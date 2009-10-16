@@ -167,9 +167,9 @@ public class FullRecordFileCreator extends BaseCLI {
         question.setName(name + "_dump");
         question.setRecordClass(recordClass);
         question.setQuery(query);
-        question.setWdkModel(wdkModel);
         // question.setFullAnswer(true);
         questionSet.addQuestion(question);
+        question.resolveReferences(wdkModel);
         return question;
     }
 
