@@ -143,20 +143,20 @@
   <!-- ChIP chip chromatin marks -->  
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesByChIPchip" includeProjects="ToxoDB"
+    <sqlQuery name="GenesByChIPchip" includeProjects="ToxoDB,PlasmoDB"
               isCacheable="true">
-        <paramRef ref="geneParams.chip_strain"/>
+        <paramRef ref="geneParams.chip_strain" includeProjects="ToxoDB"/>
         <paramRef ref="geneParams.chip_antibodies"/>
-        <paramRef ref="geneParams.chip_reps"/>
+        <paramRef ref="geneParams.chip_reps" includeProjects="ToxoDB"/>
         <paramRef ref="geneParams.chip_distance"/>
         <paramRef ref="geneParams.chip_direction"/>
         <column name="source_id"/>
         <column name="project_id"/>
         <column name="chip_distance"/>
-        <column name="chip_total_reps"/>
+        <column name="chip_total_reps" includeProjects="ToxoDB"/>
         <column name="chip_antibodies"/>
-        <column name="chip_treatment"/>
-       <sql>
+        <column name="chip_treatment" includeProjects="ToxoDB"/>
+       <sql includeProjects="ToxoDB">
              <![CDATA[
             select inner.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
               min(inner.distance) as chip_distance,
@@ -176,6 +176,25 @@
               and   cpp.strain = $$chip_strain$$
               group by ccg.gene_source_id,cpp.antibody,cpp.treatment) inner
             where inner.num_reps >= $$chip_reps$$
+            group by inner.gene_source_id
+           ]]>
+       </sql>
+       <sql includeProjects="PlasmoDB">
+             <![CDATA[
+            select inner.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+              min(inner.distance) as chip_distance, 
+              apidb.tab_to_string(CAST(COLLECT(distinct(inner.antibody)) AS apidb.varchartab),', ') as chip_antibodies 
+            from (
+              select ccg.gene_source_id ,cpp.antibody,min(ccg.distance) as distance
+              from  apidb.CHIPCHIPGENE ccg,
+                    rad.DataTransformationResult dtf,
+                    apidb.ChipProtocolParams cpp
+              where ccg.chip_na_feature_id = dtf.row_id
+              and   dtf.analysis_id = cpp.analysis_id
+              and   cpp.antibody in ($$chip_antibodies$$)
+              and   ccg.distance <= $$chip_distance$$
+              and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
+              group by ccg.gene_source_id,cpp.antibody,cpp.treatment) inner
             group by inner.gene_source_id
            ]]>
        </sql>
