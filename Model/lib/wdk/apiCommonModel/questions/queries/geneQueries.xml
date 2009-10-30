@@ -2270,6 +2270,61 @@ apidb.tab_to_string(CAST(COLLECT(distinct decode(dr.lowercase_secondary_identifi
   <!-- Expression Timing -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
+    <sqlQuery name="GenesByTimeSeriesFoldChangeOne" includeProjects="ToxoDB" 
+              isCacheable="true">
+        <paramRef ref="geneParams.ts_fc_profile_two"/>
+        <paramRef ref="geneParams.ts_fc_two"/>
+        <paramRef ref="geneParams.ts_fc_profile_one"/>
+        <paramRef ref="geneParams.ts_fc_one"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+      <sql includeProjects="ToxoDB">
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                   round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
+                                 THEN power(2, one.average) / power(2,two.average)
+                           ELSE -1 / (power(2,one.average) / power(2,two.average))
+                   END),1) as fold_change,
+        round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$ts_fc_one$$)
+ and pen.profile_set_id = $$ts_fc_profile_one$$
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$ts_fc_two$$)
+ and pen.profile_set_id = $$ts_fc_profile_two$$
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two
+ where one.source_id = two.source_id
+ and  $$regulated_dir$$ (
+               case when one.average >= two.average
+                   then power(2,one.average) / power(2,two.average)
+                   else -( power(2,two.average) / power(2,one.average))
+                   end ) >= $$fold_change$$
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+
+
+
+
     <sqlQuery name="GenesByExpressionTiming" includeProjects="PlasmoDB,TriTrypDB,ToxoDB" 
               isCacheable="true">
 
@@ -3109,10 +3164,10 @@ apidb.tab_to_string(CAST(COLLECT(distinct decode(dr.lowercase_secondary_identifi
        <sql includeProjects="PlasmoDB">
         <![CDATA[
            SELECT ga.gene as source_id, '@PROJECT_ID@' as project_id, 
-                   to_char((CASE WHEN avg(ep1.mean)/avg(ep2.mean) >= 1
+                   round((CASE WHEN avg(ep1.mean)/avg(ep2.mean) >= 1
                    THEN avg(ep1.mean)/avg(ep2.mean)
                    ELSE -1/(avg(ep1.mean)/avg(ep2.mean))
-                   END),999.9) as fold_change
+                   END),1) as fold_change
             FROM Rad.AnalysisInput ai1, Rad.Analysis a1, 
                  Rad.ExpressionProfile ep1,  
                  Rad.AnalysisInput ai2, Rad.Analysis a2,
