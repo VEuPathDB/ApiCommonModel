@@ -25,6 +25,7 @@ import org.gusdb.wdk.model.TextAttributeField;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
+import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.dbms.DBPlatform;
 import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.SqlQuery;
@@ -156,7 +157,7 @@ public class FullRecordCacheCreator extends BaseCLI {
     }
 
     private void dumpTable(TableField table, String idSql)
-            throws WdkModelException, SQLException {
+            throws WdkModelException, SQLException, WdkUserException {
         long start = System.currentTimeMillis();
 
         if (((SqlQuery) table.getQuery()).isClobRow()) {
@@ -165,7 +166,8 @@ public class FullRecordCacheCreator extends BaseCLI {
             insertFromCache(table, cacheName);
             // drop cache table
             DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-            SqlUtils.executeUpdate(dataSource, "DROP TABLE " + cacheName);
+            SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
+                    + cacheName);
         } else {
             logger.debug("Dumping charRow table field: " + table.getName());
             insertFromSql(table, idSql);
@@ -177,7 +179,7 @@ public class FullRecordCacheCreator extends BaseCLI {
     }
 
     private String createCache(TableField table, String idSql)
-            throws SQLException, WdkModelException {
+            throws SQLException, WdkModelException, WdkUserException {
         String cacheName = "wdkdumptemp";
         String tqName = "tq";
         String idqName = "idq";
@@ -185,7 +187,8 @@ public class FullRecordCacheCreator extends BaseCLI {
         DataSource dataSource = platform.getDataSource();
         if (platform.checkTableExists(null, cacheName)) {
             // drop existing table
-            SqlUtils.executeUpdate(dataSource, "DROP TABLE " + cacheName);
+            SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
+                    + cacheName);
         }
 
         String pkColumns = getPkColumns(table.getRecordClass(), idqName);
@@ -197,12 +200,12 @@ public class FullRecordCacheCreator extends BaseCLI {
         sql.append(getJoinedSql(table, idSql, idqName, tqName));
 
         logger.debug("++++++ create-cache: \n" + sql);
-        SqlUtils.executeUpdate(dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
         return cacheName;
     }
 
     private void insertFromCache(TableField table, String cacheName)
-            throws SQLException {
+            throws SQLException, WdkUserException, WdkModelException {
         String pkColumns = getPkColumns(table.getRecordClass(), null);
         StringBuilder sql = new StringBuilder("INSERT /*+ append */ INTO ");
         sql.append(cacheTable).append(getSelectSql(table, pkColumns)).append(
@@ -214,7 +217,7 @@ public class FullRecordCacheCreator extends BaseCLI {
 
         logger.debug("++++++ insert-from-cache: \n" + sql);
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
     private String getJoinedSql(TableField table, String idSql, String idqName,
@@ -238,7 +241,7 @@ public class FullRecordCacheCreator extends BaseCLI {
     }
 
     private void insertFromSql(TableField table, String idSql)
-            throws WdkModelException, SQLException {
+            throws WdkModelException, SQLException, WdkUserException {
         String idqName = "idq";
         String tqName = "tq";
         String content = getAttributesContentSql(tqName, table);
@@ -247,13 +250,14 @@ public class FullRecordCacheCreator extends BaseCLI {
         StringBuffer sql = new StringBuffer("INSERT /*+ append */ INTO ");
         sql.append(cacheTable).append(getSelectSql(table, pkColumns));
         sql.append(',').append(FUNCTION_CHAR_CLOB_AGG).append('(');
-        sql.append(content).append(") AS ").append(COLUMN_CONTENT).append(" ,sysdate ");
+        sql.append(content).append(") AS ").append(COLUMN_CONTENT).append(
+                " ,sysdate ");
         sql.append(getJoinedSql(table, idSql, idqName, tqName));
         sql.append(" GROUP BY ").append(pkColumns);
 
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
         logger.debug("++++++ insert-from-sql: \n" + sql);
-        SqlUtils.executeUpdate(dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
     private String getSelectSql(TableField table, String pkColumns) {
