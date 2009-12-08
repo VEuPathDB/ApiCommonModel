@@ -160,26 +160,39 @@
 
        <sql>
              <![CDATA[
-            select inner.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
-              min(inner.distance) as chip_distance,
-              sum(inner.num_reps) as chip_total_reps,
-              apidb.tab_to_string(CAST(COLLECT(distinct(inner.antibody)) AS apidb.varchartab),', ') as chip_antibodies,
-              apidb.tab_to_string(CAST(COLLECT(distinct(inner.treatment)) AS apidb.varchartab),', ') as chip_treatment
-            from (
-              select ccg.gene_source_id ,cpp.antibody,cpp.treatment,count(*) as num_reps,min(ccg.distance) as distance
-              from  apidb.CHIPCHIPGENE ccg,
-                    rad.DataTransformationResult dtf,
-                    apidb.ChipProtocolParams cpp
-              where ccg.chip_na_feature_id = dtf.row_id
-              and   dtf.analysis_id = cpp.analysis_id 
-              and   rtrim(cpp.antibody || '|' || cpp.treatment) in ($$chip_antibody_toxo$$) 
-              and   ccg.distance <= $$chip_distance$$ 
-              and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
-              and   cpp.strain = $$chip_strains$$
-              group by ccg.gene_source_id,cpp.antibody,cpp.treatment) inner
-              where ('No' = $$chip_replicates$$ or inner.num_reps >= 2)
-              group by inner.gene_source_id
-           ]]>
+select rep_1.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+       rep_1.antibody as chip_antibodies,
+       rep_1.treatment as chip_treatment,
+       min(rep_1.distance) as chip_distance,
+       count(*) as chip_total_reps 
+from  (select ccg.gene_source_id ,cpp.antibody,cpp.treatment,cpp.replicate,ccg.distance
+       from   apidb.CHIPCHIPGENE ccg, 
+              rad.DataTransformationResult dtf,
+              apidb.ChipProtocolParams cpp
+      where ccg.chip_na_feature_id = dtf.row_id 
+      and   dtf.analysis_id = cpp.analysis_id
+      and  rtrim(cpp.antibody || '|' || cpp.treatment) in ($$chip_antibody_toxo$$)   
+      and   ccg.distance <= $$chip_distance$$ 
+      and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
+      and   cpp.strain = $$chip_strains$$ 
+      and cpp.replicate = '1') rep_1
+full outer join
+     (select ccg.gene_source_id ,cpp.replicate,ccg.distance
+      from  apidb.CHIPCHIPGENE ccg, 
+            rad.DataTransformationResult dtf,
+            apidb.ChipProtocolParams cpp
+      where ccg.chip_na_feature_id = dtf.row_id 
+      and   dtf.analysis_id = cpp.analysis_id
+      and  rtrim(cpp.antibody || '|' || cpp.treatment) in ($$chip_antibody_toxo$$)   
+      and   ccg.distance <= $$chip_distance$$
+      and   ('Either' = $$chip_direction$$  OR ccg.direction = $$chip_direction$$)
+      and   cpp.strain = $$chip_strains$$
+      and cpp.replicate = '2') rep_2
+      on rep_1.gene_source_id = rep_2.gene_source_id
+      where ('No' = $$chip_replicates$$ or (rep_1.replicate = '1' and rep_2.replicate = '2'))
+group by rep_1.gene_source_id,rep_1.antibody,rep_1.treatment,rep_1.replicate,rep_2.replicate
+order by rep_1.gene_source_id
+          ]]>
        </sql>
     </sqlQuery>
 
