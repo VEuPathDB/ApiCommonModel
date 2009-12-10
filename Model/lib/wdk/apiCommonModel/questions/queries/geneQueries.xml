@@ -171,13 +171,13 @@ select * from  (select outer.gene_source_id as source_id,
                                    rad.datatransformationresult dtf,
                                    apidb.chipprotocolparams cpp
                             where ccg.chip_na_feature_id = dtf.row_id
-                      and   dtf.analysis_id = cpp.analysis_id
-                      and   rtrim(cpp.antibody || '|' || cpp.treatment) in ($$chip_antibody_toxo$$)   
-                      and   ccg.distance <= $$chip_distance$$ 
-                      and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
-                      and   cpp.strain = $$chip_strains$$) inner
-                group by inner.gene_source_id,inner.antibody, inner.treatment,inner.replicate) outer
-             group by outer.gene_source_id,outer.antibody, outer.treatment)
+                            and   dtf.analysis_id = cpp.analysis_id
+                            and   rtrim(cpp.antibody || '|' || cpp.treatment) in ($$chip_antibody_toxo$$)   
+                            and   ccg.distance <= $$chip_distance$$ 
+                            and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
+                            and   cpp.strain = $$chip_strains$$) inner
+                       group by inner.gene_source_id,inner.antibody, inner.treatment,inner.replicate) outer
+                 group by outer.gene_source_id,outer.antibody, outer.treatment)
 where chip_total_reps > $$chip_replicates$$
           ]]>
        </sql>
@@ -209,8 +209,9 @@ where chip_total_reps > $$chip_replicates$$
         <paramRef ref="geneParams.chip_experiment"/>
         <paramRef ref="geneParams.chip_antibody_plasmo"/>
         <paramRef ref="geneParams.chip_genotypes"/> 
+        <paramRef ref="geneParams.chip_replicates_plasmo" quote="false"/> 
         <paramRef ref="geneParams.chip_distance"/>
-        <paramRef ref="geneParams.chip_direction"/>
+        <paramRef ref="geneParams.chip_direction"/> 
 
         <column name="source_id"/>
         <column name="project_id"/>
@@ -223,26 +224,29 @@ where chip_total_reps > $$chip_replicates$$
     
       <sql>
              <![CDATA[
-            select inner.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
-                   min(inner.distance) as chip_distance,
-                   apidb.tab_to_string(CAST(COLLECT(distinct(inner.genotype)) AS apidb.varchartab),', ') as chip_genotype,
-                   apidb.tab_to_string(CAST(COLLECT(distinct(inner.antibody)) AS apidb.varchartab),', ') as chip_antibodies,
-                   max(inner.score) as chip_score
-            from (select ccg.gene_source_id ,cpp.antibody,min(ccg.distance) as distance,cpp.genotype as genotype,max(dtf.float_value) as score
-              from  apidb.CHIPCHIPGENE ccg,
-                    rad.DataTransformationResult dtf,
-                    apidb.ChipProtocolParams cpp,
-                    rad.protocol p
-              where ccg.chip_na_feature_id = dtf.row_id
-              and   dtf.analysis_id = cpp.analysis_id
-              and   cpp.protocol_id = p.protocol_id
-              and   lower(p.name) like lower('%$$chip_experiment$$%') 
-              and   ccg.distance <= $$chip_distance$$
-              and   ('not applicable' in lower($$chip_genotypes$$) OR lower(cpp.genotype) in  ($$chip_genotypes$$))
-              and   ('not applicable' in lower($$chip_antibody_plasmo$$) OR lower(cpp.antibody) in  ($$chip_antibody_plasmo$$))
-              and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
-              group by ccg.gene_source_id,cpp.antibody,cpp.genotype) inner
-            group by inner.gene_source_id
+select * from  (select outer.gene_source_id as source_id,
+                       '@PROJECT_ID@' as project_id, 
+                        outer.antibody as chip_antibodies, outer.genotype as chip_genotype,
+                        max(outer.distance) as chip_distance,
+                        max(outer.score) as chip_score,
+                        count(*) as chip_total_reps
+                from (select inner.gene_source_id,inner.antibody, inner.genotype, max(inner.distance) as distance,max(inner.score) as score
+                      from (select ccg.gene_source_id,cpp.antibody,cpp.genotype,ccg.distance,cpp.replicate,dtf.float_value as score 
+                            from   apidb.chipchipgene ccg,
+                                   rad.datatransformationresult dtf,
+                                   apidb.chipprotocolparams cpp,
+                                   rad.protocol p
+                            where ccg.chip_na_feature_id = dtf.row_id
+                            and   dtf.analysis_id = cpp.analysis_id
+                            and   cpp.protocol_id = p.protocol_id
+                            and   ('not applicable' in lower($$chip_genotypes$$) OR lower(cpp.genotype) in  ($$chip_genotypes$$))
+                            and   ('not applicable' in lower($$chip_antibody_plasmo$$) OR lower(cpp.antibody) in  ($$chip_antibody_plasmo$$))
+                            and   ccg.distance <= $$chip_distance$$ 
+                            and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
+                            and   lower(p.name) like lower('%$$chip_experiment$$%')) inner
+                group by inner.gene_source_id,inner.antibody, inner.genotype,inner.replicate) outer
+             group by outer.gene_source_id,outer.antibody, outer.genotype)
+where chip_total_reps > $$chip_replicates_plasmo$$
            ]]>
        </sql>
     </sqlQuery>
@@ -254,6 +258,7 @@ where chip_total_reps > $$chip_replicates$$
         <paramRef ref="geneParams.chip_experiment" quote="false"/>
         <paramRef ref="geneParams.chip_antibody_plasmo"   quote="false"/>
         <paramRef ref="geneParams.chip_genotypes"  quote="false"/> 
+        <paramRef ref="geneParams.chip_replicates_plasmo" quote="false"/>
         <paramRef ref="geneParams.chip_distance"   quote="false"/>
         <paramRef ref="geneParams.chip_direction"  quote="false"/> 
         <paramRef ref="geneParams.chip_score"      quote="false" />
