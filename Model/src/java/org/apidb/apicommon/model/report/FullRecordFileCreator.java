@@ -124,13 +124,12 @@ public class FullRecordFileCreator extends BaseCLI {
 
         if (cacheTable == null)
             cacheTable = "wdk" + recordClass.getType() + "Dump";
-        if (dumpFile == null) 
-            dumpFile = cacheTable + ".txt";
+        if (dumpFile == null) dumpFile = cacheTable + ".txt";
 
         Question question = createQuestion(recordClass, idSql);
         User user = wdkModel.getSystemUser();
         Map<String, String> paramValues = new LinkedHashMap<String, String>();
-        AnswerValue answerValue = question.makeAnswerValue(user, paramValues);
+        AnswerValue answerValue = question.makeAnswerValue(user, paramValues, 0);
 
         OutputStream out = new FileOutputStream(dumpFile);
         Reporter reporter = createReporter(answerValue, cacheTable);
@@ -207,7 +206,8 @@ public class FullRecordFileCreator extends BaseCLI {
         }
 
         Map<String, String> properties = new LinkedHashMap<String, String>();
-        properties.put(FullRecordCachedReporter.PROPERTY_TABLE_CACHE, cacheTable);
+        properties.put(FullRecordCachedReporter.PROPERTY_TABLE_CACHE,
+                cacheTable);
 
         Map<String, String> config = new LinkedHashMap<String, String>();
         config.put(Reporter.FIELD_FORMAT, "text");
