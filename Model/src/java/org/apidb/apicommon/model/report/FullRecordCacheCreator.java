@@ -51,6 +51,8 @@ public class FullRecordCacheCreator extends BaseCLI {
     private static final String FUNCTION_CHAR_CLOB_AGG = "apidb.char_clob_agg";
     private static final String FUNCTION_CLOB_CLOB_AGG = "apidb.clob_clob_agg";
 
+    private static final String PROP_EXCLUDE_FROM_DUMPER = "excludeFromDumper";
+
     private static final Logger logger = Logger.getLogger(FullRecordCacheCreator.class);
 
     /**
@@ -119,8 +121,9 @@ public class FullRecordCacheCreator extends BaseCLI {
 
         String idSql = loadIdSql(sqlFile);
         RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
-        Map<String, TableField> tables = recordClass.getTableFieldMap(FieldScope.REPORT_MAKER);
+        Map<String, TableField> tables = recordClass.getTableFieldMap();
         if (fieldNames != null) { // dump individual table
+            // all tables are available in this context
             String[] names = fieldNames.split(",");
             for (String fieldName : names) {
                 fieldName = fieldName.trim();
@@ -130,8 +133,11 @@ public class FullRecordCacheCreator extends BaseCLI {
                             "The table field doesn't exist: " + fieldName);
                 dumpTable(table, idSql);
             }
-        } else { // no table specified, dump all tables
+        } else { // no table specified, only dump tables with a specific flag
             for (TableField table : tables.values()) {
+                String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
+                if (props.length > 0 && props[0].equalsIgnoreCase("true"))
+                    continue;
                 System.out.println(table.getName());
                 dumpTable(table, idSql);
             }
