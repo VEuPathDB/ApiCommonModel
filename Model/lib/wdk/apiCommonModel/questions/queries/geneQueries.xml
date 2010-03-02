@@ -2457,16 +2457,18 @@ apidb.tab_to_string(CAST(COLLECT(distinct decode(dr.lowercase_secondary_identifi
        <sql>
            <!-- use CDATA because query includes angle brackets -->
             <![CDATA[
-           select distinct source_id, '@PROJECT_ID@' as project_id,max(to_char(pe.value,'999.99'))as percentile
-           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p
+           select distinct p.source_id, '@PROJECT_ID@' as project_id,max(to_char(pe.value,'999.99'))as percentile
+           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
            where ps.profile_set_id = pen.profile_set_id
             and ps.profile_set_id = p.profile_set_id
+            and p.source_id = ga.source_id
+            and ga.gene_type = 'protein coding'
             and pe.profile_id = p.profile_id
             and pe.element_order = pen.element_order
             and ps.profile_set_id = $$expressionPercentileExptsBrucei$$ 
             and  pen.profile_element_name_id in ( $$expressionPercentileSampleBrucei$$ )
             and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
-            group by source_id
+            group by p.source_id
             ]]>
           </sql>
     </sqlQuery>  
@@ -2529,8 +2531,10 @@ apidb.tab_to_string(CAST(COLLECT(distinct decode(dr.lowercase_secondary_identifi
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
- group by p.source_id ) two
+ group by p.source_id ) two, apidb.geneattributes ga
  where one.source_id = two.source_id
+ and one.source_id = ga.source_id
+ and ga.gene_type = 'protein coding'
  and  $$regulated_dir$$ (
               case when (one.average >= two.average and two.average > 0)
                   then one.average/two.average
@@ -2800,8 +2804,11 @@ where one.source_id = two.source_id
 
       <sql includeProjects="TriTrypDB">
           <![CDATA[
-           select '@PROJECT_ID@' as project_id, 
-                   ga.source_id as source_id,
+        select '@PROJECT_ID@' as project_id, 
+               drbd.source_id, max(drbd.fold_change) as fold_change,
+               max(drbd.confidence) as confidence
+        from (
+           select ga.source_id as source_id,
                    to_char(d.fold_change, '999.9') as fold_change, 
                    d.confidence
           from rad.differentialexpression d, 
@@ -2812,8 +2819,10 @@ where one.source_id = two.source_id
            and t.table_id = d.table_id
            and a.analysis_id = d.analysis_id
            and t.name = 'GeneFeature'
-           and $$regulated_dir$$(d.fold_change) >= $$fold_change$$
            and a.name like '%TbDRBD3%' 
+           ) drbd
+        group by drbd.source_id
+        having max($$regulated_dir$$(drbd.fold_change)) >= $$fold_change$$
           ]]>
       </sql>
 
@@ -2880,8 +2889,11 @@ where one.source_id = two.source_id
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
- group by p.source_id ) two
+ group by p.source_id ) two,
+ apidb.geneattributes ga
  where one.source_id = two.source_id
+ and ga.source_id = two.source_id
+ and ga.gene_type = 'protein coding'
  and  $$regulated_dir$$ (
                case when one.average >= two.average
                    then power(2,one.average) / power(2,two.average)
