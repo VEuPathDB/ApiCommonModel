@@ -701,13 +701,7 @@ where chip_total_reps > $$chip_replicates_plasmo$$
               isCacheable="true">
         <paramRef ref="geneParams.gene_result"/>
         <paramRef ref="organismParams.organism" 
-                  queryRef="organismVQ.withGenes" 
-                  includeProjects="CryptoDB,GiardiaDB,PlasmoDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,InitDB"/>
-        <paramRef ref="organismParams.organism" 
-                  queryRef="organismVQ.withStrains"
-                  includeProjects="ToxoDB"
-                  default="Toxoplasma gondii ME49,Toxoplasma gondii GT1,Toxoplasma gondii VEG"
-                  allowEmpty="true"/>
+                  queryRef="organismVQ.withGenes" />
         <paramRef ref="organismParams.localorganism" includeProjects="EuPathDB"/>
         <paramRef ref="geneParams.isSyntenic" excludeProjects="EuPathDB"/>
         <column name="source_id" />
@@ -715,15 +709,16 @@ where chip_total_reps > $$chip_replicates_plasmo$$
         <column name="wdk_weight" />
         <column name="orthologs"/>
 
-        <sql includeProjects="CryptoDB,GiardiaDB,PlasmoDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,InitDB">
+        <sql includeProjects="CryptoDB,GiardiaDB,PlasmoDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,ToxoDB,InitDB">
             <![CDATA[
             SELECT source_id, '@PROJECT_ID@' as project_id, 0 AS wdk_weight,
                    apidb.tab_to_string(CAST(COLLECT(distinct(input)) AS apidb.varchartab),', ') AS orthologs 
-            FROM (
+            FROM ((
             SELECT gf2.source_id, gf1.source_id as input
             FROM $$gene_result$$ qr, apidb.GeneAttributes gf1,
                  apidb.GeneAttributes gf2, apidb.synteny s
-            WHERE qr.source_id = gf1.source_id
+            WHERE $$isSyntenic$$ = 'yes'
+               and qr.source_id = gf1.source_id
               AND gf1.orthomcl_name = gf2.orthomcl_name
               AND gf2.gene_type = 'protein coding' -- because non-protein-coding genes use orthmcl_name for counting distinct "ortholog" results
               AND gf2.taxon_id in ($$organism$$)
@@ -735,12 +730,13 @@ where chip_total_reps > $$chip_replicates_plasmo$$
             SELECT qr.source_id, qr.source_id as input
             FROM $$gene_result$$ qr, apidb.geneattributes ga
             WHERE qr.source_id = ga.source_id
-              AND ga.taxon_id in ($$organism$$)
-            $$isSyntenic$$
+              AND ga.taxon_id in ($$organism$$) )
+            UNION
             SELECT gf2.source_id, gf1.source_id AS input 
             FROM $$gene_result$$ qr, apidb.GeneAttributes gf1,
                  apidb.GeneAttributes gf2
-            WHERE qr.source_id = gf1.source_id
+            WHERE $$isSyntenic$$ = 'no'
+               and qr.source_id = gf1.source_id
               AND gf1.orthomcl_name = gf2.orthomcl_name
               AND gf2.gene_type = 'protein coding' -- because non-protein-coding genes use orthmcl_name for counting distinct "ortholog" results
               AND gf2.taxon_id in ($$organism$$))
@@ -748,39 +744,6 @@ where chip_total_reps > $$chip_replicates_plasmo$$
            ]]>
        </sql>
 
-        <sql includeProjects="ToxoDB">
-            <![CDATA[
-            SELECT so.source_id,'@PROJECT_ID@' as project_id, 0 AS wdk_weight,
-                   apidb.tab_to_string(CAST(COLLECT(distinct(so.input)) AS apidb.varchartab),', ') as orthologs 
-            FROM (
-              SELECT gb.source_id, ga.source_id as input
-              FROM apidb.GENEATTRIBUTES ga, apidb.GENEATTRIBUTES gb,
-                   $$gene_result$$ gr, apidb.synteny s
-             WHERE ga.source_id = gr.source_id 
-               AND gb.orthomcl_name = ga.orthomcl_name
-               AND gb.ncbi_tax_id in ($$organism$$)
-               AND s.a_na_sequence_id = ga.na_sequence_id
-               AND s.b_na_sequence_id = gb.na_sequence_id
-               AND b_end > gb.start_min
-               AND b_start < gb.end_max
-             UNION
-            SELECT qr.source_id, qr.source_id as input
-            FROM $$gene_result$$ qr, apidb.geneattributes ga
-            where qr.source_id = ga.source_id
-            and ga.ncbi_tax_id in ($$organism$$)
-             ) so
-             GROUP BY so.source_id
-             $$isSyntenic$$
-            select gb.source_id,'@PROJECT_ID@' as project_id, 0 as wdk_weight,
-                   apidb.tab_to_string(CAST(COLLECT(distinct(gr.source_id)) AS apidb.varchartab),', ') as orthologs 
-              from apidb.GENEATTRIBUTES ga, apidb.GENEATTRIBUTES gb,
-                   $$gene_result$$ gr
-             where ga.source_id = gr.source_id 
-               and gb.orthomcl_name = ga.orthomcl_name
-               and gb.ncbi_tax_id in ($$organism$$)
-             group by gb.source_id
-            ]]>
-       </sql>
 
        <sql includeProjects="EuPathDB">
             <![CDATA[
