@@ -239,7 +239,7 @@ public class FullRecordCachedReporter extends Reporter {
                             String[] parts = tableValues.get(fieldName);
                             writer.println(parts[0]);
                             writer.println(parts[1]);
-                        } else {
+                        } else if (hasEmptyTable) {
                             // the table doesn't have rows, output title only
                             writer.println(getTableTitle(table));
                         }
