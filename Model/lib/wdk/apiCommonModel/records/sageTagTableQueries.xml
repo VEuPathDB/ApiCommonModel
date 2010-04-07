@@ -58,18 +58,23 @@
             <column name="bp_from_gene"/>
             <sql>
             <![CDATA[
-         select distinct a.source_id AS source_id, '@PROJECT_ID@' AS project_id,
-                   a.source_id AS aligned_source_id, sg.gene_source_id, g.product as gene_product,
+
+
+            select distinct sta1.source_id AS source_id, 'ToxoDB' AS project_id,
+                   sg.gene_source_id AS aligned_source_id, sg.gene_source_id, g.product as gene_product,
                    g.sequence_id || ':' || g.start_min || '-' || g.end_max || '(' || 
                        case when g.is_reversed = 1 then '-' 
                             when g.is_reversed = 0 then '+'
                             else '' end || ')' as gene_location,
                    case when sg.antisense = 1 then 'antisense' else 'sense' end as gene_strand,
                   sg.distance as bp_from_gene
-            from apidb.SAGETAGGENE sg, apidb.SAGETAGATTRIBUTES a, apidb.GENEATTRIBUTES g
-            where a.na_feature_id = sg.tag_feature_id
-            and sg.gene_source_id = g.source_id
-            order by gene_strand desc, bp_from_gene asc, a.source_id
+            from apidb.SAGETAGGENE sg,  apidb.GENEATTRIBUTES g, 
+                 apidb.SAGETAGATTRIBUTES sta1, apidb.SAGETAGATTRIBUTES sta2
+            where sg.tag_feature_id = sta2.na_feature_id
+            and sta2.composite_element_id = sta1.composite_element_id
+--            and sta1.source_id='TGME49_chrIa-1003090-1003104.1'
+            and sg.gene_source_id = g.source_id 
+            order by sta1.source_id, gene_strand desc, bp_from_gene asc
             ]]>
            </sql>
       </sqlQuery>
@@ -88,7 +93,11 @@
             <column name="feature_source_id"/>
             <sql>
             <![CDATA[
-              SELECT sta.source_id, '@PROJECT_ID@' AS project_id,
+
+            select t.source_id,sta.feature_source_id, '@PROJECT_ID@' AS project_id, t.sequence_source_id, t.term_name, 
+                   t.is_top_level,t.start_min,t.end_max,t.is_reversed,t.start_context,t.end_context 
+              from apidb.sagetagattributes sta,
+                     (SELECT sta.source_id, sta.composite_element_id as ceid,
                      sta.feature_source_id,
                      fl.sequence_source_id,
                      so.term_name,
@@ -98,12 +107,13 @@
                      Decode(fl.is_reversed, 0, '+', 1, '-') is_reversed,
                     (fl.start_min-5000)as start_context,
                     (fl.end_max+5000)as end_context
-              FROM apidb.featurelocation fl, apidb.sagetagattributes sta,
-                   dots.nasequence s, sres.sequenceontology so
-              WHERE fl.na_feature_id = sta.na_feature_id
-               and s.na_sequence_id = fl.na_sequence_id
-               and s.sequence_ontology_id = so.sequence_ontology_id
-              ORDER BY fl.is_top_level desc
+                     FROM apidb.featurelocation fl, apidb.sagetagattributes sta,
+                          dots.nasequence s, sres.sequenceontology so
+                     WHERE fl.na_feature_id = sta.na_feature_id
+                      and s.na_sequence_id = fl.na_sequence_id
+                      and s.sequence_ontology_id = so.sequence_ontology_id) t 
+              where sta.feature_source_id = t.feature_source_id
+              ORDER BY is_top_level desc
             ]]>
             </sql>
         </sqlQuery>
