@@ -612,7 +612,7 @@ where chip_total_reps > $$chip_replicates_plasmo$$
         </testParamValues>
         <testParamValues includeProjects="MicrosporidiaDB">
            <paramValue name="BlastQuerySequence">GTTTTGGCAGACGGTATGTTTAACAGGAAAATCTCCCATGAATCTGACGGGAATATTCATAGTATTGATTTCCATGGCCTAACCATGTGTGATATTCCGGTGATAAAAAGAGACAGATATAC</paramValue>
-	   <!--paramValue name="BlastDatabaseOrganism"></paramValue -->
+	   <paramValue name="BlastDatabaseOrganism">Encephalitozoon cuniculi GB-M1</paramValue>
         </testParamValues>
         <testParamValues includeProjects="InitDB">
            <paramValue name="BlastQuerySequence"></paramValue>
@@ -771,16 +771,16 @@ where chip_total_reps > $$chip_replicates_plasmo$$
             FROM ((
             SELECT gf2.source_id, gf1.source_id as input, qr.wdk_weight
             FROM $$gene_result$$ qr, apidb.GeneAttributes gf1,
-                 apidb.GeneAttributes gf2, apidb.synteny s
+                 apidb.GeneAttributes gf2, apidb.synteny s,apidb.syntenyanchor sa
             WHERE $$isSyntenic$$ = 'yes'
                and qr.source_id = gf1.source_id
               AND gf1.orthomcl_name = gf2.orthomcl_name
               AND gf2.gene_type = 'protein coding' -- because non-protein-coding genes use orthmcl_name for counting distinct "ortholog" results
               AND gf2.taxon_id in ($$organism$$)
-              AND s.a_na_sequence_id = gf2.na_sequence_id
-              AND s.b_na_sequence_id = gf1.na_sequence_id
-              AND s.b_end > gf1.start_min
-              AND s.b_start < gf1.end_max
+              AND s.a_na_sequence_id = gf1.na_sequence_id
+              AND s.b_na_sequence_id = gf2.na_sequence_id
+              AND sa.synteny_id = s.synteny_id 
+              AND sa.syntenic_loc = gf2.start_min 
             UNION
             SELECT qr.source_id, qr.source_id as input, qr.wdk_weight
             FROM $$gene_result$$ qr, apidb.geneattributes ga
@@ -2515,6 +2515,125 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Expression Timing -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <sqlQuery name="GenesByRNASeqPfFoldChange" includeProjects="PlasmoDB" 
+              isCacheable="true">
+
+        <paramRef ref="geneParams.RNA_pfal_fc_one_pd"/>
+        <paramRef ref="geneParams.RNA_pfal_fc_two_pd"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+        <sql>
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                  round((CASE WHEN (one.average >= two.average and two.average > 0)
+                                THEN one.average/two.average
+                              WHEN (one.average >= two.average and two.average = 0)
+                              THEN one.average
+                              WHEN (two.average > one.average and one.average > 0)
+                              THEN -(two.average/one.average)
+                              WHEN (two.average > one.average and one.average = 0)
+                              THEN -two.average
+                  END),1) as fold_change,
+                          round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNA_pfal_fc_one_pd$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNA_pfal_fc_two_pd$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two, apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and one.source_id = ga.source_id
+ and ga.gene_type = 'protein coding'
+ and  $$regulated_dir$$ (
+              case when (one.average >= two.average and two.average > 0)
+                  then one.average/two.average
+                  when (two.average >= one.average and one.average > 0)
+                  then -(two.average/one.average)
+                  when (one.average >= two.average and two.average = 0)
+                  then one.average
+                  when (two.average >= one.average and one.average = 0)
+                  then -two.average
+                  end ) >= $$fold_change$$
+           ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByRNASeqPfFoldChange" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        
+        <paramRef ref="geneParams.RNA_pfal_fc_two_pd" quote="false"/>
+        <paramRef ref="geneParams.RNA_pfal_fc_one_pd" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <wsColumn name="project_id" wsName="project_id"/>
+        <wsColumn name="source_id" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
+        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
+    </processQuery>
+
+
+    <sqlQuery name="GenesByRNASeqPfPercentile"  includeProjects="PlasmoDB"
+          isCacheable='true'>
+       <paramRef ref="geneParams.expressionPercentilePfSampleRnaSeq"/>
+       <paramRef ref="geneParams.min_expression_percentile" default="80"/>
+       <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+       <column name="project_id"/>
+       <column name="source_id" />
+       <column name="percentile" />
+       <sql>
+           <!-- use CDATA because query includes angle brackets -->
+            <![CDATA[
+           select distinct p.source_id, '@PROJECT_ID@' as project_id, max(round(pe.value * 100 ,2))as percentile
+           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
+           where ps.profile_set_id = pen.profile_set_id
+            and ps.profile_set_id = p.profile_set_id
+            and p.source_id = ga.source_id
+            and ga.gene_type = 'protein coding'
+            and pe.profile_id = p.profile_id
+            and pe.element_order = pen.element_order
+            and ps.name = 'Percents of P.falciparum duffy mRNA Seq data'
+            and  pen.profile_element_name_id in ( $$expressionPercentilePfSampleRnaSeq$$ )
+            and 100 * pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
+            group by p.source_id
+            ]]>
+          </sql>
+    </sqlQuery>  
+
+    <processQuery name="GenesByRNASeqPfPercentile" includeProjects="EuPathDB"  
+        displayName="By Expression Percentile" 
+        isCacheable='true' 
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">      
+       <paramRef ref="geneParams.expressionPercentileSampleRnaSeq"/>
+       <paramRef ref="geneParams.min_expression_percentile" default="80"/>
+       <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+       <wsColumn name="source_id" width="50" wsName="source_id"/>
+       <wsColumn name="project_id" width="32" wsName="project_id"/>
+       <wsColumn name="percentile" width="32" wsName="project_id"/>
+    </processQuery>   
+
+
+
+
+
     <sqlQuery name="GenesByRNASeqFoldChange" includeProjects="TriTrypDB" 
               isCacheable="true">
 
