@@ -105,11 +105,12 @@
        <paramRef ref="organismParams.organismWithAssemblies" includeProjects="PlasmoDB"/>
         <paramRef ref="organismParams.sequence_organism_text" includeProjects="ToxoDB"/>
 -->
+        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="MicrosporidiaDB" default="Encephalitozoon cuniculi"/>
         <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="CryptoDB"/>
         <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="ToxoDB" default="Toxoplasma gondii VEG"/>
         <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="TriTrypDB" default="Leishmania major"/>
         <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" default="Plasmodium falciparum" includeProjects="PlasmoDB"/>
-        <paramRef ref="sharedParams.chromosomeOptional" includeProjects="CryptoDB,ToxoDB,PlasmoDB,TriTrypDB"/>
+        <paramRef ref="sharedParams.chromosomeOptional" includeProjects="CryptoDB,ToxoDB,PlasmoDB,TriTrypDB,MicrosporidiaDB"/>
         <paramRef ref="sharedParams.sequenceId"/>
         <paramRef ref="sharedParams.start_point"/>
         <paramRef ref="sharedParams.end_point"/>
@@ -133,7 +134,7 @@
             ]]>
         </sqlParamValue>
 -->
-        <sqlParamValue name="chrParam" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
+        <sqlParamValue name="chrParam" includeProjects="PlasmoDB,ToxoDB,CryptoDB,MicrosporidiaDB">
             <![CDATA[
               sa.chromosome=$$chromosomeOptional$$
             ]]>
@@ -149,10 +150,10 @@
                OR lower(s.source_id) = lower($$sequenceId$$))
             ]]>
         </sqlParamValue>
-        <sqlParamValue name="chroOpt" includeProjects="GiardiaDB,AmoebaDB,MicrosporidiaDB,InitDB">
+        <sqlParamValue name="chroOpt" includeProjects="GiardiaDB,AmoebaDB,InitDB">
            <![CDATA[ lower(s.source_id) = lower($$sequenceId$$)]]>
         </sqlParamValue>
-        <sql includeProjects="GiardiaDB,AmoebaDB,MicrosporidiaDB,InitDB">
+        <sql includeProjects="GiardiaDB,AmoebaDB,InitDB">
             <![CDATA[
             select * from (
             SELECT eags.source_id, '@PROJECT_ID@' as project_id,
@@ -187,7 +188,7 @@
             ) */
            ]]>
         </sql>
-        <sql includeProjects="PlasmoDB,ToxoDB,TriTrypDB,CryptoDB">
+        <sql includeProjects="PlasmoDB,ToxoDB,TriTrypDB,CryptoDB,MicrosporidiaDB">
             <![CDATA[
             select * from (
             SELECT eags.source_id, '@PROJECT_ID@' as project_id,
@@ -273,7 +274,8 @@
             ]]>
         </sqlParamValue>
 -->
-       <sql excludeProjects="PlasmoDB,ToxoDB,CryptoDB">
+
+       <sql excludeProjects="PlasmoDB,ToxoDB,CryptoDB,AmoebaDB,MicrosporidiaDB">
             <![CDATA[
               select * from (
               SELECT source_id, '@PROJECT_ID@' as project_id,
@@ -306,6 +308,42 @@
             )          
             GROUP BY source_id
             )
+           ]]>
+       </sql>
+       <sql includeProjects="AmoebaDB,MicrosporidiaDB">
+            <![CDATA[
+              select t.* from (
+              SELECT source_id, '@PROJECT_ID@' as project_id,
+               CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(
+                    CAST(
+                      COLLECT(target_sequence_source_id || ':'
+                      || trim(to_char(target_start,'999,999,999'))
+                      || '-' || trim(to_char(target_end,'999,999,999'))
+                      || '(' || decode(is_reversed,0,'+',1,'-',null) || ')')
+                    AS apidb.varchartab), ', ') END AS assembly_locations,
+                  CASE WHEN count(distinct gene) > 20 THEN count(distinct gene)||' genes' 
+                       ELSE apidb.tab_to_string(CAST(COLLECT(gene) AS apidb.varchartab), ', ') END as genes
+	    FROM (
+                SELECT source_id,gene ,target_start,target_end, is_reversed, target_sequence_source_id
+                FROM apidb.ASMALIGNMENTGENESUMMARY
+                WHERE is_consistent in ($$high_confidence_only$$)
+                AND is_best_alignment in ($$best_alignment_only$$)
+                AND percent_identity >= $$min_percent_identity$$
+                AND percent_assembly_bases_aligned >= $$min_percent_assembly_aligned$$
+                AND est_count >= $$min_ests_in_assembly$$
+             $$overlapOrNot$$                    
+               SELECT i.source_id,i.gene ,i.target_start,i.target_end, i.is_reversed, i.target_sequence_source_id
+                FROM apidb.ASMALIGNMENTGENESUMMARY i
+                WHERE i.assembly_gene_overlap_length >= $$bp_overlap_gte$$
+                AND is_consistent in ($$high_confidence_only$$)
+                AND is_best_alignment in ($$best_alignment_only$$)
+                AND percent_identity >= $$min_percent_identity$$
+                AND percent_assembly_bases_aligned >= $$min_percent_assembly_aligned$$
+                AND est_count >= $$min_ests_in_assembly$$
+            )          
+            GROUP BY source_id
+            ) t, apidb.assemblyAttributes bfmv
+            WHERE bfmv.project_id='@PROJECT_ID@' and bfmv.source_id = t.source_id
            ]]>
        </sql>
        <sql includeProjects="PlasmoDB,ToxoDB,CryptoDB">
