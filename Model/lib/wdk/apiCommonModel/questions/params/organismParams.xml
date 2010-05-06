@@ -901,46 +901,40 @@ UNION
 
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT distinct tn.name, ts.species_taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, apidb.TaxonSpecies ts
-                WHERE tn.name_class='scientific name'
-                  AND tn.taxon_id = ts.species_taxon_id
-                  AND ts.taxon_id IN
-                             (  SELECT ga.taxon_id
-                                FROM apidb.GeneAttributes ga
-                                WHERE ga.project_id = '@PROJECT_ID@' 
-                                  )) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual
-                 UNION
-                SELECT 'Toxoplasma gondii' AS name, 6 AS rank FROM dual
-                 UNION
-                SELECT 'Neospora caninum' AS name, 7 AS rank FROM dual
-                 UNION
-                SELECT 'Trypanosoma cruzi' AS name, 8 AS rank FROM dual
-                 UNION
-                SELECT 'Giardia lamblia ATCC 50803' AS name, 9 AS rank FROM dual
-                 UNION
-                SELECT 'Giardia lamblia P15' AS name, 10 AS rank FROM dual
-                 UNION
-                SELECT 'Giardia intestinalis ATCC 50581' AS name, 11 AS rank FROM dual
-                ) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+          select tn.name as term, clade.subtaxa as internal
+          from sres.TaxonName tn,
+               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
+                                                       as apidb.varchartab), ', ') subtaxa
+                from apidb.TaxonSpecies ts
+                where ts.taxon_id in (-- taxa relevant to this param
+                                      select taxon_id from apidb.GeneAttributes)
+                group by species_taxon_id) clade,
+               (  select 'Cryptosporidium parvum' as name, 1 as rank from dual
+                union
+                  select 'Cryptosporidium hominis' as name, 2 as rank from dual
+                union
+                  select 'Plasmodium falciparum' as name, 3 as rank from dual
+                union
+                  select 'Plasmodium vivax' as name, 4 as rank from dual
+                union
+                  select 'Plasmodium yoelii' as name, 5 as rank from dual
+                union
+                  select 'Toxoplasma gondii' as name, 6 as rank from dual
+                union
+                  select 'Neospora caninum' as name, 7 as rank from dual
+                union
+                  select 'Trypanosoma cruzi' as name, 8 as rank from dual
+                union
+                  select 'Giardia lamblia ATCC 50803' as name, 9 as rank from dual
+                union
+                  select 'Giardia lamblia P15' as name, 10 as rank from dual
+                union
+                  select 'Giardia intestinalis ATCC 50581' as name, 11 as rank from dual
+               ) partial_ordering
+          where tn.taxon_id = clade.species_taxon_id
+            and tn.name_class = 'scientific name'
+            and tn.name = partial_ordering.name(+)
+          order by partial_ordering.rank, tn.name
         ]]>
       </sql>
     </sqlQuery>
@@ -957,61 +951,44 @@ UNION
         copy from withGenes -->
     <!--===================================================================-->
 
- <sqlQuery name="withPlasmoTrypCryptoGenes" includeProjects="CryptoDB,PlasmoDB,TriTrypDB" isCacheable="true">
+
+ <sqlQuery name="withPdbSimilarity" includeProjects="CryptoDB,PlasmoDB,TriTrypDB" isCacheable="true">
       <column name="internal"/>
       <column name="term"/>
 
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT CASE 
-                        WHEN tn.name = 'Giardia intestinalis' THEN 'Giardia lamblia' 
-                        else tn.name
-                      END as name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT ns.taxon_id
-                              FROM dots.NaSequence ns, dots.GeneFeature gf,apidb.geneattributes ga
-                              WHERE gf.na_sequence_id = ns.na_sequence_id
-                              AND ga.source_id = gf.source_id
-                              AND ga.project_id = '@PROJECT_ID@' 
-                              ))) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual
-                 UNION
-                SELECT 'Toxoplasma gondii' AS name, 6 AS rank FROM dual
-                 UNION
-                SELECT 'Neospora caninum' AS name, 7 AS rank FROM dual
-                 UNION
-                SELECT 'Trypanosoma cruzi' AS name, 8 AS rank FROM dual
-                ) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+          select tn.name as term, clade.subtaxa as internal
+          from sres.TaxonName tn,
+               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
+                                                       as apidb.varchartab), ', ') subtaxa
+                from apidb.TaxonSpecies ts
+                where ts.taxon_id in (-- taxa relevant to this param
+                                       select ga.taxon_id 
+                                      from apidb.GeneAttributes ga, apidb.pdbsimilarity s
+                                      where ga.source_id = s.source_id)
+                group by species_taxon_id) clade,
+               (  select 'Cryptosporidium parvum' as name, 1 as rank from dual
+                union
+                  select 'Cryptosporidium hominis' as name, 2 as rank from dual
+                union
+                  select 'Plasmodium falciparum' as name, 3 as rank from dual
+                union
+                  select 'Plasmodium vivax' as name, 4 as rank from dual
+                union
+                  select 'Plasmodium yoelii' as name, 5 as rank from dual
+                union    
+                  select 'Trypanosoma cruzi' as name, 6 as rank from dual
+               ) partial_ordering
+          where tn.taxon_id = clade.species_taxon_id
+            and tn.name_class = 'scientific name'
+            and tn.name = partial_ordering.name(+)
+          order by partial_ordering.rank, tn.name
         ]]>
       </sql>
     </sqlQuery>
 
-    <processQuery name="withPlasmoTrypCryptoGenes" includeProjects="EuPathDB"
+    <processQuery name="withPdbSimilarity" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
@@ -1090,26 +1067,16 @@ UNION
                   CONNECT BY prior taxon_id = parent_id
                   START WITH taxon_id = organisms.internal_taxon) AS internal
           FROM (SELECT tn.name as name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
+                FROM sres.TaxonName tn, sres.taxon t, apidb.TaxonSpecies ts
                 WHERE tn.name_class='scientific name'
                   AND t.taxon_id = tn.taxon_id
                   AND t.rank = 'species'
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT distinct ens.taxon_id 
-                              FROM dots.TranslatedAaSequence tas, dots.EpitopeFeature ef,
-                                   apidb.GeneAttributes ga, dots.NaSequence ens,
-                                   dots.TranslatedAaFeature taf, dots.Transcript t
-                              WHERE tas.aa_sequence_id = ef.aa_sequence_id
-                                AND tas.aa_sequence_id = taf.aa_sequence_id
-                                AND taf.na_feature_id = t.na_feature_id
-                                AND t.parent_id = ga.na_feature_id
-                                AND ga.na_sequence_id = ens.na_sequence_id
-                                AND ga.project_id = '@PROJECT_ID@' 
-                              ))) organisms,
+                  AND tn.taxon_id = ts.species_taxon_id
+                  AND ts.taxon_id IN
+                             (  SELECT ga.taxon_id
+                                FROM apidb.GeneAttributes ga
+                                WHERE ga.project_id = '@PROJECT_ID@' )
+          ) organisms,
                (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
                  UNION
                 SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
@@ -1220,22 +1187,15 @@ UNION
                   FROM sres.taxon
                   CONNECT BY prior taxon_id = parent_id
                   START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name as name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
+          FROM (SELECT distinct tn.name, ts.species_taxon_id AS internal_taxon
+                FROM sres.TaxonName tn, apidb.TaxonSpecies ts
                 WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT ns.taxon_id
-                              FROM dots.NaSequence ns, dots.GeneFeature gf,apidb.geneattributes ga
-                              WHERE gf.na_sequence_id = ns.na_sequence_id
-                              AND ga.source_id = gf.source_id
-                              AND ga.project_id = '@PROJECT_ID@' 
-                              ))) organisms,
+                  AND tn.taxon_id = ts.species_taxon_id
+                  AND ts.taxon_id IN
+                             (  SELECT ga.taxon_id
+                                FROM apidb.GeneAttributes ga
+                                WHERE ga.project_id = '@PROJECT_ID@' 
+                                  )) organisms,
                (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
                  UNION
                 SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
@@ -1249,6 +1209,14 @@ UNION
                 SELECT 'Toxoplasma gondii' AS name, 6 AS rank FROM dual
                  UNION
                 SELECT 'Neospora caninum' AS name, 7 AS rank FROM dual
+                 UNION
+                SELECT 'Trypanosoma cruzi' AS name, 8 AS rank FROM dual
+                 UNION
+                SELECT 'Giardia lamblia ATCC 50803' AS name, 9 AS rank FROM dual
+                 UNION
+                SELECT 'Giardia lamblia P15' AS name, 10 AS rank FROM dual
+                 UNION
+                SELECT 'Giardia intestinalis ATCC 50581' AS name, 11 AS rank FROM dual
                 ) partial_ordering
           WHERE organisms.name = partial_ordering.name(+)
           ORDER BY partial_ordering.rank, organisms.name
@@ -1363,54 +1331,6 @@ UNION
       <wsColumn name="term" width="32" wsName="term"/>
     </processQuery>
 
-        <sqlQuery name="withESTsAndGenes" excludeProjects="EuPathDB" isCacheable="true">
-            <column name="internal"/>
-            <column name="term"/>
-             <sql>
-                SELECT orgs.term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = orgs.internal) AS internal
-                FROM (SELECT tn.name as term,
-                        CASE WHEN tn.name like 'Giardia%' THEN
-                         (SELECT taxon_id FROM sres.taxonName where name = 'Giardia lamblia ATCC 50803')
-                          ELSE t.taxon_id END AS internal
-                      FROM sres.TaxonName tn, sres.taxon t
-                      WHERE tn.name_class='scientific name'
-                        AND t.taxon_id = tn.taxon_id
-                        AND t.rank = 'species'
-                        AND t.taxon_id in
-                            (SELECT taxon_id
-                             FROM sres.taxon
-                             CONNECT BY taxon_id = prior parent_id
-                             START WITH taxon_id IN
-                             (SELECT ens.taxon_id
-                              FROM dots.ExternalNaSequence ens, dots.Est e, 
-                                apidb.EstAttributes ea, apidb.EstAlignmentGeneSummary s
-                              WHERE ea.source_id = s.accession
-                              AND s.gene is not null
-                              AND e.na_sequence_id = ens.na_sequence_id
-                              AND ens.source_id = ea.source_id
-                              AND ea.project_id = '@PROJECT_ID@'))) orgs,
-                     (SELECT 'Plasmodium falciparum' AS term, 1 as rank from dual
-                      UNION
-                      SELECT 'Plasmodium vivax' AS term, 2 as rank from dual
-                      UNION
-                      SELECT 'Plasmodium yoelii' AS term, 3 as rank from dual) partial_order
-                  WHERE orgs.term = partial_order.term(+)
-                  ORDER BY partial_order.rank
-            </sql>
-        </sqlQuery>
-
-    <processQuery name="withESTsAndGenes" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-      <wsColumn name="internal" width="32" wsName="internal"/>
-      <wsColumn name="term" width="32" wsName="term"/>
-    </processQuery>
-
     <!--===================================================================-->
     <!-- with EC -->  
     <!--===================================================================-->
@@ -1428,25 +1348,16 @@ UNION
                   CONNECT BY prior taxon_id = parent_id
                   START WITH taxon_id = organisms.internal_taxon) AS internal
           FROM (SELECT tn.name as name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
+                FROM sres.TaxonName tn, sres.taxon t, apidb.TaxonSpecies ts
                 WHERE tn.name_class='scientific name'
                   AND t.taxon_id = tn.taxon_id
                   AND t.rank = 'species'
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT nas.taxon_id
-                              FROM dots.translatedaafeature taf, dots.AaSequenceEnzymeClass asec,
-                              dots.transcript t, dots.genefeature gf, apidb.geneattributes ga, dots.NASEQUENCE nas
-                              WHERE taf.aa_sequence_id = asec.aa_sequence_id
-                              AND t.na_feature_id = taf.na_feature_id
-                              AND gf.na_feature_id = t.parent_id
-                              AND ga.source_id = gf.source_id
-                              ANd ga.project_id = '@PROJECT_ID@'
-                              AND nas.na_sequence_id = gf.na_sequence_id
-                              ))) organisms,
+                  AND tn.taxon_id = ts.species_taxon_id
+                  AND ts.taxon_id IN
+                             (  SELECT ga.taxon_id
+                                FROM apidb.GeneAttributes ga
+                                WHERE ga.project_id = '@PROJECT_ID@' )
+          ) organisms,
                (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
                  UNION
                 SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
@@ -1473,7 +1384,7 @@ UNION
     <!-- withPlasmoGenes  -->  
     <!--===================================================================-->
 
-    <sqlQuery name="withPlasmoGenes" excludeProjects="EuPathDB" isCacheable="true">
+    <sqlQuery name="withPlasmoGenes" includeProjects="PlasmoDB" isCacheable="true">
 
       <testParamValues excludeProjects="PlasmoDB" minRows="0"/>
 
@@ -1481,38 +1392,25 @@ UNION
       <column name="term"/>
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND tn.name like 'Plasmodium %'
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT ns.taxon_id
-                              FROM dots.NaSequence ns, dots.GeneFeature gf
-                              WHERE gf.na_sequence_id = ns.na_sequence_id))) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+          select tn.name as term, clade.subtaxa as internal
+          from sres.TaxonName tn,
+               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
+                                                       as apidb.varchartab), ', ') subtaxa
+                from apidb.TaxonSpecies ts
+                where ts.taxon_id in (-- taxa relevant to this param
+                                       select ga.taxon_id from apidb.GeneAttributes ga)
+                group by species_taxon_id) clade,
+               (  
+                  select 'Plasmodium falciparum' as name, 1 as rank from dual
+                union
+                  select 'Plasmodium vivax' as name, 2 as rank from dual
+                union
+                  select 'Plasmodium yoelii' as name, 3 as rank from dual
+               ) partial_ordering
+          where tn.taxon_id = clade.species_taxon_id
+            and tn.name_class = 'scientific name'
+            and tn.name = partial_ordering.name(+)
+          order by partial_ordering.rank, tn.name
         ]]>
       </sql>
     </sqlQuery>
@@ -1534,29 +1432,22 @@ UNION
       <column name="term"/>
       <sql>
         <![CDATA[
-         SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND (tn.name like 'Trypanosoma %'
-                  OR tn.name like 'Leishmania %')
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT ns.taxon_id
-                              FROM dots.NaSequence ns, dots.GeneFeature gf
-                              WHERE gf.na_sequence_id = ns.na_sequence_id))) organisms
-          ORDER BY  organisms.name
+          select tn.name as term, clade.subtaxa as internal
+          from sres.TaxonName tn,
+               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
+                                                       as apidb.varchartab), ', ') subtaxa
+                from apidb.TaxonSpecies ts
+                where ts.taxon_id in (-- taxa relevant to this param
+                                      select taxon_id from apidb.GeneAttributes)
+                group by species_taxon_id) clade,
+               ( 
+                  select 'Trypanosoma cruzi' as name, 1 as rank from dual
+
+               ) partial_ordering
+          where tn.taxon_id = clade.species_taxon_id
+            and tn.name_class = 'scientific name'
+            and tn.name = partial_ordering.name(+)
+          order by partial_ordering.rank, tn.name
         ]]>
       </sql>
     </sqlQuery>
@@ -1575,7 +1466,7 @@ UNION
 <!--====================================================================-->
 
 
-<sqlQuery name="withPlasmoTrichGiardiaGenes" includeProjects="PlasmoDB,GiardiaDB,TrichDB,CryptoDB,TriTrypDB" isCacheable="true">
+<sqlQuery name="withSecondaryStructure" includeProjects="PlasmoDB,GiardiaDB,TrichDB,CryptoDB,TriTrypDB" isCacheable="true">
 
       <testParamValues excludeProjects="GiardiaDB,TrichDB,PlasmoDB" minRows="0"/>
 
@@ -1583,46 +1474,41 @@ UNION
       <column name="term"/>
       <sql>
         <![CDATA[
-          SELECT  case when organisms.name = 'Giardia intestinalis' then 'Giardia lamblia' else organisms.name end AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND t.taxon_id IN
-                       (SELECT taxon_id
-                        FROM sres.taxon
-                        CONNECT BY taxon_id = prior parent_id
-                        START WITH taxon_id IN
-                             (SELECT ns.taxon_id
-                              FROM dots.NaSequence ns, dots.GeneFeature gf,apidb.geneattributes ga
-                              WHERE gf.na_sequence_id = ns.na_sequence_id
-                              AND ga.source_id = gf.source_id
-                              AND ga.project_id = '@PROJECT_ID@' 
-                              ))) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual
-                ) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+          select tn.name as term, clade.subtaxa as internal
+          from sres.TaxonName tn,
+               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
+                                                       as apidb.varchartab), ', ') subtaxa
+                from apidb.TaxonSpecies ts
+                where ts.taxon_id in (-- taxa relevant to this param
+                                      select taxon_id from apidb.GeneAttributes)
+                group by species_taxon_id) clade,
+               (  select 'Cryptosporidium parvum' as name, 1 as rank from dual
+                union
+                  select 'Cryptosporidium hominis' as name, 2 as rank from dual
+                union
+                  select 'Plasmodium falciparum' as name, 3 as rank from dual
+                union
+                  select 'Plasmodium vivax' as name, 4 as rank from dual
+                union
+                  select 'Plasmodium yoelii' as name, 5 as rank from dual
+                union
+                  select 'Trypanosoma cruzi' as name, 8 as rank from dual
+                union
+                  select 'Giardia lamblia ATCC 50803' as name, 9 as rank from dual
+                union
+                  select 'Giardia lamblia P15' as name, 10 as rank from dual
+                union
+                  select 'Giardia intestinalis ATCC 50581' as name, 11 as rank from dual
+               ) partial_ordering
+          where tn.taxon_id = clade.species_taxon_id
+            and tn.name_class = 'scientific name'
+            and tn.name = partial_ordering.name(+)
+          order by partial_ordering.rank, tn.name
         ]]>
       </sql>
     </sqlQuery>
 
-    <processQuery name="withPlasmoTrichGiardiaGenes" includeProjects="EuPathDB"
+    <processQuery name="withSecondaryStructure" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
