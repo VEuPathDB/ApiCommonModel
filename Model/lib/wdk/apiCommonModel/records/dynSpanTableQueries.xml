@@ -1,47 +1,41 @@
 <wdkModel>
-    <querySet name="DynSpanTables" queryType="table" includeProjects="InitDB">
+    <querySet name="DynSpanTables" queryType="table">
 
-        <sqlQuery name="SequencePieces"
+
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <!-- genes -->  
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="Genes"
                isCacheable="false">
 
             <column name="source_id" />
             <column name="project_id" />
+            <column name="gene_source_id" />
             <column name="start_min" />
             <column name="end_max" />
-            <column name="piece_source_id" />
-            <column name="piece_min" />
-            <column name="piece_max" />
-            <column name="piece_strand" />
+            <column name="strand"  />
+
             <sql>
             <![CDATA[
-          SELECT * FROM (
-            select vs.source_id as source_id, '@PROJECT_ID@' AS project_id,
-                   sp.distance_from_left + 1 as start_min, 
-                   es.length + sp.distance_from_left as end_max,
-                   case when es.source_id is null then '(N)-' || es.length else es.source_id end as piece_source_id,
-                   1 as piece_min,
-                   es.length as piece_max,
-                   sp.strand_orientation as piece_strand,
-                   sp.sequence_order
-            from Dots.SEQUENCEPIECE sp, Dots.NASEQUENCE vs, Dots.NASEQUENCE es
-            where vs.na_sequence_id = sp.virtual_na_sequence_id
-            and es.na_sequence_id = sp.piece_na_sequence_id
-            and sp.strand_orientation is not null
-            UNION
-            select es.source_id as source_id, '@PROJECT_ID@' AS project_id,
-                   sp.distance_from_left + 1 as start_min, 
-                   es.length + sp.distance_from_left as end_max,
-                   case when es.source_id is null then '(N)-' || es.length else es.source_id end as piece_source_id,
-                   1 as piece_min,
-                   es.length as piece_max,
-                   sp.strand_orientation as piece_strand,
-                   sp.sequence_order
-            from Dots.SEQUENCEPIECE sp, Dots.NASEQUENCE vs, Dots.NASEQUENCE es
-            where vs.na_sequence_id = sp.virtual_na_sequence_id
-            and es.na_sequence_id = sp.piece_na_sequence_id
-            and sp.strand_orientation is not null
-            )
-            order by source_id, sequence_order
+ 
+             select ids.source_id,ids.project_id,ga.source_id as gene_source_id,ga.start_min,ga.end_max,ga.strand
+               from 
+                      (SELECT source_id, project_id,
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids,          
+                       apidb.geneattributes ga
+              where   ga.sequence_id = ids.seq_source_id AND
+                      ga.start_min <= ids.end_max AND
+                         ga.end_max >= ids.start_min
+             order by start_min
+
              ]]>
            </sql>
         </sqlQuery>
