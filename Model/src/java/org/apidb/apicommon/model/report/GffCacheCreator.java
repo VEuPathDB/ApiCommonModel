@@ -14,9 +14,11 @@ import org.gusdb.wdk.model.query.SqlQuery;
 /**
  * @author xingao
  * 
+ *         This code is just a skeleton, it's not implemented yet. Please refer
+ *         to the old Gff3Reporter/Gff3Dumper in the ApiCommonWebsite for
+ *         implentation detail.
  */
 public class GffCacheCreator extends DumpCreator {
-
 
     private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
@@ -28,8 +30,8 @@ public class GffCacheCreator extends DumpCreator {
     private static final String COLUMN_FIELD_TITLE = "field_title";
     private static final String COLUMN_CONTENT = "content";
     private static final String COLUMN_ROW_COUNT = "row_count";
-    
-    //private static final String TABLE_
+
+    // private static final String TABLE_
 
     private static final String FUNCTION_CHAR_CLOB_AGG = "char_clob_agg";
     private static final String FUNCTION_CLOB_CLOB_AGG = "clob_clob_agg";
@@ -61,52 +63,52 @@ public class GffCacheCreator extends DumpCreator {
 
     public void dump(String sqlFile) throws WdkModelException, IOException {
         RecordClass recordClass = (RecordClass) wdkModel.resolveReference("GeneRecordClasses.GeneRecordClass");
-        //String idSql = loadIdSql(sqlFile);
+        // String idSql = loadIdSql(sqlFile);
     }
-    
+
     private void dumpGeneAttributes(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpRnaTable(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpCdsTable(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpExonTable(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpTranscript(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpProteinSequence(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpAliases(String idSql, SqlQuery query, String[] pkColumns) {
         StringBuffer sql = new StringBuffer("SELECT ");
-        for(String pkColumn : pkColumns) { 
+        for (String pkColumn : pkColumns) {
             sql.append(pkColumn).append(", ");
         }
         sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
-        
+
         sql.append("))) AS apidb.varchartab), ', ')");
     }
-    
+
     private void dumpEcNumbers(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpGoTerms(String idSql, SqlQuery query) {
-        
+
     }
-    
+
     private void dumpDbxrefs(String idSql, SqlQuery query) {
-        
+
     }
 }

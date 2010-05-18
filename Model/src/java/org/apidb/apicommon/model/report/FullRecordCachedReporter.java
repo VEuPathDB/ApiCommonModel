@@ -34,6 +34,7 @@ import org.json.JSONException;
 /**
  * @author xingao
  * 
+ * This reporter is used by the WDK "text - Detail" to generate the report from detail table.
  */
 public class FullRecordCachedReporter extends Reporter {
 

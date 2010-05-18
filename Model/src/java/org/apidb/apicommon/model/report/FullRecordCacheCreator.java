@@ -34,6 +34,22 @@ import org.gusdb.wsf.util.BaseCLI;
 /**
  * @author xingao
  * 
+ *         this command generates the data into detail table.
+ * 
+ *         Two Oracle aggregation functions are used. apidb.char_clob_agg(),
+ *         input is varchar, and aggregate to clob. It is faster than
+ *         apidb.clob_clob_agg(), where the input is already clob. So the first
+ *         function is prefered if both can be applied.
+ * 
+ *         If the concatenated column from a row in the table sql is small
+ *         enough (<= 4K), the "clobRow" should be set to false, and
+ *         apidb.char_clob_agg() will be used.
+ * 
+ *         If the table sql already contains clob columns, or if the
+ *         concatenated column is too big (> 4K), "clobRow" should be set to
+ *         true, otherwise the sql will fail. In this case, a two-step process
+ *         will be used with the slower apidb.clob_clob_agg() aggregation
+ *         function.
  */
 public class FullRecordCacheCreator extends BaseCLI {
 
@@ -162,11 +178,32 @@ public class FullRecordCacheCreator extends BaseCLI {
         return idSql;
     }
 
+    /**
+     * for a given table, it will generate a SQL by joining the original table
+     * query with the input idSql, and collapse rows of one record into a clob.
+     * 
+     * @param table
+     * @param idSql
+     * @throws WdkModelException
+     * @throws SQLException
+     * @throws WdkUserException
+     */
     private void dumpTable(TableField table, String idSql)
             throws WdkModelException, SQLException, WdkUserException {
         long start = System.currentTimeMillis();
 
         if (((SqlQuery) table.getQuery()).isClobRow()) {
+            // if the query contains any clob column, or if the concatenated
+            // column is too big (> 4000), the clob row must be set to true.
+            // Otherwise, the sql will fail.
+
+            // In that case, we will first created a temp table, and generate
+            // all rows into it without collapsing by records, then do
+            // aggregation on the temp table.
+
+            // it is faster to do it this way than collecting on clobs directly.
+            // however, it is still slower than the pure string concatenation.
+
             logger.debug("Dumping clobRow table field: " + table.getName());
             String cacheName = createCache(table, idSql);
             insertFromCache(table, cacheName);
@@ -175,6 +212,11 @@ public class FullRecordCacheCreator extends BaseCLI {
             SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
                     + cacheName);
         } else {
+            // the query doesn't contain any clob column, and the concatenated
+            // column is small enough (<= 4000).
+
+            // In this case, we can collect the rows directly from the talbe
+            // sql.
             logger.debug("Dumping charRow table field: " + table.getName());
             insertFromSql(table, idSql);
         }
@@ -184,6 +226,19 @@ public class FullRecordCacheCreator extends BaseCLI {
                 + ((end - start) / 1000.0) + " seconds");
     }
 
+    /**
+     * Create a temp table with all rows from the table sql for all given
+     * records. The rows are not collapsed yet.
+     * 
+     * The columns of the table query are concatenated into one column.
+     * 
+     * @param table
+     * @param idSql
+     * @return
+     * @throws SQLException
+     * @throws WdkModelException
+     * @throws WdkUserException
+     */
     private String createCache(TableField table, String idSql)
             throws SQLException, WdkModelException, WdkUserException {
         String cacheName = "wdkdumptemp";
@@ -210,6 +265,16 @@ public class FullRecordCacheCreator extends BaseCLI {
         return cacheName;
     }
 
+    /**
+     * Collapse rows by records from the temp table, and insert the result into
+     * detail table.
+     * 
+     * @param table
+     * @param cacheName
+     * @throws SQLException
+     * @throws WdkUserException
+     * @throws WdkModelException
+     */
     private void insertFromCache(TableField table, String cacheName)
             throws SQLException, WdkUserException, WdkModelException {
         String pkColumns = getPkColumns(table.getRecordClass(), null);
@@ -226,6 +291,16 @@ public class FullRecordCacheCreator extends BaseCLI {
         SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
+    /**
+     * Construct the FROM and WHERE clauses from the table SQL and given id SQL.
+     * 
+     * @param table
+     * @param idSql
+     * @param idqName
+     * @param tqName
+     * @return
+     * @throws WdkModelException
+     */
     private String getJoinedSql(TableField table, String idSql, String idqName,
             String tqName) throws WdkModelException {
         String queryName = table.getQuery().getFullName();
@@ -246,6 +321,15 @@ public class FullRecordCacheCreator extends BaseCLI {
         return sql.toString();
     }
 
+    /**
+     * Aggregate the rows by records, and insert the result into detail table.
+     * 
+     * @param table
+     * @param idSql
+     * @throws WdkModelException
+     * @throws SQLException
+     * @throws WdkUserException
+     */
     private void insertFromSql(TableField table, String idSql)
             throws WdkModelException, SQLException, WdkUserException {
         String idqName = "idq";
@@ -266,6 +350,13 @@ public class FullRecordCacheCreator extends BaseCLI {
         SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
+    /**
+     * construct the SELECT clause for the final INSERT sql.
+     * 
+     * @param table
+     * @param pkColumns
+     * @return
+     */
     private String getSelectSql(TableField table, String pkColumns) {
         String name = table.getName();
         String title = getTableTitle(table);
@@ -301,6 +392,18 @@ public class FullRecordCacheCreator extends BaseCLI {
         return "'" + title + "'";
     }
 
+    /**
+     * Concatenate columns in the table SQL into one big column.
+     * 
+     * If the clobRow is set to true, I'll convert the first column to clob,
+     * then do the concatenation. Oracle will use CLOB as the type of the
+     * concatenated column; otherwise, it will be a varchar.
+     * 
+     * @param tableName
+     * @param table
+     * @return
+     * @throws WdkModelException
+     */
     private String getAttributesContentSql(String tableName, TableField table)
             throws WdkModelException {
         StringBuilder sql = new StringBuilder();

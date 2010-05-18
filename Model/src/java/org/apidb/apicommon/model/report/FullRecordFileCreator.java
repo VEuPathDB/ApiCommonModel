@@ -38,6 +38,7 @@ import org.json.JSONException;
 /**
  * @author xingao
  * 
+ * This command create detail file for the download site from the detail table.
  */
 public class FullRecordFileCreator extends BaseCLI {
 
