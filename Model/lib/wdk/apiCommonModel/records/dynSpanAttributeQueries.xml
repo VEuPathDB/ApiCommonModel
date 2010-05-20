@@ -156,7 +156,57 @@
         </sqlQuery>
 
 
+        <sqlQuery name="EstCount">
+            <column name="source_id" ignoreCase="true"/>
+            <column name="project_id" ignoreCase="true"/>
+            <column name="estCount"/>
+
+             <sql>
+            <![CDATA[
+
+
+              select ids.source_id, ids.project_id, nvl(count(ests.accession),0) as estCount
+                from 
+                    ( SELECT distinct (enas.source_id) as sequence_id,
+                                         e.accession,
+                                         blat.target_start,
+                                         blat.target_end
+                         FROM   apidb.BlatAlignmentLocation blat,
+                                dots.est e,
+                                apidb.sequenceattributes enas,
+                                apidb.estalignmentgenesummary eags
+                         WHERE  blat.query_na_sequence_id = e.na_sequence_id
+                           AND  blat.target_na_sequence_id = enas.na_sequence_id
+                           AND eags.blat_alignment_id = blat.blat_alignment_id
+                           AND  enas.is_top_level = 1
+                     ) ests   right outer join 
+                      
+                      (SELECT source_id, project_id, 
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids
+
+                   on      ests.sequence_id = ids.seq_source_id AND
+                           ests.target_start <= ids.end_max AND
+                           ests.target_end >= ids.start_min
+ 
+                  group by ids.project_id,ids.source_id
+
+
+
+             ]]>
+             </sql>
+        </sqlQuery>
+
+
   </querySet>
 
 
 </wdkModel>
+
+
