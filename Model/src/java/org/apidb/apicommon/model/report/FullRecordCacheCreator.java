@@ -136,6 +136,9 @@ public class FullRecordCacheCreator extends BaseCLI {
         wdkModel = WdkModel.construct(projectId, gusHome);
 
         String idSql = loadIdSql(sqlFile);
+
+        deleteRows(idSql, fieldNames);
+
         RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
         Map<String, TableField> tables = recordClass.getTableFieldMap();
         if (fieldNames != null) { // dump individual table
@@ -176,6 +179,25 @@ public class FullRecordCacheCreator extends BaseCLI {
         if (idSql.endsWith(";"))
             idSql = idSql.substring(0, idSql.length() - 1);
         return idSql;
+    }
+
+    private void deleteRows(String idSql, String fieldNames)
+            throws WdkUserException, WdkModelException, SQLException {
+        StringBuilder sql = new StringBuilder("DELETE FROM " + cacheTable);
+        sql.append(" WHERE source_id IN (SELECT source_id FROM (");
+        sql.append(idSql + "))");
+
+        if (fieldNames != null) {
+            String[] names = fieldNames.split(",");
+            sql.append(" AND " + COLUMN_FIELD_NAME + " IN (");
+            for (int i = 0; i < names.length; i++) {
+                if (i > 0) sql.append(", ");
+                sql.append("'" + names[i] + "'");
+            }
+            sql.append(")");
+        }
+        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+        SqlUtils.executeUpdate(wdkModel, dataSource, idSql);
     }
 
     /**
