@@ -3590,35 +3590,59 @@ where one.source_id = two.source_id
     <sqlQuery name="GenesByFalcExpressionTiming" includeProjects="PlasmoDB" 
               isCacheable="true">
 
-        <paramRef ref="geneParams.minOrMax"/>
-        <paramRef ref="geneParams.maxExprHourFalc"/>
+        <paramRef ref="geneParams.profileSetFalciparum"/>
+        <paramRef ref="geneParams.pf_fc_one_fl"/>
         <paramRef ref="geneParams.maxPlusMinusHours"/>
-        <paramRef ref="geneParams.inductionFold"/>
-        <paramRef ref="geneParams.expressionPct"/>
-        <paramRef ref="geneParams.profileSetFalc"/>
+        <paramRef ref="geneParams.pf_fc_two_fl"/>
+        <paramRef ref="geneParams.maxPlusMinusHours2"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.protein_coding_only"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
         <column name="project_id"/>
         <column name="source_id"/>
-        <column name="max_fc"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+
+       
         <sql>
           <![CDATA[
-          SELECT iq.source_id, to_char(max(iq.max_fc), '999.99') as max_fc, 
-                 count(*) as num_replicates, '@PROJECT_ID@' as project_id
-          FROM (
-          SELECT gf.source_id, prs.name, max(pr.ind_ratio) as max_fc
-          FROM apidb.profile pr, apidb.profileset prs,
-               dots.nafeature gf
-          WHERE ($$minOrMax$$ = 'min'
-                 OR abs($$maxExprHourFalc$$ - pr.equiv_max) <= $$maxPlusMinusHours$$)
-          AND ($$minOrMax$$ = 'max'
-                 OR abs($$maxExprHourFalc$$ - pr.equiv_min) <= $$maxPlusMinusHours$$)
-          AND pr.ind_ratio >= $$inductionFold$$
-          AND pr.max_percentile >= $$expressionPct$$ / 100
-          AND pr.source_id = gf.source_id
-          AND pr.profile_set_id = prs.profile_set_id
-          AND prs.name like case when $$profileSetFalc$$ = '3' then 'DeRisi % Smoothed Averaged' else $$profileSetFalc$$ end
-          group BY gf.source_id,prs.name) iq
-          group by iq.source_id
-          having count(*) >= case when $$profileSetFalc$$ = '3' then 3 else 1 end
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                   round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
+                                 THEN power(2, one.average) / power(2,two.average)
+                           ELSE -1 / (power(2,one.average) / power(2,two.average))
+                   END),1) as fold_change,
+        round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where ( (nvl((regexp_replace(pen.name,'[^[:digit:]]')),0) >= ($$pf_fc_one_fl$$ - $$maxPlusMinusHours$$))
+     and (nvl((regexp_replace(pen.name,'[^[:digit:]]')),0) <= ($$pf_fc_one_fl$$ + $$maxPlusMinusHours$$)) ) 
+ and pen.profile_set_id = $$profileSetFalciparum$$
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where ( (nvl((regexp_replace(pen.name,'[^[:digit:]]')),0) >= ($$pf_fc_two_fl$$ - $$maxPlusMinusHours2$$))
+     and (nvl((regexp_replace(pen.name,'[^[:digit:]]')),0) <= ($$pf_fc_two_fl$$ + $$maxPlusMinusHours2$$)) )  
+ and pen.profile_set_id = $$profileSetFalciparum$$
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two,
+ apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and one.source_id = ga.source_id
+ and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+ and  $$regulated_dir$$ (
+               case when one.average >= two.average
+                   then power(2,one.average) / power(2,two.average)
+                   else -( power(2,two.average) / power(2,one.average))
+                   end ) >= $$fold_change$$
           ]]>
       </sql>
     </sqlQuery>
@@ -3626,18 +3650,19 @@ where one.source_id = two.source_id
     <processQuery name="GenesByFalcExpressionTiming" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
 
-        <paramRef ref="geneParams.minOrMax" quote="false"/>
-        <paramRef ref="geneParams.maxExprHourFalc"/>
+        <paramRef ref="geneParams.profileSetFalciparum"/>
+        <paramRef ref="geneParams.pf_fc_one_fl"  quote="false"/>
         <paramRef ref="geneParams.maxPlusMinusHours"/>
-<!--        <paramRef ref="geneParams.minExprHour"/>
-        <paramRef ref="geneParams.minPlusMinusHours"/> -->
-        <paramRef ref="geneParams.inductionFold"/>
-        <paramRef ref="geneParams.expressionPct"/>
-         <paramRef ref="geneParams.profileSetFalc" quote="false"/>
-	  <wsColumn name="source_id" width="32" wsName="source_id"/>
-	  <wsColumn name="project_id" width="32" wsName="project_id"/>
-          <wsColumn name="max_fc" width="32" wsName="max_fc"/>
-          <wsColumn name="num_replicates" width="32" wsName="max_fc"/>
+        <paramRef ref="geneParams.pf_fc_two_fl"  quote="false"/>
+        <paramRef ref="geneParams.maxPlusMinusHours"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.protein_coding_only"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <wsColumn name="project_id" wsName="project_id"/>
+        <wsColumn name="source_id" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
+        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
     </processQuery>
 
     <sqlQuery name="GenesByVivaxExpressionTiming" includeProjects="PlasmoDB" 
