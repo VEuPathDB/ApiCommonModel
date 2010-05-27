@@ -1,0 +1,91 @@
+#!/usr/bin/perl
+
+# find duplicates IDs in Blast databases
+#
+# $Id$
+# $URL$
+
+use strict;
+
+my $xdformat;
+my $dbs;
+my $pids;
+my $nids;
+
+chomp(my $this = `basename $0`);
+
+my $blast_dir = $ARGV[0];
+
+usage() unless -d $blast_dir;
+
+opendir(DIR, $blast_dir) or die "can't opendir $blast_dir: $!";
+while (defined(my $file = readdir(DIR))) {
+    next if $file =~ m/CDS.x[np]d/; # CDS is subset of transcript and not used in UI
+    if ($file =~ m/(.+)\.xnd$/) {
+        push @{$dbs->{'n'}}, $1 ;
+    } if ($file =~ m/(.+)\.xpd$/) {
+        push @{$dbs->{'p'}}, $1;
+    }
+}
+closedir(DIR);
+
+##### search nucleotide databases #########
+for my $ndb (@{$dbs->{'n'}}) {
+    for my $defline (qx(xdformat -n -r $blast_dir/$ndb | grep '^>')) {
+        my ($id) = $defline =~ m/>([^\s]+\s)/;
+        push @{$nids->{$id}}, $ndb;
+    }
+}
+
+for my $id (keys %$nids) {
+    if (scalar @{$nids->{$id}} > 1) {
+        print $id . " " . (join ', ', @{$nids->{$id}}) . "\n";
+    }
+}
+
+
+##### search protein databases #########
+for my $pdb (@{$dbs->{'p'}}) {
+    for my $defline (qx(xdformat -p -r $blast_dir/$pdb | grep '^>')) {
+        my ($id) = $defline =~ m/>([^\s]+\s)/;
+        push @{$pids->{$id}}, $pdb;
+    }
+}
+
+for my $id (keys %$pids) {
+    if (scalar @{$pids->{$id}} > 1) {
+        print $id . " " . (join ', ', @{$pids->{$id}}) . "\n";
+    }
+}
+
+
+
+
+sub usage {
+    print <<"EOF";
+
+Searches for duplicate Ids in xdformated blast databases in the given directory. 
+Reports duplicates found in the same file or in different files of the same 
+datatype (prot or nuc).
+
+Why? Duplicate IDs returned in a BLAST report will frighten and confuse the WDK.
+We search across all files of the same datatype because users can search a 
+virutal database made from mulitple physical files (e.g. PvivaxMitoTranscripts 
+and PvivaxTranscripts) 
+
+usage:
+$this /var/www/Common/devSiteFilesMirror/webServices/PlasmoDB/release-6.4/blast
+
+sample output:
+gb|AY598140  PvivaxGenomics, PvivaxMitoGenomics
+AF338824  PlasmodiumIsolates, PlasmodiumIsolates
+
+sample output interpretation:
+gb|AY598140 was found in both PvivaxGenomics and PvivaxMitoGenomics database.
+AF338824 was found twice in the PlasmodiumIsolates database.
+
+
+EOF
+    exit 1;
+}
+__END__
