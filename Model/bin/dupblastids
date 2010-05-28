@@ -6,86 +6,117 @@
 # $URL$
 
 use strict;
+use File::Basename;
+use Cwd qw(realpath);
 
 my $xdformat;
 my $dbs;
-my $pids;
-my $nids;
+my $seen;
 
 chomp(my $this = `basename $0`);
 
-my $blast_dir = $ARGV[0];
+usage() unless $ARGV[0];
 
-usage() unless -d $blast_dir;
+my @blast_set = @ARGV;
 
-opendir(DIR, $blast_dir) or die "can't opendir $blast_dir: $!";
-while (defined(my $file = readdir(DIR))) {
-    next if $file =~ m/CDS.x[np]d/; # CDS is subset of transcript and not used in UI
-    if ($file =~ m/(.+)\.xnd$/) {
-        push @{$dbs->{'n'}}, $1 ;
-    } if ($file =~ m/(.+)\.xpd$/) {
-        push @{$dbs->{'p'}}, $1;
-    }
-}
-closedir(DIR);
-
-##### search nucleotide databases #########
-for my $ndb (@{$dbs->{'n'}}) {
-    for my $defline (qx(xdformat -n -r $blast_dir/$ndb | grep '^>')) {
-        my ($id) = $defline =~ m/>([^\s]+\s)/;
-        push @{$nids->{$id}}, $ndb;
-    }
+for my $blast_set (@ARGV) {
+    warn "'$blast_set' is not valid.\n" and exit 1 unless
+        -d $blast_set || 
+        -f $blast_set . '.xnd' || 
+        -f $blast_set . '.xpd';
 }
 
-for my $id (keys %$nids) {
-    if (scalar @{$nids->{$id}} > 1) {
-        print $id . " " . (join ', ', @{$nids->{$id}}) . "\n";
+for my $blast_set (@ARGV) {
+
+    if (-d $blast_set) {
+
+        $blast_set =~ s/\/+$//;
+        my $blast_dir = $blast_set;
+        opendir(DIR, $blast_dir) or die "can't opendir $blast_dir: $!";
+
+        while (defined(my $basename = readdir(DIR))) {
+            my $file = realpath($blast_dir . '/' . $basename);
+            
+            next if $seen->{$file};
+            $seen->{$file}++;
+            next if $file =~ m/CDS.x[np]d/; # CDS is subset of transcript and not used in UI
+            if ($file =~ m/(.+)\.xnd$/) {
+                push @{$dbs->{'n'}}, $1 ;
+            } elsif ($file =~ m/(.+)\.xpd$/) {
+                push @{$dbs->{'p'}}, $1;
+            }
+        }
+        closedir(DIR);
+    } elsif (-f $blast_set . '.xnd' || -f $blast_set . '.xpd') {
+    
+        if (-f $blast_set . '.xnd') {
+            my $file = realpath($blast_set . '.xnd');
+            next if $seen->{$file};
+            $seen->{$file}++;
+            push @{$dbs->{'n'}}, $blast_set;            
+        } elsif (-f $blast_set . '.xpd') {
+            my $file = realpath($blast_set . '.xpd');
+            next if $seen->{$file};
+            $seen->{$file}++;
+            push @{$dbs->{'p'}}, $blast_set;
+        }
+    }
+    
+}
+##### search nucleotide, then protein databases #########
+for my $t ('n', 'p') {
+    my $ids;
+    for my $db (@{$dbs->{$t}}) {
+        for my $defline (qx(xdformat -$t -r $db | grep '^>')) {
+            my ($id) = $defline =~ m/>([^\s]+\s)/;
+            push @{$ids->{$id}}, basename($db);
+        }
+    }
+    
+    for my $id (keys %$ids) {
+        if (scalar @{$ids->{$id}} > 1) {
+            print $id . " " . (join ', ', @{$ids->{$id}}) . "\n";
+        }
     }
 }
-
-
-##### search protein databases #########
-for my $pdb (@{$dbs->{'p'}}) {
-    for my $defline (qx(xdformat -p -r $blast_dir/$pdb | grep '^>')) {
-        my ($id) = $defline =~ m/>([^\s]+\s)/;
-        push @{$pids->{$id}}, $pdb;
-    }
-}
-
-for my $id (keys %$pids) {
-    if (scalar @{$pids->{$id}} > 1) {
-        print $id . " " . (join ', ', @{$pids->{$id}}) . "\n";
-    }
-}
-
-
 
 
 sub usage {
     print <<"EOF";
 
-Searches for duplicate Ids in xdformated blast databases in the given directory. 
-Reports duplicates found in the same file or in different files of the same 
-datatype (prot or nuc).
+Searches for duplicate IDs in xdformated blast databases in the given directory
+and database files. Reports duplicates found in the same file or in different 
+files of the same datatype (prot or nuc).
 
 Why? Duplicate IDs returned in a BLAST report will frighten and confuse the WDK.
-We search across all files of the same datatype because users can search a 
-virutal database made from mulitple physical files (e.g. PvivaxMitoTranscripts 
+We search across all files of the same datatype because website users can search
+a virtual database made from mulitple physical files (e.g. PvivaxMitoTranscripts 
 and PvivaxTranscripts) 
 
-usage:
-$this /var/www/Common/devSiteFilesMirror/webServices/PlasmoDB/release-6.4/blast
+Multiple directories and database files (without file extensions) can be 
+specified.
 
-sample output:
+usage:
+$this <dir/of/blast/database> <database>
+
+example 1:
+$this PlasmoDB/release-6.4/blast/
+
+example 2:
+$this PlasmoDB/release-6.4/blast/PfalciparumAssemblies \\
+      PlasmoDB/release-6.4/blast/PlasmodiumIsolates
+
+example output:
 gb|AY598140  PvivaxGenomics, PvivaxMitoGenomics
 AF338824  PlasmodiumIsolates, PlasmodiumIsolates
 
-sample output interpretation:
+example output interpretation:
 gb|AY598140 was found in both PvivaxGenomics and PvivaxMitoGenomics database.
 AF338824 was found twice in the PlasmodiumIsolates database.
 
+Directory paths are not shown in output so mixing multiple directories and/or
+files may lead to ambiguous file names.
 
 EOF
     exit 1;
 }
-__END__
