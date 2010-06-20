@@ -3278,6 +3278,72 @@ where one.source_id = two.source_id
 
 
 
+    <sqlQuery name="GenesByToxoCellCycleFoldChange" includeProjects="ToxoDB" 
+              isCacheable="true">
+        <paramRef ref="geneParams.cc_fc_two_mw"/>
+        <paramRef ref="geneParams.cc_fc_one_mw"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+      <sql includeProjects="ToxoDB">
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                   round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
+                                 THEN power(2, one.average) / power(2,two.average)
+                           ELSE -1 / (power(2,one.average) / power(2,two.average))
+                   END),1) as fold_change,
+        round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$cc_fc_one_mw$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$cc_fc_two_mw$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two,
+ apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and ga.source_id = two.source_id
+ and ga.gene_type = 'protein coding'
+ and  $$regulated_dir$$ (
+               case when one.average >= two.average
+                   then power(2,one.average) / power(2,two.average)
+                   else -( power(2,two.average) / power(2,one.average))
+                   end ) >= $$fold_change$$
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByToxoCellCycleFoldChange" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        <paramRef ref="geneParams.cc_fc_two_mw" quote="false"/>
+        <paramRef ref="geneParams.cc_fc_one_mw" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <wsColumn name="project_id" wsName="project_id"/>
+        <wsColumn name="source_id" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
+        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
+    </processQuery>
+
+
+
     <sqlQuery name="GenesByTimeSeriesFoldChangeTbrucei" includeProjects="TriTrypDB" 
               isCacheable="true">
       <testParamValues>
