@@ -104,6 +104,11 @@
 
        <!-- query for the genomic sequence on record page -->
        <sqlQuery name="GeneModelSequence" isCacheable="false" excludeProjects="EuPathDB">
+            <testParamValues includeProjects="MicrosporidiaDB">
+               <paramValue name="source_id">EBI_27499</paramValue>
+               <paramValue name="project_id">MicrosporidiaDB</paramValue>
+            </testParamValues>
+
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="sequence"/>
@@ -147,7 +152,7 @@
        <!-- Expression Graphs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB">
+       <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB">
             <column name="source_id" />
             <column name="project_id" />
             <column name="profile_name" />
@@ -173,7 +178,7 @@
                    gd.X_AXIS,
                    gd.Y_AXIS,
                    gd.visible_parts,
-                   d.name as attribution,
+                   nvl(gd.attribution, d.name) as attribution,
                    gd.order_num
             from apidb.ExpressionGraphs eg, apidb.profileset ps, apidb.ExpressionGraphDescrip gd,
                  sres.externaldatabaserelease r, sres.externaldatabase d
@@ -187,7 +192,12 @@
         </sqlQuery>
 
 
-       <sqlQuery name="ExpressionGraphsData" includeProjects="TriTrypDB,GiardiaDB">
+       <sqlQuery name="ExpressionGraphsData" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB">
+
+           <testParamValues includeProjects="AmoebaDB">
+               <paramValue name="source_id">EHI_098180</paramValue>
+            </testParamValues>
+
             <column name="source_id" />
             <column name="project_id" />
             <column name="profile_name" />
@@ -248,7 +258,6 @@
            order by pe.element_order
             </sql>
         </sqlQuery>
-
 
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -397,13 +406,14 @@
             <column name="interpro_name"/>
             <column name="interpro_primary_id"/>
             <column name="interpro_secondary_id"/>
+            <column name="interpro_desc"/>
             <column name="interpro_start_min"/>
             <column name="interpro_end_min"/>
             <column name="interpro_e_value"/>
             <sql>
             <![CDATA[
              select gf.source_id, '@PROJECT_ID@' AS project_id, xd1.name AS interpro_name,
-             dr.primary_identifier AS interpro_primary_id, dr.secondary_identifier AS interpro_secondary_id,
+             dr.primary_identifier AS interpro_primary_id, dr.secondary_identifier AS interpro_secondary_id, dr.remark as interpro_desc,
              al.start_min AS interpro_start_min, al.end_min AS interpro_end_min,
              case when df.e_value = 0 then '0' else to_char(df.e_value,'9.9EEEE') end AS interpro_e_value 
              from
@@ -733,6 +743,10 @@
             </testParamValues>
             <testParamValues includeProjects="AmoebaDB">
                <paramValue name="source_id">ECU07_1485</paramValue>
+            </testParamValues>
+	    <testParamValues includeProjects="MicrosporidiaDB">
+               <paramValue name="source_id">ECU02_0880</paramValue>
+               <paramValue name="project_id">MicrosporidiaDB</paramValue>
             </testParamValues>
 
             <column name="source_id"/>
@@ -1069,11 +1083,11 @@
                 ELSE ga2.organism END AS organism, 
              ga2.product, ga1.source_id,
              (SELECT case when (count(*) > 0) then 'yes' else 'no' end
-              FROM apidb.synteny s,apidb.syntenyanchor sanch
+              FROM apidb.synteny s
               WHERE s.a_na_sequence_id = ga1.na_sequence_id
                 AND s.b_na_sequence_id = ga2.na_sequence_id
-                AND sanch.synteny_id = s.synteny_id
-                AND sanch.syntenic_loc = ga2.start_min 
+                AND s.b_start < ga2.end_max
+                AND s.b_end > ga2.start_min 
                 AND rownum = 1) is_syntenic,
              (SELECT case when (count(*) > 0) then 'yes' else 'no' end as comment_count
               FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, dots.GeneFeature gff
@@ -1165,13 +1179,21 @@
        <!-- Mass spec -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="MassSpec" includeProjects="PlasmoDB,EuPathDB"
+       <sqlQuery name="MassSpec" includeProjects="CryptoDB,GiardiaDB,PlasmoDB,ToxoDB,TriTrypDB,TrichDB,EuPathDB"
                   isCacheable="false">
+
+
+            <testParamValues includeProjects="GiardiaDB">
+               <paramValue name="source_id">GL50803_17249</paramValue>
+            </testParamValues>
+            <testParamValues includeProjects="TriTrypDB">
+               <paramValue name="source_id">Tb11.0550</paramValue>
+            </testParamValues>
 
             <column name="source_id"/>
             <column name="project_id"/>
+            <column name="study_name"/>
             <column name="developmental_stage"/>
-            <column name="algorithm"/>
             <column name="seq_coverage"/>
             <column name="number_of_spans"/>
             <column name="sequence_count"/>
@@ -1179,20 +1201,24 @@
             <sql>
             <![CDATA[
                SELECT mss.developmental_stage,
-                      'Sequest' as algorithm, 
+                      mst.display_term as study_name,
                       mss.aa_seq_percent_covered as seq_coverage,
                       mss.number_of_spans, mss.sequence_count, mss.spectrum_count, 
                       gf.source_id, '@PROJECT_ID@' as project_id
                FROM dots.TranslatedAaFeature taf, dots.genefeature gf, 
-                    dots.transcript t, apidb.MassSpecSummary mss
+                    dots.transcript t, apidb.MassSpecSummary mss, 
+                    sres.externalDatabase ed, sres.externalDatabaseRelease edr, apidb.massSpecTerms mst
                WHERE t.parent_id = gf.na_feature_id
                  AND taf.na_feature_id = t.na_feature_id
                  AND mss.aa_sequence_id = taf.aa_sequence_id
-               ORDER by mss.developmental_stage
+                 AND mss.external_database_release_id = edr.external_database_release_id
+                 AND edr.external_database_id = ed.external_database_id
+                 AND ed.name = mst.extdb_name
+               ORDER by mss.developmental_stage, ed.name
             ]]>
             </sql>
         </sqlQuery>
-        <sqlQuery name="MassSpec" includeProjects="GiardiaDB,ToxoDB,CryptoDB,TriTrypDB,TrichDB"
+        <sqlQuery name="MassSpecDownload" includeProjects="CryptoDB,GiardiaDB,PlasmoDB,ToxoDB,TriTrypDB,TrichDB"
                   isCacheable="false" clobRow="true">
 
             <testParamValues includeProjects="GiardiaDB">
@@ -1212,10 +1238,11 @@
             <![CDATA[
                SELECT msgt.sequence, 
 	              msgt.sum_sequence_count, sum(msgt.spectrum_count) as spectrum_count,
-		      msgt.experiment, msgt.source_id, '@PROJECT_ID@' as project_id
-	       FROM   apidb.MassSpecGeneTable msgt
-	       GROUP BY msgt.experiment, msgt.sequence, msgt.source_id, msgt.sum_sequence_count
-	       ORDER BY msgt.experiment
+                      mst.display_term as experiment, msgt.source_id, '@PROJECT_ID@' as project_id
+	       FROM   apidb.MassSpecGeneTable msgt, apidb.massSpecTerms mst
+               WHERE  msgt.experiment = mst.extdb_name
+	       GROUP BY mst.display_term, msgt.sequence, msgt.source_id, msgt.sum_sequence_count
+	       ORDER BY mst.display_term
             ]]>
             </sql>
         </sqlQuery>
@@ -1305,7 +1332,7 @@
 
        <sqlQuery name="SageTags" isCacheable="false" includeProjects="PlasmoDB,GiardiaDB,TriTrypDB,EuPathDB">
             <testParamValues includeProjects="TriTrypDB">
-               <paramValue name="source_id">Tbg972.9.8640</paramValue>
+               <paramValue name="source_id">Tb927.3.1320</paramValue>
             </testParamValues>
 
             <column name="sta_source_id"/>
@@ -1987,7 +2014,7 @@
             <![CDATA[
                select gf.source_id, '@PROJECT_ID@' AS project_id,
                DECODE(ed.name,'Winzeler_OPI_clusters','Ontology Based pattern Identification',
-                      'Winzeler_Literature_References','Literature Database') as dataset,
+                      'Winzeler_Literature_References','Malaria Literature Database') as dataset,
                r.remark || gf.source_id as link_url
                from sres.dbref r, sres.externaldatabaserelease rel, dots.dbrefnafeature rf,
                dots.genefeature gf, sres.externaldatabase ed
@@ -1998,14 +2025,14 @@
                and ed.name in ('Winzeler_OPI_clusters','Winzeler_Literature_References')
                UNION
                select ga.source_id, ga.project_id,
-               'UCSC <i>Plasmodium falciparum</i> genome browser' as dataset,
+               'UCSC <i>P. falciparum</i> genome browser' as dataset,
                'http://areslab.ucsc.edu/cgi-bin/hgTracks?position=' || source_id as link_url
                from apidb.geneattributes ga
                where ga.project_id = '@PROJECT_ID@'
                and organism = 'Plasmodium falciparum 3D7'
                UNION
                select ga.source_id, ga.project_id, 
-               'GeneDB' as dataset,
+               'GeneDB the Sanger Institute Pathogen Genomics database' as dataset,
                'http://www.genedb.org/gene/'||source_id AS link_url
                 FROM apidb.geneattributes  ga
                 where (ga.project_id in ('TriTrypDB','PlasmoDB')
@@ -2013,14 +2040,14 @@
                 or ga.organism = 'Neospora caninum'
                UNION
                select ga.source_id, ga.project_id, 
-               'TDR Targets Database' as dataset,
+               'TDR Targets Database of drug target prioritization' as dataset,
                'http://tdrtargets.org/targets/view?gene_name=' || source_id as link_url
                from apidb.geneattributes ga
                where ga.project_id = '@PROJECT_ID@'
                and organism = 'Plasmodium falciparum 3D7'
                 UNION
                 select gf.source_id, '@PROJECT_ID@' AS project_id,
-                'PlasmoMAP' as dataset,
+                'PlasmoMAP a network of functional interactions between <i>P. falciparum</i> proteins' as dataset,
                 r.remark as link_url
                 from sres.dbref r, sres.externaldatabaserelease rel, dots.dbrefnafeature rf,
                 dots.genefeature gf, sres.externaldatabase ed
@@ -2031,7 +2058,7 @@
                 and ed.name = 'plasmoMAP DbRefs'
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
-                       DECODE(ed.name,'plasmodraft DBRefs','PlasmoDraft') as dataset,
+                       DECODE(ed.name,'plasmodraft DBRefs','PlasmoDraft a database of Gene Ontology annotation predictions for <i>P. falciparum</i> genes') as dataset,
                        'http://www.atgc-montpellier.fr/PlasmoDraft/index.php?geneid=' || gf.source_id as link_url
                 FROM   sres.dbref r, sres.externaldatabaserelease rel, 
                        dots.dbrefnafeature rf,
@@ -2066,7 +2093,7 @@
                    AND ed.name = 'Phenotype DBRefs'
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
-                       'UniProt' as dataset,
+                       'UniProt protein sequence and functional annotation' as dataset,
                        'http://www.uniprot.org/uniprot/'||r.primary_identifier as link_url
                 FROM   sres.dbref r, sres.externaldatabaserelease rel, 
                        dots.dbrefnafeature rf,
@@ -2078,7 +2105,7 @@
                    AND ed.name = 'Links to Uniprot Genes'
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
-                       'Entrez Gene' as dataset,
+                       'Entrez database of genes from RefSeq genomes' as dataset,
                        'http://www.ncbi.nlm.nih.gov/sites/entrez?Db=gene&Cmd=retrieve&dopt=full_report&list_uids='||r.primary_identifier as link_url
                 FROM   sres.dbref r, sres.externaldatabaserelease rel, 
                        dots.dbrefnafeature rf,
@@ -2090,7 +2117,7 @@
                    AND ed.name = 'Links to Entrez Genes'
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
-                       'ApiLoc' as dataset,
+                       'ApiLoc, a database of protein sub-cellular localisation in Apicomplexa' as dataset,
                        remark as link_url
                 FROM   sres.dbref r, sres.externaldatabaserelease rel, 
                        dots.dbrefnafeature rf,
@@ -2100,7 +2127,18 @@
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
                    AND ed.name = 'ApiLoc_EupathDB_Dbrefs'
-
+                UNION
+                SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
+                       'TcSNP a database of genetic variation in <i>T. cruzi</i>' as dataset,
+                       rel.id_url || r.primary_identifier link_url 
+                FROM   sres.dbref r, sres.externaldatabaserelease rel, 
+                       dots.dbrefnafeature rf,
+                       apidb.geneattributes gf, sres.externaldatabase ed
+                WHERE  gf.na_feature_id = rf.na_feature_id 
+                   AND rf.db_ref_id = r.db_ref_id 
+                   AND r.external_database_release_id = rel.external_database_release_id 
+                   AND rel.external_database_id = ed.external_database_id 
+                   AND ed.name like 'TcSNP dbxrefs'
                 ]]>
             </sql>
         </sqlQuery>
@@ -2366,6 +2404,11 @@
         <!-- GeneTables.GeneDeprecation -->
 
        <sqlQuery name="GeneDeprecation" includeProjects="GiardiaDB">
+	    <testParamValues includeProjects="GiardiaDB">
+	      <paramValue name="source_id">GL50803_10871</paramValue>
+	      <paramValue name="project_id">GiardiaDB</paramValue>
+	    </testParamValues>
+
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="action"/>

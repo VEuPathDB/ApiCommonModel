@@ -147,8 +147,8 @@
 	      SELECT ga.source_id, '@PROJECT_ID@' AS project_id, lin.source_id as updated_annotation
                 FROM apidb.geneAttributes ga,
                   (SELECT gf.source_id
-                     FROM apidb.geneAttributes gf, apidb.changedGene cg
-                    WHERE gf.source_id = cg.gene) lin
+                     FROM apidb.geneAttributes gf
+                    WHERE gf.source_id IN (SELECT gene FROM apidb.AnnotationChange)) lin
                WHERE ga.source_id = lin.source_id(+)
             </sql>
         </sqlQuery>
@@ -537,6 +537,30 @@
             </sql>
         </sqlQuery>
 
+        <sqlQuery name="GeneDBUpdatedProductName" includeProjects="TriTrypDB,PlasmoDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="new_product_name"/>
+            <sql>
+            <![CDATA[
+          SELECT source_id, 
+                 project_id,
+                 RTRIM (xmlagg (xmlelement (c, genedb_product_name || ' ; ') order by genedb_product_name).extract ('//text()'), ' ; ' ) AS new_product_name                
+       /*           The above line collates the product names into a string with ';' delimiter. This is for scenarios where there are more than one 
+                    possible product names provided from GeneDB (due to alternate splicing etc.) In Oracle 11g this can be accomplished
+                    simply by using LISTAGG, but this is not provided in lesser versions.
+      */  FROM  (SELECT  distinct ga.source_id as source_id,
+                         '@PROJECT_ID@' as project_id,
+                         CASE WHEN cgp.product != ga.product THEN cgp.product ELSE null END as genedb_product_name
+                 FROM    ApiDB.GeneAttributes ga,
+                         ApiDB.ChangedGeneProduct cgp
+                 WHERE   ga.source_id = cgp.gene(+))
+          GROUP BY project_id,source_id
+            ]]>
+            </sql>
+        </sqlQuery>
+
+
         <sqlQuery name="NaSequenceDatabaseName">
             <column name="source_id"/>
             <column name="project_id"/>
@@ -751,7 +775,7 @@
     <!-- GFF sequence -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GeneGffSequence">
+    <sqlQuery name="GeneGffSequence" excludeProjects="EuPathDB">
         <column name="source_id"/>
         <column name="project_id"/>
         <column name="gff_transcript_sequence"/>

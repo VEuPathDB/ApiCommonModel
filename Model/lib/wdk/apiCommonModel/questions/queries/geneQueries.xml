@@ -144,8 +144,8 @@
              <![CDATA[
                   SELECT ga.source_id, '@PROJECT_ID@' as project_id,
 		    '<a href="http://www.genedb.org/gene/' || ga.source_id || '" target="genedb">GeneDB record</a>' as genedb_link
-                  FROM apidb.geneAttributes ga, apidb.changedGene cg
-                  WHERE ga.source_id = cg.gene
+                  FROM apidb.geneAttributes ga
+                  WHERE ga.source_id IN (SELECT gene from apidb.AnnotationChange)
            ]]>
        </sql>
     </sqlQuery>
@@ -863,7 +863,7 @@ where chip_total_reps > $$chip_replicates_plasmo$$
             FROM ((
             SELECT gf2.source_id, gf1.source_id as input, qr.wdk_weight
             FROM $$gene_result$$ qr, apidb.GeneAttributes gf1,
-                 apidb.GeneAttributes gf2, apidb.synteny s,apidb.syntenyanchor sa
+                 apidb.GeneAttributes gf2, apidb.synteny s
             WHERE $$isSyntenic$$ = 'yes'
                and qr.source_id = gf1.source_id
               AND gf1.orthomcl_name = gf2.orthomcl_name
@@ -871,8 +871,8 @@ where chip_total_reps > $$chip_replicates_plasmo$$
               AND gf2.taxon_id in ($$organism$$)
               AND s.a_na_sequence_id = gf1.na_sequence_id
               AND s.b_na_sequence_id = gf2.na_sequence_id
-              AND sa.synteny_id = s.synteny_id 
-              AND sa.syntenic_loc = gf2.start_min 
+              AND s.b_start < gf2.end_max
+              AND s.b_end > gf2.start_min
             UNION
             SELECT qr.source_id, qr.source_id as input, qr.wdk_weight
             FROM $$gene_result$$ qr, apidb.geneattributes ga
@@ -2036,8 +2036,12 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
               AND df.aa_feature_id = draf.aa_feature_id
               AND draf.db_ref_id = dr.db_ref_id
               AND dr.external_database_release_id = $$domain_database$$
-              AND dr.primary_identifier
-                  LIKE REPLACE(substr($$domain_accession$$, 1, instr($$domain_accession$$||' :', ' :')-1),'*','%')
+              AND (dr.primary_identifier
+                  LIKE REPLACE($$domain_accession$$,'*','%')
+                  OR dr.secondary_identifier
+                  LIKE REPLACE($$domain_accession$$,'*','%')
+                  OR dr.remark
+                  LIKE REPLACE($$domain_accession$$,'*','%'))
               AND tas.taxon_id IN ($$organism$$)
               AND tas.aa_sequence_id = taf.aa_sequence_id
               AND taf.na_feature_id = t.na_feature_id
@@ -3259,14 +3263,80 @@ where one.source_id = two.source_id
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
 
       <testParamValues>
-	<paramValue name="ts_fc_one_pd">112</paramValue>
-	<paramValue name="ts_fc_two_pd">108</paramValue>
+	<paramValue name="ts_fc_one_pd">125</paramValue>
+	<paramValue name="ts_fc_two_pd">127</paramValue>
       </testParamValues>
 
         <paramRef ref="geneParams.ts_fc_profile_two_pd"/>
         <paramRef ref="geneParams.ts_fc_two_pd" quote="false"/>
         <!-- paramRef ref="geneParams.ts_fc_profile_one_pd"/ -->
         <paramRef ref="geneParams.ts_fc_one_pd" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <wsColumn name="project_id" wsName="project_id"/>
+        <wsColumn name="source_id" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
+        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
+    </processQuery>
+
+
+
+    <sqlQuery name="GenesByToxoCellCycleFoldChange" includeProjects="ToxoDB" 
+              isCacheable="true">
+        <paramRef ref="geneParams.cc_fc_two_mw"/>
+        <paramRef ref="geneParams.cc_fc_one_mw"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+      <sql includeProjects="ToxoDB">
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                   round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
+                                 THEN power(2, one.average) / power(2,two.average)
+                           ELSE -1 / (power(2,one.average) / power(2,two.average))
+                   END),1) as fold_change,
+        round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$cc_fc_one_mw$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$cc_fc_two_mw$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two,
+ apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and ga.source_id = two.source_id
+ and ga.gene_type = 'protein coding'
+ and  $$regulated_dir$$ (
+               case when one.average >= two.average
+                   then power(2,one.average) / power(2,two.average)
+                   else -( power(2,two.average) / power(2,one.average))
+                   end ) >= $$fold_change$$
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByToxoCellCycleFoldChange" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        <paramRef ref="geneParams.cc_fc_two_mw" quote="false"/>
+        <paramRef ref="geneParams.cc_fc_one_mw" quote="false"/>
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir" quote="false"/>
         <wsColumn name="project_id" wsName="project_id"/>
@@ -3754,7 +3824,7 @@ where one.source_id = two.source_id
         <column name="avg_group_two"/>
         <sql>
           <![CDATA[
- select ga.source_id, '@PROJECT_ID@' as project_id,
+ select  ga.source_id, '@PROJECT_ID@' as project_id,
                    round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
                                  THEN power(2, one.average) / power(2,two.average)
                            ELSE -1 / (power(2,one.average) / power(2,two.average))
@@ -3762,28 +3832,27 @@ where one.source_id = two.source_id
         round(one.average,2) as avg_group_one,
         round(two.average,2) as avg_group_two
  from (
- select p.source_id, avg(pe.value) as average
+ select  p.source_id, p.subject_row_id as subject_row_id,avg(pe.value) as average
  from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
  where pen.profile_element_name_id in ($$eh_fc_one_fl$$)
  and pen.profile_set_id = $$profileSetEHisto$$
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
- group by p.source_id ) one,
+ group by p.subject_row_id,p.source_id ) one,
  (
- select p.source_id, avg(pe.value) as average
+ select p.source_id, p.subject_row_id as subject_row_id,avg(pe.value) as average
  from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
  where pen.profile_element_name_id in ($$eh_fc_two_fl$$)
  and pen.profile_set_id = $$profileSetEHisto$$
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
- group by p.source_id ) two,
- apidb.geneid gi,
+ group by p.subject_row_id,p.source_id ) two,
  apidb.geneattributes ga
  where one.source_id = two.source_id
- and one.source_id = gi.id
- and gi.gene = ga.source_id
+ and ga.species = 'Entamoeba histolytica'
+ and one.source_id = ga.source_id
  and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
  and  $$regulated_dir$$ (
                case when one.average >= two.average
@@ -3907,11 +3976,48 @@ where one.source_id = two.source_id
 
     <processQuery name="GenesByProfileSimilarity" includeProjects="EuPathDB"  
              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-       <paramRef ref="organismParams.organism" queryRef="organismVQ.pf"/>
-       <paramRef ref="geneParams.ProfileGeneId"/>
+   <!--    <paramRef ref="organismParams.organism" queryRef="organismVQ.pf"/>  -->
+       <paramRef ref="geneParams.ProfileGeneId" default="PF11_0344"/>
        <paramRef ref="geneParams.ProfileDistanceMethod" quote="false"/>
        <paramRef ref="geneParams.ProfileNumToReturn"/>
        <paramRef ref="geneParams.ProfileProfileSet" quote="false"/>
+       <paramRef ref="geneParams.ProfileSearchGoal" quote="false"/>
+       <paramRef ref="geneParams.ProfileTimeShift"/>
+       <paramRef ref="geneParams.ProfileScaleData"/>
+       <paramRef ref="geneParams.ProfileMinShift"/>
+       <paramRef ref="geneParams.ProfileMaxShift"/>
+       <wsColumn name="source_id" width="50" wsName="source_id"/>
+       <wsColumn name="project_id" width="32" wsName="project_id"/>
+       <wsColumn name="distance" wsName="distance" width="50"/>
+       <wsColumn name="time_shift" wsName="time_shift" width="50"/>
+       <wsColumn name="query_source_id" wsName="query_source_id" width="50"/>
+    </processQuery>
+
+    <processQuery name="GenesByToxoProfileSimilarity" includeProjects="ToxoDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.profile.ProfileSimilarityPlugin">
+       <paramRef ref="geneParams.ProfileGeneId" noTranslation="true"/>
+       <paramRef ref="geneParams.ProfileDistanceMethod"  quote="false"/>
+       <paramRef ref="geneParams.ProfileNumToReturn"/>
+       <paramRef ref="geneParams.ProfileProfileSet"  quote="false"/>
+       <paramRef ref="geneParams.ProfileSearchGoal"  quote="false"/>
+       <paramRef ref="geneParams.ProfileTimeShift"/>
+       <paramRef ref="geneParams.ProfileScaleData"/>
+       <paramRef ref="geneParams.ProfileMinShift"/>
+       <paramRef ref="geneParams.ProfileMaxShift"/>
+       <wsColumn name="source_id" width="50" wsName="GeneID"/>
+       <wsColumn name="project_id" width="32" wsName="ProjectId"/>
+       <wsColumn name="distance" wsName="Distance" width="50"/>
+       <wsColumn name="time_shift" wsName="Shift" width="50"/>
+       <wsColumn name="query_source_id" wsName="QueryGeneId" width="50"/>
+    </processQuery>
+
+    <processQuery name="GenesByToxoProfileSimilarity" includeProjects="EuPathDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+   <!--    <paramRef ref="organismParams.organism" queryRef="organismVQ.pf"/> -->
+       <paramRef ref="geneParams.ProfileGeneId" default="TGME49_053430"/>
+       <paramRef ref="geneParams.ProfileDistanceMethod" quote="false"/>
+       <paramRef ref="geneParams.ProfileNumToReturn"/>
+       <paramRef ref="geneParams.ProfileProfileSet"  quote="false" default="ME49"/>
        <paramRef ref="geneParams.ProfileSearchGoal" quote="false"/>
        <paramRef ref="geneParams.ProfileTimeShift"/>
        <paramRef ref="geneParams.ProfileScaleData"/>
@@ -4249,7 +4355,7 @@ where one.source_id = two.source_id
         displayName="By Expression Percentile" 
         isCacheable='true' 
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">      
-       <paramRef ref="geneParams.expressionPercentileSamples"/>
+       <paramRef ref="geneParams.expressionPercentileSamples" quote="false"/>
        <paramRef ref="geneParams.min_expression_percentile" default="80"/>
        <paramRef ref="geneParams.max_expression_percentile" default="100"/>
        <wsColumn name="source_id" width="50" wsName="source_id"/>
@@ -4260,10 +4366,6 @@ where one.source_id = two.source_id
   <!-- Giardia Ringqvist fold-change and percentile -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <sqlQuery name="GenesByRingqvistFoldChange" includeProjects="GiardiaDB" isCacheable='true'>
-      <testParamValues>
-	<paramValue name="life_cyc_cruzi_ref">amastigotes</paramValue>
-	<paramValue name="life_cyc_cruzi_cmp">epimastigotes</paramValue>
-      </testParamValues>
 
         <paramRef ref="geneParams.ringqvist_reference"/>  
         <paramRef ref="geneParams.ringqvist_comparitor"/>
@@ -4317,10 +4419,6 @@ where one.source_id = two.source_id
 
     <processQuery name="GenesByRingqvistFoldChange" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-       <testParamValues>
-	<paramValue name="ringqvist_reference">amastigotes</paramValue>
-	<paramValue name="ringqvist_comparitor">epimastigotes</paramValue>
-      </testParamValues>
 
         <paramRef ref="geneParams.ringqvist_reference"/>  
         <paramRef ref="geneParams.ringqvist_comparitor"/>
@@ -4781,10 +4879,10 @@ where one.source_id = two.source_id
        <sql>
 	 <![CDATA[
           SELECT ga.source_id, '@PROJECT_ID@' as project_id, 
-                 to_char((CASE WHEN avg(ep1.mean)/avg(ep2.mean) >= 1
+                 round((CASE WHEN avg(ep1.mean)/avg(ep2.mean) >= 1
                  THEN avg(power(2,ep1.mean))/avg(power(2,ep2.mean))
                  ELSE -1/(avg(power(2,ep1.mean))/avg(power(2,ep2.mean)))
-                 END),999.9) as fold_change
+                 END), 1) as fold_change
             FROM Rad.Analysis a1, Rad.ExpressionProfile ep1,
                  Rad.Analysis a2, Rad.ExpressionProfile ep2, 
                  Rad.Protocol p, ApiDB.GeneAttributes ga
@@ -5012,7 +5110,7 @@ where one.source_id = two.source_id
 
     <processQuery name="GenesByWatersDifferentialExpression" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-       <paramRef ref="geneParams.confidence"/>
+       <paramRef ref="geneParams.confidence" default="0.7"/>
        <paramRef ref="geneParams.fold_change"/>
        <paramRef ref="geneParams.regulated_dir" quote="false"/>
 	  <wsColumn name="source_id" width="32" wsName="source_id"/>
@@ -5597,10 +5695,10 @@ where one.source_id = two.source_id
 	  <wsColumn name="project_id" width="32" wsName="project_id"/>
     </processQuery>
 
-    <sqlQuery name="GenesByWeightFilter" isCacheable="true" doNotTest="true">
+    <sqlQuery name="ByWeightFilter" isCacheable="true" doNotTest="true">
         <paramRef ref="geneParams.gene_result"/>
-        <paramRef ref="geneParams.min_weight" default="0"/>
-        <paramRef ref="geneParams.max_weight" default="100"/>
+        <paramRef ref="sharedParams.min_weight" default="0"/>
+        <paramRef ref="sharedParams.max_weight" default="100"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="wdk_weight" />
