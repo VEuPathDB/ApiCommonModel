@@ -197,7 +197,8 @@ public class FullRecordCacheCreator extends BaseCLI {
             sql.append(")");
         }
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, idSql);
+        logger.info("Removing previous rows:\n" + sql);
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
     /**
