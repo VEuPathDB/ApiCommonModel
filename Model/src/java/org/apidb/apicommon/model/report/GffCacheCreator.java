@@ -425,6 +425,8 @@ public class GffCacheCreator extends BaseCLI {
 
 	getJoinPkColumns(sql, cdsQueryName, rnaQueryName, false);
 
+	sql.append(" AND ").append(COLUMN_GFF_PROTEIN_SEQUENCE).append(" IS NOT NULL ");
+
 	insertToCacheTable(sql.toString());
     }
 
