@@ -24,8 +24,6 @@ import org.gusdb.wsf.util.BaseCLI;
  * 
  */
 public class GffCacheCreator extends BaseCLI {
-
-
     private static final String NEW_LINE = System.getProperty("line.separator");
 
     private static final String ARG_PROJECT_ID = "model";
@@ -38,6 +36,9 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_FIELD_NAME = "field_name";
     private static final String COLUMN_FIELD_TITLE = "field_title";
     private static final String COLUMN_CONTENT = "content";
+    private static final String COLUMN_GO_ID = "go_id";
+    private static final String COLUMN_ONTOLOGY = "ontology";
+    private static final String COLUMN_ORDER_NUMBER = "order_number";
     private static final String COLUMN_ROW_COUNT = "row_count";
     private static final String COLUMN_GFF_SEQID = "gff_seqid";
     private static final String COLUMN_GFF_SOURCE = "gff_source";
@@ -138,12 +139,21 @@ public class GffCacheCreator extends BaseCLI {
 
         recordClass = wdkModel.getRecordClass(GENE_RECORD_CLASS);
 
+	clearCacheTable();
 	dumpGeneAttributes();
 	dumpTranscript();
 	dumpProteinSequence();
 
         long end = System.currentTimeMillis();
         logger.info("totally spent: " + ((end - start) / 1000.0) + " seconds");
+    }
+
+    private void clearCacheTable()
+	throws SQLException, WdkModelException, WdkUserException {
+	StringBuffer sql = new StringBuffer("DELETE FROM ");
+	sql.append(cacheTable);
+	DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+	SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
     private void insertToCacheTable(String subquerySql)
@@ -171,31 +181,33 @@ public class GffCacheCreator extends BaseCLI {
 
 	// Dump column fields (no parent)
 	addCommonFieldsSql(sql, false);
-	//System.out.println("COMMON FIELDS: " + sql.toString());
 
 	// Dump gff_attr_web_id
-	sql.append(" || DECODE(").append(attributeTable).append(".").append(COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
-	sql.append(" ';web_id=' || ").append(attributeTable).append(".").append(COLUMN_GFF_ATTR_WEB_ID).append(")");
+	sql.append(" || trim(DECODE(").append(attributeTable).append(".").append(COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
+	sql.append(" ';web_id=' || ").append(attributeTable).append(".").append(COLUMN_GFF_ATTR_WEB_ID).append("))");
 	// Dump gff_attr_locus_tag
-	sql.append(" || DECODE(").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(", NULL, '', ");
-	sql.append(" ';locus_tag=' || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(")");
+	sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(", NULL, '', ");
+	sql.append(" ';locus_tag=' || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append("))");
 	// Dump gff_attr_size
-	sql.append(" || DECODE(").append(COLUMN_GFF_ATTR_SIZE).append(", NULL, '', ");
-	sql.append(" ';size=' || ").append(COLUMN_GFF_ATTR_SIZE).append(")");
+	sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_SIZE).append(", NULL, '', ");
+	sql.append(" ';size=' || ").append(COLUMN_GFF_ATTR_SIZE).append("))");
 
 	// Dump Aliases
 	sql.append(" || DECODE(").append(aliasTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append("';Alias=' || ").append(aliasTable).append(".").append(COLUMN_CONTENT).append(") || chr(13) ");
+	sql.append("';Alias=' || ").append(aliasTable).append(".").append(COLUMN_CONTENT).append(") || '").append(NEW_LINE).append("' ");
 
 	// Dump RNAs (incl. go terms & dbxref)
-	sql.append(" || ").append(rnaTable).append(".").append(COLUMN_CONTENT).append(" || chr(13) ");
+	sql.append(" || DECODE(").append(rnaTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append(rnaTable).append(".").append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
 
 	// Dump CDSs
-	sql.append(" || ").append(cdsTable).append(".").append(COLUMN_CONTENT).append(" || chr(13) ");
+	sql.append(" || DECODE(").append(cdsTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append(cdsTable).append(".").append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
 
 	// Dump exons
-	sql.append(" || ").append(exonTable).append(".").append(COLUMN_CONTENT);
-
+	sql.append(" || DECODE(").append(exonTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append(exonTable).append(".").append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
+	
 	sql.append(" AS ").append(COLUMN_CONTENT).append(",");
 	
 	getTableIdModificationDateSql(sql);
@@ -249,7 +261,7 @@ public class GffCacheCreator extends BaseCLI {
 
 	sql.append(COLUMN_CONTENT);
 	
-        sql.append("))) AS apidb.varchartab), chr(13)) AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append("))) AS apidb.varchartab), '").append(NEW_LINE).append("') AS ").append(COLUMN_CONTENT).append(" FROM (");
 
 	sql.append("SELECT ");
 
@@ -259,10 +271,10 @@ public class GffCacheCreator extends BaseCLI {
 	addCommonFieldsSql(sql, true);
 	
 	// add GO terms in mRNA
-	sql.append(" || DECODE((").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append("), NULL, '', ';Ontology_term=' || (").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(")) ");
+	sql.append(" || DECODE(").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(", NULL, '', ';Ontology_term=' || ").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(") ");
 	
 	// add dbxref in mRNA
-	sql.append(" || DECODE((").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append("), NULL, '', ';Dbxref=' || (").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(")) AS ").append(COLUMN_CONTENT).append(" FROM (");
+	sql.append(" || DECODE(").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(", NULL, '', ';Dbxref=' || ").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(") AS ").append(COLUMN_CONTENT).append(" FROM (");
 
 	// rna table query
 	String tqueryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_RNAS).getQuery().getFullName();
@@ -307,7 +319,7 @@ public class GffCacheCreator extends BaseCLI {
 
 	sql.append(COLUMN_CONTENT);
 	
-        sql.append("))) AS apidb.varchartab), chr(13)) AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append(")) ORDER BY ").append(COLUMN_ORDER_NUMBER).append(") AS apidb.varchartab), '").append(NEW_LINE).append("') AS ").append(COLUMN_CONTENT).append(" FROM (");
 
 	sql.append("SELECT ");
 	
@@ -315,11 +327,14 @@ public class GffCacheCreator extends BaseCLI {
 	
 	addCommonFieldsSql(sql, true);
 	
-	sql.append(" AS ").append(COLUMN_CONTENT).append(" FROM (");
+	sql.append(" AS ").append(COLUMN_CONTENT).append(",").append(COLUMN_ORDER_NUMBER).append(" FROM (");
 
         // table query
 	String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
-        sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
+	String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
+
+        sql.append(tableQuerySql.substring(0,tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
+	sql.append(COLUMN_ORDER_NUMBER).append(",").append(tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
 
 	sql.append("))");
 
@@ -327,7 +342,7 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void dumpAliases(StringBuffer sql)  throws WdkModelException {
-	dumpAttributeAsListSql(sql, COLUMN_GFF_ALIAS, TABLE_GENE_GFF_ALIASES); 
+	dumpAttributeAsListSql(sql, COLUMN_GFF_ALIAS, TABLE_GENE_GFF_ALIASES, false, ""); 
     }
 
     private void dumpEcNumbers(String idSql, SqlQuery query) {
@@ -335,14 +350,42 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void dumpGoTerms(StringBuffer sql)  throws WdkModelException {
-	dumpAttributeAsListSql(sql, COLUMN_GFF_GO_ID, TABLE_GENE_GFF_GO_TERMS);
+        sql.append("SELECT ");
+
+        getSelectPkColumns(sql, null); 
+	
+	sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+
+	sql.append(COLUMN_GFF_GO_ID);
+	
+        sql.append(")) ORDER BY ").append(COLUMN_ONTOLOGY).append(",").append(COLUMN_GFF_GO_ID).append(") AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(" FROM (");
+
+        sql.append("SELECT ");
+
+	getSelectPkColumns(sql, null);
+
+	sql.append(COLUMN_GFF_GO_ID).append(",").append(COLUMN_ONTOLOGY).append(" FROM (");
+        // table query
+	String queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_GO_TERMS).getQuery().getFullName();
+	String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
+
+        sql.append(tableQuerySql.substring(0,tableQuerySql.toLowerCase().indexOf("from")));
+	sql.append(",").append(COLUMN_ONTOLOGY).append(" ").append(tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf("from")));
+
+	sql.append(")");
+	getGroupPkColumns(sql, null);
+	sql.append(",").append(COLUMN_GFF_GO_ID);
+	sql.append(",").append(COLUMN_ONTOLOGY);
+
+	sql.append(")");
+	getGroupPkColumns(sql, null);
     }
 
     private void dumpDbxrefs(StringBuffer sql)  throws WdkModelException {
-	dumpAttributeAsListSql(sql, COLUMN_GFF_DBXREF, TABLE_GENE_GFF_DBXREFS);
+	dumpAttributeAsListSql(sql, COLUMN_GFF_DBXREF, TABLE_GENE_GFF_DBXREFS, false, "ORDER BY " + COLUMN_GFF_DBXREF);
     }
 
-    private void dumpAttributeAsListSql(StringBuffer sql, String columnName, String tableName) throws WdkModelException {
+    private void dumpAttributeAsListSql(StringBuffer sql, String columnName, String tableName, boolean groupInnerQuery, String collectOrder) throws WdkModelException {
         sql.append("SELECT ");
 
         getSelectPkColumns(sql, null); 
@@ -351,9 +394,9 @@ public class GffCacheCreator extends BaseCLI {
 
 	sql.append(columnName);
 	
-        sql.append("))) AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append(")) ").append(collectOrder).append(") AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(" FROM (");
 
-        sql.append("SELECT DISTINCT ");
+        sql.append("SELECT ");
 
 	getSelectPkColumns(sql, null);
 
@@ -362,8 +405,11 @@ public class GffCacheCreator extends BaseCLI {
 	String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
 
-	sql.append("))");
+	sql.append(")");
+	getGroupPkColumns(sql, null);
+	sql.append(",").append(columnName);
 
+	sql.append(")");
 	getGroupPkColumns(sql, null);
     }
 
@@ -407,7 +453,7 @@ public class GffCacheCreator extends BaseCLI {
 	getTableIdModificationDateSql(sql);
 
 	sql.append(" FROM (");
-	String queryName = recordClass.getTableFieldMap().get("GeneGffRnas").getQuery().getFullName();
+	String queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_RNAS).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
 	sql.append(") ").append(rnaQueryName).append(", (SELECT ");
 
@@ -415,7 +461,7 @@ public class GffCacheCreator extends BaseCLI {
 
 	sql.append("min(").append(cdsSubqueryName).append(".").append(COLUMN_GFF_ATTR_ID).append(") AS ");
 	sql.append(COLUMN_GFF_ATTR_ID).append(" FROM (");
-	queryName = recordClass.getTableFieldMap().get("GeneGffCdss").getQuery().getFullName();
+	queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_CDSS).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
 	sql.append(") ").append(cdsSubqueryName);
 
@@ -431,23 +477,23 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void addCommonFieldsSql(StringBuffer sql, boolean includeParent) {
-        sql.append(COLUMN_GFF_SEQID).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_SOURCE).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_TYPE).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_FSTART).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_FEND).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_SCORE).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_STRAND).append(" || '\t' || ");
-        sql.append(COLUMN_GFF_PHASE).append(" || '\t' || ");
-        sql.append(" 'ID=' || ").append(COLUMN_GFF_ATTR_ID);
+        sql.append("trim(").append(COLUMN_GFF_SEQID).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_SOURCE).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_TYPE).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_FSTART).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_FEND).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_SCORE).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_STRAND).append(") || '\t' || ");
+        sql.append("trim(").append(COLUMN_GFF_PHASE).append(") || '\t' || ");
+        sql.append(" 'ID=' || trim(").append(COLUMN_GFF_ATTR_ID).append(")");
 
-	sql.append(" || ';Name=' || apidb.url_escape(COALESCE(").append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append("))");
-	sql.append(" || ';description=' || apidb.url_escape(COALESCE(").append(COLUMN_GFF_ATTR_DESCRIPTION).append(",").append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append("))");
+	sql.append(" || ';Name=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(")))");
+	sql.append(" || ';description=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_DESCRIPTION).append(",").append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(")))");
 
         sql.append(" || ';size=' || ").append(COLUMN_GFF_ATTR_SIZE);
 
 	if (includeParent) {
-	    sql.append(" || ';Parent=' || ").append(COLUMN_GFF_ATTR_PARENT);
+	    sql.append(" || ';Parent=' || trim(").append(COLUMN_GFF_ATTR_PARENT).append(")");
 	}
     }
 
