@@ -9,6 +9,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.ResultSet;
+import java.sql.PreparedStatement;
+import java.sql.Date;
+//import java.util.Date;
 import java.util.Collection;
 import java.util.Map;
 
@@ -52,7 +55,7 @@ import org.gusdb.wsf.util.BaseCLI;
  *         will be used with the slower apidb.clob_clob_agg() aggregation
  *         function.
  */
-public class FullRecordCacheCreator extends BaseCLI {
+public class DetailTableLoader extends BaseCLI {
 
     private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
@@ -96,7 +99,7 @@ public class FullRecordCacheCreator extends BaseCLI {
      * @param command
      * @param description
      */
-    protected FullRecordCacheCreator(String command, String description) {
+    protected DetailTableLoader(String command, String description) {
         super(command, description);
     }
 
@@ -140,7 +143,7 @@ public class FullRecordCacheCreator extends BaseCLI {
 	String insertSql = "insert into " + cacheTable 
 	    + " (source_id, project_id, field_name, field_title, row_count, content, modification_date)"
 	    + " values(?,?,?,?,?,?,?)"	    ;
-	PreparedStatement insertStmt = getPreparedStatement(dataSource, inserSql);	
+	PreparedStatement insertStmt = SqlUtils.getPreparedStatement(dataSource, insertSql);	
 
         String idSql = loadIdSql(sqlFile);
 
@@ -157,7 +160,7 @@ public class FullRecordCacheCreator extends BaseCLI {
                 if (table == null)
                     throw new WdkModelException(
                             "The table field doesn't exist: " + fieldName);
-                dumpTable(table, idSql, insertStmt);
+                dumpTable(table, idSql, insertStmt, insertSql);
             }
         } else { // no table specified, only dump tables with a specific flag
             for (TableField table : tables.values()) {
@@ -165,7 +168,7 @@ public class FullRecordCacheCreator extends BaseCLI {
                 if (props.length > 0 && props[0].equalsIgnoreCase("true"))
                     continue;
                 System.out.println(table.getName());
-                dumpTable(table, idSql, insertStmt);
+                dumpTable(table, idSql, insertStmt, insertSql);
             }
         }
 
@@ -216,18 +219,18 @@ public class FullRecordCacheCreator extends BaseCLI {
      * @throws SQLException
      * @throws WdkUserException
      */
-    private void dumpTable(TableField table, String idSql, PreparedStatement insertStmt)
+    private void dumpTable(TableField table, String idSql, PreparedStatement insertStmt, String insertSql)
             throws WdkModelException, SQLException, WdkUserException {
         long start = System.currentTimeMillis();
 
-	aggregateLocally(table, idSql, insertStmt);
+	aggregateLocally(table, idSql, insertStmt, insertSql);
 
         long end = System.currentTimeMillis();
         logger.info("Dump table [" + table.getName() + "] used: "
                 + ((end - start) / 1000.0) + " seconds");
     }
 
-    private void aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt)
+    private void aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, String insertSql)
             throws WdkModelException, SQLException, WdkUserException {
 
 	String title = getTableTitle(table) + "\n";
@@ -236,20 +239,20 @@ public class FullRecordCacheCreator extends BaseCLI {
         String tqName = "tq";
 	String joinedSql = getJoinedSql(table, idSql, idqName, tqName);
 
-        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, dataSource, sql);
+        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, dataSource, joinedSql);
+	String srcId = "";
+	String prj = "";
 	String prevSrcId = "";
 	String prevPrj = "";
-	String aggregatedContent;
 	int colCount = resultSet.getMetaData().getColumnCount();
 	StringBuilder aggregatedContent = new StringBuilder(title);
 	int rowCount = 0;
 	boolean first = true;
 	while(resultSet.next()) {
-	    String srcId = resultSet.getString("SOURCE_ID");
-	    String prj = resultSet.getString("PROJECT");
+	    srcId = resultSet.getString("SOURCE_ID");
+	    prj = resultSet.getString("PROJECT");
 	    if (!first && !srcId.equals(prevSrcId) || !prj.equals(prevPrj)) {
-		writeDetailRow(insertStmt, aggregatedContent.toString(), rowCount, table,
-			       srcId, prj, title);
+		writeDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
 		aggregatedContent = new StringBuilder(title);
 		rowCount = 0;
 	    }
@@ -264,7 +267,7 @@ public class FullRecordCacheCreator extends BaseCLI {
 	    aggregatedContent.append("\n");	    
 	    rowCount++;
 	}
-	writeDetailRow(insertStmt, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
+	writeDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
     } 
 
     /**
@@ -306,7 +309,7 @@ public class FullRecordCacheCreator extends BaseCLI {
      * @throws SQLException
      * @throws WdkUserException
      */
-    private void writeDetailRow(PreparedStatement insertStmt, String content, int rowCount, TableField table, String srcId, String project, String title)
+    private void writeDetailRow(PreparedStatement insertStmt, String insertSql, String content, int rowCount, TableField table, String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
 	// (source_id, project_id, field_name, field_title, row_count, content, modification_date)
 	insertStmt.setString(1,srcId);
@@ -315,8 +318,8 @@ public class FullRecordCacheCreator extends BaseCLI {
 	insertStmt.setString(4,title);
 	insertStmt.setInt(5,rowCount);
 	insertStmt.setString(6,content);
-	insertStmt.setDate(7, new Date());
-        SqlUtils.executeStmt(insertStmt);
+	insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
+        SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
     }
 
     /**
