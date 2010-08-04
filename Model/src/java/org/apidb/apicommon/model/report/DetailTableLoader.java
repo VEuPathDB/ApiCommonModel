@@ -10,8 +10,8 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.ResultSet;
 import java.sql.PreparedStatement;
+import java.sql.Connection;
 import java.sql.Date;
-//import java.util.Date;
 import java.util.Collection;
 import java.util.Map;
 
@@ -61,7 +61,7 @@ public class DetailTableLoader extends BaseCLI {
     private static final String ARG_SQL_FILE = "sqlFile";
     private static final String ARG_RECORD = "record";
     private static final String ARG_TABLE_FIELD = "field";
-    private static final String ARG_CACHE_TABLE = "cacheTable";
+    private static final String ARG_DETAIL_TABLE = "detailTable";
 
     private static final String COLUMN_FIELD_NAME = "field_name";
     private static final String COLUMN_FIELD_TITLE = "field_title";
@@ -73,7 +73,7 @@ public class DetailTableLoader extends BaseCLI {
 
     private static final String PROP_EXCLUDE_FROM_DUMPER = "excludeFromDumper";
 
-    private static final Logger logger = Logger.getLogger(FullRecordCacheCreator.class);
+    private static final Logger logger = Logger.getLogger(DetailTableLoader.class);
 
     /**
      * @param args
@@ -81,9 +81,9 @@ public class DetailTableLoader extends BaseCLI {
      */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
-        if (cmdName == null) cmdName = FullRecordCacheCreator.class.getName();
-        FullRecordCacheCreator creator = new FullRecordCacheCreator(cmdName,
-                "Create the Dump Table");
+        if (cmdName == null) cmdName = DetailTableLoader.class.getName();
+        DetailTableLoader creator = new DetailTableLoader(cmdName,
+                "Load a Detail table.  Delete rows that will be replaced");
         try {
             creator.invoke(args);
         } finally {
@@ -92,8 +92,8 @@ public class DetailTableLoader extends BaseCLI {
     }
 
     private WdkModel wdkModel;
-    private DataSource dataSource;
-    private String cacheTable;
+    private DataSource queryDataSource;
+    private String detailTable;
 
     /**
      * @param command
@@ -114,8 +114,8 @@ public class DetailTableLoader extends BaseCLI {
         addSingleValueOption(ARG_RECORD, true, null, "The full name of the "
                 + "record class to be dumped.");
 
-        addSingleValueOption(ARG_CACHE_TABLE, true, null, "The name of the "
-                + "cache table where the cached results are stored.");
+        addSingleValueOption(ARG_DETAIL_TABLE, true, null, "The name of the "
+                + "detail table where the cached results are stored.");
 
         addSingleValueOption(ARG_TABLE_FIELD, false, null, "Optional. A comma"
                 + " separated list of the name(s) of the table field(s) to be"
@@ -134,20 +134,14 @@ public class DetailTableLoader extends BaseCLI {
         String projectId = (String) getOptionValue(ARG_PROJECT_ID);
         String sqlFile = (String) getOptionValue(ARG_SQL_FILE);
         String recordClassName = (String) getOptionValue(ARG_RECORD);
-        cacheTable = (String) getOptionValue(ARG_CACHE_TABLE);
+        detailTable = (String) getOptionValue(ARG_DETAIL_TABLE);
         String fieldNames = (String) getOptionValue(ARG_TABLE_FIELD);
 
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
         wdkModel = WdkModel.construct(projectId, gusHome);
-        dataSource = wdkModel.getQueryPlatform().getDataSource();
-	String insertSql = "insert into " + cacheTable 
-	    + " (source_id, project_id, field_name, field_title, row_count, content, modification_date)"
-	    + " values(?,?,?,?,?,?,?)"	    ;
-	PreparedStatement insertStmt = SqlUtils.getPreparedStatement(dataSource, insertSql);	
+        queryDataSource = wdkModel.getQueryPlatform().getDataSource();
 
         String idSql = loadIdSql(sqlFile);
-
-        deleteRows(idSql, fieldNames);
 
         RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
         Map<String, TableField> tables = recordClass.getTableFieldMap();
@@ -160,7 +154,7 @@ public class DetailTableLoader extends BaseCLI {
                 if (table == null)
                     throw new WdkModelException(
                             "The table field doesn't exist: " + fieldName);
-                dumpTable(table, idSql, insertStmt, insertSql);
+                dumpTable(table, idSql);
             }
         } else { // no table specified, only dump tables with a specific flag
             for (TableField table : tables.values()) {
@@ -168,7 +162,7 @@ public class DetailTableLoader extends BaseCLI {
                 if (props.length > 0 && props[0].equalsIgnoreCase("true"))
                     continue;
                 System.out.println(table.getName());
-                dumpTable(table, idSql, insertStmt, insertSql);
+                dumpTable(table, idSql);
             }
         }
 
@@ -191,24 +185,6 @@ public class DetailTableLoader extends BaseCLI {
         return idSql;
     }
 
-    private void deleteRows(String idSql, String fieldNames)
-            throws WdkUserException, WdkModelException, SQLException {
-        StringBuilder sql = new StringBuilder("DELETE FROM " + cacheTable);
-        sql.append(" WHERE source_id IN (SELECT source_id FROM (");
-        sql.append(idSql + "))");
-
-        if (fieldNames != null) {
-            String[] names = fieldNames.split(",");
-            sql.append(" AND " + COLUMN_FIELD_NAME + " IN (");
-            for (int i = 0; i < names.length; i++) {
-                if (i > 0) sql.append(", ");
-                sql.append("'" + names[i] + "'");
-            }
-            sql.append(")");
-        }
-        SqlUtils.executeUpdate(wdkModel, dataSource, idSql);
-    }
-
     /**
      * for a given table, it will generate a SQL by joining the original table
      * query with the input idSql, and collapse rows of one record into a clob.
@@ -219,40 +195,76 @@ public class DetailTableLoader extends BaseCLI {
      * @throws SQLException
      * @throws WdkUserException
      */
-    private void dumpTable(TableField table, String idSql, PreparedStatement insertStmt, String insertSql)
+    private void dumpTable(TableField table, String idSql)
             throws WdkModelException, SQLException, WdkUserException {
         long start = System.currentTimeMillis();
 
-	aggregateLocally(table, idSql, insertStmt, insertSql);
+        DataSource updateDataSource = wdkModel.getQueryPlatform().getDataSource();
+	Connection updateConnection = updateDataSource.getConnection();
 
-        long end = System.currentTimeMillis();
-        logger.info("Dump table [" + table.getName() + "] used: "
-                + ((end - start) / 1000.0) + " seconds");
+	String insertSql = "insert into " + detailTable 
+	    + " (source_id, project_id, field_name, field_title, row_count, content, modification_date)"
+	    + " values(?,?,?,?,?,?,?)"
+;
+	try {
+	    updateConnection.setAutoCommit(false);
+	    deleteRows(idSql, table.getName(), updateConnection);
+
+	    PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
+	    logger.info("Dumping table [" + table.getName() + "]");
+	    int rowCount = aggregateLocally(table, idSql, insertStmt, insertSql);
+	    updateConnection.commit();
+
+	    long end = System.currentTimeMillis();
+	    logger.info("Dump table [" + table.getName() + "] done.  Inserted "
+			+ rowCount + " rows in " + ((end - start) / 1000.0) + " seconds");
+        } catch (SQLException ex) {
+	       updateConnection.rollback();
+            throw ex;
+        } finally {
+            if (updateConnection != null) {
+		updateConnection.setAutoCommit(true);
+		updateConnection.close();
+            }
+        }
     }
 
-    private void aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, String insertSql)
+    private void deleteRows(String idSql, String fieldName, Connection connection)
+            throws WdkUserException, WdkModelException, SQLException {
+        StringBuilder sql = new StringBuilder("DELETE FROM " + detailTable);
+        sql.append(" WHERE source_id IN (SELECT source_id FROM (");
+        sql.append(idSql + "))");
+	sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
+        logger.info("Removing previous rows:\n" + sql);
+        SqlUtils.executeUpdate(wdkModel, connection, sql.toString());
+    }
+
+    private int aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, String insertSql)
             throws WdkModelException, SQLException, WdkUserException {
 
 	String title = getTableTitle(table) + "\n";
 
         String idqName = "idq";
         String tqName = "tq";
-	String joinedSql = getJoinedSql(table, idSql, idqName, tqName);
+	String joinedSql = "select tq.* "
+	    + getJoinedSql(table, idSql, idqName, tqName);
 
-        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, dataSource, joinedSql);
+        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource, joinedSql);
 	String srcId = "";
 	String prj = "";
 	String prevSrcId = "";
 	String prevPrj = "";
 	int colCount = resultSet.getMetaData().getColumnCount();
 	StringBuilder aggregatedContent = new StringBuilder(title);
+	int insertCount = 0;
 	int rowCount = 0;
 	boolean first = true;
 	while(resultSet.next()) {
 	    srcId = resultSet.getString("SOURCE_ID");
-	    prj = resultSet.getString("PROJECT");
+	    prj = resultSet.getString("PROJECT_ID");
 	    if (!first && !srcId.equals(prevSrcId) || !prj.equals(prevPrj)) {
-		writeDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
+		insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
+		insertCount++;
 		aggregatedContent = new StringBuilder(title);
 		rowCount = 0;
 	    }
@@ -261,13 +273,15 @@ public class DetailTableLoader extends BaseCLI {
 	    prevPrj = prj;
 
 	    // aggregate the columns of one row
-	    aggregatedContent.append(resultSet.getString(0));	    
-	    for (int i=1; i<colCount;i++) 
+	    aggregatedContent.append(resultSet.getString(1));	    
+	    for (int i=2; i<=colCount;i++) 
 		aggregatedContent.append("\t").append(resultSet.getString(i));
 	    aggregatedContent.append("\n");	    
 	    rowCount++;
 	}
-	writeDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
+	insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
+	insertCount++;
+	return insertCount;
     } 
 
     /**
@@ -309,7 +323,7 @@ public class DetailTableLoader extends BaseCLI {
      * @throws SQLException
      * @throws WdkUserException
      */
-    private void writeDetailRow(PreparedStatement insertStmt, String insertSql, String content, int rowCount, TableField table, String srcId, String project, String title)
+    private void insertDetailRow(PreparedStatement insertStmt, String insertSql, String content, int rowCount, TableField table, String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
 	// (source_id, project_id, field_name, field_title, row_count, content, modification_date)
 	insertStmt.setString(1,srcId);
@@ -321,25 +335,6 @@ public class DetailTableLoader extends BaseCLI {
 	insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
     }
-
-    /**
-     * construct the SELECT clause for the final INSERT sql.
-     * 
-     * @param table
-     * @param pkColumns
-     * @return
-     */
-    private String getSelectSql(TableField table, String pkColumns) {
-        String name = table.getName();
-        String title = getTableTitle(table);
-        StringBuffer sql = new StringBuffer(" SELECT ");
-        sql.append(pkColumns).append(", '");
-        sql.append(name).append("' AS ").append(COLUMN_FIELD_NAME).append(',');
-        sql.append(title).append(" AS ").append(COLUMN_FIELD_TITLE).append(',');
-        sql.append("count(*) AS ").append(COLUMN_ROW_COUNT).append(' ');
-        return sql.toString();
-    }
-
     private String getTableTitle(TableField table) {
         StringBuilder sql = new StringBuilder();
         sql.append("TABLE: ").append(table.getDisplayName()).append("\n");
