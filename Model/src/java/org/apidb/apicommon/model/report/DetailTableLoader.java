@@ -161,7 +161,6 @@ public class DetailTableLoader extends BaseCLI {
                 String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
                 if (props.length > 0 && props[0].equalsIgnoreCase("true"))
                     continue;
-                System.out.println(table.getName());
                 dumpTable(table, idSql);
             }
         }
@@ -202,8 +201,19 @@ public class DetailTableLoader extends BaseCLI {
         DataSource updateDataSource = wdkModel.getQueryPlatform().getDataSource();
 	Connection updateConnection = updateDataSource.getConnection();
 
+	// Because this is a EuPathDB program, we can assume that the pk
+	// has two columns: project and id.
+	// the name of the id might differ across record types, so we will
+	// not hardcode it, rather put it in a variable called pkName
+        String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
+	String pkName = pkColumns[0].toUpperCase();
+	String pk2 = pkColumns[1].toUpperCase();
+
+	if (!pk2.equals("PROJECT_ID"))
+	    throw new WdkModelException("Unexpected primary key type: " + pk2); 
+
 	String insertSql = "insert into " + detailTable 
-	    + " (source_id, project_id, field_name, field_title, row_count, content, modification_date)"
+	    + " (" + pkName + ", project_id, field_name, field_title, row_count, content, modification_date)"
 	    + " values(?,?,?,?,?,?,?)"
 ;
 	try {
@@ -212,12 +222,12 @@ public class DetailTableLoader extends BaseCLI {
 
 	    PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
 	    logger.info("Dumping table [" + table.getName() + "]");
-	    int rowCount = aggregateLocally(table, idSql, insertStmt, insertSql);
+	    int[] counts = aggregateLocally(table, idSql, insertStmt, insertSql, pkName);
 	    updateConnection.commit();
 
 	    long end = System.currentTimeMillis();
 	    logger.info("Dump table [" + table.getName() + "] done.  Inserted "
-			+ rowCount + " rows in " + ((end - start) / 1000.0) + " seconds");
+			+ counts[0] + " (" + counts[1] + " detail) rows in " + ((end - start) / 1000.0) + " seconds");
         } catch (SQLException ex) {
 	       updateConnection.rollback();
             throw ex;
@@ -239,17 +249,14 @@ public class DetailTableLoader extends BaseCLI {
         SqlUtils.executeUpdate(wdkModel, connection, sql.toString());
     }
 
-    private int aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, String insertSql)
+    private int[] aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, String insertSql, String pkName)
             throws WdkModelException, SQLException, WdkUserException {
 
 	String title = getTableTitle(table) + "\n";
 
-        String idqName = "idq";
-        String tqName = "tq";
-	String joinedSql = "select tq.* "
-	    + getJoinedSql(table, idSql, idqName, tqName);
+	String wrappedSql = getWrappedSql(table, idSql, pkName);
 
-        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource, joinedSql);
+        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource, wrappedSql);
 	String srcId = "";
 	String prj = "";
 	String prevSrcId = "";
@@ -257,13 +264,15 @@ public class DetailTableLoader extends BaseCLI {
 	int colCount = resultSet.getMetaData().getColumnCount();
 	StringBuilder aggregatedContent = new StringBuilder(title);
 	int insertCount = 0;
+	int detailCount = 0;
 	int rowCount = 0;
 	boolean first = true;
 	while(resultSet.next()) {
-	    srcId = resultSet.getString("SOURCE_ID");
+	    srcId = resultSet.getString(pkName);
 	    prj = resultSet.getString("PROJECT_ID");
-	    if (!first && !srcId.equals(prevSrcId) || !prj.equals(prevPrj)) {
+	    if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
 		insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
+		//		System.out.println(aggregatedContent.toString());
 		insertCount++;
 		aggregatedContent = new StringBuilder(title);
 		rowCount = 0;
@@ -278,40 +287,31 @@ public class DetailTableLoader extends BaseCLI {
 		aggregatedContent.append("\t").append(resultSet.getString(i));
 	    aggregatedContent.append("\n");	    
 	    rowCount++;
+	    detailCount++;
 	}
 	insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
 	insertCount++;
-	return insertCount;
+	int[] counts = {insertCount, detailCount};
+	return counts;
     } 
 
-    /**
-     * Construct the FROM and WHERE clauses from the table SQL and given id SQL.
-     * 
-     * @param table
-     * @param idSql
-     * @param idqName
-     * @param tqName
-     * @return
-     * @throws WdkModelException
-     */
-    private String getJoinedSql(TableField table, String idSql, String idqName,
-            String tqName) throws WdkModelException {
+    private String getWrappedSql(TableField table, String idSql, String pkName) throws WdkModelException {
+
         String queryName = table.getQuery().getFullName();
         String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
-        String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
-        StringBuilder sql = new StringBuilder(" FROM ");
-        sql.append('(').append(idSql).append(") ").append(idqName);
-        sql.append(", (").append(tableSql).append(") ").append(tqName);
-        boolean firstColumn = true;
-        for (String column : pkColumns) {
-            if (firstColumn) {
-                sql.append(" WHERE ");
-                firstColumn = false;
-            } else sql.append(" AND ");
-            sql.append(idqName).append(".").append(column).append(" = ");
-            sql.append(tqName).append(".").append(column);
-        }
-        return sql.toString();
+
+	String sql = 
+	    "select tq.*" + "\n" + 
+	    "FROM (ID_QUERY) idq," + "\n" +  
+	    "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq" + "\n" + 
+	    "WHERE idq.project_id = tq.project_id" + "\n" + 
+	    "AND idq.PK_NAME = tq.PK_NAME" + "\n" +
+	    "ORDER BY tq.PK_NAME, tq.project_id, tq.row_num";
+
+	sql = sql.replace("ID_QUERY", idSql);
+	sql = sql.replace("TABLE_QUERY", tableSql);
+	sql = sql.replace("PK_NAME", pkName);
+        return sql;
     }
 
     /**
@@ -335,17 +335,18 @@ public class DetailTableLoader extends BaseCLI {
 	insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
     }
+
+
     private String getTableTitle(TableField table) {
-        StringBuilder sql = new StringBuilder();
-        sql.append("TABLE: ").append(table.getDisplayName()).append("\n");
+        StringBuilder title = new StringBuilder();
+        title.append("TABLE: ").append(table.getDisplayName()).append("\n");
         boolean firstField = true;
         for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
             if (firstField) firstField = false;
-            else sql.append("\t");
-            sql.append("[").append(attribute.getDisplayName()).append("]");
+            else title.append("\t");
+            title.append("[").append(attribute.getDisplayName()).append("]");
         }
-        String title = sql.toString().replace("'", "''");
-        return "'" + title + "'";
+        return title.toString();
     }
 
     /**
