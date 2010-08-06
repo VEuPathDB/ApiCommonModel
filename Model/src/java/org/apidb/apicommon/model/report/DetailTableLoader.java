@@ -14,6 +14,7 @@ import java.sql.Connection;
 import java.sql.Date;
 import java.util.Collection;
 import java.util.Map;
+import java.util.HashMap;
 
 import javax.sql.DataSource;
 
@@ -261,7 +262,6 @@ public class DetailTableLoader extends BaseCLI {
 	String prj = "";
 	String prevSrcId = "";
 	String prevPrj = "";
-	int colCount = resultSet.getMetaData().getColumnCount();
 	StringBuilder aggregatedContent = new StringBuilder(title);
 	int insertCount = 0;
 	int detailCount = 0;
@@ -272,7 +272,6 @@ public class DetailTableLoader extends BaseCLI {
 	    prj = resultSet.getString("PROJECT_ID");
 	    if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
 		insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
-		//		System.out.println(aggregatedContent.toString());
 		insertCount++;
 		aggregatedContent = new StringBuilder(title);
 		rowCount = 0;
@@ -282,10 +281,12 @@ public class DetailTableLoader extends BaseCLI {
 	    prevPrj = prj;
 
 	    // aggregate the columns of one row
-	    aggregatedContent.append(resultSet.getString(1));	    
-	    for (int i=2; i<=colCount;i++) 
-		aggregatedContent.append("\t").append(resultSet.getString(i));
-	    aggregatedContent.append("\n");	    
+	    String formattedValues[] = formatAttributeValues(resultSet, table);
+	    aggregatedContent.append(formattedValues[0]);	    
+	    for (int i=1; i<formattedValues.length; i++) 
+		aggregatedContent.append("\t").append(formattedValues[i]);
+	    aggregatedContent.append("\n");
+	    System.out.println(aggregatedContent);
 	    rowCount++;
 	    detailCount++;
 	}
@@ -294,6 +295,18 @@ public class DetailTableLoader extends BaseCLI {
 	int[] counts = {insertCount, detailCount};
 	return counts;
     } 
+
+    private String getTableTitle(TableField table) {
+        StringBuilder title = new StringBuilder();
+        title.append("TABLE: ").append(table.getDisplayName()).append("\n");
+        boolean firstField = true;
+        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
+            if (firstField) firstField = false;
+            else title.append("\t");
+            title.append("[").append(attribute.getDisplayName()).append("]");
+        }
+        return title.toString();
+    }
 
     private String getWrappedSql(TableField table, String idSql, String pkName) throws WdkModelException {
 
@@ -312,6 +325,55 @@ public class DetailTableLoader extends BaseCLI {
 	sql = sql.replace("TABLE_QUERY", tableSql);
 	sql = sql.replace("PK_NAME", pkName);
         return sql;
+    }
+
+    // convert values we get from the database into the displayable format
+    // this includes resolving references within text and link attributes
+    private String[] formatAttributeValues(ResultSet resultSet, TableField table)  throws WdkModelException, SQLException, WdkUserException {
+	
+	String[] formattedValuesArray =
+	    new String[table.getAttributeFields(FieldScope.REPORT_MAKER).length];
+
+	Map formattedValuesMap = new HashMap<String,String>();
+
+	int i=0;
+        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
+            String formattedValue = formatValue(formattedValuesMap, table, attribute, resultSet);
+	    formattedValuesArray[i++] = formattedValue;
+        }
+	return formattedValuesArray;
+    }
+
+    private String formatValue(Map<String,String>  formattedValuesMap, TableField table, AttributeField attribute, ResultSet resultSet) throws WdkModelException, SQLException, WdkUserException  {
+
+	if (formattedValuesMap.containsKey(attribute.getName())) {
+	    return formattedValuesMap.get(attribute.getName());
+	}
+
+        if (attribute instanceof ColumnAttributeField) {
+	    String value = resultSet.getString(attribute.getName().toUpperCase());
+	    formattedValuesMap.put(attribute.getName(), value);
+            return value;
+	}
+
+        String text = null;
+	if (attribute instanceof PrimaryKeyAttributeField) {
+            text = ((PrimaryKeyAttributeField) attribute).getText();
+        } else if (attribute instanceof TextAttributeField) {
+            text = ((TextAttributeField) attribute).getText();
+        } else if (attribute instanceof LinkAttributeField) {
+            text = ((LinkAttributeField) attribute).getDisplayText();
+        }
+
+        Collection<AttributeField> children = attribute.getDependents();
+        for (AttributeField child : children) {
+            String key = "$$" + child.getName() + "$$";
+            String childValue = formatValue(formattedValuesMap, table, child, resultSet);
+            text = text.replace(key, childValue);
+        }
+	text = text.trim();
+	formattedValuesMap.put(attribute.getName(), text);
+	return text;
     }
 
     /**
@@ -336,68 +398,4 @@ public class DetailTableLoader extends BaseCLI {
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
     }
 
-
-    private String getTableTitle(TableField table) {
-        StringBuilder title = new StringBuilder();
-        title.append("TABLE: ").append(table.getDisplayName()).append("\n");
-        boolean firstField = true;
-        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
-            if (firstField) firstField = false;
-            else title.append("\t");
-            title.append("[").append(attribute.getDisplayName()).append("]");
-        }
-        return title.toString();
-    }
-
-    /**
-     * Concatenate columns in the table SQL into one big column.
-     * 
-     * If the clobRow is set to true, I'll convert the first column to clob,
-     * then do the concatenation. Oracle will use CLOB as the type of the
-     * concatenated column; otherwise, it will be a varchar.
-     * 
-     * @param tableName
-     * @param table
-     * @return
-     * @throws WdkModelException
-     */
-    private String getAttributesContentSql(String tableName, TableField table)
-            throws WdkModelException {
-        StringBuilder sql = new StringBuilder();
-        boolean clobRow = ((SqlQuery) table.getQuery()).isClobRow();
-        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
-            String attributeSql = getAttributeContentSql(tableName, attribute);
-            if (clobRow && sql.length() == 0) {
-                attributeSql = "TO_CLOB(" + attributeSql + ")";
-            } else if (sql.length() > 0) sql.append(" || '\t' || ");
-            sql.append(attributeSql);
-        }
-        return sql.toString();
-    }
-
-    private String getAttributeContentSql(String tableName,
-            AttributeField attribute) throws WdkModelException {
-        if (attribute instanceof ColumnAttributeField)
-            return tableName + "." + attribute.getName();
-
-        String text = null;
-        if (attribute instanceof PrimaryKeyAttributeField) {
-            text = ((PrimaryKeyAttributeField) attribute).getText();
-        } else if (attribute instanceof TextAttributeField) {
-            text = ((TextAttributeField) attribute).getText();
-        } else if (attribute instanceof LinkAttributeField) {
-            text = ((LinkAttributeField) attribute).getDisplayText();
-        }
-        text = "'" + text.replace("'", "''") + "'";
-        Collection<AttributeField> children = attribute.getDependents();
-        for (AttributeField child : children) {
-            String key = "$$" + child.getName() + "$$";
-            String replace = getAttributeContentSql(tableName, child);
-            text = text.replace(key, "' || " + replace + " || '");
-        }
-        if (text.startsWith("'' || ")) text = text.substring(6);
-        if (text.endsWith(" || ''"))
-            text = text.substring(0, text.length() - 6);
-        return text.trim();
-    }
 }
