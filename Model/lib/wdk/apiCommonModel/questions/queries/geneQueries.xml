@@ -2656,6 +2656,85 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Expression Timing -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <sqlQuery name="GenesByRNASeqPfRBCFoldChange" includeProjects="PlasmoDB" 
+              isCacheable="true">
+
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_two_pd"/>
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_one_pd"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+        <sql>
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                  round((CASE WHEN (one.average >= two.average and two.average > 0)
+                                THEN one.average/two.average
+                              WHEN (one.average >= two.average and two.average = 0)
+                              THEN one.average
+                              WHEN (two.average > one.average and one.average > 0)
+                              THEN -(two.average/one.average)
+                              WHEN (two.average > one.average and one.average = 0)
+                              THEN -two.average
+                  END),1) as fold_change,
+                          round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_one_pd$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_two_pd$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two, apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and one.source_id = ga.source_id
+ and ga.gene_type = 'protein coding'
+ and  $$regulated_dir$$ (
+              case when (one.average >= two.average and two.average > 0)
+                  then one.average/two.average
+                  when (two.average >= one.average and one.average > 0)
+                  then -(two.average/one.average)
+                  when (one.average >= two.average and two.average = 0)
+                  then one.average
+                  when (two.average >= one.average and one.average = 0)
+                  then -two.average
+                  end ) >= $$fold_change$$
+           ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByRNASeqPfRBCFoldChange" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_two_pd" quote="false"/>
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_one_pd" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <wsColumn name="project_id" wsName="project_id"/>
+        <wsColumn name="source_id" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
+        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
+    </processQuery>
+
+
+
+
+
     <sqlQuery name="GenesByRNASeqPfFoldChange" includeProjects="PlasmoDB" 
               isCacheable="true">
 
