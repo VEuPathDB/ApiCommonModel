@@ -7,14 +7,13 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.sql.SQLException;
-import java.sql.ResultSet;
-import java.sql.PreparedStatement;
 import java.sql.Connection;
-import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Collection;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -31,7 +30,6 @@ import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
-import org.gusdb.wdk.model.dbms.DBPlatform;
 import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wsf.util.BaseCLI;
@@ -182,7 +180,7 @@ public class DetailTableLoader extends BaseCLI {
         String idSql = sql.toString().trim();
         if (idSql.endsWith(";"))
             idSql = idSql.substring(0, idSql.length() - 1);
-        return idSql;
+        return idSql.trim();
     }
 
     /**
@@ -200,101 +198,108 @@ public class DetailTableLoader extends BaseCLI {
         long start = System.currentTimeMillis();
 
         DataSource updateDataSource = wdkModel.getQueryPlatform().getDataSource();
-	Connection updateConnection = updateDataSource.getConnection();
+        Connection updateConnection = updateDataSource.getConnection();
 
-	// Because this is a EuPathDB program, we can assume that the pk
-	// has two columns: project and id.
-	// the name of the id might differ across record types, so we will
-	// not hardcode it, rather put it in a variable called pkName
+        // Because this is a EuPathDB program, we can assume that the pk
+        // has two columns: project and id.
+        // the name of the id might differ across record types, so we will
+        // not hardcode it, rather put it in a variable called pkName
         String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
-	String pkName = pkColumns[0].toUpperCase();
-	String pk2 = pkColumns[1].toUpperCase();
+        String pkName = pkColumns[0].toUpperCase();
+        String pk2 = pkColumns[1].toUpperCase();
 
-	if (!pk2.equals("PROJECT_ID"))
-	    throw new WdkModelException("Unexpected primary key type: " + pk2); 
+        if (!pk2.equals("PROJECT_ID"))
+            throw new WdkModelException("Unexpected primary key type: " + pk2);
 
-	String insertSql = "insert into " + detailTable 
-	    + " (" + pkName + ", project_id, field_name, field_title, row_count, content, modification_date)"
-	    + " values(?,?,?,?,?,?,?)"
-;
-	try {
-	    updateConnection.setAutoCommit(false);
-	    deleteRows(idSql, table.getName(), updateConnection);
+        String insertSql = "insert into " + detailTable + " (" + pkName
+                + ", project_id, field_name, field_title, row_count, content, "
+                + " modification_date) values(?,?,?,?,?,?,?)";
+        try {
+            updateConnection.setAutoCommit(false);
+            deleteRows(idSql, table.getName(), updateConnection);
 
-	    PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
-	    logger.info("Dumping table [" + table.getName() + "]");
-	    int[] counts = aggregateLocally(table, idSql, insertStmt, insertSql, pkName);
-	    updateConnection.commit();
+            PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
+            logger.info("Dumping table [" + table.getName() + "]");
+            int[] counts = aggregateLocally(table, idSql, insertStmt,
+                    insertSql, pkName);
+            updateConnection.commit();
 
-	    long end = System.currentTimeMillis();
-	    logger.info("Dump table [" + table.getName() + "] done.  Inserted "
-			+ counts[0] + " (" + counts[1] + " detail) rows in " + ((end - start) / 1000.0) + " seconds");
+            long end = System.currentTimeMillis();
+            logger.info("Dump table [" + table.getName() + "] done.  Inserted "
+                    + counts[0] + " (" + counts[1] + " detail) rows in "
+                    + ((end - start) / 1000.0) + " seconds");
         } catch (SQLException ex) {
-	       updateConnection.rollback();
+            updateConnection.rollback();
             throw ex;
         } finally {
             if (updateConnection != null) {
-		updateConnection.setAutoCommit(true);
-		updateConnection.close();
+                updateConnection.setAutoCommit(true);
+                updateConnection.close();
             }
         }
     }
 
-    private void deleteRows(String idSql, String fieldName, Connection connection)
-            throws WdkUserException, WdkModelException, SQLException {
+    private void deleteRows(String idSql, String fieldName,
+            Connection connection) throws WdkUserException, WdkModelException,
+            SQLException {
         StringBuilder sql = new StringBuilder("DELETE FROM " + detailTable);
         sql.append(" WHERE source_id IN (SELECT source_id FROM (");
         sql.append(idSql + "))");
-	sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
+        sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
         logger.info("Removing previous rows:\n" + sql);
         SqlUtils.executeUpdate(wdkModel, connection, sql.toString());
     }
 
-    private int[] aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, String insertSql, String pkName)
+    private int[] aggregateLocally(TableField table, String idSql,
+            PreparedStatement insertStmt, String insertSql, String pkName)
             throws WdkModelException, SQLException, WdkUserException {
 
-	String title = getTableTitle(table) + "\n";
+        String title = getTableTitle(table) + "\n";
 
-	String wrappedSql = getWrappedSql(table, idSql, pkName);
+        String wrappedSql = getWrappedSql(table, idSql, pkName);
 
-        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource, wrappedSql);
-	String srcId = "";
-	String prj = "";
-	String prevSrcId = "";
-	String prevPrj = "";
-	StringBuilder aggregatedContent = new StringBuilder(title);
-	int insertCount = 0;
-	int detailCount = 0;
-	int rowCount = 0;
-	boolean first = true;
-	while(resultSet.next()) {
-	    srcId = resultSet.getString(pkName);
-	    prj = resultSet.getString("PROJECT_ID");
-	    if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
-		insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
-		insertCount++;
-		aggregatedContent = new StringBuilder(title);
-		rowCount = 0;
-	    }
-	    first = false;
-	    prevSrcId = srcId;
-	    prevPrj = prj;
+        ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
+                wrappedSql);
+        String srcId = "";
+        String prj = "";
+        String prevSrcId = "";
+        String prevPrj = "";
+        StringBuilder aggregatedContent = new StringBuilder(title);
+        int insertCount = 0;
+        int detailCount = 0;
+        int rowCount = 0;
+        boolean first = true;
+        while (resultSet.next()) {
+            srcId = resultSet.getString(pkName);
+            prj = resultSet.getString("PROJECT_ID");
+            if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
+                insertDetailRow(insertStmt, insertSql,
+                        aggregatedContent.toString(), rowCount, table, srcId,
+                        prj, title);
+                insertCount++;
+                aggregatedContent = new StringBuilder(title);
+                rowCount = 0;
+            }
+            first = false;
+            prevSrcId = srcId;
+            prevPrj = prj;
 
-	    // aggregate the columns of one row
-	    String formattedValues[] = formatAttributeValues(resultSet, table);
-	    aggregatedContent.append(formattedValues[0]);	    
-	    for (int i=1; i<formattedValues.length; i++) 
-		aggregatedContent.append("\t").append(formattedValues[i]);
-	    aggregatedContent.append("\n");
-	    System.out.println(aggregatedContent);
-	    rowCount++;
-	    detailCount++;
-	}
-	insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(), rowCount, table, srcId, prj, title);
-	insertCount++;
-	int[] counts = {insertCount, detailCount};
-	return counts;
-    } 
+            // aggregate the columns of one row
+            String formattedValues[] = formatAttributeValues(resultSet, table);
+            aggregatedContent.append(formattedValues[0]);
+            for (int i = 1; i < formattedValues.length; i++)
+                aggregatedContent.append("\t").append(formattedValues[i]);
+            aggregatedContent.append("\n");
+            System.out.println(aggregatedContent);
+            rowCount++;
+            detailCount++;
+        }
+        insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(),
+                rowCount, table, srcId, prj, title);
+        insertCount++;
+        int[] counts = { insertCount, detailCount };
+        return counts;
+    }
 
     private String getTableTitle(TableField table) {
         StringBuilder title = new StringBuilder();
@@ -308,56 +313,58 @@ public class DetailTableLoader extends BaseCLI {
         return title.toString();
     }
 
-    private String getWrappedSql(TableField table, String idSql, String pkName) throws WdkModelException {
+    private String getWrappedSql(TableField table, String idSql, String pkName)
+            throws WdkModelException {
 
         String queryName = table.getQuery().getFullName();
         String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
 
-	String sql = 
-	    "select tq.*" + "\n" + 
-	    "FROM (ID_QUERY) idq," + "\n" +  
-	    "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq" + "\n" + 
-	    "WHERE idq.project_id = tq.project_id" + "\n" + 
-	    "AND idq.PK_NAME = tq.PK_NAME" + "\n" +
-	    "ORDER BY tq.PK_NAME, tq.project_id, tq.row_num";
+        String sql = "select tq.*" + "\n" + "FROM (ID_QUERY) idq," + "\n"
+                + "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq"
+                + "\n" + "WHERE idq.project_id = tq.project_id" + "\n"
+                + "AND idq.PK_NAME = tq.PK_NAME" + "\n"
+                + "ORDER BY tq.PK_NAME, tq.project_id, tq.row_num";
 
-	sql = sql.replace("ID_QUERY", idSql);
-	sql = sql.replace("TABLE_QUERY", tableSql);
-	sql = sql.replace("PK_NAME", pkName);
+        sql = sql.replace("ID_QUERY", idSql);
+        sql = sql.replace("TABLE_QUERY", tableSql);
+        sql = sql.replace("PK_NAME", pkName);
         return sql;
     }
 
     // convert values we get from the database into the displayable format
     // this includes resolving references within text and link attributes
-    private String[] formatAttributeValues(ResultSet resultSet, TableField table)  throws WdkModelException, SQLException, WdkUserException {
-	
-	String[] formattedValuesArray =
-	    new String[table.getAttributeFields(FieldScope.REPORT_MAKER).length];
+    private String[] formatAttributeValues(ResultSet resultSet, TableField table)
+            throws WdkModelException, SQLException, WdkUserException {
 
-	Map formattedValuesMap = new HashMap<String,String>();
+        String[] formattedValuesArray = new String[table.getAttributeFields(FieldScope.REPORT_MAKER).length];
 
-	int i=0;
+        Map<String, String> formattedValuesMap = new HashMap<String, String>();
+
+        int i = 0;
         for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
-            String formattedValue = formatValue(formattedValuesMap, table, attribute, resultSet);
-	    formattedValuesArray[i++] = formattedValue;
+            String formattedValue = formatValue(formattedValuesMap, table,
+                    attribute, resultSet);
+            formattedValuesArray[i++] = formattedValue;
         }
-	return formattedValuesArray;
+        return formattedValuesArray;
     }
 
-    private String formatValue(Map<String,String>  formattedValuesMap, TableField table, AttributeField attribute, ResultSet resultSet) throws WdkModelException, SQLException, WdkUserException  {
+    private String formatValue(Map<String, String> formattedValuesMap,
+            TableField table, AttributeField attribute, ResultSet resultSet)
+            throws WdkModelException, SQLException, WdkUserException {
 
-	if (formattedValuesMap.containsKey(attribute.getName())) {
-	    return formattedValuesMap.get(attribute.getName());
-	}
+        if (formattedValuesMap.containsKey(attribute.getName())) {
+            return formattedValuesMap.get(attribute.getName());
+        }
 
         if (attribute instanceof ColumnAttributeField) {
-	    String value = resultSet.getString(attribute.getName().toUpperCase());
-	    formattedValuesMap.put(attribute.getName(), value);
+            String value = resultSet.getString(attribute.getName().toUpperCase());
+            formattedValuesMap.put(attribute.getName(), value);
             return value;
-	}
+        }
 
         String text = null;
-	if (attribute instanceof PrimaryKeyAttributeField) {
+        if (attribute instanceof PrimaryKeyAttributeField) {
             text = ((PrimaryKeyAttributeField) attribute).getText();
         } else if (attribute instanceof TextAttributeField) {
             text = ((TextAttributeField) attribute).getText();
@@ -368,12 +375,13 @@ public class DetailTableLoader extends BaseCLI {
         Collection<AttributeField> children = attribute.getDependents();
         for (AttributeField child : children) {
             String key = "$$" + child.getName() + "$$";
-            String childValue = formatValue(formattedValuesMap, table, child, resultSet);
+            String childValue = formatValue(formattedValuesMap, table, child,
+                    resultSet);
             text = text.replace(key, childValue);
         }
-	text = text.trim();
-	formattedValuesMap.put(attribute.getName(), text);
-	return text;
+        text = text.trim();
+        formattedValuesMap.put(attribute.getName(), text);
+        return text;
     }
 
     /**
@@ -385,16 +393,19 @@ public class DetailTableLoader extends BaseCLI {
      * @throws SQLException
      * @throws WdkUserException
      */
-    private void insertDetailRow(PreparedStatement insertStmt, String insertSql, String content, int rowCount, TableField table, String srcId, String project, String title)
+    private void insertDetailRow(PreparedStatement insertStmt,
+            String insertSql, String content, int rowCount, TableField table,
+            String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
-	// (source_id, project_id, field_name, field_title, row_count, content, modification_date)
-	insertStmt.setString(1,srcId);
-	insertStmt.setString(2,project);
-	insertStmt.setString(3,table.getName());
-	insertStmt.setString(4,title);
-	insertStmt.setInt(5,rowCount);
-	insertStmt.setString(6,content);
-	insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
+        // (source_id, project_id, field_name, field_title, row_count, content,
+        // modification_date)
+        insertStmt.setString(1, srcId);
+        insertStmt.setString(2, project);
+        insertStmt.setString(3, table.getName());
+        insertStmt.setString(4, title);
+        insertStmt.setInt(5, rowCount);
+        insertStmt.setString(6, content);
+        insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
     }
 
