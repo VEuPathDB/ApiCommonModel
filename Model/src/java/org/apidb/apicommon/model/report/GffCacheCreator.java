@@ -3,6 +3,9 @@
  */
 package org.apidb.apicommon.model.report;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.sql.SQLException;
 
@@ -26,8 +29,9 @@ import org.gusdb.wsf.util.BaseCLI;
 public class GffCacheCreator extends BaseCLI {
     private static final String NEW_LINE = System.getProperty("line.separator");
 
-    private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_CACHE_TABLE = "cacheTable";
+    private static final String ARG_PROJECT_ID = "model";
+    private static final String ARG_SQL_FILE = "sqlFile";
 
     private static final String ARG_GFF_RECORD_NAME = "gff_record";
     private static final String ARG_GFF_TRANSCRIPT_NAME = "gff_transcript";
@@ -80,7 +84,7 @@ public class GffCacheCreator extends BaseCLI {
      */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
-        if (cmdName == null) cmdName = FullRecordCacheCreator.class.getName();
+        if (cmdName == null) cmdName = GffCacheCreator.class.getName();
         GffCacheCreator creator = new GffCacheCreator(cmdName,
                 "Create the Gene GFF Dump Table");
         try {
@@ -109,6 +113,9 @@ public class GffCacheCreator extends BaseCLI {
         addSingleValueOption(ARG_CACHE_TABLE, true, null, "The name of the "
                 + "cache table where the cached results are stored.");
 
+        addSingleValueOption(ARG_SQL_FILE, true, null, "The file that contains"
+                + " a sql that returns the primary key columns of the records");
+
         addSingleValueOption(ARG_GFF_RECORD_NAME, true, null, "The table name for "
                 + "the record entry in the cache table.");
 
@@ -129,6 +136,7 @@ public class GffCacheCreator extends BaseCLI {
         long start = System.currentTimeMillis();
 
         String projectId = (String) getOptionValue(ARG_PROJECT_ID);
+        String sqlFile = (String) getOptionValue(ARG_SQL_FILE);
         cacheTable = (String) getOptionValue(ARG_CACHE_TABLE);
 	recordName = (String) getOptionValue(ARG_GFF_RECORD_NAME);
 	transcriptName = (String) getOptionValue(ARG_GFF_TRANSCRIPT_NAME);
@@ -139,19 +147,39 @@ public class GffCacheCreator extends BaseCLI {
 
         recordClass = wdkModel.getRecordClass(GENE_RECORD_CLASS);
 
-	clearCacheTable();
-	dumpGeneAttributes();
-	dumpTranscript();
-	dumpProteinSequence();
+
+        String idSql = loadIdSql(sqlFile);
+
+	deleteRows(idSql);
+	dumpGeneAttributes(idSql);
+	dumpTranscript(idSql);
+	dumpProteinSequence(idSql);
 
         long end = System.currentTimeMillis();
         logger.info("totally spent: " + ((end - start) / 1000.0) + " seconds");
     }
 
-    private void clearCacheTable()
+    private String loadIdSql(String sqlFile) throws IOException {
+        File file = new File(sqlFile);
+        StringBuffer sql = new StringBuffer();
+        BufferedReader reader = new BufferedReader(new FileReader(file));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            sql.append(line).append("\n");
+        }
+        reader.close();
+        String idSql = sql.toString().trim();
+        if (idSql.endsWith(";"))
+            idSql = idSql.substring(0, idSql.length() - 1);
+        return idSql;
+    }
+
+    private void deleteRows(String idSql)
 	throws SQLException, WdkModelException, WdkUserException {
-	StringBuffer sql = new StringBuffer("DELETE FROM ");
-	sql.append(cacheTable);
+	StringBuffer sql = new StringBuffer("DELETE FROM " + cacheTable);
+        sql.append(" WHERE source_id IN (SELECT source_id FROM (");
+        sql.append(idSql + "))");
+
 	DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
 	SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
@@ -165,8 +193,9 @@ public class GffCacheCreator extends BaseCLI {
 	SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
     }
 
-    private void dumpGeneAttributes()
+    private void dumpGeneAttributes(String idSql)
 	throws SQLException, WdkModelException, WdkUserException {
+	String idqName = "idq";
 	String aliasTable = "gffalias";
 	String rnaTable = "gffrna";
 	String cdsTable = "gffcds";
@@ -183,8 +212,8 @@ public class GffCacheCreator extends BaseCLI {
 	addCommonFieldsSql(sql, false);
 
 	// Dump gff_attr_web_id
-	sql.append(" || trim(DECODE(").append(attributeTable).append(".").append(COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
-	sql.append(" ';web_id=' || ").append(attributeTable).append(".").append(COLUMN_GFF_ATTR_WEB_ID).append("))");
+	sql.append(" || trim(DECODE(").append(attributeTable).append('.').append(COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
+	sql.append(" ';web_id=' || ").append(attributeTable).append('.').append(COLUMN_GFF_ATTR_WEB_ID).append("))");
 	// Dump gff_attr_locus_tag
 	sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(", NULL, '', ");
 	sql.append(" ';locus_tag=' || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append("))");
@@ -193,22 +222,22 @@ public class GffCacheCreator extends BaseCLI {
 	sql.append(" ';size=' || ").append(COLUMN_GFF_ATTR_SIZE).append("))");
 
 	// Dump Aliases
-	sql.append(" || DECODE(").append(aliasTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append("';Alias=' || ").append(aliasTable).append(".").append(COLUMN_CONTENT).append(") || '").append(NEW_LINE).append("' ");
+	sql.append(" || DECODE(").append(aliasTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append("';Alias=' || ").append(aliasTable).append('.').append(COLUMN_CONTENT).append(") || '").append(NEW_LINE).append("' ");
 
 	// Dump RNAs (incl. go terms & dbxref)
-	sql.append(" || DECODE(").append(rnaTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append(rnaTable).append(".").append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
+	sql.append(" || DECODE(").append(rnaTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append(rnaTable).append('.').append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
 
 	// Dump CDSs
-	sql.append(" || DECODE(").append(cdsTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append(cdsTable).append(".").append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
+	sql.append(" || DECODE(").append(cdsTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append(cdsTable).append('.').append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
 
 	// Dump exons
-	sql.append(" || DECODE(").append(exonTable).append(".").append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append(exonTable).append(".").append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
+	sql.append(" || DECODE(").append(exonTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
+	sql.append(exonTable).append('.').append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
 	
-	sql.append(" AS ").append(COLUMN_CONTENT).append(",");
+	sql.append(" AS ").append(COLUMN_CONTENT).append(',');
 	
 	getTableIdModificationDateSql(sql);
 	
@@ -222,28 +251,32 @@ public class GffCacheCreator extends BaseCLI {
 	dumpAliases(sql);
 	sql.append(") ").append(aliasTable);
 
-	getJoinPkColumns(sql, attributeTable, aliasTable, true);
+	getJoinPkColumns(sql, attributeTable, aliasTable, true, true);
 	
 	// Bring in RNA table query
 	sql.append(" LEFT OUTER JOIN (");
 	dumpRnaTable(sql);
 	sql.append(") ").append(rnaTable);
 
-	getJoinPkColumns(sql, attributeTable, rnaTable, true);
+	getJoinPkColumns(sql, attributeTable, rnaTable, true, true);
 
 	// Bring in CDS table query
 	sql.append(" LEFT OUTER JOIN (");
 	dumpCdsTable(sql);
 	sql.append(") ").append(cdsTable);
 
-	getJoinPkColumns(sql, attributeTable, cdsTable, true);
+	getJoinPkColumns(sql, attributeTable, cdsTable, true, true);
 
 	// Bring in exon table query
 	sql.append(" LEFT OUTER JOIN (");
 	dumpExonTable(sql);
 	sql.append(") ").append(exonTable);
-
-	getJoinPkColumns(sql, attributeTable, exonTable, true);
+	getJoinPkColumns(sql, attributeTable, exonTable, true, true);
+	
+	// Join to id query
+	sql.append(',');
+        sql.append('(').append(idSql).append(") ").append(idqName);
+	getJoinPkColumns(sql, idqName, attributeTable, false, true);
 
 	insertToCacheTable(sql.toString());
     }
@@ -271,10 +304,10 @@ public class GffCacheCreator extends BaseCLI {
 	addCommonFieldsSql(sql, true);
 	
 	// add GO terms in mRNA
-	sql.append(" || DECODE(").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(", NULL, '', ';Ontology_term=' || ").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(") ");
+	sql.append(" || DECODE(").append(goSubQueryName).append('.').append(COLUMN_CONTENT).append(", NULL, '', ';Ontology_term=' || ").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(") ");
 	
 	// add dbxref in mRNA
-	sql.append(" || DECODE(").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(", NULL, '', ';Dbxref=' || ").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(") AS ").append(COLUMN_CONTENT).append(" FROM (");
+	sql.append(" || DECODE(").append(dbxrefSubQueryName).append('.').append(COLUMN_CONTENT).append(", NULL, '', ';Dbxref=' || ").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(") AS ").append(COLUMN_CONTENT).append(" FROM (");
 
 	// rna table query
 	String tqueryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_RNAS).getQuery().getFullName();
@@ -287,7 +320,7 @@ public class GffCacheCreator extends BaseCLI {
 	sql.append(") ").append(goSubQueryName);
 
 	// join conditions
-	getJoinPkColumns(sql, queryName, goSubQueryName, true);
+	getJoinPkColumns(sql, queryName, goSubQueryName, true, true);
 
 	sql.append(" LEFT OUTER JOIN (");
 	// dbxref query
@@ -295,9 +328,9 @@ public class GffCacheCreator extends BaseCLI {
 	sql.append(") ").append(dbxrefSubQueryName);
 
 	// join conditions
-	getJoinPkColumns(sql, queryName, dbxrefSubQueryName, true);
+	getJoinPkColumns(sql, queryName, dbxrefSubQueryName, true, true);
 	
-	sql.append(")");
+	sql.append(')');
 
 	getGroupPkColumns(sql, null);
     }
@@ -327,14 +360,14 @@ public class GffCacheCreator extends BaseCLI {
 	
 	addCommonFieldsSql(sql, true);
 	
-	sql.append(" AS ").append(COLUMN_CONTENT).append(",").append(COLUMN_ORDER_NUMBER).append(" FROM (");
+	sql.append(" AS ").append(COLUMN_CONTENT).append(',').append(COLUMN_ORDER_NUMBER).append(" FROM (");
 
         // table query
 	String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
 	String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
 
         sql.append(tableQuerySql.substring(0,tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
-	sql.append(COLUMN_ORDER_NUMBER).append(",").append(tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
+	sql.append(COLUMN_ORDER_NUMBER).append(',').append(tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
 
 	sql.append("))");
 
@@ -385,7 +418,8 @@ public class GffCacheCreator extends BaseCLI {
 	dumpAttributeAsListSql(sql, COLUMN_GFF_DBXREF, TABLE_GENE_GFF_DBXREFS, false, "ORDER BY " + COLUMN_GFF_DBXREF);
     }
 
-    private void dumpAttributeAsListSql(StringBuffer sql, String columnName, String tableName, boolean groupInnerQuery, String collectOrder) throws WdkModelException {
+    private void dumpAttributeAsListSql(StringBuffer sql, String columnName, String tableName, boolean groupInnerQuery, String collectOrder)
+	throws WdkModelException {
         sql.append("SELECT ");
 
         getSelectPkColumns(sql, null); 
@@ -413,29 +447,34 @@ public class GffCacheCreator extends BaseCLI {
 	getGroupPkColumns(sql, null);
     }
 
-    private void dumpTranscript()
+    private void dumpTranscript(String idSql)
 	throws SQLException, WdkModelException, WdkUserException {
+	String idqName = "idq";
+	String seqQueryName = "seq";
 	StringBuffer sql = new StringBuffer("SELECT ");
 
-
-        getSelectPkColumns(sql, null);
+        getSelectPkColumns(sql, seqQueryName);
 
 	getTableNameRowCountSql(sql, transcriptName);
 
-	sql.append("apidb.gff_format_sequence(").append(COLUMN_SOURCE_ID).append(", ").append(COLUMN_GFF_TRANSCRIPT_SEQUENCE);
-	sql.append(") AS ").append(COLUMN_CONTENT).append(",");
+	sql.append("apidb.gff_format_sequence(").append(seqQueryName).append('.');
+	sql.append(COLUMN_SOURCE_ID).append(',').append(COLUMN_GFF_TRANSCRIPT_SEQUENCE);
+	sql.append(") AS ").append(COLUMN_CONTENT).append(',');
 
 	getTableIdModificationDateSql(sql);
 
 	sql.append(" FROM (");
         sql.append(((SqlQuery) wdkModel.resolveReference("GeneAttributes.GeneGffSequence")).getSql());
-	sql.append(")");
+	sql.append(')').append(seqQueryName).append(',');
+        sql.append('(').append(idSql).append(") ").append(idqName);
+	getJoinPkColumns(sql, idqName, seqQueryName, false, true);
 
 	insertToCacheTable(sql.toString());
     }
     
-    private void dumpProteinSequence()
+    private void dumpProteinSequence(String idSql)
 	throws SQLException, WdkModelException, WdkUserException{
+	String idqName = "idq";
 	String cdsQueryName = "cds";
 	String rnaQueryName = "rna";
 	String cdsSubqueryName = "subcds";
@@ -446,7 +485,7 @@ public class GffCacheCreator extends BaseCLI {
 
 	getTableNameRowCountSql(sql, proteinName);
 
-	sql.append("apidb.gff_format_sequence(").append(cdsQueryName).append(".").append(COLUMN_GFF_ATTR_ID);
+	sql.append("apidb.gff_format_sequence(").append(cdsQueryName).append('.').append(COLUMN_GFF_ATTR_ID);
 	sql.append(", ").append(rnaQueryName).append(".").append(COLUMN_GFF_PROTEIN_SEQUENCE);
 	sql.append(") AS ").append(COLUMN_CONTENT).append(",");
 	
@@ -467,9 +506,11 @@ public class GffCacheCreator extends BaseCLI {
 
 	getGroupPkColumns(sql, cdsSubqueryName);
 
-	sql.append(") ").append(cdsQueryName);
+	sql.append(") ").append(cdsQueryName).append(',');
+        sql.append('(').append(idSql).append(") ").append(idqName);
 
-	getJoinPkColumns(sql, cdsQueryName, rnaQueryName, false);
+	getJoinPkColumns(sql, idqName, rnaQueryName, false, true);
+	getJoinPkColumns(sql, cdsQueryName, rnaQueryName, false, false);
 
 	sql.append(" AND ").append(COLUMN_GFF_PROTEIN_SEQUENCE).append(" IS NOT NULL ");
 
@@ -487,8 +528,8 @@ public class GffCacheCreator extends BaseCLI {
         sql.append("trim(").append(COLUMN_GFF_PHASE).append(") || '\t' || ");
         sql.append(" 'ID=' || trim(").append(COLUMN_GFF_ATTR_ID).append(")");
 
-	sql.append(" || ';Name=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(")))");
-	sql.append(" || ';description=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_DESCRIPTION).append(",").append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(")))");
+	sql.append(" || ';Name=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_NAME).append(',').append(COLUMN_GFF_ATTR_ID).append(")))");
+	sql.append(" || ';description=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_DESCRIPTION).append(',').append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(")))");
 
         sql.append(" || ';size=' || ").append(COLUMN_GFF_ATTR_SIZE);
 
@@ -502,21 +543,21 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void getTableIdModificationDateSql(StringBuffer sql) {
-        sql.append("(").append(wdkModel.getUserPlatform().getNextIdSqlExpression("apidb", "wdkTable"));
+        sql.append('(').append(wdkModel.getUserPlatform().getNextIdSqlExpression("apidb", "wdkTable"));
 	sql.append("), sysdate ");
     }
 
     private void getSelectPkColumns(StringBuffer sql, String prefix) {
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
         for (String column : pkColumns) {
-            if (prefix != null) sql.append(prefix).append(".");
-            sql.append(column).append(",");
+            if (prefix != null) sql.append(prefix).append('.');
+            sql.append(column).append(',');
         }
     }
 
-    private void getJoinPkColumns(StringBuffer sql, String tableName, String joinTableName, boolean outerJoin) {
+    private void getJoinPkColumns(StringBuffer sql, String tableName, String joinTableName,
+				  boolean outerJoin, boolean firstColumn) {
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
-	boolean firstColumn = true;
 	for (String pkColumn : pkColumns) {
 	    if (firstColumn) {
 		if (outerJoin) {
@@ -530,8 +571,8 @@ public class GffCacheCreator extends BaseCLI {
 	    else {
 		sql.append(" AND ");
 	    }	    
-	    sql.append(tableName).append(".").append(pkColumn).append(" = ");
-	    sql.append(joinTableName).append(".").append(pkColumn);
+	    sql.append(tableName).append('.').append(pkColumn).append(" = ");
+	    sql.append(joinTableName).append('.').append(pkColumn);
 	}
     }
 
@@ -544,9 +585,9 @@ public class GffCacheCreator extends BaseCLI {
 		sql.append(" GROUP BY ");
 		firstColumn = false;
 	    } else {
-		sql.append(",");
+		sql.append(',');
 	    }
-            if (prefix != null) sql.append(prefix).append(".");
+            if (prefix != null) sql.append(prefix).append('.');
 	    sql.append(pkColumn);
 	}
     }
