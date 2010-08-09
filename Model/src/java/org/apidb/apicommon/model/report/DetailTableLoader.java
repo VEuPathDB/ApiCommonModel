@@ -290,7 +290,6 @@ public class DetailTableLoader extends BaseCLI {
             for (int i = 1; i < formattedValues.length; i++)
                 aggregatedContent.append("\t").append(formattedValues[i]);
             aggregatedContent.append("\n");
-            System.out.println(aggregatedContent);
             rowCount++;
             detailCount++;
         }
