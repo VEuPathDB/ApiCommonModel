@@ -13,7 +13,6 @@ import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
 import org.gusdb.wdk.model.RecordClass;
-import org.gusdb.wdk.model.TableValue;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -67,7 +66,9 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_SOURCE_ID = "source_id";
     private static final String COLUMN_WDK_TABLE_ID = "wdk_table_id";
 
-    private static final String GENE_RECORD_CLASS = "GeneRecordClasses.GeneRecordClass"; // Is this ok?
+    private static final String GENE_RECORD_CLASS = "GeneRecordClasses.GeneRecordClass"; // Is
+                                                                                         // this
+                                                                                         // ok?
     private static final String GENE_TABLE_QUERIES = "GeneTables";
     private static final String TABLE_GENE_GFF_RNAS = "GeneGffRnas";
     private static final String TABLE_GENE_GFF_CDSS = "GeneGffCdss";
@@ -116,14 +117,19 @@ public class GffCacheCreator extends BaseCLI {
         addSingleValueOption(ARG_SQL_FILE, true, null, "The file that contains"
                 + " a sql that returns the primary key columns of the records");
 
-        addSingleValueOption(ARG_GFF_RECORD_NAME, true, null, "The table name for "
-                + "the record entry in the cache table.");
+        addSingleValueOption(ARG_GFF_RECORD_NAME, true, null,
+                "The table name for " + "the record entry in the cache table.");
 
-        addSingleValueOption(ARG_GFF_TRANSCRIPT_NAME, true, null, "The table name for "
-                + "the transcript (NA sequence) entry in the cache table.");
+        addSingleValueOption(
+                ARG_GFF_TRANSCRIPT_NAME,
+                true,
+                null,
+                "The table name for "
+                        + "the transcript (NA sequence) entry in the cache table.");
 
-        addSingleValueOption(ARG_GFF_PROTEIN_NAME, true, null, "The table name for "
-                + "the protein (AA sequence) entry in the cache table.");
+        addSingleValueOption(ARG_GFF_PROTEIN_NAME, true, null,
+                "The table name for "
+                        + "the protein (AA sequence) entry in the cache table.");
     }
 
     /*
@@ -138,22 +144,21 @@ public class GffCacheCreator extends BaseCLI {
         String projectId = (String) getOptionValue(ARG_PROJECT_ID);
         String sqlFile = (String) getOptionValue(ARG_SQL_FILE);
         cacheTable = (String) getOptionValue(ARG_CACHE_TABLE);
-	recordName = (String) getOptionValue(ARG_GFF_RECORD_NAME);
-	transcriptName = (String) getOptionValue(ARG_GFF_TRANSCRIPT_NAME);
-	proteinName = (String) getOptionValue(ARG_GFF_PROTEIN_NAME);
+        recordName = (String) getOptionValue(ARG_GFF_RECORD_NAME);
+        transcriptName = (String) getOptionValue(ARG_GFF_TRANSCRIPT_NAME);
+        proteinName = (String) getOptionValue(ARG_GFF_PROTEIN_NAME);
 
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
         wdkModel = WdkModel.construct(projectId, gusHome);
 
         recordClass = wdkModel.getRecordClass(GENE_RECORD_CLASS);
 
-
         String idSql = loadIdSql(sqlFile);
 
-	deleteRows(idSql);
-	dumpGeneAttributes(idSql);
-	dumpTranscript(idSql);
-	dumpProteinSequence(idSql);
+        deleteRows(idSql);
+        dumpGeneAttributes(idSql);
+        dumpTranscript(idSql);
+        dumpProteinSequence(idSql);
 
         long end = System.currentTimeMillis();
         logger.info("totally spent: " + ((end - start) / 1000.0) + " seconds");
@@ -174,347 +179,393 @@ public class GffCacheCreator extends BaseCLI {
         return idSql;
     }
 
-    private void deleteRows(String idSql)
-	throws SQLException, WdkModelException, WdkUserException {
-	StringBuffer sql = new StringBuffer("DELETE FROM " + cacheTable);
+    private void deleteRows(String idSql) throws SQLException,
+            WdkModelException, WdkUserException {
+        StringBuffer sql = new StringBuffer("DELETE FROM " + cacheTable);
         sql.append(" WHERE source_id IN (SELECT source_id FROM (");
         sql.append(idSql + "))");
 
-	DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-	SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
+        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(), "api-report-gff-delete");
     }
 
-    private void insertToCacheTable(String subquerySql)
-	throws SQLException, WdkModelException, WdkUserException {
-	StringBuffer sql = new StringBuffer("INSERT INTO ");
-	sql.append(cacheTable).append(" ").append(subquerySql);
-	logger.debug("++++++ insert-to-cache-table: \n" + sql);
-	DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-	SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
+    private void insertToCacheTable(String subquerySql) throws SQLException,
+            WdkModelException, WdkUserException {
+        StringBuffer sql = new StringBuffer("INSERT INTO ");
+        sql.append(cacheTable).append(" ").append(subquerySql);
+        logger.debug("++++++ insert-to-cache-table: \n" + sql);
+        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(), "api-report-gff-insert");
     }
 
-    private void dumpGeneAttributes(String idSql)
-	throws SQLException, WdkModelException, WdkUserException {
-	String idqName = "idq";
-	String aliasTable = "gffalias";
-	String rnaTable = "gffrna";
-	String cdsTable = "gffcds";
-	String exonTable = "gffexon";
-	String attributeTable = "gffattr";
+    private void dumpGeneAttributes(String idSql) throws SQLException,
+            WdkModelException, WdkUserException {
+        String idqName = "idq";
+        String aliasTable = "gffalias";
+        String rnaTable = "gffrna";
+        String cdsTable = "gffcds";
+        String exonTable = "gffexon";
+        String attributeTable = "gffattr";
 
-	StringBuffer sql = new StringBuffer("SELECT ");
+        StringBuffer sql = new StringBuffer("SELECT ");
 
-	getSelectPkColumns(sql, attributeTable);
+        getSelectPkColumns(sql, attributeTable);
 
-	getTableNameRowCountSql(sql, recordName);
+        getTableNameRowCountSql(sql, recordName);
 
-	// Dump column fields (no parent)
-	addCommonFieldsSql(sql, false);
+        // Dump column fields (no parent)
+        addCommonFieldsSql(sql, false);
 
-	// Dump gff_attr_web_id
-	sql.append(" || trim(DECODE(").append(attributeTable).append('.').append(COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
-	sql.append(" ';web_id=' || ").append(attributeTable).append('.').append(COLUMN_GFF_ATTR_WEB_ID).append("))");
-	// Dump gff_attr_locus_tag
-	sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(", NULL, '', ");
-	sql.append(" ';locus_tag=' || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append("))");
-	// Dump gff_attr_size
-	sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_SIZE).append(", NULL, '', ");
-	sql.append(" ';size=' || ").append(COLUMN_GFF_ATTR_SIZE).append("))");
+        // Dump gff_attr_web_id
+        sql.append(" || trim(DECODE(").append(attributeTable).append('.').append(
+                COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
+        sql.append(" ';web_id=' || ").append(attributeTable).append('.').append(
+                COLUMN_GFF_ATTR_WEB_ID).append("))");
+        // Dump gff_attr_locus_tag
+        sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(
+                ", NULL, '', ");
+        sql.append(" ';locus_tag=' || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(
+                "))");
+        // Dump gff_attr_size
+        sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_SIZE).append(
+                ", NULL, '', ");
+        sql.append(" ';size=' || ").append(COLUMN_GFF_ATTR_SIZE).append("))");
 
-	// Dump Aliases
-	sql.append(" || DECODE(").append(aliasTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append("';Alias=' || ").append(aliasTable).append('.').append(COLUMN_CONTENT).append(") || '").append(NEW_LINE).append("' ");
+        // Dump Aliases
+        sql.append(" || DECODE(").append(aliasTable).append('.').append(
+                COLUMN_CONTENT).append(", NULL, '', ");
+        sql.append("';Alias=' || ").append(aliasTable).append('.').append(
+                COLUMN_CONTENT).append(") || '").append(NEW_LINE).append("' ");
 
-	// Dump RNAs (incl. go terms & dbxref)
-	sql.append(" || DECODE(").append(rnaTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append(rnaTable).append('.').append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
+        // Dump RNAs (incl. go terms & dbxref)
+        sql.append(" || DECODE(").append(rnaTable).append('.').append(
+                COLUMN_CONTENT).append(", NULL, '', ");
+        sql.append(rnaTable).append('.').append(COLUMN_CONTENT).append(" || '").append(
+                NEW_LINE).append("') ");
 
-	// Dump CDSs
-	sql.append(" || DECODE(").append(cdsTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append(cdsTable).append('.').append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
+        // Dump CDSs
+        sql.append(" || DECODE(").append(cdsTable).append('.').append(
+                COLUMN_CONTENT).append(", NULL, '', ");
+        sql.append(cdsTable).append('.').append(COLUMN_CONTENT).append(" || '").append(
+                NEW_LINE).append("') ");
 
-	// Dump exons
-	sql.append(" || DECODE(").append(exonTable).append('.').append(COLUMN_CONTENT).append(", NULL, '', ");
-	sql.append(exonTable).append('.').append(COLUMN_CONTENT).append(" || '").append(NEW_LINE).append("') ");
-	
-	sql.append(" AS ").append(COLUMN_CONTENT).append(',');
-	
-	getTableIdModificationDateSql(sql);
-	
-	sql.append(" FROM (");
+        // Dump exons
+        sql.append(" || DECODE(").append(exonTable).append('.').append(
+                COLUMN_CONTENT).append(", NULL, '', ");
+        sql.append(exonTable).append('.').append(COLUMN_CONTENT).append(" || '").append(
+                NEW_LINE).append("') ");
 
-	// Bring in attribute query
+        sql.append(" AS ").append(COLUMN_CONTENT).append(',');
+
+        getTableIdModificationDateSql(sql);
+
+        sql.append(" FROM (");
+
+        // Bring in attribute query
         sql.append(((SqlQuery) wdkModel.resolveReference("GeneAttributes.GeneGffAttrs")).getSql());
-	sql.append(") ").append(attributeTable).append(" LEFT OUTER JOIN (");
+        sql.append(") ").append(attributeTable).append(" LEFT OUTER JOIN (");
 
-	// Bring in alias table query
-	dumpAliases(sql);
-	sql.append(") ").append(aliasTable);
+        // Bring in alias table query
+        dumpAliases(sql);
+        sql.append(") ").append(aliasTable);
 
-	getJoinPkColumns(sql, attributeTable, aliasTable, true, true);
-	
-	// Bring in RNA table query
-	sql.append(" LEFT OUTER JOIN (");
-	dumpRnaTable(sql);
-	sql.append(") ").append(rnaTable);
+        getJoinPkColumns(sql, attributeTable, aliasTable, true, true);
 
-	getJoinPkColumns(sql, attributeTable, rnaTable, true, true);
+        // Bring in RNA table query
+        sql.append(" LEFT OUTER JOIN (");
+        dumpRnaTable(sql);
+        sql.append(") ").append(rnaTable);
 
-	// Bring in CDS table query
-	sql.append(" LEFT OUTER JOIN (");
-	dumpCdsTable(sql);
-	sql.append(") ").append(cdsTable);
+        getJoinPkColumns(sql, attributeTable, rnaTable, true, true);
 
-	getJoinPkColumns(sql, attributeTable, cdsTable, true, true);
+        // Bring in CDS table query
+        sql.append(" LEFT OUTER JOIN (");
+        dumpCdsTable(sql);
+        sql.append(") ").append(cdsTable);
 
-	// Bring in exon table query
-	sql.append(" LEFT OUTER JOIN (");
-	dumpExonTable(sql);
-	sql.append(") ").append(exonTable);
-	getJoinPkColumns(sql, attributeTable, exonTable, true, true);
-	
-	// Join to id query
-	sql.append(',');
+        getJoinPkColumns(sql, attributeTable, cdsTable, true, true);
+
+        // Bring in exon table query
+        sql.append(" LEFT OUTER JOIN (");
+        dumpExonTable(sql);
+        sql.append(") ").append(exonTable);
+        getJoinPkColumns(sql, attributeTable, exonTable, true, true);
+
+        // Join to id query
+        sql.append(',');
         sql.append('(').append(idSql).append(") ").append(idqName);
-	getJoinPkColumns(sql, idqName, attributeTable, false, true);
+        getJoinPkColumns(sql, idqName, attributeTable, false, true);
 
-	insertToCacheTable(sql.toString());
+        insertToCacheTable(sql.toString());
     }
 
     private void dumpRnaTable(StringBuffer sql) throws WdkModelException {
-	String queryName = "grna";
-	String goSubQueryName = "ggo";
-	String dbxrefSubQueryName = "gdbx";
+        String queryName = "grna";
+        String goSubQueryName = "ggo";
+        String dbxrefSubQueryName = "gdbx";
 
-	sql.append("SELECT ");
-        
-	getSelectPkColumns(sql, null);
+        sql.append("SELECT ");
 
-	sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        getSelectPkColumns(sql, null);
 
-	sql.append(COLUMN_CONTENT);
-	
-        sql.append("))) AS apidb.varchartab), '").append(NEW_LINE).append("') AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
 
-	sql.append("SELECT ");
+        sql.append(COLUMN_CONTENT);
 
-	getSelectPkColumns(sql, queryName);
+        sql.append("))) AS apidb.varchartab), '").append(NEW_LINE).append(
+                "') AS ").append(COLUMN_CONTENT).append(" FROM (");
 
-	// read common fields
-	addCommonFieldsSql(sql, true);
-	
-	// add GO terms in mRNA
-	sql.append(" || DECODE(").append(goSubQueryName).append('.').append(COLUMN_CONTENT).append(", NULL, '', ';Ontology_term=' || ").append(goSubQueryName).append(".").append(COLUMN_CONTENT).append(") ");
-	
-	// add dbxref in mRNA
-	sql.append(" || DECODE(").append(dbxrefSubQueryName).append('.').append(COLUMN_CONTENT).append(", NULL, '', ';Dbxref=' || ").append(dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(") AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append("SELECT ");
 
-	// rna table query
-	String tqueryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_RNAS).getQuery().getFullName();
+        getSelectPkColumns(sql, queryName);
+
+        // read common fields
+        addCommonFieldsSql(sql, true);
+
+        // add GO terms in mRNA
+        sql.append(" || DECODE(").append(goSubQueryName).append('.').append(
+                COLUMN_CONTENT).append(", NULL, '', ';Ontology_term=' || ").append(
+                goSubQueryName).append(".").append(COLUMN_CONTENT).append(") ");
+
+        // add dbxref in mRNA
+        sql.append(" || DECODE(").append(dbxrefSubQueryName).append('.').append(
+                COLUMN_CONTENT).append(", NULL, '', ';Dbxref=' || ").append(
+                dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(
+                ") AS ").append(COLUMN_CONTENT).append(" FROM (");
+
+        // rna table query
+        String tqueryName = recordClass.getTableFieldMap().get(
+                TABLE_GENE_GFF_RNAS).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(tqueryName)).getSql());
 
-	sql.append(") ").append(queryName).append(" LEFT OUTER JOIN (");
+        sql.append(") ").append(queryName).append(" LEFT OUTER JOIN (");
 
-	// go term query
-	dumpGoTerms(sql);
-	sql.append(") ").append(goSubQueryName);
+        // go term query
+        dumpGoTerms(sql);
+        sql.append(") ").append(goSubQueryName);
 
-	// join conditions
-	getJoinPkColumns(sql, queryName, goSubQueryName, true, true);
+        // join conditions
+        getJoinPkColumns(sql, queryName, goSubQueryName, true, true);
 
-	sql.append(" LEFT OUTER JOIN (");
-	// dbxref query
-	dumpDbxrefs(sql);
-	sql.append(") ").append(dbxrefSubQueryName);
+        sql.append(" LEFT OUTER JOIN (");
+        // dbxref query
+        dumpDbxrefs(sql);
+        sql.append(") ").append(dbxrefSubQueryName);
 
-	// join conditions
-	getJoinPkColumns(sql, queryName, dbxrefSubQueryName, true, true);
-	
-	sql.append(')');
+        // join conditions
+        getJoinPkColumns(sql, queryName, dbxrefSubQueryName, true, true);
 
-	getGroupPkColumns(sql, null);
+        sql.append(')');
+
+        getGroupPkColumns(sql, null);
     }
 
     private void dumpCdsTable(StringBuffer sql) throws WdkModelException {
-	dumpTableAsContent(sql, TABLE_GENE_GFF_CDSS);
+        dumpTableAsContent(sql, TABLE_GENE_GFF_CDSS);
     }
-    
+
     private void dumpExonTable(StringBuffer sql) throws WdkModelException {
-	dumpTableAsContent(sql, TABLE_GENE_GFF_EXONS);
+        dumpTableAsContent(sql, TABLE_GENE_GFF_EXONS);
     }
 
-    private void dumpTableAsContent(StringBuffer sql, String tableName) throws WdkModelException {
-	sql.append("SELECT ");
-	
-        getSelectPkColumns(sql, null); 
+    private void dumpTableAsContent(StringBuffer sql, String tableName)
+            throws WdkModelException {
+        sql.append("SELECT ");
 
-	sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
-
-	sql.append(COLUMN_CONTENT);
-	
-        sql.append(")) ORDER BY ").append(COLUMN_ORDER_NUMBER).append(") AS apidb.varchartab), '").append(NEW_LINE).append("') AS ").append(COLUMN_CONTENT).append(" FROM (");
-
-	sql.append("SELECT ");
-	
         getSelectPkColumns(sql, null);
-	
-	addCommonFieldsSql(sql, true);
-	
-	sql.append(" AS ").append(COLUMN_CONTENT).append(',').append(COLUMN_ORDER_NUMBER).append(" FROM (");
+
+        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+
+        sql.append(COLUMN_CONTENT);
+
+        sql.append(")) ORDER BY ").append(COLUMN_ORDER_NUMBER).append(
+                ") AS apidb.varchartab), '").append(NEW_LINE).append("') AS ").append(
+                COLUMN_CONTENT).append(" FROM (");
+
+        sql.append("SELECT ");
+
+        getSelectPkColumns(sql, null);
+
+        addCommonFieldsSql(sql, true);
+
+        sql.append(" AS ").append(COLUMN_CONTENT).append(',').append(
+                COLUMN_ORDER_NUMBER).append(" FROM (");
 
         // table query
-	String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
-	String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
+        String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
+        String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
 
-        sql.append(tableQuerySql.substring(0,tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
-	sql.append(COLUMN_ORDER_NUMBER).append(',').append(tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
+        sql.append(tableQuerySql.substring(0,
+                tableQuerySql.toLowerCase().indexOf("gf.source_id,")));
+        sql.append(COLUMN_ORDER_NUMBER).append(',').append(
+                tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf(
+                        "gf.source_id,")));
 
-	sql.append("))");
+        sql.append("))");
 
-	getGroupPkColumns(sql, null);
+        getGroupPkColumns(sql, null);
     }
 
-    private void dumpAliases(StringBuffer sql)  throws WdkModelException {
-	dumpAttributeAsListSql(sql, COLUMN_GFF_ALIAS, TABLE_GENE_GFF_ALIASES, false, ""); 
+    private void dumpAliases(StringBuffer sql) throws WdkModelException {
+        dumpAttributeAsListSql(sql, COLUMN_GFF_ALIAS, TABLE_GENE_GFF_ALIASES,
+                false, "");
     }
 
     private void dumpEcNumbers(String idSql, SqlQuery query) {
-	// Doesn't appear in Gff3Repoerter.java...do we need this?
+    // Doesn't appear in Gff3Repoerter.java...do we need this?
     }
 
-    private void dumpGoTerms(StringBuffer sql)  throws WdkModelException {
+    private void dumpGoTerms(StringBuffer sql) throws WdkModelException {
         sql.append("SELECT ");
 
-        getSelectPkColumns(sql, null); 
-	
-	sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        getSelectPkColumns(sql, null);
 
-	sql.append(COLUMN_GFF_GO_ID);
-	
-        sql.append(")) ORDER BY ").append(COLUMN_ONTOLOGY).append(",").append(COLUMN_GFF_GO_ID).append(") AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+
+        sql.append(COLUMN_GFF_GO_ID);
+
+        sql.append(")) ORDER BY ").append(COLUMN_ONTOLOGY).append(",").append(
+                COLUMN_GFF_GO_ID).append(") AS apidb.varchartab), ',') AS ").append(
+                COLUMN_CONTENT).append(" FROM (");
 
         sql.append("SELECT ");
 
-	getSelectPkColumns(sql, null);
+        getSelectPkColumns(sql, null);
 
-	sql.append(COLUMN_GFF_GO_ID).append(",").append(COLUMN_ONTOLOGY).append(" FROM (");
+        sql.append(COLUMN_GFF_GO_ID).append(",").append(COLUMN_ONTOLOGY).append(
+                " FROM (");
         // table query
-	String queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_GO_TERMS).getQuery().getFullName();
-	String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
+        String queryName = recordClass.getTableFieldMap().get(
+                TABLE_GENE_GFF_GO_TERMS).getQuery().getFullName();
+        String tableQuerySql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
 
-        sql.append(tableQuerySql.substring(0,tableQuerySql.toLowerCase().indexOf("from")));
-	sql.append(",").append(COLUMN_ONTOLOGY).append(" ").append(tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf("from")));
+        sql.append(tableQuerySql.substring(0,
+                tableQuerySql.toLowerCase().indexOf("from")));
+        sql.append(",").append(COLUMN_ONTOLOGY).append(" ").append(
+                tableQuerySql.substring(tableQuerySql.toLowerCase().indexOf(
+                        "from")));
 
-	sql.append(")");
-	getGroupPkColumns(sql, null);
-	sql.append(",").append(COLUMN_GFF_GO_ID);
-	sql.append(",").append(COLUMN_ONTOLOGY);
+        sql.append(")");
+        getGroupPkColumns(sql, null);
+        sql.append(",").append(COLUMN_GFF_GO_ID);
+        sql.append(",").append(COLUMN_ONTOLOGY);
 
-	sql.append(")");
-	getGroupPkColumns(sql, null);
+        sql.append(")");
+        getGroupPkColumns(sql, null);
     }
 
-    private void dumpDbxrefs(StringBuffer sql)  throws WdkModelException {
-	dumpAttributeAsListSql(sql, COLUMN_GFF_DBXREF, TABLE_GENE_GFF_DBXREFS, false, "ORDER BY " + COLUMN_GFF_DBXREF);
+    private void dumpDbxrefs(StringBuffer sql) throws WdkModelException {
+        dumpAttributeAsListSql(sql, COLUMN_GFF_DBXREF, TABLE_GENE_GFF_DBXREFS,
+                false, "ORDER BY " + COLUMN_GFF_DBXREF);
     }
 
-    private void dumpAttributeAsListSql(StringBuffer sql, String columnName, String tableName, boolean groupInnerQuery, String collectOrder)
-	throws WdkModelException {
+    private void dumpAttributeAsListSql(StringBuffer sql, String columnName,
+            String tableName, boolean groupInnerQuery, String collectOrder)
+            throws WdkModelException {
         sql.append("SELECT ");
 
-        getSelectPkColumns(sql, null); 
-	
-	sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        getSelectPkColumns(sql, null);
 
-	sql.append(columnName);
-	
-        sql.append(")) ").append(collectOrder).append(") AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(" FROM (");
+        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+
+        sql.append(columnName);
+
+        sql.append(")) ").append(collectOrder).append(
+                ") AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(
+                " FROM (");
 
         sql.append("SELECT ");
 
-	getSelectPkColumns(sql, null);
+        getSelectPkColumns(sql, null);
 
-	sql.append(columnName).append(" FROM (");
+        sql.append(columnName).append(" FROM (");
         // table query
-	String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
+        String queryName = recordClass.getTableFieldMap().get(tableName).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
 
-	sql.append(")");
-	getGroupPkColumns(sql, null);
-	sql.append(",").append(columnName);
+        sql.append(")");
+        getGroupPkColumns(sql, null);
+        sql.append(",").append(columnName);
 
-	sql.append(")");
-	getGroupPkColumns(sql, null);
+        sql.append(")");
+        getGroupPkColumns(sql, null);
     }
 
-    private void dumpTranscript(String idSql)
-	throws SQLException, WdkModelException, WdkUserException {
-	String idqName = "idq";
-	String seqQueryName = "seq";
-	StringBuffer sql = new StringBuffer("SELECT ");
+    private void dumpTranscript(String idSql) throws SQLException,
+            WdkModelException, WdkUserException {
+        String idqName = "idq";
+        String seqQueryName = "seq";
+        StringBuffer sql = new StringBuffer("SELECT ");
 
         getSelectPkColumns(sql, seqQueryName);
 
-	getTableNameRowCountSql(sql, transcriptName);
+        getTableNameRowCountSql(sql, transcriptName);
 
-	sql.append("apidb.gff_format_sequence(").append(seqQueryName).append('.');
-	sql.append(COLUMN_SOURCE_ID).append(',').append(COLUMN_GFF_TRANSCRIPT_SEQUENCE);
-	sql.append(") AS ").append(COLUMN_CONTENT).append(',');
+        sql.append("apidb.gff_format_sequence(").append(seqQueryName).append(
+                '.');
+        sql.append(COLUMN_SOURCE_ID).append(',').append(
+                COLUMN_GFF_TRANSCRIPT_SEQUENCE);
+        sql.append(") AS ").append(COLUMN_CONTENT).append(',');
 
-	getTableIdModificationDateSql(sql);
+        getTableIdModificationDateSql(sql);
 
-	sql.append(" FROM (");
+        sql.append(" FROM (");
         sql.append(((SqlQuery) wdkModel.resolveReference("GeneAttributes.GeneGffSequence")).getSql());
-	sql.append(')').append(seqQueryName).append(',');
+        sql.append(')').append(seqQueryName).append(',');
         sql.append('(').append(idSql).append(") ").append(idqName);
-	getJoinPkColumns(sql, idqName, seqQueryName, false, true);
+        getJoinPkColumns(sql, idqName, seqQueryName, false, true);
 
-	insertToCacheTable(sql.toString());
+        insertToCacheTable(sql.toString());
     }
-    
-    private void dumpProteinSequence(String idSql)
-	throws SQLException, WdkModelException, WdkUserException{
-	String idqName = "idq";
-	String cdsQueryName = "cds";
-	String rnaQueryName = "rna";
-	String cdsSubqueryName = "subcds";
 
-	StringBuffer sql = new StringBuffer("SELECT ");
+    private void dumpProteinSequence(String idSql) throws SQLException,
+            WdkModelException, WdkUserException {
+        String idqName = "idq";
+        String cdsQueryName = "cds";
+        String rnaQueryName = "rna";
+        String cdsSubqueryName = "subcds";
+
+        StringBuffer sql = new StringBuffer("SELECT ");
 
         getSelectPkColumns(sql, rnaQueryName);
 
-	getTableNameRowCountSql(sql, proteinName);
+        getTableNameRowCountSql(sql, proteinName);
 
-	sql.append("apidb.gff_format_sequence(").append(cdsQueryName).append('.').append(COLUMN_GFF_ATTR_ID);
-	sql.append(", ").append(rnaQueryName).append(".").append(COLUMN_GFF_PROTEIN_SEQUENCE);
-	sql.append(") AS ").append(COLUMN_CONTENT).append(",");
-	
-	getTableIdModificationDateSql(sql);
+        sql.append("apidb.gff_format_sequence(").append(cdsQueryName).append(
+                '.').append(COLUMN_GFF_ATTR_ID);
+        sql.append(", ").append(rnaQueryName).append(".").append(
+                COLUMN_GFF_PROTEIN_SEQUENCE);
+        sql.append(") AS ").append(COLUMN_CONTENT).append(",");
 
-	sql.append(" FROM (");
-	String queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_RNAS).getQuery().getFullName();
+        getTableIdModificationDateSql(sql);
+
+        sql.append(" FROM (");
+        String queryName = recordClass.getTableFieldMap().get(
+                TABLE_GENE_GFF_RNAS).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
-	sql.append(") ").append(rnaQueryName).append(", (SELECT ");
+        sql.append(") ").append(rnaQueryName).append(", (SELECT ");
 
-	getSelectPkColumns(sql, cdsSubqueryName);
+        getSelectPkColumns(sql, cdsSubqueryName);
 
-	sql.append("min(").append(cdsSubqueryName).append(".").append(COLUMN_GFF_ATTR_ID).append(") AS ");
-	sql.append(COLUMN_GFF_ATTR_ID).append(" FROM (");
-	queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_CDSS).getQuery().getFullName();
+        sql.append("min(").append(cdsSubqueryName).append(".").append(
+                COLUMN_GFF_ATTR_ID).append(") AS ");
+        sql.append(COLUMN_GFF_ATTR_ID).append(" FROM (");
+        queryName = recordClass.getTableFieldMap().get(TABLE_GENE_GFF_CDSS).getQuery().getFullName();
         sql.append(((SqlQuery) wdkModel.resolveReference(queryName)).getSql());
-	sql.append(") ").append(cdsSubqueryName);
+        sql.append(") ").append(cdsSubqueryName);
 
-	getGroupPkColumns(sql, cdsSubqueryName);
+        getGroupPkColumns(sql, cdsSubqueryName);
 
-	sql.append(") ").append(cdsQueryName).append(',');
+        sql.append(") ").append(cdsQueryName).append(',');
         sql.append('(').append(idSql).append(") ").append(idqName);
 
-	getJoinPkColumns(sql, idqName, rnaQueryName, false, true);
-	getJoinPkColumns(sql, cdsQueryName, rnaQueryName, false, false);
+        getJoinPkColumns(sql, idqName, rnaQueryName, false, true);
+        getJoinPkColumns(sql, cdsQueryName, rnaQueryName, false, false);
 
-	sql.append(" AND ").append(COLUMN_GFF_PROTEIN_SEQUENCE).append(" IS NOT NULL ");
+        sql.append(" AND ").append(COLUMN_GFF_PROTEIN_SEQUENCE).append(
+                " IS NOT NULL ");
 
-	insertToCacheTable(sql.toString());
+        insertToCacheTable(sql.toString());
     }
 
     private void addCommonFieldsSql(StringBuffer sql, boolean includeParent) {
@@ -528,23 +579,31 @@ public class GffCacheCreator extends BaseCLI {
         sql.append("trim(").append(COLUMN_GFF_PHASE).append(") || '\t' || ");
         sql.append(" 'ID=' || trim(").append(COLUMN_GFF_ATTR_ID).append(")");
 
-	sql.append(" || ';Name=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_NAME).append(',').append(COLUMN_GFF_ATTR_ID).append(")))");
-	sql.append(" || ';description=' || apidb.url_escape(trim(COALESCE(").append(COLUMN_GFF_ATTR_DESCRIPTION).append(',').append(COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(")))");
+        sql.append(" || ';Name=' || apidb.url_escape(trim(COALESCE(").append(
+                COLUMN_GFF_ATTR_NAME).append(',').append(COLUMN_GFF_ATTR_ID).append(
+                ")))");
+        sql.append(" || ';description=' || apidb.url_escape(trim(COALESCE(").append(
+                COLUMN_GFF_ATTR_DESCRIPTION).append(',').append(
+                COLUMN_GFF_ATTR_NAME).append(",").append(COLUMN_GFF_ATTR_ID).append(
+                ")))");
 
         sql.append(" || ';size=' || ").append(COLUMN_GFF_ATTR_SIZE);
 
-	if (includeParent) {
-	    sql.append(" || ';Parent=' || trim(").append(COLUMN_GFF_ATTR_PARENT).append(")");
-	}
+        if (includeParent) {
+            sql.append(" || ';Parent=' || trim(").append(COLUMN_GFF_ATTR_PARENT).append(
+                    ")");
+        }
     }
 
     private void getTableNameRowCountSql(StringBuffer sql, String tableName) {
-	sql.append("'").append(tableName).append("',1,");
+        sql.append("'").append(tableName).append("',1,");
     }
 
     private void getTableIdModificationDateSql(StringBuffer sql) {
-        sql.append('(').append(wdkModel.getUserPlatform().getNextIdSqlExpression("apidb", "wdkTable"));
-	sql.append("), sysdate ");
+        sql.append('(').append(
+                wdkModel.getUserPlatform().getNextIdSqlExpression("apidb",
+                        "wdkTable"));
+        sql.append("), sysdate ");
     }
 
     private void getSelectPkColumns(StringBuffer sql, String prefix) {
@@ -555,40 +614,38 @@ public class GffCacheCreator extends BaseCLI {
         }
     }
 
-    private void getJoinPkColumns(StringBuffer sql, String tableName, String joinTableName,
-				  boolean outerJoin, boolean firstColumn) {
+    private void getJoinPkColumns(StringBuffer sql, String tableName,
+            String joinTableName, boolean outerJoin, boolean firstColumn) {
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
-	for (String pkColumn : pkColumns) {
-	    if (firstColumn) {
-		if (outerJoin) {
-		    sql.append(" ON ");
-		}
-		else {
-		    sql.append(" WHERE ");
-		}
-		firstColumn = false;
-	    }
-	    else {
-		sql.append(" AND ");
-	    }	    
-	    sql.append(tableName).append('.').append(pkColumn).append(" = ");
-	    sql.append(joinTableName).append('.').append(pkColumn);
-	}
+        for (String pkColumn : pkColumns) {
+            if (firstColumn) {
+                if (outerJoin) {
+                    sql.append(" ON ");
+                } else {
+                    sql.append(" WHERE ");
+                }
+                firstColumn = false;
+            } else {
+                sql.append(" AND ");
+            }
+            sql.append(tableName).append('.').append(pkColumn).append(" = ");
+            sql.append(joinTableName).append('.').append(pkColumn);
+        }
     }
 
     private void getGroupPkColumns(StringBuffer sql, String prefix) {
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
 
-	boolean firstColumn = true;
+        boolean firstColumn = true;
         for (String pkColumn : pkColumns) {
-	    if (firstColumn) {
-		sql.append(" GROUP BY ");
-		firstColumn = false;
-	    } else {
-		sql.append(',');
-	    }
+            if (firstColumn) {
+                sql.append(" GROUP BY ");
+                firstColumn = false;
+            } else {
+                sql.append(',');
+            }
             if (prefix != null) sql.append(prefix).append('.');
-	    sql.append(pkColumn);
-	}
+            sql.append(pkColumn);
+        }
     }
 }

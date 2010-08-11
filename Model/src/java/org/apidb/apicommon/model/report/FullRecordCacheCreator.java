@@ -198,7 +198,8 @@ public class FullRecordCacheCreator extends BaseCLI {
         }
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
         logger.info("Removing previous rows:\n" + sql);
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+                "api-report-full-delete");
     }
 
     /**
@@ -233,7 +234,7 @@ public class FullRecordCacheCreator extends BaseCLI {
             // drop cache table
             DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
             SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
-                    + cacheName);
+                    + cacheName, "api-report-full-drop-table");
         } else {
             // the query doesn't contain any clob column, and the concatenated
             // column is small enough (<= 4000).
@@ -272,7 +273,7 @@ public class FullRecordCacheCreator extends BaseCLI {
         if (platform.checkTableExists(null, cacheName)) {
             // drop existing table
             SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
-                    + cacheName);
+                    + cacheName, "api-report-full-drop-table");
         }
 
         String pkColumns = getPkColumns(table.getRecordClass(), idqName);
@@ -284,7 +285,8 @@ public class FullRecordCacheCreator extends BaseCLI {
         sql.append(getJoinedSql(table, idSql, idqName, tqName));
 
         logger.debug("++++++ create-cache: \n" + sql);
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+                "api-report-full-create-table");
         return cacheName;
     }
 
@@ -311,7 +313,8 @@ public class FullRecordCacheCreator extends BaseCLI {
 
         logger.debug("++++++ insert-from-cache: \n" + sql);
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+                "api-report-full-insert-from-cache");
     }
 
     /**
@@ -370,7 +373,8 @@ public class FullRecordCacheCreator extends BaseCLI {
 
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
         logger.debug("++++++ insert-from-sql: \n" + sql);
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+                "api-report-full-insert-from-sql");
     }
 
     /**

@@ -248,7 +248,8 @@ public class DetailTableLoader extends BaseCLI {
         sql.append(idSql + "))");
         sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
         logger.info("Removing previous rows:\n" + sql);
-        SqlUtils.executeUpdate(wdkModel, connection, sql.toString());
+        SqlUtils.executeUpdate(wdkModel, connection, sql.toString(),
+                "api-report-detail-delete");
     }
 
     private int[] aggregateLocally(TableField table, String idSql,
@@ -260,7 +261,7 @@ public class DetailTableLoader extends BaseCLI {
         String wrappedSql = getWrappedSql(table, idSql, pkName);
 
         ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
-                wrappedSql);
+                wrappedSql, "api-report-detail-wrapped");
         String srcId = "";
         String prj = "";
         String prevSrcId = "";
@@ -417,7 +418,8 @@ public class DetailTableLoader extends BaseCLI {
         insertStmt.setInt(5, rowCount);
 	insertStmt.setString(6, content);
         insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
-        SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
+        SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
+                "api-report-detail-insert");
     }
 
 }
