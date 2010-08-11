@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -254,7 +255,7 @@ public class DetailTableLoader extends BaseCLI {
             PreparedStatement insertStmt, String insertSql, String pkName)
             throws WdkModelException, SQLException, WdkUserException {
 
-        String title = getTableTitle(table) + "\n";
+        String title = getTableTitle(table);
 
         String wrappedSql = getWrappedSql(table, idSql, pkName);
 
@@ -264,7 +265,7 @@ public class DetailTableLoader extends BaseCLI {
         String prj = "";
         String prevSrcId = "";
         String prevPrj = "";
-        StringBuilder aggregatedContent = new StringBuilder(title);
+        StringBuilder aggregatedContent = new StringBuilder();
         int insertCount = 0;
         int detailCount = 0;
         int rowCount = 0;
@@ -274,10 +275,10 @@ public class DetailTableLoader extends BaseCLI {
             prj = resultSet.getString("PROJECT_ID");
             if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
                 insertDetailRow(insertStmt, insertSql,
-                        aggregatedContent.toString(), rowCount, table, srcId,
-                        prj, title);
+                        aggregatedContent, rowCount, table, prevSrcId,
+                        prevPrj, title);
                 insertCount++;
-                aggregatedContent = new StringBuilder(title);
+                aggregatedContent = new StringBuilder();
                 rowCount = 0;
             }
             first = false;
@@ -286,16 +287,23 @@ public class DetailTableLoader extends BaseCLI {
 
             // aggregate the columns of one row
             String formattedValues[] = formatAttributeValues(resultSet, table);
-            aggregatedContent.append(formattedValues[0]);
-            for (int i = 1; i < formattedValues.length; i++)
-                aggregatedContent.append("\t").append(formattedValues[i]);
+            if (formattedValues[0] != null)
+		aggregatedContent.append(formattedValues[0]);
+            for (int i = 1; i < formattedValues.length; i++) {
+		if (formattedValues[i] != null)
+		    aggregatedContent.append("\t").append(formattedValues[i]);
+		else 
+		    aggregatedContent.append("\t");
+	    }
             aggregatedContent.append("\n");
             rowCount++;
             detailCount++;
         }
-        insertDetailRow(insertStmt, insertSql, aggregatedContent.toString(),
-                rowCount, table, srcId, prj, title);
-        insertCount++;
+	if (aggregatedContent.length() != 0) {
+	    insertDetailRow(insertStmt, insertSql, aggregatedContent,
+			    rowCount, table, prevSrcId, prevPrj, title);
+	    insertCount++;
+	}
         int[] counts = { insertCount, detailCount };
         return counts;
     }
@@ -323,10 +331,10 @@ public class DetailTableLoader extends BaseCLI {
                 + "\n" + "WHERE idq.project_id = tq.project_id" + "\n"
                 + "AND idq.PK_NAME = tq.PK_NAME" + "\n"
                 + "ORDER BY tq.PK_NAME, tq.project_id, tq.row_num";
-
         sql = sql.replace("ID_QUERY", idSql);
         sql = sql.replace("TABLE_QUERY", tableSql);
         sql = sql.replace("PK_NAME", pkName);
+	//System.err.println(sql);
         return sql;
     }
 
@@ -393,9 +401,13 @@ public class DetailTableLoader extends BaseCLI {
      * @throws WdkUserException
      */
     private void insertDetailRow(PreparedStatement insertStmt,
-            String insertSql, String content, int rowCount, TableField table,
+            String insertSql, StringBuilder contentBuf, int rowCount, TableField table,
             String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
+
+	//	String content = contentBuf.length() == 0? null : contentBuf.toString().trim();
+	String content = contentBuf.toString().trim();
+
         // (source_id, project_id, field_name, field_title, row_count, content,
         // modification_date)
         insertStmt.setString(1, srcId);
@@ -403,7 +415,7 @@ public class DetailTableLoader extends BaseCLI {
         insertStmt.setString(3, table.getName());
         insertStmt.setString(4, title);
         insertStmt.setInt(5, rowCount);
-        insertStmt.setString(6, content);
+	insertStmt.setString(6, content);
         insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql);
     }
