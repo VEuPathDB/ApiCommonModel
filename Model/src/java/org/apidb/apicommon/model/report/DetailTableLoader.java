@@ -36,24 +36,11 @@ import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wsf.util.BaseCLI;
 
 /**
- * @author xingao
+ * @author xingao, steve fischer
  * 
  *         this command generates the data into detail table.
  * 
- *         Two Oracle aggregation functions are used. apidb.char_clob_agg(),
- *         input is varchar, and aggregate to clob. It is faster than
- *         apidb.clob_clob_agg(), where the input is already clob. So the first
- *         function is prefered if both can be applied.
- * 
- *         If the concatenated column from a row in the table sql is small
- *         enough (<= 4K), the "clobRow" should be set to false, and
- *         apidb.char_clob_agg() will be used.
- * 
- *         If the table sql already contains clob columns, or if the
- *         concatenated column is too big (> 4K), "clobRow" should be set to
- *         true, otherwise the sql will fail. In this case, a two-step process
- *         will be used with the slower apidb.clob_clob_agg() aggregation
- *         function.
+
  */
 public class DetailTableLoader extends BaseCLI {
 
@@ -406,8 +393,8 @@ public class DetailTableLoader extends BaseCLI {
             String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
 
-	//	String content = contentBuf.length() == 0? null : contentBuf.toString().trim();
-	String content = contentBuf.toString().trim();
+	// trim trailing newline (but not leading white space)
+	String content = contentBuf.toString().substring(0,contentBuf.length()-1);
 
         // (source_id, project_id, field_name, field_title, row_count, content,
         // modification_date)
