@@ -40,7 +40,6 @@ import org.gusdb.wsf.util.BaseCLI;
  * 
  *         this command generates the data into detail table.
  * 
-
  */
 public class DetailTableLoader extends BaseCLI {
 
@@ -262,9 +261,8 @@ public class DetailTableLoader extends BaseCLI {
             srcId = resultSet.getString(pkName);
             prj = resultSet.getString("PROJECT_ID");
             if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
-                insertDetailRow(insertStmt, insertSql,
-                        aggregatedContent, rowCount, table, prevSrcId,
-                        prevPrj, title);
+                insertDetailRow(insertStmt, insertSql, aggregatedContent,
+                        rowCount, table, prevSrcId, prevPrj, title);
                 insertCount++;
                 aggregatedContent = new StringBuilder();
                 rowCount = 0;
@@ -276,22 +274,21 @@ public class DetailTableLoader extends BaseCLI {
             // aggregate the columns of one row
             String formattedValues[] = formatAttributeValues(resultSet, table);
             if (formattedValues[0] != null)
-		aggregatedContent.append(formattedValues[0]);
+                aggregatedContent.append(formattedValues[0]);
             for (int i = 1; i < formattedValues.length; i++) {
-		if (formattedValues[i] != null)
-		    aggregatedContent.append("\t").append(formattedValues[i]);
-		else 
-		    aggregatedContent.append("\t");
-	    }
+                if (formattedValues[i] != null) aggregatedContent.append("\t").append(
+                        formattedValues[i]);
+                else aggregatedContent.append("\t");
+            }
             aggregatedContent.append("\n");
             rowCount++;
             detailCount++;
         }
-	if (aggregatedContent.length() != 0) {
-	    insertDetailRow(insertStmt, insertSql, aggregatedContent,
-			    rowCount, table, prevSrcId, prevPrj, title);
-	    insertCount++;
-	}
+        if (aggregatedContent.length() != 0) {
+            insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount,
+                    table, prevSrcId, prevPrj, title);
+            insertCount++;
+        }
         int[] counts = { insertCount, detailCount };
         return counts;
     }
@@ -322,7 +319,7 @@ public class DetailTableLoader extends BaseCLI {
         sql = sql.replace("ID_QUERY", idSql);
         sql = sql.replace("TABLE_QUERY", tableSql);
         sql = sql.replace("PK_NAME", pkName);
-	//System.err.println(sql);
+        // System.err.println(sql);
         return sql;
     }
 
@@ -354,6 +351,15 @@ public class DetailTableLoader extends BaseCLI {
 
         if (attribute instanceof ColumnAttributeField) {
             String value = resultSet.getString(attribute.getName().toUpperCase());
+            if (value == null) {
+                String errorMessage = "Table Query ["
+                        + table.getQuery().getFullName()
+                        + "] returns null value on attribute ["
+                        + attribute.getName() + "]";
+                // print out more error about the cause;
+                logger.error(errorMessage);
+                throw new WdkModelException(errorMessage);
+            }
             formattedValuesMap.put(attribute.getName(), value);
             return value;
         }
@@ -389,12 +395,13 @@ public class DetailTableLoader extends BaseCLI {
      * @throws WdkUserException
      */
     private void insertDetailRow(PreparedStatement insertStmt,
-            String insertSql, StringBuilder contentBuf, int rowCount, TableField table,
-            String srcId, String project, String title)
+            String insertSql, StringBuilder contentBuf, int rowCount,
+            TableField table, String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
 
-	// trim trailing newline (but not leading white space)
-	String content = contentBuf.toString().substring(0,contentBuf.length()-1);
+        // trim trailing newline (but not leading white space)
+        String content = contentBuf.toString().substring(0,
+                contentBuf.length() - 1);
 
         // (source_id, project_id, field_name, field_title, row_count, content,
         // modification_date)
@@ -403,7 +410,7 @@ public class DetailTableLoader extends BaseCLI {
         insertStmt.setString(3, table.getName());
         insertStmt.setString(4, title);
         insertStmt.setInt(5, rowCount);
-	insertStmt.setString(6, content);
+        insertStmt.setString(6, content);
         insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
                 "api-report-detail-insert");
