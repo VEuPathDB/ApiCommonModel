@@ -11,7 +11,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -353,12 +352,14 @@ public class DetailTableLoader extends BaseCLI {
             String value = resultSet.getString(attribute.getName().toUpperCase());
             if (value == null) {
                 String errorMessage = "Table Query ["
-                        + table.getQuery().getFullName()
-                        + "] returns null value on attribute ["
-                        + attribute.getName() + "]";
+                        + table.getQuery().getFullName() + "] returns null "
+                        + "value on attribute [" + attribute.getName()
+                        + "]. The value will be treated as empty string,"
+                        + " but please investigate.";
                 // print out more error about the cause;
-                logger.error(errorMessage);
-                throw new WdkModelException(errorMessage);
+                logger.warn(errorMessage);
+                // throw new WdkModelException(errorMessage);
+                value = "";
             }
             formattedValuesMap.put(attribute.getName(), value);
             return value;
