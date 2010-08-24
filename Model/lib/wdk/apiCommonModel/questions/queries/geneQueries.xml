@@ -5192,37 +5192,39 @@ where one.source_id = two.source_id
        <column name="fold_change" />
        <sql includeProjects="PlasmoDB">
         <![CDATA[
-           SELECT ga.gene as source_id, '@PROJECT_ID@' as project_id, 
-                   round((CASE WHEN avg(ep1.mean)/avg(ep2.mean) >= 1
-                   THEN avg(ep1.mean)/avg(ep2.mean)
-                   ELSE -1/(avg(ep1.mean)/avg(ep2.mean))
-                   END),1) as fold_change
-            FROM Rad.AnalysisInput ai1, Rad.Analysis a1, 
-                 Rad.ExpressionProfile ep1,  
-                 Rad.AnalysisInput ai2, Rad.Analysis a2,
-                 Rad.ExpressionProfile ep2, 
-                 Rad.Protocol p, Rad.ShortOligoFamily sof,
-                 ApiDB.GeneAlias ga
-            WHERE p.name = 'R Expression Statistics'
-             AND ai1.logical_group_id = $$diffMeanExpr_reference$$
-             AND a1.analysis_id = ai1.analysis_id
-             AND a1.protocol_id = p.protocol_id
-             AND ep1.analysis_id = a1.analysis_id
-             AND sof.composite_element_id = ep1.row_id
-             AND ai2.logical_group_id = $$diffMeanExpr_comparitor$$
-             AND a2.analysis_id = ai2.analysis_id
-             AND a2.protocol_id = p.protocol_id
-             AND ep2.analysis_id = a2.analysis_id
-             AND sof.composite_element_id = ep2.row_id
-             AND sof.source_id is not null
-             AND ga.alias = sof.source_id
-             having $$regulated_dir$$ (
-              case when avg(ep1.mean) >= avg(ep2.mean)
-                   then avg(ep1.mean)/avg(ep2.mean)
-                   else -(avg(ep2.mean)/avg(ep1.mean))
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                   round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
+                                 THEN power(2, one.average) / power(2,two.average)
+                           ELSE -1 / (power(2,one.average) / power(2,two.average))
+                   END),1) as fold_change,
+        round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe, apidb.profileset ps
+ where pen.name in ($$diffMeanExpr_reference$$)
+ and ps.name = 'Profiles of Cowman Invasion KO-averaged'
+ and ps.profile_set_id = p.profile_set_id
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe, apidb.profileset ps
+ where pen.name in ($$diffMeanExpr_comparitor$$)
+ and ps.name = 'Profiles of Cowman Invasion KO-averaged'
+ and ps.profile_set_id = p.profile_set_id
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two
+ where one.source_id = two.source_id
+ and  $$regulated_dir$$ (
+               case when one.average >= two.average
+                   then power(2,one.average) / power(2,two.average)
+                   else -( power(2,two.average) / power(2,one.average))
                    end ) >= $$fold_change$$
-             GROUP BY ga.gene
-             ORDER BY ga.gene
             ]]>
        </sql>
     </sqlQuery>    
@@ -5311,29 +5313,15 @@ where one.source_id = two.source_id
        <column name="percentile" />
        <sql>
             <![CDATA[
-	    SELECT 
-                 ga.gene as source_id, '@PROJECT_ID@' as project_id, 
-                 max(to_char(de.percentile,'99.99')) as percentile
-            FROM RAD.ExpressionProfile de, Rad.ShortOligoFamily sof,
-                 Rad.Analysis a, Rad.AnalysisInput aia, 
-		 Rad.LogicalGroup lga,
-                 Rad.Protocol p, Rad.ProtocolParam pp, Rad.AnalysisParam ap,
-                 ApiDB.GeneAlias ga
-            WHERE sof.source_id is not null
-             AND ga.alias = sof.source_id
-             AND sof.composite_element_id = de.row_id
-             AND a.analysis_id = de.analysis_id
-             AND a.analysis_id = aia.analysis_id
-             AND aia.logical_group_id = lga.logical_group_id 
-             AND a.protocol_id = p.protocol_id
-             AND pp.protocol_id = p.protocol_id
-             AND ap.protocol_param_id = pp.protocol_param_id
-             AND ap.analysis_id = a.analysis_id
-             AND p.name = 'R Expression Statistics'
-             AND lga.logical_group_id = $$cowmanSample$$
-             AND de.percentile >= $$percentile$$
-             GROUP BY ga.gene
-             ORDER BY ga.gene
+           select source_id, '@PROJECT_ID@' as project_id, pe.value AS percentile
+           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p
+           where ps.profile_set_id = pen.profile_set_id
+            and ps.profile_set_id = p.profile_set_id
+            and pe.profile_id = p.profile_id
+            and pe.element_order = pen.element_order
+            and ps.name = 'Percentiles of Cowman Invasion KO profiles-averaged'
+            and pen.name in ( $$cowmanSample$$ )
+            and pe.value > $$percentile$$
             ]]>
           </sql>
     </sqlQuery>    
