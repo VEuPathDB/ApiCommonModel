@@ -1082,31 +1082,17 @@
 
             <sql excludeProjects="EuPathDB">
             <![CDATA[
-          SELECT DISTINCT ga2.source_id AS ortho_source_id, 
-            CASE WHEN '@PROJECT_ID@' = 'GiardiaDB' THEN ga2.species
-                ELSE ga2.organism END AS organism, 
-             ga2.product, ga1.source_id,
-             (SELECT case when (count(*) > 0) then 'yes' else 'no' end
-              FROM apidb.synteny s
-              WHERE s.a_na_sequence_id = ga1.na_sequence_id
-                AND s.b_na_sequence_id = ga2.na_sequence_id
-                AND s.b_start < ga2.end_max
-                AND s.b_end > ga2.start_min 
-                AND rownum = 1) is_syntenic,
-             (SELECT case when (count(*) > 0) then 'yes' else 'no' end as comment_count
-              FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, dots.GeneFeature gff
-              WHERE  c.comment_target_id = 'gene'
-                AND c.stable_id = ga2.source_id
-                AND c.review_status_id != 'rejected'
-                AND c.is_visible = 1
-                AND gff.source_id = ga2.source_id
-                AND rownum = 1) as comment_count,
-           '@PROJECT_ID@' as project_id
-          FROM apidb.geneattributes ga1, apidb.geneattributes ga2
-            WHERE ga1.orthomcl_name = ga2.orthomcl_name
-            AND ga2.source_id != ga1.source_id
-            AND ga2.project_id = '@PROJECT_ID@'
-          ORDER BY organism, ga2.source_id
+            select ogt.source_id, ogt.project_id, ogt.ortho_source_id, ogt.product, ogt.organism,
+                   ogt.is_syntenic, nvl(comments.comment_count, 'no') as comment_count
+            from apidb.OrthologGeneTable ogt,
+                 (select distinct 'yes' as comment_count, stable_id as source_id, project_name
+                  from comments2.comments@apidb.login_comment
+                  where comment_target_id = 'gene'
+                    and review_status_id != 'rejected'
+                    and is_visible = 1) comments
+            where ogt.source_id = comments.source_id(+)
+              and ogt.project_id = comments.source_id(+)
+            order by organism, ortho_source_id
             ]]>
             </sql>
        </sqlQuery>
