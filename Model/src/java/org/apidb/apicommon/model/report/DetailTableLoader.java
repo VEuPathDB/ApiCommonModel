@@ -357,7 +357,7 @@ public class DetailTableLoader extends BaseCLI {
                         + "]. The value will be treated as empty string,"
                         + " but please investigate.";
                 // print out more error about the cause;
-                logger.warn(errorMessage);
+                logger.debug(errorMessage);
                 // throw new WdkModelException(errorMessage);
                 value = "";
             }
