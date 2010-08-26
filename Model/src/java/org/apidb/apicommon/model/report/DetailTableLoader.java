@@ -123,11 +123,14 @@ public class DetailTableLoader extends BaseCLI {
         String fieldNames = (String) getOptionValue(ARG_TABLE_FIELD);
 
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
+        logger.debug("loading model...");
         wdkModel = WdkModel.construct(projectId, gusHome);
         queryDataSource = wdkModel.getQueryPlatform().getDataSource();
 
+        logger.debug("loading id sql...");
         String idSql = loadIdSql(sqlFile);
 
+        logger.debug("getting tables...");
         RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
         Map<String, TableField> tables = recordClass.getTableFieldMap();
         if (fieldNames != null) { // dump individual table
@@ -181,6 +184,7 @@ public class DetailTableLoader extends BaseCLI {
      */
     private void dumpTable(TableField table, String idSql)
             throws WdkModelException, SQLException, WdkUserException {
+        logger.debug("Dumping table [" + table.getName() + "]...");
         long start = System.currentTimeMillis();
 
         DataSource updateDataSource = wdkModel.getQueryPlatform().getDataSource();
@@ -202,10 +206,12 @@ public class DetailTableLoader extends BaseCLI {
                 + " modification_date) values(?,?,?,?,?,?,?)";
         try {
             updateConnection.setAutoCommit(false);
+            logger.debug("deleting old result...");
             deleteRows(idSql, table.getName(), updateConnection);
 
             PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
             logger.info("Dumping table [" + table.getName() + "]");
+            logger.debug("aggregating data...");
             int[] counts = aggregateLocally(table, idSql, insertStmt,
                     insertSql, pkName);
             updateConnection.commit();
