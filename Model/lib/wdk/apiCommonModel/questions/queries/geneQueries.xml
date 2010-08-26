@@ -5483,8 +5483,7 @@ where one.source_id = two.source_id
 
     <sqlQuery name="GenesBySuCqPage" includeProjects="PlasmoDB"
           isCacheable='true'>
-       <paramRef ref="geneParams.su_cq_reference"/>
-       <paramRef ref="geneParams.su_cq_comparitor"/>
+       <paramRef ref="geneParams.su_cq_comparisons"/>
        <paramRef ref="geneParams.confidence"/>
        <paramRef ref="geneParams.fold_change"/>
        <paramRef ref="geneParams.regulated_dir" quote="false"/>
@@ -5494,56 +5493,18 @@ where one.source_id = two.source_id
        <column name="fold_change" />
        <sql>
 	 <![CDATA[
-select '@PROJECT_ID@' as project_id,one.source_id as source_id,
-                  round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
-                                 THEN power(2, one.average) / power(2,two.average)
-                           ELSE -1 / (power(2,one.average) / power(2,two.average))
-                   END),1) as fold_change,
-       de.confidence as confidence
- from
-  (select  p.source_id as source_id,
-           pe.value as average,
-           lgl.logical_group_id
-   from    apidb.profile p,
-           apidb.profileelement pe,
-           apidb.profileelementname pen,
-           rad.logicalgrouplink lgl
-  where    p.profile_set_id = pen.profile_set_id
-    and      pe.profile_id = p.profile_id
-    and      pe.element_order = pen.element_order
-    and      pen.profile_element_name_id = $$su_cq_reference$$ 
-    and      lgl.row_id = pen.profile_element_name_id
-  ) one,
- (select  p.source_id as source_id,
-           pe.value as average,
-           lgl.logical_group_id
-   from    apidb.profile p,
-           apidb.profileelement pe,
-           apidb.profileelementname pen,
-           rad.logicalgrouplink lgl
-  where    p.profile_set_id = pen.profile_set_id
-    and      pe.profile_id = p.profile_id
-    and      pe.element_order = pen.element_order
-    and      pen.profile_element_name_id = $$su_cq_comparitor$$
-    and      lgl.row_id = pen.profile_element_name_id
-  ) two,
-   rad.analysisinput ai,
-   rad.differentialexpression de,
-   apidb.geneattributes ga
-where one.source_id = two.source_id
- and  one.source_id = ga.source_id
- and  one.logical_group_id = two.logical_group_id
- and  ai.logical_group_id = one.logical_group_id
- and  ai.analysis_id = de.analysis_id
- and  de.row_id = ga.na_feature_id
- and  de.confidence >= $$confidence$$
- and  $$regulated_dir$$ (
-               case when one.average >= two.average
-                   then power(2,one.average) / power(2,two.average)
-                   else -( power(2,two.average) / power(2,one.average))
-                   end ) >= $$fold_change$$
+          SELECT ga.source_id, '@PROJECT_ID@' as project_id, 
+                 round(de.fold_change, 2) as fold_change,
+                 round(de.confidence, 2) as confidence
+          from apidb.geneattributes ga, rad.differentialexpression de, core.tableinfo ti
+          where ti.name = 'GeneFeature'
+          and ti.table_id = de.table_id
+          and ga.na_feature_id = de.row_id
+          and $$regulated_dir$$ (de.fold_change) >= $$fold_change$$
+          and de.confidence >= $$confidence$$
+          and de.analysis_id = $$su_cq_comparisons$$
             ]]>
-          </sql>
+        </sql>
     </sqlQuery>    
 
     <processQuery name="GenesBySuCqPage" includeProjects="EuPathDB"
@@ -5610,14 +5571,17 @@ where one.source_id = two.source_id
        <column name="fold_change" />
        <sql>
             <![CDATA[
-          SELECT g.source_id, '@PROJECT_ID@' as project_id,
-	      to_char(de.fold_change, '999.99') as fold_change
-            FROM Rad.DifferentialExpression de, Core.TableInfo t, apidb.geneattributes g
-            WHERE t.table_id = de.table_id
-             AND g.na_feature_id = de.row_id
-             AND t.name = 'GeneFeature'
-             AND de.analysis_id = $$kappeAnalysis$$
-             AND ( $$regulated_dir$$ (de.fold_change)) >= $$fold_change$$
+          SELECT p.source_id, 
+                 '@PROJECT_ID@' as project_id, 
+                 to_char(max((pe.value)), '999.99') as fold_change
+          FROM   ApiDB.Profile p, ApiDB.ProfileElement pe, ApiDB.ProfileElementName pen
+          WHERE  p.profile_set_id = pen.profile_set_id
+          AND    pen.profile_set_id = p.profile_set_id
+          AND    pe.profile_id = p.profile_id
+          AND    pe.element_order = pen.element_order
+          AND    pen.profile_element_name_id = $$kappeAnalysis$$
+          AND    ($$regulated_dir$$ (pe.value)) >= $$fold_change$$
+          GROUP BY p.source_id
         ]]>
        </sql>
     </sqlQuery>  
