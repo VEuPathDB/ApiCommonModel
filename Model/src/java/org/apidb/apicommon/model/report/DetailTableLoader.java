@@ -187,8 +187,18 @@ public class DetailTableLoader extends BaseCLI {
         logger.debug("Dumping table [" + table.getName() + "]...");
         long start = System.currentTimeMillis();
 
+        // first check if the table has any columns
+        if (table.getAttributeFields(FieldScope.REPORT_MAKER).length == 0) {
+            logger.info("table [" + table.getName()
+                    + "] doesn't have any columns to be dumped. skipped.");
+            return;
+        }
+
+        logger.debug("getting data source...");
         DataSource updateDataSource = wdkModel.getQueryPlatform().getDataSource();
+        logger.debug("getting connection...");
         Connection updateConnection = updateDataSource.getConnection();
+        logger.debug("Connection obtained...");
 
         // Because this is a EuPathDB program, we can assume that the pk
         // has two columns: project and id.
@@ -205,6 +215,7 @@ public class DetailTableLoader extends BaseCLI {
                 + ", project_id, field_name, field_title, row_count, content, "
                 + " modification_date) values(?,?,?,?,?,?,?)";
         try {
+            logger.debug("disabling auto commit...");
             updateConnection.setAutoCommit(false);
             logger.debug("deleting old result...");
             deleteRows(idSql, table.getName(), updateConnection);
