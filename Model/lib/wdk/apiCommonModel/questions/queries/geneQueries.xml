@@ -2660,62 +2660,81 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
     <sqlQuery name="GenesByRNASeqPfRBCFoldChange" includeProjects="PlasmoDB" 
               isCacheable="true">
 
-        <paramRef ref="geneParams.RNA_rbc_pfal_fc_two_pd"/>
-        <paramRef ref="geneParams.RNA_rbc_pfal_fc_one_pd"/>
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_ref_pd"/>
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_comp_pd"/>
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir_up_down_only" quote="false"/>
+        <paramRef ref="geneParams.group_operator"/>
         <paramRef ref="geneParams.minimum_expression_value"/>
         <column name="project_id"/>
         <column name="source_id"/>
-        <column name="fold_change"/>
-        <column name="avg_group_one"/>
-        <column name="avg_group_two"/>
+        <column name="fold_change_average"/>
+        <column name="fold_change_minmax"/>
+        <column name="avg_ref"/>
+        <column name="avg_comp"/>
+        <column name="minmax_ref"/>
+        <column name="minmax_comp"/>
         <sql>
           <![CDATA[
- select one.source_id, '@PROJECT_ID@' as project_id,
-                  round((CASE WHEN (one.average >= two.average and two.average > 0)
-                                THEN one.average/two.average
-                              WHEN (one.average >= two.average and two.average = 0)
-                              THEN one.average
-                              WHEN (two.average > one.average and one.average > 0)
-                              THEN -(two.average/one.average)
-                              WHEN (two.average > one.average and one.average = 0)
-                              THEN -two.average
-                  END),1) as fold_change,
-                          round(one.average,2) as avg_group_one,
-        round(two.average,2) as avg_group_two
+ select ref.source_id, '@PROJECT_ID@' as project_id,
+                  round((CASE WHEN (ref.average >= comp.average and comp.average > 0)
+                                THEN -(ref.average/comp.average)
+                              WHEN (ref.average >= comp.average and comp.average = 0)
+                              THEN -ref.average
+                              WHEN (comp.average > ref.average and ref.average > 0)
+                              THEN comp.average/ref.average
+                              WHEN (comp.average > ref.average and ref.average = 0)
+                              THEN comp.average
+                  END),1) as fold_change_average,
+                  round((CASE WHEN (ref.minmax >= comp.minmax and comp.minmax > 0)
+                                THEN -(ref.minmax/comp.minmax)
+                              WHEN (ref.minmax >= comp.minmax and comp.minmax = 0)
+                              THEN -ref.minmax
+                              WHEN (comp.minmax > ref.minmax and ref.minmax > 0)
+                              THEN comp.minmax/ref.minmax
+                              WHEN (comp.minmax > ref.minmax and ref.minmax = 0)
+                              THEN comp.minmax
+                  END),1) as fold_change_minmax,
+                          round(ref.average,2) as avg_ref,
+        round(comp.average,2) as avg_comp,round(ref.minmax,2) as minmax_ref,
+        round(comp.minmax,2) as minmax_comp
  from (
  select p.source_id, 
- CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(pe.value) ELSE min(pe.value) END as average
+ CASE WHEN $$group_operator$$ = 'average'  THEN avg(pe.value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pe.value) ELSE max(pe.value) END as groupval,
+ CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pe.value) ELSE max(pe.value) END as minmax,
+ avg(pe.value) as average
  from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
- where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_one_pd$$)
+ where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_ref_pd$$)
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
- and pe.value >= $$minimum_expression_value$$
- group by p.source_id ) one,
+ and pe.value >= CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN 0 ELSE $$minimum_expression_value$$ END
+ group by p.source_id ) ref,
  (
  select p.source_id, 
- CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pe.value) ELSE max(pe.value) END as average
+ CASE WHEN $$group_operator$$ = 'average'  THEN avg(pe.value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(pe.value) ELSE min(pe.value) END as groupval,
+ CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(pe.value) ELSE min(pe.value) END as minmax,
+ avg(pe.value) as average
  from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
- where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_two_pd$$)
+ where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_comp_pd$$)
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
- and pe.value >= $$minimum_expression_value$$
- group by p.source_id ) two, apidb.geneattributes ga
- where one.source_id = two.source_id
- and one.source_id = ga.source_id
+ and pe.value >= CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN $$minimum_expression_value$$ ELSE 0 END
+ group by p.source_id ) comp, apidb.geneattributes ga
+ where ref.source_id = comp.source_id
+ and ref.source_id = ga.source_id
  and ga.gene_type = 'protein coding'
+ 
  and  $$regulated_dir_up_down_only$$ (
-              case when (one.average >= two.average and two.average > 0)
-                  then one.average/two.average
-                  when (two.average >= one.average and one.average > 0)
-                  then -(two.average/one.average)
-                  when (one.average >= two.average and two.average = 0)
-                  then one.average
-                  when (two.average >= one.average and one.average = 0)
-                  then -two.average
+              case when (ref.groupval >= comp.groupval and comp.groupval > 0)
+                  then -(ref.groupval/comp.groupval)
+                  when (comp.groupval >= ref.groupval and ref.groupval > 0)
+                  then comp.groupval/ref.groupval
+                  when (ref.groupval >= comp.groupval and comp.groupval = 0)
+                  then -ref.groupval
+                  when (comp.groupval >= ref.groupval and ref.groupval = 0)
+                  then comp.groupval
                   end ) >= $$fold_change$$
            ]]>
       </sql>
@@ -2725,16 +2744,19 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
     <processQuery name="GenesByRNASeqPfRBCFoldChange" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
 
-        
-        <paramRef ref="geneParams.RNA_rbc_pfal_fc_two_pd" quote="false"/>
-        <paramRef ref="geneParams.RNA_rbc_pfal_fc_one_pd" quote="false"/>
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_ref_pd"/>
+        <paramRef ref="geneParams.RNA_rbc_pfal_fc_comp_pd"/>
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir_up_down_only" quote="false"/>
-        <wsColumn name="project_id" wsName="project_id"/>
-        <wsColumn name="source_id" wsName="source_id"/>
-        <wsColumn name="fold_change" wsName="fold_change"/>
-        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
-        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
+        <paramRef ref="geneParams.group_operator"/>
+        <paramRef ref="geneParams.minimum_expression_value"/>
+        <wsColumn name="project_id"/>
+        <wsColumn name="source_id"/>
+        <wsColumn name="fold_change"/>
+        <wsColumn name="avg_ref"/>
+        <wsColumn name="avg_comp"/>
+        <wsColumn name="minmax_ref"/>
+        <wsColumn name="minmax_comp"/>        
     </processQuery>
 
 
