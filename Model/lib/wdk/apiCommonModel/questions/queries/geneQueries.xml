@@ -2666,7 +2666,8 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir_up_down_only" quote="false"/>
         <paramRef ref="geneParams.group_operator"/>
-        <paramRef ref="geneParams.minimum_expression_value"/>
+        <paramRef ref="geneParams.minimum_percentile_value"/>
+        <paramRef ref="geneParams.global_min_max"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="fold_change_average"/>
@@ -2694,35 +2695,67 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
  from (
  select p.source_id, 
  CASE WHEN $$group_operator$$ = 'average'  THEN avg(pe.value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pe.value) ELSE max(pe.value) END as groupval,
+ CASE WHEN $$group_operator$$ = 'average'  THEN avg(pepc.value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pepc.value) ELSE max(pepc.value) END as group_pc,
  CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pe.value) ELSE max(pe.value) END as minmax,
  avg(pe.value) as average
- from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe, apidb.profileelementname penpc, apidb.profileset pspc, apidb.profile ppc, apidb.profileelement pepc
  where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_ref_pd$$)
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
+ and (($$global_min_max$$ = 'dont_care'
+       or ('$$regulated_dir_up_down_only$$' = '+'
+       and $$global_min_max$$ = 'max')
+       or ('$$regulated_dir_up_down_only$$' = '-'
+       and $$global_min_max$$ = 'min'))
+  or ('$$regulated_dir_up_down_only$$' = '+'
+      and pen.name = p.time_of_min_expr || 'h')
+  or ('$$regulated_dir_up_down_only$$' = '-'
+      and pen.name = p.time_of_max_expr || 'h'))
+ and pspc.name = 'Percents of P. falciparum Stunnenberg mRNA Seq data'
+ and pspc.profile_set_id = ppc.profile_set_id
+ and ppc.profile_id = pepc.profile_id
+ and penpc.profile_set_id = pspc.profile_set_id
+ and p.source_id = ppc.source_id
+ and penpc.element_order = pepc.element_order
  group by p.source_id ) ref,
  (
  select p.source_id, 
  CASE WHEN $$group_operator$$ = 'average'  THEN avg(pe.value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(pe.value) ELSE min(pe.value) END as groupval,
+ CASE WHEN $$group_operator$$ = 'average'  THEN avg(pepc.value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(pepc.value) ELSE max(pepc.value) END as group_pc,
  CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(pe.value) ELSE min(pe.value) END as minmax,
  avg(pe.value) as average
- from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe, apidb.profileelementname penpc, apidb.profileset pspc, apidb.profile ppc, apidb.profileelement pepc
  where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_comp_pd$$)
  and p.profile_set_id = pen.profile_set_id
  and pe.profile_id = p.profile_id
  and pe.element_order = pen.element_order
+ and (($$global_min_max$$ = 'dont_care'
+       or ('$$regulated_dir_up_down_only$$' = '+'
+       and $$global_min_max$$ = 'min')
+       or ('$$regulated_dir_up_down_only$$' = '-'
+       and $$global_min_max$$ = 'max'))
+  or ('$$regulated_dir_up_down_only$$' = '+'
+      and pen.name = p.time_of_max_expr || 'h')
+  or ('$$regulated_dir_up_down_only$$' = '-'
+      and pen.name = p.time_of_min_expr || 'h'))
+ and pspc.name = 'Percents of P. falciparum Stunnenberg mRNA Seq data'
+ and pspc.profile_set_id = ppc.profile_set_id
+ and ppc.profile_id = pepc.profile_id
+ and penpc.profile_set_id = pspc.profile_set_id
+ and p.source_id = ppc.source_id
+ and penpc.element_order = pepc.element_order
  group by p.source_id ) comp, apidb.geneattributes ga
  where ref.source_id = comp.source_id
  and ref.source_id = ga.source_id
  and ga.gene_type = 'protein coding'
- and CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN comp.groupval ELSE ref.groupval END >= $$minimum_expression_value$$
+ and CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN comp.group_pc ELSE ref.group_pc END >= $$minimum_percentile_value$$
  and  $$regulated_dir_up_down_only$$ (
               case when (ref.groupval >= comp.groupval)
                   then -((ref.groupval + .01)/(comp.groupval + .01))
                   when (comp.groupval >= ref.groupval)
                   then (comp.groupval + .01)/(ref.groupval + .01)
-                  end ) >= $$fold_change$$
+                  end ) >= CASE WHEN $$fold_change$$ > 1 THEN $$fold_change$$ ELSE -100000 END
            ]]>
       </sql>
 
@@ -2736,7 +2769,8 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir_up_down_only" quote="false"/>
         <paramRef ref="geneParams.group_operator"/>
-        <paramRef ref="geneParams.minimum_expression_value"/>
+        <paramRef ref="geneParams.minimum_percentile_value"/>
+        <paramRef ref="geneParams.global_min_max"/>
         <wsColumn name="project_id"/>
         <wsColumn name="source_id"/>
         <wsColumn name="fold_change_average"/>
@@ -2761,9 +2795,8 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
            <!-- use CDATA because query includes angle brackets -->
             <![CDATA[
            select distinct p.source_id, '@PROJECT_ID@' as project_id, max(round(pe.value,2))as percentile
-           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
-           where ps.profile_set_id = pen.profile_set_id
-            and ps.profile_set_id = p.profile_set_id
+           from apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
+           where p.profile_set_id = pen.profile_set_id
             and p.source_id = ga.source_id
             and ga.gene_type = 'protein coding'
             and pe.profile_id = p.profile_id
@@ -2800,7 +2833,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <paramRef ref="geneParams.RNA_pfal_fc_one_pd"/>
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir" quote="false"/>
-        <paramRef ref="geneParams.minimum_expression_value"/>
+        <paramRef ref="geneParams.minimum_percentile_value"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="fold_change"/>
@@ -2835,9 +2868,9 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
  where one.source_id = two.source_id
  and one.source_id = ga.source_id
  and ga.gene_type = 'protein coding'
- and  $$regulated_dir$$ ( CASE WHEN (one.average >= two.average and one.average >= $$minimum_expression_value$$)
+ and  $$regulated_dir$$ ( CASE WHEN (one.average >= two.average and one.average >= $$minimum_percentile_value$$)
                                 THEN (one.average + .01)/(two.average + .01)
-                              WHEN (two.average > one.average and two.average >= $$minimum_expression_value$$)
+                              WHEN (two.average > one.average and two.average >= $$minimum_percentile_value$$)
                               THEN -((two.average + .01)/(one.average + .01))
                               ELSE 0
                   end ) >= $$fold_change$$
@@ -2854,7 +2887,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <paramRef ref="geneParams.RNA_pfal_fc_one_pd" quote="false"/>
         <paramRef ref="geneParams.fold_change"/>
         <paramRef ref="geneParams.regulated_dir" quote="false"/>
-        <paramRef ref="geneParams.minimum_expression_value"/>
+        <paramRef ref="geneParams.minimum_percentile_value"/>
         <wsColumn name="project_id" wsName="project_id"/>
         <wsColumn name="source_id" wsName="source_id"/>
         <wsColumn name="fold_change" wsName="fold_change"/>
