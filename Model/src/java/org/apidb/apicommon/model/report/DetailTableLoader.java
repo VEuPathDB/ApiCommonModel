@@ -30,6 +30,7 @@ import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
+import org.gusdb.wdk.model.dbms.DBPlatform;
 import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wsf.util.BaseCLI;
@@ -418,8 +419,8 @@ public class DetailTableLoader extends BaseCLI {
             throws WdkModelException, SQLException, WdkUserException {
 
         // trim trailing newline (but not leading white space)
-        String content = contentBuf.toString().substring(0,
-                contentBuf.length() - 1);
+        String content = contentBuf.toString();
+        DBPlatform platform = wdkModel.getQueryPlatform();
 
         // (source_id, project_id, field_name, field_title, row_count, content,
         // modification_date)
@@ -428,7 +429,9 @@ public class DetailTableLoader extends BaseCLI {
         insertStmt.setString(3, table.getName());
         insertStmt.setString(4, title);
         insertStmt.setInt(5, rowCount);
-        insertStmt.setString(6, content);
+        if (content.length() < 32766) insertStmt.setString(6, content);
+        else platform.setClobData(insertStmt, 6, content, false);
+
         insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
                 "api-report-detail-insert");
