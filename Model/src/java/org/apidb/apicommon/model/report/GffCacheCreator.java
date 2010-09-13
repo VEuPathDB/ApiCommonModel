@@ -67,8 +67,8 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_WDK_TABLE_ID = "wdk_table_id";
 
     private static final String GENE_RECORD_CLASS = "GeneRecordClasses.GeneRecordClass"; // Is
-                                                                                         // this
-                                                                                         // ok?
+    // this
+    // ok?
     private static final String GENE_TABLE_QUERIES = "GeneTables";
     private static final String TABLE_GENE_GFF_RNAS = "GeneGffRnas";
     private static final String TABLE_GENE_GFF_CDSS = "GeneGffCdss";
@@ -186,7 +186,8 @@ public class GffCacheCreator extends BaseCLI {
         sql.append(idSql + "))");
 
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(), "api-report-gff-delete");
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+                "api-report-gff-delete");
     }
 
     private void insertToCacheTable(String subquerySql) throws SQLException,
@@ -195,7 +196,8 @@ public class GffCacheCreator extends BaseCLI {
         sql.append(cacheTable).append(" ").append(subquerySql);
         logger.debug("++++++ insert-to-cache-table: \n" + sql);
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(), "api-report-gff-insert");
+        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+                "api-report-gff-insert");
     }
 
     private void dumpGeneAttributes(String idSql) throws SQLException,
@@ -600,9 +602,12 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void getTableIdModificationDateSql(StringBuffer sql) {
+        // use the cache table name to generate the sequence name.
+        int idx = cacheTable.indexOf('.');
+        String schema = (idx < 0) ? null : cacheTable.substring(0, idx);
+        String table = (idx < 0) ? cacheTable : cacheTable.substring(idx + 1);
         sql.append('(').append(
-                wdkModel.getUserPlatform().getNextIdSqlExpression("apidb",
-                        "wdkTable"));
+                wdkModel.getUserPlatform().getNextIdSqlExpression(schema, table));
         sql.append("), sysdate ");
     }
 
