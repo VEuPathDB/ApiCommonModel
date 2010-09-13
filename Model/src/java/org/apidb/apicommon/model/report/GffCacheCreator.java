@@ -197,8 +197,8 @@ public class GffCacheCreator extends BaseCLI {
         StringBuffer sql = new StringBuffer("INSERT INTO " + cacheTable);
         sql.append(" (" + COLUMN_SOURCE_ID + ", project_id, "
                 + COLUMN_FIELD_NAME + ", " + COLUMN_ROW_COUNT + ", "
-                + COLUMN_FIELD_TITLE + ", " + COLUMN_CONTENT + ", "
-                + COLUMN_WDK_TABLE_ID + ", " + COLUMN_MODIFICATION_DATE + ") ");
+                + COLUMN_CONTENT + ", " + COLUMN_WDK_TABLE_ID + ", "
+                + COLUMN_MODIFICATION_DATE + ") ");
         sql.append(subquerySql);
         logger.debug("++++++ insert-to-cache-table: \n" + sql);
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
