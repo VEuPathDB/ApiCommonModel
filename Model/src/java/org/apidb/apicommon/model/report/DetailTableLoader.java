@@ -155,7 +155,7 @@ public class DetailTableLoader extends BaseCLI {
         }
 
         long end = System.currentTimeMillis();
-        logger.info("totally spent: " + ((end - start) / 1000.0) + " seconds");
+        logger.info("Total time: " + ((end - start) / 1000.0) + " seconds");
     }
 
     private String loadIdSql(String sqlFile) throws IOException {
@@ -226,12 +226,15 @@ public class DetailTableLoader extends BaseCLI {
             logger.debug("aggregating data...");
             int[] counts = aggregateLocally(table, idSql, insertStmt,
                     insertSql, pkName);
+            long startCommit = System.currentTimeMillis();	    
             updateConnection.commit();
+	    long end = System.currentTimeMillis();
 
-            long end = System.currentTimeMillis();
-            logger.info("Dump table [" + table.getName() + "] done.  Inserted "
+
+            logger.info("Dump table [" + table.getName() + "] done.  Created and inserted "
                     + counts[0] + " (" + counts[1] + " detail) rows in "
-                    + ((end - start) / 1000.0) + " seconds");
+                    + ((end - start) / 1000.0) + " seconds.  Cumulative insert time was " + (int)(counts[2]/1000) + " seconds.  Commit was "
+			+ (int)(end - startCommit)/1000);
         } catch (SQLException ex) {
             updateConnection.rollback();
             throw ex;
@@ -246,13 +249,18 @@ public class DetailTableLoader extends BaseCLI {
     private void deleteRows(String idSql, String fieldName,
             Connection connection) throws WdkUserException, WdkModelException,
             SQLException {
+        long start = System.currentTimeMillis();
         StringBuilder sql = new StringBuilder("DELETE FROM " + detailTable);
         sql.append(" WHERE source_id IN (SELECT source_id FROM (");
         sql.append(idSql + "))");
         sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
-        logger.info("Removing previous rows:\n" + sql);
+        logger.info("Removing previous rows [" + fieldName + "]");
+	logger.debug("\n" + sql);
         SqlUtils.executeUpdate(wdkModel, connection, sql.toString(),
-                "api-report-detail-delete");
+                "api-report-detail-delete-"+fieldName);
+            long end = System.currentTimeMillis();
+	logger.info("Deleted rows for [" + fieldName + "] in " +
+		     ((end - start) / 1000.0) + " seconds");
     }
 
     private int[] aggregateLocally(TableField table, String idSql,
@@ -263,8 +271,9 @@ public class DetailTableLoader extends BaseCLI {
 
         String wrappedSql = getWrappedSql(table, idSql, pkName);
 
+	logger.debug("wrapped sql:\n" + wrappedSql);
         ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
-                wrappedSql, "api-report-detail-wrapped");
+                wrappedSql, "api-report-detail-aggregate-"+table.getName());
         String srcId = "";
         String prj = "";
         String prevSrcId = "";
@@ -274,12 +283,14 @@ public class DetailTableLoader extends BaseCLI {
         int detailCount = 0;
         int rowCount = 0;
         boolean first = true;
+	long insertTime = 0;
         while (resultSet.next()) {
             srcId = resultSet.getString(pkName);
             prj = resultSet.getString("PROJECT_ID");
             if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
-                insertDetailRow(insertStmt, insertSql, aggregatedContent,
-                        rowCount, table, prevSrcId, prevPrj, title);
+                insertTime +=
+		    insertDetailRow(insertStmt, insertSql, aggregatedContent,
+				    rowCount, table, prevSrcId, prevPrj, title);
                 insertCount++;
                 aggregatedContent = new StringBuilder();
                 rowCount = 0;
@@ -302,11 +313,12 @@ public class DetailTableLoader extends BaseCLI {
             detailCount++;
         }
         if (aggregatedContent.length() != 0) {
-            insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount,
-                    table, prevSrcId, prevPrj, title);
+            insertTime +=
+		insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount,
+				table, prevSrcId, prevPrj, title);
             insertCount++;
         }
-        int[] counts = { insertCount, detailCount };
+        int[] counts = { insertCount, detailCount, (int)insertTime};
         return counts;
     }
 
@@ -413,10 +425,13 @@ public class DetailTableLoader extends BaseCLI {
      * @throws SQLException
      * @throws WdkUserException
      */
-    private void insertDetailRow(PreparedStatement insertStmt,
+    private long insertDetailRow(PreparedStatement insertStmt,
             String insertSql, StringBuilder contentBuf, int rowCount,
             TableField table, String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
+
+	long start = System.currentTimeMillis();
+
 
         // trim trailing newline (but not leading white space)
         String content = contentBuf.toString();
@@ -434,7 +449,8 @@ public class DetailTableLoader extends BaseCLI {
 
         insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
-                "api-report-detail-insert");
+                "api-report-detail-insert-"+table.getName());
+	return System.currentTimeMillis() - start;
     }
 
 }
