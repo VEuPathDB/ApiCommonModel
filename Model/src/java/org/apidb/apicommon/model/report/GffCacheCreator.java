@@ -39,10 +39,13 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_FIELD_NAME = "field_name";
     private static final String COLUMN_FIELD_TITLE = "field_title";
     private static final String COLUMN_CONTENT = "content";
+    private static final String COLUMN_ROW_COUNT = "row_count";
+    private static final String COLUMN_MODIFICATION_DATE = "modification_date";
+    private static final String COLUMN_WDK_TABLE_ID = "wdk_table_id";
+
     private static final String COLUMN_GO_ID = "go_id";
     private static final String COLUMN_ONTOLOGY = "ontology";
     private static final String COLUMN_ORDER_NUMBER = "order_number";
-    private static final String COLUMN_ROW_COUNT = "row_count";
     private static final String COLUMN_GFF_SEQID = "gff_seqid";
     private static final String COLUMN_GFF_SOURCE = "gff_source";
     private static final String COLUMN_GFF_TYPE = "gff_type";
@@ -64,7 +67,6 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_GFF_TRANSCRIPT_SEQUENCE = "gff_transcript_sequence";
     private static final String COLUMN_GFF_PROTEIN_SEQUENCE = "gff_protein_sequence";
     private static final String COLUMN_SOURCE_ID = "source_id";
-    private static final String COLUMN_WDK_TABLE_ID = "wdk_table_id";
 
     private static final String GENE_RECORD_CLASS = "GeneRecordClasses.GeneRecordClass"; // Is
     // this
@@ -192,8 +194,12 @@ public class GffCacheCreator extends BaseCLI {
 
     private void insertToCacheTable(String subquerySql) throws SQLException,
             WdkModelException, WdkUserException {
-        StringBuffer sql = new StringBuffer("INSERT INTO ");
-        sql.append(cacheTable).append(" ").append(subquerySql);
+        StringBuffer sql = new StringBuffer("INSERT INTO " + cacheTable);
+        sql.append(" (" + COLUMN_SOURCE_ID + ", project_id, "
+                + COLUMN_FIELD_NAME + ", " + COLUMN_ROW_COUNT + ", "
+                + COLUMN_FIELD_TITLE + ", " + COLUMN_CONTENT + ", "
+                + COLUMN_WDK_TABLE_ID + ", " + COLUMN_MODIFICATION_DATE + ") ");
+        sql.append(subquerySql);
         logger.debug("++++++ insert-to-cache-table: \n" + sql);
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
         SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
