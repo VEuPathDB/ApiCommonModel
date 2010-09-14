@@ -576,7 +576,10 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void addCommonFieldsSql(StringBuffer sql, boolean includeParent) {
-        sql.append("trim(").append(COLUMN_GFF_SEQID).append(") || '\t' || ");
+        // always convert the first column to clob, so that the concatenation
+        // won't fail if the content is too long.
+        sql.append("to_clob(trim(").append(COLUMN_GFF_SEQID).append(
+                ")) || '\t' || ");
         sql.append("trim(").append(COLUMN_GFF_SOURCE).append(") || '\t' || ");
         sql.append("trim(").append(COLUMN_GFF_TYPE).append(") || '\t' || ");
         sql.append("trim(").append(COLUMN_GFF_FSTART).append(") || '\t' || ");
