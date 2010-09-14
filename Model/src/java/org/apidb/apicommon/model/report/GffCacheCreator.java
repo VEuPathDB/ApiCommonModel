@@ -36,8 +36,7 @@ public class GffCacheCreator extends BaseCLI {
     private static final String ARG_GFF_TRANSCRIPT_NAME = "gff_transcript";
     private static final String ARG_GFF_PROTEIN_NAME = "gff_protein";
 
-    private static final String COLUMN_FIELD_NAME = "field_name";
-    private static final String COLUMN_FIELD_TITLE = "field_title";
+    private static final String COLUMN_TABLE_NAME = "table_name";
     private static final String COLUMN_CONTENT = "content";
     private static final String COLUMN_ROW_COUNT = "row_count";
     private static final String COLUMN_MODIFICATION_DATE = "modification_date";
@@ -196,7 +195,7 @@ public class GffCacheCreator extends BaseCLI {
             WdkModelException, WdkUserException {
         StringBuffer sql = new StringBuffer("INSERT INTO " + cacheTable);
         sql.append(" (" + COLUMN_SOURCE_ID + ", project_id, "
-                + COLUMN_FIELD_NAME + ", " + COLUMN_ROW_COUNT + ", "
+                + COLUMN_TABLE_NAME + ", " + COLUMN_ROW_COUNT + ", "
                 + COLUMN_CONTENT + ", " + COLUMN_WDK_TABLE_ID + ", "
                 + COLUMN_MODIFICATION_DATE + ") ");
         sql.append(subquerySql);
