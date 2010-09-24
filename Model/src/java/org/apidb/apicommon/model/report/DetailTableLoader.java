@@ -11,7 +11,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -447,7 +449,7 @@ public class DetailTableLoader extends BaseCLI {
         if (content.length() < 32766) insertStmt.setString(6, content);
         else platform.setClobData(insertStmt, 6, content, false);
 
-        insertStmt.setDate(7, new java.sql.Date(new java.util.Date().getTime()));
+        insertStmt.setTimestamp(7, new Timestamp(new Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
                 "api-report-detail-insert-"+table.getName());
 	return System.currentTimeMillis() - start;
