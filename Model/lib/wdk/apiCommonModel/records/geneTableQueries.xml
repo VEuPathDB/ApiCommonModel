@@ -1089,14 +1089,21 @@
             select ogt.source_id, ogt.project_id, ogt.ortho_source_id, ogt.product, ogt.organism,
                    ogt.is_syntenic, nvl(comments.comment_count, 'no') as comment_count
             from apidb.OrthologGeneTable ogt,
-                 (select distinct 'yes' as comment_count, stable_id as source_id, project_name
-                  from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
-                  where comment_target_id = 'gene'
-                    and review_status_id != 'rejected'
-                    and is_visible = 1
-                    and project_name = '@PROJECT_ID@') comments
+                 (with comment_q as (select cmnts.comment_id, cmnts.stable_id as source_id, cmnts.project_name as project_id
+                                     from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ cmnts
+                                     where cmnts.comment_target_id = 'gene'
+                                       and cmnts.review_status_id != 'rejected'
+                                       and cmnts.is_visible = 1
+                                       and cmnts.project_name = 'TriTrypDB')
+                  select 'yes' as comment_count, source_id, project_id
+                  from (  select source_id, project_id
+                          from comment_q
+                        union
+                          select csi.stable_id as source_id, cq.project_id
+                          from comment_q cq, @COMMENT_SCHEMA@CommentStableId@COMMENT_DBLINK@ csi
+                          where cq.comment_id = csi.comment_id)) comments
             where ogt.ortho_source_id = comments.source_id(+)
-              and ogt.project_id = comments.project_name(+)
+              and ogt.project_id = comments.project_id(+)
             order by organism, ortho_source_id
             ]]>
             </sql>
