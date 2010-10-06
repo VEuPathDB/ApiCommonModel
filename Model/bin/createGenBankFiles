@@ -1,0 +1,58 @@
+#!/usr/bin/perl
+
+#use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+use WDK::Model::CommandHelper;
+use IO::File;
+use Cwd;
+
+my $GUS_HOME = $ENV{GUS_HOME};
+my $CLASSPATH = &WDK::Model::CommandHelper::getJavaClasspath($GUS_HOME);
+my $sysProps = &WDK::Model::CommandHelper::getSystemProps($GUS_HOME, 'fullRecordDump');
+my $args = &WDK::Model::CommandHelper::getJavaArgs(@ARGV);
+my $tempFileName = "genbank.tmp";
+my $reporter = "genbank";
+my $baseDir = &Cwd::abs_path();
+my $hasBaseDir = 0;
+
+for my $arg (@ARGV) {
+    if ($hasBaseDir) {
+	$baseDir = $arg;
+	$hasBaseDir = 0;
+    } elsif ($arg eq "-baseDir") {
+	$hasBaseDir = 1;
+    }
+}
+
+my $cmd = "java $sysProps -classpath $CLASSPATH org.gusdb.wdk.model.report.Dumper -reporter $reporter -fileName $tempFileName $args";
+
+system($cmd);
+
+splitOutputFile($baseDir, $tempFileName);
+
+sub splitOutputFile
+{
+    my ($baseDir, $tempFileName) = @_;
+    my $outf;
+    my $inf;
+    my $infName = "$baseDir/$tempFileName";
+    my $hasOutput = 0;
+
+    open ($inf,"$infName") or die $!;
+
+    while (my $line = <$inf>)
+    {
+	if ($line =~ />Feature\t(\w+)/) {
+	    close $outf;
+	    open ($outf, ">$baseDir/$1.tbl") or die $!;
+	    $hasOutput = 1;
+	}
+	
+	if ($hasOutput) {
+	    print $outf $line;
+	}
+    }
+    close $outf;
+    close $inf;
+    unlink $infName;
+}

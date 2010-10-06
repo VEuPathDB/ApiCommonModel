@@ -48,13 +48,14 @@ public class GenBankReporter extends Reporter {
     public void write(OutputStream out) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
-	PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
-
 	String rcName = getQuestion().getRecordClass().getFullName();
 	if (!rcName.equals("SequenceRecordClasses.SequenceRecordClass"))
             throw new WdkModelException("Unsupported record type: " + rcName);
 
+
+	PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
 	pageSequences(writer);
+	writer.flush();
     }
 
     private void pageSequences(PrintWriter writer) throws WdkModelException,
@@ -76,11 +77,6 @@ public class GenBankReporter extends Reporter {
 	    Map<String,Boolean> sorting = new LinkedHashMap<String,Boolean>();
 	    sorting.put(properties.get(PROPERTY_SEQUENCE_ID_COLUMN), true);
 
-	    System.out.println(properties.get(PROPERTY_PAGE_SIZE));
-	    System.out.println(Integer.parseInt(properties.get(PROPERTY_PAGE_SIZE)));
-	    
-	    System.out.println("Running question '" + properties.get(PROPERTY_GENE_QUESTION) + "'");
-	    System.out.println("with sequence ids: " + params.get(properties.get(PROPERTY_SEQUENCE_ID_PARAM)));
 	    Question geneQuestion = (Question) wdkModel.resolveReference(properties.get(PROPERTY_GENE_QUESTION));
 	    AnswerValue geneAnswer = geneQuestion.makeAnswerValue(answerValue.getUser(), params, 0,
 								  Integer.parseInt(properties.get(PROPERTY_PAGE_SIZE)), sorting, null, 0);
@@ -98,7 +94,7 @@ public class GenBankReporter extends Reporter {
 	    
 	    for (RecordInstance record : answerValue.getRecordInstances()) {
 		String recordSequenceId = record.getAttributeValue(properties.get(PROPERTY_SEQUENCE_ID_COLUMN)).toString();
-		if (lastSequenceId != null && lastSequenceId.compareTo(recordSequenceId) != 0) {
+		if (lastSequenceId == null || lastSequenceId.compareTo(recordSequenceId) != 0) {
 		    // If a new sequence id, need to write that out first!
 		    writer.println(">Feature\t" + recordSequenceId);
 		}
