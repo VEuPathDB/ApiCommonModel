@@ -20,7 +20,6 @@ public class GenBankReporter extends Reporter {
 
     private static final String PROPERTY_GENE_QUESTION = "gene_question";
     private static final String PROPERTY_SEQUENCE_ID_PARAM = "sequence_param";
-    private static final String PROPERTY_PAGE_SIZE = "page_size";
     private static final String PROPERTY_SEQUENCE_ID_COLUMN = "sequence_id";
     private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
 
@@ -79,7 +78,7 @@ public class GenBankReporter extends Reporter {
 
 	    Question geneQuestion = (Question) wdkModel.resolveReference(properties.get(PROPERTY_GENE_QUESTION));
 	    AnswerValue geneAnswer = geneQuestion.makeAnswerValue(answerValue.getUser(), params, 0,
-								  Integer.parseInt(properties.get(PROPERTY_PAGE_SIZE)), sorting, null, 0);
+								  maxPageSize, sorting, null, 0);
 	    
 	    lastSequenceId = writeGenes(geneAnswer, writer, lastSequenceId);
 	}
@@ -88,7 +87,7 @@ public class GenBankReporter extends Reporter {
     private String writeGenes(AnswerValue geneAnswer, PrintWriter writer, String lastSequenceId) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
-	PageAnswerIterator pagedGenes = new PageAnswerIterator(geneAnswer, 1, geneAnswer.getResultSize());
+	PageAnswerIterator pagedGenes = new PageAnswerIterator(geneAnswer, 1, geneAnswer.getResultSize(), maxPageSize);
 	while (pagedGenes.hasNext()) {
 	    AnswerValue answerValue = pagedGenes.next();
 	    
