@@ -101,8 +101,17 @@ public class GenBankReporter extends Reporter {
 		// Write this record out in GenBank Table Format
 		// 1. Write gene id & bounds
 		// TODO:  Make sure reverse is handled correctly
-		writer.print(record.getAttributeValue("start_min"));
-		writer.println("\t" + record.getAttributeValue("end_max") + "\tgene");
+		String strand = record.getAttributeValue("strand").toString();
+		String start, end;
+		if (strand.compareTo("forward") == 0) {
+		    start = record.getAttributeValue("start_min").toString();
+		    end = record.getAttributeValue("end_max").toString();
+		}
+		else {
+		    start = record.getAttributeValue("end_max").toString();
+		    end = record.getAttributeValue("start_min").toString();
+		}
+		writer.println(start + "\t" + end + "\tgene");
 		writer.println("\t\t\tgene\t" + record.getAttributeValue("source_id"));
 
 		// TODO:  2. CDS bounds & properties
@@ -110,9 +119,9 @@ public class GenBankReporter extends Reporter {
 		String geneType = record.getAttributeValue("gene_type").toString();
 		if (geneType.compareTo("protein coding") == 0) geneType = "CDS";
 
-		writer.print(record.getAttributeValue("context_start"));
-		writer.println("\t" + record.getAttributeValue("context_end") + "\t" + geneType);
+		writer.println(start + "\t" + end + "\t" + geneType);
 		writer.println("\t\t\tproduct\t" + record.getAttributeValue("product"));
+		writer.println("\t\t\tgene\t" + record.getAttributeValue("source_id"));
 
 		// TODO:  exons? other features?
 		
