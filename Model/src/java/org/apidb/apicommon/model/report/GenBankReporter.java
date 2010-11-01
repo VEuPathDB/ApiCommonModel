@@ -5,12 +5,16 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.gusdb.wdk.model.AnswerValue;
+import org.gusdb.wdk.model.AttributeValue;
 import org.gusdb.wdk.model.Question;
 import org.gusdb.wdk.model.RecordInstance;
+import org.gusdb.wdk.model.TableValue;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.report.Reporter;
@@ -36,8 +40,6 @@ public class GenBankReporter extends Reporter {
 
     public void configure(Map<String, String> config) {
 	super.configure(config);
-
-	// list of columns to dump for genes (why?)
     }
 
     public String getConfigInfo() {
@@ -99,10 +101,11 @@ public class GenBankReporter extends Reporter {
 		}
 		
 		// Write this record out in GenBank Table Format
-		// 1. Write gene id & bounds
-		// TODO:  Make sure reverse is handled correctly
+		String sourceId = record.getAttributeValue("source_id").toString();
 		String strand = record.getAttributeValue("strand").toString();
 		String start, end;
+		//String codingStart = record.getAttributeValue("coding_start").toString();
+		//String codingEnd = record.getAttributeValue("coding_end").toString();
 		if (strand.compareTo("forward") == 0) {
 		    start = record.getAttributeValue("start_min").toString();
 		    end = record.getAttributeValue("end_max").toString();
@@ -110,21 +113,82 @@ public class GenBankReporter extends Reporter {
 		else {
 		    start = record.getAttributeValue("end_max").toString();
 		    end = record.getAttributeValue("start_min").toString();
-		}
-		writer.println(start + "\t" + end + "\tgene");
-		writer.println("\t\t\tgene\t" + record.getAttributeValue("source_id"));
+		}   
 
-		// TODO:  2. CDS bounds & properties
-		//        3. (m|t|?)RNA bounds & properties
+		// Check for start codon at sequence start & stop codon at sequence end
+		String sequence;
+
 		String geneType = record.getAttributeValue("gene_type").toString();
-		if (geneType.compareTo("protein coding") == 0) geneType = "CDS";
+		if (geneType.compareTo("protein coding") == 0) {
+		    geneType = "CDS";
+		    sequence = record.getAttributeValue("cds").toString();
+		}
+		else {
+		    sequence = record.getAttributeValue("transcript_sequence").toString();
+		}
 
-		writer.println(start + "\t" + end + "\t" + geneType);
-		writer.println("\t\t\tproduct\t" + record.getAttributeValue("product"));
-		writer.println("\t\t\tgene\t" + record.getAttributeValue("source_id"));
+		String partialStart = "";
+		String partialEnd = "";
+		if (!sequence.startsWith("ATG")) {
+		    partialStart = "<";
+		}
+		if (!sequence.endsWith("TAG")
+		    && !sequence.endsWith("TAA")
+		    && !sequence.endsWith("TGA")
+		    || sequence.length() % 3 != 0) {
+		    partialEnd = ">"; 
+		}
 
-		// TODO:  exons? other features?
+		writer.println(partialStart + start + "\t" + partialEnd + end + "\tgene");
+		writer.println("\t\t\tgene\t" + sourceId);
+
 		
+		// write exon locations in record entry
+		List<String> exonLocations = new ArrayList<String>();
+		TableValue exons = record.getTableValue("GeneGffExons");
+		int count = 0;
+		for (Map<String, AttributeValue> exon: exons) {
+		    String exonStart, exonEnd, exonLocation;
+		    if (strand.compareTo("forward") == 0) {
+			exonStart = exon.get("gff_fstart").toString();
+			exonEnd = exon.get("gff_fend").toString();	    
+		    }
+		    else {
+			exonStart = exon.get("gff_fend").toString();
+			exonEnd = exon.get("gff_fstart").toString();	    
+		    }
+		    if (count == 0) exonStart = partialStart + exonStart;
+		    if (count == exons.size() - 1) exonEnd = partialEnd + exonEnd;
+		    exonLocation = exonStart + "\t" + exonEnd;
+		    exonLocations.add(exonLocation);
+		    if (count == 0) writer.println(exonLocation + "\t" + geneType);
+		    else writer.println(exonLocation);
+		    count++;
+		}
+
+		String product = record.getAttributeValue("product").toString();
+		if (product != null)
+		    writer.println("\t\t\tproduct\t" + product);
+		writer.println("\t\t\tgene\t" + sourceId);
+
+		TableValue comments = record.getTableValue("Notes");
+		for (Map<String, AttributeValue> comment : comments) {
+		    String commentString = comment.get("comment_string").toString();
+		    if (commentString != null)
+			writer.println("\t\t\tnote\t" + commentString);
+		}
+
+		TableValue ecNumbers = record.getTableValue("EcNumber");
+		for (Map<String, AttributeValue> ecNumber : ecNumbers) {
+		    writer.println("\t\t\tEC_number\t" + ecNumber.get("ec_number"));
+		}
+
+		// write exon rows in table format
+		/* for (String exonLocation : exonLocations) {
+		    writer.println(exonLocation + "\texon");
+		    writer.println("\t\t\tgene\t" + sourceId);
+		    }*/
+
 		lastSequenceId = recordSequenceId;
 	    }
 	}
