@@ -2772,12 +2772,15 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         round(comp.average,2) as avg_comp,round(ref.minmax,2) as minmax_ref,
         round(comp.minmax,2) as minmax_comp
  from (
+ select * from (
  select source_id, 
  CASE WHEN $$group_operator$$ = 'average'  THEN avg(value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(value) ELSE max(value) END as groupval,
  CASE WHEN $$group_operator$$ = 'average'  THEN avg(percentile) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(percentile) ELSE max(percentile) END as group_pc,
  CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN min(value) ELSE max(value) END as minmax,
- avg(value) as average
- from  (select p.source_id,pe.value * $$apply_scaling$$ as value, pepc.value as percentile
+ avg(value) as average, sum(min_expr) as sum_min_expr, sum(max_expr) as sum_max_expr
+ from  (select p.source_id,pe.value * $$apply_scaling$$ as value, pepc.value as percentile,
+        CASE WHEN pen.name = p.time_of_min_expr || 'h' THEN 1 ELSE 0 END as min_expr,
+        CASE WHEN pen.name = p.time_of_max_expr || 'h' THEN 1 ELSE 0 END as max_expr
   from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe, apidb.profileset pspc, apidb.profile ppc, apidb.profileelement pepc, apidb.nextgenseq_scaling sc
  where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_ref_pd$$)
  and p.profile_set_id = pen.profile_set_id
@@ -2785,28 +2788,32 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
  and pe.element_order = pen.element_order
  and sc. exp_name = 'Stunnenberg_iRBC'
  and sc.sample_name = pen.name
- and (($$global_min_max$$ = 'dont_care'
-       or ('$$regulated_dir_up_down_only$$' = '+'
-       and $$global_min_max$$ = 'max')
-       or ('$$regulated_dir_up_down_only$$' = '-'
-       and $$global_min_max$$ = 'min'))
-  or ('$$regulated_dir_up_down_only$$' = '+'
-      and pen.name = p.time_of_min_expr || 'h')
-  or ('$$regulated_dir_up_down_only$$' = '-'
-      and pen.name = p.time_of_max_expr || 'h'))
  and pspc.name = 'Percents of P. falciparum Stunnenberg mRNA Seq data'
  and pspc.profile_set_id = ppc.profile_set_id
  and ppc.profile_id = pepc.profile_id
  and p.source_id = ppc.source_id
  and pen.element_order = pepc.element_order)
- group by source_id ) ref,
+ group by source_id ) 
+ where ($$global_min_max$$ = 'dont_care'
+       or ('$$regulated_dir_up_down_only$$' = '+'
+       and $$global_min_max$$ = 'max')
+       or ('$$regulated_dir_up_down_only$$' = '-'
+       and $$global_min_max$$ = 'min'))
+  or ('$$regulated_dir_up_down_only$$' = '+'
+      and sum_min_expr >= 1)
+  or ('$$regulated_dir_up_down_only$$' = '-'
+      and sum_max_expr >= 1)
+ ) ref,
  (
+ select * from (
  select source_id, 
  CASE WHEN $$group_operator$$ = 'average'  THEN avg(value) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(value) ELSE min(value) END as groupval,
  CASE WHEN $$group_operator$$ = 'average'  THEN avg(percentile) WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(percentile) ELSE min(percentile) END as group_pc,
  CASE WHEN '$$regulated_dir_up_down_only$$' = '+' THEN max(value) ELSE min(value) END as minmax,
- avg(value) as average
- from (select p.source_id,pe.value * $$apply_scaling$$ as value, pepc.value as percentile
+ avg(value) as average, sum(min_expr) as sum_min_expr, sum(max_expr) as sum_max_expr
+ from  (select p.source_id,pe.value * $$apply_scaling$$ as value, pepc.value as percentile,
+        CASE WHEN pen.name = p.time_of_min_expr || 'h' THEN 1 ELSE 0 END as min_expr,
+        CASE WHEN pen.name = p.time_of_max_expr || 'h' THEN 1 ELSE 0 END as max_expr
    from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe, apidb.profileset pspc, apidb.profile ppc, apidb.profileelement pepc, apidb.nextgenseq_scaling sc
  where pen.profile_element_name_id in ($$RNA_rbc_pfal_fc_comp_pd$$)
  and p.profile_set_id = pen.profile_set_id
@@ -2814,21 +2821,22 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
  and pe.element_order = pen.element_order
  and sc. exp_name = 'Stunnenberg_iRBC'
  and sc.sample_name = pen.name
- and (($$global_min_max$$ = 'dont_care'
-       or ('$$regulated_dir_up_down_only$$' = '+'
-       and $$global_min_max$$ = 'min')
-       or ('$$regulated_dir_up_down_only$$' = '-'
-       and $$global_min_max$$ = 'max'))
-  or ('$$regulated_dir_up_down_only$$' = '+'
-      and pen.name = p.time_of_max_expr || 'h')
-  or ('$$regulated_dir_up_down_only$$' = '-'
-      and pen.name = p.time_of_min_expr || 'h'))
  and pspc.name = 'Percents of P. falciparum Stunnenberg mRNA Seq data'
  and pspc.profile_set_id = ppc.profile_set_id
  and ppc.profile_id = pepc.profile_id
  and p.source_id = ppc.source_id
  and pen.element_order = pepc.element_order)
- group by source_id ) comp, apidb.geneattributes ga
+ group by source_id )
+ where ($$global_min_max$$ = 'dont_care'
+       or ('$$regulated_dir_up_down_only$$' = '+'
+       and $$global_min_max$$ = 'min')
+       or ('$$regulated_dir_up_down_only$$' = '-'
+       and $$global_min_max$$ = 'max'))
+  or ('$$regulated_dir_up_down_only$$' = '+'
+      and sum_max_expr >= 1)
+  or ('$$regulated_dir_up_down_only$$' = '-'
+      and sum_min_expr >= 1)
+ ) comp, apidb.geneattributes ga
  where ref.source_id = comp.source_id
  and ref.source_id = ga.source_id
  and ga.gene_type = 'protein coding'
