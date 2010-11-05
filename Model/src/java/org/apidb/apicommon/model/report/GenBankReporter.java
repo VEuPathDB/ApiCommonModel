@@ -103,9 +103,8 @@ public class GenBankReporter extends Reporter {
 		// Write this record out in GenBank Table Format
 		String sourceId = record.getAttributeValue("source_id").toString();
 		String strand = record.getAttributeValue("strand").toString();
+		boolean isPseudo = (record.getAttributeValue("is_pseudo").toString().compareTo("Yes") == 0);
 		String start, end;
-		//String codingStart = record.getAttributeValue("coding_start").toString();
-		//String codingEnd = record.getAttributeValue("coding_end").toString();
 		if (strand.compareTo("forward") == 0) {
 		    start = record.getAttributeValue("start_min").toString();
 		    end = record.getAttributeValue("end_max").toString();
@@ -144,32 +143,47 @@ public class GenBankReporter extends Reporter {
 
 		
 		// write exon locations in record entry
-		List<String> exonLocations = new ArrayList<String>();
-		TableValue exons = record.getTableValue("GeneGffExons");
-		int count = 0;
-		for (Map<String, AttributeValue> exon: exons) {
-		    String exonStart, exonEnd, exonLocation;
-		    if (strand.compareTo("forward") == 0) {
-			exonStart = exon.get("gff_fstart").toString();
-			exonEnd = exon.get("gff_fend").toString();	    
+		if (!isPseudo) {
+		    List<String> exonLocations = new ArrayList<String>();
+		    TableValue exons = record.getTableValue("GeneGffCdss");
+		    if (exons.size() > 0) {
+			int count = 0;
+			for (Map<String, AttributeValue> exon: exons) {
+			    String exonStart, exonEnd, exonLocation;
+			    if (strand.compareTo("forward") == 0) {
+				exonStart = exon.get("gff_fstart").toString();
+				exonEnd = exon.get("gff_fend").toString();	    
+			    }
+			    else {
+				exonStart = exon.get("gff_fend").toString();
+				exonEnd = exon.get("gff_fstart").toString();	    
+			    }
+			    if (count == 0) exonStart = partialStart + exonStart;
+			    if (count == exons.size() - 1) exonEnd = partialEnd + exonEnd;
+			    exonLocation = exonStart + "\t" + exonEnd;
+			    exonLocations.add(exonLocation);
+			    if (count == 0) writer.println(exonLocation + "\t" + geneType);
+			    else writer.println(exonLocation);
+			    count++;
+			}
 		    }
 		    else {
-			exonStart = exon.get("gff_fend").toString();
-			exonEnd = exon.get("gff_fstart").toString();	    
+			String codingStart,codingEnd;
+			if (strand.compareTo("forward") == 0) {
+			    codingStart = record.getAttributeValue("coding_start").toString();
+			    codingEnd = record.getAttributeValue("coding_end").toString();
+			}
+			else {
+			    codingStart = record.getAttributeValue("coding_end").toString();
+			    codingEnd = record.getAttributeValue("coding_start").toString();
+			}
+			writer.println(partialStart + start + "\t" + partialEnd + end + "\t" + geneType);
 		    }
-		    if (count == 0) exonStart = partialStart + exonStart;
-		    if (count == exons.size() - 1) exonEnd = partialEnd + exonEnd;
-		    exonLocation = exonStart + "\t" + exonEnd;
-		    exonLocations.add(exonLocation);
-		    if (count == 0) writer.println(exonLocation + "\t" + geneType);
-		    else writer.println(exonLocation);
-		    count++;
+		    
+		    writer.println("\t\t\tgene\t" + sourceId);
 		}
 
-		String product = record.getAttributeValue("product").toString();
-		if (product != null)
-		    writer.println("\t\t\tproduct\t" + product);
-		writer.println("\t\t\tgene\t" + sourceId);
+		writer.println("\t\t\tproduct\t" + record.getAttributeValue("product"));
 
 		TableValue comments = record.getTableValue("Notes");
 		for (Map<String, AttributeValue> comment : comments) {
@@ -183,6 +197,13 @@ public class GenBankReporter extends Reporter {
 		    writer.println("\t\t\tEC_number\t" + ecNumber.get("ec_number"));
 		}
 
+		// TODO: Figure out how to handle ncRNA properly
+		if (geneType.compareTo("ncRNA") == 0) {
+		    writer.println("\t\t\tncRNA_class\tother");
+		}
+		
+		if (isPseudo)
+		    writer.println("\t\t\tpseudo");
 		// write exon rows in table format
 		/* for (String exonLocation : exonLocations) {
 		    writer.println(exonLocation + "\texon");
