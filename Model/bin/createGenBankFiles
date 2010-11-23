@@ -14,6 +14,7 @@ my $tempFileName = "genbank.tmp";
 my $reporter = "genbank";
 my $baseDir = &Cwd::abs_path();
 my $hasBaseDir = 0;
+my @sequences;
 
 for my $arg (@ARGV) {
     if ($hasBaseDir) {
@@ -28,12 +29,14 @@ my $cmd = "java $sysProps -classpath $CLASSPATH org.gusdb.wdk.model.report.Dumpe
 
 system($cmd);
 
-splitOutputFile($baseDir, $tempFileName);
+splitOutputFile($baseDir, $tempFileName, ">Feature\t(\\w+)","tbl", 1);
+
+generateFastaFiles($baseDir);
 
 # need to generate template file?
 
-# Run tbl2asn with validation flag?
-$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt -V vb";
+# Run tbl2asn with validation flag
+$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt -V v";
 
 system($cmd);
 
@@ -41,7 +44,7 @@ system($cmd);
 
 sub splitOutputFile
 {
-    my ($baseDir, $tempFileName) = @_;
+    my ($baseDir, $tempFileName, $matchRule, $suffix, $updateSequences) = @_;
     my $outf;
     my $inf;
     my $infName = "$baseDir/$tempFileName";
@@ -51,10 +54,13 @@ sub splitOutputFile
 
     while (my $line = <$inf>)
     {
-	if ($line =~ />Feature\t(\w+)/) {
+	if ($line =~ /$matchRule/) {
+	    #print "Matched $line, and got: $1\n";
 	    close $outf;
-	    generateFastaFile($baseDir, $1);
-	    open ($outf, ">$baseDir/$1.tbl") or die $!;
+	    if ($updateSequences) {
+		push(@sequences, "'$1'");
+	    }
+	    open ($outf, ">$baseDir/$1.$suffix") or die $!;
 	    $hasOutput = 1;
 	}
 	
@@ -67,20 +73,34 @@ sub splitOutputFile
     unlink $infName;
 }
 
-sub generateFastaFile
+sub generateFastaFiles
 {
-    my ($baseDir, $sequenceId) = @_;
-
-    my $sql = <<"EOF";
+    my ($baseDir) = @_;
+    my $tempFileName = "allSequences";
+    my $numSequences = scalar @sequences;
+    print "Sequences: $numSequences\n";
+    my $sliceStart = 0;
+    while ($sliceStart < $numSequences)
+    {
+        my $sliceEnd = $sliceStart + 999;
+	$sliceEnd = ($sliceEnd >= $numSequences) ? $numSequences-1 : $sliceEnd;
+        my @slice = @sequences[$sliceStart..$sliceEnd];
+	my $sliceSize = scalar @slice;
+        my $sequencesList = join(',',@slice);
+        my $sql = <<"EOF";
      SELECT sa.source_id, ' [organism=' ||
             sa.organism || ']' as defline,
             ns.sequence
            FROM apidb.sequenceattributes sa,
                 dots.nasequence ns
-      WHERE sa.source_id = '$sequenceId'
+      WHERE sa.source_id IN ($sequencesList)
         AND ns.na_sequence_id = sa.na_sequence_id
 EOF
 
-    my $cmd = "gusExtractSequences --outputFile $baseDir/$sequenceId.fsa  --idSQL \"$sql\" --verbose";
-    system($cmd);
+        my $cmd = "gusExtractSequences --outputFile $baseDir/$tempFileName  --idSQL \"$sql\" --verbose";
+        system($cmd);
+        splitOutputFile($baseDir,$tempFileName, ">(\\w+) \\[organism=.*", "fsa", 0);
+	$sliceStart += 1000;
+	$tempFileName = "$tempFilename$slice";
+    }
 }

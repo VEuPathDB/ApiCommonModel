@@ -66,7 +66,7 @@ public class GenBankReporter extends Reporter {
 	for (AnswerValue answerValue : this) {
 	    StringBuffer sequenceIdList = new StringBuffer();
 	    for (RecordInstance record : answerValue.getRecordInstances()) {
-		// Collect the gene ids in this page one by one(?)
+		// Collect the sequence ids in this page
 		if (sequenceIdList.length() > 0) {
 		    sequenceIdList.append(',');
 		}
@@ -87,130 +87,182 @@ public class GenBankReporter extends Reporter {
     }
 
     private String writeGenes(AnswerValue geneAnswer, PrintWriter writer, String lastSequenceId) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+													NoSuchAlgorithmException, SQLException, JSONException,
+													WdkUserException {
 	PageAnswerIterator pagedGenes = new PageAnswerIterator(geneAnswer, 1, geneAnswer.getResultSize(), maxPageSize);
 	while (pagedGenes.hasNext()) {
 	    AnswerValue answerValue = pagedGenes.next();
 	    
 	    for (RecordInstance record : answerValue.getRecordInstances()) {
-		String recordSequenceId = record.getAttributeValue(properties.get(PROPERTY_SEQUENCE_ID_COLUMN)).toString();
-		if (lastSequenceId == null || lastSequenceId.compareTo(recordSequenceId) != 0) {
-		    // If a new sequence id, need to write that out first!
-		    writer.println(">Feature\t" + recordSequenceId);
-		}
+		if (wdkModel.getProjectId().compareTo("GiardiaDB") != 0 || record.getAttributeValue("is_deprecated").toString().compareTo("Yes") != 0) {
+		    String recordSequenceId = record.getAttributeValue(properties.get(PROPERTY_SEQUENCE_ID_COLUMN)).toString();
+		    if (lastSequenceId == null || lastSequenceId.compareTo(recordSequenceId) != 0) {
+			// If a new sequence id, need to write that out first!
+			writer.println(">Feature\t" + recordSequenceId);
+		    }
 		
-		// Write this record out in GenBank Table Format
-		String sourceId = record.getAttributeValue("source_id").toString();
-		String strand = record.getAttributeValue("strand").toString();
-		boolean isPseudo = (record.getAttributeValue("is_pseudo").toString().compareTo("Yes") == 0);
-		String start, end;
-		if (strand.compareTo("forward") == 0) {
-		    start = record.getAttributeValue("start_min").toString();
-		    end = record.getAttributeValue("end_max").toString();
-		}
-		else {
-		    start = record.getAttributeValue("end_max").toString();
-		    end = record.getAttributeValue("start_min").toString();
-		}   
+		    // Write this record out in GenBank Table Format
+		    String sourceId = record.getAttributeValue("source_id").toString();
+		    String strand = record.getAttributeValue("strand").toString();
+		    String product = record.getAttributeValue("product").toString();
+		    boolean isPseudo = (record.getAttributeValue("is_pseudo").toString().compareTo("Yes") == 0
+					|| product.toLowerCase().contains("pseudo"));
+		    String start, end;
+		    if (strand.compareTo("forward") == 0) {
+			start = record.getAttributeValue("start_min").toString();
+			end = record.getAttributeValue("end_max").toString();
+		    }
+		    else {
+			start = record.getAttributeValue("end_max").toString();
+			end = record.getAttributeValue("start_min").toString();
+		    }   
 
-		// Check for start codon at sequence start & stop codon at sequence end
-		String sequence;
+		    // Check for start codon at sequence start & stop codon at sequence end
+		    // If not found, set the appropriate partial sequence modifiers
+		    String sequence;
+		    String proteinSequence = null;
 
-		String geneType = record.getAttributeValue("gene_type").toString();
-		if (geneType.compareTo("protein coding") == 0) {
-		    geneType = "CDS";
-		    sequence = record.getAttributeValue("cds").toString();
-		}
-		else {
-		    sequence = record.getAttributeValue("transcript_sequence").toString();
-		}
+		    String geneType = record.getAttributeValue("gene_type").toString();
+		    if (geneType.compareTo("protein coding") == 0) {
+			geneType = "CDS";
+			sequence = record.getAttributeValue("cds").toString();
+			proteinSequence = record.getAttributeValue("protein_sequence").toString();
+		    }
+		    else {
+			sequence = record.getAttributeValue("transcript_sequence").toString();
+		    }
 
-		String partialStart = "";
-		String partialEnd = "";
-		if (!sequence.startsWith("ATG")) {
-		    partialStart = "<";
-		}
-		if (!sequence.endsWith("TAG")
-		    && !sequence.endsWith("TAA")
-		    && !sequence.endsWith("TGA")
-		    || sequence.length() % 3 != 0) {
-		    partialEnd = ">"; 
-		}
+		    String partialStart = "";
+		    String partialEnd = "";
+		    if (sequence != null) {
+			// Take off any trailing bases that don't form a complete codon.
+			sequence = sequence.substring(0,sequence.length() - (sequence.length() % 3));
+			if (!sequence.startsWith("ATG")) {
+			    partialStart = "<";
+			}
+			if (!sequence.endsWith("TAG")
+			    && !sequence.endsWith("TAA")
+			    && !sequence.endsWith("TGA")
+			    || sequence.length() % 3 != 0) {
+			    partialEnd = ">"; 
+			}
+		    }
 
-		writer.println(partialStart + start + "\t" + partialEnd + end + "\tgene");
-		writer.println("\t\t\tgene\t" + sourceId);
+		    // RULE : Give gene bounds, including partial markers if needed.
+		    writer.println(partialStart + start + "\t" + partialEnd + end + "\tgene");
+		    writer.println("\t\t\tgene\t" + sourceId);
 
-		
-		// write exon locations in record entry
-		if (!isPseudo) {
-		    List<String> exonLocations = new ArrayList<String>();
-		    TableValue exons = record.getTableValue("GeneGffCdss");
-		    if (exons.size() > 0) {
-			int count = 0;
-			for (Map<String, AttributeValue> exon: exons) {
-			    String exonStart, exonEnd, exonLocation;
+		    // RULE : Include locus tag
+
+		    // RULE : Include old locus tag
+
+		    // RULE : Include gene synonym
+		    
+
+		    // RULE : gene type, etc., not valid for pseudo genes, skip this if isPseudo
+		    if (!isPseudo) {
+			// write exon locations in record entry if exons exist
+			List<String> exonLocations = new ArrayList<String>();
+			TableValue exons = record.getTableValue("GenBankExons");
+			if (exons.size() > 0) {
+			    int count = 0;
+			    for (Map<String, AttributeValue> exon: exons) {
+				String exonStart, exonEnd, exonLocation;
+				if (strand.compareTo("forward") == 0) {
+				    exonStart = exon.get("exon_start").toString();
+				    exonEnd = exon.get("exon_end").toString();	    
+				}
+				else {
+				    exonStart = exon.get("exon_end").toString();
+				    exonEnd = exon.get("exon_start").toString();	    
+				}
+				// RULE : Give exon bounds, including 5' partial marker if this
+				// is the first exon, and 3' partial marker if this is the last
+				if (count == 0) exonStart = partialStart + exonStart;
+				if (count == exons.size() - 1) exonEnd = partialEnd + exonEnd;
+				exonLocation = exonStart + "\t" + exonEnd;
+				exonLocations.add(exonLocation);
+				if (count == 0) writer.println(exonLocation + "\t" + geneType);
+				else writer.println(exonLocation);
+				count++;
+			    }
+			}
+			else {
+			    String codingStart,codingEnd;
 			    if (strand.compareTo("forward") == 0) {
-				exonStart = exon.get("gff_fstart").toString();
-				exonEnd = exon.get("gff_fend").toString();	    
+				codingStart = record.getAttributeValue("coding_start").toString();
+				codingEnd = record.getAttributeValue("coding_end").toString();
 			    }
 			    else {
-				exonStart = exon.get("gff_fend").toString();
-				exonEnd = exon.get("gff_fstart").toString();	    
+				codingStart = record.getAttributeValue("coding_end").toString();
+				codingEnd = record.getAttributeValue("coding_start").toString();
 			    }
-			    if (count == 0) exonStart = partialStart + exonStart;
-			    if (count == exons.size() - 1) exonEnd = partialEnd + exonEnd;
-			    exonLocation = exonStart + "\t" + exonEnd;
-			    exonLocations.add(exonLocation);
-			    if (count == 0) writer.println(exonLocation + "\t" + geneType);
-			    else writer.println(exonLocation);
-			    count++;
+			    writer.println(partialStart + start + "\t" + partialEnd + end + "\t" + geneType);
+			}
+			
+			writer.println("\t\t\tgene\t" + sourceId);
+			
+			if (geneType.compareTo("CDS") == 0) {
+			    /* RULE : Include the translation table to handle, e.g.,
+			       stop codons translated as tryptophan */
+			    String sequenceSoTerm = record.getAttributeValue("sequence_so_term").toString();
+			    
+			    // Use the mitochondrial translation table if this is a mitochondrial gene
+			    if (sequenceSoTerm.compareTo("mitochondrial_chromosome") == 0) {
+				writer.println("\t\t\ttransl_table\t" + record.getAttributeValue("mitochondrial_genetic_code"));
+			    }
+			    else {
+				writer.println("\t\t\ttransl_table\t" + record.getAttributeValue("genetic_code"));
+			    }
+			    
+			    // RULE : Include protein id
 			}
 		    }
 		    else {
-			String codingStart,codingEnd;
-			if (strand.compareTo("forward") == 0) {
-			    codingStart = record.getAttributeValue("coding_start").toString();
-			    codingEnd = record.getAttributeValue("coding_end").toString();
-			}
-			else {
-			    codingStart = record.getAttributeValue("coding_end").toString();
-			    codingEnd = record.getAttributeValue("coding_start").toString();
-			}
-			writer.println(partialStart + start + "\t" + partialEnd + end + "\t" + geneType);
+			// RULE : Include pseudo flag for pseudogenes
+			writer.println("\t\t\tpseudo");
+		    }
+
+		    // RULE : Include product field
+		    writer.println("\t\t\tproduct\t" + product);
+
+		    // RULE : Include notes
+		    TableValue comments = record.getTableValue("Notes");
+		    for (Map<String, AttributeValue> comment : comments) {
+			String commentString = comment.get("comment_string").toString();
+			if (commentString != null)
+			    writer.println("\t\t\tnote\t" + commentString);
 		    }
 		    
-		    writer.println("\t\t\tgene\t" + sourceId);
+		    // RULE : Include EC numbers
+		    try {
+			TableValue ecNumbers = record.getTableValue("EcNumber");
+			for (Map<String, AttributeValue> ecNumber : ecNumbers) {
+			    writer.println("\t\t\tEC_number\t" + ecNumber.get("ec_number"));
+			}
+		    }
+		    catch (WdkModelException ex) {
+			// Trap exception?  In case model doesn't have EC numbers.
+		    }
+		    
+		    // RULE : Include GO terms as dbxrefs
+		    try {
+			TableValue goTerms = record.getTableValue("GoTerms");
+			for (Map<String, AttributeValue> goTerm : goTerms) {
+			    writer.println("\t\t\tdb_xref\t" + goTerm.get("go_id"));
+			}
+		    }
+		    catch (WdkModelException ex) {
+			// Trap exception?  In case model doesn't have EC numbers.
+		    }
+
+		    // RULE : Provide ncRNA class for ncRNAs
+		    if (geneType.compareTo("ncRNA") == 0) {
+			writer.println("\t\t\tncRNA_class\tother");
+		    }
+		    
+		    lastSequenceId = recordSequenceId;
 		}
-
-		writer.println("\t\t\tproduct\t" + record.getAttributeValue("product"));
-
-		TableValue comments = record.getTableValue("Notes");
-		for (Map<String, AttributeValue> comment : comments) {
-		    String commentString = comment.get("comment_string").toString();
-		    if (commentString != null)
-			writer.println("\t\t\tnote\t" + commentString);
-		}
-
-		TableValue ecNumbers = record.getTableValue("EcNumber");
-		for (Map<String, AttributeValue> ecNumber : ecNumbers) {
-		    writer.println("\t\t\tEC_number\t" + ecNumber.get("ec_number"));
-		}
-
-		// TODO: Figure out how to handle ncRNA properly
-		if (geneType.compareTo("ncRNA") == 0) {
-		    writer.println("\t\t\tncRNA_class\tother");
-		}
-		
-		if (isPseudo)
-		    writer.println("\t\t\tpseudo");
-		// write exon rows in table format
-		/* for (String exonLocation : exonLocations) {
-		    writer.println(exonLocation + "\texon");
-		    writer.println("\t\t\tgene\t" + sourceId);
-		    }*/
-
-		lastSequenceId = recordSequenceId;
 	    }
 	}
 	
