@@ -150,9 +150,9 @@ public class GenBankReporter extends Reporter {
 
 		    // RULE : Give gene bounds, including partial markers if needed.
 		    writer.println(partialStart + start + "\t" + partialEnd + end + "\tgene");
-		    writer.println("\t\t\tgene\t" + sourceId);
 
 		    // RULE : Include locus tag
+		    writer.println("\t\t\t" + "locus_tag" + "\t" + sourceId);
 
 		    // RULE : Include old locus tag
 
@@ -200,7 +200,8 @@ public class GenBankReporter extends Reporter {
 			    writer.println(partialStart + start + "\t" + partialEnd + end + "\t" + geneType);
 			}
 			
-			writer.println("\t\t\tgene\t" + sourceId);
+			// RULE : Include gene reference for CDS/mRNA/etc.
+			writer.println("\t\t\t" + "locus_tag" + "\t" + sourceId);
 			
 			if (geneType.compareTo("CDS") == 0) {
 			    /* RULE : Include the translation table to handle, e.g.,
@@ -209,36 +210,34 @@ public class GenBankReporter extends Reporter {
 			    
 			    // Use the mitochondrial translation table if this is a mitochondrial gene
 			    if (sequenceSoTerm.compareTo("mitochondrial_chromosome") == 0) {
-				writer.println("\t\t\ttransl_table\t" + record.getAttributeValue("mitochondrial_genetic_code"));
+				writer.println("\t\t\t" + "transl_table" + "\t" + record.getAttributeValue("mitochondrial_genetic_code"));
 			    }
 			    else {
-				writer.println("\t\t\ttransl_table\t" + record.getAttributeValue("genetic_code"));
+				writer.println("\t\t\t" + "transl_table" + "\t" + record.getAttributeValue("genetic_code"));
 			    }
-			    
-			    // RULE : Include protein id
 			}
 		    }
 		    else {
 			// RULE : Include pseudo flag for pseudogenes
-			writer.println("\t\t\tpseudo");
+			writer.println("\t\t\t" + "pseudo");
 		    }
 
 		    // RULE : Include product field
-		    writer.println("\t\t\tproduct\t" + product);
+		    writer.println("\t\t\t" + "product" + "\t" + product);
 
 		    // RULE : Include notes
 		    TableValue comments = record.getTableValue("Notes");
 		    for (Map<String, AttributeValue> comment : comments) {
 			String commentString = comment.get("comment_string").toString();
 			if (commentString != null)
-			    writer.println("\t\t\tnote\t" + commentString);
+			    writer.println("\t\t\t" + "note" + "\t" + commentString);
 		    }
 		    
 		    // RULE : Include EC numbers
 		    try {
 			TableValue ecNumbers = record.getTableValue("EcNumber");
 			for (Map<String, AttributeValue> ecNumber : ecNumbers) {
-			    writer.println("\t\t\tEC_number\t" + ecNumber.get("ec_number"));
+			    writer.println("\t\t\t" + "EC_number" + "\t" + ecNumber.get("ec_number"));
 			}
 		    }
 		    catch (WdkModelException ex) {
@@ -249,7 +248,7 @@ public class GenBankReporter extends Reporter {
 		    try {
 			TableValue goTerms = record.getTableValue("GoTerms");
 			for (Map<String, AttributeValue> goTerm : goTerms) {
-			    writer.println("\t\t\tdb_xref\t" + goTerm.get("go_id"));
+			    writer.println("\t\t\t" + "db_xref" + "\t" + goTerm.get("go_id"));
 			}
 		    }
 		    catch (WdkModelException ex) {
@@ -258,7 +257,7 @@ public class GenBankReporter extends Reporter {
 
 		    // RULE : Provide ncRNA class for ncRNAs
 		    if (geneType.compareTo("ncRNA") == 0) {
-			writer.println("\t\t\tncRNA_class\tother");
+			writer.println("\t\t\t" + "ncRNA_class" + "\t" + "other");
 		    }
 		    
 		    lastSequenceId = recordSequenceId;
