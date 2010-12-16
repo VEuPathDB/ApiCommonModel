@@ -3116,6 +3116,11 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
 
     <sqlQuery name="GenesByTgVegRNASeqFoldChange" includeProjects="ToxoDB" 
               isCacheable="true">
+      <testParamValues>
+	<paramValue name="RNASeq_reference_sample">Day3</paramValue>
+	<paramValue name="RNASeq_comparison_sample">Day4</paramValue>
+      </testParamValues>
+
         <paramRef ref="geneParams.RNASeq_reference_sample" quote="false"/>
         <paramRef ref="geneParams.RNASeq_comparison_sample" quote="false"/>
         <paramRef ref="geneParams.fold_change"/>
@@ -3123,23 +3128,43 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
       <sql includeProjects="ToxoDB">
           <![CDATA[
  select one.source_id, '@PROJECT_ID@' as project_id,
-                  round(one.average,1) as fold_change
+                  round((CASE WHEN (one.average >= two.average)
+                                THEN (one.average + .01)/(two.average + .01)
+                              WHEN (two.average > one.average)
+                              THEN -((two.average + .01)/(one.average + .01))
+                  END),1) as fold_change,
+                          round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
  from (
-	 SELECT p.source_id, avg(pe.value) as average
-	 FROM  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
-	 WHERE --p.profile_set_id in ( $$RNASeq_profile$$ )
-	 p.profile_set_id = pen.profile_set_id
-	 and pe.profile_id = p.profile_id
-	 and pe.element_order = pen.element_order
-	 group by p.source_id 
- ) one,
- apidb.geneattributes ga
- where one.source_id = ga.source_id
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNASeq_reference_sample$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNASeq_comparison_sample$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two, apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and one.source_id = ga.source_id
  and ga.gene_type = 'protein coding'
- and one.average  >= $$fold_change$$
+ and  $$regulated_dir$$ (
+                              CASE WHEN (one.average >= two.average)
+                                THEN (one.average + .01)/(two.average + .01)
+                              WHEN (two.average > one.average)
+                                THEN -((two.average + .01)/(one.average + .01))
+                  end ) >= $$fold_change$$
            ]]>
       </sql>
 
