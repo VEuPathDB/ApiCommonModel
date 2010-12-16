@@ -152,7 +152,7 @@
        <!-- Expression Graphs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB">
+       <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB,PlasmoDB">
             <column name="source_id" />
             <column name="project_id" />
             <column name="profile_name" />
@@ -163,6 +163,8 @@
             <column name="description" />
             <column name="x_axis" />
             <column name="y_axis" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
             <column name="visible_parts" />
             <column name="attribution" />
             <sql>
@@ -179,6 +181,8 @@
                    gd.Y_AXIS,
                    gd.visible_parts,
                    nvl(gd.attribution, d.name) as attribution,
+                   gd.mainOpen,
+                   gd.dataOpen,                   
                    gd.order_num
             from apidb.ExpressionGraphs eg, apidb.profileset ps, apidb.ExpressionGraphDescrip gd,
                  sres.externaldatabaserelease r, sres.externaldatabase d
@@ -192,7 +196,7 @@
         </sqlQuery>
 
 
-       <sqlQuery name="ExpressionGraphsData" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB">
+       <sqlQuery name="ExpressionGraphsData" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB,PlasmoDB">
 
            <testParamValues includeProjects="AmoebaDB">
                <paramValue name="source_id">EHI_098180</paramValue>
@@ -264,18 +268,22 @@
        <!-- Aliases -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="Aliases" isCacheable="false" includeProjects="PlasmoDB,EuPathDB">
+
+<!--
+       <sqlQuery name="Aliases" isCacheable="false" includeProjects="PlasmoDB,EuPathDB,TriTrypDB">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="alias"/>
             <sql>
             SELECT distinct gf.source_id, '@PROJECT_ID@' AS project_id,
-                   ng.name AS alias
+                   replace(ng.name, ';current=false','') AS alias
             FROM dots.GeneFeature gf, dots.NaFeatureNaGene nfng, dots.NaGene ng
             WHERE gf.na_feature_id = nfng.na_feature_id
               AND nfng.na_gene_id = ng.na_gene_id
             </sql>
         </sqlQuery>
+
+-->
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Phenotype -->  
@@ -404,6 +412,7 @@
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="interpro_name"/>
+            <column name="interpro_family_id"/>
             <column name="interpro_primary_id"/>
             <column name="interpro_secondary_id"/>
             <column name="interpro_desc"/>
@@ -415,7 +424,8 @@
              select gf.source_id, '@PROJECT_ID@' AS project_id, xd1.name AS interpro_name,
              dr.primary_identifier AS interpro_primary_id, dr.secondary_identifier AS interpro_secondary_id, dr.remark as interpro_desc,
              al.start_min AS interpro_start_min, al.end_min AS interpro_end_min,
-             case when df.e_value = 0 then '0' else to_char(df.e_value,'9.9EEEE') end AS interpro_e_value 
+             case when df.e_value = 0 then '0' else to_char(df.e_value,'9.9EEEE') end AS interpro_e_value ,
+             df2.source_id as interpro_family_id
              from
              dots.aalocation al,
              sres.externaldatabaserelease xdr1,
@@ -428,8 +438,9 @@
              dots.genefeature gf,
              dots.transcript t,
              dots.translatedaafeature taf,
-             dots.translatedaasequence tas
-             where xd3.name = 'INTERPRO'
+             dots.translatedaasequence tas,
+             dots.domainfeature df2
+             where xd3.name in ('InterproscanData_RSRC','INTERPRO')
              and gf.na_feature_id = t.parent_id
              and t.na_feature_id = taf.na_feature_id
              and taf.aa_sequence_id = tas.aa_sequence_id
@@ -441,6 +452,7 @@
              and xdr1.external_database_id = xd1.external_database_id
              and df.external_database_release_id = xdr3.external_database_release_id
              and xdr3.external_database_id = xd3.external_database_id
+             and df.parent_id = df2.aa_feature_id (+)
              ORDER BY interpro_name, interpro_start_min
             ]]>
             </sql>
@@ -484,7 +496,8 @@
 
             <sql>
            <![CDATA[
-             select gf.source_id, '@PROJECT_ID@' AS project_id, 
+             /* hint added November 2010 to work around puzzling Oracle 11g bug */
+             select /*+ no_star_transformation */ gf.source_id, '@PROJECT_ID@' AS project_id,
              tmf.aa_feature_id AS tmf_name,
              tmf.parent_id AS tmf_parent_id, tmf.topology AS tmf_topology,
              aal.start_min AS tmf_start_min, aal.end_max AS tmf_end_max,
@@ -517,8 +530,10 @@
             <column name="project_id"/>
             <sql>
             <![CDATA[
-            SELECT distinct gi.alias as alias, database_name, gi.gene as source_id, '@PROJECT_ID@' as project_id
+            SELECT distinct upper(replace(gi.alias, ';current=false','')) as alias, database_name, gi.gene as source_id, '@PROJECT_ID@' as project_id
             FROM apidb.geneid gi
+            WHERE REGEXP_LIKE(gi.alias, '\D') 
+            ORDER BY database_name
              ]]>
             </sql>
         </sqlQuery>
@@ -663,8 +678,8 @@
              min_query_start AS blastp_start, max_query_end AS blastp_end,
              'E() = ' || pvalue_mant || 'e' || pvalue_exp || ', ' || round(100 * number_identical / total_match_length) || '% identity, ' || description AS blastp_description,
              case when pvalue_mant = 0 then '0' else pvalue_mant || 'e' || pvalue_exp end AS blastp_expect_value,
-             round(number_identical / total_match_length) AS blastp_percent_identity,
-             round(number_positive / total_match_length) AS blastp_percent_positive
+             round(100 * number_identical / total_match_length) AS blastp_percent_identity,
+             round(100 * number_positive / total_match_length) AS blastp_percent_positive
              from apidb.blastp
              order by pvalue_exp, pvalue_mant
              ]]>
@@ -734,6 +749,9 @@
        <sqlQuery name="Notes"
                isCacheable="false" clobRow="true">
 
+            <testParamValues includeProjects="PlasmoDB">
+               <paramValue name="source_id">MAL13P1.100</paramValue>
+            </testParamValues>
             <testParamValues includeProjects="CryptoDB">
                <paramValue name="source_id">cgd1_200</paramValue>
             </testParamValues>
@@ -1008,7 +1026,7 @@
             AND drnf.db_ref_id = dr.db_ref_id
             AND dr.external_database_release_id = edr.external_database_release_id
             AND edr.external_database_id = ed.external_database_id
-            AND ed.name = 'Links to Pathway Maps'
+            AND ed.name = 'Pf_PathwayMappings_Hagai_RSRC'
             ORDER BY dr.primary_identifier
             ]]>
             </sql>
@@ -1078,31 +1096,25 @@
 
             <sql excludeProjects="EuPathDB">
             <![CDATA[
-          SELECT DISTINCT ga2.source_id AS ortho_source_id, 
-            CASE WHEN '@PROJECT_ID@' = 'GiardiaDB' THEN ga2.species
-                ELSE ga2.organism END AS organism, 
-             ga2.product, ga1.source_id,
-             (SELECT case when (count(*) > 0) then 'yes' else 'no' end
-              FROM apidb.synteny s
-              WHERE s.a_na_sequence_id = ga1.na_sequence_id
-                AND s.b_na_sequence_id = ga2.na_sequence_id
-                AND s.b_start < ga2.end_max
-                AND s.b_end > ga2.start_min 
-                AND rownum = 1) is_syntenic,
-             (SELECT case when (count(*) > 0) then 'yes' else 'no' end as comment_count
-              FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, dots.GeneFeature gff
-              WHERE  c.comment_target_id = 'gene'
-                AND c.stable_id = ga2.source_id
-                AND c.review_status_id != 'rejected'
-                AND c.is_visible = 1
-                AND gff.source_id = ga2.source_id
-                AND rownum = 1) as comment_count,
-           '@PROJECT_ID@' as project_id
-          FROM apidb.geneattributes ga1, apidb.geneattributes ga2
-            WHERE ga1.orthomcl_name = ga2.orthomcl_name
-            AND ga2.source_id != ga1.source_id
-            AND ga2.project_id = '@PROJECT_ID@'
-          ORDER BY organism, ga2.source_id
+            select ogt.source_id, ogt.project_id, ogt.ortho_source_id, ogt.product, ogt.organism,
+                   ogt.is_syntenic, nvl(comments.comment_count, 'no') as comment_count
+            from apidb.OrthologGeneTable ogt,
+                 (with comment_q as (select cmnts.comment_id, cmnts.stable_id as source_id, cmnts.project_name as project_id
+                                     from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ cmnts
+                                     where cmnts.comment_target_id = 'gene'
+                                       and cmnts.review_status_id != 'rejected'
+                                       and cmnts.is_visible = 1
+                                       and cmnts.project_name = '@PROJECT_ID@')
+                  select 'yes' as comment_count, source_id, project_id
+                  from (  select source_id, project_id
+                          from comment_q
+                        union
+                          select csi.stable_id as source_id, cq.project_id
+                          from comment_q cq, @COMMENT_SCHEMA@CommentStableId@COMMENT_DBLINK@ csi
+                          where cq.comment_id = csi.comment_id)) comments
+            where ogt.ortho_source_id = comments.source_id(+)
+              and ogt.project_id = comments.project_id(+)
+            order by organism, ortho_source_id
             ]]>
             </sql>
        </sqlQuery>
@@ -1189,6 +1201,9 @@
             <testParamValues includeProjects="TriTrypDB">
                <paramValue name="source_id">Tb11.0550</paramValue>
             </testParamValues>
+            <testParamValues includeProjects="TrichDB">
+               <paramValue name="source_id">TVAG_230580</paramValue>
+            </testParamValues>
 
             <column name="source_id"/>
             <column name="project_id"/>
@@ -1226,6 +1241,9 @@
             </testParamValues>
             <testParamValues includeProjects="TriTrypDB">
                <paramValue name="source_id">Tb11.0550</paramValue>
+            </testParamValues>
+            <testParamValues includeProjects="TrichDB">
+               <paramValue name="source_id">TVAG_230580</paramValue>
             </testParamValues>
 
             <column name="source_id"/>
@@ -1341,7 +1359,6 @@
             <column name="sequence"/>
             <column name="frequency"/>
             <column name="percent"/>
-            <column name="libraryTotalTagCount"/>
             <column name="genomeOccurrences"/>
             <column name="sense"/>
             <column name="source_id"/>
@@ -1354,7 +1371,6 @@
                       'CATG' || t.sequence as sequence, 
                       round(t.tag_count,1) as frequency,
                       round((t.tag_count / t.library_total_tag_count * 100),3 ) || '%'as percent,
-                      round(t.library_total_tag_count,1) as libraryTotalTagCount, 
                       t.occurrence as genomeOccurrences,
                       decode(tg.antisense,0,'sense',1,'antisense') as sense,
                       sta.source_id AS sta_source_id, 
@@ -1512,7 +1528,7 @@
               AND drnf.db_ref_id = dr.db_ref_id
               AND dr.external_database_release_id = edr.external_database_release_id
               AND edr.external_database_id = ed.external_database_id
-              AND ed.name = 'Predicted protein structures'
+              AND ed.name in ('Predicted protein structures', 'Pf_predictedProteinStructures_RSRC')
            UNION
             SELECT DISTINCT gf.source_id, '@PROJECT_ID@' as project_id,
                    'Sanger:' || gf.source_id AS gff_dbxref
@@ -1592,6 +1608,36 @@
                 and gf.sequence_ontology_id = so.sequence_ontology_id
                 and gf.source_id = protein.source_id(+)
             order by nl.start_min asc, nl.end_max asc
+        </sql>
+    </sqlQuery>
+
+    <sqlQuery name="GenBankExons" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+        <column name="start"/>
+        <column name="end"/>
+        <sql>
+            select 
+                   least(nl.coding_start, nl.coding_end) as exon_start,
+                   greatest(nl.coding_start, nl.coding_end) as exon_end,
+                   gf.source_id, '@PROJECT_ID@' as project_id
+            from DoTS.GeneFeature gf,
+                 DoTS.Transcript rna,
+                 DoTS.ExonFeature ef,
+                 apidb.FeatureLocation nl,
+                 DoTS.NaSequence ns,
+                 dots.RnaFeatureExon rfe
+            where gf.na_feature_id = rna.parent_id
+            and rna.na_feature_id = rfe.rna_feature_id
+            and ef.na_feature_id = rfe.exon_feature_id
+            and ef.na_feature_id = nl.na_feature_id
+            and nl.is_top_level = 1
+            and nl.na_sequence_id = ns.na_sequence_id
+            and ef.coding_start is not null
+            and ef.coding_start != -1
+            and ef.coding_end is not null
+            and ef.coding_end != -1
+            order by ef.order_number
         </sql>
     </sqlQuery>
 
@@ -1831,6 +1877,11 @@
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
        <sqlQuery name="ArrayElements" isCacheable="false" includeProjects="PlasmoDB,EuPathDB">
+            
+          <testParamValues includeProjects="PlasmoDB">
+               <paramValue name="source_id">PBANKA_112620</paramValue>
+            </testParamValues>
+
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="array_source_id"/>
@@ -1851,7 +1902,7 @@
                  AND ens.na_sequence_id = s.query_id
                  AND 'ExternalNASequence' = ti1.name
                  AND ti1.table_id = s.query_table_id
-                 AND 'Transcript' = ti2.name
+                 AND 'ExternalAASequence' = ti2.name
                  AND ti2.table_id = s.subject_table_id
                  AND t.na_feature_id = s.subject_id
             ]]>
@@ -1865,7 +1916,7 @@
        <sqlQuery name="ProteinExpression" isCacheable="false" includeProjects="PlasmoDB,EuPathDB">
 
         <testParamValues includeProjects="PlasmoDB">
-               <paramValue name="source_id">PB000172.01.0</paramValue>
+               <paramValue name="source_id">PBANKA_140060</paramValue>
             </testParamValues>
 
             <column name="source_id"/>
@@ -1918,7 +1969,7 @@
                   AND taf.na_feature_id = t.na_feature_id
                   AND df.aa_feature_id = taf.aa_feature_id
                   AND dbr.db_ref_id = df.db_ref_id
-                  AND ed.name = 'MR4DBxRefs'
+                  AND ed.name = 'Pf_MR4Reagents_RSRC'
                   AND edr.external_database_id = ed.external_database_id
                   AND dbr.external_database_release_id
                       = edr.external_database_release_id
@@ -2013,8 +2064,8 @@
             <sql>
             <![CDATA[
                select gf.source_id, '@PROJECT_ID@' AS project_id,
-               DECODE(ed.name,'Winzeler_OPI_clusters','Ontology Based pattern Identification',
-                      'Winzeler_Literature_References','Malaria Literature Database') as dataset,
+               CASE WHEN ed.name like '%_Winzeler_Westenberger_Dbrefs_RSRC%' then 'Ontology Based pattern Identification' 
+                    WHEN ed.name like '%_Winzeler_Literature_References_RSRC%' then 'Malaria Literature Database' END  as dataset,
                r.remark || gf.source_id as link_url
                from sres.dbref r, sres.externaldatabaserelease rel, dots.dbrefnafeature rf,
                dots.genefeature gf, sres.externaldatabase ed
@@ -2022,7 +2073,7 @@
                and rf.db_ref_id = r.db_ref_id
                and r.external_database_release_id = rel.external_database_release_id
                and rel.external_database_id = ed.external_database_id
-               and ed.name in ('Winzeler_OPI_clusters','Winzeler_Literature_References')
+               and ed.name in ('Pf_Winzeler_Westenberger_Dbrefs_RSRC','Pb_Winzeler_Westenberger_Dbrefs_RSRC','Pc_Winzeler_Westenberger_Dbrefs_RSRC','Py_Winzeler_Westenberger_Dbrefs_RSRC','Pf_Winzeler_Literature_References_RSRC','Pb_Winzeler_Literature_References_RSRC','Pc_Winzeler_Literature_References_RSRC','Py_Winzeler_Literature_References_RSRC')
                UNION
                select ga.source_id, ga.project_id,
                'UCSC <i>P. falciparum</i> genome browser' as dataset,
@@ -2033,7 +2084,7 @@
                UNION
                select ga.source_id, ga.project_id, 
                'GeneDB the Sanger Institute Pathogen Genomics database' as dataset,
-               'http://www.genedb.org/gene/'||source_id AS link_url
+               'http://www.genedb.org/QuickSearchQuery?pseudogenes=true&product=true&allNames=true&searchText='||source_id AS link_url
                 FROM apidb.geneattributes  ga
                 where (ga.project_id in ('TriTrypDB','PlasmoDB')
                     and ga.species != 'Plasmodium berghei')
@@ -2043,9 +2094,10 @@
                'TDR Targets Database of drug target prioritization' as dataset,
                'http://tdrtargets.org/targets/view?gene_name=' || source_id as link_url
                from apidb.geneattributes ga
-               where ga.project_id = '@PROJECT_ID@'
-               and organism = 'Plasmodium falciparum 3D7'
-                UNION
+               where ga.project_id in ('PlasmoDB','ToxoDB','TriTrypDB')
+               and organism in ('Plasmodium falciparum 3D7','Plasmodium vivax SaI-1','Toxoplasma gondii ME49',
+                                'Leishmania major','Trypanosoma brucei TREU927','Trypanosoma cruzi')
+               UNION
                 select gf.source_id, '@PROJECT_ID@' AS project_id,
                 'PlasmoMAP a network of functional interactions between <i>P. falciparum</i> proteins' as dataset,
                 r.remark as link_url
@@ -2055,10 +2107,10 @@
                 and rf.db_ref_id = r.db_ref_id
                 and r.external_database_release_id = rel.external_database_release_id
                 and rel.external_database_id = ed.external_database_id
-                and ed.name = 'plasmoMAP DbRefs'
+                and ed.name = 'Pf_PlasmoMAP_DBRefs_RSRC'
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
-                       DECODE(ed.name,'plasmodraft DBRefs','PlasmoDraft a database of Gene Ontology annotation predictions for <i>P. falciparum</i> genes') as dataset,
+                       DECODE(ed.name,'Pf_Plasmodraft_DBRefs_RSRC','PlasmoDraft a database of Gene Ontology annotation predictions for <i>P. falciparum</i> genes') as dataset,
                        'http://www.atgc-montpellier.fr/PlasmoDraft/index.php?geneid=' || gf.source_id as link_url
                 FROM   sres.dbref r, sres.externaldatabaserelease rel, 
                        dots.dbrefnafeature rf,
@@ -2067,7 +2119,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name = 'plasmodraft DBRefs'
+                   AND ed.name = 'Pf_Plasmodraft_DBRefs_RSRC'
                 UNION
                 select gf.source_id, '@PROJECT_ID@' AS project_id,
                 'PASA ESTs' as dataset,
@@ -2078,7 +2130,7 @@
                 and rf.db_ref_id = r.db_ref_id
                 and r.external_database_release_id = rel.external_database_release_id
                 and rel.external_database_id = ed.external_database_id
-                and ed.name like 'PASA%'
+                and ed.name like 'Pf_PASA_DBRefs_RSRC%'
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'Phenotypes from Genetically Modified Rodent Malaria Parasite database' as dataset,
@@ -2090,7 +2142,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name = 'Phenotype DBRefs'
+                   AND ed.name in ('Pf_Phenotype_DBRefs_RSRC','Pb_RMgm_Phenotype_DBRefs_RSRC','Pc_Phenotype_DBRefs_RSRC','Pv_Phenotype_DBRefs_RSRC')
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'UniProt protein sequence and functional annotation' as dataset,
@@ -2102,7 +2154,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name = 'Links to Uniprot Genes'
+                   AND ed.name in ('Pf_Uniprot_Gene_dbxref_RSRC','Pb_Uniprot_Gene_dbxref_RSRC','Pc_Uniprot_Gene_dbxref_RSRC','Pk_Uniprot_Gene_dbxref_RSRC','Pv_Uniprot_Gene_dbxref_RSRC','Py_Uniprot_Gene_dbxref_RSRC','Links to Uniprot Genes')
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'Entrez database of genes from RefSeq genomes' as dataset,
@@ -2114,7 +2166,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name = 'Links to Entrez Genes'
+                   AND ed.name in ('Pf_Entrez_Gene_dbxref_RSRC','Pb_Entrez_Gene_dbxref_RSRC','Pc_Entrez_Gene_dbxref_RSRC','Pk_Entrez_Gene_dbxref_RSRC','Pv_Entrez_Gene_dbxref_RSRC','Py_Entrez_Gene_dbxref_RSRC','Links to Entrez Genes')
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'ApiLoc, a database of protein sub-cellular localisation in Apicomplexa' as dataset,
@@ -2126,7 +2178,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name = 'ApiLoc_EupathDB_Dbrefs'
+                   AND ed.name in ('Pf_ApiLoc_EupathDB_Dbrefs_RSRC','Pb_ApiLoc_EupathDB_Dbrefs_RSRC','Pc_ApiLoc_EupathDB_Dbrefs_RSRC','Pk_ApiLoc_EupathDB_Dbrefs_RSRC','Pv_ApiLoc_EupathDB_Dbrefs_RSRC','Py_ApiLoc_EupathDB_Dbrefs_RSRC','ApiLoc_EupathDB_Dbrefs')
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'TcSNP a database of genetic variation in <i>T. cruzi</i>' as dataset,
@@ -2268,7 +2320,7 @@
               AND drnf.db_ref_id = dr.db_ref_id
               AND dr.external_database_release_id = edr.external_database_release_id
               AND edr.external_database_id = ed.external_database_id
-              AND ed.name = 'Predicted protein structures'
+              AND ed.name = 'Pf_predictedProteinStructures_RSRC'
             ]]>
             </sql>
         </sqlQuery>
@@ -2309,7 +2361,7 @@
       <sqlQuery name="TwoChannelDifferentialExpression" isCacheable='false' includeProjects="PlasmoDB,EuPathDB">
 
        <testParamValues includeProjects="PlasmoDB">
-               <paramValue name="source_id">PB000296.02.0</paramValue>
+               <paramValue name="source_id">PBANKA_123650</paramValue>
             </testParamValues>
 
         <column name="source_id"/>

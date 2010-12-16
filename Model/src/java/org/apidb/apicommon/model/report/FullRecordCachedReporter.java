@@ -34,7 +34,8 @@ import org.json.JSONException;
 /**
  * @author xingao
  * 
- * This reporter is used by the WDK "text - Detail" to generate the report from detail table.
+ *         This reporter is used by the WDK "text - Detail" to generate the
+ *         report from detail table.
  */
 public class FullRecordCachedReporter extends Reporter {
 
@@ -83,9 +84,13 @@ public class FullRecordCachedReporter extends Reporter {
         // get basic configurations
         if (config.containsKey(FIELD_HAS_EMPTY_TABLE)) {
             String value = config.get(FIELD_HAS_EMPTY_TABLE);
-            hasEmptyTable = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true"))
-                    ? true : false;
+            hasEmptyTable = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true
+                    : false;
         }
+    }
+
+    public String getConfigInfo() {
+	return "This reporter does not have config info yet.";
     }
 
     /*
@@ -226,7 +231,8 @@ public class FullRecordCachedReporter extends Reporter {
                         String fieldName = resultSet.getString("field_name").trim();
                         String fieldTitle = resultSet.getString("field_title").trim();
                         String content = platform.getClobData(resultSet,
-                                "content").trim();
+                                "content");
+                        content = (content == null) ? "" : content.trim();
                         tableValues.put(fieldName, new String[] { fieldTitle,
                                 content });
                     }

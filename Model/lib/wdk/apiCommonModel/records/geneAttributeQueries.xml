@@ -10,7 +10,7 @@
 
 
             <defaultTestParamValues includeProjects="PlasmoDB,EuPathDB">
-               <paramValue name="source_id">PB400024.00.0</paramValue>
+               <paramValue name="source_id">PF11_0344</paramValue>
                <paramValue name="project_id">PlasmoDB</paramValue>
             </defaultTestParamValues>
 
@@ -169,6 +169,8 @@
             <column name="protein_length" />
             <column name="context_start" />
             <column name="context_end" />
+            <column name="coding_start" />
+            <column name="coding_end" />
             <column name="strand_plus_minus"  sortingColumn="strand"/>
             <column name="sequence_id"  ignoreCase="true"/>
             <column name="cyc_db"  sortingColumn="organism" excludeProjects="AmoebaDB,MicrosporidiaDB,InitDB"/>
@@ -191,6 +193,8 @@
             <column name="ncbi_tax_id" />
             <column name="chromosome" sortingColumn="chromosome_order_num" />
             <column name="chromosome_order_num" />
+            <column name="is_pseudo" />
+            <column name="pseudo_string" />
             <column name="species"  sortingColumn="organism"/>
             <column name="genus_species"  sortingColumn="organism"/>
             <column name="organism_full"  sortingColumn="organism"/> 
@@ -307,6 +311,7 @@
                    decode(strand,'forward','+','reverse','-',null) as strand_plus_minus,
                    bfmv.cds_length, bfmv.protein_length, bfmv.transcript_length,
                    bfmv.context_start,bfmv.context_end,
+                   bfmv.coding_start,bfmv.coding_end,
                    bfmv.sequence_id, bfmv.organism as organism_full, bfmv.tm_count, bfmv.so_id,
                    bfmv.so_term_name, bfmv.so_term_definition,
                    bfmv.ontology_name, bfmv.so_version, bfmv.anticodon,
@@ -340,18 +345,20 @@
                    bfmv.derisi_min_timing as der_min_timing,
                    bfmv.derisi_max_timing as der_max_timing,
                    to_char(bfmv.derisi_max_fold_induction, '999.99') as der_max_fold_induction,
-                   TO_CHAR(bfmv.derisi_max_pct * 100, '99.9') as der_max_pct,
+                   TO_CHAR(bfmv.derisi_max_pct, '999.9') as der_max_pct,
                    bfmv.winzeler_max_level as winz_max_level,
                    bfmv.winzeler_min_level as winz_min_level,
                    bfmv.winzeler_min_timing as winz_min_timing,
                    bfmv.winzeler_max_timing as winz_max_timing,
-                   TO_CHAR(bfmv.winzeler_max_pct * 100, '99.9') as winz_max_pct,
+                   TO_CHAR(bfmv.winzeler_max_pct, '999.9') as winz_max_pct,
                    bfmv.total_snps as total_snps_all_strains,
                    bfmv.nonsynonymous_snps as nonsynonymous_snps_all_strains,
                    bfmv.nonsyn_syn_ratio as nonsyn_syn_ratio_all_strains,
                    bfmv.synonymous_snps as synonymous_snps_all_strains,
                    bfmv.signalp_scores,bfmv.signalp_peptide,
-                   ortholog_number,paralog_number, chromosome, chromosome_order_num
+                   ortholog_number,paralog_number, chromosome, chromosome_order_num,
+                   decode(is_pseudo,0,'gene',1,'pseudogene') as pseudo_string, 
+                   decode(is_pseudo,0,'No',1,'Yes') as is_pseudo
             FROM apidb.GeneAttributes bfmv
             ]]>
             </sql>
@@ -455,6 +462,35 @@
 -->
 
         </sqlQuery>
+
+
+
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- tritrypdb gene names -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="TempTriTrypDBGeneNames" displayName="Name" includeProjects="TriTrypDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="gene_name"/>
+            <sql>
+            <![CDATA[
+               select ga.source_id, apidb.tab_to_string(CAST(COLLECT(ig.name) AS apidb.varchartab),', ') as gene_name, ga.project_id
+               from apidb.geneattributes ga, (
+               select distinct ga.source_id, g.name
+               from dots.nagene g, dots.nafeaturenagene fg,
+                    apidb.geneattributes ga
+               where g.is_verified = 1
+               and g.na_gene_id = fg.na_gene_id
+               and fg.na_feature_id = ga.na_feature_id) ig
+               where ga.source_id = ig.source_id (+)
+               group by ga.source_id, ga.project_id
+            ]]>
+            </sql>
+        </sqlQuery>
+
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- toxo release4 genes -->  
@@ -775,7 +811,7 @@
     <!-- GFF sequence -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GeneGffSequence" excludeProjects="EuPathDB">
+    <sqlQuery name="GeneGffSequence">
         <column name="source_id"/>
         <column name="project_id"/>
         <column name="gff_transcript_sequence"/>
@@ -815,7 +851,7 @@
         <column name="gff_attr_size"/>
         <sql>
           <![CDATA[
-            select ga.source_id, '@PROJECT_ID@' as project_id,
+            select ga.source_id, project_id  as project_id,
                    'apidb|' || ga.sequence_id as gff_seqid,
                    'ApiDB' as gff_source,
                    'gene' as gff_type,
@@ -920,6 +956,31 @@
            
             ]]>
             </sql>
+        </sqlQuery>
+
+        <sqlQuery name="GeneticCode">
+            <column name="source_id" />
+            <column name="project_id"/>
+            <column name="genetic_code" />
+            <column name="mitochondrial_genetic_code" />
+            <column name="sequence_so_term" />
+            <sql>
+            SELECT g.source_id, '@PROJECT_ID@' as project_id,
+                   gc.ncbi_genetic_code_id as genetic_code,
+                   mgc.ncbi_genetic_code_id as mitochondrial_genetic_code,
+                   so.term_name as sequence_so_term
+            FROM apidb.geneattributes g,
+                 apidb.sequenceattributes sa,
+                 sres.sequenceontology so,
+                 sres.taxon t,
+                 sres.geneticcode gc,
+                 sres.geneticcode mgc
+            WHERE sa.na_sequence_id = g.na_sequence_id
+              AND so.so_id = sa.so_id
+              AND t.taxon_id = g.taxon_id
+              AND gc.genetic_code_id = t.genetic_code_id
+              AND mgc.genetic_code_id = t.mitochondrial_genetic_code_id
+           </sql>
         </sqlQuery>
 
     </querySet>
