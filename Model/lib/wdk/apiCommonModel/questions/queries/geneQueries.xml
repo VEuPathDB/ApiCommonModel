@@ -3040,9 +3040,6 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
     </processQuery>   
 
 
-
-
-
     <sqlQuery name="GenesByRNASeqFoldChange" includeProjects="TriTrypDB" 
               isCacheable="true">
       <testParamValues>
@@ -3117,10 +3114,77 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <wsColumn name="avg_group_two" wsName="avg_group_two"/>
     </processQuery>
 
+    <sqlQuery name="GenesByTgVegRNASeqFoldChange" includeProjects="ToxoDB" 
+              isCacheable="true">
+      <testParamValues>
+	<paramValue name="RNASeq_reference_sample">Day3</paramValue>
+	<paramValue name="RNASeq_comparison_sample">Day4</paramValue>
+      </testParamValues>
+
+        <paramRef ref="geneParams.RNASeq_reference_sample" quote="false"/>
+        <paramRef ref="geneParams.RNASeq_comparison_sample" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+      <sql includeProjects="ToxoDB">
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                  round((CASE WHEN (one.average >= two.average)
+                                THEN (one.average + .01)/(two.average + .01)
+                              WHEN (two.average > one.average)
+                              THEN -((two.average + .01)/(one.average + .01))
+                  END),1) as fold_change,
+                          round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNASeq_reference_sample$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$RNASeq_comparison_sample$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two, apidb.geneattributes ga
+ where one.source_id = two.source_id
+ and one.source_id = ga.source_id
+ and ga.gene_type = 'protein coding'
+ and  $$regulated_dir$$ (
+                              CASE WHEN (one.average >= two.average)
+                                THEN (one.average + .01)/(two.average + .01)
+                              WHEN (two.average > one.average)
+                                THEN -((two.average + .01)/(one.average + .01))
+                  end ) >= $$fold_change$$
+           ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByTgVegRNASeqFoldChange" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <wsColumn name="project_id" width="20" wsName="project_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+    </processQuery>
 
 
 
-    <sqlQuery name="GenesByRNASeqPercentile"  includeProjects="TriTrypDB"
+
+
+    <sqlQuery name="GenesByRNASeqPercentile"  includeProjects="TriTrypDB,ToxoDB"
           isCacheable='true'>
        <paramRef ref="geneParams.expressionPercentileSampleRnaSeq"/>
        <paramRef ref="geneParams.min_expression_percentile" default="80"/>
@@ -3128,7 +3192,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
        <column name="project_id"/>
        <column name="source_id" />
        <column name="percentile" />
-       <sql>
+       <sql includeProjects="TriTrypDB">
            <!-- use CDATA because query includes angle brackets -->
             <![CDATA[
            select distinct p.source_id, '@PROJECT_ID@' as project_id, max(round(pe.value * 100 ,2))as percentile
@@ -3141,6 +3205,24 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
             and pe.element_order = pen.element_order
             and ps.name = 'T.brucei George Cross RNA Sequence Profiles Percentile'
             and  pen.profile_element_name_id in ( $$expressionPercentileSampleRnaSeq$$ )
+            and 100 * pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
+            group by p.source_id
+            ]]>
+          </sql>
+       <sql includeProjects="ToxoDB">
+            <![CDATA[
+           select distinct p.source_id, '@PROJECT_ID@' as project_id, max(round(pe.value,2))as percentile
+           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
+           where ps.profile_set_id = pen.profile_set_id
+            and ps.profile_set_id = p.profile_set_id
+            and p.source_id = ga.source_id
+            and ga.gene_type = 'protein coding'
+            and pe.profile_id = p.profile_id
+            and pe.element_order = pen.element_order
+            and ps.name in ('T. gondii VEG Day 3-4 Tachyzoite aligned to the TgME49 Genome-profiles',
+                            'T. gondii VEG Day 3-4 Tachyzoite aligned to the VEG Genome-profiles',
+                            'N. caninum Day 3-4 Tachyzoite-profiles')
+            and pen.profile_element_name_id in ( $$expressionPercentileSampleRnaSeq$$ )
             and 100 * pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
             group by p.source_id
             ]]>
@@ -3158,8 +3240,6 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
        <wsColumn name="project_id" width="20" wsName="project_id"/>
        <wsColumn name="percentile" width="32" wsName="project_id"/>
     </processQuery>   
-
-
 
     <sqlQuery name="GenesByMicroArrPageLogValue" includeProjects="TriTrypDB" 
               isCacheable="true">
@@ -3542,6 +3622,201 @@ where one.source_id = two.source_id
         <wsColumn name="fold_change" wsName="fold_change"/>
         <wsColumn name="confidence" wsName="confidence"/>
     </processQuery>
+
+
+
+
+
+    <sqlQuery name="GenesByMicroArrPageTbHeatShock" includeProjects="TriTrypDB" 
+              isCacheable="true">
+
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <paramRef ref="geneParams.confidence"/> 
+        <paramRef ref="geneParams.protein_coding_only"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="confidence"/>
+
+      <sql includeProjects="TriTrypDB">
+          <![CDATA[
+           select '@PROJECT_ID@' as project_id, 
+                   ga.source_id as source_id,
+                   round(d.fold_change, 1) as fold_change, 
+                   d.confidence
+          from rad.differentialexpression d, 
+               Core.tableInfo t ,
+               Apidb.GeneAttributes ga, 
+               rad.analysis a
+          where ga.na_feature_id = d.row_id
+           and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+           and t.table_id = d.table_id
+           and a.analysis_id = d.analysis_id
+           and t.name = 'GeneFeature'
+           and $$regulated_dir$$(d.fold_change) >= $$fold_change$$
+           and d.confidence >= $$confidence$$
+           and a.name = 'T. brucei under heat shock page analysis' 
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByMicroArrPageTbHeatShock" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <paramRef ref="geneParams.confidence"/> 
+        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
+        <wsColumn name="project_id" width="20" wsName="project_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="confidence" wsName="confidence"/>
+    </processQuery>
+
+
+
+    <sqlQuery name="GenesByMicroArrPctTbHeatShock" includeProjects="TriTrypDB" 
+              isCacheable="true">
+
+       <paramRef ref="geneParams.PaGE_HeatShock_pct_Tb" />
+       <paramRef ref="geneParams.min_expression_percentile" default="80"/>
+       <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+       <paramRef ref="geneParams.protein_coding_only"/>
+       <column name="project_id"/>
+       <column name="source_id" />
+       <column name="percentile" />
+       <sql>
+           <!-- use CDATA because query includes angle brackets -->
+            <![CDATA[
+           select ga.source_id, '@PROJECT_ID@' as project_id,max(round(pe.value,1))as percentile
+           from   apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
+           where p.profile_set_id = pen.profile_set_id
+            and ga.source_id = p.source_id
+            and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+            and pen.profile_set_id = p.profile_set_id
+            and pe.profile_id = p.profile_id
+            and pe.element_order = pen.element_order
+            and pen.profile_element_name_id in ( $$PaGE_HeatShock_pct_Tb$$ )
+            and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
+            group by ga.source_id
+         ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByMicroArrPctTbHeatShock" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+       <paramRef ref="geneParams.PaGE_HeatShock_pct_Tb" />
+       <paramRef ref="geneParams.min_expression_percentile" default="80"/>
+       <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
+       <wsColumn name="source_id" width="50" wsName="source_id"/>
+       <wsColumn name="project_id" width="20" wsName="project_id"/>
+       <wsColumn name="percentile" width="32" wsName="project_id"/>
+    </processQuery>
+
+
+
+
+    <sqlQuery name="GenesByMicroArrPctTbDHH1" includeProjects="TriTrypDB" 
+              isCacheable="true">
+
+       <paramRef ref="geneParams.PaGE_comparisons_pct_Tb" />
+       <paramRef ref="geneParams.min_expression_percentile" default="80"/>
+       <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+       <paramRef ref="geneParams.protein_coding_only"/>
+       <column name="project_id"/>
+       <column name="source_id" />
+       <column name="percentile" />
+       <sql>
+           <!-- use CDATA because query includes angle brackets -->
+            <![CDATA[
+           select ga.source_id, '@PROJECT_ID@' as project_id,max(round(pe.value,1))as percentile
+           from   apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
+           where p.profile_set_id = pen.profile_set_id
+            and ga.source_id = p.source_id
+            and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+            and pen.profile_set_id = p.profile_set_id
+            and pe.profile_id = p.profile_id
+            and pe.element_order = pen.element_order
+            and pen.profile_element_name_id in ( $$PaGE_comparisons_pct_Tb$$ )
+            and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
+            group by ga.source_id
+         ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByMicroArrPctTbDHH1" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+       <paramRef ref="geneParams.PaGE_comparisons_pct_Tb"/>
+       <paramRef ref="geneParams.min_expression_percentile" default="80"/>
+       <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
+       <wsColumn name="source_id" width="50" wsName="source_id"/>
+       <wsColumn name="project_id" width="20" wsName="project_id"/>
+       <wsColumn name="percentile" width="32" wsName="project_id"/>
+    </processQuery>
+
+
+
+
+
+
+    <sqlQuery name="GenesByMicroArrPageTbDHH1" includeProjects="TriTrypDB" 
+              isCacheable="true">
+
+        <paramRef ref="geneParams.PaGE_comparisons_Tb_DHH1"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <paramRef ref="geneParams.confidence"/> 
+        <paramRef ref="geneParams.protein_coding_only"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="confidence"/>
+
+      <sql includeProjects="TriTrypDB">
+          <![CDATA[
+           select '@PROJECT_ID@' as project_id, 
+                   ga.source_id as source_id,
+                   round(d.fold_change, 1) as fold_change, 
+                   d.confidence
+          from rad.differentialexpression d, 
+               Core.tableInfo t ,
+               Apidb.GeneAttributes ga, 
+               rad.analysis a
+          where ga.na_feature_id = d.row_id
+           and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+           and t.table_id = d.table_id
+           and a.analysis_id = d.analysis_id
+           and t.name = 'GeneFeature'
+           and $$regulated_dir$$(d.fold_change) >= $$fold_change$$
+           and d.confidence >= $$confidence$$
+           and a.analysis_id = $$PaGE_comparisons_Tb_DHH1$$ 
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByMicroArrPageTbDHH1" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        <paramRef ref="geneParams.PaGE_comparisons_Tb_DHH1"/> 
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <paramRef ref="geneParams.confidence"/> 
+        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
+        <wsColumn name="project_id" width="20" wsName="project_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="confidence" wsName="confidence"/>
+    </processQuery>
+
 
 
 
@@ -5365,6 +5640,84 @@ where one.source_id = two.source_id
         <wsColumn name="max_percentile"/>
         <wsColumn name="min_percentile"/>
     </processQuery>
+
+
+
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+  <!-- GenesByIntraerythrocyticExpression fold change -->
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="GenesByIntraerythroExprFoldChange" includeProjects="PlasmoDB" isCacheable='true'>
+
+        <paramRef ref="geneParams.synchronizationFldChnge1"/>
+        <paramRef ref="geneParams.winz_asexual_reference"/>
+        <paramRef ref="geneParams.synchronizationFldChnge2"/>
+        <paramRef ref="geneParams.winz_asexual_comparitor"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <paramRef ref="geneParams.protein_coding_only"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="val_one"/>
+        <column name="val_two"/>
+      <sql>
+          <![CDATA[
+select one.source_id, '@PROJECT_ID@' as project_id,
+                  round((CASE WHEN power(2, one.val) / power(2,two.val) >= 1
+                                 THEN power(2, one.val) / power(2,two.val)
+                           ELSE -1 / (power(2,one.val) / power(2,two.val))
+                   END),1) as fold_change,
+        round(one.val,2) as val_one,
+        round(two.val,2) as val_two
+ from (
+ select p.source_id, pe.value as val
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$winz_asexual_reference$$)
+ and p.profile_set_id = $$synchronizationFldChnge1$$
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ ) one,
+ (
+ select p.source_id, pe.value as val
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$winz_asexual_comparitor$$)
+ and p.profile_set_id = $$synchronizationFldChnge2$$
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ ) two
+ where one.source_id = two.source_id
+ and  ( $$regulated_dir$$ (
+               case when one.val >= two.val
+                   then power(2,one.val) / power(2,two.val)
+                   else -( power(2,two.val) / power(2,one.val))
+                   end ) >= $$fold_change$$)
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByIntraerythroExprFoldChange" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
+        <paramRef ref="geneParams.synchronizationFldChnge1"/>
+        <paramRef ref="geneParams.winz_asexual_reference" quote="false"/>
+        <paramRef ref="geneParams.synchronizationFldChnge2"/>
+        <paramRef ref="geneParams.winz_asexual_comparitor" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
+        <wsColumn name="project_id" width="20" wsName="project_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="val_one" wsName="avg_group_one"/>
+        <wsColumn name="val_two" wsName="avg_group_two"/>
+
+    </processQuery> 
+
+
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- GenesByExtraerythrocyticExpression -->
