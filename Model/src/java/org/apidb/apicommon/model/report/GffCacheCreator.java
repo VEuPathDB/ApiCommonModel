@@ -225,40 +225,40 @@ public class GffCacheCreator extends BaseCLI {
 
         // Dump gff_attr_web_id
         sql.append(" || trim(DECODE(").append(attributeTable).append('.').append(
-                COLUMN_GFF_ATTR_WEB_ID).append(", NULL, '', ");
-        sql.append(" ';web_id=' || ").append(attributeTable).append('.').append(
+                COLUMN_GFF_ATTR_WEB_ID).append(", NULL, to_clob(''), ");
+        sql.append(" to_clob(';web_id=') || ").append(attributeTable).append('.').append(
                 COLUMN_GFF_ATTR_WEB_ID).append("))");
         // Dump gff_attr_locus_tag
         sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(
-                ", NULL, '', ");
-        sql.append(" ';locus_tag=' || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(
+                ", NULL, to_clob(''), ");
+        sql.append(" to_clob(';locus_tag=') || ").append(COLUMN_GFF_ATTR_LOCUS_TAG).append(
                 "))");
         // Dump gff_attr_size
         sql.append(" || trim(DECODE(").append(COLUMN_GFF_ATTR_SIZE).append(
-                ", NULL, '', ");
-        sql.append(" ';size=' || ").append(COLUMN_GFF_ATTR_SIZE).append("))");
+                ", NULL, to_clob(''), ");
+        sql.append(" to_clob(';size=') || ").append(COLUMN_GFF_ATTR_SIZE).append("))");
 
         // Dump Aliases
         sql.append(" || DECODE(").append(aliasTable).append('.').append(
-                COLUMN_CONTENT).append(", NULL, '', ");
-        sql.append("';Alias=' || ").append(aliasTable).append('.').append(
+                COLUMN_CONTENT).append(", NULL, to_clob(''), ");
+        sql.append(" to_clob(';Alias=') || ").append(aliasTable).append('.').append(
                 COLUMN_CONTENT).append(") || '").append(NEW_LINE).append("' ");
 
         // Dump RNAs (incl. go terms & dbxref)
         sql.append(" || DECODE(").append(rnaTable).append('.').append(
-                COLUMN_CONTENT).append(", NULL, '', ");
+                COLUMN_CONTENT).append(", NULL, to_clob(''), ");
         sql.append(rnaTable).append('.').append(COLUMN_CONTENT).append(" || '").append(
                 NEW_LINE).append("') ");
 
         // Dump CDSs
         sql.append(" || DECODE(").append(cdsTable).append('.').append(
-                COLUMN_CONTENT).append(", NULL, '', ");
+                COLUMN_CONTENT).append(", NULL, to_clob(''), ");
         sql.append(cdsTable).append('.').append(COLUMN_CONTENT).append(" || '").append(
                 NEW_LINE).append("') ");
 
         // Dump exons
         sql.append(" || DECODE(").append(exonTable).append('.').append(
-                COLUMN_CONTENT).append(", NULL, '', ");
+                COLUMN_CONTENT).append(", NULL, to_clob(''), ");
         sql.append(exonTable).append('.').append(COLUMN_CONTENT).append(" || '").append(
                 NEW_LINE).append("') ");
 
@@ -331,12 +331,12 @@ public class GffCacheCreator extends BaseCLI {
 
         // add GO terms in mRNA
         sql.append(" || DECODE(").append(goSubQueryName).append('.').append(
-                COLUMN_CONTENT).append(", NULL, '', ';Ontology_term=' || ").append(
+                COLUMN_CONTENT).append(", NULL, to_clob(''), to_clob(';Ontology_term=') || ").append(
                 goSubQueryName).append(".").append(COLUMN_CONTENT).append(") ");
 
         // add dbxref in mRNA
         sql.append(" || DECODE(").append(dbxrefSubQueryName).append('.').append(
-                COLUMN_CONTENT).append(", NULL, '', ';Dbxref=' || ").append(
+                COLUMN_CONTENT).append(", NULL, to_clob(''), to_clob(';Dbxref=') || ").append(
                 dbxrefSubQueryName).append(".").append(COLUMN_CONTENT).append(
                 ") AS ").append(COLUMN_CONTENT).append(" FROM (");
 
