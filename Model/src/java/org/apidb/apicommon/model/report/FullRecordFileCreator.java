@@ -134,7 +134,7 @@ public class FullRecordFileCreator extends BaseCLI {
 
         OutputStream out = new FileOutputStream(dumpFile);
         Reporter reporter = createReporter(answerValue, cacheTable);
-        reporter.write(out);
+        reporter.report(out);
         out.close();
 
         long end = System.currentTimeMillis();

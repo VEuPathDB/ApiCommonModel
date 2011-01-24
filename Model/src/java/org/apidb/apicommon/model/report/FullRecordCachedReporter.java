@@ -90,7 +90,7 @@ public class FullRecordCachedReporter extends Reporter {
     }
 
     public String getConfigInfo() {
-	return "This reporter does not have config info yet.";
+        return "This reporter does not have config info yet.";
     }
 
     /*
@@ -129,7 +129,8 @@ public class FullRecordCachedReporter extends Reporter {
      * @see
      * org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
      */
-    public void write(OutputStream out) throws WdkModelException,
+    @Override
+    protected void write(OutputStream out) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
         // get the columns that will be in the report
@@ -275,5 +276,15 @@ public class FullRecordCachedReporter extends Reporter {
             sql.append("[").append(attribute.getDisplayName()).append("]");
         }
         return sql.toString();
+    }
+
+    @Override
+    protected void complete() {
+    // do nothing
+    }
+
+    @Override
+    protected void initialize() throws SQLException {
+    // do nothing
     }
 }

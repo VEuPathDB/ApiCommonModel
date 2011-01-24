@@ -50,7 +50,10 @@ import org.gusdb.wsf.util.BaseCLI;
  *         true, otherwise the sql will fail. In this case, a two-step process
  *         will be used with the slower apidb.clob_clob_agg() aggregation
  *         function.
+ *         
+ *         this command is replaced by DetailTableLoader
  */
+@Deprecated
 public class FullRecordCacheCreator extends BaseCLI {
 
     private static final String ARG_PROJECT_ID = "model";

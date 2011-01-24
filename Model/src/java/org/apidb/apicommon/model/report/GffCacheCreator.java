@@ -24,7 +24,9 @@ import org.gusdb.wsf.util.BaseCLI;
 /**
  * @author ctreatma
  * 
+ * have problem with clobs, will be removed in the future
  */
+@Deprecated
 public class GffCacheCreator extends BaseCLI {
     private static final String NEW_LINE = System.getProperty("line.separator");
 
