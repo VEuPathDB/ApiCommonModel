@@ -700,7 +700,7 @@
                <paramValue name="source_id">TVAG_563160</paramValue>
             </testParamValues>
             <testParamValues includeProjects="TriTrypDB">
-               <paramValue name="source_id">LmjF02.0480</paramValue>
+               <paramValue name="source_id">LmjF.02.0480</paramValue>
             </testParamValues>
             <testParamValues includeProjects="AmoebaDB">
                <paramValue name="source_id">EIN_088300</paramValue>
@@ -1137,7 +1137,7 @@
                <paramValue name="source_id">GL50803_6081</paramValue>
             </testParamValues>
             <testParamValues includeProjects="TriTrypDB">
-               <paramValue name="source_id">LmjF18.1480</paramValue>
+               <paramValue name="source_id">LmjF.10.0460</paramValue>
             </testParamValues>
 
             <column name="source_id"/>
@@ -1207,29 +1207,40 @@
 
             <column name="source_id"/>
             <column name="project_id"/>
-            <column name="study_name"/>
+            <column name="experiment"/>
             <column name="developmental_stage"/>
-            <column name="seq_coverage"/>
-            <column name="number_of_spans"/>
             <column name="sequence_count"/>
             <column name="spectrum_count"/>
             <sql>
             <![CDATA[
-               SELECT mss.developmental_stage,
-                      mst.display_term as study_name,
-                      mss.aa_seq_percent_covered as seq_coverage,
-                      mss.number_of_spans, mss.sequence_count, mss.spectrum_count, 
-                      gf.source_id, '@PROJECT_ID@' as project_id
-               FROM dots.TranslatedAaFeature taf, dots.genefeature gf, 
-                    dots.transcript t, apidb.MassSpecSummary mss, 
-                    sres.externalDatabase ed, sres.externalDatabaseRelease edr, apidb.massSpecTerms mst
-               WHERE t.parent_id = gf.na_feature_id
-                 AND taf.na_feature_id = t.na_feature_id
-                 AND mss.aa_sequence_id = taf.aa_sequence_id
-                 AND mss.external_database_release_id = edr.external_database_release_id
-                 AND edr.external_database_id = ed.external_database_id
-                 AND ed.name = mst.extdb_name
-               ORDER by mss.developmental_stage, ed.name
+            SELECT source_id, experiment, developmental_stage, '@PROJECT_ID@' as project_id, sum(spectrum_count) as spectrum_count, count(*) as sequence_count
+            FROM ( SELECT source_id, experiment, developmental_stage, sequence, count(*) as spectrum_count
+                   FROM ( SELECT gf.source_id,
+                                 mst.display_term as experiment,
+                                 mss.developmental_stage,
+                                 to_Char(substr(taas.sequence, aal.start_min, aal.end_max - aal.start_min + 1)) as sequence
+                          FROM  dots.massspecfeature msf,
+                                dots.aalocation aal,
+                                dots.translatedaafeature taaf,
+                                dots.translatedaasequence taas,
+                                sres.externaldatabaserelease edr,
+                                sres.externaldatabase ed,
+                                dots.transcript t, 
+                                dots.genefeature gf,
+                                apidb.massspecterms mst,
+                                apidb.massspecsummary mss
+                          WHERE msf.parent_id = taaf.aa_feature_id
+                            AND mss.mass_spec_summary_id = msf.source_id
+                            AND taaf.aa_sequence_id = taas.aa_sequence_id
+                            AND msf.aa_feature_id = aal.aa_feature_id
+                            AND msf.external_database_release_id = edr.external_database_release_id
+                            AND edr.external_database_id = ed.external_database_id
+                            AND taaf.na_feature_id = t.na_feature_id
+                            AND t.parent_id = gf.na_feature_id
+                            AND mst.extdb_name = ed.name )
+                   GROUP BY source_id, experiment, developmental_stage, sequence )
+            GROUP BY source_id, experiment, developmental_stage, '@PROJECT_ID@'
+            ORDER BY experiment
             ]]>
             </sql>
         </sqlQuery>
@@ -1250,17 +1261,38 @@
             <column name="project_id"/>
             <column name="experiment"/>
             <column name="sequence"/>
-            <column name="sum_sequence_count"/>
-            <column name="sum_spectrum_count"/>
+            <column name="sequence_count"/>
+            <column name="protein_start"/>
+            <column name="protein_end"/>
             <sql>
             <![CDATA[
-               SELECT msgt.sequence, 
-	              msgt.sum_sequence_count, sum(msgt.spectrum_count) as spectrum_count,
-                      mst.display_term as experiment, msgt.source_id, '@PROJECT_ID@' as project_id
-	       FROM   apidb.MassSpecGeneTable msgt, apidb.massSpecTerms mst
-               WHERE  msgt.experiment = mst.extdb_name
-	       GROUP BY mst.display_term, msgt.sequence, msgt.source_id, msgt.sum_sequence_count
-	       ORDER BY mst.display_term
+            select source_id, experiment, sequence, count(*) as spectrum_count, '@PROJECT_ID@' as project_id, protein_start, protein_end
+            from (
+            SELECT gf.source_id,
+                   mst.display_term as experiment,
+                   to_Char(substr(taas.sequence, aal.start_min, aal.end_max - aal.start_min + 1)) as sequence,
+                   aal.start_min as protein_start,
+                   aal.end_max as protein_end
+            FROM  dots.massspecfeature msf,
+                  dots.aalocation aal,
+                  dots.translatedaafeature taaf,
+                  dots.translatedaasequence taas,
+                  sres.externaldatabaserelease edr,
+                  sres.externaldatabase ed,
+                  dots.transcript t, 
+                  dots.genefeature gf,
+                  apidb.massspecterms mst
+            WHERE msf.parent_id = taaf.aa_feature_id
+                  AND taaf.aa_sequence_id = taas.aa_sequence_id
+                  AND msf.aa_feature_id = aal.aa_feature_id
+                  AND msf.external_database_release_id = edr.external_database_release_id
+                  AND edr.external_database_id = ed.external_database_id
+                  and taaf.na_feature_id = t.na_feature_id
+                  and t.parent_id = gf.na_feature_id
+                  and mst.extdb_name = ed.name
+                  )
+             GROUP BY source_id, experiment, sequence, '@PROJECT_ID@', protein_start, protein_end
+            ORDER BY experiment
             ]]>
             </sql>
         </sqlQuery>
@@ -1401,7 +1433,7 @@
             <![CDATA[
                SELECT source_id, product,
                       '@PROJECT_ID@' as project_id
-               FROM dots.GeneFeature
+               FROM apidb.geneattributes
             ]]>
             </sql>
         </sqlQuery>
@@ -1433,7 +1465,7 @@
             </testParamValues>
             <testParamValues minRows="0" includeProjects="GiardiaDB"/>
             <testParamValues includeProjects="TriTrypDB">
-               <paramValue name="source_id">LinJ23_V3.0280</paramValue>
+               <paramValue name="source_id">LinJ.23.0280</paramValue>
             </testParamValues>
             <testParamValues includeProjects="MicrosporidiaDB">
                <paramValue name="source_id">ECU10_1660</paramValue>
@@ -1444,12 +1476,8 @@
             <column name="gff_alias"/>
                 <sql>
                 <![CDATA[
-                SELECT distinct ng.name AS gff_alias, 
-                       gf.source_id, '@PROJECT_ID@' as project_id
-                FROM dots.GeneFeature gf, dots.NaFeatureNaGene nfng, dots.NaGene ng
-                WHERE gf.na_feature_id = nfng.na_feature_id
-                  AND nfng.na_gene_id = ng.na_gene_id
-                  AND ng.name is NOT NULL
+                SELECT DISTINCT gene AS source_id, '@PROJECT_ID@' AS project_id, alias AS gff_alias
+                FROM apidb.GeneId
                 ]]>
                 </sql>
        </sqlQuery>
@@ -2121,6 +2149,14 @@
                    AND rel.external_database_id = ed.external_database_id 
                    AND ed.name = 'Pf_Plasmodraft_DBRefs_RSRC'
                 UNION
+                select gf.source_id,  '@PROJECT_ID@' AS project_id, 'LeishCyc database of Leishmania metabolic pathways' as dataset, 'http://leishcyc.bio21.unimelb.edu.au/LEISH/NEW-IMAGE?type=GENE' || '&' || 'object=' || db.primary_identifier as link_url
+                from sres.dbref db, SRES.externaldatabase d, SRES.externaldatabaserelease r, DOTS.dbrefnafeature dn, dots.genefeature gf
+                where r.external_database_release_id = db.external_database_release_id
+                 and d.external_database_id = r.external_database_id
+                 and dn.db_ref_id = db.db_ref_id
+                 and dn.na_feature_id = gf.na_feature_id
+                 and d.name = 'Lmajor_LeishCYC_dbxref_RSRC'
+                UNION
                 select gf.source_id, '@PROJECT_ID@' AS project_id,
                 'PASA ESTs' as dataset,
                 r.remark as link_url
@@ -2154,7 +2190,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name in ('Pf_Uniprot_Gene_dbxref_RSRC','Pb_Uniprot_Gene_dbxref_RSRC','Pc_Uniprot_Gene_dbxref_RSRC','Pk_Uniprot_Gene_dbxref_RSRC','Pv_Uniprot_Gene_dbxref_RSRC','Py_Uniprot_Gene_dbxref_RSRC','Links to Uniprot Genes')
+                   AND ed.name in ('Pf_Uniprot_Gene_dbxref_RSRC','Pb_Uniprot_Gene_dbxref_RSRC','Pc_Uniprot_Gene_dbxref_RSRC','Pk_Uniprot_Gene_dbxref_RSRC','Pv_Uniprot_Gene_dbxref_RSRC','Py_Uniprot_Gene_dbxref_RSRC','Lbraziliensis_Uniprot_Gene_dbxref_RSRC','Linfantum_Uniprot_Gene_dbxref_RSRC','Lmajor_Uniprot_Gene_dbxref_RSRC','Lmexicana_Uniprot_Gene_dbxref_RSRC','Tbrucei_Uniprot_Gene_dbxref_RSRC','Tcongolense_Uniprot_Gene_dbxref_RSRC','TcruziEsmeraldoLike_Uniprot_Gene_dbxref_RSRC','TcruziNonEsmeraldoLike_Uniprot_Gene_dbxref_RSRC','Tvivax_Uniprot_Gene_dbxref_RSRC','Links to Uniprot Genes')
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'Entrez database of genes from RefSeq genomes' as dataset,
@@ -2166,7 +2202,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name in ('Pf_Entrez_Gene_dbxref_RSRC','Pb_Entrez_Gene_dbxref_RSRC','Pc_Entrez_Gene_dbxref_RSRC','Pk_Entrez_Gene_dbxref_RSRC','Pv_Entrez_Gene_dbxref_RSRC','Py_Entrez_Gene_dbxref_RSRC','Links to Entrez Genes')
+                   AND ed.name in ('Pf_Entrez_Gene_dbxref_RSRC','Pb_Entrez_Gene_dbxref_RSRC','Pc_Entrez_Gene_dbxref_RSRC','Pk_Entrez_Gene_dbxref_RSRC','Pv_Entrez_Gene_dbxref_RSRC','Py_Entrez_Gene_dbxref_RSRC','Lbraziliensis_Entrez_Gene_dbxref_RSRC','Linfantum_Entrez_Gene_dbxref_RSRC','Lmajor_Entrez_Gene_dbxref_RSRC','Lmexicana_Entrez_Gene_dbxref_RSRC','Tbrucei_Entrez_Gene_dbxref_RSRC','Tcongolense_Entrez_Gene_dbxref_RSRC','TcruziEsmeraldoLike_Entrez_Gene_dbxref_RSRC','TcruziNonEsmeraldoLike_Entrez_Gene_dbxref_RSRC','Tvivax_Entrez_Gene_dbxref_RSRC','Links to Entrez Genes')
                 UNION
                 SELECT gf.source_id, '@PROJECT_ID@' AS project_id,
                        'ApiLoc, a database of protein sub-cellular localisation in Apicomplexa' as dataset,
@@ -2190,7 +2226,7 @@
                    AND rf.db_ref_id = r.db_ref_id 
                    AND r.external_database_release_id = rel.external_database_release_id 
                    AND rel.external_database_id = ed.external_database_id 
-                   AND ed.name like 'TcSNP dbxrefs'
+                   AND ed.name like 'TcruziEsmeraldoLike_Aguero_SNP_DBRefs_RSRC;TcruziNonEsmeraldoLike_Aguero_SNP_DBRefs_RSRC'
                 ]]>
             </sql>
         </sqlQuery>
