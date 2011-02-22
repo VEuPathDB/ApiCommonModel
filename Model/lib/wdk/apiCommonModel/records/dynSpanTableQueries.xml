@@ -1,47 +1,128 @@
 <wdkModel>
-    <querySet name="DynSpanTables" queryType="table" includeProjects="InitDB">
+    <querySet name="DynSpanTables" queryType="table">
 
-        <sqlQuery name="SequencePieces"
+
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <!-- genes -->  
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="Genes"
                isCacheable="false">
 
             <column name="source_id" />
             <column name="project_id" />
+            <column name="gene_source_id" />
             <column name="start_min" />
             <column name="end_max" />
-            <column name="piece_source_id" />
-            <column name="piece_min" />
-            <column name="piece_max" />
-            <column name="piece_strand" />
+            <column name="strand"  />
+            <column name="product"  />
+
             <sql>
             <![CDATA[
-          SELECT * FROM (
-            select vs.source_id as source_id, '@PROJECT_ID@' AS project_id,
-                   sp.distance_from_left + 1 as start_min, 
-                   es.length + sp.distance_from_left as end_max,
-                   case when es.source_id is null then '(N)-' || es.length else es.source_id end as piece_source_id,
-                   1 as piece_min,
-                   es.length as piece_max,
-                   sp.strand_orientation as piece_strand,
-                   sp.sequence_order
-            from Dots.SEQUENCEPIECE sp, Dots.NASEQUENCE vs, Dots.NASEQUENCE es
-            where vs.na_sequence_id = sp.virtual_na_sequence_id
-            and es.na_sequence_id = sp.piece_na_sequence_id
-            and sp.strand_orientation is not null
-            UNION
-            select es.source_id as source_id, '@PROJECT_ID@' AS project_id,
-                   sp.distance_from_left + 1 as start_min, 
-                   es.length + sp.distance_from_left as end_max,
-                   case when es.source_id is null then '(N)-' || es.length else es.source_id end as piece_source_id,
-                   1 as piece_min,
-                   es.length as piece_max,
-                   sp.strand_orientation as piece_strand,
-                   sp.sequence_order
-            from Dots.SEQUENCEPIECE sp, Dots.NASEQUENCE vs, Dots.NASEQUENCE es
-            where vs.na_sequence_id = sp.virtual_na_sequence_id
-            and es.na_sequence_id = sp.piece_na_sequence_id
-            and sp.strand_orientation is not null
-            )
-            order by source_id, sequence_order
+ 
+             select ids.source_id,ids.project_id,ga.source_id as gene_source_id,ga.start_min,ga.end_max,ga.strand,ga.product 
+               from 
+                      (SELECT source_id, project_id,
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids,          
+                       apidb.geneattributes ga
+              where   ga.sequence_id = ids.seq_source_id AND
+                      ga.start_min <= ids.end_max AND
+                      ga.end_max >= ids.start_min
+             order by start_min
+
+             ]]>
+           </sql>
+        </sqlQuery>
+
+
+
+         <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <!-- ORFs -->  
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="ORFs"
+               isCacheable="false">
+
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="orf_source_id" />
+            <column name="start_min" />
+            <column name="end_max" />
+            <column name="is_reversed"  />
+
+
+            <sql>
+            <![CDATA[
+ 
+             select ids.source_id,ids.project_id,oa.source_id as orf_source_id,oa.start_min,oa.end_max,oa.is_reversed
+               from 
+                      (SELECT source_id, project_id,
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids,          
+                       apidb.orfattributes oa
+              where   oa.nas_id = ids.seq_source_id AND
+                      oa.start_min <= ids.end_max AND
+                      oa.end_max >= ids.start_min
+             order by start_min
+
+             ]]>
+           </sql>
+        </sqlQuery>
+
+
+
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <!-- SNPs -->  
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="SNPs"
+               isCacheable="false">
+
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="snp_source_id" />
+            <column name="start_min" />
+            <column name="reference_strain" />
+            <column name="reference_na"  />
+            <column name="gene_source_id"  />
+            <column name="gene_strand"  />
+            <column name="is_coding"  />
+  <column name="strain_count"  />
+  <column name="strains"  />
+
+            <sql>
+            <![CDATA[
+ 
+             select ids.source_id,ids.project_id,sa.source_id as snp_source_id,sa.start_min,sa.reference_strain,sa.reference_na,sa.gene_source_id,sa.gene_strand,sa.is_coding, sa.strain_count,sa.strains
+               from 
+                      (SELECT source_id, project_id,
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids,          
+                       apidb.snpattributes sa
+              where   sa.seq_source_id = ids.seq_source_id AND
+                      sa.start_min >= ids.start_min   AND  
+                      sa.start_min <= ids.end_max
+             order by start_min
+
              ]]>
            </sql>
         </sqlQuery>
@@ -49,6 +130,128 @@
 
 
 
+
+      <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <!-- sage tags -->  
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="SageTags"
+               isCacheable="false">
+
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="stag_source_id" />
+            <column name="start_min" />
+            <column name="end_max" />
+            <column name="is_reversed"  />
+            <column name="sequence"  />
+            <column name="gene_count" />
+            <column name="gene_source_id" />
+            <column name="gene_product"  />
+
+            <sql>
+            <![CDATA[
+ 
+
+               select ids.source_id,ids.project_id,sta.source_id as stag_source_id,sta.start_min,sta.end_max,sta.is_reversed,sta.sequence, sta.gene_count, sta.gene_source_id, sta.gene_product 
+               from 
+                      (SELECT source_id, project_id,
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids,          
+                       apidb.sagetagattributes sta
+              where   sta.sequence_source_id = ids.seq_source_id AND
+                      sta.start_min <= ids.end_max AND
+                         sta.end_max >= ids.start_min
+             order by start_min
+
+
+
+
+
+            ]]>
+           </sql>
+        </sqlQuery>
+
+
+
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <!-- ESTs  -->  
+        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="ESTs"
+               isCacheable="false">
+
+            <column name="source_id" />
+            <column name="project_id" />
+
+            <column name="est_source_id"/>
+            <column name="target_start"/>
+            <column name="target_end"/>  
+            <column name="length"/>
+            <column name="is_reversed"/>
+            <column name="is_best_alignment"/>
+            <column name="is_consistent"/>
+            <column name="percent_identity"/>
+          
+            <column name="gene"/>
+
+            <column name="assembly_source_id"/>
+            <column name="assembly_est_count"/>
+
+            <sql>
+            <![CDATA[
+ 
+
+               select ids.source_id,ids.project_id,ea.source_id as est_source_id,ests.target_start,ests.target_end,ea.length,ests.is_reversed,ests.is_best_alignment,ests.is_consistent,ests.percent_identity,ests.gene,ea.assembly_source_id,ea.assembly_est_count
+               from 
+                      (SELECT source_id, project_id,
+                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+   				       else 'Unknown' end as strand
+                         FROM (##WDK_ID_SQL##)
+                       ) ids, 
+                      ( SELECT distinct (enas.source_id) as sequence_id,
+                                         e.accession,
+                                         enas.project_id,
+                                         blat.target_start,
+                                         blat.target_end,
+                                         decode(blat.is_best_alignment,0,'No',1,'Yes',blat.is_best_alignment) as is_best_alignment,
+                                         decode(blat.is_consistent,0,'No',1,'Yes',blat.is_consistent) as is_consistent,
+                                         decode(blat.is_reversed,0,'+',1,'-',blat.is_reversed) as is_reversed,
+                                         blat.percent_identity,
+                                         eags.gene
+                         FROM   apidb.BlatAlignmentLocation blat,
+                                dots.est e,
+                                apidb.sequenceattributes enas,
+                                apidb.estalignmentgenesummary eags
+                         WHERE  blat.query_na_sequence_id = e.na_sequence_id
+                           AND  blat.target_na_sequence_id = enas.na_sequence_id
+                           AND eags.blat_alignment_id = blat.blat_alignment_id
+                           AND  enas.is_top_level = 1
+                         ) ests,
+                       apidb.estattributes ea
+              where   ests.accession = ea.source_id AND
+                      ests.sequence_id = ids.seq_source_id AND
+                      ests.target_start <= ids.end_max AND
+                      ests.target_end >= ids.start_min
+             order by target_start
+
+
+            ]]>
+           </sql>
+        </sqlQuery>
+
+
   </querySet>
 
 </wdkModel>
+
