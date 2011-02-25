@@ -275,7 +275,7 @@ public class DetailTableLoader extends BaseCLI {
 
 	logger.debug("wrapped sql:\n" + wrappedSql);
         ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
-                wrappedSql, "api-report-detail-aggregate-"+table.getName());
+                wrappedSql, "api-report-detail-aggregate-"+table.getName(), 2000);
         String srcId = "";
         String prj = "";
         String prevSrcId = "";
