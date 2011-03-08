@@ -38,7 +38,8 @@ import org.json.JSONException;
 /**
  * @author xingao
  * 
- * This command create detail file for the download site from the detail table.
+ *         This command create detail file for the download site from the detail
+ *         table.
  */
 public class FullRecordFileCreator extends BaseCLI {
 
@@ -48,7 +49,8 @@ public class FullRecordFileCreator extends BaseCLI {
     private static final String ARG_CACHE_TABLE = "cacheTable";
     private static final String ARG_DUMP_FILE = "dumpFile";
 
-    private static final Logger logger = Logger.getLogger(FullRecordCacheCreator.class);
+    private static final Logger logger = Logger
+            .getLogger(FullRecordFileCreator.class);
 
     /**
      * @param args
@@ -56,7 +58,8 @@ public class FullRecordFileCreator extends BaseCLI {
      */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
-        if (cmdName == null) cmdName = FullRecordFileCreator.class.getName();
+        if (cmdName == null)
+            cmdName = FullRecordFileCreator.class.getName();
         FullRecordFileCreator writer = new FullRecordFileCreator(cmdName,
                 "Create the Dump File from dump table");
         try {
@@ -125,12 +128,14 @@ public class FullRecordFileCreator extends BaseCLI {
 
         if (cacheTable == null)
             cacheTable = "wdk" + recordClass.getType() + "Dump";
-        if (dumpFile == null) dumpFile = cacheTable + ".txt";
+        if (dumpFile == null)
+            dumpFile = cacheTable + ".txt";
 
-        Question question = createQuestion(recordClass, idSql);
+        Question question = createQuestion(projectId, recordClass, idSql);
         User user = wdkModel.getSystemUser();
         Map<String, String> paramValues = new LinkedHashMap<String, String>();
-        AnswerValue answerValue = question.makeAnswerValue(user, paramValues, 0);
+        AnswerValue answerValue = question
+                .makeAnswerValue(user, paramValues, 0);
 
         OutputStream out = new FileOutputStream(dumpFile);
         Reporter reporter = createReporter(answerValue, cacheTable);
@@ -157,11 +162,12 @@ public class FullRecordFileCreator extends BaseCLI {
         return idSql;
     }
 
-    private Question createQuestion(RecordClass recordClass, String idSql)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+    private Question createQuestion(String projectId, RecordClass recordClass,
+            String idSql) throws WdkModelException, NoSuchAlgorithmException,
+            SQLException, JSONException, WdkUserException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
-        QuestionSet questionSet = wdkModel.getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
+        QuestionSet questionSet = wdkModel
+                .getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
         Query query = createQuery(recordClass, idSql);
         Question question = new Question();
         question.setName(name + "_dump");
@@ -169,6 +175,7 @@ public class FullRecordFileCreator extends BaseCLI {
         question.setQuery(query);
         // question.setFullAnswer(true);
         questionSet.addQuestion(question);
+        question.excludeResources(projectId);
         question.resolveReferences(wdkModel);
         return question;
     }
@@ -183,7 +190,8 @@ public class FullRecordFileCreator extends BaseCLI {
         query.setIsCacheable(false);
         query.setSql(idSql);
         querySet.addQuery(query);
-        String[] columnNames = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+        String[] columnNames = recordClass.getPrimaryKeyAttributeField()
+                .getColumnRefs();
         Column[] columns = new Column[columnNames.length];
         for (int i = 0; i < columns.length; i++) {
             Column column = new Column();
@@ -202,7 +210,8 @@ public class FullRecordFileCreator extends BaseCLI {
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();
         for (String fieldName : fields.keySet()) {
-            if (sbFields.length() > 0) sbFields.append(",");
+            if (sbFields.length() > 0)
+                sbFields.append(",");
             sbFields.append(fieldName);
         }
 
