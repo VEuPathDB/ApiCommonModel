@@ -82,7 +82,8 @@ public class Gff3Dumper {
         System.out.println("Usage: gff3Dump -model <model_name> -organism "
                 + "<organism_list> [-dir <base_dir>]");
         System.out.println();
-        System.out.println("\t\t<model_name>:\tThe name of WDK supported model;");
+        System.out
+                .println("\t\t<model_name>:\tThe name of WDK supported model;");
         System.out.println("\t\t<organism_list>: a list of organism names, "
                 + "delimited by a comma;");
         System.out.println("\t\t<base_dir>: Optional, the base directory for "
@@ -111,7 +112,8 @@ public class Gff3Dumper {
             Gff3Dumper.printUsage();
             System.exit(-1);
         }
-        if (baseDir == null || baseDir.length() == 0) baseDir = ".";
+        if (baseDir == null || baseDir.length() == 0)
+            baseDir = ".";
 
         // construct wdkModel
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
@@ -131,7 +133,7 @@ public class Gff3Dumper {
         config.put(Reporter.FIELD_FORMAT, "text");
         config.put(Gff3Reporter.FIELD_HAS_TRANSCRIPT, "true");
         config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "true");
-        
+
         for (String organism : organisms) {
             dumpOrganism(wdkModel, organism.trim(), config, baseDir);
         }
@@ -147,7 +149,8 @@ public class Gff3Dumper {
         // decide the path-file name
         logger.info("Preparing gff file....");
         File dir = new File(baseDir, organism.replace(' ', '_'));
-        if (!dir.exists() || !dir.isDirectory()) dir.mkdirs();
+        if (!dir.exists() || !dir.isDirectory())
+            dir.mkdirs();
         int pos = organism.indexOf(" ");
         String fileName = organism;
         if (pos >= 0)
@@ -164,12 +167,14 @@ public class Gff3Dumper {
         params.put("gff_organism", organism);
 
         User user = wdkModel.getSystemUser();
-        Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
+        Question seqQuestion = (Question) wdkModel
+                .resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
         AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, 0);
         Gff3Reporter seqReport = (Gff3Reporter) sqlAnswer.createReport("gff3",
                 config);
 
-        Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
+        Question geneQuestion = (Question) wdkModel
+                .resolveReference("GeneDumpQuestions.GeneDumpQuestion");
         AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, 0);
 
         config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
@@ -220,8 +225,8 @@ public class Gff3Dumper {
 
     private void deleteRows(WdkModel wdkModel, String idSql, String cacheTable)
             throws WdkUserException, WdkModelException, SQLException {
-        String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN ("
-                + idSql + ")";
+        String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN "
+                + "(SELECT source_ID FROM (" + idSql + "))";
         DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
         SqlUtils.executeUpdate(wdkModel, dataSource, sql,
                 "gff-dump-delete-rows");
