@@ -4072,113 +4072,140 @@ where one.source_id = two.source_id
 
 
 
-    <sqlQuery name="GenesByToxoFoldChangeBoothroyd" includeProjects="ToxoDB" 
-              isCacheable="true">
+    <sqlQuery name="GenesByGenericTimeSeriesFoldChangeMicroarrayLog2" includeProjects="ToxoDB" 
+              isCacheable="true" doNotTest="true">
 
-      <testParamValues>
-	<paramValue name="cc_fc_two_boothroyd">4 days sporulated</paramValue>
-	<paramValue name="cc_fc_one_boothroyd">10 days sporulated</paramValue>
-      </testParamValues>
-
-        <paramRef ref="geneParams.cc_fc_two_boothroyd"/>
-        <paramRef ref="geneParams.cc_fc_one_boothroyd"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.regulated_dir" quote="false"/>
-        <paramRef ref="geneParams.group_operator"/>
-        <paramRef ref="geneParams.protein_coding_only"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-				<column name="fold_change_avg"/>
-				<column name="fold_change_minmax"/>
-        <column name="avg_group_one"/>
-        <column name="avg_group_two"/>
-				<column name="max_group_one"/>
-				<column name="max_group_two"/>
-				<column name="min_group_one"/>
-				<column name="min_group_two"/>
-      <sql includeProjects="ToxoDB">
-          <![CDATA[
-select one.source_id, 
-       '@PROJECT_ID@' as project_id,
-       round((CASE WHEN power(2, one.average - two.average) >= 1
-                   THEN power(2, one.average - two.average)
-                   ELSE -1 * (power(2, two.average - one.average))
-               END), 1) as fold_change_avg,
-       round((CASE WHEN '$$regulated_dir$$' = '-'
-                   THEN -1 * power(2, two.maximum - one.minimum)
-                   WHEN '$$regulated_dir$$' = '+'
-                   THEN power(2, one.maximum - two.minimum)
-                   ELSE CASE WHEN power(2, one.maximum - two.minimum) >= power(2, two.maximum - one.minimum)
-                             THEN power(2, one.maximum - two.minimum)
-                             ELSE -1 * power(2, two.maximum - one.minimum) 
-                        END
-               END), 1) as fold_change_minmax,
-       round(one.average, 2) as avg_group_one,
-       round(two.average, 2) as avg_group_two,
-       round(one.maximum, 2) as max_group_one,
-       round(two.maximum, 2) as max_group_two,
-       round(one.minimum, 2) as min_group_one,
-       round(two.minimum, 2) as min_group_two
-from (
-select p.source_id, 
-       avg(pe.value) as average,        max(pe.value) as maximum,
-       min(pe.value) as minimum
-from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
-where pen.profile_element_name_id in ($$cc_fc_one_boothroyd$$)
-  and p.profile_set_id = pen.profile_set_id
-  and pe.profile_id = p.profile_id
-  and pe.element_order = pen.element_order
- group by p.source_id ) one,
-(
-select p.source_id, 
-       avg(pe.value) as average,
-       max(pe.value) as maximum,
-       min(pe.value) as minimum
-from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
-where pen.profile_element_name_id in ($$cc_fc_two_boothroyd$$)
-  and p.profile_set_id = pen.profile_set_id
-  and pe.profile_id = p.profile_id
-  and pe.element_order = pen.element_order
-  group by p.source_id ) two,
-  apidb.geneattributes ga
-where one.source_id = two.source_id
-  and ga.source_id = two.source_id
-  and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-  and  (( $$group_operator$$ = 'average' AND $$regulated_dir$$ (
-  case when one.average >= two.average
-       then power(2, one.average - two.average)
-       else -( power(2, two.average - one.average))
-  end) >= $$fold_change$$ )
-  OR
-  ($$group_operator$$ = 'minmax' AND ($$regulated_dir$$ (power(2, one.maximum - two.minimum)) >= $$fold_change$$
-  OR $$regulated_dir$$ ( -(power(2, two.maximum - one.minimum))) >= $$fold_change$$) ))
-          ]]>
+      <paramRef ref="geneParams.profileset_generic"/>
+      <paramRef ref="geneParams.samples_fc_two_generic"/>
+      <paramRef ref="geneParams.min_max_avg_two"/>
+      <paramRef ref="geneParams.samples_fc_one_generic"/>
+      <paramRef ref="geneParams.min_max_avg_one"/>
+      <paramRef ref="geneParams.fold_change"/>
+      <paramRef ref="geneParams.regulated_dir" quote="false"/>
+      <paramRef ref="geneParams.global_min_max"/>
+      <paramRef ref="geneParams.protein_coding_only"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="fold_change_avg"/>
+      <column name="fold_change_chosen"/>
+      <column name="avg_group_one"/>
+      <column name="avg_group_two"/>
+      <column name="max_group_one"/>
+      <column name="max_group_two"/>
+      <column name="min_group_one"/>
+      <column name="min_group_two"/>
+      <column name="chose_group_one"/>
+      <column name="chose_group_two"/>
+      <sql>
+      <![CDATA[
+      select one.source_id, 
+             '@PROJECT_ID@' as project_id,
+             round((CASE WHEN power(2, one.average - two.average) >= 1
+                         THEN power(2, one.average - two.average)
+                         ELSE -1 * (power(2, two.average - one.average))
+                     END), 1) as fold_change_avg,
+             round((CASE WHEN one.chosen >= two.chosen
+                         THEN power(2, one.chosen - two.chosen)
+                         ELSE -1 * power(2, two.chosen - one.chosen) 
+                     END), 1) as fold_change_chosen,
+             round(one.average, 2) as avg_group_one,
+             round(two.average, 2) as avg_group_two,
+             round(one.maximum, 2) as max_group_one,
+             round(two.maximum, 2) as max_group_two,
+             round(one.minimum, 2) as min_group_one,
+             round(two.minimum, 2) as min_group_two,
+             round(one.chosen, 2) as chose_group_one,
+             round(two.chosen, 2) as chose_group_two
+      from ( select p.source_id, 
+                    CASE WHEN $$min_max_avg_two$$ = 'minimum'
+                         THEN min(pe.value)
+                         WHEN $$min_max_avg_two$$ = 'maximum'
+                         THEN max(pe.value)
+                         ELSE avg(pe.value)
+                    END  as chosen,
+                    avg(pe.value) as average,        
+                    max(pe.value) as maximum,
+                    min(pe.value) as minimum, 
+                   CASE WHEN p.min_expression = min(pe.value)
+                        THEN 1 else 0 
+                   END as has_min_expression,
+                   CASE WHEN p.max_expression = max(pe.value)
+                        THEN 1 else 0 
+                   END as has_max_expression
+             from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+             where pen.profile_element_name_id in ($$samples_fc_one_generic$$)
+               and p.profile_set_id = pen.profile_set_id
+               and pe.profile_id = p.profile_id
+               and pe.element_order = pen.element_order
+             group by p.source_id, p.min_expression, p.max_expression ) one,
+           ( select p.source_id, 
+                    CASE WHEN $$min_max_avg_two$$ = 'minimum'
+                         THEN min(pe.value)
+                         WHEN $$min_max_avg_two$$ = 'maximum'
+                         THEN max(pe.value)
+                         ELSE avg(pe.value)
+                    END  as chosen,
+                    avg(pe.value) as average,
+                    max(pe.value) as maximum,
+                    min(pe.value) as minimum, 
+                    CASE WHEN p.min_expression = min(pe.value)
+                         THEN 1 else 0 
+                    END as has_min_expression,
+                    CASE WHEN p.max_expression = max(pe.value)
+                        THEN 1 else 0 
+                    END as has_max_expression
+             from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+             where pen.profile_element_name_id in ($$samples_fc_two_generic$$)
+               and p.profile_set_id = pen.profile_set_id
+               and pe.profile_id = p.profile_id
+               and pe.element_order = pen.element_order
+             group by p.source_id, p.min_expression, p.max_expression ) two,  
+           apidb.geneattributes ga
+      where one.source_id = two.source_id
+        and ga.source_id = two.source_id
+        and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+        and ($$regulated_dir$$ (  power(2, one.chosen - two.chosen))  >= $$fold_change$$
+          OR $$regulated_dir$$ (-(power(2, two.chosen - one.chosen))) >= $$fold_change$$)
+        and (('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'both' and two.has_min_expression = 1 and one.has_max_expression = 1)
+          OR ('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'min'  and two.has_min_expression = 1)
+          OR ('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'max'  and one.has_max_expression = 1)
+          OR ('$$regulated_dir$$' = '-' and $$global_min_max$$ = 'both' and one.has_min_expression = 1 and two.has_max_expression = 1)
+          OR ('$$regulated_dir$$' = '-' and $$global_min_max$$ = 'min'  and one.has_min_expression = 1)
+          OR ('$$regulated_dir$$' = '-' and $$global_min_max$$ = 'max'  and two.has_max_expression = 1)
+          OR ('$$regulated_dir$$' = 'abs' and $$global_min_max$$ = 'both' and one.has_min_expression + one.has_max_expression + two.has_min_expression + two.has_max_expression = 2)
+          OR ('$$regulated_dir$$' = 'abs' and $$global_min_max$$ = 'min'  and one.has_min_expression + two.has_min_expression = 1)
+          OR ('$$regulated_dir$$' = 'abs' and $$global_min_max$$ = 'max'  and one.has_max_expression + two.has_max_expression = 1)
+          OR $$global_min_max$$ = 'dont_care' 
+          )
+      ]]>
       </sql>
 
     </sqlQuery>
 
-    <processQuery name="GenesByToxoFoldChangeBoothroyd" includeProjects="EuPathDB"
+    <processQuery name="GenesByGenericTimeSeriesFoldChangeMicroarrayLog2" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-
-      <testParamValues>
-	<paramValue name="cc_fc_two_boothroyd">4 days sporulated</paramValue>
-	<paramValue name="cc_fc_one_boothroyd">10 days sporulated</paramValue>
-      </testParamValues>
-
-        <paramRef ref="geneParams.cc_fc_two_mw" quote="false"/>
-        <paramRef ref="geneParams.cc_fc_one_mw" quote="false"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.regulated_dir" quote="false"/>
+      <paramRef ref="geneParams.profileset_generic"/>
+      <paramRef ref="geneParams.samples_fc_two_generic"/>
+      <paramRef ref="geneParams.min_max_avg_two"/>
+      <paramRef ref="geneParams.samples_fc_one_generic"/>
+      <paramRef ref="geneParams.min_max_avg_one"/>
+      <paramRef ref="geneParams.fold_change"/>
+      <paramRef ref="geneParams.regulated_dir" quote="false"/>
+      <paramRef ref="geneParams.global_min_max"/>
+      <paramRef ref="geneParams.protein_coding_only"/>
+      <paramRef ref="geneParams.protein_coding_only"/>
         <wsColumn name="project_id" width="20" wsName="project_id"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_change_avg" wsName="fold_change_avg"/>
+        <wsColumn name="fold_change_chosen" wsName="fold_change_chosen"/>
         <wsColumn name="avg_group_one" wsName="avg_group_one"/>
         <wsColumn name="avg_group_two" wsName="avg_group_two"/>
-        <wsColumn name="fold_change_avg" wsName="fold_change_avg"/>
-        <wsColumn name="fold_change_minmax" wsName="fold_change_minmax"/>
         <wsColumn name="max_group_one" wsName="max_group_one"/>
         <wsColumn name="max_group_two" wsName="max_group_two"/>
         <wsColumn name="min_group_one" wsName="min_group_one"/>
         <wsColumn name="min_group_two" wsName="min_group_two"/>
+        <wsColumn name="chose_group_one" wsName="chose_group_one"/>
+        <wsColumn name="chose_group_two" wsName="chose_group_two"/>
     </processQuery>
 
     <sqlQuery name="GenesByTimeSeriesFoldChangeTbrucei" includeProjects="TriTrypDB" 
