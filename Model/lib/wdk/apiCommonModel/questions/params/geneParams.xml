@@ -960,53 +960,29 @@ Choose the operation to use if you select multiple samples.   Choosing minimum /
 
 
 
-    <enumParam name="min_max_avg_one"
+       <flatVocabParam name="min_max_avg_one"
+                     queryRef="GeneVQ.MinMaxAvgOne"
                      prompt="Operation Applied to Comparison Samples"
-                     multiPick="false">
+                     dependedParamRef="geneParams.regulated_dir">
       <help>
           <![CDATA[
 Choose the operation (min/max/average) to be applied to the chosen sample(s).  This parameter only makes a difference if more than one sample/time point is chosen.
           ]]>
       </help>
-      <enumList>
-        <enumValue>
-          <term>minimum</term>
-          <internal>minimum</internal>
-        </enumValue>
-        <enumValue>
-          <term>maximum</term>
-          <internal>maximum</internal>
-        </enumValue>
-        <enumValue default="true">
-          <term>average</term>
-          <internal>average</internal>
-        </enumValue>
-      </enumList>
-    </enumParam>
+        </flatVocabParam>
 
-    <enumParam name="min_max_avg_two"
+
+
+       <flatVocabParam name="min_max_avg_two"
+                     queryRef="GeneVQ.MinMaxAvgTwo"
                      prompt="Operation Applied to Reference Samples"
-                     multiPick="false">
+                     dependedParamRef="geneParams.regulated_dir">
       <help>
           <![CDATA[
 Choose the operation (min/max/average) to be applied to the chosen sample(s).  This parameter only makes a difference if more than one sample/time point is chosen.
           ]]>
       </help>
-      <enumList>
-        <enumValue>
-          <term>minimum</term>
-          <internal>minimum</internal>
-        </enumValue>
-        <enumValue>
-          <term>maximum</term>
-          <internal>maximum</internal>
-        </enumValue>
-        <enumValue default="true">
-          <term>average</term>
-          <internal>average</internal>
-        </enumValue>
-      </enumList>
-    </enumParam>
+        </flatVocabParam>
 
 
     <enumParam name="apply_scaling"
@@ -7173,6 +7149,23 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
 
 
 
+    <enumParam name="any_or_all"
+                     prompt="Matches Any or All Selected Samples?"
+                     multiPick="false"
+                     quote="false">
+      <help>Does the percentile range match any or all of the chosen samples?</help>
+      <enumList>
+        <enumValue default="true">
+          <term>any</term>
+          <internal>any</internal>
+        </enumValue>
+        <enumValue>
+          <term>all</term>
+          <internal>all</internal>
+        </enumValue>  
+      </enumList>
+    </enumParam>
+
 
        <flatVocabParam name="samples_fc_two_generic"
                      queryRef="GeneVQ.GenericSamples"
@@ -7181,7 +7174,7 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      displayType="checkBox"
                      multiPick="true"
                      dependedParamRef="geneParams.profileset_generic">
-            <help>Choose one or more time point.  NOTE: if more than one is chosen the fold change will be calculated using the average of all samples within the group</help>
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold change will be calculated using the average of all samples within the group</help>
           <suggest selectMode="none" />
         </flatVocabParam>
 
@@ -7192,7 +7185,18 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      displayType="checkBox"
                      multiPick="true"
                      dependedParamRef="geneParams.profileset_generic">
-            <help>Choose one or more time point.  NOTE: if more than one is chosen the fold change will be calculated using the average of all samples within the group</help>
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold change will be calculated using the average of all samples within the group</help>
+          <suggest selectMode="none" />
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_percentile_generic"
+                     queryRef="GeneVQ.GenericSamples"
+                     prompt="Samples"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="geneParams.profileset_generic">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold change will be calculated using the average of all samples within the group</help>
           <suggest selectMode="none" />
         </flatVocabParam>
 
@@ -9629,6 +9633,124 @@ select display,term,internal,parentTerm from (
  <!-- #################################################################################################  -->
 
 
+      <sqlQuery name="MinMaxAvgOne" excludeProjects="EuPathDB">
+             <paramRef ref="geneParams.regulated_dir"/>
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>
+         <![CDATA[
+          select term || p.so as term, internal,display, p.so
+          from ( select 'average' as term, 
+                        'average' as internal, 
+                        'average' as display, 
+                        CASE 
+                          WHEN  $$regulated_dir$$ = 'abs' 
+                          THEN 1 
+                        ELSE 2 END as so 
+                 from dual
+                 union
+                 select 'minimum' as term, 
+                        'minimum' as internal, 
+                        'minimum' as display, 
+                        CASE 
+                          WHEN  $$regulated_dir$$ = '+' 
+                          THEN 1 
+                        ELSE 2 END as so 
+                 from dual
+                 union
+                 select 'maximum' as term, 
+                        'maximum' as internal, 
+                        'maximum' as display, 
+                        CASE 
+                          WHEN  $$regulated_dir$$ = '-' 
+                          THEN 1 
+                        ELSE 2 END as so 
+                 from dual
+               ) p, 
+               ( select 'abs' as type from dual
+                 union
+                 select '+' as type  from dual
+                 union
+                 select '-' as type from dual
+               ) t, 
+               ( select 1 as so  from dual 
+                 union 
+                 select 2 as so from dual 
+                 union 
+                 select 3 as so from dual
+               ) o
+           where p.so = o.so and type = $$regulated_dir$$
+           order by p.so
+          ]]>
+          </sql>
+        </sqlQuery>
+
+       <processQuery name="MinMaxAvgOne" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+        </processQuery>
+
+     <sqlQuery name="MinMaxAvgTwo" excludeProjects="EuPathDB">
+             <paramRef ref="geneParams.regulated_dir"/>
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>
+         <![CDATA[
+          select term || p.so as term, internal,display, p.so
+          from ( select 'average' as term, 
+                        'average' as internal, 
+                        'average' as display, 
+                        CASE 
+                          WHEN  $$regulated_dir$$ = 'abs' 
+                          THEN 1 
+                        ELSE 2 END as so 
+                 from dual
+                 union
+                 select 'minimum' as term, 
+                        'minimum' as internal, 
+                        'minimum' as display, 
+                        CASE 
+                          WHEN  $$regulated_dir$$ = '-' 
+                          THEN 1 
+                        ELSE 2 END as so 
+                 from dual
+                 union
+                 select 'maximum' as term, 
+                        'maximum' as internal, 
+                        'maximum' as display, 
+                        CASE 
+                          WHEN  $$regulated_dir$$ = '+' 
+                          THEN 1 
+                        ELSE 2 END as so 
+                 from dual
+               ) p, 
+               ( select 'abs' as type from dual
+                 union
+                 select '+' as type  from dual
+                 union
+                 select '-' as type from dual
+               ) t, 
+               ( select 1 as so  from dual 
+                 union 
+                 select 2 as so from dual 
+                 union 
+                 select 3 as so from dual
+               ) o
+           where p.so = o.so and type = $$regulated_dir$$
+           order by p.so
+          ]]>
+          </sql>
+        </sqlQuery>
+
+       <processQuery name="MinMaxAvgTwo" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+        </processQuery>
+
+
+
       <sqlQuery name="GenericSamples" excludeProjects="EuPathDB">
              <paramRef ref="geneParams.profileset_generic"/>
              <column name="internal"/>
@@ -9651,7 +9773,7 @@ select display,term,internal,parentTerm from (
 
 
       <!-- placeholder -->
-      <sqlQuery name="GenericProfiles">
+      <sqlQuery name="GenericProfiles" excludeProjects="EuPathDB">
              <column name="display"/>
              <column name="internal"/>
              <column name="term"/>
@@ -9662,6 +9784,13 @@ select display,term,internal,parentTerm from (
         from apidb.profileset
           </sql>
         </sqlQuery>
+
+       <processQuery name="GenericProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
 
 
       <sqlQuery name="BoothroydDevelopmentalStagesProfiles" includeProjects="ToxoDB">
@@ -9682,6 +9811,27 @@ select display,term,internal,parentTerm from (
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
+
+      <sqlQuery name="BoothroydDevelopmentalStagesPctProfiles" includeProjects="ToxoDB">
+             <column name="display"/>
+             <column name="internal"/>
+             <column name="term"/>
+          <sql>
+         Select name as term,
+                profile_set_id as internal,
+                'Oocyst, Tachyzoite and Bradyzoite Development' as display
+        from apidb.profileset
+        where name like 'Expression percentile profiles of Tgondii ME49 Boothroyd experiments'
+          </sql>
+        </sqlQuery>
+
+       <processQuery name="BoothroydDevelopmentalStagesPctProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
+
 
 
 

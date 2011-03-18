@@ -2530,44 +2530,55 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Expression Percentiles ToxoDB -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="GenesByExpressionPercentileBoothroyd"  includeProjects="ToxoDB"
+    <sqlQuery name="GenesByGenericPercentile"  includeProjects="ToxoDB"
           isCacheable='true'>
-       <paramRef ref="geneParams.expressionPercentileSampleBoothroyd"/>
+       <paramRef ref="geneParams.profileset_generic"/>
+       <paramRef ref="geneParams.samples_percentile_generic"/>
        <paramRef ref="geneParams.min_expression_percentile" default="80"/>
        <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+       <paramRef ref="geneParams.any_or_all"/>
        <paramRef ref="geneParams.protein_coding_only"/>
        <column name="project_id"/>
        <column name="source_id" />
-       <column name="percentile" />
+       <column name="max_percentile_chosen" />
+       <column name="min_percentile_chosen" />
        <sql>
-           <!-- use CDATA because query includes angle brackets -->
             <![CDATA[
-           select  ga.source_id, '@PROJECT_ID@' as project_id,max(round(pe.value,1))as percentile
-           from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidb.geneattributes ga
-           where ps.profile_set_id = pen.profile_set_id
-            and ga.source_id = p.source_id
-            and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-            and ps.profile_set_id = p.profile_set_id
-            and pe.profile_id = p.profile_id
-            and pe.element_order = pen.element_order
-            and  pen.profile_element_name_id in ( $$expressionPercentileSampleBoothroyd$$ )
-            and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
-            group by ga.source_id
+           select ga.source_id, 
+                   '@PROJECT_ID@' as project_id,
+                   max(round(profile.value, 1)) as max_percentile_chosen,
+                   min(round(profile.value, 1)) as min_percentile_chosen
+           from ( select p.source_id, pen.profile_element_name_id, min(pe.value) as value
+                  from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p
+                  where ps.profile_set_id = pen.profile_set_id
+                   and ps.profile_set_id = p.profile_set_id
+                   and pe.profile_id = p.profile_id
+                   and pe.element_order = pen.element_order
+                   and  pen.profile_element_name_id in ( $$samples_percentile_generic$$ )
+                   and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
+                  group by p.source_id, pen.profile_element_name_id
+                ) profile, apidb.geneattributes ga
+           where ga.source_id = profile.source_id
+             and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+           group by ga.source_id
+           having '$$any_or_all$$' = 'any' OR count(*) = (select count(*) as total from apidb.profileelementname where profile_element_name_id in ( $$samples_percentile_generic$$ ))
             ]]>
           </sql>
     </sqlQuery>  
 
-    <processQuery name="GenesByExpressionPercentileBoothroyd" includeProjects="EuPathDB"  
+    <processQuery name="GenesByGenericPercentile" includeProjects="EuPathDB"  
         displayName="By Expression Percentile" 
         isCacheable='true' 
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">      
        <paramRef ref="geneParams.expressionPercentileSampleBoothroyd"/>
        <paramRef ref="geneParams.min_expression_percentile" default="80"/>
        <paramRef ref="geneParams.max_expression_percentile" default="100"/>
+       <paramRef ref="geneParams.any_or_all"/>
        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
        <wsColumn name="source_id" width="50" wsName="source_id"/>
        <wsColumn name="project_id" width="20" wsName="project_id"/>
-       <wsColumn name="percentile" width="32" wsName="percentile"/>
+       <wsColumn name="min_percentile_chosen" width="32" wsName="min_percentile_chosen"/>
+       <wsColumn name="max_percentile_chosen" width="32" wsName="max_percentile_chosen"/>
     </processQuery>   
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -4072,16 +4083,16 @@ where one.source_id = two.source_id
 
 
 
-    <sqlQuery name="GenesByGenericTimeSeriesFoldChangeMicroarrayLog2" includeProjects="ToxoDB" 
+    <sqlQuery name="GenesByGenericFoldChange" includeProjects="ToxoDB" 
               isCacheable="true" doNotTest="true">
 
       <paramRef ref="geneParams.profileset_generic"/>
+      <paramRef ref="geneParams.regulated_dir" quote="false"/>
       <paramRef ref="geneParams.samples_fc_two_generic"/>
       <paramRef ref="geneParams.min_max_avg_two"/>
       <paramRef ref="geneParams.samples_fc_one_generic"/>
       <paramRef ref="geneParams.min_max_avg_one"/>
       <paramRef ref="geneParams.fold_change"/>
-      <paramRef ref="geneParams.regulated_dir" quote="false"/>
       <paramRef ref="geneParams.global_min_max"/>
       <paramRef ref="geneParams.protein_coding_only"/>
       <column name="project_id"/>
@@ -4096,17 +4107,21 @@ where one.source_id = two.source_id
       <column name="min_group_two"/>
       <column name="chose_group_one"/>
       <column name="chose_group_two"/>
+
+      <sqlParamValue name="isLogged">1</sqlParamValue>
+      <sqlParamValue name="shift">0</sqlParamValue>
+
       <sql>
       <![CDATA[
       select one.source_id, 
              '@PROJECT_ID@' as project_id,
-             round((CASE WHEN power(2, one.average - two.average) >= 1
-                         THEN power(2, one.average - two.average)
-                         ELSE -1 * (power(2, two.average - one.average))
+             round((CASE WHEN one.average / two.average >= 1
+                         THEN one.average / two.average
+                         ELSE -1 * (two.average  / one.average)
                      END), 1) as fold_change_avg,
-             round((CASE WHEN one.chosen >= two.chosen
-                         THEN power(2, one.chosen - two.chosen)
-                         ELSE -1 * power(2, two.chosen - one.chosen) 
+             round((CASE WHEN one.chosen / two.chosen >= 1
+                         THEN one.chosen / two.chosen
+                         ELSE -1 * (two.chosen / one.chosen) 
                      END), 1) as fold_change_chosen,
              round(one.average, 2) as avg_group_one,
              round(two.average, 2) as avg_group_two,
@@ -4117,11 +4132,18 @@ where one.source_id = two.source_id
              round(one.chosen, 2) as chose_group_one,
              round(two.chosen, 2) as chose_group_two
       from ( select p.source_id, 
-                    CASE WHEN $$min_max_avg_one$$ = 'minimum'
-                         THEN min(pe.value)
-                         WHEN $$min_max_avg_two$$ = 'maximum'
-                         THEN max(pe.value)
-                         ELSE avg(pe.value)
+                    CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_one$$ = 'minimum'
+                         THEN power(2, min(pe.value))
+                         WHEN &&isLogged&& = 1 AND $$min_max_avg_one$$ = 'maximum'
+                         THEN power(2, max(pe.value))
+                         WHEN &&isLogged&& = 1 AND $$min_max_avg_one$$ = 'average'
+                         THEN power(2, avg(pe.value))
+                         WHEN &&isLogged&& = 0 AND $$min_max_avg_one$$ = 'minimum'
+                         THEN min(pe.value) + &&shift&&
+                         WHEN &&isLogged&& = 0 AND $$min_max_avg_one$$ = 'maximum'
+                         THEN max(pe.value) + &&shift&&
+                         WHEN &&isLogged&& = 0 AND $$min_max_avg_one$$ = 'average'
+                         THEN avg(pe.value) + &&shift&&
                     END  as chosen,
                     avg(pe.value) as average,        
                     max(pe.value) as maximum,
@@ -4139,11 +4161,18 @@ where one.source_id = two.source_id
                and pe.element_order = pen.element_order
              group by p.source_id, p.min_expression, p.max_expression ) one,
            ( select p.source_id, 
-                    CASE WHEN $$min_max_avg_two$$ = 'minimum'
-                         THEN min(pe.value)
-                         WHEN $$min_max_avg_two$$ = 'maximum'
-                         THEN max(pe.value)
-                         ELSE avg(pe.value)
+                    CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_two$$ = 'minimum'
+                         THEN power(2, min(pe.value))
+                         WHEN &&isLogged&& = 1 AND $$min_max_avg_two$$ = 'maximum'
+                         THEN power(2, max(pe.value))
+                         WHEN &&isLogged&& = 1 AND $$min_max_avg_two$$ = 'average'
+                         THEN power(2, avg(pe.value))
+                         WHEN &&isLogged&& != 1 AND $$min_max_avg_two$$ = 'minimum'
+                         THEN min(pe.value) + &&shift&&
+                         WHEN &&isLogged&& != 1 AND $$min_max_avg_two$$ = 'maximum'
+                         THEN max(pe.value) + &&shift&&
+                         WHEN &&isLogged&& != 1 AND $$min_max_avg_two$$ = 'average'
+                         THEN avg(pe.value) + &&shift&&
                     END  as chosen,
                     avg(pe.value) as average,
                     max(pe.value) as maximum,
@@ -4164,8 +4193,8 @@ where one.source_id = two.source_id
       where one.source_id = two.source_id
         and ga.source_id = two.source_id
         and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-        and ($$regulated_dir$$ (  power(2, one.chosen - two.chosen))  >= $$fold_change$$
-          OR $$regulated_dir$$ (-(power(2, two.chosen - one.chosen))) >= $$fold_change$$)
+        and ($$regulated_dir$$ ( one.chosen / two.chosen)  >= $$fold_change$$
+          OR $$regulated_dir$$ (-(two.chosen / one.chosen)) >= $$fold_change$$)
         and (('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'both' and two.has_min_expression = 1 and one.has_max_expression = 1)
           OR ('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'min'  and two.has_min_expression = 1)
           OR ('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'max'  and one.has_max_expression = 1)
@@ -4182,7 +4211,7 @@ where one.source_id = two.source_id
 
     </sqlQuery>
 
-    <processQuery name="GenesByGenericTimeSeriesFoldChangeMicroarrayLog2" includeProjects="EuPathDB"
+    <processQuery name="GenesByGenericTimeSeriesFoldChangeLog2" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <paramRef ref="geneParams.profileset_generic"/>
       <paramRef ref="geneParams.samples_fc_two_generic"/>
