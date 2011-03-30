@@ -882,6 +882,15 @@
         </help>
       </flatVocabParam>
 
+        <stringParam name="p_value"
+                     prompt="P value less than or equal to"
+                     number="true">
+            <help>The p value cutoff for this search. The p value for the gene indicates the significance of the difference in sequence coverage for the comparison selected. (p values were estimated using the Fisher's Exact Test)
+</help> 
+            <suggest default="0.001"/>
+        </stringParam>
+
+
         <stringParam name="confidence"
                      prompt="Confidence >= "
                      number="true">
@@ -889,6 +898,14 @@
 </help> 
             <suggest default="0.8"/>
         </stringParam>
+
+        <stringParam name="fold_change_cov"
+                     prompt="Fold change in seq coverage >="
+                     number="true">
+            <help>Enter a non-negative number.  NOTE:  Fold change is reported in the summary as positive numbers for genes with greater coverage in the reference than comparison sample and negative numbers for genes with lesser coverage in the reference than the comparison sample</help> 
+            <suggest default="2"/>
+        </stringParam>
+
 
         <stringParam name="fold_change"
                      prompt="Fold change >="
@@ -911,28 +928,16 @@
             <suggest default="0.75"/>
         </stringParam>
 
-    <enumParam name="regulated_dir"
-                     prompt="Direction"
-                     multiPick="false">
- <noTranslation value="true" includeProjects="EuPathDB" />
+    <flatVocabParam name="regulated_dir"
+                    prompt="Direction"
+                    multiPick="false"
+                    queryRef="GeneVQ.regulatedDirection">
+    <noTranslation value="true" includeProjects="EuPathDB" />
       <help>
             For ConditionA vs. ConditionB, select up-regulated for genes where ConditionA > ConditionB and select down-regulated for genes where ConditionB > ConditionA.
       </help>
-      <enumList>
-       <enumValue>
-          <term>up or down regulated</term>
-          <internal>abs</internal>
-        </enumValue>
-        <enumValue>
-          <term>down-regulated</term>
-          <internal>-</internal>
-        </enumValue>
-        <enumValue>
-          <term>up-regulated</term>
-          <internal>+</internal>
-        </enumValue>
-      </enumList>
-    </enumParam>
+    </flatVocabParam>
+
 
     <enumParam name="regulated_dir_up_down_only"
                      prompt="Direction"
@@ -976,6 +981,30 @@ Choose the operation to use if you select multiple samples.   Choosing minimum /
       </enumList>
     </enumParam>
 
+
+    <enumParam name="fold_change_operator"
+                     prompt="Operation when estimating Fold Change"
+                     multiPick="false">
+ <noTranslation value="true" includeProjects="EuPathDB" />
+      <help>
+          <![CDATA[Choose the operation (min/max/average) to be applied when genes have multiple fold change values (due to comparison with different samples/time points). This parameter only makes a difference if more than one sample/time point is chosen.
+          ]]>
+      </help>
+      <enumList>
+        <enumValue>
+          <term>minimum</term>
+          <internal>minimum</internal>
+        </enumValue>
+        <enumValue>
+          <term>maximum</term>
+          <internal>maximum</internal>
+        </enumValue>
+        <enumValue>
+          <term>average</term>
+          <internal>average</internal>
+        </enumValue>
+      </enumList>
+    </enumParam>
 
 
        <flatVocabParam name="min_max_avg_comp"
@@ -2559,6 +2588,16 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
             <suggest default="Papadopoulou Linfantum axenic amastigote page analysis"/>
         </flatVocabParam>
 
+
+        <flatVocabParam name="RNAi_seq_comparisons" includeProjects="TriTrypDB,EuPathDB"
+                     queryRef="GeneVQ.LifeCycStgTbruceiRnaSeq"
+                     prompt="Comparison"
+                     quote="false"
+                     displayType="checkBox" 
+                     multiPick="true">
+            <help>Choose a comparison</help>
+            <suggest default=""/>
+        </flatVocabParam>
 
 
         <flatVocabParam name="PaGE_comparisons_Tb_DHH1" includeProjects="TriTrypDB,EuPathDB"
@@ -7354,6 +7393,43 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
 
 
     <querySet name="GeneVQ" queryType="vocab">
+
+        <sqlQuery name="regulatedDirection">
+            <column name="internal" />
+            <column name="term" />
+            <sql>
+            SELECT 'up or down regulated' as term, 'abs' as internal from dual
+            UNION
+            SELECT 'down-regulated' as term, '-' as internal from dual
+            UNION
+            SELECT 'up-regulated' as term, '+' as internal from dual
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="regulatedDirRNAi">
+            <column name="internal" />
+            <column name="term" />
+            <column name="display" />
+            <sql>
+            SELECT 'Decrease in coverage' as display, 'down-regulated' as term, '-' as internal from dual
+            </sql>
+        </sqlQuery>
+
+
+
+        <processQuery name="regulatedDirection" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="1">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="200" wsName="term"/>
+        </processQuery>
+
+
+        <processQuery name="regulatedDirRNAi" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="1">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="200" wsName="term"/>
+            <wsColumn name="display" width="200" wsName="term"/>
+        </processQuery>
+
+
         <sqlQuery name="PhyleticIndentMap" doNotTest="1" excludeProjects="EuPathDB">
             <column name="internal" />
             <column name="term" />
@@ -9353,6 +9429,54 @@ GROUP BY term
 
 
 
+        <sqlQuery name="LifeCycStgTbruceiRnaSeqRef" includeProjects="TriTrypDB">
+             <column name="display"/>
+	     <column name="internal"/>
+	     <column name="term"/>
+	  <sql>
+          SELECT pen.name as term,
+                 pen.profile_element_name_id as internal,
+                 'Uninduced sample' as display
+          FROM  apidb.profileset ps, apidb.profileelementname pen 
+          where ps.name = 'T.brucei Horn RNAi Sequence minProfiles'
+          and   pen.profile_set_id = ps.profile_set_id
+          and   pen.name in ('No_Tet')
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="LifeCycStgTbruceiRnaSeqRef" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
+            <wsColumn name="display" width="100"/>
+            <wsColumn name="internal" width="100"/>
+            <wsColumn name="term" width="100"/>
+        </processQuery>
+
+
+        <sqlQuery name="LifeCycStgTbruceiRnaSeq" includeProjects="TriTrypDB">
+             <column name="display"/>
+	     <column name="internal"/>
+	     <column name="term"/>
+	  <sql>
+          SELECT pen.name as term,
+                 pen.profile_element_name_id as internal,
+                 CASE WHEN (pen.name = 'PF') THEN 'Induced procyclics'
+                      WHEN (pen.name = 'BFD3') THEN 'Induced bloodstream form (day 3)'
+                      WHEN (pen.name = 'BFD6') THEN 'Induced bloodstream form (day 6)'
+                      WHEN (pen.name = 'DIF') THEN 'DIF (induced throughout growth) form' END  as display
+          FROM  apidb.profileset ps, apidb.profileelementname pen 
+          where ps.name = 'T.brucei Horn RNAi Sequence minProfiles'
+          and   pen.profile_set_id = ps.profile_set_id
+          and   pen.name in ('BFD3','BFD6','DIF','PF')
+          order by pen.element_order
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="LifeCycStgTbruceiRnaSeq" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
+            <wsColumn name="display" width="100"/>
+            <wsColumn name="internal" width="100"/>
+            <wsColumn name="term" width="100"/>
+        </processQuery>
+
+
         <sqlQuery name="LifeCycStgLmajorPage" includeProjects="TriTrypDB">
              <column name="display"/>
 	     <column name="internal"/>
@@ -9963,6 +10087,29 @@ select display,term,internal,parentTerm from (
         </sqlQuery>
 
        <processQuery name="BoothroydDevelopmentalStagesPctProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
+
+   <!-- RNAi Phenotyping - target seq -->
+
+
+     <sqlQuery name="HornRNAiSeqProfiles" includeProjects="TriTrypDB">
+             <column name="display"/>
+             <column name="internal"/>
+             <column name="term"/>
+          <sql>
+         Select name as term,
+                profile_set_id as internal,
+                'Phenotyping based on RNAi target sequencing' as display
+        from apidb.profileset
+        where name like 'T.brucei Horn RNAi Sequence minProfiles'
+          </sql>
+        </sqlQuery>
+
+       <processQuery name="HornRNAiSeqProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
             <wsColumn name="internal" width="100" wsName="internal"/>
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>

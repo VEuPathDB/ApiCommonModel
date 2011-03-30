@@ -3572,6 +3572,9 @@ where one.source_id = two.source_id
 
 
 
+
+
+
     <sqlQuery name="GenesByMicroArrPagePreComparedLm" includeProjects="TriTrypDB" 
               isCacheable="true">
 
@@ -4082,6 +4085,100 @@ where one.source_id = two.source_id
     </processQuery>
 
 
+  <sqlQuery name="GenesByGenericFoldChangeWithPvalue" includeProjects="TriTrypDB" 
+              isCacheable="true" doNotTest="true">
+
+      <paramRef ref="geneParams.profileset_generic"/>
+      <paramRef ref="geneParams.regulated_dir" quote="false"/>
+      <paramRef ref="geneParams.samples_fc_ref_generic"/>
+      <paramRef ref="geneParams.samples_fc_comp_generic"/>
+      <paramRef ref="geneParams.fold_change"/>
+      <paramRef ref="geneParams.fold_change_operator"/>
+      <paramRef ref="geneParams.protein_coding_only"/>
+      <paramRef ref="geneParams.p_value"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="p_value" />
+      <column name="fold_change" />
+
+      <sqlParamValue name="isLogged" includeProjects="TriTrypDB">0</sqlParamValue>
+      <sqlParamValue name="shift" includeProjects="TriTrypDB">0.001</sqlParamValue>
+
+      <sql>
+      <![CDATA[
+      select  one.source_id, 
+             '@PROJECT_ID@' as project_id,
+             avg(to_number(de.pvalue_mant || 'e' || de.pvalue_exp)) as p_value, 
+             CASE WHEN $$fold_change_operator$$ = 'minimum' THEN min(( round((CASE WHEN one.value / two.value >= 1
+                         THEN  one.value / two.value
+                         ELSE -1 * (two.value / one.value)
+                     END), 1) ))
+                  WHEN $$fold_change_operator$$ ='maximum' THEN max( round((CASE WHEN  one.value / two.value >= 1
+                         THEN  one.value / two.value
+                         ELSE -1 * (two.value / one.value)
+                     END), 1) ) 
+                  ELSE avg( round((CASE WHEN  one.value / two.value >= 1
+                         THEN  one.value / two.value
+                         ELSE -1 * (two.value / one.value)
+                     END), 1) ) END as fold_change
+      from ( select p.source_id, pen.profile_element_name_id, 
+                    CASE WHEN &&isLogged&& = 1  THEN power(2, pe.value)
+                         WHEN &&isLogged&& = 0  THEN pe.value + &&shift&&
+                      END  as value
+             from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+             where pen.profile_element_name_id in ($$samples_fc_comp_generic$$)
+               and p.profile_set_id = pen.profile_set_id
+               and pe.profile_id = p.profile_id
+               and pe.element_order = pen.element_order ) one,
+           (select p.source_id, pen.profile_element_name_id, 
+                    CASE WHEN &&isLogged&& = 1  THEN power(2, pe.value)
+                         WHEN &&isLogged&& = 0  THEN pe.value + &&shift&&
+                      END  as value 
+             from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+             where pen.profile_element_name_id in ($$samples_fc_ref_generic$$)
+               and p.profile_set_id = pen.profile_set_id
+               and pe.profile_id = p.profile_id
+               and pe.element_order = pen.element_order ) two,
+          rad.logicalgrouplink lgl1,
+          rad.logicalgrouplink lgl2,   
+          apidb.geneattributes ga,
+          rad.analysisinput ai, 
+          rad.differentialexpression de
+      where one.profile_element_name_id = lgl1.row_id
+      and    two.profile_element_name_id = lgl2.row_id
+      and one.source_id = two.source_id
+      and ga.source_id = two.source_id
+      and lgl1.logical_group_id = lgl2.logical_group_id
+      and  ai.logical_group_id = lgl1.logical_group_id
+      and  ai.analysis_id = de.analysis_id
+      and  de.row_id = ga.na_feature_id
+      and (pvalue_mant is null or (to_number(de.pvalue_mant || 'e' || de.pvalue_exp)) <= $$p_value$$) 
+      and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+              and ($$regulated_dir$$ ( one.value / two.value)  >= $$fold_change$$
+            OR $$regulated_dir$$ (-(two.value / one.value)) >= $$fold_change$$)
+group by one.source_id
+   ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByGenericFoldChangeWithPvalue" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+      <paramRef ref="geneParams.profileset_generic"/>
+      <paramRef ref="geneParams.regulated_dir" quote="false"/>
+      <paramRef ref="geneParams.samples_fc_ref_generic"/>
+      <paramRef ref="geneParams.samples_fc_comp_generic"/>
+      <paramRef ref="geneParams.fold_change"/>
+      <paramRef ref="geneParams.fold_change_operator"/>
+      <paramRef ref="geneParams.protein_coding_only"/>
+      <paramRef ref="geneParams.p_value"/>
+      
+      <wsColumn name="project_id" width="20" wsName="project_id"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="p_value" wsName="p_value"/>
+      <wsColumn name="fold_change" wsName="fold_change"/>
+    </processQuery>
+
 
 
     <sqlQuery name="GenesByGenericFoldChange" includeProjects="ToxoDB" 
@@ -4239,6 +4336,10 @@ where one.source_id = two.source_id
         <wsColumn name="chose_group_one" wsName="chose_group_one"/>
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
     </processQuery>
+
+
+
+
 
     <sqlQuery name="GenesByTimeSeriesFoldChangeTbrucei" includeProjects="TriTrypDB" 
               isCacheable="true">
