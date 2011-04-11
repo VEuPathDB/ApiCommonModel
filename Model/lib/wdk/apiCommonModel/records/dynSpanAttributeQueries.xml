@@ -34,7 +34,9 @@
                              case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
    				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
    				       else 'Unknown' end as strand
-                      FROM (##WDK_ID_SQL##)) ids, 
+                      FROM (##WDK_ID_SQL##
+                           )
+                     ) ids, 
                      apidb.SequenceAttributes sa
                 WHERE ids.seq_source_id = sa.source_id
              ]]>
@@ -50,22 +52,23 @@
              <sql>
             <![CDATA[
 
-              select ids.source_id, ids.project_id, nvl(count(ga.source_id),0) as geneCount
-               from apidb.geneattributes ga right outer join 
-                      (SELECT source_id, project_id, 
-                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
-                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
-   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
-   				       else 'Unknown' end as strand
-                         FROM (##WDK_ID_SQL##)
-                       ) ids
-              on      ga.sequence_id = ids.seq_source_id AND
-                      ga.start_min <= ids.end_max AND
-                      ga.end_max >= ids.start_min
-              group by ids.project_id,ids.source_id
-
+              select
+                     ids.source_id, ids.project_id,
+                     nvl(count(distinct GeneLoc.feature_source_id),0) as geneCount
+              from (select source_id, project_id,
+                           regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                           substr(source_id, -1) as strand
+                         from (##WDK_ID_SQL##)
+                   ) ids,
+                   apidb.FeatureLocation GeneLoc
+              where GeneLoc.sequence_source_id(+) = ids.seq_source_id and
+                    GeneLoc.start_min(+) <= ids.end_max and
+                    GeneLoc.end_max(+) >= ids.start_min and
+                    GeneLoc.is_reversed(+) >= ids.strand and
+                    GeneLoc.feature_type(+) = 'GeneFeature'
+              group by ids.source_id, ids.project_id
 
              ]]>
              </sql>
@@ -81,22 +84,24 @@
              <sql>
             <![CDATA[
 
-              select ids.source_id, ids.project_id, nvl(count(sa.source_id),0) as snpCount
-               from apidb.snpattributes sa right outer join 
-                      (SELECT source_id, project_id, 
-                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
-                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
-   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
-   				       else 'Unknown' end as strand
-                         FROM (##WDK_ID_SQL##)
-                       ) ids
-              on      sa.seq_source_id = ids.seq_source_id AND
-                      sa.start_min >= ids.start_min   AND  
-                      sa.start_min <= ids.end_max
-              group by ids.project_id,ids.source_id
-
+              select
+                     ids.source_id, ids.project_id,
+                     nvl(count(distinct SnpLoc.feature_source_id),0) as snpCount
+              from (select source_id, project_id, 
+                           regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                           case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
+                                when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
+                                else 'Unknown' end as strand
+                    from (##WDK_ID_SQL##)
+                   ) ids,
+                   apidb.FeatureLocation SnpLoc
+              where SnpLoc.sequence_source_id(+) = ids.seq_source_id and
+                    SnpLoc.start_min(+) >= ids.start_min and  
+                    SnpLoc.start_min(+) <= ids.end_max and
+                    SnpLoc.feature_type(+) = 'SnpFeature'
+              group by ids.source_id, ids.project_id
 
              ]]>
              </sql>
@@ -111,22 +116,25 @@
              <sql>
             <![CDATA[
 
-              select ids.source_id, ids.project_id, nvl(count(oa.source_id),0) as orfCount
-               from apidb.orfattributes oa right outer join 
-                      (SELECT source_id, project_id, 
-                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
-                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
-   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
-   				       else 'Unknown' end as strand
+              select
+                     ids.source_id, ids.project_id,
+                     nvl(count(distinct OrfLoc.feature_source_id),0) as orfCount
+              from (select source_id, project_id, 
+                           regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                           substr(source_id, -1) as strand,
+                           (select sequence_ontology_id from sres.SequenceOntology where term_name = 'ORF') as orf_sequence_ontology_id
                          FROM (##WDK_ID_SQL##)
-                       ) ids
-              on       oa.nas_id = ids.seq_source_id AND
-                      oa.start_min <= ids.end_max AND
-                      oa.end_max >= ids.start_min
-              group by ids.project_id,ids.source_id
-
+                   ) ids,
+                   apidb.FeatureLocation OrfLoc
+              where OrfLoc.sequence_source_id(+) = ids.seq_source_id AND
+                    OrfLoc.start_min(+) <= ids.end_max   AND  
+                    OrfLoc.end_max(+) >= ids.start_min AND
+                    OrfLoc.is_reversed(+) >= ids.strand AND
+                    OrfLoc.feature_type(+) = 'Miscellaneous' AND
+                    OrfLoc.sequence_ontology_id(+) = ids.orf_sequence_ontology_id
+              GROUP BY ids.source_id, ids.project_id
 
              ]]>
              </sql>
@@ -155,7 +163,7 @@
               on      sta.sequence_source_id = ids.seq_source_id AND
                       sta.start_min <= ids.end_max AND
                       sta.end_max >= ids.start_min
-              group by ids.project_id,ids.source_id
+              group by ids.project_id, ids.source_id
 
 
              ]]>
@@ -171,40 +179,22 @@
              <sql>
             <![CDATA[
 
-
-              select ids.source_id, ids.project_id, nvl(count(ests.accession),0) as estCount
-                from 
-                    ( SELECT distinct (enas.source_id) as sequence_id,
-                                         e.accession,
-                                         blat.target_start,
-                                         blat.target_end
-                         FROM   apidb.BlatAlignmentLocation blat,
-                                dots.est e,
-                                apidb.sequenceattributes enas,
-                                apidb.estalignmentgenesummary eags
-                         WHERE  blat.query_na_sequence_id = e.na_sequence_id
-                           AND  blat.target_na_sequence_id = enas.na_sequence_id
-                           AND eags.blat_alignment_id = blat.blat_alignment_id
-                           AND  enas.is_top_level = 1
-                     ) ests   right outer join 
-                      
-                      (SELECT source_id, project_id, 
-                             regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
-                             regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
-                             case when regexp_substr(source_id, '[^:]+', 1, 3) = '0' then '+'
-   				       when regexp_substr(source_id, '[^:]+', 1, 3) = '1' then '-'
-   				       else 'Unknown' end as strand
-                         FROM (##WDK_ID_SQL##)
-                       ) ids
-
-                   on      ests.sequence_id = ids.seq_source_id AND
-                           ests.target_start <= ids.end_max AND
-                           ests.target_end >= ids.start_min
- 
-                  group by ids.project_id,ids.source_id
-
-
+              select
+                     ids.source_id, ids.project_id,
+                     nvl(count(distinct EstLoc.blat_alignment_id),0) as estCount
+              from (select source_id, project_id, 
+                           regexp_substr(source_id, '[^:]+', 1, 1) as seq_source_id,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,1) as start_min,
+                           regexp_substr(regexp_substr(source_id, '[^:]+', 1, 2), '[^\-]+', 1,2) as end_max,
+                           substr(source_id, -1) as strand
+                         from (##WDK_ID_SQL##)
+                   ) ids,
+                   apidb.EstAlignmentGeneSummary EstLoc
+              where EstLoc.target_sequence_source_id(+) = ids.seq_source_id and
+                    EstLoc.target_start(+) <= ids.end_max and  
+                    EstLoc.target_end(+) >= ids.start_min and
+                    EstLoc.is_reversed(+) >= ids.strand
+              group by ids.source_id, ids.project_id
 
              ]]>
              </sql>
