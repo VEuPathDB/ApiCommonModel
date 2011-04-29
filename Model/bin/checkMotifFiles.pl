@@ -31,6 +31,8 @@ if($help) {
   &usage();
 }
 
+my $failures = 0;
+
 my $dbiDsn = 'dbi:Oracle:' . $eupathDatabase;
 
 my $dbh = DBI->connect($dbiDsn) or die DBI->errstr;
@@ -88,13 +90,16 @@ while(my ($projectId) = $sh->fetchrow_array()) {
 
       unless(-e $filename) {
         print "ERROR:  Expected file not found:  $filename\n";
+        $failures++;
       }
     }
     $motifSh->finish();
   }
 }
 $sh->finish();
+$dbh->disconnect();
 
+print STDERR "Finished with $failures Errors\n";
 
 sub usage {
   my $e = shift;
@@ -106,7 +111,7 @@ sub usage {
   exit;
 }
 
-$dbh->disconnect();
+
 1;
 
 
