@@ -4308,6 +4308,8 @@ where one.source_id = two.source_id
       <column name="min_group_two"/>
       <column name="chose_group_one"/>
       <column name="chose_group_two"/>
+      <column name="time_of_min_expr"/>
+      <column name="time_of_max_expr"/>
 
       <sqlParamValue name="isLogged">1</sqlParamValue>
       <sqlParamValue name="shift">0</sqlParamValue>
@@ -4331,7 +4333,9 @@ where one.source_id = two.source_id
              round(decode(one.minimum, 0, 0, log(2, one.minimum)), 2) as min_group_one,
              round(decode(two.minimum, 0, 0, log(2, two.minimum)), 2) as min_group_two,
              round(decode(one.chosen, 0, 0, log(2, one.chosen)), 2) as chose_group_one,
-             round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) as chose_group_two
+             round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) as chose_group_two,
+             p.time_of_min_expr,
+             p.time_of_max_expr
       from ( select p.source_id, 
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'minimum'
                          THEN power(2, min(pe.value))
@@ -4346,9 +4350,9 @@ where one.source_id = two.source_id
                          WHEN &&isLogged&& = 0 AND $$min_max_avg_comp$$ = 'average'
                          THEN avg(pe.value) + &&shift&&
                     END  as chosen,
-                    avg(pe.value) as average,        
-                    max(pe.value) as maximum,
-                    min(pe.value) as minimum, 
+                    decode(&&isLogged&&, 1, power(2, avg(pe.value)), avg(pe.value)) as average,
+                    decode(&&isLogged&&, 1, power(2, max(pe.value)), max(pe.value)) as maximum,
+                    decode(&&isLogged&&, 1, power(2, min(pe.value)), min(pe.value)) as minimum,
                    CASE WHEN p.min_expression = min(pe.value)
                         THEN 1 else 0 
                    END as has_min_expression,
@@ -4375,9 +4379,9 @@ where one.source_id = two.source_id
                          WHEN &&isLogged&& != 1 AND $$min_max_avg_ref$$ = 'average'
                          THEN avg(pe.value) + &&shift&&
                     END  as chosen,
-                    avg(pe.value) as average,
-                    max(pe.value) as maximum,
-                    min(pe.value) as minimum, 
+                    decode(&&isLogged&&, 1, power(2, avg(pe.value)), avg(pe.value)) as average,
+                    decode(&&isLogged&&, 1, power(2, max(pe.value)), max(pe.value)) as maximum,
+                    decode(&&isLogged&&, 1, power(2, min(pe.value)), min(pe.value)) as minimum,
                     CASE WHEN p.min_expression = min(pe.value)
                          THEN 1 else 0 
                     END as has_min_expression,
@@ -4390,9 +4394,11 @@ where one.source_id = two.source_id
                and pe.profile_id = p.profile_id
                and pe.element_order = pen.element_order
              group by p.source_id, p.min_expression, p.max_expression ) two,  
-           apidb.geneattributes ga
+           apidb.geneattributes ga, apidb.profile p
       where one.source_id = two.source_id
         and ga.source_id = two.source_id
+        and p.profile_set_id = $$profileset_generic$$
+        and ga.na_feature_id = p.subject_row_id
         and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
         and ($$regulated_dir$$ ( one.chosen / two.chosen)  >= $$fold_change$$
           OR $$regulated_dir$$ (-(two.chosen / one.chosen)) >= $$fold_change$$)
