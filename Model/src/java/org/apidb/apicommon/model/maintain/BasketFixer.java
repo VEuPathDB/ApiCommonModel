@@ -115,7 +115,7 @@ public class BasketFixer extends BaseCLI {
                 + "          a." + idColumn + " AS new_id               "
                 + "   FROM " + userSchema + "user_baskets" + dblink + " b "
                 + "     LEFT JOIN " + aliasTable + " a "
-                + "       ON b.pk_column_1 = a.alias "
+                + "       ON b.pk_column_1 = a.id "
                 + "   WHERE b.project_id = ? AND b.record_class = ?";
 
         ResultSet resultSet = null;
