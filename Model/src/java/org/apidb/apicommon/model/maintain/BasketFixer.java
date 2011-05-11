@@ -214,6 +214,8 @@ public class BasketFixer extends BaseCLI {
             psDelete = SqlUtils.getPreparedStatement(dataSource,
                     sqlDelete.toString());
 
+	    int count = 0;	// <ADD-AG 050111>
+
             for (String oldId : ids.keySet()) {
                 String newId = ids.get(oldId);
                 if (newId == null) {
@@ -223,7 +225,7 @@ public class BasketFixer extends BaseCLI {
                     psDelete.setInt(2, userId);
                     psDelete.setString(3, type);
                     psDelete.setString(4, oldId);
-                     psDelete.addBatch();
+                    psDelete.addBatch();
                 } else {
                     logger.trace("change user #" + userId + " basket id: "
                             + oldId + " to " + newId + " of type " + type);
@@ -232,11 +234,23 @@ public class BasketFixer extends BaseCLI {
                     psUpdate.setInt(3, userId);
                     psUpdate.setString(4, type);
                     psUpdate.setString(5, oldId);
-                     psUpdate.addBatch();
+                    psUpdate.addBatch();
                 }
+
+		// <ADD-AG 050111> ------------------------------------------------------
+		count++;
+		if (count % 500 == 0) {
+			psUpdate.executeBatch();
+             		psDelete.executeBatch();
+			logger.info("Rows processed by changeIds = " + count + ".");
+		}
+		// </ADD-AG 050111> -----------------------------------------------------
+
             }
              psUpdate.executeBatch();
              psDelete.executeBatch();
+
+	     logger.info("Total rows processed by changeIds = " + count + ".");	// <ADD-AG 050111>
         } finally {
             SqlUtils.closeStatement(psUpdate);
             SqlUtils.closeStatement(psDelete);
