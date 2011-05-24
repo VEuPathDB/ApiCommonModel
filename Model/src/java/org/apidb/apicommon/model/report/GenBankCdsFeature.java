@@ -10,36 +10,24 @@ public class GenBankCdsFeature extends GenBankFeature {
     private int codonStart;
 
     private String translTable;
-    private String product;
 
     private List<String> ecNumbers;
     private List<String> notes;
+    private List<String> signalPeptides;
+    private List<String> transmembraneHelixes;
 
-    public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, int codonStart, String product) {
-        super(genbankFeature.getLocus(), genbankFeature.getIsPseudo(), genbankFeature.getSequenceOntology(), "cds", sequence);
+    public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, int codonStart) {
+        super(genbankFeature, "cds");
+
+        this.setSequence(sequence);
 
         this.translTable = translTable;
         this.codonStart = codonStart;
-        this.product = product;
 
         this.ecNumbers = new ArrayList<String>();
         this.notes = new ArrayList<String>();;
-    }
-
-    protected String getTranslTable() {
-        return(this.translTable);
-    }
-
-    protected int getCodonStart() {
-        return(this.codonStart);
-    }
-
-    protected String getProduct() {
-        return(this.product);
-    }
-
-    protected List getNotes() {
-        return(this.notes);
+        this.signalPeptides = new ArrayList<String>();
+        this.transmembraneHelixes = new ArrayList<String>();
     }
 
     protected void addNote(String note) {
@@ -52,10 +40,19 @@ public class GenBankCdsFeature extends GenBankFeature {
             this.ecNumbers.add(ecNumber);
     }
 
+    protected String getTranslation() {
+        return(super.getSequence());
+    }
+
+
     public String toString() {
         String rv = super.toString();
-        rv = rv + "\t\t\tproduct\t" + this.product + "\n";
+
+        String translation = this.getTranslation();
+
         rv = rv + "\t\t\ttransl_table\t" + this.translTable + "\n";
+
+        rv = rv + "\t\t\ttranslation\t" + translation + "\n";
 
         for(String ec : this.ecNumbers) {
             rv = rv + "\t\t\tEc_number\t" + ec + "\n";

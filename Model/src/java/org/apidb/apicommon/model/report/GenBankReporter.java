@@ -23,6 +23,8 @@ import org.json.JSONException;
 import org.apidb.apicommon.model.report.GenBankFeature;
 import org.apidb.apicommon.model.report.GenBankLocation;
 
+import java.util.regex.*;
+
 public class GenBankReporter extends Reporter {
 
     private static final String PROPERTY_GENE_QUESTION = "gene_question";
@@ -31,6 +33,11 @@ public class GenBankReporter extends Reporter {
     private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
 
     private static final String DB_XREF_QUALIFIER_INTERPRO = "InterPro";
+    private static final String DB_XREF_QUALIFIER_NCBI_TAXON = "taxon";
+    private static final String DB_XREF_QUALIFIER_ENTREZ_GENE = "GeneID";
+    private static final String DB_XREF_QUALIFIER_GOA = "GOA";
+    private static final String DB_XREF_QUALIFIER_GI = "GI";
+    private static final String DB_XREF_QUALIFIER_UNIPROTKB = "UniProtKB/TrEMBL";
 
     public GenBankReporter(AnswerValue answerValue, int startIndex, int endIndex) {
         super(answerValue, startIndex, endIndex);
@@ -157,11 +164,52 @@ public class GenBankReporter extends Reporter {
                 sequence = record.getAttributeValue("transcript_sequence").toString();
             }
 
-            GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence);
+            String ncbiTaxId = record.getAttributeValue("ncbi_tax_id").toString();
+
+            GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product);
+
+            geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
+
+            // RULE:  Alias
+            TableValue aliasRows = record.getTableValue("Alias");
+            for (Map<String, AttributeValue> aliasRow : aliasRows) {
+                String alias = aliasRow.get("alias").toString();
+                String databaseName = aliasRow.get("database_name").toString();
+
+                // EntrezGene
+                if(matchesDatabaseName(databaseName.toLowerCase(), "entrez[_| ]gene"))
+                    geneFeature.addDbXref(DB_XREF_QUALIFIER_ENTREZ_GENE + ":" + alias);
+
+                // GOA
+                if(matchesDatabaseName(databaseName.toLowerCase(), "goa"))
+                    geneFeature.addDbXref(DB_XREF_QUALIFIER_GOA + ":" + alias);
+
+                // GI
+                if(matchesDatabaseName(databaseName.toLowerCase(), "_gi_"))
+                    geneFeature.addDbXref(DB_XREF_QUALIFIER_GI + ":" + alias);
+
+                // GI
+                if(matchesDatabaseName(databaseName.toLowerCase(), "^gi"))
+                    geneFeature.addDbXref(DB_XREF_QUALIFIER_GI + ":" + alias);
+
+                // GI
+                if(matchesDatabaseName(databaseName.toLowerCase(), "uniprotkb"))
+                    geneFeature.addDbXref(DB_XREF_QUALIFIER_UNIPROTKB + ":" + alias);
+            }
 
             return(geneFeature);
     }
 
+
+    private boolean matchesDatabaseName(CharSequence inputString, String patternString) {
+
+        //        System.out.println(inputString + "\t" + patternString);
+
+        Pattern pattern = Pattern.compile(patternString);
+        Matcher matcher = pattern.matcher(inputString);
+
+        return(matcher.find());
+    }
 
     private List makeGenBankLocations(RecordInstance record, String sequenceId)
             throws WdkModelException, NoSuchAlgorithmException, SQLException,
@@ -189,7 +237,7 @@ public class GenBankReporter extends Reporter {
     }
 
 
-    private GenBankCdsFeature makeCdsFeature(RecordInstance record, GenBankFeature geneFeature, String product)
+    private GenBankCdsFeature makeCdsFeature(RecordInstance record, GenBankFeature geneFeature)
             throws WdkModelException, NoSuchAlgorithmException, SQLException,
             JSONException, WdkUserException {
 
@@ -209,7 +257,7 @@ public class GenBankReporter extends Reporter {
         // RULE : Include protein translation for CDS
         String proteinSequence = record.getAttributeValue("protein_sequence").toString();
 
-        GenBankCdsFeature cdsFeature = new GenBankCdsFeature(geneFeature, proteinSequence, geneticCode, codonStart, product);
+        GenBankCdsFeature cdsFeature = new GenBankCdsFeature(geneFeature, proteinSequence, geneticCode, codonStart);
 
         return(cdsFeature);
     }
@@ -240,7 +288,8 @@ public class GenBankReporter extends Reporter {
 
             // RULE : CDS but not pseudoGene
             if (geneFeature.getSequenceOntology().equals("protein coding") && !geneFeature.getIsPseudo()) {
-                GenBankCdsFeature cdsFeature = makeCdsFeature(record, geneFeature, product);
+
+                GenBankCdsFeature cdsFeature = makeCdsFeature(record, geneFeature);
                 cdsFeature.setLocations(genbankLocations);
 
                 // RULE : Include notes
@@ -248,6 +297,36 @@ public class GenBankReporter extends Reporter {
                 for (Map<String, AttributeValue> comment : comments) {
                     String commentString = comment.get("comment_string").toString();
                     cdsFeature.addNote(commentString);
+                }
+
+                // RULE : SignalP
+                TableValue signalPeptideRows = record.getTableValue("SignalP");
+                for (Map<String, AttributeValue> signalPeptide  : signalPeptideRows) {
+                    String spName = signalPeptide.get("spf_name").toString();
+                    String spDScore = signalPeptide.get("d_score").toString();
+                    String spHmmSigProb = signalPeptide.get("signal_probability").toString();
+                    String spStart = signalPeptide.get("spf_start_min").toString();
+                    String spEnd = signalPeptide.get("spf_end_max").toString();
+
+                    String spNote = "SignalP_" + spName + "; d_score=" + spDScore + "; hmm_probability=" +
+                        spHmmSigProb + "; protein_start=" + spStart + "; protein_end=" + spEnd;
+
+                    cdsFeature.addNote(spNote);
+                }
+
+                // RULE : TMHMM
+                TableValue tmhmmRows = record.getTableValue("TMHMM");
+                for (Map<String, AttributeValue> tmhmm  : tmhmmRows) {
+
+                    String tmhmmName = tmhmm.get("tmf_name").toString();
+                    String tmhmmStart = tmhmm.get("tmf_start_min").toString();
+                    String tmhmmEnd = tmhmm.get("tmf_end_max").toString();
+                    String tmhmmTopology = tmhmm.get("tmf_topology").toString();
+
+                    String tmhmmNote = "TMHMM_" + tmhmmName + "; topology=" + tmhmmTopology +
+                        "; protein_start=" + tmhmmStart + "; protein_end=" + tmhmmEnd;
+
+                    cdsFeature.addNote(tmhmmNote);
                 }
 
                 // RULE : Include EC numbers

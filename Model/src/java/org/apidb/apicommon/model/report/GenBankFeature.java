@@ -21,23 +21,23 @@ public class GenBankFeature {
     private String locus;
     private String sequenceOntology;
     private String featureType;
+    private String product;
+
 
     private String sequence;
 
     private boolean hasPartialStart;
     private boolean hasPartialEnd;
 
-    private boolean seenPartialStart;
-    private boolean seenPartialEnd;
-
     private boolean isPseudo;
 
 
-    public GenBankFeature(String locus, boolean isPseudo, String sequenceOntology, String featureType, String sequence) {
+    public GenBankFeature(String locus, boolean isPseudo, String sequenceOntology, String featureType, String sequence, String product) {
         this.locus = locus;
         this.isPseudo = isPseudo;
         this.sequenceOntology = sequenceOntology;
         this.sequence = sequence;
+        this.product = product;
 
         if(featureType.equals("gene") || featureType.equals("cds") || featureType.equals("exon")) {
             this.featureType = featureType;
@@ -46,6 +46,10 @@ public class GenBankFeature {
         }
 
         this.dbXrefs = new ArrayList<String>();
+
+        // partial start and end will be inherited by children
+        this.hasPartialStart = hasPartialStart(sequence);
+        this.hasPartialEnd = hasPartialEnd(sequence);
     }
 
 
@@ -56,6 +60,8 @@ public class GenBankFeature {
         this.hasPartialStart = genbankFeature.hasPartialStart;
         this.hasPartialEnd = genbankFeature.hasPartialEnd;
         this.dbXrefs = genbankFeature.dbXrefs;
+        this.sequence = genbankFeature.sequence;
+        this.product = genbankFeature.product;
 
         this.featureType = featureType;
     }
@@ -67,7 +73,16 @@ public class GenBankFeature {
             genbankFeatureKey = this.featureType.toUpperCase();
         } 
         else if(this.featureType.equals("exon")) {
-            genbankFeatureKey = "mRNA";
+
+            if(this.sequenceOntology.equals("protein coding")) {
+                genbankFeatureKey = "mRNA";
+            } else if(this.sequenceOntology.equals("rRNA encoding")) {
+                genbankFeatureKey = "rRNA";
+            } else if(this.sequenceOntology.equals("tRNA encoding")) {
+                genbankFeatureKey = "tRNA";
+            } else {
+                genbankFeatureKey = "ncRNA";
+            }
         }
         else {
             genbankFeatureKey = this.featureType;
@@ -77,6 +92,7 @@ public class GenBankFeature {
 
 
         rv = rv + "\t\t\tlocus_tag\t" + this.locus + "\n";
+        rv = rv + "\t\t\tproduct\t" + this.product + "\n";
 
         if(this.isPseudo) {
             rv = rv + "\t\t\tpseudo\t\n";
@@ -87,13 +103,43 @@ public class GenBankFeature {
             rv = rv + "\t\t\tdb_xref\t\"" + dbXref + "\"\n";
         }
 
+
+        if(genbankFeatureKey.equals("ncRNA")) {
+            String ncRnaClass = lookupRnaClass(this.sequenceOntology);
+            rv = rv + "\t\t\tncRNA_class\t" + ncRnaClass + "\n";
+        }
+
         //gene
         //gene_synonym
 
-        //dbxref
-
         return(rv);
     }
+
+    private String lookupRnaClass(String s) {
+        String rnaClass = "";
+
+        if(s.equals("RNase MRP RNA"))
+            rnaClass = "RNase_MRP_RNA";
+        
+        if(s.equals("RNase P RNA"))
+            rnaClass = "RNase_P_RNA";
+        if(s.equals("SRP RNA encoding"))
+            rnaClass = "SRP_RNA";
+        if(s.equals("scRNA encoding"))
+            rnaClass = "scRNA";
+        if(s.equals("snRNA encoding"))
+            rnaClass = "snRNA";
+        if(s.equals("snoRNA encoding"))
+            rnaClass = "snoRNA";           
+        if(s.equals("non protein coding"))
+            rnaClass = "other";           
+        if(s.equals("repeat region"))
+            rnaClass = "other";           
+
+        return(rnaClass);
+    }
+
+
 
     protected String locationsString(String featureKey) {
 
@@ -113,12 +159,13 @@ public class GenBankFeature {
 
             assert(strand.equals(featureStrand));
 
+
             if(this.hasPartialStart && strand.equals("forward") && count == 0) {
                 start = PARTIAL_START + start;
             }
 
             if(this.hasPartialStart && strand.equals("reverse") && count == this.locations.size() - 1) {
-                start = PARTIAL_START + start;
+                start = PARTIAL_END + start;
             }
 
             if(this.hasPartialStart && strand.equals("forward") && count == this.locations.size() - 1) {
@@ -126,7 +173,7 @@ public class GenBankFeature {
             }
 
             if(this.hasPartialStart && count == 0 && strand.equals("reverse")) {
-                end = PARTIAL_END + end;
+                end = PARTIAL_START + end;
             }
 
             if(strand.equals("forward")) {
@@ -170,39 +217,34 @@ public class GenBankFeature {
         return(this.isPseudo);
     }
 
-    protected String getLocus() {
-        return(this.locus);
+
+    protected String getSequence() {
+        return(this.sequence);
     }
 
     protected String getSequenceOntology() {
         return(this.sequenceOntology);
     }
 
-    protected boolean hasPartialStart() {
-        if(this.seenPartialStart) {
-            return(this.hasPartialStart);
-        }
+    protected void setSequence(String sequence) {
+        this.sequence = sequence;
+    }
 
-        String tmpSequence = this.sequence;
+    protected boolean hasPartialStart(String tmpSequence) {
+
         if (tmpSequence != null) {
             tmpSequence = tmpSequence.substring(0, tmpSequence.length()
                                           - (tmpSequence.length() % 3));
+
             if (!tmpSequence.startsWith("ATG")) {
-                this.hasPartialStart = true;
+                return(true);
             }
         }
-
-        this.seenPartialStart = true;
-
-        return(this.hasPartialStart);
+        return(false);
     }
 
-    protected boolean hasPartialEnd() {
-        if(this.seenPartialEnd) {
-            return(this.hasPartialEnd);
-        }
+    protected boolean hasPartialEnd(String tmpSequence) {
 
-        String tmpSequence = this.sequence;
         if (tmpSequence != null) {
             tmpSequence = tmpSequence.substring(0, tmpSequence.length()
                                           - (tmpSequence.length() % 3));
@@ -210,19 +252,10 @@ public class GenBankFeature {
             if (!sequence.endsWith("TAG") && !sequence.endsWith("TAA")
                 && !sequence.endsWith("TGA")
                 || sequence.length() % 3 != 0) {
-                this.hasPartialEnd = true;
+                return(true);
             }
         }
-
-        this.seenPartialEnd = true;
-
-        return(this.hasPartialEnd);
+        return(false);
     }
-
-
-    protected void setSequence(String sequence) {
-        this.sequence = sequence;
-    }
-
 
 }
