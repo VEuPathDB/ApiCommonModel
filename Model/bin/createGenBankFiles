@@ -1,106 +1,135 @@
 #!/usr/bin/perl
 
-#use strict;
+use strict;
 use lib "$ENV{GUS_HOME}/lib/perl";
 use WDK::Model::CommandHelper;
 use IO::File;
 use Cwd;
 
+use ApiCommonWebsite::Model::ModelConfig;
+use Bio::SeqIO;
+use Bio::Seq;
+
+use Getopt::Long;
+use DBI;
+use DBD::Oracle;
+
+use lib $ENV{CGILIB};
+
+my $CGIBIN = $ENV{CGIBIN};
 my $GUS_HOME = $ENV{GUS_HOME};
+
 my $CLASSPATH = &WDK::Model::CommandHelper::getJavaClasspath($GUS_HOME);
 my $sysProps = &WDK::Model::CommandHelper::getSystemProps($GUS_HOME, 'createGenBankFiles');
 my $args = &WDK::Model::CommandHelper::getJavaArgs(@ARGV);
 my $tempFileName = "genbank.tmp";
 my $reporter = "genbank";
-my $baseDir = &Cwd::abs_path();
-my $hasBaseDir = 0;
+my $baseDir;
+my $model;
+
 my @sequences;
 
-for my $arg (@ARGV) {
-    if ($hasBaseDir) {
-	$baseDir = &Cwd::abs_path($arg);
-	$hasBaseDir = 0;
-    } elsif ($arg eq "-dir") {
-	$hasBaseDir = 1;
-    }
-}
+# get the model and dir (will pass other params directly)
+&GetOptions('dir=s' => \$baseDir,
+            'model=s' => \$model,
+            'question=s', 'params=s'
+            );
 
+$baseDir = &Cwd::abs_path() unless($baseDir);
+
+my $modelConfig = ApiCommonWebsite::Model::ModelConfig->new($model);
+
+
+my $dbh = DBI->connect( $modelConfig->getDbiDsn(),
+                        $modelConfig->getLogin(),
+                        $modelConfig->getPassword()
+                      )
+  || die "unable to open db handle to ", $modelConfig->getDbiDsn();
+
+# solve oracle clob problem; not that we're liable to need it...
+$dbh->{LongTruncOk} = 0;
+$dbh->{LongReadLen} = 10000000;
+
+
+my $sequenceIdToGenbankFile = &lookupOriginalGenbankFiles($dbh);
+
+# write tbl files
 my $cmd = "java $sysProps -classpath $CLASSPATH org.gusdb.wdk.model.report.Dumper -reporter $reporter -fileName $tempFileName $args";
-
 system($cmd);
 
-splitOutputFile($baseDir, $tempFileName, ">Feature\t(\\w+)","tbl", 1);
 
-generateFastaFiles($baseDir);
+opendir(DIR, $baseDir) or die "Cannot open directory $baseDir for reading: $!";
 
-# need to generate template file?
+while (my $tblFile = readdir(DIR)) { 
+  next unless $tblFile =~ /$tempFileName/;
+
+
+  open(TBL, $tblFile) or die "Cannot open file $tblFile for reading: $!";
+
+  my $defline = <TBL>;
+  chomp $defline;
+  my ($junk, $sequenceId) = split(/\t/, $defline);
+
+
+  close TBL;
+
+  my $newTblFile = $sequenceId . ".tbl";
+  my $fasta = $sequenceId . ".fsa";
+
+  rename($tblFile, $newTblFile);
+
+
+  my $gbFile = $sequenceIdToGenbankFile->{$sequenceId};
+
+  my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'genbank');
+
+  my $seqioFsa = Bio::SeqIO->new(-format => 'Fasta', -file => "> $fasta");
+
+  while(my $seq = $seqio->next_seq()) {
+    next unless($seq->id eq $sequenceId);
+
+    $seqioFsa->write_seq($seq);
+  }
+}
+
+close DIR;
+
 
 # Run tbl2asn with validation flag
 $cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt -V v";
-
 system($cmd);
 
 
+$dbh->disconnect();
 
-sub splitOutputFile
-{
-    my ($baseDir, $tempFileName, $matchRule, $suffix, $updateSequences) = @_;
-    my $outf;
-    my $inf;
-    my $infName = "$baseDir/$tempFileName";
-    my $hasOutput = 0;
 
-    open ($inf,"$infName") or die "$! Could not find $infName\n";
+sub lookupOriginalGenbankFiles {
+  my ($dbh) = @_;
 
-    while (my $line = <$inf>)
-    {
-	if ($line =~ /$matchRule/) {
-	    #print "Matched $line, and got: $1\n";
-	    close $outf;
-	    if ($updateSequences) {
-		push(@sequences, "'$1'");
-	    }
-	    open ($outf, ">$baseDir/$1.$suffix") or die $!;
-	    $hasOutput = 1;
-	}
-	
-	if ($hasOutput) {
-	    print $outf $line;
-	}
-    }
-    close $outf;
-    close $inf;
-    unlink $infName;
+  my %rv;
+
+  my $sql = "select distinct ga.sequence_id, ap.string_value
+from core.algorithmparam ap, core.algorithmparamkey apk,
+     apidb.geneattributes ga, dots.genefeature gf
+where apk.algorithm_param_key = 'inputFileOrDir'
+and ap.algorithm_param_key_id = apk.algorithm_param_key_id
+and ga.na_feature_id = gf.na_feature_id
+and gf.row_alg_invocation_id = ap.algorithm_invocation_id";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($sequence, $file) = $sh->fetchrow_array()) {
+    $file =~ s/^\/files\/cbil\/data\/cbil/\/eupath\/data/;
+    $rv{$sequence} = $file;
+
+
+  }
+
+  $sh->finish();
+
+  return \%rv;
 }
 
-sub generateFastaFiles
-{
-    my ($baseDir) = @_;
-    my $tempFileName = "allSequences";
-    my $numSequences = scalar @sequences;
-    print "Sequences: $numSequences\n";
-    my $sliceStart = 0;
-    while ($sliceStart < $numSequences)
-    {
-        my $sliceEnd = $sliceStart + 999;
-	$sliceEnd = ($sliceEnd >= $numSequences) ? $numSequences-1 : $sliceEnd;
-        my @slice = @sequences[$sliceStart..$sliceEnd];
-	my $sliceSize = scalar @slice;
-        my $sequencesList = join(',',@slice);
-        my $sql = <<"EOF";
-     SELECT sa.source_id, ' [organism=' ||
-            sa.organism || ']' as defline,
-            ns.sequence
-           FROM apidb.sequenceattributes sa,
-                dots.nasequence ns
-      WHERE sa.source_id IN ($sequencesList)
-        AND ns.na_sequence_id = sa.na_sequence_id
-EOF
 
-        my $cmd = "gusExtractSequences --outputFile $baseDir/$tempFileName  --idSQL \"$sql\" --verbose";
-        system($cmd);
-        splitOutputFile($baseDir,$tempFileName, ">(\\w+) \\[organism=.*", "fsa", 0);
-	$sliceStart += 1000;
-	$tempFileName = "$tempFilename$slice";
-    }
-}
+1;
