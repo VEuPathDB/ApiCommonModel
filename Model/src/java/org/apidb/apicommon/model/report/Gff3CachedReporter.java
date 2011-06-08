@@ -114,20 +114,20 @@ public class Gff3CachedReporter extends Reporter {
         // include transcript
         if (config.containsKey(FIELD_HAS_TRANSCRIPT)) {
             String value = config.get(FIELD_HAS_TRANSCRIPT);
-            hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true"))
-                    ? true : false;
+            hasTranscript = (value.equalsIgnoreCase("yes") || value
+                    .equalsIgnoreCase("true")) ? true : false;
         }
 
         // include protein
         if (config.containsKey(FIELD_HAS_PROTEIN)) {
             String value = config.get(FIELD_HAS_PROTEIN);
-            hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true"))
-                    ? true : false;
+            hasProtein = (value.equalsIgnoreCase("yes") || value
+                    .equalsIgnoreCase("true")) ? true : false;
         }
     }
 
     public String getConfigInfo() {
-	return "This reporter does not have config info yet.";
+        return "This reporter does not have config info yet.";
     }
 
     /*
@@ -184,7 +184,8 @@ public class Gff3CachedReporter extends Reporter {
         writeRecords(writer);
 
         // write sequence
-        if (hasTranscript || hasProtein) writeSequences(writer);
+        if (hasTranscript || hasProtein)
+            writeSequences(writer);
     }
 
     private void writeHeader(PrintWriter writer) throws WdkModelException,
@@ -203,12 +204,16 @@ public class Gff3CachedReporter extends Reporter {
         for (AnswerValue answerValue : this) {
             for (RecordInstance record : answerValue.getRecordInstances()) {
                 String seqId = getValue(record.getAttributeValue("gff_seqid"));
-                int start = Integer.parseInt(getValue(record.getAttributeValue("gff_fstart")));
-                int stop = Integer.parseInt(getValue(record.getAttributeValue("gff_fend")));
+                int start = Integer.parseInt(getValue(record
+                        .getAttributeValue("gff_fstart")));
+                int stop = Integer.parseInt(getValue(record
+                        .getAttributeValue("gff_fend")));
                 if (regions.containsKey(seqId)) {
                     int[] region = regions.get(seqId);
-                    if (region[0] > start) region[0] = start;
-                    if (region[1] < stop) region[1] = stop;
+                    if (region[0] > start)
+                        region[0] = start;
+                    if (region[1] < stop)
+                        region[1] = stop;
                     regions.put(seqId, region);
                 } else {
                     int[] region = { start, stop };
@@ -231,26 +236,18 @@ public class Gff3CachedReporter extends Reporter {
             WdkUserException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
-        String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+        String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
+                .getColumnRefs();
 
-        // get cache info
-        ResultFactory resultFactory = wdkModel.getResultFactory();
-        CacheFactory cacheFactory = resultFactory.getCacheFactory();
-        QueryInstance instance = baseAnswer.getIdsQueryInstance();
-        QueryInfo queryInfo = cacheFactory.getQueryInfo(instance.getQuery());
-        String cacheTable = queryInfo.getCacheTable();
-        int instanceId = instance.getInstanceId();
+        // get id sql, then combine with the gff cache.
+        String idSql = baseAnswer.getIdSql();
 
-        StringBuffer sql = new StringBuffer("SELECT ");
-        sql.append("tc.").append(COLUMN_CONTENT).append(" FROM ");
-        sql.append(tableCache).append(" tc, ").append(cacheTable).append(" ac");
-        sql.append(" WHERE tc.table_name = '").append(recordName).append("'");
+        StringBuffer sql = new StringBuffer("SELECT tc." + COLUMN_CONTENT);
+        sql.append(" FROM " + tableCache + " tc, (" + idSql + ") ac");
+        sql.append(" WHERE tc.table_name = '" + recordName + "' ");
         for (String column : pkColumns) {
-            sql.append(" AND tc.").append(column).append(" = ac.").append(
-                    column);
+            sql.append(" AND tc." + column + " = ac." + column);
         }
-        sql.append(" AND ac.").append(CacheFactory.COLUMN_INSTANCE_ID);
-        sql.append(" = ").append(instanceId);
 
         WdkModel wdkModel = getQuestion().getWdkModel();
         DBPlatform platform = wdkModel.getQueryPlatform();
@@ -278,7 +275,8 @@ public class Gff3CachedReporter extends Reporter {
             WdkUserException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
-        String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+        String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
+                .getColumnRefs();
 
         // get cache info
         ResultFactory resultFactory = wdkModel.getResultFactory();
@@ -290,9 +288,11 @@ public class Gff3CachedReporter extends Reporter {
 
         // construct in clause
         StringBuffer sqlIn = new StringBuffer();
-        if (hasTranscript) sqlIn.append("'" + transcriptName + "'");
+        if (hasTranscript)
+            sqlIn.append("'" + transcriptName + "'");
         if (hasProtein) {
-            if (sqlIn.length() > 0) sqlIn.append(", ");
+            if (sqlIn.length() > 0)
+                sqlIn.append(", ");
             sqlIn.append("'" + proteinName + "'");
         }
 
@@ -301,8 +301,8 @@ public class Gff3CachedReporter extends Reporter {
         sql.append(tableCache).append(" tc, ").append(cacheTable).append(" ac");
         sql.append(" WHERE tc.table_name IN (").append(sqlIn).append(")");
         for (String column : pkColumns) {
-            sql.append(" AND tc.").append(column).append(" = ac.").append(
-                    column);
+            sql.append(" AND tc.").append(column).append(" = ac.")
+                    .append(column);
         }
         sql.append(" AND ac.").append(CacheFactory.COLUMN_INSTANCE_ID);
         sql.append(" = ").append(instanceId);
@@ -341,7 +341,8 @@ public class Gff3CachedReporter extends Reporter {
             value = attrVal.getValue().toString();
         }
         value = value.trim();
-        if (value.length() == 0) return null;
+        if (value.length() == 0)
+            return null;
         return value;
     }
 
