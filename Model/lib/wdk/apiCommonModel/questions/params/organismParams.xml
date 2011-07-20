@@ -906,13 +906,31 @@ UNION
     <sqlQuery name="withSequenceStrains" excludeProjects="EuPathDB">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
       <sql>
         <![CDATA[
-           SELECT distinct sa.organism as term,ns.taxon_id as internal
-           FROM dots.NaSequence ns, apidb.sequenceattributes sa
-           WHERE sa.na_sequence_id = ns.na_sequence_id
-           AND sa.project_id = '@PROJECT_ID@'
-           ORDER BY organism asc
+          with TaxonWithSeqStrains as (
+            select distinct ns.taxon_id as taxon_id 
+            from dots.NaSequence ns, apidb.SequenceAttributes sa 
+            where ns.na_sequence_id = sa.na_sequence_id)
+          select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                 as apidb.varchartab), ', ') as internal
+          from (
+               select distinct ga.organism as term,
+                               ga.species as parentTerm,
+                               ga.taxon_id as internal
+               from apidb.GeneAttributes ga, sres.Taxon t, TaxonWithSeqStrains tws
+               where ga.taxon_id = tws.taxon_id 
+               and ga.taxon_id = t.taxon_id 
+               and t.rank != 'species'
+          union
+          select distinct ga.species as term, 
+                          '' as parentTerm, 
+                          ga.taxon_id as internal 
+          from apidb.GeneAttributes ga, TaxonWithSeqStrains tws
+          where ga.taxon_id = tws.taxon_id
+          )
+          group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -920,6 +938,7 @@ UNION
     <processQuery name="withSequenceStrains" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 <!--===================================================================-->
