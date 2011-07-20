@@ -641,49 +641,65 @@ UNION
     <sqlQuery name="withGenomicSeq" excludeProjects="EuPathDB">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
       <sql excludeProjects="ToxoDB,MicrosporidiaDB">
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT distinct tn.name, ts.species_taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, apidb.TaxonSpecies ts
-                WHERE tn.name_class='scientific name'
-                  AND tn.taxon_id = ts.species_taxon_id
-                  AND ts.taxon_id IN
-                             (  SELECT ns.taxon_id
-                                FROM dots.NaSequence ns, sres.SequenceOntology so,apidb.sequenceattributes ga
-                                WHERE so.sequence_ontology_id = ns.sequence_ontology_id
-                                AND so.term_name IN ('contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence')
-                                AND ga.source_id = ns.source_id
-                                AND ga.project_id = '@PROJECT_ID@' 
-                                  )) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual
-                ) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+                   with TaxonWithSeqStrains as (
+            select distinct taxon_id
+            from dots.NaSequence ns, apidb.SequenceAttributes sa, sres.SequenceOntology so
+            where ns.na_sequence_id = sa.na_sequence_id
+			and so.sequence_ontology_id = ns.sequence_ontology_id
+			and so.term_name IN ('contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence'))
+          select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                 as apidb.varchartab), ', ') as internal
+          from (
+               select distinct ga.organism as term,
+                               ga.species as parentTerm,
+                               ga.taxon_id as internal
+               from apidb.GeneAttributes ga, sres.Taxon t, TaxonWithSeqStrains tws
+               where ga.taxon_id = tws.taxon_id 
+               and ga.taxon_id = t.taxon_id 
+               and t.rank != 'species'
+          union
+          select distinct ga.species as term, 
+                          '' as parentTerm, 
+                          ga.taxon_id as internal 
+          from apidb.GeneAttributes ga, TaxonWithSeqStrains tws
+          where ga.taxon_id = tws.taxon_id
+          )
+          group by term,parentTerm
         ]]>
       </sql>
 
   <sql includeProjects="ToxoDB,MicrosporidiaDB">
         <![CDATA[
-           SELECT distinct sa.organism as term,ns.taxon_id as internal
+          with TaxonWithSeqStrains as (
+            select distinct ns.taxon_id as taxon_id 
+            from dots.NaSequence ns, apidb.SequenceAttributes sa 
+            where ns.na_sequence_id = sa.na_sequence_id)
+          select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                 as apidb.varchartab), ', ') as internal
+          from (
+               select distinct ga.organism as term,
+                               ga.species as parentTerm,
+                               ga.taxon_id as internal
+               from apidb.GeneAttributes ga, sres.Taxon t, TaxonWithSeqStrains tws
+               where ga.taxon_id = tws.taxon_id 
+               and ga.taxon_id = t.taxon_id 
+               and t.rank != 'species'
+          union
+          select distinct ga.species as term, 
+                          '' as parentTerm, 
+                          ga.taxon_id as internal 
+          from apidb.GeneAttributes ga, TaxonWithSeqStrains tws
+          where ga.taxon_id = tws.taxon_id
+          )
+          group by term,parentTerm
+/*           SELECT distinct sa.organism as term,ns.taxon_id as internal
            FROM dots.NaSequence ns, apidb.sequenceattributes sa
            WHERE sa.na_sequence_id = ns.na_sequence_id
            AND sa.project_id = '@PROJECT_ID@'
-           ORDER BY organism asc
+           ORDER BY organism asc */
         ]]>
       </sql>
 
@@ -692,6 +708,7 @@ UNION
     <processQuery name="withGenomicSeq" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
     <!--===================================================================-->
