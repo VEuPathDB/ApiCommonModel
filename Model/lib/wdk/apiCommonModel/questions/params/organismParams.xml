@@ -1,3 +1,4 @@
+
 <wdkModel>
 
   <!--=====================================================================-->
@@ -18,6 +19,7 @@
       <flatVocabParam name="organism"
                      queryRef="organismVQ.withGenes"
                      prompt="Organism"
+                     displayType="treeBox"
                      multiPick="true"
                      quote="false">
           <suggest selectMode="all" />
@@ -48,6 +50,7 @@
       <flatVocabParam name="organism_with_epitopes"
                      queryRef="organismVQ.withEpitopes"
                      prompt="Organism"
+                     displayType="treeBox"
                      multiPick="true"
                      quote="false"
                      includeProjects="CryptoDB,ToxoDB,PlasmoDB,GiardiaDB,TriTrypDB">
@@ -66,6 +69,7 @@
       <flatVocabParam name="text_search_organism"
                      queryRef="organismVQ.withGenes"
                      prompt="Organism"
+                     displayType="treeBox"
                      multiPick="true"
                      quote="true">
           <noTranslation value="true"/>
@@ -437,7 +441,8 @@
       <column name="term"/>
 
            <sql>
-            SELECT distinct ga.species as term,ga.species as internal from apidb.geneattributes ga where chromosome is not null 
+            SELECT distinct ga.species as term,ga.species as internal
+            from apidb.geneattributes ga where chromosome is not null
             </sql>
         </sqlQuery>
 
@@ -702,43 +707,28 @@ UNION
     <sqlQuery name="withGenes" excludeProjects="EuPathDB" isCacheable="true">
       <column name="internal"/>
       <column name="term"/>
-
+      <column name="parentTerm"/>
       <sql>
         <![CDATA[
-          select tn.name as term, clade.subtaxa as internal
-          from sres.TaxonName tn,
-               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
-                                                       as apidb.varchartab), ', ') subtaxa
-                from apidb.TaxonSpecies ts
-                where ts.taxon_id in (-- taxa relevant to this param
-                                      select taxon_id from apidb.GeneAttributes WHERE project_id = '@PROJECT_ID@')
-                group by species_taxon_id) clade,
-               (  select 'Cryptosporidium parvum' as name, 1 as rank from dual
-                union
-                  select 'Cryptosporidium hominis' as name, 2 as rank from dual
-                union
-                  select 'Plasmodium falciparum' as name, 3 as rank from dual
-                union
-                  select 'Plasmodium vivax' as name, 4 as rank from dual
-                union
-                  select 'Plasmodium yoelii' as name, 5 as rank from dual
-                union
-                  select 'Toxoplasma gondii' as name, 6 as rank from dual
-                union
-                  select 'Neospora caninum' as name, 7 as rank from dual
-                union
-                  select 'Trypanosoma cruzi' as name, 8 as rank from dual
-                union
-                  select 'Giardia lamblia ATCC 50803' as name, 9 as rank from dual
-                union
-                  select 'Giardia lamblia P15' as name, 10 as rank from dual
-                union
-                  select 'Giardia intestinalis ATCC 50581' as name, 11 as rank from dual
-               ) partial_ordering
-          where tn.taxon_id = clade.species_taxon_id
-            and tn.name_class = 'scientific name'
-            and tn.name = partial_ordering.name(+)
-          order by partial_ordering.rank, tn.name
+         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                as apidb.varchartab), ', ') as internal 
+         from (
+           select distinct ga.organism as term,
+                           ga.species as parentTerm,
+                           tn.taxon_id as internal
+           from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t 
+           where ga.organism = tn.name 
+           and tn.taxon_id = t.taxon_id
+           and t.rank != 'species'
+           union
+           select distinct ga.species as term,
+                           '' as parentTerm,
+                           ts.taxon_id as internal
+            from apidb.GeneAttributes ga, SRES.TaxonName tn, apidb.taxonSpecies ts
+            where ga.species = tn.name
+            and tn.taxon_id = ts.species_taxon_id
+          )
+          group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -747,6 +737,7 @@ UNION
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 
@@ -759,35 +750,33 @@ UNION
  <sqlQuery name="withPdbSimilarity" includeProjects="CryptoDB,PlasmoDB,TriTrypDB" isCacheable="true">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
 
       <sql>
         <![CDATA[
-          select tn.name as term, clade.subtaxa as internal
-          from sres.TaxonName tn,
-               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
-                                                       as apidb.varchartab), ', ') subtaxa
-                from apidb.TaxonSpecies ts
-                where ts.taxon_id in (-- taxa relevant to this param
-                                       select ga.taxon_id 
-                                      from apidb.GeneAttributes ga, apidb.pdbsimilarity s
-                                      where ga.source_id = s.source_id)
-                group by species_taxon_id) clade,
-               (  select 'Cryptosporidium parvum' as name, 1 as rank from dual
-                union
-                  select 'Cryptosporidium hominis' as name, 2 as rank from dual
-                union
-                  select 'Plasmodium falciparum' as name, 3 as rank from dual
-                union
-                  select 'Plasmodium vivax' as name, 4 as rank from dual
-                union
-                  select 'Plasmodium yoelii' as name, 5 as rank from dual
-                union    
-                  select 'Trypanosoma cruzi' as name, 6 as rank from dual
-               ) partial_ordering
-          where tn.taxon_id = clade.species_taxon_id
-            and tn.name_class = 'scientific name'
-            and tn.name = partial_ordering.name(+)
-          order by partial_ordering.rank, tn.name
+            select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                    as apidb.varchartab), ', ') as internal 
+            from (
+                 select distinct ga.organism as term,
+                                 ga.species as parentTerm,
+                                 tn.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, 
+                      SRES.Taxon t, apidb.pdbsimilarity s
+                 where ga.organism = tn.name 
+                 and s.source_id = ga.source_id
+                 and tn.taxon_id = t.taxon_id
+                 and t.rank != 'species'
+                 union
+                 select distinct ga.species as term,
+                                 '' as parentTerm,
+                                 ts.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, 
+                      apidb.taxonSpecies ts, apidb.pdbsimilarity s
+                 where ga.species = tn.name
+                 and tn.taxon_id = ts.species_taxon_id
+                 and s.source_id = ga.source_id
+            )
+            group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -796,6 +785,7 @@ UNION
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 
@@ -860,43 +850,41 @@ UNION
     <sqlQuery name="withEpitopes"  includeProjects="CryptoDB,ToxoDB,PlasmoDB,GiardiaDB,TriTrypDB,PiroplasmaDB" isCacheable="true">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
+
 
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name as name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t, apidb.TaxonSpecies ts
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND tn.taxon_id = ts.species_taxon_id
-                  AND ts.taxon_id IN
-                             (  SELECT ga.taxon_id
-                                FROM apidb.GeneAttributes ga
-                                WHERE ga.project_id = '@PROJECT_ID@' )
-          ) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual
-                 UNION
-                SELECT 'Toxoplasma gondii' AS name, 6 AS rank FROM dual
-                 UNION
-                SELECT 'Neospora caninum' AS name, 7 AS rank FROM dual
-                ) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+
+            select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                   as apidb.varchartab), ', ') as internal 
+            from (
+                 select distinct ga.organism as term,
+                                 ga.species as parentTerm,
+                                 tn.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t, dots.transcript tr,
+                      dots.translatedAaFeature taf, dots.epitopeFeature ef
+                 where ga.organism = tn.name
+                 and ga.na_feature_id= tr.parent_id
+                 and tr.na_feature_id=taf.na_feature_id
+                 and taf.aa_sequence_id = ef.aa_sequence_id
+                 and tn.taxon_id = t.taxon_id
+                 and t.rank != 'species'
+                 union
+                 select distinct ga.species as term,
+                                 '' as parentTerm,
+                                 ts.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t, dots.transcript tr,
+                      apidb.taxonSpecies ts, dots.translatedAaFeature taf, dots.epitopeFeature ef
+                 where ga.species = tn.name
+                 and tn.taxon_id = ts.species_taxon_id
+                 and ga.na_feature_id=tr.parent_id
+                 and tr.na_feature_id=taf.na_feature_id
+                 and taf.aa_sequence_id = ef.aa_sequence_id
+                 and tn.taxon_id = t.taxon_id
+                 )
+            group by term,parentTerm
+
         ]]>
       </sql>
     </sqlQuery>
@@ -905,6 +893,7 @@ UNION
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 <!--===================================================================-->
@@ -967,11 +956,31 @@ UNION
     <sqlQuery name="withPhenotype" includeProjects="TriTrypDB">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/> 
       <sql>
         <![CDATA[
-          select distinct ga.organism as term, ga.organism as internal
-          from apidb.GENEATTRIBUTES ga, apidb.SIRNA si
-          where si.gene = ga.SOURCE_ID
+           select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                    as apidb.varchartab), ', ') as internal 
+           from (
+                 select distinct ga.organism as term,
+                                 ga.species as parentTerm,
+                                 tn.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t, apidb.sirna si
+                 where ga.organism = tn.name 
+                 and tn.taxon_id = t.taxon_id
+				 and ga.source_id = si.gene
+                 and t.rank != 'species'
+                 union
+                 select distinct ga.species as term,
+                                 '' as parentTerm,
+                                 ts.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, apidb.taxonSpecies ts,
+                      apidb.sirna si
+                 where ga.species = tn.name
+                 and tn.taxon_id = ts.species_taxon_id
+				 and ga.source_id = si.gene
+           )
+           group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -980,6 +989,7 @@ UNION
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 
@@ -1120,10 +1130,31 @@ UNION
     <sqlQuery name="tfBindingSite" includeProjects="PlasmoDB" isCacheable="true">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
       <sql>
         <![CDATA[
-          select distinct ga.species as term, ga.species as internal from apidb.tfbsgene tg, apidb.geneattributes ga
-           where tg.gene_source_id = ga.source_id
+        select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                    as apidb.varchartab), ', ') as internal from (
+          select distinct ga.organism as term,
+                          ga.species as parentTerm,
+                          tn.taxon_id as internal
+          from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t, 
+          apidb.tfbsgene tg
+          where ga.organism = tn.name 
+          and tg.gene_source_id = ga.source_id
+          and tn.taxon_id = t.taxon_id
+          and t.rank != 'species'
+          union
+          select distinct ga.species as term,
+                          '' as parentTerm,
+                          ts.taxon_id as internal
+          from apidb.GeneAttributes ga, SRES.TaxonName tn, apidb.taxonSpecies ts,
+               apidb.tfbsgene tg
+          where ga.species = tn.name
+          and tn.taxon_id = ts.species_taxon_id
+          and tg.gene_source_id = ga.source_id
+        )
+        group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1131,6 +1162,7 @@ UNION
     <processQuery name="tfBindingSite" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 
@@ -1143,38 +1175,32 @@ UNION
     <sqlQuery name="withEC" excludeProjects="MicrosporidiaDB,EuPathDB" isCacheable="true">
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name as name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t, apidb.TaxonSpecies ts
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND tn.taxon_id = ts.species_taxon_id
-                  AND ts.taxon_id IN
-                             (  SELECT ga.taxon_id
-                                FROM apidb.GeneAttributes ga
-                                WHERE ga.project_id = '@PROJECT_ID@'
-                                 AND ec_numbers is not null )
-          ) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
+            select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                    as apidb.varchartab), ', ') as internal 
+            from (
+                 select distinct ga.organism as term,
+                                 ga.species as parentTerm,
+                                 tn.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t
+                 where ga.organism = tn.name 
+                 and ga.ec_numbers is not null
+                 and tn.taxon_id = t.taxon_id
+                 and t.rank != 'species'
+                 and ga.project_id='@PROJECT_ID@'
+                 union
+                 select distinct ga.species as term,
+                                 '' as parentTerm,
+                                 ts.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, apidb.taxonSpecies ts
+                 where ga.species = tn.name
+                 and ga.ec_numbers is not null
+                 and ga.project_id='@PROJECT_ID@'
+                 and tn.taxon_id = ts.species_taxon_id
+            )
+            group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1182,58 +1208,17 @@ UNION
     <processQuery name="withEC" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
-    </processQuery>
-
-
-
-    <!--===================================================================-->
-    <!-- withPlasmoGenes  -->  
-    <!--===================================================================-->
-
-    <sqlQuery name="withPlasmoGenes" includeProjects="PlasmoDB" isCacheable="true">
-
-      <testParamValues excludeProjects="PlasmoDB" minRows="0"/>
-
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        <![CDATA[
-          select tn.name as term, clade.subtaxa as internal
-          from sres.TaxonName tn,
-               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
-                                                       as apidb.varchartab), ', ') subtaxa
-                from apidb.TaxonSpecies ts
-                where ts.taxon_id in (-- taxa relevant to this param
-                                       select ga.taxon_id from apidb.GeneAttributes ga)
-                group by species_taxon_id) clade,
-               (  
-                  select 'Plasmodium falciparum' as name, 1 as rank from dual
-                union
-                  select 'Plasmodium vivax' as name, 2 as rank from dual
-                union
-                  select 'Plasmodium yoelii' as name, 3 as rank from dual
-               ) partial_ordering
-          where tn.taxon_id = clade.species_taxon_id
-            and tn.name_class = 'scientific name'
-            and tn.name = partial_ordering.name(+)
-          order by partial_ordering.rank, tn.name
-        ]]>
-      </sql>
-    </sqlQuery>
-
-    <processQuery name="withPlasmoGenes" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-      <wsColumn name="internal" width="32" wsName="internal"/>
-      <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
     <!--===================================================================-->
     <!-- TriTrypWithGenes  -->  
     <!--===================================================================-->
 
-    <sqlQuery name="withTriTrypGenes" includeProjects="TriTrypDB" isCacheable="true">
+<!-- Appears Unused 
 
+      <sqlQuery name="withTriTrypGenes" includeProjects="TriTrypDB" isCacheable="true">
       <testParamValues excludeProjects="TriTrypDB" minRows="0"/>
-
       <column name="internal"/>
       <column name="term"/>
       <sql>
@@ -1243,12 +1228,11 @@ UNION
                (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
                                                        as apidb.varchartab), ', ') subtaxa
                 from apidb.TaxonSpecies ts
-                where ts.taxon_id in (-- taxa relevant to this param
+                where ts.taxon_id in (/* taxa relevant to this param */
                                       select taxon_id from apidb.GeneAttributes)
                 group by species_taxon_id) clade,
                ( 
                   select 'Trypanosoma cruzi' as name, 1 as rank from dual
-
                ) partial_ordering
           where tn.taxon_id = clade.species_taxon_id
             and tn.name_class = 'scientific name'
@@ -1257,12 +1241,11 @@ UNION
         ]]>
       </sql>
     </sqlQuery>
-
     <processQuery name="withTriTrypGenes" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
     </processQuery>
-
+-->
 
 <!--====================================================================-->
 <!-- withPlamsoTrichGiardiaGenes used in genes by secondary structure   , 
@@ -1275,49 +1258,41 @@ UNION
 <sqlQuery name="withSecondaryStructure" includeProjects="PlasmoDB,GiardiaDB,TrichDB,CryptoDB,TriTrypDB" isCacheable="true">
 
       <testParamValues excludeProjects="GiardiaDB,TrichDB,PlasmoDB" minRows="0"/>
-
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
       <sql>
         <![CDATA[
-          select tn.name as term, clade.subtaxa as internal
-          from sres.TaxonName tn,
-               (select species_taxon_id, apidb.tab_to_string(cast(collect(trim(to_char(taxon_id)))
-                                                       as apidb.varchartab), ', ') subtaxa
-                from apidb.TaxonSpecies ts
-                where ts.taxon_id in (-- taxa relevant to this param
-                                      select taxon_id from apidb.GeneAttributes)
-                group by species_taxon_id) clade,
-               (  select 'Cryptosporidium parvum' as name, 1 as rank from dual
-                union
-                  select 'Cryptosporidium hominis' as name, 2 as rank from dual
-                union
-                  select 'Plasmodium falciparum' as name, 3 as rank from dual
-                union
-                  select 'Plasmodium vivax' as name, 4 as rank from dual
-                union
-                  select 'Plasmodium yoelii' as name, 5 as rank from dual
-                union
-                  select 'Trypanosoma cruzi' as name, 8 as rank from dual
-                union
-                  select 'Giardia lamblia ATCC 50803' as name, 9 as rank from dual
-                union
-                  select 'Giardia lamblia P15' as name, 10 as rank from dual
-                union
-                  select 'Giardia intestinalis ATCC 50581' as name, 11 as rank from dual
-               ) partial_ordering
-          where tn.taxon_id = clade.species_taxon_id
-            and tn.name_class = 'scientific name'
-            and tn.name = partial_ordering.name(+)
-          order by partial_ordering.rank, tn.name
+          with TaxaWithStructure as (
+            select distinct taxon_id
+            from dots.AaSequence aas, dots.SecondaryStructure ss
+            where aas.aa_sequence_id = ss.aa_sequence_id)
+          select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                 as apidb.varchartab), ', ') as internal
+          from (
+               select distinct ga.organism as term,
+                               ga.species as parentTerm,
+                               ga.taxon_id as internal
+               from apidb.GeneAttributes ga, sres.Taxon t, TaxaWithStructure tws
+               where ga.taxon_id = tws.taxon_id 
+               and ga.taxon_id = t.taxon_id 
+               and t.rank != 'species'
+          union
+          select distinct ga.species as term, 
+                          '' as parentTerm, 
+                          ga.taxon_id as internal 
+          from apidb.GeneAttributes ga, TaxaWithStructure tws
+          where ga.taxon_id = tws.taxon_id
+          )
+          group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
-
     <processQuery name="withSecondaryStructure" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 
@@ -1334,6 +1309,7 @@ UNION
 
       <column name="internal"/>
       <column name="term"/>
+      <column name="parentTerm"/>
       <sqlParamValue name="organism" includeProjects="PlasmoDB">Plasmodium falciparum</sqlParamValue>
       <sqlParamValue name="organism" includeProjects="ToxoDB">Toxoplasma gondii</sqlParamValue>
       <sqlParamValue name="organism" includeProjects="GiardiaDB">Giardia lamblia</sqlParamValue>
@@ -1361,6 +1337,7 @@ UNION
     <processQuery name="tg-pf-gl" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
 
@@ -1382,20 +1359,29 @@ UNION
       <sqlParamValue name="organism" includeProjects="CryptoDB,GiardiaDB,TrichDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,InitDB,PiroplasmaDB">none at all</sqlParamValue>
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND tn.name = '&&organism&&') organisms
-          ORDER BY organisms.name
+           select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                    as apidb.varchartab), ', ') as internal 
+           from (
+                 select distinct ga.organism as term,
+                                 ga.species as parentTerm,
+                                 tn.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t
+                 where ga.organism = '&&organism&&'
+        				 and ga.organism = tn.name
+                 and tn.taxon_id = t.taxon_id
+                 and t.rank != 'species'
+                                
+                 union
+                 select distinct ga.species as term,
+                                 '' as parentTerm,
+                                 ts.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, apidb.taxonSpecies ts
+                  where ga.organism = '&&organism&&' 
+                  and ga.species = tn.name               
+                  and ga.organism = tn.name
+                  and tn.taxon_id = ts.species_taxon_id
+)
+           group by term,parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1403,6 +1389,7 @@ UNION
     <processQuery name="tg-pf" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm"/>
     </processQuery>
 
     <!--===================================================================-->
@@ -1419,21 +1406,29 @@ UNION
       <sqlParamValue name="organism" includeProjects="CryptoDB,GiardiaDB,ToxoDB,TrichDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,InitDB,PiroplasmaDB">none at all</sqlParamValue>
       <sql>
         <![CDATA[
-          SELECT organisms.name AS term,
-                 (SELECT apidb.tab_to_string(CAST(COLLECT(trim(to_char(taxon_id)))
-                                             AS apidb.varchartab), ', ')
-                         AS internal
-                  FROM sres.taxon
-                  CONNECT BY prior taxon_id = parent_id
-                  START WITH taxon_id = organisms.internal_taxon) AS internal
-          FROM (SELECT tn.name, t.taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, sres.taxon t
-                WHERE tn.name_class='scientific name'
-                  AND t.taxon_id = tn.taxon_id
-                  AND t.rank = 'species'
-                  AND tn.name = '&&organism&&') organisms
-          ORDER BY organisms.name
-        ]]>
+           select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                    as apidb.varchartab), ', ') as internal 
+           from (
+                 select distinct ga.organism as term,
+                                 ga.species as parentTerm,
+                                 tn.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, SRES.Taxon t
+                 where ga.organism = '&&organism&&'
+        				 and ga.organism = tn.name
+                 and tn.taxon_id = t.taxon_id
+                 and t.rank != 'species'              
+                 union
+                 select distinct ga.species as term,
+                                 '' as parentTerm,
+                                 ts.taxon_id as internal
+                 from apidb.GeneAttributes ga, SRES.TaxonName tn, apidb.taxonSpecies ts
+                  where ga.organism = '&&organism&&' 
+                  and ga.species = tn.name               
+                  and ga.organism = tn.name
+                  and tn.taxon_id = ts.species_taxon_id
+                )
+           group by term,parentTerm
+              ]]>
       </sql>
     </sqlQuery>
 
