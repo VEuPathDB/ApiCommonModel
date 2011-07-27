@@ -93,7 +93,7 @@ public class BasketFixer extends BaseCLI {
         logger.info("Fixing gene basket...");
 
         String type = "GeneRecordClasses.GeneRecordClass";
-        String aliasTable = "apidb.GeneId";
+        String aliasTable = "ApidbTuning.GeneId";
         String idColumn = "gene";
         Map<Integer, Map<String, String>> users = getDeprecatedIds(wdkModel,
                 type, aliasTable, idColumn);

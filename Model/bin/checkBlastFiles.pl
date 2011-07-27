@@ -58,7 +58,7 @@ foreach(@{$apiCommonModel->{modelName}}) {
   $projectVersions{$projectId} = $version;
 }
 # Get valid project ids
-my $sh = $dbh->prepare("select distinct project_id from apidb.sequenceattributes");
+my $sh = $dbh->prepare("select distinct project_id from ApidbTuning.SequenceAttributes");
 $sh->execute();
 
 while(my ($projectId) = $sh->fetchrow_array()) {
