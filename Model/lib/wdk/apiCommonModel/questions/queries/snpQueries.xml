@@ -49,14 +49,6 @@
         <column name="ref_product"/>
         <column name="comp_products"/>
 
-        <sqlParamValue name="providers" includeProjects="PlasmoDB">
-           AND ed.name in ('sangerPReichenowiSnps_RSRC','Pf_plasmoDbCombinedSnps_RSRC')
-        </sqlParamValue>
-        <sqlParamValue name="providers" includeProjects="ToxoDB">
-          AND ed.name in ('Genomic Sequence SNPs','Genetic Markers - David Sibley','John Boothroyd lab at Stanford','Lindstrom 454 SNPs')
-        </sqlParamValue>
-        <sqlParamValue name="providers" includeProjects="CryptoDB"></sqlParamValue>
-
         <sql>
             <![CDATA[
 select * from (
@@ -84,18 +76,14 @@ FROM
       sf.position_in_protein,sf.source_id
       FROM ($$ds_gene_ids$$) ds,
            ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
-           sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
            dots.SeqVariation isva, dots.SeqVariation isvb
       WHERE lower(gi.id) = lower(ds.source_id)
         AND gf.source_id = gi.gene
         AND gf.na_feature_id = sf.parent_id
-        AND edr.external_database_release_id = sf.external_database_release_id
-        AND edr.external_database_id = ed.external_database_id                               
-        &&providers&& 
         AND sf.na_feature_id = isva.parent_id
         AND sf.na_feature_id = isvb.parent_id
-        AND lower(isva.strain) = $$snp_strain_a$$                               
-        AND lower(isvb.strain) in ($$snp_strain_m$$)
+        AND isva.strain = $$snp_strain_a$$                               
+        AND isvb.strain in ($$snp_strain_m$$)
         AND isva.allele != isvb.allele ) hits,
     dots.NaSequence nas, dots.NALocation gene_loc, dots.NALocation l,
     dots.SeqVariation sva, dots.SeqVariation svb
@@ -104,8 +92,8 @@ FROM
     AND hits.snp_na_feature_id = l.na_feature_id
     AND hits.snp_na_feature_id = sva.parent_id 
     AND hits.snp_na_feature_id = svb.parent_id 
-    AND lower(sva.strain) = $$snp_strain_a$$                               
-    AND lower(svb.strain) in ($$snp_strain_a$$,$$snp_strain_m$$)                             
+    AND sva.strain = $$snp_strain_a$$                               
+    AND svb.strain in ($$snp_strain_m$$)                             
     ) snpq                              
 GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product
 )
@@ -187,15 +175,6 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
           <column name="ref_product"/>
           <column name="comp_products"/>
 
-
-        <sqlParamValue name="providers" includeProjects="PlasmoDB">
-           AND ed.name in ('sangerPReichenowiSnps_RSRC','Pf_plasmoDbCombinedSnps_RSRC')
-        </sqlParamValue>
-        <sqlParamValue name="providers" includeProjects="ToxoDB">
-          AND ed.name in ('Genomic Sequence SNPs','Genetic Markers - David Sibley','John Boothroyd lab at Stanford','Lindstrom 454 SNPs','InsertSnps.pm NGS SNPs INTERNAL')
-        </sqlParamValue>
-        <sqlParamValue name="providers" includeProjects="CryptoDB"></sqlParamValue>
-
         <sql includeProjects="PlasmoDB,ToxoDB">
             <![CDATA[
               select * from (
@@ -224,18 +203,14 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                 p.product_a AS ref_product, p.product_b AS comp_product,
                 p.position_in_protein as prot_pos,
                 p.gene_source_id as gene
-               FROM ApidbTuning.Polymorphism p, ApidbTuning.SequenceAttributes seq,
-                    sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+               FROM apidbtuning.Polymorphism p, apidb.sequenceAttributes seq
                WHERE seq.na_sequence_id = p.na_sequence_id
-                 AND p.external_database_release_id = edr.external_database_release_id
-                 AND edr.external_database_id = ed.external_database_id
                  AND seq.chromosome in ( $$chromosomeOptional$$ )
-                 AND lower(p.strain_a) = $$snp_strain_a$$ -- ref
-                 AND lower(p.strain_b) in ($$snp_strain_m$$) -- comp
-                 AND $$snp_strain_a$$ < lower(p.strain_b)
+                 AND p.strain_a = $$snp_strain_a$$ -- ref
+                 AND p.strain_b in ($$snp_strain_m$$) -- comp
+                 AND $$snp_strain_a$$ < p.strain_b
                  AND p.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
                  AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
-                   &&providers&&
               UNION
                -- second, when comp strain name < ref strain name
                -- (ref is strain b, comp is strain a)
@@ -250,18 +225,15 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                      ELSE 'non-coding' END as phenotype,
                 p.product_b AS ref_product, p.product_a AS comp_product,
                 p.position_in_protein as prot_pos, p.gene_source_id as gene
-               FROM ApidbTuning.Polymorphism p, ApidbTuning.SequenceAttributes seq,
-                    sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+               FROM apidbtuning.Polymorphism p, apidb.sequenceAttributes seq
                WHERE seq.na_sequence_id = p.na_sequence_id
-                 AND p.external_database_release_id = edr.external_database_release_id
-                 AND edr.external_database_id = ed.external_database_id
                  AND seq.chromosome in ( $$chromosomeOptional$$ )
-                 AND lower(p.strain_b) = $$snp_strain_a$$ -- ref
-                 AND lower(p.strain_a) in ($$snp_strain_m$$) -- comp
-                 AND lower(p.strain_a) < $$snp_strain_a$$
+                 AND p.strain_b = $$snp_strain_a$$ -- ref
+                 AND p.strain_a in ($$snp_strain_m$$) -- comp
+                 AND p.strain_a < $$snp_strain_a$$
                  AND p.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
                  AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
-                 &&providers&&) snpq
+                 ) snpq
             GROUP BY snpq.source_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product)
            ]]>
        </sql>
