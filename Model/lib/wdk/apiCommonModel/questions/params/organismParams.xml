@@ -72,7 +72,8 @@
                      prompt="Organism"
                      displayType="treeBox"
                      multiPick="true"
-                     quote="true">
+                     quote="true"
+                     suppressNode ="true">
           <noTranslation value="true"/>
       </flatVocabParam>
 
@@ -710,6 +711,25 @@ UNION
 
   <sql includeProjects="ToxoDB,MicrosporidiaDB">
         <![CDATA[
+         /* withGenomicSeq filter query */
+         WITH FilterQuery as (
+            SELECT distinct taxon_id
+            FROM dots.NaSequence ns, ApidbTuning.SequenceAttributes sa
+            WHERE ns.na_sequence_id = sa.na_sequence_id             
+            and sa.project_id = '@PROJECT_ID@')
+         /* end filter query */
+         SELECT DISTINCT sl.term, sl.parentTerm, pi.internal
+         FROM ApidbTuning.SpeciesTaxonLevel sl , 
+              (SELECT term, 
+                      apidb.tab_to_string(cast(collect(trim(to_char(internal)))
+                      as apidb.varchartab), ', ') AS internal
+               FROM ApidbTuning.SpeciesTaxonLevel
+               GROUP BY term ) pi,
+              FilterQuery fq
+         WHERE pi.term = sl.term
+         AND sl.organism = fq.organism
+         ORDER BY parentTerm
+ 
          with TaxonWithSeqStrains as (
             select distinct taxon_id
             from dots.NaSequence ns, ApidbTuning.SequenceAttributes sa
@@ -797,39 +817,14 @@ UNION
          WITH FilterQuery as (
               SELECT DISTINCT ga.organism as organism
               FROM apidbtuning.GeneAttributes ga
-              WHERE ga.project_id = '@PROJECT_ID@')
+              WHERE ga.project_id = 'PlasmoDB')
          /* end filter query */
-         SELECT DISTINCT sl.term, sl.parentTerm, pi.internal
-         FROM ApidbTuning.SpeciesTaxonLevel sl , (SELECT term, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-              as apidb.varchartab), ', ') AS internal
-              FROM ApidbTuning.SpeciesTaxonLevel
-              GROUP BY term ) pi,
-              FilterQuery fq
-         WHERE pi.term = sl.term
-         AND sl.organism = fq.organism
-         ORDER BY parentTerm         
-
-/*         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           sl.term as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga,
-                APIDBTUNING.speciestaxonlevel sl
-           where ga.organism != ga.species
-           and sl.term = ga.species
-           and ga.project_id = 'PlasmoDB'
-           union
-           select distinct sl.term as term,
-                           sl.parentTerm as parentTerm,
-                           sl.internal as internal
-           from ApidbTuning.SpeciesTaxonLevel sl
-           where sl.project_id = 'PlasmoDB'
-         )
-         group by term,parentTerm
-         order by term
-*/
+         SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
     </sqlQuery>
