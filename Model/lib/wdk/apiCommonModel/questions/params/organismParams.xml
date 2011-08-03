@@ -646,146 +646,40 @@ UNION
       <column name="parentTerm"/>
       <sql excludeProjects="ToxoDB,MicrosporidiaDB">
         <![CDATA[
-         with TaxonWithSeqStrains as (
-            select distinct taxon_id
-            from dots.NaSequence ns, ApidbTuning.SequenceAttributes sa, sres.SequenceOntology so
-            where ns.na_sequence_id = sa.na_sequence_id
-			and so.sequence_ontology_id = ns.sequence_ontology_id
-			and so.term_name IN ('contig', 'supercontig', 'chromosome',
-                           'mitochondrial_chromosome','plastid_sequence'))
-         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithSeqStrains tws, SRES.Taxon t 
-           where ga.taxon_id = tws.taxon_ID
-           and tws.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithSeqStrains tws,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = tws.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithSeqStrains tws,
-                JCADE.specieslevel sl
-           where ga.taxon_id = tws.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct sl.parentTerm as term,
-			   '' as parentTerm, 
-                           -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithSeqStrains tws 
-           where tws.taxon_id = ga.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@'
-         )
-         group by term,parentTerm
-         order by term
-
+	 /* withGenomicSeq filter query (excluding Toxo and Micro) */
+         WITH FilterQuery as (
+		SELECT DISTINCT sa.organism
+		FROM dots.NaSequence ns, ApidbTuning.SequenceAttributes sa, sres.SequenceOntology so
+		WHERE ns.na_sequence_id = sa.na_sequence_id
+		AND so.sequence_ontology_id = ns.sequence_ontology_id
+		AND so.term_name IN ('contig', 'supercontig', 'chromosome',
+                                     'mitochondrial_chromosome','plastid_sequence')
+		AND sa.project_id = '@PROJECT_ID@')
+         /* end filter query */
+         SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
 
   <sql includeProjects="ToxoDB,MicrosporidiaDB">
         <![CDATA[
-         /* withGenomicSeq filter query */
-         WITH FilterQuery as (
-            SELECT distinct taxon_id
+         /* withGenomicSeq filter query (for Toxo and Micro) */
+         WITH FilterQuery AS (
+            SELECT DISTINCT sa.organism
             FROM dots.NaSequence ns, ApidbTuning.SequenceAttributes sa
             WHERE ns.na_sequence_id = sa.na_sequence_id             
-            and sa.project_id = '@PROJECT_ID@')
+            AND sa.project_id = '@PROJECT_ID@')
          /* end filter query */
-         SELECT DISTINCT sl.term, sl.parentTerm, pi.internal
-         FROM ApidbTuning.SpeciesTaxonLevel sl , 
-              (SELECT term, 
-                      apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                      as apidb.varchartab), ', ') AS internal
-               FROM ApidbTuning.SpeciesTaxonLevel
-               GROUP BY term ) pi,
-              FilterQuery fq
-         WHERE pi.term = sl.term
-         AND sl.organism = fq.organism
-         ORDER BY parentTerm
- 
-         with TaxonWithSeqStrains as (
-            select distinct taxon_id
-            from dots.NaSequence ns, ApidbTuning.SequenceAttributes sa
-            where ns.na_sequence_id = sa.na_sequence_id)
-         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithSeqStrains tws, SRES.Taxon t 
-           where ga.taxon_id = tws.taxon_ID
-           and tws.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithSeqStrains tws,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = tws.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithSeqStrains tws,
-                JCADE.specieslevel sl
-           where ga.taxon_id = tws.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct sl.parentTerm as term,
-			   '' as parentTerm, 
-                           -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithSeqStrains tws 
-           where tws.taxon_id = ga.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@'
-         )
-         group by term,parentTerm
-         order by term
+		 SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
 
@@ -850,62 +744,19 @@ UNION
 
       <sql>
         <![CDATA[
-         with TaxonWithPdbSimilarity as (
-            select distinct taxon_id
-            from ApidbTuning.GeneAttributes ga, ApidbTuning.pdbsimilarity s 
-            where s.source_id = ga.source_id)
-	 select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithPdbSimilarity tps, SRES.Taxon t 
-           where ga.taxon_id = tps.taxon_ID
-           and tps.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithPdbSimilarity tps,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = tps.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithPdbSimilarity tps,
-                JCADE.specieslevel sl
-           where ga.taxon_id = tps.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct sl.parentTerm as term,
-			                     '' as parentTerm, 
-                           -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithPdbSimilarity tps 
-           where tps.taxon_id = ga.taxon_id
-		       and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@'
-         )
-         group by term,parentTerm
-         order by term
+         /* withPdbSimilarity filter query */
+         WITH FilterQuery AS (  
+	    SELECT DISTINCT ga.organism
+            FROM ApidbTuning.GeneAttributes ga, ApidbTuning.pdbsimilarity s 
+            WHERE s.source_id = ga.source_id
+	    AND ga.project_id='@PROJECT_ID@')
+         /* end filter query */
+         SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm	
         ]]>
       </sql>
     </sqlQuery>
@@ -984,67 +835,22 @@ UNION
 
       <sql>
         <![CDATA[
-         with TaxonWithEpitopes as (
-            select distinct taxon_id
-            from ApidbTuning.GeneAttributes ga, dots.transcript tr,
+	 /* withEpitopes filter query */
+         WITH FilterQuery AS (
+	    SELECT DISTINCT ga.organism
+            FROM ApidbTuning.GeneAttributes ga, dots.transcript tr,
                       dots.translatedAaFeature taf, dots.epitopeFeature ef
-			where ga.na_feature_id = tr.parent_id
-            and tr.na_feature_id = taf.na_feature_id
-            and taf.aa_sequence_id = ef.aa_sequence_id)
-         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithEpitopes twe, SRES.Taxon t 
-           where ga.taxon_id = twe.taxon_ID
-           and twe.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithEpitopes twe,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = twe.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithEpitopes twe,
-                JCADE.specieslevel sl
-           where ga.taxon_id = twe.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct sl.parentTerm as term,
-			'' as parentTerm, 
-                        -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithEpitopes twe 
-           where twe.taxon_id = ga.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@'
-         )
-         group by term,parentTerm
-         order by term
-
-
+			WHERE ga.na_feature_id = tr.parent_id
+            AND tr.na_feature_id = taf.na_feature_id
+            AND taf.aa_sequence_id = ef.aa_sequence_id
+			AND ga.project_id = '@PROJECT_ID@')
+		 /* end filter query */
+         SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm        
         ]]>
       </sql>
     </sqlQuery>
@@ -1069,28 +875,19 @@ UNION
       <column name="parentTerm"/>
       <sql>
         <![CDATA[
-          with TaxonWithSeqStrains as (
-            select distinct ns.taxon_id as taxon_id 
-            from dots.NaSequence ns, ApidbTuning.SequenceAttributes sa 
-            where ns.na_sequence_id = sa.na_sequence_id)
-          select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                 as apidb.varchartab), ', ') as internal
-          from (
-               select distinct ga.organism as term,
-                               ga.species as parentTerm,
-                               ga.taxon_id as internal
-               from ApidbTuning.GeneAttributes ga, sres.Taxon t, TaxonWithSeqStrains tws
-               where ga.taxon_id = tws.taxon_id 
-               and ga.taxon_id = t.taxon_id 
-               and t.rank != 'species'
-          union
-          select distinct ga.species as term, 
-                          '' as parentTerm, 
-                          ga.taxon_id as internal 
-          from ApidbTuning.GeneAttributes ga, TaxonWithSeqStrains tws
-          where ga.taxon_id = tws.taxon_id
-          )
-          group by term,parentTerm
+         /* withSequenceStrains filter query */
+         WITH FilterQuery AS (
+			SELECT DISTINCT sa.organism
+            FROM dots.NaSequence ns, ApidbTuning.SequenceAttributes sa 
+            WHERE ns.na_sequence_id = sa.na_sequence_id
+			AND sa.project_id = '@PROJECT_ID@')
+	     /* end filter query */
+		 SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1138,63 +935,19 @@ UNION
       <column name="parentTerm"/> 
       <sql>
         <![CDATA[
-         with TaxonWithPhenotype as (
-            select distinct taxon_id
-            from ApidbTuning.GeneAttributes ga, ApidbTuning.sirna si
-			where ga.source_id = si.gene)
-		 select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithPhenotype twp, SRES.Taxon t 
-           where ga.taxon_id = twp.taxon_ID
-           and twp.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@DB'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithPhenotype twp,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = twp.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@DB'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithPhenotype twp,
-                JCADE.specieslevel sl
-           where ga.taxon_id = twp.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@DB'
-           union
-           select distinct sl.parentTerm as term,
-			'' as parentTerm, 
-                        -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithPhenotype twp 
-           where twp.taxon_id = ga.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@DB'
-         )
-         group by term,parentTerm
-         order by term
-
+         /* withPhenotype filter query */
+         WITH FilterQuery AS (
+		SELECT DISTINCT ga.organism
+		FROM ApidbTuning.GeneAttributes ga, Apidb.sirna si
+		WHERE ga.source_id = si.gene
+		AND ga.project_id = '@PROJECT_ID@')
+	 /* end filter query */
+	 SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1341,62 +1094,18 @@ UNION
       <column name="parentTerm"/>
       <sql>
         <![CDATA[
-	 with TaxonWithEcNumbers as (
-            select distinct taxon_id
-            from ApidbTuning.GeneAttributes ga
-            where ga.ec_numbers is not null)
-         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithEcNumbers ten, SRES.Taxon t 
-           where ga.taxon_id = ten.taxon_ID
-           and ten.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithEcNumbers ten,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = ten.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithEcNumbers ten,
-                JCADE.specieslevel sl
-           where ga.taxon_id = ten.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct sl.parentTerm as term,
-                          '' as parentTerm, 
-                          -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithEcNumbers ten 
-           where ten.taxon_id = ga.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@'
-         )
-         group by term,parentTerm
-         order by term
+	 /* withEC filter query */
+	 WITH FilterQuery AS (
+	      SELECT DISTINCT ga.organism
+	      FROM ApidbTuning.GeneAttributes ga
+              WHERE ga.ec_numbers IS NOT NULL)
+	 /* end filter query */
+	 SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1420,62 +1129,19 @@ UNION
       <column name="parentTerm"/>
       <sql>
         <![CDATA[
-	 with TaxonWithTfBinding as (
-            select distinct taxon_id
-            from ApidbTuning.GeneAttributes ga, ApidbTuning.tfbsgene tg
-            where tg.gene_source_id = ga.source_id)
-         select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                as apidb.varchartab), ', ') as internal 
-         from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithTfBinding ttb, SRES.Taxon t 
-           where ga.taxon_id = ttb.taxon_ID
-           and ttb.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithTfBinding ttb,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = ttb.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithTfBinding ttb,
-                JCADE.specieslevel sl
-           where ga.taxon_id = ttb.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = '@PROJECT_ID@'
-           union
-           select distinct sl.parentTerm as term,
-                          '' as parentTerm, 
-                          -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithTfBinding ttb 
-           where ttb.taxon_id = ga.taxon_id
-           and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = '@PROJECT_ID@'
-         )
-         group by term,parentTerm
-         order by term
+	 /* tfBindingSite filter query */
+	 WITH FilterQuery AS (
+              SELECT DISTINCT ga.organism
+              FROM ApidbTuning.GeneAttributes ga, ApidbTuning.tfbsgene tg
+              WHERE tg.gene_source_id = ga.source_id
+	      AND ga.project_id = '@PROJECT_ID@')
+		 /* end filter query */
+	 SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
     </sqlQuery>
@@ -1538,63 +1204,20 @@ UNION
       <column name="parentTerm"/>
       <sql>
         <![CDATA[
-          with TaxonWithStructure as (
-            select distinct taxon_id
-            from dots.AaSequence aas, dots.SecondaryStructure ss
-            where aas.aa_sequence_id = ss.aa_sequence_id)
-          select term, parentTerm, apidb.tab_to_string(cast(collect(trim(to_char(internal)))
-                 as apidb.varchartab), ', ') as internal
-          from (
-           select distinct ga.organism as term,
-                           ga.species as parentTerm,
-                           ga.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, TaxonWithStructure tws, SRES.Taxon t 
-           where ga.taxon_id = tws.taxon_ID
-           and tws.taxon_id = t.taxon_id
-           and t.rank != 'species'
-           and ga.project_id = 'PlasmoDB'
-           union
-           select distinct ga.species as term,
-                           tng.name as parentTerm,
-                           ts.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, TaxonWithStructure tws,
-                ApidbTuning.taxonSpecies ts, SRES.TaxonName tng, SRes.Taxon t
-           where ga.taxon_id = tws.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tn.taxon_id = ts.species_taxon_id
-           and tng.taxon_id = t.parent_id
-           and tng.name_class = 'scientific name'
-           and ga.project_id = 'PlasmoDB'
-           union
-           select distinct tng.name as term,
-                           sl.parentTerm as parentTerm,
-                           tng.taxon_id as internal
-           from ApidbTuning.GeneAttributes ga, SRES.TaxonName tn, 
-                SRES.TaxonName tng, SRes.Taxon t, TaxonWithStructure tws,
-                JCADE.specieslevel sl
-           where ga.taxon_id = tws.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = t.taxon_id
-           and tng.taxon_id = t.parent_id
-           and sl.term = ga.species
-           and tng.name_class ='scientific name'
-           and ga.project_id = 'PlasmoDB'
-           union
-           select distinct sl.parentTerm as term,
-			'' as parentTerm, 
-                        -1 as internal
-           from jcade.speciesLevel sl,ApidbTuning.GeneAttributes ga, 
-           SRES.TaxonName tn, ApidbTuning.taxonSpecies ts, TaxonWithStructure tws 
-           where tws.taxon_id = ga.taxon_id
-		   and ga.species = tn.name
-           and tn.taxon_id = ts.species_taxon_id
-           and sl.term = ga.species
-           and ga.project_id = 'PlasmoDB'
-         )
-         group by term,parentTerm
-         order by term
-
+         /* withSecondaryStructure filter query */
+	 WITH FilterQuery AS (
+		SELECT DISTINCT ga.organism
+                FROM dots.AaSequence aas, dots.SecondaryStructure ss, ApidbTuning.GeneAttributes ga
+                WHERE aas.aa_sequence_id = ss.aa_sequence_id
+		AND aas.taxon_id = ga.taxon_id
+		AND ga.project_id = '@PROJECT_ID@')
+	 /* end filter query */
+	 SELECT DISTINCT term, parentTerm, apidb.tab_to_string
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
         ]]>
       </sql>
     </sqlQuery>
