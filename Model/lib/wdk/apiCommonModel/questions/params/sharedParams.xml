@@ -1649,10 +1649,21 @@
      <!-- SNPs -->  
      <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
+       <flatVocabParam name="snpProvider" includeProjects="EuPathDB,PlasmoDB,ToxoDB,CryptoDB"
+                      queryRef="SharedVQ.snp_provider"
+                      prompt="Provider (data set)"
+                      multiPick="false" >
+      <noTranslation value="true" includeProjects="EuPathDB" />
+       <help>
+              Choose a SNP data set from the list of providers.
+       </help>
+       </flatVocabParam>
+
        <flatVocabParam name="snp_strain_a" includeProjects="EuPathDB,PlasmoDB,ToxoDB,CryptoDB"
                       queryRef="SharedVQ.SnpStrainAA"
                       prompt="Reference"
-                      multiPick="false">
+                      multiPick="false"
+                      dependedParamRef="sharedParams.snpProvider">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose a reference from the list of strains.
@@ -1662,7 +1673,8 @@
        <flatVocabParam name="snp_strain_m" includeProjects="EuPathDB,PlasmoDB,ToxoDB,CryptoDB"
                       queryRef="SharedVQ.SnpStrainAA"
                       prompt="Comparator"
-                      multiPick="true">
+                      multiPick="true"
+                      dependedParamRef="sharedParams.snpProvider">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose comparators from the list of strains. 
@@ -2404,7 +2416,20 @@ and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
 	  <wsColumn name="term" width="32" wsName="term"/>
 	</processQuery>
 
+        <sqlQuery name="snp_provider" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
+          <column name="internal"/>
+          <column name="term"/>
+          <sql>
+select d.name as term, apidb.tab_to_string(CAST(COLLECT(distinct to_char(p.external_database_release_id)) AS apidb.varchartab), ', ') as internal
+from apidbtuning.polymorphism p, SRES.externaldatabaserelease r, SRES.externaldatabase d
+where r.external_database_release_id = p.external_database_release_id
+and d.external_database_id = r.external_database_id
+group by d.name
+          </sql>
+        </sqlQuery>
+
         <sqlQuery name="SnpStrainAA" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
+          <paramRef ref="sharedParams.snpProvider" quote="false" queryRef="SharedVQ.snp_provider"/> 
           <column name="internal"/>
           <column name="term"/>
           <sql>
@@ -2412,12 +2437,14 @@ and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
             from (
             select distinct sa.organism, p.strain_a as term, p.strain_a as internal 
             from apidbtuning.polymorphism p, apidbtuning.sequenceattributes sa
-            where sa.na_sequence_id = p.na_sequence_id
+            where p.external_database_release_id in ($$snpProvider$$)
+            and sa.na_sequence_id = p.na_sequence_id
             and p.strain_a != 'Preich'
             union 
             select distinct sa.organism, p.strain_b as term, p.strain_b as internal 
             from apidbtuning.polymorphism p, apidbtuning.sequenceattributes sa
-            where sa.na_sequence_id = p.na_sequence_id
+            where p.external_database_release_id in ($$snpProvider$$)
+            and sa.na_sequence_id = p.na_sequence_id
             and p.strain_b != 'Preich')
             union
             select distinct 'P. reichenowi (vs. 3D7 only)' as term, 'Preich' as internal
