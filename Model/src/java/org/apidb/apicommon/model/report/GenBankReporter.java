@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.gusdb.wdk.model.AnswerValue;
 import org.gusdb.wdk.model.AttributeValue;
@@ -19,11 +21,6 @@ import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.report.Reporter;
 import org.json.JSONException;
-
-import org.apidb.apicommon.model.report.GenBankFeature;
-import org.apidb.apicommon.model.report.GenBankLocation;
-
-import java.util.regex.*;
 
 public class GenBankReporter extends Reporter {
 

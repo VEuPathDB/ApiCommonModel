@@ -7,35 +7,29 @@ package org.apidb.apicommon.model.fusiontables;
 // http://code.google.com/p/gdata-java-client/downloads/list and
 // http://code.google.com/p/google-collections/downloads/list.
 
-import com.google.gdata.client.ClientLoginAccountType;
-import com.google.gdata.client.GoogleService;
-import com.google.gdata.client.Service.GDataRequest;
-import com.google.gdata.client.Service.GDataRequest.RequestType;
-
-import com.google.gdata.util.AuthenticationException;
-import com.google.gdata.util.ContentType;
-import com.google.gdata.util.ServiceException;
-
-import java.lang.Math;
-
-import java.io.InputStreamReader;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Scanner;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 
-import java.sql.DriverManager;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.Statement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-
 import oracle.jdbc.driver.OracleDriver;
+
+import com.google.gdata.client.ClientLoginAccountType;
+import com.google.gdata.client.GoogleService;
+import com.google.gdata.client.Service.GDataRequest;
+import com.google.gdata.client.Service.GDataRequest.RequestType;
+import com.google.gdata.util.AuthenticationException;
+import com.google.gdata.util.ContentType;
+import com.google.gdata.util.ServiceException;
 
 /**
  * This is a modified copy of ApiExample.java --

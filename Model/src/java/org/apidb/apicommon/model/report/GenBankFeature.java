@@ -1,13 +1,8 @@
 package org.apidb.apicommon.model.report;
 
-import java.util.List;
 import java.util.ArrayList;
-
-import org.apidb.apicommon.model.report.GenBankLocation;
-
 import java.util.Collections;
-
-import java.io.PrintWriter;
+import java.util.List;
 
 public class GenBankFeature {
 

@@ -1,9 +1,7 @@
 package org.apidb.apicommon.model.report;
 
-import org.apidb.apicommon.model.report.GenBankFeature;
-
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 public class GenBankCdsFeature extends GenBankFeature {
 
