@@ -1649,32 +1649,32 @@
      <!-- SNPs -->  
      <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <flatVocabParam name="snpProvider" includeProjects="EuPathDB,PlasmoDB,ToxoDB,CryptoDB"
-                      queryRef="SharedVQ.snp_provider"
-                      prompt="Provider (data set)"
+       <flatVocabParam name="snpReferenceOrganism"
+                      queryRef="SharedVQ.snp_ref_org"
+                      prompt="Reference organism"
                       multiPick="false" >
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
-              Choose a SNP data set from the list of providers.
+              Choose a reference organism (ie, the SNPs have been mapped to this genome).
        </help>
        </flatVocabParam>
 
-       <flatVocabParam name="snp_strain_a" includeProjects="EuPathDB,PlasmoDB,ToxoDB,CryptoDB"
+       <flatVocabParam name="snp_strain_a"
                       queryRef="SharedVQ.SnpStrainAA"
                       prompt="Reference"
                       multiPick="false"
-                      dependedParamRef="sharedParams.snpProvider">
+                      dependedParamRef="sharedParams.snpReferenceOrganism">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose a reference from the list of strains.
        </help>
        </flatVocabParam>
 
-       <flatVocabParam name="snp_strain_m" includeProjects="EuPathDB,PlasmoDB,ToxoDB,CryptoDB"
+       <flatVocabParam name="snp_strain_m" 
                       queryRef="SharedVQ.SnpStrainAA"
                       prompt="Comparator"
                       multiPick="true"
-                      dependedParamRef="sharedParams.snpProvider">
+                      dependedParamRef="sharedParams.snpReferenceOrganism">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose comparators from the list of strains. 
@@ -2416,25 +2416,28 @@ and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
 	  <wsColumn name="term" width="32" wsName="term"/>
 	</processQuery>
 
-        <sqlQuery name="snp_provider" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
+        <sqlQuery name="snp_ref_org">
           <column name="internal"/>
           <column name="term"/>
           <sql>
-select d.name as term, apidb.tab_to_string(CAST(COLLECT(distinct to_char(p.external_database_release_id)) AS apidb.varchartab), ', ') as internal
-from apidbtuning.polymorphism p, SRES.externaldatabaserelease r, SRES.externaldatabase d
-where r.external_database_release_id = p.external_database_release_id
+select sa.organism as term, apidb.tab_to_string(CAST(COLLECT(distinct to_char(sf.external_database_release_id)) 
+AS apidb.varchartab), ', ') as internal
+from dots.snpfeature sf, SRES.externaldatabaserelease r, SRES.externaldatabase d,apidbtuning.sequenceattributes sa
+where r.external_database_release_id = sf.external_database_release_id 
 and d.external_database_id = r.external_database_id
-group by d.name
+and sa.na_sequence_id = sf.na_sequence_id
+and d.name in ('InsertSnps.pm NGS SNPs INTERNAL','Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+group by sa.organism
           </sql>
         </sqlQuery>
 
-        <processQuery name="snp_provider" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+        <processQuery name="snp_ref_org" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
 
-        <sqlQuery name="SnpStrainAA" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
-          <paramRef ref="sharedParams.snpProvider" quote="false" queryRef="SharedVQ.snp_provider"/> 
+        <sqlQuery name="SnpStrainAA">
+          <paramRef ref="sharedParams.snpReferenceOrganism" quote="false" queryRef="SharedVQ.snp_ref_org"/> 
           <column name="internal"/>
           <column name="term"/>
           <sql>
@@ -2442,13 +2445,13 @@ group by d.name
             from (
             select distinct sa.organism, p.strain_a as term, p.strain_a as internal 
             from apidbtuning.polymorphism p, apidbtuning.sequenceattributes sa
-            where p.external_database_release_id in ($$snpProvider$$)
+            where p.external_database_release_id in ($$snpReferenceOrganism$$)
             and sa.na_sequence_id = p.na_sequence_id
             and p.strain_a != 'Preich'
             union 
             select distinct sa.organism, p.strain_b as term, p.strain_b as internal 
             from apidbtuning.polymorphism p, apidbtuning.sequenceattributes sa
-            where p.external_database_release_id in ($$snpProvider$$)
+            where p.external_database_release_id in ($$snpReferenceOrganism$$)
             and sa.na_sequence_id = p.na_sequence_id
             and p.strain_b != 'Preich')
             union
@@ -2460,7 +2463,7 @@ group by d.name
         </sqlQuery>
 
         <processQuery name="SnpStrainAA" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <paramRef ref="sharedParams.snpProvider" quote="false" queryRef="SharedVQ.snp_provider"/>
+            <paramRef ref="sharedParams.snpReferenceOrganism" quote="false" queryRef="SharedVQ.snp_ref_org"/>
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
