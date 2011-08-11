@@ -35,6 +35,7 @@
         <paramRef ref="sharedParams.ds_gene_ids" excludeProjects="CryptoDB,ToxoDB"/>
         <paramRef ref="sharedParams.ds_gene_ids" default="TGME49_039250" includeProjects="ToxoDB"/>
         <paramRef ref="sharedParams.ds_gene_ids" default="cgd3_510" includeProjects="CryptoDB"/>
+        <paramRef ref="sharedParams.snpReferenceOrganism" quote="false"/>
         <paramRef ref="sharedParams.snp_strain_a"/>
         <paramRef ref="sharedParams.snp_strain_m"/>
         <column name="source_id"/>
@@ -80,6 +81,7 @@ FROM
       WHERE lower(gi.id) = lower(ds.source_id)
         AND gf.source_id = gi.gene
         AND gf.na_feature_id = sf.parent_id
+        AND sf.external_database_release_id in ($$snpReferenceOrganism$$)
         AND sf.na_feature_id = isva.parent_id
         AND sf.na_feature_id = isvb.parent_id
         AND isva.strain = $$snp_strain_a$$                               
@@ -350,7 +352,88 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
       </processQuery>
 
 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <sqlQuery name="HtsSnpsByLocation" includeProjects="ToxoDB,TriTrypDB,AmoebaDB" isCacheable="true">
+ 
+        <testParamValues includeProjects="ToxoDB">
+            <paramValue name="snp_strain_m">Tg-VEG (type III)</paramValue>
+            <paramValue name="chromosomeOptional">III</paramValue>
+        </testParamValues>
 
+        <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesSNPs"/>
+         <paramRef ref="sharedParams.chromosomeOptional" multiPick="true"/>
+          <paramRef ref="sharedParams.start_point"/>
+          <paramRef ref="sharedParams.end_point"/>
+          <paramRef ref="sharedParams.htsSnpReferenceOrganism" quote="false"/>
+          <paramRef ref="sharedParams.htsSnp_strain_a"/>
+          <paramRef ref="sharedParams.htsSnp_strain_m"/>
+          <paramRef ref="sharedParams.hts_snps_coverage"/>
+          <paramRef ref="sharedParams.hts_snps_allele_freq"/>
+          <paramRef ref="sharedParams.hts_snps_pvalue"/>
+          <column name="source_id"/>
+	  <column name="project_id"/>
+          <column name="gene"/>
+          <column name="snp_location"/>
+          <column name="ref_strain"/>
+          <column name="comp_strains"/>
+          <column name="ref_allele"/>
+          <column name="comp_alleles"/>
+          <column name="phenotype"/>
+          <column name="prot_pos"/>
+          <column name="ref_product"/>
+          <column name="comp_products"/>
+
+        <sql>
+            <![CDATA[
+              select * from (
+            SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product,
+              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_allele) AS apidb.varchartab), ', ') as comp_alleles,
+              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_product) AS apidb.varchartab), ', ') as comp_products,
+              apidb.tab_to_string(CAST(COLLECT(distinct snpq.phenotype) AS apidb.varchartab), ', ') as phenotype,
+              apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_strain) AS apidb.varchartab), ', ') as ref_strain,
+              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_strain) AS apidb.varchartab), ', ') as comp_strains
+            FROM
+              (
+               SELECT 
+                       sf.source_id as source_id,
+                      seq.source_id || ':' || trim(to_char(fl.start_min,'999,999,999')) as snp_location,
+                sva.strain AS ref_strain, svb.strain AS comp_strain,
+                sva.allele as ref_allele,
+                svb.allele as comp_allele,
+                CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product THEN 'non-syn'
+                     ELSE 'non-coding' END as phenotype,
+                sva.product AS ref_product, svb.product AS comp_product,
+                sf.position_in_protein as prot_pos,
+                gf.source_id as gene
+               FROM dots.SeqVariation sva, dots.SeqVariation svb, dots.snpfeature sf,
+                    apidbtuning.featurelocation fl,apidbtuning.sequenceAttributes seq,
+                    dots.genefeature gf
+               WHERE sf.external_database_release_id in ($$htsSnpReferenceOrganism$$)
+                 AND fl.feature_source_id = sf.source_id
+                 and fl.is_top_level = 1
+                 AND fl.na_sequence_id = seq.na_sequence_id
+                 AND seq.chromosome in ( $$chromosomeOptional$$ )
+                 AND fl.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
+                 AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR fl.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))                
+                 AND sf.na_feature_id = sva.parent_id
+                 AND sf.na_feature_id = svb.parent_id
+                 AND sva.strain = $$htsSnp_strain_a$$ -- ref
+                 AND svb.strain in ($$htsSnp_strain_m$$) -- comp
+                 AND sva.allele != svb.allele
+                 AND NVL(sva.pvalue,0) <= $$hts_snps_pvalue$$
+                 AND NVL(sva.allele_percent,100) >= $$hts_snps_allele_freq$$
+                 AND NVL(sva.coverage,1000) >= $$hts_snps_coverage$$
+                 AND NVL(svb.pvalue,0) <= $$hts_snps_pvalue$$
+                 AND NVL(svb.allele_percent,100) >= $$hts_snps_allele_freq$$
+                 AND NVL(svb.coverage,1000) >= $$hts_snps_coverage$$
+                 AND sf.parent_id = gf.na_feature_id (+)
+                 ) snpq
+                 GROUP BY snpq.source_id,snpq.gene, snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product
+                 )
+           ]]>
+       </sql>
+
+    </sqlQuery>
 
 
 
