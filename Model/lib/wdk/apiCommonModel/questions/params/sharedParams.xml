@@ -1649,21 +1649,12 @@
      <!-- SNPs -->  
      <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <flatVocabParam name="snpReferenceOrganism"
-                      queryRef="SharedVQ.snp_ref_org"
-                      prompt="Genome"
-                      multiPick="false" >
-      <noTranslation value="true" includeProjects="EuPathDB" />
-       <help>
-              Choose a genome (returned SNPs or Genes will be features on this genome).
-       </help>
-       </flatVocabParam>
 
        <flatVocabParam name="snp_strain_a"
                       queryRef="SharedVQ.SnpStrainAA"
                       prompt="Reference"
                       multiPick="false"
-                      dependedParamRef="sharedParams.snpReferenceOrganism">
+                      dependedParamRef="organismParams.organism">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose a reference from the list of strains.
@@ -1674,28 +1665,20 @@
                       queryRef="SharedVQ.SnpStrainAA"
                       prompt="Comparator"
                       multiPick="true"
-                      dependedParamRef="sharedParams.snpReferenceOrganism">
+                      dependedParamRef="organismParams.organism">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose comparators from the list of strains. 
        </help>
        </flatVocabParam>
 
-       <flatVocabParam name="htsSnpReferenceOrganism"
-                      queryRef="SharedVQ.htsSnp_ref_org"
-                      prompt="Genome"
-                      multiPick="false" >
-      <noTranslation value="true" includeProjects="EuPathDB" />
-       <help>
-              Choose a genome (returned SNPs or Genes will be features on this genome and are based on alignments of HTS sequencing reads against this genome).
-       </help>
-       </flatVocabParam>
+
 
        <flatVocabParam name="htsSnp_strain_a"
                       queryRef="SharedVQ.htsSnpStrainAA"
                       prompt="Reference"
                       multiPick="false"
-                      dependedParamRef="sharedParams.htsSnpReferenceOrganism">
+                      dependedParamRef="organismParams.organism">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose a reference from the list of strains.
@@ -1706,7 +1689,7 @@
                       queryRef="SharedVQ.htsSnpStrainAA"
                       prompt="Comparator"
                       multiPick="true"
-                      dependedParamRef="sharedParams.htsSnpReferenceOrganism">
+                      dependedParamRef="organismParams.organism">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose comparators from the list of strains. 
@@ -2422,7 +2405,39 @@ and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
                from ApidbTuning.GeneAttributes 
                where species in ($$organism$$)
                 and chromosome is not null
-               union 
+               unionn 
+               select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as chromosome_order_num from dual)
+               order by chromosome_order_num asc
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="ChromosomeOrderNumSNPs" includeProjects="CryptoDB,PlasmoDB,ToxoDB" isCacheable="true" doNotTest="true">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesSNPs"/> 
+            <column name="internal"/>
+            <column name="term"/>
+            <sql>
+             select * from (
+               select distinct chromosome as term , chromosome as internal, chromosome_order_num 
+               from ApidbTuning.SequenceAttributes
+               where organism = $$organism$$
+                and chromosome is not null
+               union
+               select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as chromosome_order_num from dual)
+               order by chromosome_order_num asc
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="ChromosomeOrderNumHtsSNPs" includeProjects="AmoebaDB,TriTrypDB,ToxoDB" isCacheable="true" doNotTest="true">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesHtsSNPs"/> 
+            <column name="internal"/>
+            <column name="term"/>
+            <sql>
+             select * from (
+               select distinct chromosome as term , chromosome as internal, chromosome_order_num 
+               from ApidbTuning.SequenceAttributes
+               where organism = $$organism$$
+                and chromosome is not null
+               union
                select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as chromosome_order_num from dual)
                order by chromosome_order_num asc
             </sql>
@@ -2482,101 +2497,107 @@ and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
 	  <wsColumn name="term" width="32" wsName="term"/>
 	</processQuery>
 
-        <sqlQuery name="snp_ref_org" excludeProjects="EuPathDB">
-          <column name="internal"/>
-          <column name="term"/>
-          <sql>
-select sa.organism as term, apidb.tab_to_string(CAST(COLLECT(distinct to_char(sf.external_database_release_id)) 
-AS apidb.varchartab), ', ') as internal
-from dots.snpfeature sf, SRES.externaldatabaserelease r, SRES.externaldatabase d,apidbtuning.sequenceattributes sa
-where r.external_database_release_id = sf.external_database_release_id 
-and d.external_database_id = r.external_database_id
-and sa.na_sequence_id = sf.na_sequence_id
-and d.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-group by sa.organism
-          </sql>
-        </sqlQuery>
-
-        <processQuery name="snp_ref_org" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <wsColumn name="internal" width="32" wsName="internal"/>
-            <wsColumn name="term" width="32" wsName="term"/>
-        </processQuery> 
 
         <sqlQuery name="SnpStrainAA" excludeProjects="EuPathDB">
-          <paramRef ref="sharedParams.snpReferenceOrganism" quote="false" queryRef="SharedVQ.snp_ref_org"/> 
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withSNPs"/> 
           <column name="internal"/>
           <column name="term"/>
           <sql>
-            select substr(organism, 1, 1) || substr(organism, instr(organism, ' ') + 1, 1) || '-' || term as term, internal
-            from (
-            select distinct sa.organism, p.strain_a as term, p.strain_a as internal 
-            from apidbtuning.polymorphism p, apidbtuning.sequenceattributes sa
-            where p.external_database_release_id in ($$snpReferenceOrganism$$)
-            and sa.na_sequence_id = p.na_sequence_id
-            and p.strain_a != 'Preich'
+            select distinct substr(st.organism, 1, 1) || substr(st.organism, instr(st.organism, ' ') + 1, 1) || '-' || st.strain as term, st.strain as internal
+            from ApiDBTuning.SnpStrains st
+            where st.extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+            and st.organism = $$organism$$
+            and st.strain != 'Preich'
             union 
-            select distinct sa.organism, p.strain_b as term, p.strain_b as internal 
-            from apidbtuning.polymorphism p, apidbtuning.sequenceattributes sa
-            where p.external_database_release_id in ($$snpReferenceOrganism$$)
-            and sa.na_sequence_id = p.na_sequence_id
-            and p.strain_b != 'Preich')
-            union
             select distinct 'P. reichenowi (vs. 3D7 only)' as term, 'Preich' as internal
-            from apidbtuning.polymorphism
-            where strain_a = 'Preich'
-            or strain_b = 'Preich'
+            from apidbtuning.SnpStrains
+            where strain = 'Preich'
+            and organism = $$organism$$
+            and extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+            
           </sql>
         </sqlQuery>
 
         <processQuery name="SnpStrainAA" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <paramRef ref="sharedParams.snpReferenceOrganism" quote="false" queryRef="SharedVQ.snp_ref_org"/>
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withSNPs"/> 
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
+ 
 
-        <sqlQuery name="htsSnp_ref_org" excludeProjects="EuPathDB">
+        <sqlQuery name="ChrSnpStrainAA" excludeProjects="EuPathDB">
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesSNPs"/> 
           <column name="internal"/>
           <column name="term"/>
           <sql>
-select sa.organism as term, apidb.tab_to_string(CAST(COLLECT(distinct to_char(sf.external_database_release_id)) 
-AS apidb.varchartab), ', ') as internal
-from dots.snpfeature sf, SRES.externaldatabaserelease r, SRES.externaldatabase d,apidbtuning.sequenceattributes sa
-where r.external_database_release_id = sf.external_database_release_id 
-and d.external_database_id = r.external_database_id
-and sa.na_sequence_id = sf.na_sequence_id
-and d.name = 'InsertSnps.pm NGS SNPs INTERNAL'
-group by sa.organism
+            select distinct substr(st.organism, 1, 1) || substr(st.organism, instr(st.organism, ' ') + 1, 1) || '-' || st.strain as term, st.strain as internal
+            from ApiDBTuning.SnpStrains st
+            where st.extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+            and st.organism = $$organism$$
+            and st.strain != 'Preich'
+            union 
+            select distinct 'P. reichenowi (vs. 3D7 only)' as term, 'Preich' as internal
+            from apidbtuning.SnpStrains
+            where strain = 'Preich'
+            and organism = $$organism$$
+            and extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+            
           </sql>
         </sqlQuery>
-
-        <processQuery name="htsSnp_ref_org" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+        <processQuery name="ChrSnpStrainAA" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesSNPs"/> 
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
 
         <sqlQuery name="htsSnpStrainAA" excludeProjects="EuPathDB">
-          <paramRef ref="sharedParams.htsSnpReferenceOrganism" quote="false" queryRef="SharedVQ.htsSnp_ref_org"/> 
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
           <column name="internal"/>
           <column name="term"/>
           <sql>
-            select distinct substr(sa.organism, 1, 1) || substr(sa.organism, instr(sa.organism, ' ') + 1, 1) || '-' || sv.strain as term, sv.strain as internal
-            from apidbtuning.sequenceattributes sa, dots.snpfeature sf, dots.seqvariation sv
-            where sf.external_database_release_id in ($$htsSnpReferenceOrganism$$)
-            and sf.na_feature_id = sv.parent_id
-            and sa.na_sequence_id = sf.na_sequence_id
-            and sv.strain != 'Preich'
-            union
+            select distinct substr(st.organism, 1, 1) || substr(st.organism, instr(st.organism, ' ') + 1, 1) || '-' || st.strain as term, st.strain as internal
+            from ApiDBTuning.SnpStrains st
+            where st.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
+            and st.organism = $$organism$$
+            and st.strain != 'Preich'
+            union 
             select distinct 'P. reichenowi (vs. 3D7 only)' as term, 'Preich' as internal
-            from apidbtuning.sequenceattributes sa, dots.snpfeature sf, dots.seqvariation sv
-            where sf.external_database_release_id in ($$htsSnpReferenceOrganism$$)
-            and sf.na_feature_id = sv.parent_id
-            and sa.na_sequence_id = sf.na_sequence_id
-            and sv.strain = 'Preich'
+            from apidbtuning.SnpStrains
+            where strain = 'Preich'
+            and organism = $$organism$$
+            and extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
           </sql>
         </sqlQuery>
 
         <processQuery name="htsSnpStrainAA" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <paramRef ref="sharedParams.snpReferenceOrganism" quote="false" queryRef="SharedVQ.htsSnp_ref_org"/>
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
+            <wsColumn name="internal" width="32" wsName="internal"/>
+            <wsColumn name="term" width="32" wsName="term"/>
+        </processQuery> 
+
+
+
+        <sqlQuery name="htsChrSnpStrainAA" excludeProjects="EuPathDB">
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesHtsSNPs"/> 
+          <column name="internal"/>
+          <column name="term"/>
+          <sql>
+            select distinct substr(st.organism, 1, 1) || substr(st.organism, instr(st.organism, ' ') + 1, 1) || '-' || st.strain as term, st.strain as internal
+            from ApiDBTuning.SnpStrains st
+            where st.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
+            and st.organism = $$organism$$
+            and st.strain != 'Preich'
+            union 
+            select distinct 'P. reichenowi (vs. 3D7 only)' as term, 'Preich' as internal
+            from apidbtuning.SnpStrains
+            where strain = 'Preich'
+            and organism = $$organism$$
+            and extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="htsChrSnpStrainAA" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesHtsSNPs"/> 
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
