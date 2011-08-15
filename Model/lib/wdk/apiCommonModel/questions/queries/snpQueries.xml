@@ -135,6 +135,10 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                   quote="true" queryRef="organismVQ.withHtsSNPs"/>
         <paramRef ref="sharedParams.htsSnp_strain_a"/>
         <paramRef ref="sharedParams.htsSnp_strain_m"/>
+        <paramRef ref="sharedParams.hts_snps_coverage"/>
+        <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB,AmoebaDB"/>
+        <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="ToxoDB"/>
+        <paramRef ref="sharedParams.hts_snps_pvalue"/>
         <column name="source_id"/>
         <column name="project_id"/>
         <column name="snp_location"/>
@@ -154,7 +158,7 @@ SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.snp_location,snpq.prot_
   apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_all END) AS apidb.varchartab), ', ') as comp_alleles,                
   apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_product END) AS apidb.varchartab), ', ') as comp_products,                
   apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.phenotype END) AS apidb.varchartab), ', ') as phenotype,                  
-  apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a = snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as ref_strain,              
+  $$htsSnp_strain_a$$ as ref_strain,              
   apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as comp_strains 
 FROM                 
   (SELECT /*+ ordered */ 
@@ -185,7 +189,14 @@ FROM
         AND sf.na_feature_id = isvb.parent_id
         AND isva.strain = $$htsSnp_strain_a$$                               
         AND isvb.strain in ($$htsSnp_strain_m$$)
-        AND isva.allele != isvb.allele ) hits,
+        AND isva.allele != isvb.allele
+        AND NVL(isva.pvalue,0) <= $$hts_snps_pvalue$$
+        AND NVL(isva.allele_percent,100) >= $$hts_snps_allele_freq$$
+        AND NVL(isva.coverage,1000) >= $$hts_snps_coverage$$
+        AND NVL(isvb.pvalue,0) <= $$hts_snps_pvalue$$
+        AND NVL(isvb.allele_percent,100) >= $$hts_snps_allele_freq$$
+        AND NVL(isvb.coverage,1000) >= $$hts_snps_coverage$$
+        ) hits,
     dots.NaSequence nas, dots.NALocation gene_loc, dots.NALocation l,
     dots.SeqVariation sva, dots.SeqVariation svb
   WHERE hits.na_sequence_id = nas.na_sequence_id
