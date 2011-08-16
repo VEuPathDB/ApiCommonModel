@@ -78,13 +78,15 @@ FROM
       sf.position_in_protein,sf.source_id
       FROM ($$ds_gene_ids$$) ds,
            ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
-           dots.SeqVariation isva, dots.SeqVariation isvb,apidbtuning.snpstrains ss
+           dots.SeqVariation isva, dots.SeqVariation isvb,
+           sres.externaldatabase d, sres.externaldatabaserelease rel
       WHERE lower(gi.id) = lower(ds.source_id)
         AND gf.source_id = gi.gene
         AND gf.na_feature_id = sf.parent_id
-        AND ss.organism = $$organism$$
-        AND ss.extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-        AND sf.external_database_release_id = ss.external_database_release_id
+        AND gf.organism = $$organism$$
+        AND d.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+        AND rel.external_database_id = d.external_database_id
+        AND sf.external_database_release_id = rel.external_database_release_id
         AND sf.na_feature_id = isva.parent_id
         AND sf.na_feature_id = isvb.parent_id
         AND isva.strain = $$snp_strain_a$$                               
@@ -178,13 +180,15 @@ FROM
       sf.position_in_protein,sf.source_id
       FROM ($$ds_gene_ids$$) ds,
            ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
-           dots.SeqVariation isva, dots.SeqVariation isvb,apidbtuning.snpstrains ss
+           dots.SeqVariation isva, dots.SeqVariation isvb,
+           sres.externaldatabase d, sres.externaldatabaserelease rel
       WHERE lower(gi.id) = lower(ds.source_id)
         AND gf.source_id = gi.gene
         AND gf.na_feature_id = sf.parent_id
-        AND ss.organism = $$organism$$
-        AND ss.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
-        AND sf.external_database_release_id = ss.external_database_release_id
+        AND gf.organism = $$organism$$
+        AND d.name = 'InsertSnps.pm NGS SNPs INTERNAL'
+        AND rel.external_database_id = d.external_database_id
+        AND sf.external_database_release_id = rel.external_database_release_id
         AND sf.na_feature_id = isva.parent_id
         AND sf.na_feature_id = isvb.parent_id
         AND isva.strain = $$htsSnp_strain_a$$                               
@@ -316,10 +320,12 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                 p.product_a AS ref_product, p.product_b AS comp_product,
                 p.position_in_protein as prot_pos,
                 p.gene_source_id as gene
-               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq, apidbtuning.snpstrains ss
-               WHERE ss.organism = $$organism$$
-                 AND ss.extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-                 AND p.external_database_release_id = ss.external_database_release_id
+               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq, 
+                    sres.externaldatabase d, sres.externaldatabaserelease rel
+               WHERE seq.organism = $$organism$$
+                 AND d.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+                 AND rel.external_database_id = d.external_database_id
+                 AND p.external_database_release_id = rel.external_database_release_id
                  AND seq.na_sequence_id = p.na_sequence_id
                  AND seq.chromosome in ( $$chromosomeOptional$$ )
                  AND p.strain_a = $$snp_strain_a$$ -- ref
@@ -341,10 +347,12 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                      ELSE 'non-coding' END as phenotype,
                 p.product_b AS ref_product, p.product_a AS comp_product,
                 p.position_in_protein as prot_pos, p.gene_source_id as gene
-               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq,apidbtuning.snpstrains ss
-               WHERE ss.organism = $$organism$$
-                 AND ss.extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-                 AND p.external_database_release_id = ss.external_database_release_id
+               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq,
+                    sres.externaldatabase d, sres.externaldatabaserelease rel
+               WHERE seq.organism = $$organism$$
+                 AND d.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+                 AND rel.external_database_id = d.external_database_id
+                 AND p.external_database_release_id = rel.external_database_release_id
                  AND seq.na_sequence_id = p.na_sequence_id
                  AND seq.chromosome in ( $$chromosomeOptional$$ )
                  AND p.strain_b = $$snp_strain_a$$ -- ref
@@ -354,83 +362,6 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                  AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
                  ) snpq
             GROUP BY snpq.source_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product)
-           ]]>
-       </sql>
-        <sql includeProjects="CryptoDB_not">
-            <![CDATA[
-              select * from (
-              SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product,
-                apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_all) AS apidb.varchartab), ', ') as comp_alleles,
-                apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_product) AS apidb.varchartab), ', ') as comp_products,
-                apidb.tab_to_string(CAST(COLLECT(distinct snpq.phenotype) AS apidb.varchartab), ', ') as phenotype,
-                apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_strain) AS apidb.varchartab), ', ') as ref_strain,
-                apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_strain) AS apidb.varchartab), ', ') as comp_strains
-              FROM
-                (-- records in apid.polymorphism are constrained that
-                 -- strain_a < strain_b, so this subquery is the union of two
-                 -- possibilities:
-                 -- first, when ref strain name < comp strain name
-                 -- (i.e. ref is strain a, comp is strain b)
-                 SELECT p.snp_source_id as source_id,
-                        seq.source_id || ':' || trim(to_char(p.start_min,'999,999,999')) as snp_location,
-                  p.strain_a AS ref_strain, p.strain_b AS comp_strain,
-                  CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(ref.allele)
-                       ELSE ref.allele END as ref_allele,
-                  CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(comp.allele)
-                       ELSE comp.allele END as comp_all,
-                  CASE WHEN ref.product = comp.product then 'syn' WHEN ref.product != comp.product THEN 'non-syn'
-                       ELSE 'non-coding' END as phenotype,
-                  ref.product AS ref_product, comp.product AS comp_product,
-                  snp.position_in_protein as prot_pos,
-                  ref.allele as allele_a, comp.allele as allele_b, p.strain_b, gene.source_id as gene
-                 FROM ApidbTuning.Polymorphism p, dots.SnpFeature snp, ApidbTuning.SequenceAttributes seq,
-                      dots.SeqVariation ref, dots.SeqVariation comp,
-                      dots.NaLocation gene_loc, dots.GeneFeature gene
-                 WHERE seq.na_sequence_id = p.na_sequence_id
-                   AND p.gene_na_feature_id = gene_loc.na_feature_id(+)
-                   AND p.snp_na_feature_id = snp.na_feature_id
-                   AND seq.chromosome in ( $$chromosomeOptional$$ )
-                   AND p.strain_a = $$snp_strain_a$$ -- ref
-                   AND p.strain_b in ($$snp_strain_m$$) -- comp
-                   AND $$snp_strain_a$$ < p.strain_b
-                   AND p.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
-                   AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
-                   AND p.na_feature_id_b = comp.na_feature_id
-                   AND p.na_feature_id_a = ref.na_feature_id
-                   AND p.gene_na_feature_id = gene.na_feature_id(+)
-                UNION
-                 -- second, when comp strain name < ref strain name
-                 -- (ref is strain b, comp is strain a)
-                 SELECT p.snp_source_id as source_id,
-                        seq.source_id || ':' || trim(to_char(p.start_min,'999,999,999')) as snp_location,
-                  p.strain_b AS ref_strain, p.strain_a AS comp_strain,
-                  CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(ref.allele)
-                       ELSE ref.allele END as ref_allele,
-                  CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(comp.allele)
-                       ELSE comp.allele END as comp_all,
-                  CASE WHEN ref.product = comp.product then 'syn' WHEN ref.product != comp.product THEN 'non-syn'
-                       ELSE 'non-coding' END as phenotype,
-                  ref.product AS ref_product, comp.product AS comp_product,
-                  snp.position_in_protein as prot_pos,
-                  ref.allele as allele_a, comp.allele as allele_b, p.strain_b, gene.source_id as gene
-                 FROM ApidbTuning.Polymorphism p, dots.SnpFeature snp, ApidbTuning.SequenceAttributes seq,
-                      dots.SeqVariation ref, dots.SeqVariation comp,
-                      dots.NaLocation gene_loc, dots.GeneFeature gene, ApidbTuning.FeatureLocation fl
-                 WHERE seq.na_sequence_id = p.na_sequence_id
-                   AND p.gene_na_feature_id = gene_loc.na_feature_id(+)
-                   AND p.external_database_release_id = edr.external_database_release_id
-                   AND edr.external_database_id = ed.external_database_id
-                   AND p.snp_na_feature_id = snp.na_feature_id
-                   AND seq.chromosome in ( $$chromosomeOptional$$ )
-                   AND p.strain_b = $$snp_strain_a$$ -- ref
-                   AND p.strain_a in ($$snp_strain_m$$) -- comp
-                   AND p.strain_a < $$snp_strain_a$$
-                   AND p.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
-                   AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
-                   AND p.na_feature_id_a = comp.na_feature_id
-                   AND p.na_feature_id_b = ref.na_feature_id
-                   AND p.gene_na_feature_id = gene.na_feature_id(+) ) snpq
-              GROUP BY snpq.source_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product)
            ]]>
        </sql>
     </sqlQuery>
@@ -531,10 +462,12 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
                 gf.source_id as gene
                FROM dots.SeqVariation sva, dots.SeqVariation svb, dots.snpfeature sf,
                     apidbtuning.featurelocation fl,apidbtuning.sequenceAttributes seq,
-                    dots.genefeature gf,apidbtuning.snpstrains ss
-               WHERE ss.organism = $$organism$$
-                 AND ss.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
-                 AND sf.external_database_release_id = ss.external_database_release_id
+                    dots.genefeature gf,
+                    sres.externaldatabase d, sres.externaldatabaserelease rel
+               WHERE seq.organism = $$organism$$
+                 AND d.name = 'InsertSnps.pm NGS SNPs INTERNAL'
+                 AND rel.external_database_id = d.external_database_id
+                 AND sf.external_database_release_id = rel.external_database_release_id
                  AND fl.feature_source_id = sf.source_id
                  AND fl.na_sequence_id = seq.na_sequence_id
                  &&seqIdOrChrom&&

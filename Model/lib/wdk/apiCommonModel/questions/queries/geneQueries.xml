@@ -1918,39 +1918,31 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
 	      FROM (
 SELECT cds_length, na_feature_id, source_id,
        strain_a, strain_b,
-       sum(synonymous) / 2 as synonymous,
-       sum(non_synonymous) / 2as non_synonymous,
-       sum(non_coding) / 2 as non_coding,
-       sum(stop) / 2 as stop,
-       (sum(non_coding) + sum(synonymous) + sum(non_synonymous)) / 2 as total
-FROM  (SELECT greatest(taf.translation_start, taf.translation_stop)
-              - least(taf.translation_start, taf.translation_stop) + 1 AS cds_length,
-              gf.na_feature_id, gf.source_id,
+       sum(synonymous) as synonymous,
+       sum(non_synonymous) as non_synonymous,
+       sum(non_coding) as non_coding,
+       sum(stop) as stop,
+       (sum(non_coding) + sum(synonymous) + sum(non_synonymous)) as total
+FROM  (SELECT gf.cds_length, gf.na_feature_id, gf.source_id,
               sf.external_database_release_id,
               sva.strain AS strain_a,
               svb.strain AS strain_b,
               CASE WHEN sva.product IS NULL THEN 1 ELSE 0 END AS non_coding,
               CASE WHEN sva.product = svb.product THEN 1 ELSE 0 END AS synonymous,
               CASE WHEN sva.product != svb.product THEN 1 ELSE 0 END AS non_synonymous,
-              CASE WHEN sva.product = '*' OR  svb.product = '*' THEN 1 ELSE 0 END AS stop,
-              least(sva.coverage,svb.coverage) as coverage,
-              least(sva.frequency,svb.frequency) as frequency,
-              greatest(sva.pvalue,svb.pvalue) as pvalue
+              CASE WHEN sva.product = '*' OR  svb.product = '*' THEN 1 ELSE 0 END AS stop
        FROM dots.SeqVariation sva, dots.SeqVariation svb, dots.SnpFeature sf,
-            dots.SplicedNaSequence cds, dots.Transcript, dots.GeneFeature gf,
-            dots.TranslatedAaFeature taf,apidbtuning.snpstrains ss
-       WHERE ss.organism = $$organism$$
-         AND ss.extdb_name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-         AND sf.external_database_release_id = ss.external_database_release_id
+            apidbtuning.geneattributes gf, sres.externaldatabase d, SRES.externaldatabaserelease rel
+       WHERE gf.organism = $$organism$$
+         AND d.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
+         AND rel.external_database_id = d.external_database_id
+         AND sf.external_database_release_id = rel.external_database_release_id
          AND sva.parent_id = sf.na_feature_id
          AND svb.parent_id = sf.na_feature_id        
          AND sva.strain = $$snp_strain_a$$
          AND svb.strain = $$snp_strain_m$$
          AND sva.allele != svb.allele
          AND sf.parent_id = gf.na_feature_id
-         AND gf.na_feature_id = transcript.parent_id
-         AND transcript.na_sequence_id = cds.na_sequence_id
-         AND transcript.na_feature_id = taf.na_feature_id
 )
 GROUP BY cds_length, na_feature_id, source_id,
          strain_a, strain_b )
@@ -2050,13 +2042,12 @@ GROUP BY cds_length, na_feature_id, source_id,
 	      FROM (
 SELECT cds_length, na_feature_id, source_id,
        strain_a, strain_b,
-       sum(synonymous) / 2 as synonymous,
-       sum(non_synonymous) / 2 as non_synonymous,
-       sum(non_coding) / 2 as non_coding,
-       sum(stop) / 2 as stop,
-       (sum(non_coding) + sum(synonymous) + sum(non_synonymous)) / 2 as total
-FROM  (SELECT greatest(taf.translation_start, taf.translation_stop)
-              - least(taf.translation_start, taf.translation_stop) + 1 AS cds_length,
+       sum(synonymous) as synonymous,
+       sum(non_synonymous) as non_synonymous,
+       sum(non_coding) as non_coding,
+       sum(stop) as stop,
+       (sum(non_coding) + sum(synonymous) + sum(non_synonymous)) as total
+FROM  (SELECT gf.cds_length,
               gf.na_feature_id, gf.source_id,
               sf.external_database_release_id,
               sva.strain AS strain_a,
@@ -2064,16 +2055,13 @@ FROM  (SELECT greatest(taf.translation_start, taf.translation_stop)
               CASE WHEN sva.product IS NULL THEN 1 ELSE 0 END AS non_coding,
               CASE WHEN sva.product = svb.product THEN 1 ELSE 0 END AS synonymous,
               CASE WHEN sva.product != svb.product THEN 1 ELSE 0 END AS non_synonymous,
-              CASE WHEN sva.product = '*' OR  svb.product = '*' THEN 1 ELSE 0 END AS stop,
-              least(sva.coverage,svb.coverage) as coverage,
-              least(sva.frequency,svb.frequency) as frequency,
-              greatest(sva.pvalue,svb.pvalue) as pvalue
+              CASE WHEN sva.product = '*' OR  svb.product = '*' THEN 1 ELSE 0 END AS stop
        FROM dots.SeqVariation sva, dots.SeqVariation svb, dots.SnpFeature sf,
-            dots.SplicedNaSequence cds, dots.Transcript, dots.GeneFeature gf,
-            dots.TranslatedAaFeature taf,apidbtuning.snpstrains ss
-       WHERE ss.organism = $$organism$$
-         AND ss.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
-         AND sf.external_database_release_id = ss.external_database_release_id
+            apidbtuning.geneattributes gf, sres.externaldatabase d, SRES.externaldatabaserelease rel
+       WHERE gf.organism = $$organism$$
+         AND d.name = 'InsertSnps.pm NGS SNPs INTERNAL'
+         AND rel.external_database_id = d.external_database_id
+         AND sf.external_database_release_id = rel.external_database_release_id
          AND sva.parent_id = sf.na_feature_id
          AND svb.parent_id = sf.na_feature_id        
          AND sva.strain = $$htsSnp_strain_a$$
@@ -2086,9 +2074,6 @@ FROM  (SELECT greatest(taf.translation_start, taf.translation_stop)
          AND NVL(svb.allele_percent,100) >= $$hts_snps_allele_freq$$
          AND NVL(svb.coverage,1000) >= $$hts_snps_coverage$$
          AND sf.parent_id = gf.na_feature_id
-         AND gf.na_feature_id = transcript.parent_id
-         AND transcript.na_sequence_id = cds.na_sequence_id
-         AND transcript.na_feature_id = taf.na_feature_id
 )
 GROUP BY cds_length, na_feature_id, source_id,
          strain_a, strain_b )
