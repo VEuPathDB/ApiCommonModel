@@ -18,6 +18,8 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Scanner;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 
@@ -125,9 +127,9 @@ public class FusionTable {
      * of the service URL. A Google Fusion Tables API SELECT statement
      * will be passed in to this method in the selectQuery parameter.
      */
-    public void loadTuningTableFromFusionTable(String datasetId, Connection dbc, String tuningTable, String suffix, String columnList) throws IOException,
-																	      ServiceException, SQLException {
-	String selectQuery = new String("select " + columnList + " from " + datasetId);
+    public void loadTuningTableFromFusionTable(String datasetId, Connection dbc, String tuningTable, String suffix)
+	throws IOException, ServiceException, SQLException {
+	String selectQuery = new String("select * from " + datasetId);
 	URL url = new URL(
 			  SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8"));
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
@@ -190,17 +192,21 @@ public class FusionTable {
      * of the service URL. A Google Fusion Tables API SELECT statement
      * will be passed in to this method in the selectQuery parameter.
      */
-    public void createTuningTable(String datasetId, Connection dbc, String tuningTable, String suffix, String columnList) throws IOException,
-																 ServiceException, SQLException {
-	String selectQuery = new String("select " + columnList + " from " + datasetId);
+    public void createTuningTable(String datasetId, Connection dbc, String tuningTable, String suffix, String expectedColumns)
+	throws IOException, ServiceException, SQLException, Exception {
+
+	// make a set of expected columns, if supplied
+	String[] expectedColumnArray = expectedColumns.split(",");
+	Set<String> expectedColumnSet = new HashSet<String>();
+	for (String column : expectedColumnArray) {
+	    expectedColumnSet.add(column);
+	}
+
+	String selectQuery = new String("select * from " + datasetId);
 	URL url = new URL(SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8"));
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
-	
 	request.execute();
 	
-	/* Prints the results of the query.                */
-	/* No Google Fusion Tables API-specific code here. */
-
 	Scanner scanner = new Scanner(request.getResponseStream(),"UTF-8");
 	boolean processingHeader = true;
 	int columnNumber = 0;
@@ -220,10 +226,22 @@ public class FusionTable {
 		String decoded = quotedString == null ? match.group(1)
 		    : quotedString.replaceAll("\"\"", "\"");
 		columnName[columnNumber++] = decoded;
+
+		// if a set of expected columns was given, check that this is in it
+		if (expectedColumns.length() > 0) {
+		    if (!expectedColumnSet.contains(decoded))
+			throw new Exception("column \"" + decoded + "\" not contained in expected-column list \"" + expectedColumns + "\"");
+		}
+
 		if (!match.group(4).equals(",")) { // last column; process row
 		    processingHeader = false;
 		    columnCount = columnNumber;
 		    columnNumber = 0;
+
+		    // compare counts of expected vs. received columns
+		    if (expectedColumnSet.size() != columnCount) {
+			throw new Exception("expected " + expectedColumnSet.size() + " columns; received " + columnCount);
+		    }
 		}
 	    } else {
 		scanner.findWithinHorizon(CSV_VALUE_PATTERN, 0);
@@ -256,7 +274,7 @@ public class FusionTable {
      *
      *
      */
-    public static void main(String[] args) throws ServiceException, IOException, SQLException {
+    public static void main(String[] args) throws ServiceException, IOException, SQLException, Exception {
 
 	if (args.length != 3 && args.length != 4) {
 	    System.err.println("usage: java FusionTable <datasetId> <tuningTable> <suffix> [ <columnList> ]");
@@ -278,8 +296,8 @@ public class FusionTable {
 	Connection dbc = DriverManager.getConnection("jdbc:oracle:oci:@" + instance, schema, password);
 
 	FusionTable ft = new FusionTable("");
-	String columnList = new String( (args.length == 4) ? args[3] : "*");
+	String columnList = new String( (args.length == 4) ? args[3] : "");
 	ft.createTuningTable(args[0], dbc, args[1], args[2], columnList);
-	ft.loadTuningTableFromFusionTable(args[0], dbc, args[1], args[2], columnList);
+	ft.loadTuningTableFromFusionTable(args[0], dbc, args[1], args[2]);
     }
 }
