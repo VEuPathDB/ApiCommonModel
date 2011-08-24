@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.SQLException;
-import java.util.Collection;
 import java.util.Map;
 
 import javax.sql.DataSource;
@@ -50,7 +49,7 @@ import org.gusdb.wsf.util.BaseCLI;
  *         true, otherwise the sql will fail. In this case, a two-step process
  *         will be used with the slower apidb.clob_clob_agg() aggregation
  *         function.
- *         
+ * 
  *         this command is replaced by DetailTableLoader
  */
 @Deprecated
@@ -72,7 +71,8 @@ public class FullRecordCacheCreator extends BaseCLI {
 
     private static final String PROP_EXCLUDE_FROM_DUMPER = "excludeFromDumper";
 
-    private static final Logger logger = Logger.getLogger(FullRecordCacheCreator.class);
+    private static final Logger logger = Logger
+            .getLogger(FullRecordCacheCreator.class);
 
     /**
      * @param args
@@ -85,7 +85,8 @@ public class FullRecordCacheCreator extends BaseCLI {
                 "Create the Dump Table");
         try {
             creator.invoke(args);
-        } finally {
+        }
+        finally {
             System.exit(0);
         }
     }
@@ -157,7 +158,8 @@ public class FullRecordCacheCreator extends BaseCLI {
             }
         } else { // no table specified, only dump tables with a specific flag
             for (TableField table : tables.values()) {
-                String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
+                String[] props = table
+                        .getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
                 if (props.length > 0 && props[0].equalsIgnoreCase("true"))
                     continue;
                 System.out.println(table.getName());
@@ -307,8 +309,8 @@ public class FullRecordCacheCreator extends BaseCLI {
             throws SQLException, WdkUserException, WdkModelException {
         String pkColumns = getPkColumns(table.getRecordClass(), null);
         StringBuilder sql = new StringBuilder("INSERT /*+ append */ INTO ");
-        sql.append(cacheTable).append(getSelectSql(table, pkColumns)).append(
-                ',');
+        sql.append(cacheTable).append(getSelectSql(table, pkColumns))
+                .append(',');
         sql.append(FUNCTION_CLOB_CLOB_AGG).append('(').append(COLUMN_CONTENT);
         sql.append(") AS ").append(COLUMN_CONTENT);
         sql.append(" ,sysdate FROM ").append(cacheName);
@@ -333,8 +335,10 @@ public class FullRecordCacheCreator extends BaseCLI {
     private String getJoinedSql(TableField table, String idSql, String idqName,
             String tqName) throws WdkModelException {
         String queryName = table.getQuery().getFullName();
-        String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
-        String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
+        String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName))
+                .getSql();
+        String[] pkColumns = table.getRecordClass()
+                .getPrimaryKeyAttributeField().getColumnRefs();
         StringBuilder sql = new StringBuilder(" FROM ");
         sql.append('(').append(idSql).append(") ").append(idqName);
         sql.append(", (").append(tableSql).append(") ").append(tqName);
@@ -369,8 +373,8 @@ public class FullRecordCacheCreator extends BaseCLI {
         StringBuffer sql = new StringBuffer("INSERT /*+ append */ INTO ");
         sql.append(cacheTable).append(getSelectSql(table, pkColumns));
         sql.append(',').append(FUNCTION_CHAR_CLOB_AGG).append('(');
-        sql.append(content).append(") AS ").append(COLUMN_CONTENT).append(
-                " ,sysdate ");
+        sql.append(content).append(") AS ").append(COLUMN_CONTENT)
+                .append(" ,sysdate ");
         sql.append(getJoinedSql(table, idSql, idqName, tqName));
         sql.append(" GROUP BY ").append(pkColumns);
 
@@ -400,7 +404,8 @@ public class FullRecordCacheCreator extends BaseCLI {
 
     private String getPkColumns(RecordClass recordClass, String prefix) {
         StringBuilder sql = new StringBuilder();
-        String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+        String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
+                .getColumnRefs();
         for (String column : pkColumns) {
             if (sql.length() > 0) sql.append(',');
             if (prefix != null) sql.append(prefix).append('.');
@@ -413,7 +418,8 @@ public class FullRecordCacheCreator extends BaseCLI {
         StringBuilder sql = new StringBuilder();
         sql.append("TABLE: ").append(table.getDisplayName()).append("\n");
         boolean firstField = true;
-        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
+        for (AttributeField attribute : table
+                .getAttributeFields(FieldScope.REPORT_MAKER)) {
             if (firstField) firstField = false;
             else sql.append("\t");
             sql.append("[").append(attribute.getDisplayName()).append("]");
@@ -438,7 +444,8 @@ public class FullRecordCacheCreator extends BaseCLI {
             throws WdkModelException {
         StringBuilder sql = new StringBuilder();
         boolean clobRow = ((SqlQuery) table.getQuery()).isClobRow();
-        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
+        for (AttributeField attribute : table
+                .getAttributeFields(FieldScope.REPORT_MAKER)) {
             String attributeSql = getAttributeContentSql(tableName, attribute);
             if (clobRow && sql.length() == 0) {
                 attributeSql = "TO_CLOB(" + attributeSql + ")";
@@ -462,8 +469,9 @@ public class FullRecordCacheCreator extends BaseCLI {
             text = ((LinkAttributeField) attribute).getDisplayText();
         }
         text = "'" + text.replace("'", "''") + "'";
-        Collection<AttributeField> children = attribute.getDependents();
-        for (AttributeField child : children) {
+        Map<String, ColumnAttributeField> children = attribute
+                .getColumnAttributeFields();
+        for (ColumnAttributeField child : children.values()) {
             String key = "$$" + child.getName() + "$$";
             String replace = getAttributeContentSql(tableName, child);
             text = text.replace(key, "' || " + replace + " || '");

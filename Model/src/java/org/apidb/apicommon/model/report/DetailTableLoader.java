@@ -12,7 +12,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,7 +60,8 @@ public class DetailTableLoader extends BaseCLI {
 
     private static final String PROP_EXCLUDE_FROM_DUMPER = "excludeFromDumper";
 
-    private static final Logger logger = Logger.getLogger(DetailTableLoader.class);
+    private static final Logger logger = Logger
+            .getLogger(DetailTableLoader.class);
 
     /**
      * @param args
@@ -74,7 +74,8 @@ public class DetailTableLoader extends BaseCLI {
                 "Load a Detail table.  Delete rows that will be replaced");
         try {
             creator.invoke(args);
-        } finally {
+        }
+        finally {
             System.exit(0);
         }
     }
@@ -149,7 +150,8 @@ public class DetailTableLoader extends BaseCLI {
             }
         } else { // no table specified, only dump tables with a specific flag
             for (TableField table : tables.values()) {
-                String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
+                String[] props = table
+                        .getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
                 if (props.length > 0 && props[0].equalsIgnoreCase("true"))
                     continue;
                 dumpTable(table, idSql);
@@ -198,7 +200,8 @@ public class DetailTableLoader extends BaseCLI {
         }
 
         logger.debug("getting data source...");
-        DataSource updateDataSource = wdkModel.getQueryPlatform().getDataSource();
+        DataSource updateDataSource = wdkModel.getQueryPlatform()
+                .getDataSource();
         logger.debug("getting connection...");
         Connection updateConnection = updateDataSource.getConnection();
         logger.debug("Connection obtained...");
@@ -207,7 +210,8 @@ public class DetailTableLoader extends BaseCLI {
         // has two columns: project and id.
         // the name of the id might differ across record types, so we will
         // not hardcode it, rather put it in a variable called pkName
-        String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
+        String[] pkColumns = table.getRecordClass()
+                .getPrimaryKeyAttributeField().getColumnRefs();
         String pkName = pkColumns[0].toUpperCase();
         String pk2 = pkColumns[1].toUpperCase();
 
@@ -223,24 +227,29 @@ public class DetailTableLoader extends BaseCLI {
             logger.debug("deleting old result...");
             deleteRows(idSql, table.getName(), updateConnection);
 
-            PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
+            PreparedStatement insertStmt = updateConnection
+                    .prepareStatement(insertSql);
             logger.info("Dumping table [" + table.getName() + "]");
             logger.debug("aggregating data...");
             int[] counts = aggregateLocally(table, idSql, insertStmt,
                     insertSql, pkName);
-            long startCommit = System.currentTimeMillis();	    
+            long startCommit = System.currentTimeMillis();
             updateConnection.commit();
-	    long end = System.currentTimeMillis();
+            long end = System.currentTimeMillis();
 
-
-            logger.info("Dump table [" + table.getName() + "] done.  Created and inserted "
-                    + counts[0] + " (" + counts[1] + " detail) rows in "
-                    + ((end - start) / 1000.0) + " seconds.  Cumulative insert time was " + (int)(counts[2]/1000) + " seconds.  Commit was "
-			+ (int)(end - startCommit)/1000);
-        } catch (SQLException ex) {
+            logger.info("Dump table [" + table.getName()
+                    + "] done.  Created and inserted " + counts[0] + " ("
+                    + counts[1] + " detail) rows in "
+                    + ((end - start) / 1000.0)
+                    + " seconds.  Cumulative insert time was "
+                    + (int) (counts[2] / 1000) + " seconds.  Commit was "
+                    + (int) (end - startCommit) / 1000);
+        }
+        catch (SQLException ex) {
             updateConnection.rollback();
             throw ex;
-        } finally {
+        }
+        finally {
             if (updateConnection != null) {
                 updateConnection.setAutoCommit(true);
                 updateConnection.close();
@@ -257,12 +266,12 @@ public class DetailTableLoader extends BaseCLI {
         sql.append(idSql + "))");
         sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
         logger.info("Removing previous rows [" + fieldName + "]");
-	logger.debug("\n" + sql);
+        logger.debug("\n" + sql);
         SqlUtils.executeUpdate(wdkModel, connection, sql.toString(),
-                "api-report-detail-delete-"+fieldName);
-            long end = System.currentTimeMillis();
-	logger.info("Deleted rows for [" + fieldName + "] in " +
-		     ((end - start) / 1000.0) + " seconds");
+                "api-report-detail-delete-" + fieldName);
+        long end = System.currentTimeMillis();
+        logger.info("Deleted rows for [" + fieldName + "] in "
+                + ((end - start) / 1000.0) + " seconds");
     }
 
     private int[] aggregateLocally(TableField table, String idSql,
@@ -273,9 +282,10 @@ public class DetailTableLoader extends BaseCLI {
 
         String wrappedSql = getWrappedSql(table, idSql, pkName);
 
-	logger.debug("wrapped sql:\n" + wrappedSql);
+        logger.debug("wrapped sql:\n" + wrappedSql);
         ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
-                wrappedSql, "api-report-detail-aggregate-"+table.getName(), 2000);
+                wrappedSql, "api-report-detail-aggregate-" + table.getName(),
+                2000);
         String srcId = "";
         String prj = "";
         String prevSrcId = "";
@@ -285,14 +295,14 @@ public class DetailTableLoader extends BaseCLI {
         int detailCount = 0;
         int rowCount = 0;
         boolean first = true;
-	long insertTime = 0;
+        long insertTime = 0;
         while (resultSet.next()) {
             srcId = resultSet.getString(pkName);
             prj = resultSet.getString("PROJECT_ID");
             if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
-                insertTime +=
-		    insertDetailRow(insertStmt, insertSql, aggregatedContent,
-				    rowCount, table, prevSrcId, prevPrj, title);
+                insertTime += insertDetailRow(insertStmt, insertSql,
+                        aggregatedContent, rowCount, table, prevSrcId, prevPrj,
+                        title);
                 insertCount++;
                 aggregatedContent = new StringBuilder();
                 rowCount = 0;
@@ -306,8 +316,8 @@ public class DetailTableLoader extends BaseCLI {
             if (formattedValues[0] != null)
                 aggregatedContent.append(formattedValues[0]);
             for (int i = 1; i < formattedValues.length; i++) {
-                if (formattedValues[i] != null) aggregatedContent.append("\t").append(
-                        formattedValues[i]);
+                if (formattedValues[i] != null) aggregatedContent.append("\t")
+                        .append(formattedValues[i]);
                 else aggregatedContent.append("\t");
             }
             aggregatedContent.append("\n");
@@ -315,12 +325,12 @@ public class DetailTableLoader extends BaseCLI {
             detailCount++;
         }
         if (aggregatedContent.length() != 0) {
-            insertTime +=
-		insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount,
-				table, prevSrcId, prevPrj, title);
+            insertTime += insertDetailRow(insertStmt, insertSql,
+                    aggregatedContent, rowCount, table, prevSrcId, prevPrj,
+                    title);
             insertCount++;
         }
-        int[] counts = { insertCount, detailCount, (int)insertTime};
+        int[] counts = { insertCount, detailCount, (int) insertTime };
         return counts;
     }
 
@@ -328,7 +338,8 @@ public class DetailTableLoader extends BaseCLI {
         StringBuilder title = new StringBuilder();
         title.append("TABLE: ").append(table.getDisplayName()).append("\n");
         boolean firstField = true;
-        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
+        for (AttributeField attribute : table
+                .getAttributeFields(FieldScope.REPORT_MAKER)) {
             if (firstField) firstField = false;
             else title.append("\t");
             title.append("[").append(attribute.getDisplayName()).append("]");
@@ -340,7 +351,8 @@ public class DetailTableLoader extends BaseCLI {
             throws WdkModelException {
 
         String queryName = table.getQuery().getFullName();
-        String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
+        String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName))
+                .getSql();
 
         String sql = "select tq.*" + "\n" + "FROM (ID_QUERY) idq," + "\n"
                 + "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq"
@@ -359,12 +371,14 @@ public class DetailTableLoader extends BaseCLI {
     private String[] formatAttributeValues(ResultSet resultSet, TableField table)
             throws WdkModelException, SQLException, WdkUserException {
 
-        String[] formattedValuesArray = new String[table.getAttributeFields(FieldScope.REPORT_MAKER).length];
+        String[] formattedValuesArray = new String[table
+                .getAttributeFields(FieldScope.REPORT_MAKER).length];
 
         Map<String, String> formattedValuesMap = new HashMap<String, String>();
 
         int i = 0;
-        for (AttributeField attribute : table.getAttributeFields(FieldScope.REPORT_MAKER)) {
+        for (AttributeField attribute : table
+                .getAttributeFields(FieldScope.REPORT_MAKER)) {
             String formattedValue = formatValue(formattedValuesMap, table,
                     attribute, resultSet);
             formattedValuesArray[i++] = formattedValue;
@@ -381,7 +395,8 @@ public class DetailTableLoader extends BaseCLI {
         }
 
         if (attribute instanceof ColumnAttributeField) {
-            String value = resultSet.getString(attribute.getName().toUpperCase());
+            String value = resultSet.getString(attribute.getName()
+                    .toUpperCase());
             if (value == null) {
                 String errorMessage = "Table Query ["
                         + table.getQuery().getFullName() + "] returns null "
@@ -406,8 +421,9 @@ public class DetailTableLoader extends BaseCLI {
             text = ((LinkAttributeField) attribute).getDisplayText();
         }
 
-        Collection<AttributeField> children = attribute.getDependents();
-        for (AttributeField child : children) {
+        Map<String, ColumnAttributeField> children = attribute
+                .getColumnAttributeFields();
+        for (ColumnAttributeField child : children.values()) {
             String key = "$$" + child.getName() + "$$";
             String childValue = formatValue(formattedValuesMap, table, child,
                     resultSet);
@@ -432,8 +448,7 @@ public class DetailTableLoader extends BaseCLI {
             TableField table, String srcId, String project, String title)
             throws WdkModelException, SQLException, WdkUserException {
 
-	long start = System.currentTimeMillis();
-
+        long start = System.currentTimeMillis();
 
         // trim trailing newline (but not leading white space)
         String content = contentBuf.toString();
@@ -451,8 +466,8 @@ public class DetailTableLoader extends BaseCLI {
 
         insertStmt.setTimestamp(7, new Timestamp(new Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
-                "api-report-detail-insert-"+table.getName());
-	return System.currentTimeMillis() - start;
+                "api-report-detail-insert-" + table.getName());
+        return System.currentTimeMillis() - start;
     }
 
 }
