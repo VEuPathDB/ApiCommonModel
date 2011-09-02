@@ -164,26 +164,30 @@
     <sqlQuery name="SpansByeQTLtoGenes" includeProjects="PlasmoDB" 
               isCacheable="true">
 
-        <paramRef ref="geneParams.pf_gene_id"/>
+        <paramRef ref="sharedParams.ds_gene_ids" default="PF11_0300, PF11_0398"/>
         <paramRef ref="geneParams.lod_score" default="1E-3"/>
         <paramRef ref="geneParams.liberal_conservative"/>
+        <paramRef ref="geneParams.any_or_all_DynSeg"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="lod_score"/>
       <sql>
           <![CDATA[
-            SELECT  CASE WHEN ($$liberal_conservative$$ = 'liberal') THEN (ens.source_id || ':' || nl.start_min  || '-' || nl.end_max || ':f')
-                         WHEN ($$liberal_conservative$$ = 'conservative') THEN (ens.source_id || ':' || nl.start_max  || '-' || nl.end_min || ':f') 
-                    END as source_id,  '@PROJECT_ID@' as project_id,
-                    to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') as lod_score 
+    SELECT source_id, '@PROJECT_ID@' as project_id, max(lod_score) as lod_score
+    FROM   (SELECT  CASE WHEN ($$liberal_conservative$$ = 'liberal') THEN (ens.source_id || ':' || nl.start_min  || '-' || nl.end_max)
+                         WHEN ($$liberal_conservative$$ = 'conservative') THEN (ens.source_id || ':' || nl.start_max  || '-' || nl.end_min) 
+                    END as source_id,
+                    to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') as lod_score
             FROM    dots.chromosomeelementfeature  cef, apidb.genefeaturelodscore  gls,
-                    dots.externalnasequence ens, dots.nalocation nl, apidb.geneattributes ga 
-            where ga.source_id = $$pf_gene_id$$
+                    dots.externalnasequence ens, dots.nalocation nl, apidb.geneattributes ga, ($$ds_gene_ids$$) ds 
+            where ga.source_id = ds.source_id
             and gls.na_feature_id = ga.na_feature_id
             and cef.name = gls.HAPLOTYPE_BLOCK_NAME
             and nl.na_feature_id = cef.na_feature_id
             and cef.na_sequence_id = ens.na_sequence_id
-            and to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) <= $$lod_score$$ 
+            and to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) <= $$lod_score$$)
+    GROUP BY source_id
+    HAVING '$$any_or_all_DynSeg$$' = 'any' or count(*) = (select count(*) from apidb.geneattributes ga,($$ds_gene_ids$$) ds  where ga.source_id = ds.source_id) 
           ]]>
       </sql>
 
@@ -192,9 +196,10 @@
     <processQuery name="SpansByeQTLtoGenes" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
 
-        <paramRef ref="geneParams.pf_gene_id"/>
+        <paramRef ref="sharedParams.ds_gene_ids" default="PF11_0300, PF11_0398"/>
         <paramRef ref="geneParams.lod_score" default="1E-3"/>
         <paramRef ref="geneParams.liberal_conservative"/>
+        <paramRef ref="geneParams.any_or_all_DynSeg"/>
         <wsColumn name="project_id" width="20" wsName="project_id"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="lod_score" wsName="lod_score"/>
