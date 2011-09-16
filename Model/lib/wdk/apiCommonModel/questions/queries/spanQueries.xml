@@ -171,26 +171,30 @@
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="lod_score"/>
+        <column name="sequence_id"/>
+        <column name="start_loc"/>
+        <column name="end_loc"/>
         <column name="assoc_genes"/>
       <sql>
           <![CDATA[
-    SELECT source_id, '@PROJECT_ID@' as project_id, max(lod_score) as lod_score,
+    SELECT sequence_id, start_loc, end_loc, (sequence_id || ':' || start_loc || '-' || end_loc) as source_id, 
+           '@PROJECT_ID@' as project_id, max(lod_score) as lod_score,
            apidb.tab_to_string(CAST(COLLECT(gene_id order by gene_id) AS apidb.varchartab),', ') as assoc_genes
-    FROM   (SELECT  CASE WHEN ($$liberal_conservative$$ = 'liberal') THEN (ens.source_id || ':' || nl.start_min  || '-' || nl.end_max)
-                         WHEN ($$liberal_conservative$$ = 'conservative') THEN (ens.source_id || ':' || nl.start_max  || '-' || nl.end_min) 
-                    END as source_id, ga.source_id as gene_id,
+    FROM  (SELECT  ga.source_id as gene_id,ens.source_id as sequence_id,
+                    CASE WHEN ($$liberal_conservative$$ = 'liberal') THEN nl.start_min ELSE nl.start_max END as start_loc,
+                    CASE WHEN ($$liberal_conservative$$ = 'liberal') THEN nl.end_max ELSE nl.end_min END as end_loc,
                     CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                                ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
                     END as lod_score
-            FROM    dots.chromosomeelementfeature  cef, apidb.genefeaturelodscore  gls,
+           FROM    dots.chromosomeelementfeature  cef, apidb.genefeaturelodscore  gls,
                     dots.externalnasequence ens, dots.nalocation nl, apidbTuning.geneattributes ga, ($$ds_gene_ids$$) ds 
-            where lower(ga.source_id) = lower(ds.source_id)
-            and gls.na_feature_id = ga.na_feature_id
-            and cef.name = gls.HAPLOTYPE_BLOCK_NAME
-            and nl.na_feature_id = cef.na_feature_id
-            and cef.na_sequence_id = ens.na_sequence_id
-            and to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) >= $$lod_score$$)
-    GROUP BY source_id
+           where lower(ga.source_id) = lower(ds.source_id)
+           and gls.na_feature_id = ga.na_feature_id
+           and cef.name = gls.HAPLOTYPE_BLOCK_NAME
+           and nl.na_feature_id = cef.na_feature_id
+           and cef.na_sequence_id = ens.na_sequence_id
+           and to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) >= $$lod_score$$)
+    GROUP BY sequence_id, start_loc, end_loc
     HAVING '$$any_or_all_DynSeg$$' = 'any' or count(*) = (select count(*) from apidbtuning.geneattributes ga,($$ds_gene_ids$$) ds  where lower(ga.source_id) = lower(ds.source_id)) 
           ]]>
       </sql>
@@ -207,6 +211,9 @@
         <wsColumn name="project_id" width="20" wsName="project_id"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="lod_score" wsName="lod_score"/>
+        <wsColumn name="sequence_id" wsName="sequence_id"/>
+        <wsColumn name="start_loc" wsName="start_loc"/>
+        <wsColumn name="end_loc" wsName="end_loc"/>
         <wsColumn name="assoc_genes" wsName="assoc_genes"/>
     </processQuery>
 
