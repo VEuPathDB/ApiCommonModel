@@ -150,12 +150,13 @@
             <column name="source_id" />
             <column name="updated_annotation" />
 	    <sql>
-	      SELECT ga.source_id, '@PROJECT_ID@' AS project_id, lin.source_id as updated_annotation
-                FROM ApidbTuning.GeneAttributes ga,
-                  (SELECT gf.source_id
-                     FROM ApidbTuning.GeneAttributes gf
-                    WHERE gf.source_id IN (SELECT gene FROM apidbtuning.AnnotationChange)) lin
-               WHERE ga.source_id = lin.source_id(+)
+            select ga.source_id, '@PROJECT_ID@' as project_id, ua.changed_gene as updated_annotation
+            from apidbtuning.geneattributes ga,
+                 ( select distinct ac.gene as changed_gene
+                   from apidbtuning.annotationchange ac, apidbtuning.geneid gi
+                   where upper(gi.id) = upper(ac.gene)
+                 ) ua
+            where ga.source_id = ua.changed_gene (+)
             </sql>
         </sqlQuery>
 
@@ -587,12 +588,12 @@
        /*           The above line collates the product names into a string with ';' delimiter. This is for scenarios where there are more than one 
                     possible product names provided from GeneDB (due to alternate splicing etc.) In Oracle 11g this can be accomplished
                     simply by using LISTAGG, but this is not provided in lesser versions.
-      */  FROM  (SELECT  distinct ga.source_id as source_id,
-                         '@PROJECT_ID@' as project_id,
-                         CASE WHEN cgp.product != ga.product THEN cgp.product ELSE null END as genedb_product_name
+      */  FROM  (SELECT  distinct ga.source_id as source_id, '@PROJECT_ID@' as project_id,
+                                  CASE WHEN c.product != ga.product THEN c.product ELSE null END as genedb_product_name
                  FROM    ApidbTuning.GeneAttributes ga,
-                         ApiDBTuning.ChangedGeneProduct cgp
-                 WHERE   ga.source_id = cgp.gene(+))
+                        (select distinct gi.gene, cgp.product from apidbtuning.geneid gi, apidbtuning.changedgeneproduct cgp where upper(gi.id) = upper(cgp.gene)) c
+                 WHERE   ga.source_id = c.gene(+)
+                 )
           GROUP BY project_id,source_id
             ]]>
             </sql>
