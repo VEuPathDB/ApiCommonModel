@@ -611,12 +611,12 @@ and v.product = 'SAG1'
 
       <sql>
       <![CDATA[
- select distinct initcap(v.term) as term, initcap(v.term) as internal, initcap(v.parent) as parentTerm
+ select distinct replace(initcap(v.term), '''', ' ') as term, initcap(v.term) as internal, initcap(v.parent) as parentTerm
  from   apidb.isolatevocabulary v, apidb.isolatemapping m
  where  v.type = 'geographic_location'
  and    v.isolate_vocabulary_id = m.isolate_vocabulary_id
  union
- select distinct initcap(v.parent) as term, initcap(v.parent) as internal, '' as parentterm 
+ select distinct replace(initcap(v.parent), '''', ' ') as term, initcap(v.parent) as internal, '' as parentterm 
  from   apidb.isolatevocabulary v, apidb.isolatemapping m
  where  v.type = 'geographic_location' 
  and    v.isolate_vocabulary_id = m.isolate_vocabulary_id
@@ -706,9 +706,12 @@ and v.product = 'SAG1'
       <column name="parentTerm"/>
 
 
-<sql includeProjects="CryptoDB">
+<sql>
       <![CDATA[
-select distinct i.organism as term, tn.name as internal, p.name as parentTerm 
+select term,internal,parentTerm from (
+select distinct i.organism as term, 
+tn.name as internal, regexp_replace(p.name, ' \(.+\)', '', 1, 1, 'n') as parentTerm,
+i.project_id
 from ApidbTuning.IsolateAttributes i, sres.taxonname tn, 
      sres.taxon t, sres.TaxonName p
 where i.organism = tn.name
@@ -716,59 +719,27 @@ and tn.taxon_id = t.taxon_id
 and tn.name_class = 'scientific name'
 and t.parent_id = p.taxon_id
 and p.name_class =  'scientific name'
---union
---select 'Cryptosporidium' as term, 'Cryptosporidium' as internal, '' as parentTerm from dual
 union
-select 'unclassified Cryptosporidium' as term, 'unclassified Cryptosporidium' as internal, 'Cryptosporidium' as parentTerm from dual
+select distinct ot.term, ot.term as internal, ot.parentTerm, ia.project_id 
+from apidbtuning.organismtree ot, apidbtuning.isolateattributes ia
+where ot.organism = ia.organism and ot.parentterm is not null
 union
-select 'environmental samples' as term, 'environmental samples' as internal, 'Cryptosporidium' as parentTerm from dual
+select 'environmental samples' as term, 'environmental samples' as internal, 'Cryptosporidium' as parentTerm, 'CryptoDB' as project_id from dual
+union
+select 'unclassified Cryptosporidium' as term, 'unclassified Cryptosporidium' as internal, 'Cryptosporidium' as parentTerm, 'CryptoDB' as project_id from dual
+union
+select 'Plasmodium - Not Annotated' as term, 'Unknown' as internal, 'Plasmodium' as parentTerm, 'PlasmoDB' as project_id from dual
+union
+select 'Cryptosporidium - Not Annotated' as term, 'Unknown' as internal, 'Cryptosporidium' as parentTerm, 'CryptoDB' as project_id from dual
+union
+select 'Cryptosporidium parvum Iowa II' as term, 'Cryptosporidium parvum Iowa II' as internal, 'Cryptosporidium parvum' as parentTerm, 'CryptoDB' as project_id from dual
+) where project_id = '@PROJECT_ID@'
+order by term
      ]]>
       </sql>
 
-      <sql  includeProjects="PlasmoDB">
-      <![CDATA[
-select distinct i.organism as term, tn.name as internal, '' as parentTerm 
-from ApidbTuning.IsolateAttributes i, sres.taxonname tn
-where i.organism = tn.name
-and tn.name_class = 'scientific name'
-union
-select 'unclassified Plasmodium' as term, 'Unknown' as internal, '' as parentTerm from dual
-      ]]>
-      </sql>
-
-      <sql  includeProjects="ToxoDB">
-      <![CDATA[
-select distinct i.organism as term, tn.name as internal, '' as parentTerm 
-from ApidbTuning.IsolateAttributes i, sres.taxonname tn
-where i.organism = tn.name
-and tn.name_class = 'scientific name'
-      ]]>
-      </sql>
-
-      <sql  includeProjects="GiardiaDB">
-      <![CDATA[
-select distinct i.organism as term, tn.name as internal, '' as parentTerm 
-from ApidbTuning.IsolateAttributes i, sres.taxonname tn
-where i.organism = tn.name
-and tn.name_class = 'scientific name'
-union
-select 'unclassified Giardia' as term, 'Unknown' as internal, '' as parentTerm from dual
-      ]]>
-      </sql>
     </sqlQuery>
-<!--
-      <sql  includeProjects="PlasmoDB">
-      <![CDATA[
-    select 'P.f. ' || new as term, new as internal, '' as parentTerm
-    from (
-      SELECT lower(regexp_replace(src.strain, '[-_/]', '-')) as new
-      FROM DoTS.IsolateSource src
-      )
-    group by new order by new
-      ]]>
-      </sql>
-    </sqlQuery>
--->
+
 
  <processQuery name="withIsolates" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="200" wsName="internal"/>
