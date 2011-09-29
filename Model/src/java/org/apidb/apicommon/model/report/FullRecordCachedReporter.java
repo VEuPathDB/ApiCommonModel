@@ -166,10 +166,9 @@ public class FullRecordCachedReporter extends Reporter {
             String[] fields = fieldsList.split(",");
             for (String column : fields) {
                 column = column.trim();
-                if (!fieldMap.containsKey(column))
-                    throw new WdkModelException("The column '" + column
-                            + "' cannot be included in the report");
-                columns.add(fieldMap.get(column));
+                if (fieldMap.containsKey(column)) {
+                	columns.add(fieldMap.get(column));
+                }
             }
         }
         return columns;
