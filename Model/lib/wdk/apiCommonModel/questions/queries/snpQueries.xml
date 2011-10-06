@@ -76,7 +76,7 @@ FROM
     hits.position_in_protein as prot_pos,
     sva.allele as allele_a, svb.allele as allele_b, svb.strain as strain_b
   FROM 
-    ( SELECT /*+ ordered */
+    ( SELECT /*+ ordered */ 
       distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
       sf.position_in_protein,sf.source_id
       FROM ($$ds_gene_ids$$) ds,
@@ -169,31 +169,31 @@ select * from (
 SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.snp_location,snpq.prot_pos,
   apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_allele) AS apidb.varchartab), ', ') as ref_allele,
   apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_product) AS apidb.varchartab), ', ') as ref_product,
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_all END) AS apidb.varchartab), ', ') as comp_alleles,                
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_product END) AS apidb.varchartab), ', ') as comp_products,                
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.phenotype END) AS apidb.varchartab), ', ') as phenotype,                  
-  $$htsSnp_strain_a$$ as ref_strain,              
-  apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as comp_strains 
-FROM                 
-  (SELECT /*+ ordered */ 
-    hits.source_id as source_id,nas.source_id || ':' || trim(to_char(l.start_min,'999,999,999')) as snp_location,                               
-    sva.strain as ref_strain, svb.strain as comp_strain,                               
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(sva.allele)                                  
-    ELSE sva.allele END as ref_allele,                 
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(svb.allele)                                 
-    ELSE svb.allele END as comp_all,                 
-    CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product then 'non-syn' ELSE 'non-coding' END as phenotype,                               
-    sva.product as ref_product, svb.product as comp_product,                           
+  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_all END) AS apidb.varchartab), ', ') as comp_alleles,
+  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_product END) AS apidb.varchartab), ', ') as comp_products,
+  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.phenotype END) AS apidb.varchartab), ', ') as phenotype,
+  $$htsSnp_strain_a$$ as ref_strain,
+  apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as comp_strains
+FROM
+  (SELECT /*+ ordered */
+    hits.source_id as source_id,nas.source_id || ':' || trim(to_char(l.start_min,'999,999,999')) as snp_location,
+    sva.strain as ref_strain, svb.strain as comp_strain,
+    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(sva.allele)
+    ELSE sva.allele END as ref_allele,
+    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(svb.allele)
+    ELSE svb.allele END as comp_all,
+    CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product then 'non-syn' ELSE 'non-coding' END as phenotype,
+    sva.product as ref_product, svb.product as comp_product,
     hits.position_in_protein as prot_pos,
     sva.allele as allele_a, svb.allele as allele_b, svb.strain as strain_b
-  FROM 
+  FROM
     ( SELECT /*+ ordered */
       distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
       sf.position_in_protein,sf.source_id
       FROM ($$ds_gene_ids$$) ds,
            ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
            dots.SeqVariation isva, dots.SeqVariation isvb,
-            ( select distinct organism,extdb_name as name,external_database_release_id 
+            ( select distinct organism,extdb_name as name,external_database_release_id
               from apidbtuning.snpstrains) ss
       WHERE lower(gi.id) = lower(ds.source_id)
         AND gf.source_id = gi.gene
@@ -203,26 +203,26 @@ FROM
         AND sf.external_database_release_id = ss.external_database_release_id
         AND sf.na_feature_id = isva.parent_id
         AND sf.na_feature_id = isvb.parent_id
-        AND isva.strain = $$htsSnp_strain_a$$                               
+        AND isva.strain = $$htsSnp_strain_a$$
         AND isvb.strain in ($$htsSnp_strain_m$$)
         AND isva.allele != isvb.allele
-        AND NVL(isva.pvalue,0) <= $$hts_snps_pvalue$$
-        AND NVL(isva.allele_percent,100) >= $$hts_snps_allele_freq$$
-        AND NVL(isva.coverage,1000) >= $$hts_snps_coverage$$
-        AND NVL(isvb.pvalue,0) <= $$hts_snps_pvalue$$
-        AND NVL(isvb.allele_percent,100) >= $$hts_snps_allele_freq$$
-        AND NVL(isvb.coverage,1000) >= $$hts_snps_coverage$$
+        AND (isva.pvalue is null or isva.pvalue <= $$hts_snps_pvalue$$)
+        AND (isva.allele_percent is null or isva.allele_percent  >= $$hts_snps_allele_freq$$)
+        AND (isva.coverage is null or isva.coverage >= $$hts_snps_coverage$$)
+        AND (isvb.pvalue is null or isvb.pvalue <= $$hts_snps_pvalue$$)
+        AND (isvb.allele_percent is null or isvb.allele_percent >= $$hts_snps_allele_freq$$)
+        AND (isvb.coverage is null or isvb.coverage >= $$hts_snps_coverage$$)
         ) hits,
     dots.NaSequence nas, dots.NALocation gene_loc, dots.NALocation l,
     dots.SeqVariation sva, dots.SeqVariation svb
   WHERE hits.na_sequence_id = nas.na_sequence_id
     AND hits.gene_na_feature_id = gene_loc.na_feature_id
     AND hits.snp_na_feature_id = l.na_feature_id
-    AND hits.snp_na_feature_id = sva.parent_id 
-    AND hits.snp_na_feature_id = svb.parent_id 
-    AND sva.strain = $$htsSnp_strain_a$$                               
-    AND svb.strain in ($$htsSnp_strain_m$$)                             
-    ) snpq                              
+    AND hits.snp_na_feature_id = sva.parent_id
+    AND hits.snp_na_feature_id = svb.parent_id
+    AND sva.strain = $$htsSnp_strain_a$$
+    AND svb.strain in ($$htsSnp_strain_m$$)
+    ) snpq
 GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
 )
            ]]>
@@ -492,26 +492,27 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
                 sva.product AS ref_product, svb.product AS comp_product,
                 sf.position_in_protein as prot_pos,
                 sf.gene_source_id as gene
-               FROM dots.SeqVariation sva, dots.SeqVariation svb, apidbtuning.snpattributes sf,
-                    apidbtuning.featurelocation fl,apidbtuning.sequenceAttributes seq
+               FROM dots.SeqVariation sva, dots.SeqVariation svb, ApidbTuning.SnpAttributes sf,
+                    ApidbTuning.FeatureLocation fl, ApidbTuning.SequenceAttributes seq
                WHERE sf.organism = $$organism$$
                  AND sf.dataset = 'InsertSnps.pm NGS SNPs INTERNAL'
+                 AND fl.feature_type = 'SnpFeature'
                  AND fl.na_feature_id = sf.na_feature_id
                  AND fl.na_sequence_id = seq.na_sequence_id
                  &&seqIdOrChrom&&
                  AND fl.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
-                 AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR fl.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))                
+                 AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR fl.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
                  AND sf.na_feature_id = sva.parent_id
                  AND sf.na_feature_id = svb.parent_id
                  AND sva.strain = $$htsSnp_strain_a$$ -- ref
                  AND svb.strain in ($$htsSnp_strain_m$$) -- comp
                  AND sva.allele != svb.allele
-                 AND NVL(sva.pvalue,0) <= $$hts_snps_pvalue$$
-                 AND NVL(sva.allele_percent,100) >= $$hts_snps_allele_freq$$
-                 AND NVL(sva.coverage,1000) >= $$hts_snps_coverage$$
-                 AND NVL(svb.pvalue,0) <= $$hts_snps_pvalue$$
-                 AND NVL(svb.allele_percent,100) >= $$hts_snps_allele_freq$$
-                 AND NVL(svb.coverage,1000) >= $$hts_snps_coverage$$
+                 AND (sva.pvalue is null or sva.pvalue <= $$hts_snps_pvalue$$)
+                 AND (sva.allele_percent is null or sva.allele_percent >= $$hts_snps_allele_freq$$)
+                 AND (sva.coverage is null or sva.coverage >= $$hts_snps_coverage$$)
+                 AND (svb.pvalue is null or svb.pvalue <= $$hts_snps_pvalue$$)
+                 AND (svb.allele_percent is null or svb.allele_percent >= $$hts_snps_allele_freq$$)
+                 AND (svb.coverage is null or svb.coverage >= $$hts_snps_coverage$$)
                  ) snpq
                  GROUP BY snpq.source_id,snpq.gene, snpq.snp_location,snpq.prot_pos
                  )
