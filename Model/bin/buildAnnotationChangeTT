@@ -1,0 +1,358 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+$| = 1; # don't buffer stdout
+
+use DBI;
+use Data::Dumper;
+use Getopt::Long qw(GetOptions);
+use LWP::UserAgent;
+use HTTP::Request;
+use HTTP::Response;
+use XML::Simple;
+use ApiCommonData::Load::TuningConfig::Utils;
+
+my $insertStatement;
+
+my ($propfile, $instance, $schema, $password, $suffix, $project, $subversionDir, $debug);
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "password=s" => \$password,
+           "suffix=s" => \$suffix,
+           "subversionDir=s" => \$subversionDir,
+           "debug!" => \$debug,
+	  );
+
+($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+
+createEmptyTable($dbh, $suffix);
+indexChanges($dbh, $suffix);
+
+print STDERRR "about to get genome list\n" if $debug;
+my $genomeListRef = getGenomeList($dbh);
+my @genomeList = @$genomeListRef;
+my $totalChangedGenes;
+
+foreach my $genome (@genomeList) {
+  $totalChangedGenes += processChangedGenes($dbh, $genome->{'taxonomyId'}, $genome->{'sinceDate'}, $suffix);
+}
+
+populateGenesAndProducts($dbh, $suffix);
+renameOldChanges($dbh, $suffix);
+
+print STDERR "Saved $totalChangedGenes total changed genes from web service\n";
+
+sub getGenomeList {
+
+    my ($dbh) = @_;
+    my $taxa = getOfferedTaxa();
+
+    my $stmt = $dbh->prepare(<<SQL);
+with genomes as
+       (select distinct t.ncbi_tax_id as taxonomyId, edr.version as sinceDate
+        from dots.GeneFeature gf, dots.NaSequence ns,
+             sres.Taxon t, sres.ExternalDatabaseRelease edr
+        where gf.external_database_release_id = edr.external_database_release_id
+          and gf.na_sequence_id = ns.na_sequence_id
+          and ns.taxon_id = t.taxon_id
+          and edr.version like '____-__-__'),
+     FullSet as
+       (select taxonomyId, sinceDate from genomes
+        union
+        select YouSayPotato.sanger_taxon as taxonomyId, sinceDate
+        from genomes g,
+             (select 'Trypanosoma cruzi'       as organism, 353153 as eupath_taxon,   5693 as sanger_taxon from dual
+             union
+              select 'Leishmania major'        as organism,   5664 as eupath_taxon, 347515 as sanger_taxon from dual
+             union
+              select 'Leishmania braziliensis' as organism,   5660 as eupath_taxon, 420245 as sanger_taxon from dual
+             union
+              select 'Plasmodium berghei'      as organism,   5823 as eupath_taxon,   5821 as sanger_taxon from dual
+             union
+              select 'Plasmodium chabaudi'     as organism,  31271 as eupath_taxon,   5825 as sanger_taxon from dual
+             union
+              select 'Plasmodium falciparum'   as organism,  36329 as eupath_taxon,   5833 as sanger_taxon from dual
+             union
+              select 'Plasmodium knowlesi'     as organism,   5851 as eupath_taxon,   5850 as sanger_taxon from dual
+             union
+              select 'Plasmodium vivax'        as organism, 126793 as eupath_taxon,   5855 as sanger_taxon from dual
+             union
+              select 'Plasmodium yoelii'       as organism, 352914 as eupath_taxon,   5861 as sanger_taxon from dual) YouSayPotato
+        where g.taxonomyId = YouSayPotato.eupath_taxon)
+select taxonomyId, min(sinceDate) as sinceDate
+from FullSet
+where taxonomyId in ($taxa)
+group by taxonomyId
+SQL
+
+print STDERRR "getting list of taxa\n" if $debug;
+  $stmt->execute();
+print STDERRR "done execute()ing taxa query \n" if $debug;
+  my @genomeList;
+  while (my $ref = $stmt->fetchrow_hashref()) {
+# print STDERRR "adding " . Dumper($ref) . " to the list\n" if $debug;
+    push(@genomeList, $ref);
+  }
+
+  # old, hardwired taxon/date pairs
+  #   my @genomeList = (
+  # 		    {taxonomyId => 185431, sinceDate => '2008-11-13'},  # T. brucei
+  # 		    {taxonomyId => 5671, sinceDate => '2008-11-24'} );  # L. infantum
+
+print STDERRR "got list of taxa\n" if $debug;
+  return \@genomeList;
+}
+
+
+sub getOfferedTaxa {
+
+  # This has been commented out since before Sanger changed their URLs. The URL
+  # has been updated, but not tested. Use care when putting this back into service.
+
+  # returns a comma-separated string of NCBI taxon IDs for which the Sanger web
+  # service can show changes.  The service itself will provide this list, as a
+  # response to the URL in the code.  But since it changes slowly, and every
+  # component runs the tuning manager, it's hardwired into this RETURN statement
+
+  # short, TriTrypDB-specific list: 
+  # return '5671, 5692, 5693, 5699, 31285, 185431, 347515, 420245';
+
+  # old, longer list
+  return <<SANGERTAXA;
+   5085, 360910, 518, 95486, 272559, 97084, 519, 520, 28450,
+   83555, 1491, 1496, 1717, 42374, 197, 28447, 813, 44689,
+   554, 216592, 5759, 5802, 420245, 5661, 5671,347515, 5665,
+   1765, 1769, 1781, 1773, 487, 272831, 5821, 5825,          -- skip "29176" (Neospora caninum)
+   5833, 294,5850, 5855, 5861, 384, 46170, 282458, 282459,
+   54736, 4932, 1902, 592, 40324, 6183, 615, 561276, 373153,
+   1313, 170187, 4896, 1314, 90370, 568708, 1349, 5874,
+   5761, 185431, 31285, 5692, 5693, 5699, 2039, 630, 632
+SANGERTAXA
+
+  my $ua = new LWP::UserAgent;
+  my $url = "http://www.genedb.org/services/genomes/changes.xml?since=2008-12-01";
+
+  print STDERR "getting list of available taxa from = $url";
+  my $request = new HTTP::Request('GET', $url);
+  my $response = $ua->request($request);
+  if (!$response->is_success) {
+    die "trying to get taxon list with URL ->>\"$url\<<-.  Got response ->>" . $response->content . "<<- (end of response to taxon-list request)";
+  }
+
+  my $simple = XML::Simple->new();
+  my $changeList = $simple->XMLin($response->content, KeyAttr => [] );
+  my $results = $changeList->{results};
+
+  my $organisms = $results->{organism};
+
+  my @taxa;
+  map {my $taxonomyID = $_->{'taxonomyID'}; push(@taxa, $taxonomyID) if $taxonomyID} @$organisms;
+
+  my $taxa = join(', ', @taxa);
+  return $taxa;
+}
+
+sub processChangedGenes {
+
+  my ($dbh, $taxonomyId, $sinceDate, $suffix) = @_;
+
+  die "bad taxonomyId" if !defined($taxonomyId);
+
+  my $ua = new LWP::UserAgent;
+  my $url = "http://www.genedb.org/services/features/annotation_changes?date=$sinceDate&organism=tax:$taxonomyId";
+  print STDERR "getting list of gene changes from = $url\n";
+  my $request;
+  my $response;
+
+  my $retries = 0;
+  my $MAX_RETRIES = 10;
+  do {
+    print STDERR "trying again (retry $retries) with \"$url\"" if $retries;
+    $request = new HTTP::Request('GET', $url);
+    $response = $ua->request($request);
+
+      if (!$response->is_success # request failed
+         || $response->content =~ /<error / ) {  # response was an error message
+        print STDERR "unsuccessful when trying to get changed-gene list for taxonomy ID $taxonomyId with URL $url .  Got response ->>"
+                      . $response->content . "<<- (end of response to gene-list request for taxonomy ID $taxonomyId)";
+      }
+
+  } until (++$retries >= $MAX_RETRIES || ($response->content && $response->is_success && !($response->content =~ /<error /)));
+
+  if (!$response->is_success || $response->content =~ /<error /) {
+    die "trying to get changed-gene list for taxonomy ID $taxonomyId with URL $url";
+  }
+
+  # <response>
+  #   <results>
+
+  #     <result xsi:type="feature" organismId="19" uniqueName="Tb927.10.14890:pep">
+  #       <changes>
+  #         <change type="annotation" detail="added_controlled_curation" date="2014-02-23" user="FLK"/>
+  #         <change type="annotation" detail="added_comment" date="2014-02-23" user="FLK"/>
+  #       </changes>
+  #       <isObsolete>false</isObsolete>
+  #       <type name="polypeptide"/>
+  #       <products/>
+  #     </result>
+
+  #     <result . . .
+
+  #   </results>
+  # </response>
+
+  my $simple = XML::Simple->new();
+  my $bigList = $simple->XMLin($response->content, forcearray => 1);
+  my $results = $bigList->{results};
+  my $resultList = $results->[0]->{result};
+
+  my $insertStatement = getInsertStatement($dbh, $suffix);
+  my $changeCount = 0;
+  foreach my $result (@$resultList) {
+      my $changeList = $result->{changes}->[0]->{change};
+      foreach my $change (@$changeList) {
+	  $changeCount++;
+	  $insertStatement->execute($result->{uniqueName}, $change->{date}, $change->{detail},
+                                    $result->{uniqueName}, $change->{date}, $change->{detail})
+	      or die "Can't insert AnnotationChange record (uniqueName \"" . $result->{uniqueName}
+                     . "\" date \"" . $change->{date} . "\" change \"" . $change->{detail} . "\"\n";
+      }
+
+  }
+
+  print STDERR "$changeCount changes from web service for taxonomy ID $taxonomyId\n";
+
+  return $changeCount;
+
+}
+
+sub getInsertStatement {
+
+    my ($dbh, $suffix) = @_;
+    if (!$insertStatement) {
+    $insertStatement = $dbh->prepare(<<SQL);
+      insert into AnnotationChange$suffix (feature_name, change_date, change)
+      select ?, to_date(?, 'yyyy-mm-dd'), ?
+      from dual
+      where (select count(*)
+             from AnnotationChange$suffix
+             where feature_name = ? and change_date = to_date(?, 'yyyy-mm-dd') and change = ?)
+            = 0
+SQL
+  }
+
+  return $insertStatement;
+}
+
+sub createEmptyTable {
+    my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating table";
+create table AnnotationChange$suffix nologging (
+   gene         varchar2(50),
+   change_date  date,
+   change       varchar2(2000),
+   feature_name varchar2(50),
+   product      varchar2(300)
+) nologging
+SQL
+
+  $dbh->{PrintError} = 0;
+  $dbh->do(<<SQL);
+  insert into AnnotationChange$suffix
+              (gene, change_date, change, feature_name, product)
+  select gene, change_date, change, feature_name, product from AnnotationChange
+SQL
+  $dbh->{PrintError} = 1;
+
+}
+
+sub populateGenesAndProducts {
+    # use another Sanger web service to get the gene and product associated with a changed feature
+
+    my ($dbh, $suffix) = @_;
+
+    my $stmt = $dbh->prepare(<<SQL) or die "preparing select records with null gene";
+      select distinct feature_name
+      from AnnotationChange$suffix
+      where gene is null
+SQL
+
+    my $updateStmt = $dbh->prepare(<<SQL) or die "preparing gene/product update statement";
+      update AnnotationChange$suffix
+      set gene = ?, product = ?
+      where feature_name = ?
+SQL
+
+    $stmt->execute();
+    print STDERRR "done execute()ing query for changes without gene IDs\n" if $debug;
+    while (my ($feature) = $stmt->fetchrow_array()) {
+	print STDERRR "getting gene and product for feature \"$feature\"\n" if $debug;
+	my ($gene, $product) = getFeatureGeneAndProduct($feature);
+	$updateStmt->execute($gene, $product, $feature);
+	print STDERR "set gene to \"$gene\" and product to \"$product\" for feature \"$feature\"\n" if $debug;
+    }
+
+}
+
+sub getFeatureGeneAndProduct {
+
+    my ($feature) = @_;
+
+    my $ua = new LWP::UserAgent;
+    my $url = "http://www.genedb.org/services/feature/hierarchy?uniqueName=$feature";
+    print STDERR "getting info for feature \"$feature\"\n" if $debug;
+    my $request;
+    my $response;
+    $request = new HTTP::Request('GET', $url);
+    $response = $ua->request($request);
+
+    if (!$response->is_success || $response->content =~ /<error /) {
+	die "trying to get getting info for feature \"$feature\"";
+    }
+
+    my $simple = XML::Simple->new();
+    my $info = $simple->XMLin($response->content, forcearray => 1, KeyAttr => [] );
+    # print STDERRR "info:\n" . Dumper($info). "\n";
+
+    my $gene = $info->{results}->[0]->{result}->[0]->{uniqueName};
+
+    my $product;
+    foreach my $term (@{$info->{results}->[0]->{result}->[0]->{children}->[0]->{children}->[0]->{terms}->[0]->{term}}) {
+	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+    }
+
+    return($gene, $product);
+}
+
+sub renameOldChanges {
+# suppress changes (by changing the gene ID to "old change: <gene ID>") for genes whose data-load is newer than the newest change
+
+    my ($dbh, $suffix) = @_;
+    $dbh->do(<<SQL) or die "renaming genes to suppress old-news annotations";
+update AnnotationChange$suffix
+set gene = 'old change: ' || gene
+where change_date < (select to_date(edr.version, 'yyyy-mm-dd')
+                       from GeneAttributes ga, dots.NaFeature nf, sres.ExternalDatabaseRelease edr
+                       where ga.source_id = AnnotationChange$suffix.gene
+                         and nf.na_feature_id = ga.na_feature_id
+                         and edr.external_database_release_id = nf.external_database_release_id
+                         and edr.version like '____-__-__')
+SQL
+
+}
+
+sub indexChanges {
+
+# index AnnotationChange table
+    my ($dbh, $suffix) = @_;
+    $dbh->do(<<SQL) or die "creating index";
+      create index AnotCh_ix$suffix
+      on AnnotationChange$suffix (gene, change_date) tablespace INDX
+SQL
+
+}
