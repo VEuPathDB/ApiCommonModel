@@ -2679,29 +2679,26 @@ GROUP BY cds_length, na_feature_id, source_id,
        <column name="source_id" />
        <column name="max_percentile_chosen" />
        <column name="min_percentile_chosen" />
-       <column name="module" />
        <sql>
             <![CDATA[
            select ga.source_id, 
                    '@PROJECT_ID@' as project_id,
                    max(round(profile_min_max.max_value, 1)) as max_percentile_chosen,
-                   min(round(profile_min_max.min_value, 1)) as min_percentile_chosen,
-                  profile.module
-           from ( select p.source_id, pen.profile_element_name_id, pgd.module
-                  from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p, apidbTuning.profileGraphDescrip pgd
+                   min(round(profile_min_max.min_value, 1)) as min_percentile_chosen
+           from ( select p.source_id, pen.profile_element_name_id
+                  from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p
                   where ps.profile_set_id = pen.profile_set_id
                    and ps.profile_set_id = p.profile_set_id
                    and pe.profile_id = p.profile_id
                    and pe.element_order = pen.element_order
                    and pen.profile_element_name_id in ( $$samples_percentile_generic$$ )
                    and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
-                   and pgd.profile_name = ps.name
-                  group by p.source_id, pen.profile_element_name_id, pgd.module
+                  group by p.source_id, pen.profile_element_name_id
                 ) profile, ApidbTuning.GeneAttributes ga,
                 ( select p.source_id, min(pe.value) as min_value, max(pe.value) as max_value
                   from apidb.profileset ps, apidb.profileelement pe, apidb.profileelementname pen, apidb.profile p
                   where ps.profile_set_id = pen.profile_set_id
-                   and ps.profile_set_id = p.profile_set_id
+                   and ps.profile_set_id = p.profile_set_id 
                    and pe.profile_id = p.profile_id
                    and pe.element_order = pen.element_order
                    and  pen.profile_element_name_id in ( $$samples_percentile_generic$$ )
@@ -2710,7 +2707,7 @@ GROUP BY cds_length, na_feature_id, source_id,
            where ga.source_id = profile.source_id
              and ga.source_id = profile_min_max.source_id
              and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-           group by ga.source_id, profile.module
+           group by ga.source_id
            having '$$any_or_all$$' = 'any' OR count(*) = (select count(*) as total from apidb.profileelementname where profile_element_name_id in ( $$samples_percentile_generic$$ ))
             ]]>
           </sql>
@@ -4710,7 +4707,7 @@ where one.source_id = two.source_id
                         and       pe.element_order = pen.element_order) grp1,
                        (select    p.source_id,
                                   pen.profile_element_name_id,
-                                  pgd.module
+                                  pgd.module,
                                   CASE WHEN &&isLogged&& != 1 THEN pe.value + &&shift&& ELSE power(2, pe.value) END as value
                         from      apidb.profileelementname pen, 
                                   apidb.profile p, apidb.profileelement pe,
@@ -4761,7 +4758,7 @@ where one.source_id = two.source_id
       <wsColumn name="fold_change" wsName="fold_change"/>
       <wsColumn name="group_one_value" wsName="group_one_value"/>
       <wsColumn name="group_two_value" wsName="group_two_value"/>
-
+      <wsColumn name="module" wsName="module"/>
     </processQuery>				
 				   
 
@@ -4806,7 +4803,7 @@ where one.source_id = two.source_id
       <column name="chose_group_two"/>
       <column name="time_of_min_expr"/>
       <column name="time_of_max_expr"/>
-      <column name="module"/>
+      <column name="module" />
 
       <sqlParamValue name="isLogged">1</sqlParamValue>
       <sqlParamValue name="shift">0</sqlParamValue>
@@ -4832,7 +4829,7 @@ where one.source_id = two.source_id
              round(decode(one.chosen, 0, 0, log(2, one.chosen)), 2) as chose_group_one,
              round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) as chose_group_two,
              p.time_of_min_expr,
-             p.time_of_max_expr
+             p.time_of_max_expr,
              two.module
       from ( select p.source_id, 
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'minimum'
@@ -4888,14 +4885,14 @@ where one.source_id = two.source_id
                     END as has_max_expression,
                     pgd.module
              from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe,
-                  apidb.profileset ps, apidbTuning.profilegraphdecrip pgd
+                  apidb.profileset ps, apidbTuning.profilegraphdescrip pgd
              where pen.profile_element_name_id in ($$samples_fc_ref_generic$$)
                and p.profile_set_id = pen.profile_set_id
                and pe.profile_id = p.profile_id
                and pe.element_order = pen.element_order
                and ps.profile_set_id = p.profile_set_id
                and pgd.profile_name = ps.name
-             group by p.source_id, p.min_expression, p.max_expression ) two,  
+             group by p.source_id, p.min_expression, p.max_expression,pgd.module ) two,  
            ApidbTuning.GeneAttributes ga, apidb.profile p
       where one.source_id = two.source_id
         and ga.source_id = two.source_id
@@ -4946,6 +4943,7 @@ where one.source_id = two.source_id
         <wsColumn name="min_group_two" wsName="min_group_two"/>
         <wsColumn name="chose_group_one" wsName="chose_group_one"/>
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
+        <wsColumn name="module" wsName="module"/>
       <wsColumn name="time_of_min_expr"/>
       <wsColumn name="time_of_max_expr"/>
 
