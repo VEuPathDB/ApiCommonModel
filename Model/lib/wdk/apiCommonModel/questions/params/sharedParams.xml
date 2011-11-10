@@ -194,8 +194,9 @@
        <flatVocabParam name="BlastDatabaseOrganism"
                      queryRef="SharedVQ.BlastOrganismFiles"
                      prompt="Target Organism"
-                     displayType="checkBox" 
+                     displayType="treeBox" 
                      multiPick="true"
+                     suppressNode="false"
                      dependedParamRef="sharedParams.BlastDatabaseType">
           <noTranslation value="false" excludeProjects="EuPathDB" />
           <help>
@@ -1641,13 +1642,15 @@ by the sequence generator.</help>
             <paramRef ref="sharedParams.BlastDatabaseType"/>
             <column name="internal" />
             <column name="term" />
+            <column name="parentTerm" />
             <sql>
                 <![CDATA[ 
-select CASE WHEN types.organism = 'Cryptosporidium parvum'
-                       THEN 'Cryptosporidium parvum Chr. 6'
-                       ELSE abbrev.organism
-                  END AS term,
-                  macros.macro || '/' || abbreviation as internal
+select abbrev.parent as parentTerm,
+       CASE WHEN types.organism = 'Cryptosporidium parvum'
+            THEN 'Cryptosporidium parvum Chr. 6'
+            ELSE abbrev.organism
+            END AS term,
+            macros.macro || '/' || abbreviation as internal
 From   ApidbTuning.OrganismAbbreviationBlast abbrev,
   (
   -- Standard GENES (RH for toxo is included in the apicoplast)
@@ -1739,6 +1742,13 @@ where types.organism = abbrev.organism
 and macros.project_id = types.project_id
 and types.type = '$$BlastDatabaseType$$'
 and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+union
+select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
+from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationBlast abbrev, ApidbTuning.OrganismTree pt
+where (ot.term = abbrev.parent
+and ot.parentTerm not in (select parent from ApidbTuning.OrganismAbbreviationBlast abbrev))
+or ( ot.term not in (select organism from ApidbTuning.OrganismAbbreviationBlast abbrev))
+or (ot.parentTerm =pt.term and pt.parentTerm is null)
                 ]]>
             </sql>
         </sqlQuery>
@@ -1748,6 +1758,7 @@ and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
       <paramRef ref="organismParams.organism" quote="false"/> 
       <wsColumn name="internal" width="32" wsName="internal"/>
       <wsColumn name="term" width="32" wsName="term"/>
+      <wsColumn name="parentTerm" width="32" wsName="parentTerm" />
     </processQuery>
 
 
