@@ -4,7 +4,8 @@
 
        <flatVocabParam name="motif_organism"
                       queryRef="SimilarityVQ.GenomicMotifFiles"
-                      displayType="checkBox"  
+                      displayType="treeBox"
+                      suppressNode="true"  
                       prompt="Organism"
                       multiPick="true">
       <noTranslation value="true" includeProjects="EuPathDB" />
@@ -21,7 +22,8 @@
 
        <flatVocabParam name="motif_organism"
                       queryRef="SimilarityVQ.OrfMotifFiles"
-                      displayType="checkBox"  
+                      displayType="treeBox"  
+                      suppressNode="true"
                       prompt="Organism"
                       multiPick="true">
       <noTranslation value="true" includeProjects="EuPathDB" />
@@ -41,7 +43,8 @@
 
        <flatVocabParam name="motif_organism"
                       queryRef="SimilarityVQ.AnnotatedProteinMotifFiles"
-                      displayType="checkBox" 
+                      displayType="treeBox"
+                      suppressNode="true" 
                       prompt="Organism"
                       multiPick="true">
       <noTranslation value="true" includeProjects="EuPathDB" />
@@ -59,12 +62,11 @@
 
         <sqlQuery name="OrfMotifFiles">
             <column name="internal" />
+            <column name="parentTerm"/>
             <column name="term" />
             <sql>
                 <![CDATA[ 
-                select abbrev.organism as term, abbrev.abbreviation || 'ORFs'  || '_' || orgs.project_id || '.fasta' as internal
-                From ApidbTuning.OrganismAbbreviationws abbrev, 
-                     (select distinct organism, project_id
+                with orgs as (select distinct organism, project_id
                       from ApidbTuning.SequenceAttributes
   UNION
   -- GiardiaDB uses species for everything  
@@ -89,22 +91,37 @@
    -- CryptoDB has ESTORFs
   select 'Cryptosporidium parvum EST' as organism,  'CryptoDB' as project_id from dual
   UNION 
-  select 'Cryptosporidium muris EST' as organism,  'CryptoDB' as project_id from dual
-                      ) orgs
+  select 'Cryptosporidium muris EST' as organism,  'CryptoDB' as project_id from dual)   
+                select abbrev.parent as parentTerm, 
+                       abbrev.organism as term,
+                       abbrev.abbreviation || 'ORFs'  || '_' || orgs.project_id || '.fasta' as internal
+               From ApidbTuning.OrganismAbbreviationws abbrev,  orgs
                where orgs.organism = abbrev.organism
                and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+               UNION
+               select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
+               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationWS abbrev,
+               ApidbTuning.OrganismTree pt,orgs
+               where orgs.organism = abbrev.organism
+               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+               and ot.term = abbrev.parent
+               or ot.term in (select ot.parentTerm 
+               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationWS abbrev, orgs
+               where orgs.organism = abbrev.organism
+               and orgs.organism = abbrev.organism
+               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@') 
+               and ot.term = abbrev.parent)
                 ]]>
             </sql>
         </sqlQuery>
 
         <sqlQuery name="GenomicMotifFiles">
             <column name="internal" />
+            <column name="parentTerm" />
             <column name="term" />
             <sql>
                 <![CDATA[ 
-                select abbrev.organism as term, abbrev.abbreviation || 'Genomic'  || '_' || orgs.project_id || '.fasta' as internal
-                From ApidbTuning.OrganismAbbreviationws abbrev, 
-                     (select distinct organism, project_id
+                with orgs as  (select distinct organism, project_id
                       from ApidbTuning.SequenceAttributes
   UNION
   -- GiardiaDB Scaffolds
@@ -128,21 +145,35 @@
   select distinct organism || ' plastid' as organism, project_id
   from ApidbTuning.SequenceAttributes
   where so_id = 'SO:0001259'
-                      ) orgs
+                      )
+                select  abbrev.parent as parentTerm, abbrev.organism as term, abbrev.abbreviation || 'Genomic'  || '_' || orgs.project_id || '.fasta' as internal
+                From ApidbTuning.OrganismAbbreviationws abbrev, orgs
                where orgs.organism = abbrev.organism
                and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+               UNION
+               select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
+               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationWS abbrev,
+               ApidbTuning.OrganismTree pt,orgs
+               where orgs.organism = abbrev.organism
+               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+               and ot.term = abbrev.parent
+               or ot.term in (select ot.parentTerm 
+               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationWS abbrev, orgs
+               where orgs.organism = abbrev.organism
+               and orgs.organism = abbrev.organism
+               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@') 
+               and ot.term = abbrev.parent)
                 ]]>
             </sql>
         </sqlQuery>
 
         <sqlQuery name="AnnotatedProteinMotifFiles">
             <column name="internal" />
+            <column name="parentTerm" />
             <column name="term" />
             <sql>
                 <![CDATA[ 
-                select abbrev.organism as term, abbrev.abbreviation || 'AnnotatedProteins'  || '_' || orgs.project_id || '.fasta' as internal
-                From ApidbTuning.OrganismAbbreviationws abbrev, 
-                     (select distinct organism, project_id
+                with orgs as (select distinct organism, project_id
                       from ApidbTuning.GeneAttributes 
                       where organism not in ('Toxoplasma gondii RH')
   UNION
@@ -173,9 +204,24 @@
   select distinct organism || ' plastid' as organism, project_id
   from ApidbTuning.SequenceAttributes
   where so_id = 'SO:0001259'
-                      ) orgs
+                      )
+                select abbrev.parent as parentTerm, abbrev.organism as term, abbrev.abbreviation || 'AnnotatedProteins'  || '_' || orgs.project_id || '.fasta' as internal
+               From ApidbTuning.OrganismAbbreviationws abbrev, orgs
                where orgs.organism = abbrev.organism
                and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+               UNION
+               select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
+               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationWS abbrev,
+               ApidbTuning.OrganismTree pt,orgs
+               where orgs.organism = abbrev.organism
+               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+               and ot.term = abbrev.parent
+               or ot.term in (select ot.parentTerm 
+               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationWS abbrev, orgs
+               where orgs.organism = abbrev.organism
+               and orgs.organism = abbrev.organism
+               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@') 
+               and ot.term = abbrev.parent)
                 ]]>
             </sql>
         </sqlQuery>
