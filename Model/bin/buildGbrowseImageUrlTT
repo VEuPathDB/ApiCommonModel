@@ -1,0 +1,150 @@
+#!/usr/bin/perl
+
+use strict;
+
+use XML::Simple;
+
+use DBI;
+use DBD::Oracle;
+
+use Getopt::Long qw(GetOptions);
+
+use Data::Dumper;
+
+use ApiCommonData::Load::TuningConfig::Utils;
+
+
+my ($help, $propfile,$thisProject, $instance, $schema, $password, $suffix, $subversionDir, $debug);
+my $xmlFile = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/xml/gbrowseImageUrls.xml";
+
+
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "password=s" => \$password,
+           "suffix=s" => \$suffix,
+           "subversionDir=s" => \$subversionDir,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+           "project=s" => \$thisProject,
+           "password=s" => \$password,
+          );
+
+($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+
+&run();
+
+sub run{
+  unless(-e $xmlFile) {
+    &usage("ERROR:  $xmlFile not found");
+  }
+
+  &usage() if($help);
+
+  my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+
+  $dbh->{RaiseError} = 1;
+  $dbh->{AutoCommit} = 0;
+
+  my $xml = XMLin($xmlFile, KeyAttr => [], ForceArray => 1, SuppressEmpty => undef);
+
+  my $subtrackSets = {};
+
+  foreach my $subtrackSet (@{$xml->{subtrackSet}}) {
+    my $project = $subtrackSet->{project};
+    my $name = $subtrackSet->{name};
+    my $tracks = $subtrackSet->{track};
+    my $suffixes = $subtrackSet->{suffixes};
+
+    my @suffixes = split(';', $suffixes);
+
+    my @expanded;
+    foreach my $t (@$tracks) {
+      foreach my $s (@suffixes) { 
+        push @expanded, $t . $s;
+      }
+    }
+    $subtrackSets->{$project}->{$name} = \@expanded;
+  }
+
+
+  my $insertStatement = "INSERT INTO GbrowseTracksOrganism$suffix (organism, gtracks) VALUES (?,?)";
+  my $insertRow = $dbh->prepare($insertStatement);
+  &createEmptyTable($dbh,$suffix);
+
+  foreach my $urlSpec (@{$xml->{url}}) {
+    my $organisms = $urlSpec->{org};
+    my $tracks = $urlSpec->{track};
+    my $project = $urlSpec->{project};
+
+#    next unless($project eq $thisProject);
+
+    foreach my $orgHash (@$organisms) {
+      my $organism = $orgHash->{organism};
+      my $abbrev = $orgHash->{abbrev};
+
+
+      my @fTracks;
+      foreach my $track (@$tracks) {
+        my $name = $track->{name};
+        my $abbrevFirst = $track->{abbrevFirst};
+        my $subtracks = $track->{subtrack};
+
+        if($subtracks) {
+          my @subtracks;
+          foreach my $subtrack (@$subtracks) {
+            my $setName = $subtrack->{set};
+            my $subtrackName = $subtrack->{name};
+
+            if($setName) {
+              my $names = $subtrackSets->{$project}->{$setName};
+              die "Could not map subtrack set $subtrackName to a subtrackSet" unless($names);
+
+              push @subtracks, @$names;
+            }
+            else {
+              push @subtracks, $subtrackName;
+            }
+          }
+
+          my @sortedSubtracks = sort {$b =~ /$abbrev/ <=> $a =~ /$abbrev/} @subtracks;
+          push @fTracks, $name . "/" . join('+', @sortedSubtracks);
+        }
+        else {
+          push @fTracks, $name;
+        }
+      }
+      my $gtracks = join('%1E', @fTracks);
+      $insertRow->execute($organism, $gtracks);
+    }
+  }
+
+  $dbh->commit();
+  $dbh->disconnect();
+}
+
+sub createEmptyTable {
+     my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating table";
+     create table GbrowseTracksOrganism$suffix (
+	organism     varchar2(255),
+	gtracks      varchar2(4000)
+  ) nologging
+SQL
+$dbh->{PrintError} = 0;
+
+}
+
+
+sub usage {
+  my $e = shift;
+  if($e) {
+    print STDERR $e . "\n";
+  }
+  print STDERR "usage:  createMassSpecTerms.pl --databaseInstance <instance> --userName <userName> --password <password>";
+  exit;
+}
+
+1;
+
