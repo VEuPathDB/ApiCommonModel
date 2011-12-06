@@ -38,7 +38,7 @@ my @genomeList = @$genomeListRef;
 my $totalChangedGenes;
 
 foreach my $genome (@genomeList) {
-  $totalChangedGenes += processChangedGenes($dbh, $genome->{'taxonomyId'}, $genome->{'sinceDate'}, $suffix);
+  $totalChangedGenes += processChangedGenes($dbh, $genome->{SANGER_ID}, $genome->{SINCEDATE}, $suffix);
 }
 
 populateGenesAndProducts($dbh, $suffix);
@@ -49,94 +49,118 @@ print STDERR "Saved $totalChangedGenes total changed genes from web service\n";
 sub getGenomeList {
 
     my ($dbh) = @_;
+
     my $taxa = getOfferedTaxa();
 
-    my $stmt = $dbh->prepare(<<SQL);
-with genomes as
-       (select distinct t.ncbi_tax_id as taxonomyId, edr.version as sinceDate
-        from dots.GeneFeature gf, dots.NaSequence ns,
-             sres.Taxon t, sres.ExternalDatabaseRelease edr
-        where gf.external_database_release_id = edr.external_database_release_id
-          and gf.na_sequence_id = ns.na_sequence_id
-          and ns.taxon_id = t.taxon_id
-          and edr.version like '____-__-__'),
-     FullSet as
-       (select taxonomyId, sinceDate from genomes
-        union
-        select YouSayPotato.sanger_taxon as taxonomyId, sinceDate
-        from genomes g,
-             (select 'Trypanosoma cruzi'       as organism, 353153 as eupath_taxon,   5693 as sanger_taxon from dual
-             union
-              select 'Leishmania major'        as organism,   5664 as eupath_taxon, 347515 as sanger_taxon from dual
-             union
-              select 'Leishmania braziliensis' as organism,   5660 as eupath_taxon, 420245 as sanger_taxon from dual
-             union
-              select 'Plasmodium berghei'      as organism,   5823 as eupath_taxon,   5821 as sanger_taxon from dual
-             union
-              select 'Plasmodium chabaudi'     as organism,  31271 as eupath_taxon,   5825 as sanger_taxon from dual
-             union
-              select 'Plasmodium falciparum'   as organism,  36329 as eupath_taxon,   5833 as sanger_taxon from dual
-             union
-              select 'Plasmodium knowlesi'     as organism,   5851 as eupath_taxon,   5850 as sanger_taxon from dual
-             union
-              select 'Plasmodium vivax'        as organism, 126793 as eupath_taxon,   5855 as sanger_taxon from dual
-             union
-              select 'Plasmodium yoelii'       as organism, 352914 as eupath_taxon,   5861 as sanger_taxon from dual) YouSayPotato
-        where g.taxonomyId = YouSayPotato.eupath_taxon)
-select taxonomyId as "taxonomyId", min(sinceDate) as "sinceDate"
-from FullSet
-where taxonomyId in ($taxa)
-group by taxonomyId
+    # the successive subqueries of this query use increasingly broad techniques
+    # to match GeneDB and EuPathDB organism name. The techniques are described
+    # inline. Note that each has as one of its conditions that the GeneDB name
+    # didn't have a match in an earlier one.
+    my $sql = <<SQL;
+with Sanger_names as -- organism name/ID pairs from Sanger web service
+        ($taxa),
+     local_taxa as -- name/GUS ID/genome date tuples from the current database instance
+        (select ga.organism, ga.taxon_id, min(edr.version) as sinceDate
+         from ApidbTuning.GeneAttributes ga, dots.GeneFeature gf,
+              sres.ExternalDatabaseRelease edr
+         where ga.na_feature_id = gf.na_feature_id
+           and gf.external_database_release_id = edr.external_database_release_id
+           and edr.version like '____-__-__'
+         group by ga.organism, ga.taxon_id),
+     hardwired_mapping as -- you say "tater", I say "spud"
+        (select 'Leishmania infantum JPCM5 ' as sanger_name,
+                'Leishmania infantum' as eupathdb_name
+         from dual
+         union select 'Trypanosoma brucei Lister 427' as sanger_name,
+                      'Trypanosoma brucei Lister strain 427' as eupathdb_name from dual
+         union select 'Trypanosoma brucei brucei, strain 927' as sanger_name,
+                      'Trypanosoma brucei TREU927' as eupathdb_name from dual),
+     exact_match as -- Sanger name matches GeneAttributes.organism
+        (select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: exact match' as match_method
+         from sanger_names sn, local_taxa lt
+         where sn.name = lt.organism),
+     including_taxon_tree as -- exact_match query (above), UNIONed with
+                             -- Sanger name matches TaxonName.name for the species
+        (select * from exact_match
+         union 
+         select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: TaxonSpecies table (EuPathDB taxon - Sanger species)' as match_method
+         from sanger_names sn, sres.TaxonName tn, ApidbTuning.TaxonSpecies ts, local_taxa lt
+         where sn.name not in (select sanger_name from exact_match)
+           and sn.name = tn.name
+           and tn.taxon_id = ts.species_taxon_id
+           and ts.taxon_id = lt.taxon_id),
+     including_eupathdb_as_parent as -- including_taxon_tree query (above), UNIONed with
+                                     -- EuPathDB taxon is parent of taxon with Sanger name
+        (select * from including_taxon_tree
+         union 
+         select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: Taxon tree (EupSanger taxon is parent of Sanger taxon)' as match_method
+         from sanger_names sn, sres.TaxonName tn, sres.Taxon t, local_taxa lt
+         where sn.name not in (select sanger_name from exact_match)
+           and sn.name = tn.name
+           and tn.taxon_id = t.taxon_id
+           and t.parent_id = lt.taxon_id),
+     including_hardwired_mapping as -- above three, UNIONed with
+                                    -- hardwired_mapping joins Sanger name with our organism
+        (select * from including_eupathdb_as_parent
+         union 
+         select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: hardwired mapping' as match_method
+         from sanger_names sn, hardwired_mapping hm, local_taxa lt
+         where sn.name not in (select sanger_name from including_eupathdb_as_parent)
+           and sn.name = hm.sanger_name
+           and hm.eupathdb_name = lt.organism),
+     including_genus_only_match as -- above, UNIONed with
+                                   -- Sanger genus (i.e. space-delimited first word) matches local Genus
+                                   --         (walk Taxon tree from GeneAttributes taxon_id
+                                   --          to genus rank, get scientific name)
+        (select * from including_hardwired_mapping
+         union 
+         select sn.name as sanger_name, '' as eupathdb_name, sn.sanger_id,
+                '' as sinceDate, 'match: genus-only' as match_method
+         from sanger_names sn,
+              (select distinct name
+               from (select t.taxon_id, t.rank, tn.name
+                     from sres.Taxon t, sres.TaxonName tn
+                     where t.taxon_id = tn.taxon_id
+                       and tn.name_class = 'scientific name'
+                     start with t.taxon_id in (select taxon_id from ApidbTuning.GeneAttributes)
+                     connect by (prior t.parent_id = t.taxon_id and prior t.rank != 'genus'))
+               where rank = 'genus') local_genus
+         where sn.name not in (select sanger_name from including_hardwired_mapping)
+           and substr(sn.name, 1, instr(sn.name, ' ') - 1) = local_genus.name)
+select * from including_genus_only_match order by sanger_name
 SQL
+    print "SQL is:\n$sql\n\n" if $debug;
+
+    my $stmt = $dbh->prepare($sql);
 
 print STDERRR "getting list of taxa\n" if $debug;
   $stmt->execute();
 print STDERRR "done execute()ing taxa query \n" if $debug;
   my @genomeList;
   while (my $ref = $stmt->fetchrow_hashref()) {
-# print STDERRR "adding " . Dumper($ref) . " to the list\n" if $debug;
-    push(@genomeList, $ref);
+    # print STDERRR "adding " . Dumper($ref) . " to the list\n" if $debug;
+    if ($ref->{MATCH_METHOD} eq 'match: genus-only') {
+      print STDERR "WARNING: GeneDB taxon \"" . $ref->{SANGER_NAME} . "\" does not match any taxon in the local instance.";
+    } else {
+      push(@genomeList, $ref);
+    }
   }
 
-  # old, hardwired taxon/date pairs
-  #   my @genomeList = (
-  # 		    {taxonomyId => 185431, sinceDate => '2008-11-13'},  # T. brucei
-  # 		    {taxonomyId => 5671, sinceDate => '2008-11-24'} );  # L. infantum
-
-print STDERRR "got list of taxa\n" if $debug;
-  return \@genomeList;
-}
+    print STDERRR "got list of taxa\n" if $debug;
+    return \@genomeList;
+  }
 
 
 sub getOfferedTaxa {
 
-  # This has been commented out since before Sanger changed their URLs. The URL
-  # has been updated, but not tested. Use care when putting this back into service.
-
-  # returns a comma-separated string of NCBI taxon IDs for which the Sanger web
-  # service can show changes.  The service itself will provide this list, as a
-  # response to the URL in the code.  But since it changes slowly, and every
-  # component runs the tuning manager, it's hardwired into this RETURN statement
-
-  # short, TriTrypDB-specific list: 
-  # return '5671, 5692, 5693, 5699, 31285, 185431, 347515, 420245';
-
-  # old, longer list
-  return <<SANGERTAXA;
-   5085, 360910, 518, 95486, 272559, 97084, 519, 520, 28450,
-   83555, 1491, 1496, 1717, 42374, 197, 28447, 813, 44689,
-   554, 216592, 5759, 5802, 420245, 5661, 5671,347515, 5665,
-   1765, 1769, 1781, 1773, 487, 272831, 5821, 5825,          -- skip "29176" (Neospora caninum)
-   5833, 294,5850, 5855, 5861, 384, 46170, 282458, 282459,
-   54736, 4932, 1902, 592, 40324, 6183, 615, 561276, 373153,
-   1313, 170187, 4896, 1314, 90370, 568708, 1349, 5874,
-   5761, 185431, 31285, 5692, 5693, 5699, 2039, 630, 632
-SANGERTAXA
-
   my $ua = new LWP::UserAgent;
-  my $url = "http://www.genedb.org/services/genomes/changes.xml?since=2008-12-01";
+  my $url = "http://www.genedb.org/services/organisms/list";
 
-  print STDERR "getting list of available taxa from = $url";
+  print STDERR "getting list of available taxa from = $url\n";
   my $request = new HTTP::Request('GET', $url);
   my $response = $ua->request($request);
   if (!$response->is_success) {
@@ -144,16 +168,19 @@ SANGERTAXA
   }
 
   my $simple = XML::Simple->new();
-  my $changeList = $simple->XMLin($response->content, KeyAttr => [] );
-  my $results = $changeList->{results};
+  my $taxonList = $simple->XMLin($response->content, KeyAttr => [] );
 
-  my $organisms = $results->{organism};
+  # print "\ntaxonList:\n" . Dumper($taxonList) . "\n<- taxonList";
+  # print "\ntaxonList->results->result:\n" . Dumper($taxonList->{results}->{result}) . "\n<- taxonList";
 
-  my @taxa;
-  map {my $taxonomyID = $_->{'taxonomyID'}; push(@taxa, $taxonomyID) if $taxonomyID} @$organisms;
+  my @selects;
+  foreach my $taxon (@{$taxonList->{results}->{result}}) {
+    push(@selects, "select '" . $taxon->{name} . "' as name, '" . $taxon->{id} . "' as sanger_id from dual");
+  }
 
-  my $taxa = join(', ', @taxa);
-  return $taxa;
+  my $taxonSubquery = join("\nunion ", @selects);
+
+  return $taxonSubquery;
 }
 
 sub processChangedGenes {
@@ -163,7 +190,7 @@ sub processChangedGenes {
   die "bad taxonomyId" if !defined($taxonomyId);
 
   my $ua = new LWP::UserAgent;
-  my $url = "http://www.genedb.org/services/features/annotation_changes?date=$sinceDate&organism=tax:$taxonomyId";
+  my $url = "http://www.genedb.org/services/features/annotation_changes?date=$sinceDate&organism=org:$taxonomyId";
   print STDERR "getting list of gene changes from = $url\n";
   my $request;
   my $response;
@@ -177,8 +204,8 @@ sub processChangedGenes {
 
       if (!$response->is_success # request failed
          || $response->content =~ /<error / ) {  # response was an error message
-        print STDERR "unsuccessful when trying to get changed-gene list for taxonomy ID $taxonomyId with URL $url .  Got response ->>"
-                      . $response->content . "<<- (end of response to gene-list request for taxonomy ID $taxonomyId)";
+        print STDERR "unsuccessful when trying to get changed-gene list for organism ID $taxonomyId with URL $url .  Got response ->>"
+                      . $response->content . "<<- (end of response to gene-list request for organism ID $taxonomyId)";
       }
 
   } until (++$retries >= $MAX_RETRIES || ($response->content && $response->is_success && !($response->content =~ /<error /)));
