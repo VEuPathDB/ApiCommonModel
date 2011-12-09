@@ -144,7 +144,7 @@ print STDERRR "done execute()ing taxa query \n" if $debug;
   while (my $ref = $stmt->fetchrow_hashref()) {
     # print STDERRR "adding " . Dumper($ref) . " to the list\n" if $debug;
     if ($ref->{MATCH_METHOD} eq 'match: genus-only') {
-      print STDERR "WARNING: GeneDB taxon \"" . $ref->{SANGER_NAME} . "\" does not match any taxon in the local instance.";
+      print STDERR "WARNING: GeneDB taxon \"" . $ref->{SANGER_NAME} . "\" does not match any taxon in the local instance.\n";
     } else {
       push(@genomeList, $ref);
     }
@@ -320,6 +320,8 @@ SQL
     while (my ($feature) = $stmt->fetchrow_array()) {
 	print STDERRR "getting gene and product for feature \"$feature\"\n" if $debug;
 	my ($gene, $product) = getFeatureGeneAndProduct($feature);
+	my ($gene, $product) = getFeatureSynonymGeneAndProduct($feature)
+	  if !$gene;
 	$updateStmt->execute($gene, $product, $feature);
 	print STDERR "set gene to \"$gene\" and product to \"$product\" for feature \"$feature\"\n" if $debug;
     }
@@ -335,11 +337,12 @@ sub getFeatureGeneAndProduct {
     print STDERR "getting info for feature \"$feature\"\n" if $debug;
     my $request;
     my $response;
+
     $request = new HTTP::Request('GET', $url);
     $response = $ua->request($request);
 
     if (!$response->is_success || $response->content =~ /<error /) {
-	die "trying to get info for feature \"$feature\" using URL $url";
+	return('', '')
     }
 
     my $simple = XML::Simple->new();
@@ -354,6 +357,32 @@ sub getFeatureGeneAndProduct {
     }
 
     return($gene, $product);
+}
+
+sub getFeatureSynonymGeneAndProduct {
+
+    my ($feature) = @_;
+
+    my $ua = new LWP::UserAgent;
+    my $url = "http://www.genedb.org/services/features/synonyms?features=$feature";
+    print STDERR "getting synonym for feature \"$feature\"\n" if $debug;
+    my $request;
+    my $response;
+    $request = new HTTP::Request('GET', $url);
+    $response = $ua->request($request);
+
+    if (!$response->is_success || $response->content =~ /<error /) {
+	die "trying to get synonym for feature \"$feature\" using URL $url";
+    }
+
+    my $simple = XML::Simple->new();
+    my $info = $simple->XMLin($response->content, forcearray => 1, KeyAttr => [] );
+    # print "info:\n" . Dumper($info). "\n";
+
+    my $realName = $info->{results}->[0]->{result}->[0]->{uniqueName};
+
+    print "real name = \"$realName\"\n" if $debug;
+    return(getFeatureGeneAndProduct($realName));
 }
 
 sub renameOldChanges {
