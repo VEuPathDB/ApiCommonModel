@@ -84,8 +84,8 @@ while(my ($projectId) = $sh->fetchrow_array()) {
     my $motifSh = $dbh->prepare($sql);
     $motifSh->execute();
 
-    while(my ($organism, $file) = $motifSh->fetchrow_array()) {
-
+    while(my ($parent, $organism, $file) = $motifSh->fetchrow_array()) {
+      next if($file eq '-1');
       my $filename = "$apiSiteFilesDir/webServices/$projectId/release-$version/motif/$file";
 
       unless(-e $filename) {

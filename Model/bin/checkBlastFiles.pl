@@ -68,6 +68,7 @@ while(my ($projectId) = $sh->fetchrow_array()) {
   die "No version for project $projectId specified "unless($version);
 
   foreach my $blastType (@$blastDatabaseTypes) {
+
     my $tempBlastSql = $blastSql;
     my $includeProjects = $blastType->{includeProjects};
     my $excludeProjects = $blastType->{excludeProjects};
@@ -82,12 +83,13 @@ while(my ($projectId) = $sh->fetchrow_array()) {
     }
 
     $tempBlastSql =~ s/\@PROJECT_ID\@/$projectId/g;
-    $tempBlastSql =~ s/\$\$BlastDatabaseType\$\$/\'$internal\'/g;
+    $tempBlastSql =~ s/\$\$BlastDatabaseType\$\$/$internal/g;
 
     my $blastSh = $dbh->prepare($tempBlastSql);
     $blastSh->execute();
 
-    while(my ($organism, $file) = $blastSh->fetchrow_array()) {
+    while(my ($parent, $organism, $file) = $blastSh->fetchrow_array()) {
+      next if($file eq '-1');
       my $basename = basename($file);
 
       my $filename = "$apiSiteFilesDir/webServices/$projectId/release-$version/blast/$basename" . $internal . $extension;
