@@ -317,11 +317,11 @@ public class GffCacheCreator extends BaseCLI {
 
         getSelectPkColumns(sql, null);
 
-        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        sql.append("apidb.tab_to_string(set(cast(COLLECT(trim(to_char(");
 
         sql.append(COLUMN_CONTENT);
 
-        sql.append("))) AS apidb.varchartab), '").append(NEW_LINE).append(
+        sql.append("))) AS apidb.varchartab)), '").append(NEW_LINE).append(
                 "') AS ").append(COLUMN_CONTENT).append(" FROM (");
 
         sql.append("SELECT ");
@@ -383,12 +383,12 @@ public class GffCacheCreator extends BaseCLI {
 
         getSelectPkColumns(sql, null);
 
-        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        sql.append("apidb.tab_to_string(set(cast(COLLECT(trim(to_char(");
 
         sql.append(COLUMN_CONTENT);
 
         sql.append(")) ORDER BY ").append(COLUMN_ORDER_NUMBER).append(
-                ") AS apidb.varchartab), '").append(NEW_LINE).append("') AS ").append(
+                ") AS apidb.varchartab)), '").append(NEW_LINE).append("') AS ").append(
                 COLUMN_CONTENT).append(" FROM (");
 
         sql.append("SELECT ");
@@ -429,12 +429,12 @@ public class GffCacheCreator extends BaseCLI {
 
         getSelectPkColumns(sql, null);
 
-        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        sql.append("apidb.tab_to_string(set(cast(COLLECT(trim(to_char(");
 
         sql.append(COLUMN_GFF_GO_ID);
 
         sql.append(")) ORDER BY ").append(COLUMN_ONTOLOGY).append(",").append(
-                COLUMN_GFF_GO_ID).append(") AS apidb.varchartab), ',') AS ").append(
+                COLUMN_GFF_GO_ID).append(") AS apidb.varchartab)), ',') AS ").append(
                 COLUMN_CONTENT).append(" FROM (");
 
         sql.append("SELECT ");
@@ -475,12 +475,12 @@ public class GffCacheCreator extends BaseCLI {
 
         getSelectPkColumns(sql, null);
 
-        sql.append("apidb.tab_to_string(CAST(COLLECT(trim(to_char(");
+        sql.append("apidb.tab_to_string(set(cast(COLLECT(trim(to_char(");
 
         sql.append(columnName);
 
         sql.append(")) ").append(collectOrder).append(
-                ") AS apidb.varchartab), ',') AS ").append(COLUMN_CONTENT).append(
+                ") AS apidb.varchartab)), ',') AS ").append(COLUMN_CONTENT).append(
                 " FROM (");
 
         sql.append("SELECT ");
