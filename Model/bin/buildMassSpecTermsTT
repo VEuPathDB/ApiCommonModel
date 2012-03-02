@@ -15,6 +15,8 @@ use Getopt::Long qw(GetOptions);
 
 use Data::Dumper;
 
+use Spreadsheet::ParseExcel;
+
 use ApiCommonData::Load::TuningConfig::Utils;
 
 
@@ -32,8 +34,7 @@ GetOptions("propfile=s" => \$propfile,
            "password=s" => \$password,
            "branch=s" => \$svnBranch,
           );
-
-my $TABFILE = "MSTermTab.txt";
+my $TABFILE = "MSTermTab.xls";
 my $tabFileLocation = "/tmp/$TABFILE";
 
 system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/data/${TABFILE} $tabFileLocation");
@@ -46,11 +47,10 @@ unlink $tabFileLocation;
 
 sub run{
 
-  
-  unless(-e $tabFileLocation) {
-    &usage("ERROR:  tabFile $tabFileLocation is not in this directory");
+  unless (-e $tabFileLocation)  {
+    die "Mass Spec Tab file :$tabFileLocation does not exist";
   }
-  
+
   if($help) {
     &usage();
   }
@@ -67,19 +67,60 @@ my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $sche
   my $insertStatement = "INSERT INTO MassSpecTerms$suffix(project_id,
                             experiment,organism,sample,ext_db_name,sort_order) VALUES (?,?,?,?,?,?)";
   my $insertRow = $dbh->prepare($insertStatement);
+  my @lines = [];
   createEmptyTable($dbh,$suffix);
-  open (FILE, $tabFileLocation);
-  while (<FILE>) {
-    chomp;
-    # skip commets / header
-    next if(/^#/);
+  if ($tabFileLocation =~ /\.xls$/ || $tabFileLocation =~ /\.xlsx$/) {
+    eval {
+      require Spreadsheet::ParseExcel;
+    };
+    if($@) {
+      die "Spreadsheet::ParseExcel is a required package when loading from a .xls file";
+    }
+    else {
+      my $oExcel = new Spreadsheet::ParseExcel;
+      my $oBook = $oExcel->Parse($tabFileLocation);
 
-    (my $project_id, my $experiment, my $organism, my $sample, my $ext_db_name, my $sort_order ) = split("\t");
+      for(my $iSheet=0; $iSheet < $oBook->{SheetCount} ; $iSheet++) {
+        my $oSheet = $oBook->{Worksheet}[$iSheet];
+        my $minRow = $oSheet->{MinRow};
+        my $maxRow = $oSheet->{MaxRow};
+        my $minCol = $oSheet->{MinCol};
+        my $maxCol = $oSheet->{MaxCol};
+        if($maxRow) {
+          for(my $i = $minRow; $i <= $maxRow; $i++) {
+            # skip comments / header
+            my @row;
+            for(my $j = $minCol; $j <= $maxCol; $j++) {
+              my $oCell = $oSheet->{Cells}[$i][$j];
+              my $cellValue = $oCell ? $oCell->Value : undef;
+              $cellValue =~ s/["\']//g;
+              push(@row, $cellValue);
+            }
+            push @lines, join("\t", @row);
+          }
+        }
+      }
+    }
+  }
+#   else
+#   {
+#     open (FILE, $tabFileLocation);
+#     while (<FILE>) {
+#       chomp;
+#       # skip comments / header
+#       next if(/^#/);
+#       push @lines, $_;
+#     }
+#    close (FILE);
+#}
+  foreach my $line (@lines) {
+    (my $project_id, my $experiment, my $organism, my $sample, my $ext_db_name, my $sort_order ) = split("\t",$line) unless $line=~/^#/;
     if ($ext_db_name) {
       $insertRow->execute($project_id,$experiment,$organism,$sample,$ext_db_name,$sort_order);
     }
+    else {
+    }
   }
-  close (FILE);
   $dbh->commit();
   $dbh->disconnect();
 }
