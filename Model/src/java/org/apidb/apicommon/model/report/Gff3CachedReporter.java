@@ -240,7 +240,7 @@ public class Gff3CachedReporter extends Reporter {
                 .getColumnRefs();
 
         // get id sql, then combine with the gff cache.
-        String idSql = baseAnswer.getIdSql();
+        String idSql = baseAnswer.getSortedIdSql();
 
         StringBuffer sql = new StringBuffer("SELECT tc." + COLUMN_CONTENT);
         sql.append(" FROM " + tableCache + " tc, (" + idSql + ") ac");
