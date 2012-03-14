@@ -75,10 +75,6 @@ SQL
 
   my %dataSources;
 
-  my %types;
-  my %subtypes;
-  my %organisms;
-
   while (my $hashref = $query->fetchrow_hashref()) {
     my $name = $hashref->{NAME};
 
