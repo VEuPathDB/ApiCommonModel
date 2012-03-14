@@ -2,30 +2,62 @@ package ApiCommonShared::Model::DataSourceList;
 
 use strict;
 
+=pod
+
+=head1 Usage
+
+  my $dbh = $self->getQueryHandle($cgi);
+  my $dsList = ApiCommonShared::Model::DataSourceList->new($dbh);
+
+  my $distinctSubtypeValues = $dsList->getDistinctValuesByField('subtype');
+  my $dataSourceHashRef = $dsList->dataSourceHashByName('CalbSC5314_dbxref_unity_CGD_RSRC');
+
+  my $filteredList = $dsList->filter('organism', 'Candida albicans SC5314');
+  my $filteredDistinctSubtypeValues = $filteredList->getDistinctValuesByField('subtype');
+
+=cut
+
+
 sub new {
-  my ($class, $dbh) = @_;
+  my ($class, $dbh, $dataSources) = @_;
 
   unless(UNIVERSAL::isa($dbh,'DBI::db')) {
-    die "Error Connecting to the database";
+    die "Database handle not provided";
   }
-  my $self = {dbh => $dbh};
 
+  my $self = {dbh => $dbh};
   bless($self,$class);
 
-  $self->readDatabase();
+  if($dataSources) {
+    $self->setDataSources($dataSources);
+  }
+  else {
+    $self->setDataSourcesFromDatabase();
+  }
 
   return $self;
 }
 
-
-
 sub getDbh             { $_[0]->{dbh} }
 sub getDataSources     { $_[0]->{dataSources} }
-sub getTypes           { $_[0]->{types} }
-sub getSubtypes        { $_[0]->{dataSources} }
-sub getOrganisms       { $_[0]->{organisms} }
+sub setDataSources     { $_[0]->{dataSources} = $_[1] }
 
-sub readDatabase {
+sub getDistinctValuesByField { 
+  my ($self, $field) = @_;
+
+  my $datasources = $self->getDataSources();
+
+  my %distinct;
+  foreach my $hashref (values %$datasources) {
+    my $value = $hashref->{uc($field)};
+    $distinct{$value}++ if($value);
+  }
+
+  my @rv = keys %distinct;
+  return \@rv;
+}
+
+sub setDataSourcesFromDatabase {
   my ($self) = @_;
 
   my $dbh = $self->getDbh();
@@ -50,27 +82,10 @@ SQL
   while (my $hashref = $query->fetchrow_hashref()) {
     my $name = $hashref->{NAME};
 
-    my $type = $hashref->{TYPE};
-    my $subtype = $hashref->{SUBTYPE};
-    my $organism = $hashref->{ORGANISM};
-
-    $types{$type}++ if($type);
-    $subtypes{$subtype}++ if($subtype);
-    $organisms{$organism}++ if($organism);
-
     $dataSources{$name} = $hashref;
   }
 
   $self->{dataSources} = \%dataSources;
-
-  my @organisms = keys %organisms;
-  my @types = keys %types;
-  my @subtypes = keys %subtypes;
-
-
-  $self->{organisms} = \@organisms;
-  $self->{types} = \@types;
-  $self->{subtypes} = \@subtypes;
 
   return %dataSources;
 }
@@ -96,19 +111,23 @@ sub filter {
   my ($self, $filterField, $filterValue) = @_;
 
   my $dataSources = $self->getDataSources();
+  my $dbh = $self->getDbh();
 
   my @allvalues = values %$dataSources;
   my @filtered;
 
+  my %filtered;
+
   foreach my $hashref (@allvalues) {
     my $value = $hashref->{uc($filterField)};
+    my $name = $hashref->{NAME};
 
     if($value && $filterValue eq $value) {
-      push @filtered, $hashref;
+      $filtered{$name} = $hashref;
     }
   }
 
-  return \@filtered;
+  return ApiCommonShared::Model::DataSourceList->new($dbh, \%filtered);
 }
 
 
