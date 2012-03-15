@@ -8,14 +8,15 @@ use XML::Simple;
 use Data::Dumper;
 
 sub new {
-  my ($class, $resourceInfoXmlFile, $wdkReferenceCategories) = @_;
+  my ($class, $dataAttributionsXmlFile, $wdkReferenceCategories, $dbDataSourceList) = @_;
 
   my $self = {};
 
   bless($self,$class);
 
-  $self->{resourceInfoXmlFile} = $resourceInfoXmlFile;
+  $self->{dataAttributionsXmlFile} = $dataAttributionsXmlFile;
   $self->{wdkReferenceCategories} = $wdkReferenceCategories;
+  $self->{dbDataSourceList} = $dbDataSourceList;
 
   $self->_parseXmlFile();
 
@@ -23,11 +24,11 @@ sub new {
 }
 
 # Deprecated
-sub getXmlFile { $_[0]->getResourceInfoXmlFile() }
+sub getXmlFile { $_[0]->getDataAttributionsXmlFile() }
 
-sub getResourceInfoXmlFile {
+sub getDataAttributionsXmlFile {
   my ($self) = @_;
-  return $self->{resourceInfoXmlFile};
+  return $self->{dataAttributionsXmlFile};
 }
 
 sub getWdkReferenceCategories {
@@ -36,41 +37,43 @@ sub getWdkReferenceCategories {
 }
 
 
-sub getDataSourceInfoNames {
+sub getDataSourceAttributionNames {
   my ($self) = @_;
 
-  my $resourceInfos = $self->{data}->{resourceInfo};
+  my $attributionObj = $self->{data}->{dataSourceAttribution};
 
-  return keys(%$resourceInfos);
+  return keys(%$attributionObj);
 }
 
-sub getDataSourceInfo {
+sub getDataSourceAttribution {
     my ($self, $dataSourceName) = @_;
 
-    die "can't find resourceInfo '$dataSourceName' in xml file $self->{resourceInfoXmlFile}"
-      unless $self->{data}->{resourceInfo}->{$dataSourceName};
+    die "can't find resourceInfo '$dataSourceName' in xml file $self->{dataAttributionsXmlFile}"
+      unless $self->{data}->{dataSourceAttribution}->{$dataSourceName};
 
-    return ReFlow::DataSource::DataSourceInfo->new($dataSourceName, $self->{data}->{resourceInfo}->{$dataSourceName}, $self);
+    return ApiCommonShared::Model::DataSourceAttribution->new($dataSourceName, $self->{data}->{dataSourceAttribution}->{$dataSourceName}, $self);
 }
 
 sub _parseXmlFile {
   my ($self) = @_;
 
-  my $resourceInfoXmlFile = $self->getResourceInfoXmlFile();
+  my $dataAttributionsXmlFile = $self->getDataAttributionsXmlFile();
 
-  my $xmlString = `cat $resourceInfoXmlFile`;
+  my $xmlString = `cat $dataAttributionsXmlFile`;
   my $xml = new XML::Simple();
-  $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => undef, KeyAttr => 'resource', ForceArray=>['publication','resourceInfo', 'wdkReference']) };
-  die "$@\n$xmlString\nerror processing XML file $resourceInfoXmlFile\n" if($@);
+  $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => undef, KeyAttr => 'resource', ForceArray=>['dataSourceAttribution','contact','publication','link','wdkReference']) } ;
+  die "$@\n$xmlString\nerror processing XML file $dataAttributionsXmlFile\n" if($@);
 
   if(my $wdkReferenceCategories = $self->getWdkReferenceCategories()) {
 
-    foreach my $resourceName (keys %{$self->{data}->{resourceInfo}}) {
-      my $resource = $self->{data}->{resourceInfo}->{$resourceName};
+    my $dbDataSourceObj = $self->{dbDataSourceList};
 
-      my $resourceCategory = $resource->{category};
-      my $resourceWdkRefs = $resource->{wdkReference} ? $resource->{wdkReference} : [];
+    foreach my $resourceName (keys %{$self->{data}->{dataSourceAttribution}}) {
 
+      my $attributionObj = $self->{data}->{dataSourceAttribution}->{$resourceName};
+      my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
+      my $resourceCategory = $dbDataSource->{TYPE};
+      my $resourceWdkRefs = $attributionObj->{wdkReference} ? $attributionObj->{wdkReference} : [];
       my $baseWdkRefs = $wdkReferenceCategories->getWdkReferencesByCategoryName($resourceCategory);
 
       push @$resourceWdkRefs, @$baseWdkRefs;

@@ -64,7 +64,7 @@ sub setDataSourcesFromDatabase {
 
   my $query = $dbh->prepare(<<SQL);
 select * from (
-select ds.name, ds.version, ds.is_species_scope, ds.type, ds.subtype,tn.name as organism, tn.name_class as org_name_class
+select ds.name, ds.version, ds.data_source_id as id, ds.is_species_scope, ds.type, ds.subtype,tn.name as organism, tn.name_class as org_name_class
 from apidb.datasource ds, sres.taxonname tn
 where ds.taxon_id = tn.taxon_id (+)
 ) where org_name_class = 'scientific name' or organism is null

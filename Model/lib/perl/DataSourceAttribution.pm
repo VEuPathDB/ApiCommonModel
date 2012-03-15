@@ -4,20 +4,25 @@ use strict;
 use Data::Dumper;
 
 sub new {
-  my ($class, $resourceName, $parsedXml, $dataSourceInfos) = @_;
+  my ($class, $resourceName, $parsedXml, $dataSourceAttributions) = @_;
 
-  my $self = {resourceName => $resourceName,
+  my $self = {#strings
+              resourceName => $resourceName,
               displayName => $parsedXml->{displayName},
-              project => $parsedXml->{project},
-              category => $parsedXml->{category},
-              contact => $parsedXml->{contact},
-              email => $parsedXml->{email},
-              institution => $parsedXml->{institution},
-              publicUrl => $parsedXml->{publicUrl},
+              summary => $parsedXml->{summary},
+              protocol => $parsedXml->{protocol},
+              caveat => $parsedXml->{caveat},
+              acknowledgement => $parsedXml->{acknowledgement},
+              releasePolicy => $parsedXml->{releasePolicy},
               description => $parsedXml->{description},
+
+              #Array Objs
               wdkReference => $parsedXml->{wdkReference},
+              contacts =>  $parsedXml->{contacts}->{contact},
+              links => $parsedXml->{links}->{link}, 
+
               parsedXml => $parsedXml,
-              dataSourceInfos => $dataSourceInfos,
+              dataSourceAttributions => $dataSourceAttributions,
              };
 
   bless($self,$class);
@@ -26,10 +31,10 @@ sub new {
 }
 
 
-sub getDataSourceInfos {
+sub dataSourceAttributions {
   my ($self) = @_;
 
-  return $self->{dataSourceInfos};
+  return $self->{dataSourceAttributions};
 }
 
 sub getParsedXml {
@@ -41,7 +46,7 @@ sub getParsedXml {
 sub getName {
     my ($self) = @_;
 
-    return $self->{dataSourceName};
+    return $self->{resourceName};
 }
 
 sub getDisplayName {
@@ -50,40 +55,46 @@ sub getDisplayName {
     return $self->{displayName};
 }
 
-sub getProject {
+sub getContacts {
     my ($self) = @_;
 
-    return $self->{project};
+    return $self->{contacts};
 }
 
-sub getCategory {
+sub getProtocol {
     my ($self) = @_;
 
-    return $self->{category};
+    return $self->{protocol};
 }
 
-sub getContact {
+sub getCaveat {
     my ($self) = @_;
 
-    return $self->{contact};
+    return $self->{caveat};
 }
 
-sub getEmail {
+sub getAcknowledgement {
     my ($self) = @_;
 
-    return $self->{email};
+    return $self->{acknowledgement};
 }
 
-sub getInstitution {
+sub getReleasePolicy {
     my ($self) = @_;
 
-    return $self->{institution};
+    return $self->{releasePolicy};
 }
 
-sub getPublicUrl {
+sub getSummary {
     my ($self) = @_;
 
-    return $self->{publicUrl};
+    return $self->{summary};
+}
+
+sub getAssociatedLinks {
+    my ($self) = @_;
+
+    return $self->{links};
 }
 
 sub getDescription {
@@ -101,7 +112,7 @@ sub getPublications {
 
     if (!$self->{publications}) {
 
-	my $publications = ref($parsedXml->{publication}) eq 'ARRAY' ? $parsedXml->{publication} : [];
+	my $publications = $parsedXml->{publications}->{publication};
 
 	foreach my $publication (@$publications) {
 	    my $pubmedId = $publication->{pmid};
