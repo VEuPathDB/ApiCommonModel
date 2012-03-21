@@ -1,0 +1,157 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use XML::Simple;
+
+use File::Basename;
+
+use DBI;
+use DBD::Oracle;
+
+use Getopt::Long qw(GetOptions);
+
+use Data::Dumper;
+
+use Spreadsheet::ParseExcel;
+
+use ApiCommonData::Load::TuningConfig::Utils;
+
+
+my ($help, $propfile,$project, $instance, $schema, $password, $suffix, $subversionDir, $debug, $svnBranch);
+
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "password=s" => \$password,
+           "suffix=s" => \$suffix,
+           "subversionDir=s" => \$subversionDir,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+           "project=s" => \$project,
+           "password=s" => \$password,
+           "branch=s" => \$svnBranch,
+          );
+my $TABFILE = "MSTermTab.xls";
+my $tabFileLocation = "/tmp/$TABFILE";
+
+system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/data/${TABFILE} $tabFileLocation");
+
+($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+
+&run();
+
+unlink $tabFileLocation;
+
+sub run{
+
+  unless (-e $tabFileLocation)  {
+    die "Mass Spec Tab file :$tabFileLocation does not exist";
+  }
+
+  if($help) {
+    &usage();
+  }
+
+  my $failures = 0;
+
+my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+
+  $dbh->{RaiseError} = 1;
+  $dbh->{AutoCommit} = 0;
+  
+  # parse Tab file
+  
+  my $insertStatement = "INSERT INTO MassSpecTerms$suffix(project_id,
+                            experiment,organism,sample,internal_id,sort_order) VALUES (?,?,?,?,?,?)";
+  my $insertRow = $dbh->prepare($insertStatement);
+  my @lines = [];
+  createEmptyTable($dbh,$suffix);
+  if ($tabFileLocation =~ /\.xls$/ || $tabFileLocation =~ /\.xlsx$/) {
+    eval {
+      require Spreadsheet::ParseExcel;
+    };
+    if($@) {
+      die "Spreadsheet::ParseExcel is a required package when loading from a .xls file";
+    }
+    else {
+      my $oExcel = new Spreadsheet::ParseExcel;
+      my $oBook = $oExcel->Parse($tabFileLocation);
+
+      for(my $iSheet=0; $iSheet < $oBook->{SheetCount} ; $iSheet++) {
+        my $oSheet = $oBook->{Worksheet}[$iSheet];
+        my $minRow = $oSheet->{MinRow};
+        my $maxRow = $oSheet->{MaxRow};
+        my $minCol = $oSheet->{MinCol};
+        my $maxCol = $oSheet->{MaxCol};
+        if($maxRow) {
+          for(my $i = $minRow; $i <= $maxRow; $i++) {
+            # skip comments / header
+            my @row;
+            for(my $j = $minCol; $j <= $maxCol; $j++) {
+              my $oCell = $oSheet->{Cells}[$i][$j];
+              my $cellValue = $oCell ? $oCell->Value : undef;
+              $cellValue =~ s/["\']//g;
+              push(@row, $cellValue);
+            }
+            push @lines, join("\t", @row);
+          }
+        }
+      }
+    }
+  }
+#   else
+#   {
+#     open (FILE, $tabFileLocation);
+#     while (<FILE>) {
+#       chomp;
+#       # skip comments / header
+#       next if(/^#/);
+#       push @lines, $_;
+#     }
+#    close (FILE);
+#}
+  foreach my $line (@lines) {
+    (my $project_id, my $experiment, my $organism, my $sample, my $ext_db_name, my $sample_file, my $sort_order ) = split("\t",$line) unless $line=~/^#/;
+    my $internal_id = $ext_db_name;
+    if ($sample_file) {
+      $internal_id .= '|'.$sample_file;
+    if ($ext_db_name) {
+      $insertRow->execute($project_id,$experiment,$organism,$sample,$internal_id,$sort_order);
+    }
+    else {
+    }
+  }
+  $dbh->commit();
+  $dbh->disconnect();
+}
+
+sub createEmptyTable {
+     my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating table";
+     create table MassSpecTerms$suffix (
+	project_id   varchar2(9),
+        experiment   varchar2(255),
+	organism     varchar2(255),
+	sample       varchar2(129),
+	internal_id  varchar2(81),
+        sort_order   number
+  ) nologging
+SQL
+$dbh->{PrintError} = 0;
+
+}
+
+sub usage {
+  my $e = shift;
+  if($e) {
+    print STDERR $e . "\n";
+  }
+  print STDERR "usage:  createMassSpecTerms.pl --databaseInstance <instance> --userName <userName> --password <password>";
+  exit;
+}
+
+1;
