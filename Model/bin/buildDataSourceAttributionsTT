@@ -11,6 +11,7 @@ use ApiCommonData::Load::TuningConfig::Utils;
 use ApiCommonShared::Model::DataSourceAttributions;
 use ApiCommonShared::Model::DataSourceAttribution;
 use ApiCommonShared::Model::WdkReferenceCategories;
+use ApiCommonShared::Model::DataSourceList;
 use CBIL::Util::PropertySet;
 
 BEGIN {
@@ -43,15 +44,15 @@ my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $sche
 
 $|=1;
 
-my $workingDir = $subversionDir . "datasources";
+#my $workingDir = $subversionDir . "datasources";
 
 createTables($dbh, $suffix);
 
-chdir "$workingDir";
+#chdir "$workingDir";
 
 my $projectQuery = $dbh->prepare(<<SQL);
   select project_id, lower(project_id) as lower_project_id
-  from (select distinct project_id from $schema.SequenceAttributes)
+  from (select distinct project_id from apidbtuning.SequenceAttributes)
 SQL
 
 my $wdkReferenceCategoriesXmlFile = "wdkReferenceCategories.xml";
@@ -60,15 +61,15 @@ my $wdkReferenceCategories = ApiCommonShared::Model::WdkReferenceCategories->new
 $projectQuery->execute() or die "getting a list of project IDs";
 while (my ($project, $lowerProject) = $projectQuery->fetchrow_array()) {
 
-  loadDataSources($dbh, "globalResourcesInfo.xml", $suffix, $wdkReferenceCategories, $debug);
+#  loadDataSources($dbh, "globalResourcesInfo.xml", $suffix, $wdkReferenceCategories, $debug);
 
-  foreach my $file (`ls $lowerProject/*Info.xml`) {
+  foreach my $file (`ls $lowerProject/*Attributions.xml`) {
     loadDataSources($dbh, $file, $suffix, $wdkReferenceCategories, $debug);
   }
 }
 
-createIndexes($dbh);
-dropConstraints($dbh, $suffix);
+#createIndexes($dbh);
+#dropConstraints($dbh, $suffix);
 
 die if getErrorFlag();
 
@@ -84,39 +85,22 @@ sub loadDataSources {
      my $dataSourceAttributions = ApiCommonShared::Model::DataSourceAttributions->new($infile, $wdkReferenceCategories,$dbDataSourcesList);
 
     if($debug){
-	print STDERR "DATA SOURCE INFO:  ";
-	print STDERR Dumper $dataSourceAttributions;
+	#print STDERR "DATA SOURCE INFO:  ";
+#	print STDERR Dumper $dataSourceAttributions;
     }
 
 
     my $insertDsAttrib = $dbh->prepare(<<SQL);
       insert into ApiDB.DataSourceAttribution$suffix
                   (data_source_id, display_name, description,summary,
-                   protocol, caveat, ackowledgement, releasepolicy)
+                   protocol, caveat, acknowledgement, releasepolicy)
                    values (?, ?, ?, ?, ?, ?, ?, ?)
 SQL
 
-    my $queryContact = $dbh->prepare(<<SQL);
-         select contact_id from Sres.Contact where name = ? and email = ?
-SQL     
-
-    my $insertDsCntctLink = $dbh->prepare(<<SQL);
-      insert into ApiDB.DataSourceContact$suffix
-                  (contact_id,data_source_id, is_primary_contact)
-                  values(?, ?, ?)
-SQL
-
-    my $insertDsCntctLinkNew = $dbh->prepare(<<SQL);
-      insert into ApiDB.DataSourceContact$suffix
-                  (contact_id,data_source_id, is_primary_contact)
-      select DataSourceContact_sq$suffix.currval, ?, ?
-      from dual
-SQL
-
     my $insertDsCntct = $dbh->prepare(<<SQL);
-      insert into Sres.Contact$suffix
-                  (contact_id,name,email,country,state,city,address1,address2,zip)
-      select DataSourceContact_sq$suffix.nextval, ?, ?, ?, ?, ?, ?, ?, ?
+      insert into ApiDB.DataSourceContact$suffix
+                  (data_source_contact_id, data_source_id, is_primary_contact, name, email, affiliation, city, state, country, address, zip)
+      select DataSourceCntct_sq$suffix.nextval, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       from dual
 SQL
 
@@ -142,15 +126,16 @@ SQL
 SQL
  
 
+
  #   my %loadedDatasets = getLoadedDatasets($dbh);
 
     foreach my $dsName ($dataSourceAttributions->getDataSourceAttributionNames()) {
       chomp($dsName);
 
       my $ds = $dataSourceAttributions->getDataSourceAttribution($dsName);
-      print STDERR "data source: \"$dsName\"" if $debug;
+      #print STDERR "data source: \"$dsName\"" if $debug;
 
-      my $dbDataSource = $dbDataSourcesList->dataSourceHashByName{$dsName};
+      my $dbDataSource = $dbDataSourcesList->dataSourceHashByName($dsName);
       my $dataSourceId = $dbDataSource->{ID};
 
       if (!$dbDataSource) {
@@ -160,60 +145,55 @@ SQL
 
       $insertDsAttrib->execute($dataSourceId, $ds->getDisplayName(),
                        $ds->getDescription(), $ds->getSummary(), $ds->getProtocol(),
-                       $ds->getCaveat(), $ds->getAcknowledgement(), $ds->releasePolicy())
+                       $ds->getCaveat(), $ds->getAcknowledgement(), $ds->getReleasePolicy())
 	or die "inserting a DataSourceAttribution record";
-
+       my $displayName = $ds->getDisplayName(); my $description = $ds->getDescription(); my $summary = $ds->getSummary(); my $protocol = $ds->getProtocol();
+       my $caveat = $ds->getCaveat(); my $ack = $ds->getAcknowledgement; my $rlsPolicy = $ds->getReleasePolicy(); 
+        print ("$dataSourceId\t$displayName\t$description\t$summary\t$protocol\t$caveat\t$ack\t$rlsPolicy\n");
 
 
       foreach my $linkObj ($ds->getAssociatedLinks()) {
-	print STDERR "Dumping External Links:\n" . Dumper($linkObj) if $debug;
+#	print STDERR "Dumping External Links:\n" . Dumper($linkObj) if $debug;
 	foreach my $extLink (@$linkObj) {
-          $insertDsURL->execute($dataSourceId, $extLink->{type}, $extLink->{linkDescription}, $extLink->{url})
-	    or die "inserting a DataSetExternalLinks record";
+           $insertDsURL->execute($dataSourceId, $extLink->{type}, $extLink->{linkDescription}, $extLink->{url})
+           or die "inserting a DataSetExternalLinks record"; 
+           my $type = $extLink->{type}; my $linkDescription =  $extLink->{linkDescription}; my $url = $extLink->{url};
+           print("$dataSourceId\t$type\t$linkDescription\t$url\n");
+	  
 	}
       }
 
     
 
       foreach my $contactObj ($ds->getContacts()) {
-        print STDERR "Dumping contacts:\n" . Dumper($contactObj) if $debug;
+        #print STDERR "Dumping contacts:\n" . Dumper($contactObj) if $debug;
         foreach my $contact (@$contactObj) {
-
-          #See if contact already exists in Sres Table
-          $queryContact->execute($contact->{name}, $concat->{email})
-           or die "getting DataSource name/ID pairs";
-
-           #If it exists then link the data source to the existing contact record 
-           if (my($contactId) = $queryContact->fetchrow_array()) {
-             $insertDsCntctLink->execute($contactId,$dataSourceId,$contact->isPrimaryContact())
-             or die "inserting a DataSourceContactLink record"; 
-           } else {
-            #If it does'nt, then insert records in both tables
-             $insertDsCntct->execute($contact->{name}, $contact->{email}, $contact->{country}, $contact->{state}, $contact->{city}, $contact->{institution}, $contact->{address}, $contact->{zip})
-             or die "inserting a DataSourceContact record";
-             $insertDsCntctLinkNew->execute($dataSourceId,$contact->isPrimaryContact())
-             or die "inserting a DataSourceContactLink record";
-           }
+            $insertDsCntct->execute($dataSourceId,$contact->{isPrimaryContact},$contact->{name},$contact->{email},$contact->{institution},$contact->{city},$contact->{state},$contact->{country},$contact->{address},$contact->{zip})
+            or die "inserting a DataSourceContact record"; 
         }
       }
 
 
       foreach my $publicationList ($ds->getPublications()) {
-	print STDERR "Dumping publication:\n" . Dumper($publicationList) if $debug;
+	#print STDERR "Dumping publication:\n" . Dumper($publicationList) if $debug;
 	foreach my $publication (@$publicationList) {
           $insertDsp->execute($dataSourceId, $publication->{pmid}, $publication->{doi}, $publication->{citation}, $publication->{abstract})
-	    or die "inserting a DataSetPublication record";
+       	  or die "inserting a DataSetPublication record";
+          my $pmd= $publication->{pmid}; my $doi= $publication->{doi}; my $cit= $publication->{citation}; my $abs= $publication->{abstract};
+         print ("$dataSourceId\t$pmd\t$doi\t$cit\t$abs\n");
 	}
       }
 
       foreach my $referenceList ($ds->getWdkReferences()) {
-	print STDERR "Dumping referenceList:\n" . Dumper($referenceList) if $debug;
+	#print STDERR "Dumping referenceList:\n" . Dumper($referenceList) if $debug;
 	foreach my $reference (@$referenceList) {
 	    $insertDsr->execute($dataSourceId, $reference->{recordClass}, $reference->{type}, $reference->{name})
 	      or die "inserting a DataSetReference record";
-	}
+            my $rcdClass = $reference->{recordClass}; my $refType = $reference->{type}; my $refname = $reference->{name};
+	    print ("$dataSourceId\t$rcdClass\t$refType\t$refname\n");
+		}
       }
-
+print "\n\n\n\n";
     }
 }
 
@@ -256,9 +236,17 @@ SQL
     $dbh->do(<<SQL) or die "creating DataSourceContact table";
       create table ApiDB.DataSourceContact$suffix (
         data_source_id               number(12),
-        contact_id                   number(12),
+        data_source_contact_id       number(12),
         is_primary_contact           varchar2(20),
-        constraint DataSourceContc_pk$suffix primary key (contact_id)
+        name                         varchar2(255),
+        email                        varchar2(255),
+        affiliation                  varchar2(255),
+        city                         varchar2(255),
+        state                        varchar2(255),
+        country                      varchar2(255),
+        address                      varchar2(255),
+        zip                          varchar2(25),
+        constraint DataSourceContc_pk$suffix primary key (data_source_contact_id),
         constraint DataSrcContc_parent_fk$suffix foreign key (data_source_id) references apidb.DataSourceAttribution$suffix
       )
 SQL
@@ -270,7 +258,7 @@ SQL
         url_type                     varchar2(20),
         url_description              varchar2(4000),
         url                          varchar2(2000),
-        constraint DataSourceUrl_pk$suffix primary key (ext_link_id)
+        constraint DataSourceUrl_pk$suffix primary key (ext_link_id),
         constraint DataSrcUrl_parent_fk$suffix foreign key (data_source_id) references apidb.DataSourceAttribution$suffix
       )
 SQL
@@ -295,13 +283,14 @@ SQL
         record_type                  varchar2(50),
         target_type                  varchar2(20),
         target_name                  varchar2(60),
+        display_category             varchar2(60),
         constraint DataSrcInfoRef_pk$suffix primary key (data_source_reference_id),
         constraint DataSrcInfoRef_parent_fk$suffix foreign key (data_source_id) references apidb.DataSourceAttribution$suffix
       )
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DataSourceContact table";
-      create sequence apidb.DataSourceContact_sq$suffix
+      create sequence apidb.DataSourceCntct_sq$suffix
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DataSourceUrl table";
