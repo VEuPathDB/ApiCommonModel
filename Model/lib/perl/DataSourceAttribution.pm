@@ -15,6 +15,9 @@ sub new {
               acknowledgement => $parsedXml->{acknowledgement},
               releasePolicy => $parsedXml->{releasePolicy},
               description => $parsedXml->{description},
+              overridingType => $parsedXml->{overridingType},
+              overridingSubtype => $parsedXml->{overridingSubtype},
+              ignore => $parsedXml->{ignore},
 
               #Array Objs
               wdkReference => $parsedXml->{wdkReference},
@@ -41,6 +44,24 @@ sub getParsedXml {
   my ($self) = @_;
 
   return $self->{parsedXml};
+}
+
+sub checkIgnore {
+    my ($self) = @_;
+
+    return $self->{ignore};
+}
+
+sub getOverridingType {
+    my ($self) = @_;
+
+    return $self->{overridingType};
+}
+
+sub getOverridingSubtype {
+    my ($self) = @_;
+
+    return $self->{overridingSubType};
 }
 
 sub getName {

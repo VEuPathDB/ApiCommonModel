@@ -8,16 +8,19 @@ use XML::Simple;
 use Data::Dumper;
 
 sub new {
-  my ($class, $dataAttributionsXmlFile, $wdkReferenceCategories, $dbDataSourceList) = @_;
+  my ($class, $dataAttributionsXmlFile, $dataSourceWdkReferences, $dbDataSourceList) = @_;
 
   my $self = {};
-
+  
   bless($self,$class);
 
-  $self->{dataAttributionsXmlFile} = $dataAttributionsXmlFile;
-  $self->{wdkReferenceCategories} = $wdkReferenceCategories;
-  $self->{dbDataSourceList} = $dbDataSourceList;
+  my %displayCategories;
 
+  $self->{dataAttributionsXmlFile} = $dataAttributionsXmlFile;
+  $self->{dataSourceWdkReferences} = $dataSourceWdkReferences;
+  $self->{dbDataSourceList} = $dbDataSourceList;
+  $self->{displayCategories} = %displayCategories;
+  
   $self->_parseXmlFile();
 
   return $self;
@@ -31,10 +34,18 @@ sub getDataAttributionsXmlFile {
   return $self->{dataAttributionsXmlFile};
 }
 
-sub getWdkReferenceCategories {
+sub getDataSourceWdkReferences {
   my ($self) = @_;
-  return $self->{wdkReferenceCategories};
+  return $self->{dataSourceWdkReferences};
 }
+
+
+sub getDisplayCategories {
+  my ($self) = @_;
+  return $self->{displayCategories};
+}
+
+
 
 
 sub getDataSourceAttributionNames {
@@ -58,27 +69,43 @@ sub _parseXmlFile {
   my ($self) = @_;
 
   my $dataAttributionsXmlFile = $self->getDataAttributionsXmlFile();
+  my %displayCatg;
 
   my $xmlString = `cat $dataAttributionsXmlFile`;
   my $xml = new XML::Simple();
   $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => undef, KeyAttr => 'resource', ForceArray=>['dataSourceAttribution','contact','publication','link','wdkReference']) } ;
   die "$@\n$xmlString\nerror processing XML file $dataAttributionsXmlFile\n" if($@);
 
-  if(my $wdkReferenceCategories = $self->getWdkReferenceCategories()) {
+  if(my $dataSourceWdkRefs = $self->getDataSourceWdkReferences()) {
 
     my $dbDataSourceObj = $self->{dbDataSourceList};
 
     foreach my $resourceName (keys %{$self->{data}->{dataSourceAttribution}}) {
 
       my $attributionObj = $self->{data}->{dataSourceAttribution}->{$resourceName};
-      my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
-      my $resourceCategory = $dbDataSource->{TYPE};
+    
+      my $dataSourceType = $attributionObj->{overriddingType};
+      if ($dataSourceType eq '') { 
+        my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
+        $dataSourceType = $dbDataSource->{TYPE};
+      }
+
+      my $dataSourceSubType = $attributionObj->{overridingSubtype};
+      if ($dataSourceSubType eq '') {
+        my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
+        $dataSourceSubType = $dbDataSource->{SUBTYPE};
+      }
+ 
       my $resourceWdkRefs = $attributionObj->{wdkReference} ? $attributionObj->{wdkReference} : [];
-      my $baseWdkRefs = $wdkReferenceCategories->getWdkReferencesByCategoryName($resourceCategory);
+      my $baseWdkRefs = $dataSourceWdkRefs->getDataSourceWdkRefsByName("$dataSourceType:$dataSourceSubType");
+      my $displayCategory = $dataSourceWdkRefs->getDisplayCategoryByName("$dataSourceType:$dataSourceSubType");
 
       push @$resourceWdkRefs, @$baseWdkRefs;
-    }
-  }
+      $displayCatg{$resourceName} = $displayCategory;
+      }
+    $self->{displayCategories} = \%displayCatg;
+   }
+
 }
 
 sub validateWdkReference {
