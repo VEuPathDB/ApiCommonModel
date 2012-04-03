@@ -90,7 +90,7 @@ sub getDisplayCategoryByName {
   my ($self, $dataSourceType) = @_;
 
   my $data = $self->getDisplay();
-  return $data->{$dataSourceType} || [];
+  return $data->{$dataSourceType} || '';
 }
 
 
