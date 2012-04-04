@@ -56,6 +56,16 @@ sub getDataSourceAttributionNames {
   return keys(%$attributionObj);
 }
 
+
+sub checkIfRegEx {
+  my ($self, $dsName) = @_;
+
+  return $self->{data}->{dataSourceAttribution}->{$dsName}->{nameIsRegEx};
+}
+
+
+
+
 sub getDataSourceAttribution {
     my ($self, $dataSourceName) = @_;
 

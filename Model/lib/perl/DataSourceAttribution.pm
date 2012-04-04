@@ -9,6 +9,7 @@ sub new {
   my $self = {#strings
               resourceName => $resourceName,
               displayName => $parsedXml->{displayName},
+              displayCategory => $parsedXml->{displayCategory},
               summary => $parsedXml->{summary},
               protocol => $parsedXml->{protocol},
               caveat => $parsedXml->{caveat},
@@ -76,6 +77,12 @@ sub getDisplayName {
     return $self->{displayName};
 }
 
+sub getDisplayCategory {
+    my ($self) = @_;
+
+    return $self->{displayCategory};
+}
+
 sub getContacts {
     my ($self) = @_;
 
@@ -134,7 +141,7 @@ sub getPublications {
     if (!$self->{publications}) {
 
 	my $publications = $parsedXml->{publications}->{publication};
-
+        next unless ($publications);
 	foreach my $publication (@$publications) {
 	    my $pubmedId = $publication->{pmid};
 	    if ($pubmedId) {

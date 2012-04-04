@@ -126,6 +126,12 @@ sub filter {
   return ApiCommonShared::Model::DataSourceList->new($dbh, \%filtered);
 }
 
+sub getDbDataSourceNames {
+  my ($self) = @_;
 
+  my $dataSourcesObj = $self->getDataSources();
+
+  return keys(%$dataSourcesObj);
+}
 
 1;
