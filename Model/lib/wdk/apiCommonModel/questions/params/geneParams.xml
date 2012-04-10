@@ -7778,13 +7778,40 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
  <sqlQuery name="Pviv_Timing" includeProjects="PlasmoDB">
              <column name="internal"/>
              <column name="term"/>
+             <column name="display"/>
           <sql>       
         Select  name as term,
-                profile_set_id as internal
+                profile_set_id as internal,
+                replace(name, 'ZB Pvivax time series', 'Patient') as display
         from apidb.profileset
         where name like 'ZB Pvivax time series %'
           </sql>
     </sqlQuery>
+
+<processQuery name="Pviv_Timing" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
+ <sqlQuery name="Pviv_Timing_Percentile" includeProjects="PlasmoDB">
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>       
+        Select  name as term,
+                profile_set_id as internal,
+                replace(name, 'ZB Pvivax time series', 'Patient') as display
+        from apidb.profileset
+        where name like 'red percentile - ZB Pvivax time series %'
+          </sql>
+    </sqlQuery>
+
+<processQuery name="Pviv_Timing_Percentile" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
 
 <sqlQuery name="ProfileProfileSet" includeProjects="PlasmoDB">
              <column name="display"/>
@@ -7798,6 +7825,26 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
         where name like 'DeRisi % Smoothed'
           </sql>
     </sqlQuery>
+
+ <sqlQuery name="Pyoe_Kappe_Percentile" includeProjects="PlasmoDB">
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>       
+        Select  name as term,
+                profile_set_id as internal,
+                name as display
+        from apidb.profileset
+        where name like 'percentile - kappe_profiles_averaged_over_all_channels'
+          </sql>
+    </sqlQuery>
+
+<processQuery name="Pyoe_Kappe_Percentile" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
      <sqlQuery name="ProfileProfileSetFerdig" includeProjects="PlasmoDB">
              <column name="display"/>
              <column name="internal"/>
@@ -7815,8 +7862,6 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
-
-
 
         <sqlQuery name="regulatedDirection"  excludeProjects="EuPathDB">
             <column name="internal" />
@@ -8637,21 +8682,20 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                 <![CDATA[
                     WITH OrganismConstraint as (
                            select ims.sample, ims.organism, ims.experiment, ims.project_id, 
-                                  ims.ext_db_name, ims.sort_order 
-                           from apidb.massspecsummary mss,
+                                  ims.internal_id, ims.sort_order 
+                           from DOTS.massspecfeature msf,
+                                apidb.massspecsummary mss,
+                                dots.translatedaafeature taaf, 
                                 sres.externaldatabase ed,
                                 sres.externaldatabaserelease edr,
-                                apidbTuning.massspecterms ims,
-                                dots.translatedaafeature taaf, 
-                                dots.transcript t, 
-                                ApidbTuning.GeneAttributes ga
-                           where mss.external_database_release_id = edr.external_database_release_id
-                           and edr.external_database_id = ed.external_database_id
-                           and ims.ext_db_name = ed.name
-                           and mss.aa_sequence_id = taaf.aa_sequence_id
-                           and taaf.na_feature_id = t.na_feature_id
-                           and t.parent_id = ga.na_feature_id
-                           and ims.project_id = '@PROJECT_ID@')
+                                apidbTuning.massspecterms ims
+                           where msf.parent_id = taaf.aa_feature_id
+                           and   mss.mass_spec_summary_id = msf.source_id
+                           and   msf.external_database_release_id = edr.external_database_release_id
+                           and   edr.external_database_id = ed.external_database_id
+                           and ((mss.sample_file is null and ims.internal_id = ed.name) or
+                                (ims.internal_id = ed.name||'|'||mss.sample_file))
+                           and ims.project_id = '@PROJECT_ID@')  
                      select replace(replace(term,','),('''')) as term, 
                             replace(replace(parentTerm,','),('''')) as parentTerm, 
                             term as display,
@@ -8665,7 +8709,7 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                                  THEN mst.organism
                                  ELSE mst.experiment
                                  END as parentTerm,
-                            mst.ext_db_name as internal,
+                            mst.internal_id as internal,
                             mst.sort_order as sort_order
                      from OrganismConstraint mst
                      where mst.experiment is not null
@@ -9419,7 +9463,7 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
           FROM   apidb.profileelementname pen, apidb.profileset ps
           WHERE  pen.profile_set_id = ps.profile_set_id
           AND    ps.name = 'P.falciparum duffy mRNA Seq data'
-          order by pen.element_ordesr
+          order by pen.element_order
           </sql>
         </sqlQuery>
 
@@ -10959,6 +11003,12 @@ select display,term,internal,parentTerm from (
           order by element_order
           </sql>
         </sqlQuery>
+      <processQuery name="GenericSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="geneParams.regulated_dir"/>
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
 
       <sqlQuery name="Pviv_Timing_Samples" includeProjects="PlasmoDB">
              <paramRef ref="geneParams.profileset_generic"/>
@@ -10969,15 +11019,15 @@ select display,term,internal,parentTerm from (
           select name as term, 
                  profile_element_name_id as internal, 
                  CASE WHEN name = 'TP1' Then '9 hours'
-                     WHEN name = 'TP2' Then '13 hours'
-                     WHEN name = 'TP3' Then '17 hours'
-                     WHEN name = 'TP4' Then '20 hours'
-                     WHEN name = 'TP5' Then '23 hours'
-                     WHEN name = 'TP6' Then '29 hours'
-                     WHEN name = 'TP7' Then '35 hours'
-                     WHEN name = 'TP8' Then '40 hours'
-                     WHEN name = 'TP9' Then '43 hours'
-                     END as display
+                      WHEN name = 'TP2' Then '13 hours'
+                      WHEN name = 'TP3' Then '17 hours'
+                      WHEN name = 'TP4' Then '20 hours'
+                      WHEN name = 'TP5' Then '23 hours'
+                      WHEN name = 'TP6' Then '29 hours'
+                      WHEN name = 'TP7' Then '35 hours'
+                      WHEN name = 'TP8' Then '40 hours'
+                      WHEN name = 'TP9' Then '43 hours'
+                 END as display
           from apidb.profileelementname 
           where profile_set_id = '$$profileset_generic$$'
           order by element_order

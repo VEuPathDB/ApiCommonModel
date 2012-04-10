@@ -1465,27 +1465,33 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
           select distinct ga.source_id,'@PROJECT_ID@' as project_id, seq.sum_sequence_count, spec.sum_spectrum_count
           from apidb.massspecsummary mss,
                 dots.translatedaafeature taaf, dots.transcript t, ApidbTuning.GeneAttributes ga,
-          (select intseq.aa_sequence_id,count(*) as sum_sequence_count
+          ( select intseq.aa_sequence_id,count(*) as sum_sequence_count
              from (select msf.aa_sequence_id, count(*) as sum_seq_ct
               from dots.massspecfeature msf,
+                   apidb.massspecsummary mss,
                    dots.aalocation aal,
                    sres.externaldatabase ed,
                    sres.externaldatabaserelease edr
               where msf.aa_feature_id = aal.aa_feature_id
                 and msf.external_database_release_id = edr.external_database_release_id
+                and mss.mass_spec_summary_id = msf.source_id
                 and edr.external_database_id = ed.external_database_id
-                and ed.name in ($$ms_assay$$)
+                and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
+                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
               group by msf.aa_sequence_id,aal.start_min,aal.end_max ) intseq
               group by intseq.aa_sequence_id
               having count(*) >= $$min_sequence_count$$
           ) seq,
           (select mss.aa_sequence_id, sum(spectrum_count) as sum_spectrum_count
-              from apidb.massspecsummary mss,
+              from dots.massspecfeature msf,
+                   apidb.massspecsummary mss,
                    sres.externaldatabase ed,
                    sres.externaldatabaserelease edr
-              where mss.external_database_release_id = edr.external_database_release_id
+              where msf.external_database_release_id = edr.external_database_release_id
+                and mss.mass_spec_summary_id = msf.source_id
                 and edr.external_database_id = ed.external_database_id
-                and ed.name in ($$ms_assay$$)
+                and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
+                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
               group by mss.aa_sequence_id
               having sum(spectrum_count) >= $$min_spectrum_count$$
           ) spec,
