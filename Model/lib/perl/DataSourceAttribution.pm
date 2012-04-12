@@ -141,14 +141,15 @@ sub getPublications {
     if (!$self->{publications}) {
 
 	my $publications = $parsedXml->{publications}->{publication};
-        next unless ($publications);
-	foreach my $publication (@$publications) {
-	    my $pubmedId = $publication->{pmid};
-	    if ($pubmedId) {
-		$publication->{citation} = `pubmedIdToCitation $pubmedId`;
-		die "failed calling 'pubmedIdToCitation $pubmedId'" if $? >> 8;
-	    }
-	}
+        if  ($publications) {
+	  foreach my $publication (@$publications) {
+	      my $pubmedId = $publication->{pmid};
+	      if ($pubmedId) {
+	  	  $publication->{citation} = `pubmedIdToCitation $pubmedId`;
+		  die "failed calling 'pubmedIdToCitation $pubmedId'" if $? >> 8;
+	      }
+	  }
+        }
 	$self->{publications} = $publications;
     }
     return $self->{publications};
