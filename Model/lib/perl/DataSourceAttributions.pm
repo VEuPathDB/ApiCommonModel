@@ -94,6 +94,15 @@ sub _parseXmlFile {
 
       my $attributionObj = $self->{data}->{dataSourceAttribution}->{$resourceName};
     
+
+      my $nameIsRegEx = $self->checkIfRegEx($resourceName);
+      if ($nameIsRegEx eq "true") {
+         $resourceName = qq($resourceName);
+         my ($dbDataSourceName) = grep {$_ =~ /$resourceName/} ($dbDataSourceObj->getDbDataSourceNames());
+         ($resourceName = $dbDataSourceName) unless (!$dbDataSourceName);
+      }
+
+
       my $dataSourceType = $attributionObj->{overriddingType};
       if ($dataSourceType eq '') { 
         my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
@@ -105,13 +114,16 @@ sub _parseXmlFile {
         my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
         $dataSourceSubType = $dbDataSource->{SUBTYPE};
       }
- 
+
       my $resourceWdkRefs = $attributionObj->{wdkReference} ? $attributionObj->{wdkReference} : [];
       my $baseWdkRefs = $dataSourceWdkRefs->getDataSourceWdkRefsByName("$dataSourceType:$dataSourceSubType");
       my $displayCategory = $dataSourceWdkRefs->getDisplayCategoryByName("$dataSourceType:$dataSourceSubType");
-
+      
       push @$resourceWdkRefs, @$baseWdkRefs;
+      $attributionObj->{wdkReference} = $resourceWdkRefs;
+      
       $displayCatg{$resourceName} = $displayCategory;
+
       }
     $self->{displayCategories} = \%displayCatg;
    }
