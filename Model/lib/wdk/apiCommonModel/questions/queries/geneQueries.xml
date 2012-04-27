@@ -4189,8 +4189,10 @@ where one.source_id = two.source_id
         <column name="cut_off_score"/>
       <sql>
           <![CDATA[
-            SELECT distinct source_id, '@PROJECT_ID@' as project_id, max(lod_score) as lod_score, $$lod_score$$ as cut_off_score
-            FROM   (select distinct ga.source_id,
+        SELECT a.source_id, '@PROJECT_ID@' as project_id, a.lod_score, b.cut_off_score
+        FROM
+            (SELECT distinct source_id, max(lod_score) as lod_score
+             FROM   (select distinct ga.source_id,
                            CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                            ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
                            END as lod_score
@@ -4204,12 +4206,22 @@ where one.source_id = two.source_id
                            where  gls.na_feature_id = ga.na_feature_id 
                            and lower(ga.source_id) = lower($$pf_gene_id$$) 
                            and to_binary_double(LOD_SCORE_MANT || 'e' || LOD_SCORE_EXP) >= $$lod_score$$))
-            GROUP BY source_id
-            HAVING ((count(*)*100)/(select count(*) 
+             GROUP BY source_id
+             HAVING ((count(*)*100)/(select count(*) 
                                     from apidbTuning.geneattributes ga, apidb.genefeaturelodscore  gls
                                     where  gls.na_feature_id = ga.na_feature_id 
                                     and lower(ga.source_id) = lower($$pf_gene_id$$)
                                     and to_binary_double(LOD_SCORE_MANT || 'e' || LOD_SCORE_EXP) >= $$lod_score$$)) >= $$percentage_sim_haploblck$$
+            ) a,
+            (Select max(cut_off) as cut_off_score, source_id from  (select CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
+                           ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
+                           END as cut_off, ga.source_id from apidbTuning.geneattributes ga, apidb.genefeaturelodscore  gls
+                           where  gls.na_feature_id = ga.na_feature_id 
+                           and lower(ga.source_id) = lower($$pf_gene_id$$) 
+                           and to_binary_double(LOD_SCORE_MANT || 'e' || LOD_SCORE_EXP) >= $$lod_score$$)
+                           group by source_id
+            ) b
+            WHERE a.source_id != b.source_id
          ]]>
       </sql>
 
