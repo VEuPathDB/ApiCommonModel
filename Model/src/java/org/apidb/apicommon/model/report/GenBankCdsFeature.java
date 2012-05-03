@@ -5,14 +5,14 @@ import java.util.List;
 
 public class GenBankCdsFeature extends GenBankFeature {
 
-    private int codonStart;
+    //private int codonStart;
 
     private String translTable;
 
     private List<String> ecNumbers;
     private List<String> notes;
-    private List<String> signalPeptides;
-    private List<String> transmembraneHelixes;
+    //private List<String> signalPeptides;
+    //private List<String> transmembraneHelixes;
 
     public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, int codonStart) {
         super(genbankFeature, "cds");
@@ -20,12 +20,12 @@ public class GenBankCdsFeature extends GenBankFeature {
         this.setSequence(sequence);
 
         this.translTable = translTable;
-        this.codonStart = codonStart;
+        //this.codonStart = codonStart;
 
         this.ecNumbers = new ArrayList<String>();
         this.notes = new ArrayList<String>();;
-        this.signalPeptides = new ArrayList<String>();
-        this.transmembraneHelixes = new ArrayList<String>();
+        //this.signalPeptides = new ArrayList<String>();
+        //this.transmembraneHelixes = new ArrayList<String>();
     }
 
     protected void addNote(String note) {

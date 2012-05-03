@@ -26,6 +26,7 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.gusdb.wdk.model.AnswerValue;
 import org.gusdb.wdk.model.AttributeValue;
+import org.gusdb.wdk.model.AttributeValueMap;
 import org.gusdb.wdk.model.Question;
 import org.gusdb.wdk.model.RecordClass;
 import org.gusdb.wdk.model.RecordInstance;
@@ -59,6 +60,26 @@ public class Gff3Reporter extends Reporter {
     public final static String FIELD_HAS_TRANSCRIPT = "hasTranscript";
     public final static String FIELD_HAS_PROTEIN = "hasProtein";
 
+    private class AttribMapImpl implements AttributeValueMap {
+
+    	private Map<String, AttributeValue> _map;
+    	
+		public AttribMapImpl(Map<String, AttributeValue> map) {
+			_map = map;
+		}
+
+		@Override
+		public void addAttributeValue(AttributeValue value) {
+			_map.put(value.getAttributeField().getName(), value);
+		}
+
+		@Override
+		public AttributeValue getAttributeValue(String key) throws WdkModelException, WdkUserException {
+			return _map.get(key);
+		}
+    	
+    }
+    
     private String tableCache;
     private String recordName;
     private String proteinName;
@@ -328,9 +349,7 @@ public class Gff3Reporter extends Reporter {
     }
 
     private void formatGeneRecord(RecordInstance record,
-            StringBuffer recordBuffer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+            StringBuffer recordBuffer) throws WdkModelException, WdkUserException {
         // get common fields from the record
         readCommonFields(record, recordBuffer);
 
@@ -380,11 +399,14 @@ public class Gff3Reporter extends Reporter {
         // print RNAs
         TableValue rnas = record.getTableValue("GeneGffRnas");
         for (Map<String, AttributeValue> row : rnas) {
+        	// convert to attribute map
+        	AttribMapImpl map = new AttribMapImpl(row);
+        	
             // read common fields
-            readCommonFields(row, recordBuffer);
+            readCommonFields(map, recordBuffer);
 
             // read other fields
-            recordBuffer.append(";Parent=" + readField(row, "gff_attr_parent"));
+            recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
 
             // add GO terms in mRNA
             if (sbGoTerms.length() > 0)
@@ -400,11 +422,14 @@ public class Gff3Reporter extends Reporter {
         // print CDSs
         TableValue cdss = record.getTableValue("GeneGffCdss");
         for (Map<String, AttributeValue> row : cdss) {
+        	// convert to attribute map
+        	AttribMapImpl map = new AttribMapImpl(row);
+        	
             // read common fields
-            readCommonFields(row, recordBuffer);
+            readCommonFields(map, recordBuffer);
 
             // read other fields
-            recordBuffer.append(";Parent=" + readField(row, "gff_attr_parent"));
+            recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
 
             recordBuffer.append(NEW_LINE);
         }
@@ -412,20 +437,21 @@ public class Gff3Reporter extends Reporter {
         // print EXONs
         TableValue exons = record.getTableValue("GeneGffExons");
         for (Map<String, AttributeValue> row : exons) {
+        	// convert to attribute map
+        	AttribMapImpl map = new AttribMapImpl(row);
+        	
             // read common fields
-            readCommonFields(row, recordBuffer);
+            readCommonFields(map, recordBuffer);
 
             // read other fields
-            recordBuffer.append(";Parent=" + readField(row, "gff_attr_parent"));
+            recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
 
             recordBuffer.append(NEW_LINE);
         }
     }
 
     private void formatSequenceRecord(RecordInstance record,
-            StringBuffer recordBuffer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+            StringBuffer recordBuffer) throws WdkModelException, WdkUserException {
         // get common fields from the record
         readCommonFields(record, recordBuffer);
 
@@ -563,8 +589,7 @@ public class Gff3Reporter extends Reporter {
                             TableValue cdss = record.getTableValue("GeneGffCdss");
                             Iterator<Map<String, AttributeValue>> it = cdss.iterator();
                             if (it.hasNext()) {
-                                Map<String, AttributeValue> row = it.next();
-                                cdsId = readField(row, "gff_attr_id");
+                                cdsId = readField(new AttribMapImpl(it.next()), "gff_attr_id");
                             }
 
                             // print CDSs
@@ -611,9 +636,8 @@ public class Gff3Reporter extends Reporter {
         }
     }
 
-    private void readCommonFields(Object object, StringBuffer buffer)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+    private void readCommonFields(AttributeValueMap object, StringBuffer buffer)
+            throws WdkModelException, WdkUserException {
         buffer.append(readField(object, "gff_seqid") + "\t");
         buffer.append(readField(object, "gff_source") + "\t");
         buffer.append(readField(object, "gff_type") + "\t");
@@ -645,23 +669,13 @@ public class Gff3Reporter extends Reporter {
         buffer.append(";size=" + readField(object, "gff_attr_size"));
     }
 
-    private String readField(Object object, String field)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
-        AttributeValue value;
-        if (object instanceof RecordInstance) {
-            RecordInstance record = (RecordInstance) object;
-            value = record.getAttributeValue(field);
-        } else {
-            Map<String, AttributeValue> row = (Map<String, AttributeValue>) object;
-            value = row.get(field);
-        }
-        return getValue(value);
+    private String readField(AttributeValueMap attributeMap, String field)
+            throws WdkModelException, WdkUserException {
+        return getValue(attributeMap.getAttributeValue(field));
     }
-
+    
     private String getValue(AttributeValue object)
-            throws NoSuchAlgorithmException, WdkModelException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
         String value;
         if (object == null) {
             return null;

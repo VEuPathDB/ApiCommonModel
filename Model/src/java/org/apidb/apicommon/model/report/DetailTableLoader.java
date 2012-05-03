@@ -51,12 +51,12 @@ public class DetailTableLoader extends BaseCLI {
     private static final String ARG_DETAIL_TABLE = "detailTable";
 
     private static final String COLUMN_FIELD_NAME = "field_name";
-    private static final String COLUMN_FIELD_TITLE = "field_title";
-    private static final String COLUMN_CONTENT = "content";
-    private static final String COLUMN_ROW_COUNT = "row_count";
+    //private static final String COLUMN_FIELD_TITLE = "field_title";
+    //private static final String COLUMN_CONTENT = "content";
+    //private static final String COLUMN_ROW_COUNT = "row_count";
 
-    private static final String FUNCTION_CHAR_CLOB_AGG = "apidb.char_clob_agg";
-    private static final String FUNCTION_CLOB_CLOB_AGG = "apidb.clob_clob_agg";
+    //private static final String FUNCTION_CHAR_CLOB_AGG = "apidb.char_clob_agg";
+    //private static final String FUNCTION_CLOB_CLOB_AGG = "apidb.clob_clob_agg";
 
     private static final String PROP_EXCLUDE_FROM_DUMPER = "excludeFromDumper";
 

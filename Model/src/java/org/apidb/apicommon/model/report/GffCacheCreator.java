@@ -44,7 +44,7 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_MODIFICATION_DATE = "modification_date";
     private static final String COLUMN_WDK_TABLE_ID = "wdk_table_id";
 
-    private static final String COLUMN_GO_ID = "go_id";
+    //private static final String COLUMN_GO_ID = "go_id";
     private static final String COLUMN_ONTOLOGY = "ontology";
     private static final String COLUMN_ORDER_NUMBER = "order_number";
     private static final String COLUMN_GFF_SEQID = "gff_seqid";
@@ -70,9 +70,8 @@ public class GffCacheCreator extends BaseCLI {
     private static final String COLUMN_SOURCE_ID = "source_id";
 
     private static final String GENE_RECORD_CLASS = "GeneRecordClasses.GeneRecordClass"; // Is
-    // this
-    // ok?
-    private static final String GENE_TABLE_QUERIES = "GeneTables";
+    // this ok?
+    //private static final String GENE_TABLE_QUERIES = "GeneTables";
     private static final String TABLE_GENE_GFF_RNAS = "GeneGffRnas";
     private static final String TABLE_GENE_GFF_CDSS = "GeneGffCdss";
     private static final String TABLE_GENE_GFF_EXONS = "GeneGffExons";
@@ -418,10 +417,6 @@ public class GffCacheCreator extends BaseCLI {
     private void dumpAliases(StringBuffer sql) throws WdkModelException {
         dumpAttributeAsListSql(sql, COLUMN_GFF_ALIAS, TABLE_GENE_GFF_ALIASES,
                 false, "");
-    }
-
-    private void dumpEcNumbers(String idSql, SqlQuery query) {
-    // Doesn't appear in Gff3Repoerter.java...do we need this?
     }
 
     private void dumpGoTerms(StringBuffer sql) throws WdkModelException {

@@ -27,7 +27,7 @@ public class GenBankReporter extends Reporter {
     private static final String PROPERTY_GENE_QUESTION = "gene_question";
     private static final String PROPERTY_SEQUENCE_ID_PARAM = "sequence_param";
     private static final String PROPERTY_SEQUENCE_ID_COLUMN = "sequence_id";
-    private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
+    //private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
 
     private static final String DB_XREF_QUALIFIER_INTERPRO = "InterPro";
     private static final String DB_XREF_QUALIFIER_NCBI_TAXON = "taxon";
@@ -208,7 +208,7 @@ public class GenBankReporter extends Reporter {
         return(matcher.find());
     }
 
-    private List makeGenBankLocations(RecordInstance record, String sequenceId)
+    private List<GenBankLocation> makeGenBankLocations(RecordInstance record, String sequenceId)
             throws WdkModelException, NoSuchAlgorithmException, SQLException,
             JSONException, WdkUserException {
 

@@ -190,7 +190,7 @@ public class GenBankFeature {
     }
 
     protected void setLocations(List<GenBankLocation> locations) {
-        List<GenBankLocation> myLocations = new ArrayList();
+        List<GenBankLocation> myLocations = new ArrayList<GenBankLocation>();
 
         for (GenBankLocation location : locations) {
             String locationType = location.getType();
