@@ -45,6 +45,11 @@ sub getDisplayCategories {
   return $self->{displayCategories};
 }
 
+sub setProjectId {
+  my ($self,$projectId) = @_;
+  return $self->{projectId} = $projectId;
+}
+
 
 
 
@@ -121,6 +126,16 @@ sub _parseXmlFile {
       
       push @$resourceWdkRefs, @$baseWdkRefs;
       $attributionObj->{wdkReference} = $resourceWdkRefs;
+
+      if ($dataSourceType eq 'genome' || $dataSourceType eq 'gene_annotation') {
+        my $attrLinks = $attributionObj->{links}->{link} ? $attributionObj->{links}->{link} : [];
+        my %downloadLink;
+         $downloadLink{"url"}  = "http://PROJECT_ID.org/common/downloads/Current_Release/ORGANISM_ABBREV";
+         $downloadLink{"type"}  = "downloadLink";
+         $downloadLink{"linkDescription"}  = "Data files for Genome and Annotations";
+       push @$attrLinks, \%downloadLink ;
+       $attributionObj->{links}->{link} = $attrLinks;
+      }
       
       $displayCatg{$resourceName} = $displayCategory;
 
