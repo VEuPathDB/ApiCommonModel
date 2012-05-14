@@ -82,8 +82,7 @@ public class Gff3Dumper {
         System.out.println("Usage: gff3Dump -model <model_name> -organism "
                 + "<organism_list> [-dir <base_dir>]");
         System.out.println();
-        System.out
-                .println("\t\t<model_name>:\tThe name of WDK supported model;");
+        System.out.println("\t\t<model_name>:\tThe name of WDK supported model;");
         System.out.println("\t\t<organism_list>: a list of organism names, "
                 + "delimited by a comma;");
         System.out.println("\t\t<base_dir>: Optional, the base directory for "
@@ -112,8 +111,7 @@ public class Gff3Dumper {
             Gff3Dumper.printUsage();
             System.exit(-1);
         }
-        if (baseDir == null || baseDir.length() == 0)
-            baseDir = ".";
+        if (baseDir == null || baseDir.length() == 0) baseDir = ".";
 
         // construct wdkModel
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
@@ -149,14 +147,16 @@ public class Gff3Dumper {
         // decide the path-file name
         logger.info("Preparing gff file....");
         File dir = new File(baseDir, organism.replace(' ', '_'));
-        if (!dir.exists() || !dir.isDirectory())
-            dir.mkdirs();
+        if (!dir.exists() || !dir.isDirectory()) dir.mkdirs();
         int pos = organism.indexOf(" ");
         String fileName = organism;
         if (pos >= 0)
             fileName = organism.substring(0, 1).toLowerCase() + "_"
                     + organism.substring(pos + 1);
         fileName += ".gff";
+        // prepend the project info
+        fileName = wdkModel.getProjectId() + "-" + wdkModel.getVersion()
+                + "_" + fileName;
         File gffFile = new File(dir, fileName);
         PrintWriter writer = new PrintWriter(new FileWriter(gffFile));
 
@@ -167,14 +167,12 @@ public class Gff3Dumper {
         params.put("gff_organism", organism);
 
         User user = wdkModel.getSystemUser();
-        Question seqQuestion = (Question) wdkModel
-                .resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
+        Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
         AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, 0);
         Gff3Reporter seqReport = (Gff3Reporter) sqlAnswer.createReport("gff3",
                 config);
 
-        Question geneQuestion = (Question) wdkModel
-                .resolveReference("GeneDumpQuestions.GeneDumpQuestion");
+        Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
         AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, 0);
 
         config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
@@ -210,7 +208,8 @@ public class Gff3Dumper {
             // collect the genomic sequences
             logger.info("Collecting genomic sequences....");
             seqReport.writeSequences(writer);
-        } finally {
+        }
+        finally {
             seqReport.complete();
             geneReport.complete();
             writer.flush();
