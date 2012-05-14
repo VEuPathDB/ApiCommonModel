@@ -146,18 +146,17 @@ public class Gff3Dumper {
 
         // decide the path-file name
         logger.info("Preparing gff file....");
-        File dir = new File(baseDir, organism.replace(' ', '_'));
-        if (!dir.exists() || !dir.isDirectory()) dir.mkdirs();
+
+        // format the file name
         int pos = organism.indexOf(" ");
-        String fileName = organism;
-        if (pos >= 0)
-            fileName = organism.substring(0, 1).toLowerCase() + "_"
-                    + organism.substring(pos + 1);
+        String fileName = wdkModel.getProjectId() + "-" + wdkModel.getVersion()
+                + "_";
+        if (pos >= 0) {
+            fileName += organism.substring(0, 1).toUpperCase();
+            fileName += organism.substring(pos + 1).replaceAll("\\s+", "");
+        } else fileName += organism;
         fileName += ".gff";
-        // prepend the project info
-        fileName = wdkModel.getProjectId() + "-" + wdkModel.getVersion()
-                + "_" + fileName;
-        File gffFile = new File(dir, fileName);
+        File gffFile = new File(baseDir, fileName);
         PrintWriter writer = new PrintWriter(new FileWriter(gffFile));
 
         // prepare reporters
