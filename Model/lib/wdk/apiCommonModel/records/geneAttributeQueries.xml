@@ -1257,11 +1257,20 @@ FROM (SELECT p.source_id,
             <column name="hasSsgcid" />
             <sql>
             <![CDATA[  
-            select distinct ga.source_id, ga.project_id,  
-                   case when nvl(regexp_replace(ssgcid.eupathdb, '[[:print:]]+:', ''), 0) = '0' then 0 
-                         else 1 end as hasSsgcid
-            from apidbtuning.geneattributes ga left join apidbtuning.ssgcid ssgcid
-            on ga.source_id = regexp_replace(ssgcid.eupathdb, '[[:print:]]+:', '')
+               with sbri as (select distinct
+                                    substr(eupathdb, instr(eupathdb, ':') + 1) as source_id,
+                                    decode(substr(eupathdb, 1, instr(eupathdb, ':') - 1),
+                                           'TritrypDB', 'TriTrypDB',
+                                           substr(eupathdb, 1, instr(eupathdb, ':') - 1))
+                                    as project_id
+                             from ApidbTuning.Ssgcid),
+                    sbri_genes as (select distinct 1 as hasSsgcid, gi.gene as source_id, sbri.project_id
+                                   from sbri, ApidbTuning.GeneId gi
+                                   where sbri.source_id = gi.id)
+               select ga.source_id, ga.project_id, nvl(sg.hasSsgcid, 0) as hasSsgcid
+               from sbri_genes sg, ApidbTuning.GeneAttributes ga
+               where ga.source_id = sg.source_id(+)
+                 and ga.project_id = sg.project_id(+)
             ]]>
            </sql>
         </sqlQuery>
