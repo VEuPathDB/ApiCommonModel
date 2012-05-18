@@ -20,8 +20,11 @@ my ($help, $website, $propFile, $runSangerTm);
 my $host = $ENV{HOSTNAME};
 my $suffix;
 
+my $isUgaServer;
+
 if($host =~ /\.uga\.edu$/) {
   $suffix = "s";
+  $isUgaServer = 1;
 } 
 elsif($host =~ /\.upenn\.edu$/) {
   $suffix = "n";
@@ -42,6 +45,16 @@ my $aliasesUrl = $dashboardUrl . "aliases/value";
 
 my $database = `curl -s "$databaseUrl"`;
 chomp $database;
+
+my $isQaSite = $website =~ /^qa\./;
+my $isUgaClone = $database =~ /s$/;
+
+# Exit without error if this is a qa site configured to a penn clone but we are running on a uga server
+if($isQaSite && !$isUgaClone && $isUgaServer) {
+  print STDERR "WARN:  qa site configured to penn clone but this is a uga server\n";
+  exit;
+}
+
 my $aliases = `curl -s "$aliasesUrl"`;
 chomp $aliases;
 
@@ -86,17 +99,18 @@ if($instanceNickname =~ /(.+)-(rbld|inc)/) {
 # correct the suffix based on where we are running
 elsif($instanceNickname =~ /(.+)(n|s)$/) {
   $instanceNickname = $1 . $suffix;
+
 }
 else {
   die "Could not resolve instance_nickname;  should be either inc,rbld or n|s clone";
 }
 
+
 my $isTmConfigured = `tuningMgrMgr list --propFile /eupath/scratch/jbrestel/gus_home/config/tuningManagerProp.xml|grep $instanceNickname`;
 chomp $isTmConfigured;
 
 unless($isTmConfigured) {
-  print STDERR  "WARN:  Could not resolve $instanceNickname in the tuning manager registry.  If the database has been cloned, use tuningMgrMgr to add the instance to the tuningManager's registry.";
-  exit;
+  die "WARN:  Could not resolve $instanceNickname in the tuning manager registry.  If the database has been cloned, use tuningMgrMgr to add the instance to the tuningManager's registry.";
 }
 
 # run the tuningManager
