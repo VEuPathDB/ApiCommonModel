@@ -191,6 +191,8 @@
 
        <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB,PlasmoDB,FungiDB,CryptoDB">
             <column name="source_id" />
+            <column name="graph_ids" />
+            <column name="default_graph_id" />
             <column name="project_id" />
             <column name="profile_name" />
             <column name="module" />
@@ -208,7 +210,103 @@
             <column name="attribution" />
             <sql>
             <![CDATA[
-            select distinct eg.source_id,
+                          select collect.*, Case when graph_ids like '%'||source_id||'%' 
+                           then source_id
+                           when graph_ids like '%,%'
+                           then substr(graph_ids,0,(instr(graph_ids,',',1,1))-1)
+                           else graph_ids
+                      end as default_graph_id, 
+                   Case when graph_ids like '%'||source_id||'%' 
+                           then internal_main_open
+                           else 'FALSE'
+                      end as mainOpen    
+                   from 
+                   ((select distinct 
+                   ga.source_id as source_id,                     
+                   apidb.tab_to_string(set(cast(COLLECT(eg.source_id) AS apidb.varchartab)), ',') as graph_ids,
+                   eg.project_id,
+                   eg.profile_name, 
+                   eg.has_profile,
+                   gd.display_name,
+                   gd.module,
+                   ga.species,
+                   ga.organism,
+                   gd.description,
+                   gd.X_AXIS,
+                   gd.Y_AXIS,
+                   gd.dataTable,
+                   gd.visible_parts,
+                   nvl(gd.attribution, d.name) as attribution,
+                   gd.mainOpen as internal_main_open,
+                   gd.dataOpen,                   
+                   gd.order_num
+            from dots.geneinstance gi, ApidbTuning.GeneAttributes ga,
+                 dots.geneinstance ogi, ApidbTuning.GeneAttributes oga,
+                 ApidbTuning.ProfileGraphs eg, apidb.profileset ps, ApidbTuning.ProfileGraphDescrip gd,
+                 sres.externaldatabaserelease r, sres.externaldatabase d
+            where gd.type = 'expression'
+            and gi.na_feature_id = ga.na_feature_id
+            and gi.gene_id = ogi.gene_id
+            and ogi.na_feature_id = oga.na_feature_id
+            and ga.project_id = 'ToxoDB'
+            and ps.name = eg.profile_name
+            and ps.name = gd.profile_name
+            and eg.source_id = oga.source_id
+            and gd.species = ga.species
+            and has_profile = 1
+            and ps.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            group by eg.project_id, ga.source_id, eg.profile_name, 
+                   eg.has_profile, gd.display_name, gd.module, ga.species, 
+                   ga.organism, gd.description, gd.X_AXIS, gd.Y_AXIS,
+                   gd.dataTable, gd.visible_parts, gd.mainOpen, gd.dataOpen,                   
+                   gd.order_num, gd.attribution, d.name
+
+            union 
+            select distinct 
+                   ga.source_id as source_id,
+                   apidb.tab_to_string(set(cast(COLLECT(eg.source_id) AS apidb.varchartab)), ',') as graph_ids,
+                   eg.project_id,
+                   eg.profile_name, 
+                   eg.has_profile,
+                   gd.display_name,
+                   gd.module,
+                   ga.species,
+                   ga.organism,
+                   gd.description,
+                   gd.X_AXIS,
+                   gd.Y_AXIS,
+                   gd.dataTable,
+                   gd.visible_parts,
+                   nvl(gd.attribution, d.name) as attribution,
+                   gd.mainOpen as internal_main_open,
+                   gd.dataOpen,                   
+                   gd.order_num
+            from ApidbTuning.GeneAttributes ga,
+                 ApidbTuning.ProfileGraphs eg, apidb.profileset ps, ApidbTuning.ProfileGraphDescrip gd,
+                 sres.externaldatabaserelease r, sres.externaldatabase d
+            where gd.type = 'expression'
+            and ga.na_feature_id not in (select na_feature_id from dots.geneinstance)
+            and ga.project_id = 'PlasmoDB'
+            and ps.name = eg.profile_name
+            and ps.name = gd.profile_name
+            and eg.source_id = ga.source_id
+            and gd.species = ga.species
+            and has_profile = 1
+            and ps.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            group by eg.project_id, ga.source_id, eg.profile_name, 
+                   eg.has_profile, gd.display_name, gd.module, ga.species, 
+                   ga.organism, gd.description, gd.X_AXIS, gd.Y_AXIS,
+                   gd.dataTable, gd.visible_parts, gd.mainOpen, gd.dataOpen,                   
+                   gd.order_num, gd.attribution, d.name)
+          order by source_id
+        ) collect
+            order by source_id, order_num
+             ]]>
+            
+<!--      <![CDATA[  
+           select distinct eg.source_id,
                    eg.project_id,
                    eg.profile_name, 
                    eg.has_profile,
@@ -234,6 +332,7 @@
             and r.external_database_id = d.external_database_id
             order by gd.order_num
             ]]>
+ -->            
             </sql>
         </sqlQuery>
 
@@ -243,6 +342,8 @@
 
        <sqlQuery name="PhenotypeGraphs" includeProjects="TriTrypDB">
             <column name="source_id" />
+            <column name="graph_ids" />
+            <column name="default_graph_id" />
             <column name="project_id" />
             <column name="profile_name" />
             <column name="module" />
@@ -260,7 +361,9 @@
             <column name="attribution" />
             <sql>
             <![CDATA[
-            select distinct eg.source_id,
+            select distinct eg.source_id as source_id,
+                   eg.source_id as graph_ids,
+                   eg.source_id as default_graph_id, 
                    eg.project_id,
                    eg.profile_name, 
                    eg.has_profile,
