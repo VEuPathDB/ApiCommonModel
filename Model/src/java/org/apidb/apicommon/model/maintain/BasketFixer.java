@@ -40,7 +40,7 @@ public class BasketFixer extends BaseCLI {
             ex.printStackTrace();
             throw ex;
         } finally {
-            logger.info("model cacher done.");
+            logger.info("basket fixer done.");
             System.exit(0);
         }
     }
@@ -84,17 +84,15 @@ public class BasketFixer extends BaseCLI {
         for (String projectId : projects) {
             logger.info("Fixing basket for project " + projectId);
             WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
-            fixGeneBasket(wdkModel);
+            fixBasket(wdkModel, "GeneRecordClasses.GeneRecordClass", "ApidbTuning.GeneId",  "gene");
+            fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.SequenceId",  "sequence");
             logger.info("=========================== done ============================");
         }
     }
 
-    public void fixGeneBasket(WdkModel wdkModel) throws SQLException {
-        logger.info("Fixing gene basket...");
+    public void fixBasket(WdkModel wdkModel, String type, String aliasTable, String idColumn) throws SQLException {
+        logger.info("Fixing "+type+" basket...");
 
-        String type = "GeneRecordClasses.GeneRecordClass";
-        String aliasTable = "ApidbTuning.GeneId";
-        String idColumn = "gene";
         Map<Integer, Map<String, String>> users = getDeprecatedIds(wdkModel,
                 type, aliasTable, idColumn);
         for (int userId : users.keySet()) {
