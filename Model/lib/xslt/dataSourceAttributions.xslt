@@ -80,7 +80,15 @@
 						
 						<dd>
 							<xsl:for-each select="./publications/publication/@pmid">
-								<xsl:value-of select="." disable-output-escaping="yes" />
+       
+<a>
+<xsl:attribute name="href">
+http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output-escaping="yes" />
+</xsl:attribute>
+<xsl:value-of select="." disable-output-escaping="yes" />
+</a>
+
+
 								<br />
 							</xsl:for-each>
 						</dd>
