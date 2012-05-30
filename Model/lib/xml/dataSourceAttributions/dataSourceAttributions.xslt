@@ -106,7 +106,21 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 								<br />
 							</xsl:for-each>
 						</dd>
+                            <dt><b>Links:</b></dt>
+                        <dd>
+                            <xsl:for-each select="./links/link">
+       
+<a>
+<xsl:attribute name="href">
+<xsl:value-of select="url" disable-output-escaping="yes" />
+</xsl:attribute>
+<xsl:value-of select="url" disable-output-escaping="yes" />
+</a>
 
+
+                                <br />
+                            </xsl:for-each>
+                        </dd>
 
 					</dl>
 
