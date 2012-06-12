@@ -691,7 +691,7 @@
               </help>
      </flatVocabParam>
  
-     <flatVocabParam name="chromosomeOptional" includeProjects="TriTrypDB,MicrosporidiaDB,CryptoDB,PlasmoDB,ToxoDB,PiroplasmaDB,GiardiaDB,FungiDB"
+     <flatVocabParam name="chromosomeOptional" excludeProjects="EuPathDB"
                      prompt="Chromosome"
                      queryRef="SharedVQ.ChromosomeOrderNum"
                      multiPick="false"
@@ -705,47 +705,6 @@
               </help>
      </flatVocabParam>
 
-<flatVocabParam name="chromosomeOptionalSnps" includeProjects="EuPathDB"
-                     prompt="Chromosome"
-                     queryRef="SharedVQ.ChromosomeOrderNumSNPs"
-                     multiPick="true"
-                     displayType="checkBox"
-                     dependedParamRef="organismParams.organism">
-             <help>
-                <![CDATA[
-                Select chromosome for a selected organism or enter genomic sequence ID. If you provide both you will get both.
-                ]]>
-              </help>
-              <suggest selectMode="all"/>
-     </flatVocabParam>
- 
-     <flatVocabParam name="chromosomeOptionalSnps" includeProjects="CryptoDB,PlasmoDB,ToxoDB,GiardiaDB,FungiDB"
-                     prompt="Chromosome"
-                     queryRef="SharedVQ.ChromosomeOrderNumSNPs"
-                     multiPick="true"
-                     quote="true"
-                     dependedParamRef="organismParams.organism">
-             <help>
-                <![CDATA[
-                Select chromosome.
-                ]]>
-              </help>
-              <suggest selectMode="all"/>
-     </flatVocabParam>
-
-     <flatVocabParam name="chromosomeOptionalSnps" includeProjects="TriTrypDB"
-                     prompt="Chromosome"
-                     queryRef="SharedVQ.ChromosomeOrderNumHtsSNPs"
-                     multiPick="true"
-                     quote="true"
-                     dependedParamRef="organismParams.organism">
-             <help>
-                <![CDATA[
-                Select chromosome.
-                ]]>
-              </help>
-              <suggest selectMode="all"/>
-     </flatVocabParam>
 
 
 	<flatVocabParam name="centromere_chromosome" includeProjects="PlasmoDB,ToxoDB,EuPathDB"
@@ -764,19 +723,6 @@
 	  <help>Chromosomes that have telomeres.</help>
 	</flatVocabParam>
 
-
-<!-- this is only used by portal the way SNPs by HTS location search page is built, including the Chromosome parameter for Amoeba organism -->
-    <enumParam name="chromosomeOptionalSnps"   includeProjects="AmoebaDB"  visible="false" >
-             <help>
-                 AmoebaDB has not currently defined chromosomes.
-             </help>
-          <enumList>
-           <enumValue>
-             <term>No chromosomes defined for organisms in AmoebaDB</term>
-             <internal>dummy value</internal>
-           </enumValue>
-         </enumList>
-       </enumParam>
 
      <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
      <!-- Sequence Id -->  
@@ -980,7 +926,6 @@
 
        <flatVocabParam name="htsSnp_strain_a"
                       queryRef="SharedVQ.htsSnpStrainAA"
-		      includeProjects="ToxoDB,TriTrypDB,AmoebaDB,EuPathDB,PlasmoDB"
                       prompt="Reference"
                       multiPick="false"
                       dependedParamRef="organismParams.organism">
@@ -992,7 +937,6 @@
 
        <flatVocabParam name="htsSnp_strain_m" 
                       queryRef="SharedVQ.htsSnpStrainAA"
-		      includeProjects="ToxoDB,TriTrypDB,AmoebaDB,EuPathDB,PlasmoDB"
                       prompt="Comparator"
                       multiPick="true"
                       dependedParamRef="organismParams.organism">
@@ -1658,7 +1602,7 @@ where ot.term in (select ot.parentTerm from (select ot.parentTerm from ApidbTuni
 
 
 
-        <sqlQuery name="ChromosomeOrderNum" includeProjects="TriTrypDB,MicrosporidiaDB,CryptoDB,PlasmoDB,ToxoDB,PiroplasmaDB,GiardiaDB,FungiDB" isCacheable="true" doNotTest="true">
+        <sqlQuery name="ChromosomeOrderNum" excludeProjects="EuPathDB" isCacheable="true" doNotTest="true">
             <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomes"/> 
             <column name="internal"/>
             <column name="term"/>
@@ -1680,123 +1624,31 @@ where ot.term in (select ot.parentTerm from (select ot.parentTerm from ApidbTuni
 	  <wsColumn name="term" width="130" wsName="term"/>
 	</processQuery>
 
-        <sqlQuery name="ChromosomeOrderNumSNPs" excludeProjects="EuPathDB,MicrosporidiaDB,TriTrypDB,PiroplasmaDB,AmoebaDB" isCacheable="true" doNotTest="true">
-            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesSNPs"/>
+        <sqlQuery name="ChromosomeOrderNumMultipick" isCacheable="true" doNotTest="true">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesHtsSNPs"/>
             <column name="internal"/>
             <column name="term"/>
             <sql>
-             select * from (
-               select distinct chromosome as term , chromosome as internal, chromosome_order_num 
+select * from (
+ select distinct nvl(sa.chromosome, 'Not Applicable') as term , nvl(sa.chromosome, 'Not Applicable') as internal, nvl(sa.chromosome_order_num, -1) as chromosome_order_num
+               from ApidbTuning.SequenceAttributes sa, sres.sequenceontology so
+               where sa.organism = $$organism$$
+               and sa.is_top_level = 1
+               and sa.chromosome is null
+               and so.so_id = sa.so_id
+               and so.term_name not like '%chromosome%'
+ union
+ select distinct chromosome as term , chromosome as internal, chromosome_order_num as chromosome_order_num
                from ApidbTuning.SequenceAttributes
                where organism = $$organism$$
-                and chromosome is not null
+               and chromosome is not null
+  )
                order by chromosome_order_num
-             )
             </sql>
         </sqlQuery>
         
-       <processQuery name="ChromosomeOrderNumSNPs"  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-	  <paramRef ref="organismParams.organism" quote="false" queryRef="organismVQ.withChromosomesSNPs"/> 
-	  <wsColumn name="internal" width="32" wsName="internal"/>
-	  <wsColumn name="term" width="32" wsName="term"/>
-	</processQuery>
-
-        <sqlQuery name="ChromosomeOrderNumHtsSNPs" includeProjects="PlasmoDB,TriTrypDB,ToxoDB" isCacheable="true" doNotTest="true">
-            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withChromosomesHtsSNPs"/> 
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-             select * from (
-               select distinct chromosome as term , chromosome as internal, chromosome_order_num 
-               from ApidbTuning.SequenceAttributes
-               where organism = $$organism$$
-                and chromosome is not null
-              order by chromosome_order_num
-             )
-            </sql>
-        </sqlQuery>
-
-        <processQuery name="ChromosomeOrderNumHtsSNPs"  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="true">
+       <processQuery name="ChromosomeOrderNumMultipick"  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
 	  <paramRef ref="organismParams.organism" quote="false" queryRef="organismVQ.withChromosomesHtsSNPs"/> 
-	  <wsColumn name="internal" width="32" wsName="internal"/>
-	  <wsColumn name="term" width="32" wsName="term"/>
-	</processQuery>
-
-        <sqlQuery name="ChromosomeOrderNumEstAssem" includeProjects="TriTrypDB,MicrosporidiaDB,PlasmoDB,ToxoDB,GiardiaDB,FungiDB" isCacheable="true" doNotTest="true">
-            <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesESTsAssems" quote="false"/> 
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-             select * from (
-               select distinct chromosome as term , chromosome as internal,  chromosome_order_num 
-               from ApidbTuning.SequenceAttributes 
-               where organism like '$$organism$$%'
-                and chromosome is not null
-               union 
-               select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as  chromosome_order_num  from dual)
-               order by  chromosome_order_num  asc
-            </sql>
-        </sqlQuery>
-
-
-        <sqlQuery name="ChromosomeOrderNumEstAssem" includeProjects="CryptoDB" isCacheable="true" doNotTest="true">
-            <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesESTsAssems" quote="false"/> 
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-             select * from (
-               select distinct chromosome as term , chromosome as internal,  chromosome_order_num 
-               from ApidbTuning.SequenceAttributes 
-               where organism = '$$organism$$'
-                and chromosome is not null
-               union 
-               select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as  chromosome_order_num  from dual)
-               order by  chromosome_order_num  asc
-            </sql>
-        </sqlQuery>
-
-	<processQuery name="ChromosomeOrderNumEstAssem"  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-	  <paramRef ref="organismParams.organism" quote="false" queryRef="organismVQ.withChromosomesESTsAssems"/> 
-	  <wsColumn name="internal" width="32" wsName="internal"/>
-	  <wsColumn name="term" width="32" wsName="term"/>
-	</processQuery>
-
-
-        <sqlQuery name="ChromosomeOrderNumOrf" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,FungiDB" isCacheable="true" doNotTest="true">
-            <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesORFs" quote="false"/> 
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-             select * from (
-               select distinct chromosome as term , chromosome as internal,  chromosome_order_num 
-               from ApidbTuning.SequenceAttributes 
-               where organism like '$$organism$$%'
-                and chromosome is not null
-               union 
-               select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as  chromosome_order_num  from dual)
-               order by  chromosome_order_num  asc
-            </sql>
-        </sqlQuery>
-
-        <sqlQuery name="ChromosomeOrderNumOrf" includeProjects="CryptoDB" isCacheable="true" doNotTest="true">
-            <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesORFs" quote="false"/> 
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-             select * from (
-               select distinct chromosome as term , chromosome as internal,  chromosome_order_num 
-               from ApidbTuning.SequenceAttributes 
-               where organism = '$$organism$$'
-                and chromosome is not null
-               union 
-               select 'Choose chromosome' as term, 'Choose chromosome' as internal, -1 as  chromosome_order_num  from dual)
-               order by  chromosome_order_num  asc
-            </sql>
-        </sqlQuery>
-
-
-	<processQuery name="ChromosomeOrderNumOrf"  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-	  <paramRef ref="organismParams.organism" quote="false" queryRef="organismVQ.withChromosomesORFs"/> 
 	  <wsColumn name="internal" width="32" wsName="internal"/>
 	  <wsColumn name="term" width="32" wsName="term"/>
 	</processQuery>
@@ -1904,7 +1756,7 @@ where ot.term in (select ot.parentTerm from (select ot.parentTerm from ApidbTuni
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
 
-        <sqlQuery name="htsSnpStrainAA" includeProjects="ToxoDB,TriTrypDB,AmoebaDB,PlasmoDB" doNotTest="true">
+        <sqlQuery name="htsSnpStrainAA" excludeProjects="EuPathDB" doNotTest="true">
           <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
           <column name="internal"/>
           <column name="term"/>
