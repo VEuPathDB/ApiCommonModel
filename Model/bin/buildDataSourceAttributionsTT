@@ -154,91 +154,104 @@ SQL
       my $ds = $dataSourceAttributions->getDataSourceAttribution($dsName);
       print STDERR "data source: \"$dsName\"" if $debug;
 
-
+      my @dbDataSourceName;
       my $nameIsRegEx = $dataSourceAttributions->checkIfRegEx($dsName);
+
       if ($nameIsRegEx eq "true") {
          $dsName = qq($dsName);
-         my ($dbDataSourceName) = grep {$_ =~ /$dsName/} ($dbDataSourcesList->getDbDataSourceNames());
-         ($dsName = $dbDataSourceName) unless (!$dbDataSourceName);
+
+         my $dsType = $ds->getOverridingType();
+
+         if ($dsType eq 'dbxref') {
+           @dbDataSourceName = grep {/$dsName/} ($dbDataSourcesList->getDbDataSourceNames());
+         } else {
+           my ($dbDataSourceName) = grep {$_ =~ /$dsName/} ($dbDataSourcesList->getDbDataSourceNames());
+           push (@dbDataSourceName, $dbDataSourceName);
+         }
+
+      } else {
+         push (@dbDataSourceName, $dsName);
       }
 
-      my $displayCategory =  $ds->getDisplayCategory() ?  $ds->getDisplayCategory() :  $displayCategories->{$dsName}; 
+      foreach my $dataSource (@dbDataSourceName) {
+print "DataSource $dataSource\n";
+        my $displayCategory =  $ds->getDisplayCategory() ?  $ds->getDisplayCategory() :  $displayCategories->{$dataSource}; 
+        $displayCategory =~ s/:(.*)$//;
 
-      $displayCategory =~ s/:(.*)$//;
+#        my $ignore = $ds->checkIgnore();
+#        next if ($ignore eq "true");
 
-#      my $ignore = $ds->checkIgnore();
-#      next if ($ignore eq "true");
+         my $dbDataSource = $dbDataSourcesList->dataSourceHashByName($dataSource);
+         my $dataSourceId = $dbDataSource->{ID};
+         chomp($dataSourceId);
 
-      my $dbDataSource = $dbDataSourcesList->dataSourceHashByName($dsName);
-      my $dataSourceId = $dbDataSource->{ID};
-      chomp($dataSourceId);
+         if ($dataSourceId eq '') {
+	   print  "skipping [$dataSource] because $dataSource does not exist in apidb.DataSource\n" if $debug;
+	    next;
+         }
 
-      if ($dataSourceId eq '') {
-	print  "skipping [$dsName] because $dsName does not exist in apidb.DataSource\n" if $debug;
-	next;
-      }
+         #Fail if no display category is found
+#         die "No Display Category found for $dsName. Display Category is a required field and will be used to organize the attributions" if $displayCategory eq ''; 
 
-     #Fail if no display category is found
-#     die "No Display Category found for $dsName. Display Category is a required field and will be used to organize the attributions" if $displayCategory eq ''; 
-
-
-      next unless ($ds->getDisplayName() ne '');
-      $insertDsAttrib->execute($dataSourceId, $ds->getDisplayName(),
+         next unless ($ds->getDisplayName() ne '');
+         $insertDsAttrib->execute($dataSourceId, $ds->getDisplayName(),
                        $ds->getDescription(), $ds->getSummary(), $ds->getProtocol(),
                        $ds->getCaveat(), $ds->getAcknowledgement(), $ds->getReleasePolicy(), $displayCategory)
-	or die "inserting a DataSourceAttribution record";
+	 or die "inserting a DataSourceAttribution record";
 
 
 
 
-      foreach my $linkObj ($ds->getAssociatedLinks()) {
-        next unless ($linkObj);
-	print STDERR "Dumping External Links:\n" . Dumper($linkObj) if $debug;
-	foreach my $extLink (@$linkObj) {
-            next unless ($extLink->{url} ne '');
-            $insertDsURL->execute($dataSourceId, $extLink->{type}, $extLink->{linkDescription}, $extLink->{url})
-            or die "inserting a DataSetExternalLinks record"; 	  
-	}
-      }
+         foreach my $linkObj ($ds->getAssociatedLinks()) {
+           next unless ($linkObj);
+	   print STDERR "Dumping External Links:\n" . Dumper($linkObj) if $debug;
+	   foreach my $extLink (@$linkObj) {
+              next unless ($extLink->{url} ne '');
+              $insertDsURL->execute($dataSourceId, $extLink->{type}, $extLink->{linkDescription}, $extLink->{url})
+              or die "inserting a DataSetExternalLinks record"; 	  
+	   }
+         }
 
     
 
-      foreach my $contactObj ($ds->getContacts()) {
-        next unless ($contactObj);
-        print STDERR "Dumping contacts:\n" . Dumper($contactObj) if $debug;
-        foreach my $contact (@$contactObj) {
-          next unless ($contact->{name} ne '');
-             $insertDsCntct->execute($dataSourceId,$contact->{isPrimaryContact},$contact->{name},$contact->{email},$contact->{institution},$contact->{city},$contact->{state},$contact->{country},$contact->{address},$contact->{zip})
-             or die "inserting a DataSourceContact record";
-        }
-      }
+         foreach my $contactObj ($ds->getContacts()) {
+            next unless ($contactObj);
+            print STDERR "Dumping contacts:\n" . Dumper($contactObj) if $debug;
+            foreach my $contact (@$contactObj) {
+              next unless ($contact->{name} ne '');
+              $insertDsCntct->execute($dataSourceId,$contact->{isPrimaryContact},$contact->{name},$contact->{email},$contact->{institution},$contact->{city},$contact->{state},$contact->{country},$contact->{address},$contact->{zip})
+              or die "inserting a DataSourceContact record";
+            }
+         }
 
 
-      foreach my $publicationList ($ds->getPublications()) {
-        next unless ($publicationList);
-	print STDERR "Dumping publication:\n" . Dumper($publicationList) if $debug;
-	foreach my $publication (@$publicationList) {
-          next unless ($publication->{pmid} ne '');
-           $insertDsp->execute($dataSourceId, $publication->{pmid}, $publication->{doi}, $publication->{citation}, $publication->{abstract})
-           or die "inserting a DataSetPublication record";
-	}
-      }
+         foreach my $publicationList ($ds->getPublications()) {
+           next unless ($publicationList);
+	   print STDERR "Dumping publication:\n" . Dumper($publicationList) if $debug;
+	   foreach my $publication (@$publicationList) {
+             next unless ($publication->{pmid} ne '');
+             $insertDsp->execute($dataSourceId, $publication->{pmid}, $publication->{doi}, $publication->{citation}, $publication->{abstract})
+             or die "inserting a DataSetPublication record";
+   	   }
+         }
 
 
-      foreach my $referenceList ($ds->getWdkReferences()) {
-        next unless ($referenceList);
-	print STDERR "Dumping referenceList:\n" . Dumper($referenceList) if $debug;
-	foreach my $reference (@$referenceList) {
-           next unless ($reference->{recordClass} ne '' && $reference->{type} ne '' && $reference->{name} ne '');
-            my $refName = $reference->{name};my $refType = $reference->{type};
-            $refName =~ s/://g;
-	    $insertDsr->execute($dataSourceId, $reference->{recordClass}, $refType, $refName)
-	      or die "inserting a DataSetReference record";
-        }
-     }
+         foreach my $referenceList ($ds->getWdkReferences()) {
+           next unless ($referenceList);
+	   print STDERR "Dumping referenceList:\n" . Dumper($referenceList) if $debug;
+	   foreach my $reference (@$referenceList) {
+             next unless ($reference->{recordClass} ne '' && $reference->{type} ne '' && $reference->{name} ne '');
+             my $refName = $reference->{name};my $refType = $reference->{type};
+             $refName =~ s/://g;
+	     $insertDsr->execute($dataSourceId, $reference->{recordClass}, $refType, $refName)
+	     or die "inserting a DataSetReference record";
+           }
+         } #references
+    }#$dataSource
 
-  }
-}
+
+  } #$dsName
+} #loadDataSources
 
 
 
