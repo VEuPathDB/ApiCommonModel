@@ -44,19 +44,23 @@ my $sharedParamsXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/apiCo
 my $apiCommonModelXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/apiCommonModel.xml";
 
 my $sharedParams = XMLin($sharedParamsXml, ForceArray => 1);
-my $apiCommonModel = XMLin($apiCommonModelXml, ForceArray => 1);
+my $apiCommonModel = XMLin($apiCommonModelXml, keyattr=>[], ForceArray => 1);
 
 my $blastDatabaseTypes = $sharedParams->{paramSet}->{sharedParams}->{enumParam}->{BlastDatabaseType}->{enumList}->[0]->{enumValue};
 my $blastSql =  $sharedParams->{querySet}->{SharedVQ}->{sqlQuery}->{BlastOrganismFiles}->{sql}->[0];
 $blastSql =~ s/\\'/'/;
 
 my %projectVersions;
-foreach(@{$apiCommonModel->{modelName}}) {
-  my $version = $_->{version};
-  my $projectId = $_->{displayName};
 
-  $projectVersions{$projectId} = $version;
+foreach(@{$apiCommonModel->{constant}}) {
+  if ($_->{name} eq "releaseVersion") {
+    my $version = $_->{content};
+    my $projectId = $_->{includeProjects};
+
+    $projectVersions{$projectId} = $version;
+  }
 }
+
 # Get valid project ids
 my $sh = $dbh->prepare("select distinct project_id from ApidbTuning.SequenceAttributes");
 $sh->execute();

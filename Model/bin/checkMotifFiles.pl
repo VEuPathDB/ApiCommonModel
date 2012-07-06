@@ -44,7 +44,7 @@ my $similarityParamsXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/a
 my $apiCommonModelXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/apiCommonModel.xml";
 
 my $similarityParams = XMLin($similarityParamsXml, ForceArray => 1);
-my $apiCommonModel = XMLin($apiCommonModelXml, ForceArray => 1);
+my $apiCommonModel = XMLin($apiCommonModelXml, keyattr=>[], ForceArray => 1);
 
 my $orfSql =  $similarityParams->{querySet}->{SimilarityVQ}->{sqlQuery}->{OrfMotifFiles}->{sql}->[0];
 my $genomicSql =  $similarityParams->{querySet}->{SimilarityVQ}->{sqlQuery}->{GenomicMotifFiles}->{sql}->[0];
@@ -55,11 +55,13 @@ $genomicSql =~ s/\\'/'/;
 $annotatedProteinsSql =~ s/\\'/'/;
 
 my %projectVersions;
-foreach(@{$apiCommonModel->{modelName}}) {
-  my $version = $_->{version};
-  my $projectId = $_->{displayName};
+foreach(@{$apiCommonModel->{constant}}) {
+  if ($_->{name} eq "releaseVersion") {
+    my $version = $_->{content};
+    my $projectId = $_->{includeProjects};
 
-  $projectVersions{$projectId} = $version;
+    $projectVersions{$projectId} = $version;
+  }
 }
 
 # Get valid project ids
