@@ -175,7 +175,7 @@ public class FusionTable {
 		insertStatement.setString(columnNumber, decoded);
 		columnNumber++;
 		if (!match.group(4).equals(",")) { // last column; process row
-		    insertStatement.executeQuery();
+		    insertStatement.executeUpdate();
 		    columnNumber = 1;
 		}
 	    }

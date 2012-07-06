@@ -297,12 +297,10 @@ public class Gff3Reporter extends Reporter {
         // check if we need to insert into cache
         PreparedStatement psInsert = null;
         try {
-            if (tableCache != null) {
                 // want to cache the table content
                 DataSource dataSource = platform.getDataSource();
                 psInsert = SqlUtils.getPreparedStatement(dataSource,
                         sqlInsert.toString());
-            }
 
             // get page based answers with a maximum size (defined in
             // PageAnswerIterator)
@@ -527,12 +525,10 @@ public class Gff3Reporter extends Reporter {
         // check if we need to insert into cache
         PreparedStatement psInsert = null;
         try {
-            if (tableCache != null) {
                 // want to cache the table content
                 DataSource dataSource = platform.getDataSource();
                 psInsert = SqlUtils.getPreparedStatement(dataSource,
                         sqlInsert.toString());
-            }
 
             // get page based answers with a maximum size (defined in
             // PageAnswerIterator)

@@ -238,19 +238,19 @@ public class GenBankFeature {
         return(false);
     }
 
-    protected boolean hasPartialEnd(String tmpSequence) {
+    protected boolean hasPartialEnd(String sequence) {
 
-        if (tmpSequence != null) {
-            tmpSequence = tmpSequence.substring(0, tmpSequence.length()
-                                          - (tmpSequence.length() % 3));
+        if (sequence != null) {
+            sequence = sequence.substring(0, sequence.length()
+                                          - (sequence.length() % 3));
 
             if (!sequence.endsWith("TAG") && !sequence.endsWith("TAA")
                 && !sequence.endsWith("TGA")
                 || sequence.length() % 3 != 0) {
-                return(true);
+                return true;
             }
         }
-        return(false);
+        return false;
     }
 
 }

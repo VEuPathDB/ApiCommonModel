@@ -419,6 +419,8 @@ public class DetailTableLoader extends BaseCLI {
             text = ((TextAttributeField) attribute).getText();
         } else if (attribute instanceof LinkAttributeField) {
             text = ((LinkAttributeField) attribute).getDisplayText();
+        } else {
+        	throw new WdkModelException("Unsupported type for attribute: " + attribute.getName());
         }
 
         Map<String, ColumnAttributeField> children = attribute

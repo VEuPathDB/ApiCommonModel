@@ -467,6 +467,9 @@ public class FullRecordCacheCreator extends BaseCLI {
             text = ((TextAttributeField) attribute).getText();
         } else if (attribute instanceof LinkAttributeField) {
             text = ((LinkAttributeField) attribute).getDisplayText();
+        } else {
+          throw new WdkModelException("Unsupported attribute type for " +
+          		"attribute: " + attribute.getName());
         }
         text = "'" + text.replace("'", "''") + "'";
         Map<String, ColumnAttributeField> children = attribute
