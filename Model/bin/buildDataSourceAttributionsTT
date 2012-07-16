@@ -78,11 +78,13 @@ while (my ($project, $lowerProject) = $projectQuery->fetchrow_array()) {
 
   system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/lib/xml/dataSourceAttributions/${projectXmlFile} $projectXmlPath");
 
-#The check below for file-exists will be enforced once all components fall under workflow.
   if(-e $projectXmlPath) {
     loadDataSources($dbh, $projectXmlPath, $suffix, $dataSourceWdkReferences, $debug);
   } else {
-    #die "Data Source Attributions file $projectXmlPath could not be found."; 
+    print "Data Source Attributions file $projectXmlPath could not be found.\n";
+    exit; 
+    #The die below for file-exists will be enforced once all components fall under workflow.
+    #die "Data Source Attributions file $projectXmlPath could not be found.\n";  
   }
   unlink($projectXmlPath);
 }
@@ -98,10 +100,12 @@ die if getErrorFlag();
 sub loadDataSources {
     my ($dbh, $infile, $suffix, $wdkReferenceCategories, $debug) = @_;
 
-    print STDERR "loading $infile";
+    #list of db data source names from ApiDB.DataSource 
+    my $dbDataSourcesList = ApiCommonShared::Model::DataSourceList->new($dbh); 
 
-     my $dbDataSourcesList = ApiCommonShared::Model::DataSourceList->new($dbh); 
-     my $dataSourceAttributions = ApiCommonShared::Model::DataSourceAttributions->new($infile, $dataSourceWdkReferences,$dbDataSourcesList);
+   #transform xml to a collection of attributions
+    print STDERR "loading $infile\n";
+    my $dataSourceAttributions = ApiCommonShared::Model::DataSourceAttributions->new($infile, $dataSourceWdkReferences,$dbDataSourcesList);
 
     if($debug){
 	print STDERR "DATA SOURCE ATTRIBUTION:  ";
@@ -146,20 +150,20 @@ SQL
 SQL
  
 
-
     foreach my $dsName ($dataSourceAttributions->getDataSourceAttributionNames()) {
 
       chomp($dsName);
 
+      #read individual attribution objects
       my $ds = $dataSourceAttributions->getDataSourceAttribution($dsName);
       print STDERR "data source: \"$dsName\"" if $debug;
 
       my @dbDataSourceName;
       my $nameIsRegEx = $dataSourceAttributions->checkIfRegEx($dsName);
 
+      #if regex, load one representative of the matching attributions. except dbxrefs, where all the matches are to be loaded.
       if ($nameIsRegEx eq "true") {
          $dsName = qq($dsName);
-
          my $dsType = $ds->getOverridingType();
 
          if ($dsType eq 'dbxref') {
@@ -168,18 +172,20 @@ SQL
            my ($dbDataSourceName) = grep {$_ =~ /$dsName/} ($dbDataSourcesList->getDbDataSourceNames());
            push (@dbDataSourceName, $dbDataSourceName);
          }
-
       } else {
          push (@dbDataSourceName, $dsName);
       }
 
+     
+      #validate and load the attribution 
       foreach my $dataSource (@dbDataSourceName) {
-print "DataSource $dataSource\n";
+
         my $displayCategory =  $ds->getDisplayCategory() ?  $ds->getDisplayCategory() :  $displayCategories->{$dataSource}; 
         $displayCategory =~ s/:(.*)$//;
 
-#        my $ignore = $ds->checkIgnore();
-#        next if ($ignore eq "true");
+        #Set this when we decide to ignore attributions (we dont now). 
+        #my $ignore = $ds->checkIgnore();
+        #next if ($ignore eq "true");
 
          my $dbDataSource = $dbDataSourcesList->dataSourceHashByName($dataSource);
          my $dataSourceId = $dbDataSource->{ID};
@@ -191,7 +197,7 @@ print "DataSource $dataSource\n";
          }
 
          #Fail if no display category is found
-#         die "No Display Category found for $dsName. Display Category is a required field and will be used to organize the attributions" if $displayCategory eq ''; 
+         #die "No Display Category found for $dsName. Display Category is a required field and will be used to organize the attributions" if $displayCategory eq ''; 
 
          next unless ($ds->getDisplayName() ne '');
          $insertDsAttrib->execute($dataSourceId, $ds->getDisplayName(),

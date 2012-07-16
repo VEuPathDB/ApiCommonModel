@@ -107,7 +107,7 @@ sub _parseXmlFile {
          ($resourceName = $dbDataSourceName) unless (!$dbDataSourceName);
       }
 
-
+      #set Type and Subtype for Display Category (when not specified).
       my $dataSourceType = $attributionObj->{overriddingType};
       if ($dataSourceType eq '') { 
         my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
@@ -127,6 +127,7 @@ sub _parseXmlFile {
       push @$resourceWdkRefs, @$baseWdkRefs;
       $attributionObj->{wdkReference} = $resourceWdkRefs;
 
+      #download links for genome attributions
       if ($dataSourceType eq 'genome' || $dataSourceType eq 'gene_annotation') {
         my $attrLinks = $attributionObj->{links}->{link} ? $attributionObj->{links}->{link} : [];
         my %downloadLink;
