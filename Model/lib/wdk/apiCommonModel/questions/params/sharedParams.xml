@@ -1455,7 +1455,7 @@ by the sequence generator.</help>
             <column name="parentTerm" />
             <sql>
                 <![CDATA[
- WITH types as ( 
+ WITH orgs as ( 
   -- Standard GENES (RH for toxo is included in the apicoplast)
   select distinct organism, project_id, type 
   from ApidbTuning.GeneAttributes,
@@ -1499,17 +1499,13 @@ by the sequence generator.</help>
   where so_id = 'SO:0001259'
   and not project_id='PlasmoDB' 
   UNION
-   -- CryptoDB has ESTORFs
-  select 'Cryptosporidium parvum EST' as organism,  'CryptoDB' as project_id, 'ORF' as type from dual
-  UNION 
-  select 'Cryptosporidium muris EST' as organism,  'CryptoDB' as project_id, 'ORF' as type from dual
-  UNION 
-  select 'Cryptosporidium parvum Iowa II' as organism,  'CryptoDB' as project_id, 'EST' as type from dual
-  UNION  
-  -- Regular ESTs (must exclude specific strains because ests are done at the species level for most databases
-  select distinct organism, project_id, 'EST' as type 
-  from ApidbTuning.EstAttributes ea 
-  where organism not in ('Plasmodium berghei ANKA','Plasmodium falciparum 3D7','Plasmodium yoelii yoelii','Plasmodium yoelii yoelii 17XNL','Plasmodium vivax SaI-1', 'Toxoplasma gondii RH', 'Cryptosporidium parvum')
+  -- Regular ESTs (all species from apidbtuning.estattributes)
+  select distinct sp.name as organism, ea.project_id, 'EST' as type
+  from ApidbTuning.EstAttributes ea, SRES.taxonname tn, apidbtuning.taxonspecies ts, SRES.taxonname sp
+  where ea.organism = tn.name
+  and (tn.taxon_id = ts.taxon_id or tn.taxon_id=ts.species_taxon_id)
+  and ts.species_taxon_id = sp.taxon_id
+  and sp.name_class = 'scientific name'
   UNION
   select 'Other Apicomplexan ESTs' as organism, 'EuPathDB' as project_id, 'EST' as type from dual
   UNION
@@ -1532,79 +1528,38 @@ by the sequence generator.</help>
   UNION
   select 'All Giardia Isolates' as organism, 'GiardiaDB' as project_id, 'Isolates' as type from dual
   UNION
-  select 'Cryptosporidium  Isolates' as organism, 'CryptoDB' as project_id, 'Isolates' as type from dual
-  UNION
   select 'All Toxoplasma Isolates' as organism, 'ToxoDB' as project_id, 'Isolates' as type from dual
-  UNION
-  select 'Enterocytozoonidae Isolates' as organism, 'MicrosporidiaDB' as project_id, 'Isolates' as type from dual
-  UNION
-  select 'Nematocida Isolates' as organism, 'MicrosporidiaDB' as project_id, 'Isolates' as type from dual
-  UNION
-  select 'Nosematidae Isolates' as organism, 'MicrosporidiaDB' as project_id, 'Isolates' as type from dual
-  UNION
-  select 'Unikaryonidae Isolates' as organism, 'MicrosporidiaDB' as project_id, 'Isolates' as type from dual
-  UNION
-  select 'Babesiidae Isolates' as organism, 'PiroplasmaDB' as project_id, 'Isolates' as type from dual
-  UNION
-  select 'Theileriidae Isolates' as organism, 'PiroplasmaDB' as project_id, 'Isolates' as type from dual
   ) 
-select CASE WHEN types.organism = 'Cryptosporidium parvum'
-            THEN 'Cryptosporidium parvum'
-            ELSE abbrev.parent 
-            END as parentTerm,
-       CASE WHEN types.organism = 'Cryptosporidium parvum'
-            THEN 'Cryptosporidium parvum Chr. 6'
-            ELSE abbrev.organism
-            END AS term,
-            macros.macro || '/' || abbreviation as internal
-From   ApidbTuning.OrganismAbbreviationBlast abbrev, types,
-  (SELECT nvl(m.macro, s.siteFile || '/webServices/@PROJECT_ID@/release-%%releaseVersion%%/blast') AS macro,
-          m.project_id
-   FROM ( select 'FungiDB' as project_id, '@FUNGI_BLAST_PATH@' as macro from dual union
-          select 'PiroplasmaDB' as project_id, '@PIRO_BLAST_PATH@' as macro from dual union
-          select 'ToxoDB' as project_id, '@TOXO_BLAST_PATH@' as macro from dual union
-          select 'CryptoDB' as project_id, '@CRYPTO_BLAST_PATH@' as macro from dual union
-          select 'GiardiaDB' as project_id, '@GIARDIA_BLAST_PATH@' as macro from dual union
-          select 'TrichDB' as project_id, '@TRICH_BLAST_PATH@' as macro from dual union
-          select 'MicrosporidiaDB' as project_id, '@MICRO_BLAST_PATH@' as macro from dual union
-          select 'AmoebaDB' as project_id, '@AMOEBA_BLAST_PATH@' as macro from dual union
-          select 'PlasmoDB' as project_id, '@PLASMO_BLAST_PATH@' as macro from dual union
-          select 'TriTrypDB' as project_id, '@TRYP_BLAST_PATH@' as macro from dual union
-          select 'EuPathDB' as project_id, '@API_BLAST_PATH@' as macro from dual
-        ) m,
-        ( SELECT CASE WHEN '@SITE_FILE_MIRROR@' IS NULL OR '@SITE_FILE_MIRROR@' = '@' || 'SITE_FILE_MIRROR' || '@'
-                 THEN '/var/www/Common/prodSiteFilesMirror'
-                 ELSE '@SITE_FILE_MIRROR@' END AS siteFile 
-          FROM dual 
-         ) s
+     select distinct nvl(ot.term, files.term) as term,
+     case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+      case when (ot.organism is null or
+           ( ot.organism is not null and ot.term = files.term)) then files.abbreviation  || 'AnnotatedProteins_@PROJECT_ID@'  || '.fasta'
+           else '-1'
+      end as internal
+From apidbtuning.organismtree ot, (
+    select distinct abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            macros.macro || '/' || abbreviation as abbreviation
+     from orgs, apidbtuning.organismabbreviationblast abbrev,
+            (
+  select 'FungiDB' as project_id, '@FUNGI_BLAST_PATH@' as macro from dual union
+  select 'PiroplasmaDB' as project_id, '@PIRO_BLAST_PATH@' as macro from dual union
+  select 'ToxoDB' as project_id, '@TOXO_BLAST_PATH@' as macro from dual union
+  select 'CryptoDB' as project_id, '@CRYPTO_BLAST_PATH@' as macro from dual union
+  select 'GiardiaDB' as project_id, '@GIARDIA_BLAST_PATH@' as macro from dual union
+  select 'TrichDB' as project_id, '@TRICH_BLAST_PATH@' as macro from dual union
+  select 'MicrosporidiaDB' as project_id, '@MICRO_BLAST_PATH@' as macro from dual union
+  select 'AmoebaDB' as project_id, '@AMOEBA_BLAST_PATH@' as macro from dual union
+  select 'PlasmoDB' as project_id, '@PLASMO_BLAST_PATH@' as macro from dual union
+  select 'TriTrypDB' as project_id, '@TRYP_BLAST_PATH@' as macro from dual union
+  select 'EuPathDB' as project_id, '@API_BLAST_PATH@' as macro from dual
   ) macros
-where types.organism = abbrev.organism
-and macros.project_id = types.project_id
-and types.type = '$$BlastDatabaseType$$'
-and (types.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
-union
-select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
-from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationBlast abbrev, types
-where types.organism = abbrev.organism
-and types.type = '$$BlastDatabaseType$$'
-and ot.term = abbrev.parent
-and (ot.project_id = '@PROJECT_ID@' or 'EuPathDB'='@PROJECT_ID@')
-union
-select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
-from ApidbTuning.OrganismTree ot
-where ot.term in (select ot.parentTerm 
-               from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationBlast abbrev, types
-               where types.organism = abbrev.organism
-               and types.type = '$$BlastDatabaseType$$' and ot.term = abbrev.parent
-               and (ot.project_id = '@PROJECT_ID@' or '@PROJECT_ID@' = 'EuPathDB'))
-union
-select ot.parentTerm as parentTerm,ot.term as term,'-1'as internal
-from ApidbTuning.OrganismTree ot
-where ot.term in (select ot.parentTerm from (select ot.parentTerm from ApidbTuning.OrganismTree ot, ApidbTuning.OrganismAbbreviationBlast abbrev, types
-               where types.organism = abbrev.organism
-               and types.type = '$$BlastDatabaseType$$' and ot.term = abbrev.parent
-               and (ot.project_id = 'EuPathDB' or '@PROJECT_ID@' = 'EuPathDB'))pt,  ApidbTuning.OrganismTree ot
-               where pt.parentTerm = ot.term)
+     where orgs.organism = abbrev.organism
+      and orgs.type = '$$BlastDatabaseType$$'
+      and macros.project_id = orgs.project_id
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@') 
+     ) files
+where files.term = ot.organism (+)  
                 ]]>
             </sql>
         </sqlQuery>
@@ -1728,11 +1683,10 @@ select * from (
           <column name="term"/>
           <sql>
             SELECT * FROM (
-            SELECT distinct substr(st.organism, 1, 1) || substr(st.organism, instr(st.organism, ' ') + 1, 1) || '-' || st.strain as term, st.strain as internal
+            SELECT distinct st.strain as term, st.strain as internal
             FROM ApiDBTuning.SnpStrains st
             WHERE st.is_queryable = 1
             AND st.organism = $$organism$$
-            AND st.strain != 'Preich'
             AND st.strain not like '%-Broad'
             AND st.strain not like '%-NIH'    
             AND extdb_name != 'InsertSnps.pm NGS SNPs INTERNAL'
@@ -1759,17 +1713,11 @@ select * from (
           <column name="internal"/>
           <column name="term"/>
           <sql>
-            select distinct substr(st.organism, 1, 1) || substr(st.organism, instr(st.organism, ' ') + 1, 1) || '-' || st.strain as term, st.strain as internal
+            select distinct st.strain as term, st.strain as internal
             from ApiDBTuning.SnpStrains st
             where st.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
             and st.organism in ($$organism$$)
-            and st.strain != 'Preich'
-            union 
-            select distinct 'P. reichenowi (vs. 3D7 only)' as term, 'Preich' as internal
-            from apidbtuning.SnpStrains
-            where strain = 'Preich'
-            and organism in ($$organism$$)
-            and extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
+            order by st.strain
           </sql>
         </sqlQuery>
 
