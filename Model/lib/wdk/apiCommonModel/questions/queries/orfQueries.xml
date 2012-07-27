@@ -272,23 +272,23 @@
               isCacheable='true'>
 
         <testParamValues includeProjects="ToxoDB">
-            <paramValue name="orf_ms_assay">Wastling 1-D SDS PAGE</paramValue>
+            <paramValue name="ms_assay">Wastling 1-D SDS PAGE</paramValue>
         </testParamValues>
         <testParamValues includeProjects="CryptoDB">
-            <paramValue name="orf_ms_assay">Wastling MassSpec 1D Gel LC-MS/MS</paramValue>
+            <paramValue name="ms_assay">Wastling MassSpec 1D Gel LC-MS/MS</paramValue>
         </testParamValues>
         <testParamValues includeProjects="GiardiaDB">
-            <paramValue name="orf_ms_assay">DTASelect-filter_032108_Proteomics</paramValue>
+            <paramValue name="ms_assay">DTASelect-filter_032108_Proteomics</paramValue>
         </testParamValues>
 
-        <paramRef ref="orfParams.orf_ms_assay"/>
+        <paramRef ref="geneParams.ms_assay"/>
         <paramRef ref="sharedParams.min_sequence_count"/>
         <paramRef ref="sharedParams.min_spectrum_count"/>
         <column name="project_id" />
         <column name="source_id" />
         <column name="sum_sequence_count" />
         <column name="sum_spectrum_count" />
-        <sql includeProjects="ToxoDB,GiardiaDB">
+        <sql includeProjects="ToxoDB,GiardiaDB,CryptoDB">
             <![CDATA[
             select distinct misc.source_id, '@PROJECT_ID@' as project_id,
                             seq.sum_sequence_count, spec.sum_spectrum_count
@@ -305,8 +305,9 @@
                   and msf.aa_feature_id = aal.aa_feature_id
                   and msf.external_database_release_id = edr.external_database_release_id
                   and edr.external_database_id = ed.external_database_id
-                  and ed.name in ($$orf_ms_assay$$)
-                group by mss.aa_sequence_id,aal.start_min,aal.end_max ) intseq
+                  and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
+                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
+                group by mss.aa_sequence_id,aal.start_min,aal.end_max ) intseq                  
                 group by intseq.aa_sequence_id
                 having count(*) >= $$min_sequence_count$$
             ) seq,
@@ -316,7 +317,8 @@
                      sres.externaldatabaserelease edr
                 where mss.external_database_release_id = edr.external_database_release_id
                   and edr.external_database_id = ed.external_database_id
-                  and ed.name in ($$orf_ms_assay$$)
+                  and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
+                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
                 group by mss.aa_sequence_id
                 having sum(spectrum_count) >= $$min_spectrum_count$$
             ) spec
@@ -328,57 +330,16 @@
             and mss.aa_sequence_id = spec.aa_sequence_id
             ]]>
        </sql>
-        <sql includeProjects="CryptoDB">
-            <![CDATA[
-                select distinct misc.source_id, '@PROJECT_ID@' as project_id,
-                       seq.sum_sequence_count, spec.sum_spectrum_count
-            from apidb.massspecsummary mss, dots.translatedaafeature taaf,  
-                 dots.miscellaneous misc, sres.sequenceontology o,
-                 dots.nasequence nas,
-            (select intseq.aa_sequence_id,count(*) as sum_sequence_count 
-              from (select mss.aa_sequence_id, count(*) as sum_seq_ct
-                from apidb.massspecsummary mss,
-                     dots.massspecfeature msf,
-                     dots.aalocation aal,
-                     sres.externaldatabase ed,
-                     sres.externaldatabaserelease edr
-                where mss.mass_spec_summary_id = msf.source_id
-                  and msf.aa_feature_id = aal.aa_feature_id
-                  and msf.external_database_release_id = edr.external_database_release_id
-                  and edr.external_database_id = ed.external_database_id
-                  and ed.name in ($$orf_ms_assay$$)
-                group by mss.aa_sequence_id,aal.start_min,aal.end_max ) intseq
-                group by intseq.aa_sequence_id
-                having count(*) >= $$min_sequence_count$$
-            ) seq,
-            (select mss.aa_sequence_id, sum(spectrum_count) as sum_spectrum_count
-                from apidb.massspecsummary mss,
-                     sres.externaldatabase ed,
-                     sres.externaldatabaserelease edr
-                where mss.external_database_release_id = edr.external_database_release_id
-                  and edr.external_database_id = ed.external_database_id
-                  and ed.name in ($$orf_ms_assay$$)
-                group by mss.aa_sequence_id
-                having sum(spectrum_count) >= $$min_spectrum_count$$
-            ) spec
-            where mss.aa_sequence_id = taaf.aa_sequence_id
-            and taaf.na_feature_id = misc.na_feature_id
-            and misc.sequence_ontology_id = o.sequence_ontology_id
-            and o.term_name = 'ORF'
-            and mss.aa_sequence_id = seq.aa_sequence_id
-            and mss.aa_sequence_id = spec.aa_sequence_id
-            and misc.na_sequence_id = nas.na_sequence_id
-           ]]>
-       </sql>
+
     </sqlQuery>   
 
     <processQuery name="OrfsByMassSpec" includeProjects="EuPathDB"
              isCacheable='true' processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
         <testParamValues>
-            <paramValue name="orf_ms_assay">Wastling 1-D SDS PAGE</paramValue>
+            <paramValue name="ms_assay">Wastling 1-D SDS PAGE</paramValue>
         </testParamValues>
 
-        <paramRef ref="orfParams.orf_ms_assay" quote="false"/>
+        <paramRef ref="geneParams.ms_assay" quote="false"/>
         <paramRef ref="sharedParams.min_sequence_count"/>
         <paramRef ref="sharedParams.min_spectrum_count"/>
         <wsColumn name="source_id" />
