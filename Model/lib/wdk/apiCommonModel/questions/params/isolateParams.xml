@@ -54,7 +54,7 @@
              default="Mammals - Human"
              prompt="Host"
              multiPick="true"
-             quote="false"
+             quote="true"
              displayType="treeBox">
         </flatVocabParam>
 
@@ -62,7 +62,7 @@
              queryRef="isolationSourceVQ.withIsolates"
              prompt="Isolation Source"
              multiPick="true"
-             quote="false">
+             quote="true">
         </flatVocabParam>
 
         <flatVocabParam name="product"
@@ -168,7 +168,7 @@
             prompt="Geographic Locations"
             default="Unknown"
             multiPick="true"
-            quote="false"
+            quote="true"
             displayType="treeBox">
             <suggest selectMode="all" />
         </flatVocabParam>
@@ -185,10 +185,10 @@
             queryRef="strainVQ.withIsolates"
             prompt="Species/Strain Name"
             multiPick="true"
-            quote="false"
+            quote="true"
             displayType="treeBox">
                   <help>
-                         Species Name (and strain if appropriate)
+                        Names from the NCBI Taxonomy 
                         </help>
             <suggest selectMode="all" />
        </flatVocabParam>
@@ -281,19 +281,12 @@
     <column name="parentTerm"/>
     <sql>
     <![CDATA[
- select distinct initcap(v.term) as term, initcap(v.term) as internal, initcap(v.parent) as parentTerm
- from   apidb.isolatevocabulary v, apidb.isolatemapping m
- where  v.type = 'specific_host'
- and   v.isolate_vocabulary_id = m.isolate_vocabulary_id
- union
- select distinct initcap(v.parent) as term, initcap(v.parent) as internal, ''  as parentterm 
- from   apidb.isolatevocabulary v, apidb.isolatemapping m
- where  v.type = 'specific_host' 
- and    v.isolate_vocabulary_id = m.isolate_vocabulary_id
- and v.parent is not null 
- union
- select 'Unknown' as term, 'Unknown' as internal, '' as parentTerm from dual
-]]>
+    select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
+    from apidb.isolatevocabulary
+    where type = 'specific_host'
+    start with term in (select distinct annotated_specific_host from apidbtuning.isolateattributes)
+    connect by prior parent = term
+    ]]>
     </sql>
     </sqlQuery>
 
@@ -311,11 +304,11 @@
     <column name="internal"/>
     <sql>
     <![CDATA[
-select distinct initcap(v.term) as term, v.term as internal
-from apidb.isolatevocabulary v, apidb.isolatemapping m 
-where v.type = 'isolation_source'
-and   v.isolate_vocabulary_id = m.isolate_vocabulary_id
-order by v.term asc
+    select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
+    from apidb.isolatevocabulary
+    where type = 'isolation_source'
+    start with term in (select distinct annotated_isolation_source from apidbtuning.isolateattributes)
+    connect by prior parent = term
     ]]>
     </sql>
     </sqlQuery>
@@ -540,18 +533,11 @@ and v.product = 'SAG1'
 
       <sql>
       <![CDATA[
- select distinct replace(initcap(v.term), '''', ' ') as term, initcap(v.term) as internal, initcap(v.parent) as parentTerm
- from   apidb.isolatevocabulary v, apidb.isolatemapping m
- where  v.type = 'geographic_location'
- and    v.isolate_vocabulary_id = m.isolate_vocabulary_id
- union
- select distinct replace(initcap(v.parent), '''', ' ') as term, initcap(v.parent) as internal, '' as parentterm 
- from   apidb.isolatevocabulary v, apidb.isolatemapping m
- where  v.type = 'geographic_location' 
- and    v.isolate_vocabulary_id = m.isolate_vocabulary_id
- and    parent is not null
- union
- select 'Unknown' as term, 'Unknown' as internal, '' as parentTerm from dual
+    select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
+    from apidb.isolatevocabulary
+    where type = 'geographic_location'
+    start with term in (select distinct annotated_geographic_location from apidbtuning.isolateattributes)
+    connect by prior parent = term
       ]]>
       </sql>
     </sqlQuery>
@@ -637,35 +623,39 @@ and v.product = 'SAG1'
 
 <sql>
       <![CDATA[
-select term,internal,parentTerm from (
-select distinct i.organism as term, 
-tn.name as internal, regexp_replace(p.name, ' \(.+\)', '', 1, 1, 'n') as parentTerm,
-i.project_id
-from ApidbTuning.IsolateAttributes i, sres.taxonname tn, 
-     sres.taxon t, sres.TaxonName p
-where i.organism = tn.name
-and tn.taxon_id = t.taxon_id
-and tn.name_class = 'scientific name'
-and t.parent_id = p.taxon_id
-and p.name_class =  'scientific name'
-union
-select distinct ot.term, ot.term as internal, ot.parentTerm, ia.project_id 
-from apidbtuning.organismtree ot, apidbtuning.isolateattributes ia
-where ot.organism = ia.organism and ot.parentterm is not null
-union
-select 'environmental samples' as term, 'environmental samples' as internal, 'Cryptosporidium' as parentTerm, 'CryptoDB' as project_id from dual
-union
-select 'unclassified Cryptosporidium' as term, 'unclassified Cryptosporidium' as internal, 'Cryptosporidium' as parentTerm, 'CryptoDB' as project_id from dual
-union
-select 'Plasmodium - Not Annotated' as term, 'Unknown' as internal, 'Plasmodium' as parentTerm, 'PlasmoDB' as project_id from dual
-union
-select 'Cryptosporidium - Not Annotated' as term, 'Unknown' as internal, 'Cryptosporidium' as parentTerm, 'CryptoDB' as project_id from dual
-union
-select 'Cryptosporidium parvum Iowa II' as term, 'Cryptosporidium parvum Iowa II' as internal, 'Cryptosporidium parvum' as parentTerm, 'CryptoDB' as project_id from dual
-union
-select 'Toxoplasma' as term, 'Toxoplasma' as internal, 'Apicomplexa' as parentTerm, 'ToxoDB' as project_id from dual
-) where project_id = '@PROJECT_ID@'
-order by term
+select distinct regexp_replace(organism, '['']', '') as term,
+                organism as internal,
+                case when organism = 'environmental samples'
+                     then ''
+                     else regexp_replace(parent, '['']', '')
+                end as parentTerm
+from (select tn.name as organism, 
+             pn.name as parent
+      from (select t.taxon_id, t.parent_id
+            from sres.taxon t
+            start with taxon_id in (select distinct tn.taxon_id 
+                                    from apidb.organism o, sres.taxonname tn
+                                    where family_name_for_files is not null 
+                                    and tn.name = o.family_name_for_files
+
+                                    -- TODO: these can be removed when the workflow populates apidb.organism.family_name_for_files
+                                    union
+                                    select taxon_id from sres.taxonname 
+                                    where name = case when '@PROJECT_ID@' = 'PlasmoDB'
+                                                      then 'Plasmodium'
+                                                      when '@PROJECT_ID@' = 'ToxoDB'
+                                                      then 'Sarcocystidae'
+                                                      when '@PROJECT_ID@' = 'GiardiaDB'
+                                                      then 'Giardia'
+                                                 else '' end
+                                    )
+            connect by prior taxon_id = parent_id
+           ) tree, sres.taxonname tn, sres.taxonname pn
+     where tree.taxon_id = tn.taxon_id and tn.name_class = 'scientific name'
+     and tree.parent_id = pn.taxon_id and pn.name_class = 'scientific name'
+     )
+start with organism in (select distinct organism from apidbtuning.isolateattributes)
+connect by prior parent = organism
      ]]>
       </sql>
 
