@@ -532,7 +532,7 @@ where pf.na_feature_id = gf.na_feature_id
             <column name="strain_b_disp"/>
             <column name="gene_source_id"/>
             <column name="organism"/>
-            <column name="link" includeProjects="ToxoDB,TriTrypDB,AmoebaDB"/>
+            <column name="link" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,AmoebaDB"/>
             <column name="num_non_synonymous"/>
             <column name="num_synonymous"/>
             <column name="num_nonsense"/>
@@ -542,22 +542,28 @@ where pf.na_feature_id = gf.na_feature_id
 
             <sql includeProjects="PlasmoDB,EuPathDB">
             <![CDATA[
-              SELECT ss.source_id, '@PROJECT_ID@' AS project_id,
-              ss.source_id as gene_source_id,type as type,
-              'Pf-' || replace(strain_a,' ','') as strain_a_query,
-              CASE WHEN strain_b = 'Preich' THEN 'P. reichenowi (vs. 3D7 only)' ELSE 'Pf-'|| replace(strain_b,' ','') END  as strain_b_query,
+              SELECT ss.source_id, '@PROJECT_ID@' AS project_id,type as type,
               CASE WHEN strain_b = 'Preich' THEN 'Sp. Pf-'||strain_a ELSE strain_a END as strain_a_disp,
               CASE WHEN strain_b = 'Preich' THEN 'Sp. P.reichenowi' ELSE strain_b END as strain_b_disp,
-              CASE WHEN strain_b = 'Preich' THEN 0 ELSE total END as ord, ss.cds_length,
-        round(non_synonymous / CASE synonymous
-           WHEN 0 THEN 1
-     ELSE synonymous end, 2) as dn_ds_ratio,
+              replace(strain_a,' ','') as strain_a_query,
+              CASE WHEN strain_b = 'Preich' THEN 'P. reichenowi (vs. 3D7 only)' ELSE replace(strain_b,' ','') END  as strain_b_query,
+              ss.cds_length,ss.source_id as gene_source_id,
+              round(non_synonymous / CASE synonymous
+                 WHEN 0 THEN 1
+                 ELSE synonymous end, 2) as dn_ds_ratio,
               non_synonymous as num_non_synonymous,synonymous as num_synonymous,
-              stop as num_nonsense,non_coding as num_non_coding,total as num_total,
-              round(((ss.non_synonymous + ss.synonymous) / ss.cds_length * 1000),2) as cds_snp_density,ga.organism
+              stop as num_nonsense,non_coding as num_non_coding,total, 
+              CASE WHEN strain_b = 'Preich' THEN 0 ELSE total END as num_total,
+              round(((ss.non_synonymous + ss.synonymous) / ss.cds_length * 1000),2) as cds_snp_density,
+              ga.organism,
+              CASE WHEN type = 'HTS' THEN 
+              'processQuestion.do?questionFullName=SnpQuestions.HtsSnpsByGeneId&' || 'ds_gene_ids_type=DATA&' || 'ds_gene_ids_data=' || ss.source_id|| '&' || 'array%28organism%29=' || ga.organism|| '&' || 'array%28htsSnp_strain_a%29=' || strain_a || '&' || 'array%28htsSnp_strain_m%29=' || strain_b || '&'|| 'array%28hts_snps_coverage%29=5&' || 'array%28hts_snps_pvalue%29=0.01&' ||'questionSubmit=Get+Answer'
+              ELSE
+              'processQuestion.do?questionFullName=SnpQuestions.SnpsByGeneId&' || 'ds_gene_ids_type=DATA&' || 'ds_gene_ids_data=' || ss.source_id || '&' || 'array%28organism%29=' || ga.organism || '&' || 'array%28snp_strain_a%29=' || strain_a || '&' || 'array%28snp_strain_m%29=' || strain_b || '&'  || 'questionSubmit=Get+Answer'
+              END as link
         FROM ApidbTuning.SnpSummary ss, ApidbTuning.geneattributes ga
         WHERE ga.source_id = ss.source_id 
-        ORDER BY type,ord desc
+        ORDER BY type,num_total desc
             ]]>
             </sql>
 
@@ -587,14 +593,8 @@ where pf.na_feature_id = gf.na_feature_id
             <![CDATA[
               SELECT ss.source_id, '@PROJECT_ID@' AS project_id,type as type,
               strain_a as strain_a_disp, strain_b as strain_b_disp,
-              CASE WHEN strain_a = 'ME49' THEN 'Tg-ME49 (type II)' 
-              WHEN strain_a = 'RH' THEN 'Tg-RH (type I)'
-              WHEN strain_a = 'VEG' THEN 'Tg-VEG (type III)'
-              WHEN strain_a = 'GT1' THEN 'Tg-GT1 (type I)'  ELSE strain_a END as strain_a_query,
-              CASE WHEN strain_b = 'ME49' THEN 'Tg-ME49 (type II)' 
-              WHEN strain_b = 'RH' THEN 'Tg-RH (type I)'
-              WHEN strain_b = 'VEG' THEN 'Tg-VEG (type III)'
-              WHEN strain_b = 'GT1' THEN 'Tg-GT1 (type I)' ELSE strain_b END as strain_b_query,
+              strain_a as strain_a_query,
+              strain_b as strain_b_query,
               ss.cds_length,ss.source_id as gene_source_id,                
               round(non_synonymous / CASE synonymous WHEN 0 THEN 1  ELSE synonymous end, 2) as dn_ds_ratio,              
               non_synonymous as num_non_synonymous,synonymous as num_synonymous,              
@@ -602,9 +602,9 @@ where pf.na_feature_id = gf.na_feature_id
               round(((ss.non_synonymous + ss.synonymous) / ss.cds_length * 1000),2) as cds_snp_density,
               ga.organism,
               CASE WHEN type = 'HTS' THEN 
-              'processQuestion.do?questionFullName=SnpQuestions.HtsSnpsByGeneId&' || 'ds_gene_ids_type=DATA&' || 'ds_gene_ids_data=' || ss.source_id|| '&' || 'array%28organism%29=' || ga.organism|| '&' || 'array%28htsSnp_strain_a%29=' || substr(ga.organism, 1, 1) || substr(ga.organism, instr(ga.organism, ' ') + 1, 1) || '-' || strain_a || '&' || 'array%28htsSnp_strain_m%29=' || substr(ga.organism, 1, 1) || substr(ga.organism, instr(ga.organism, ' ') + 1, 1) || '-' || strain_b || '&'|| 'array%28hts_snps_coverage%29=5&' || 'array%28hts_snps_pvalue%29=0.01&' ||'questionSubmit=Get+Answer'
+              'processQuestion.do?questionFullName=SnpQuestions.HtsSnpsByGeneId&' || 'ds_gene_ids_type=DATA&' || 'ds_gene_ids_data=' || ss.source_id|| '&' || 'array%28organism%29=' || ga.organism|| '&' || 'array%28htsSnp_strain_a%29=' || strain_a || '&' || 'array%28htsSnp_strain_m%29=' || strain_b || '&'|| 'array%28hts_snps_coverage%29=5&' || 'array%28hts_snps_pvalue%29=0.01&' ||'questionSubmit=Get+Answer'
               ELSE
-              'processQuestion.do?questionFullName=SnpQuestions.SnpsByGeneId&' || 'ds_gene_ids_type=DATA&' || 'ds_gene_ids_data=' || ss.source_id || '&' || 'array%28organism%29=' || ga.organism || '&' || 'array%28snp_strain_a%29=' || substr(ga.organism, 1, 1) || substr(ga.organism, instr(ga.organism, ' ') + 1, 1) || '-'||strain_a || '&' || 'array%28snp_strain_m%29=' || substr(ga.organism, 1, 1) || substr(ga.organism, instr(ga.organism, ' ') + 1, 1) || '-' || strain_b || '&'  || 'questionSubmit=Get+Answer'
+              'processQuestion.do?questionFullName=SnpQuestions.SnpsByGeneId&' || 'ds_gene_ids_type=DATA&' || 'ds_gene_ids_data=' || ss.source_id || '&' || 'array%28organism%29=' || ga.organism || '&' || 'array%28snp_strain_a%29=' || strain_a || '&' || 'array%28snp_strain_m%29=' || strain_b || '&'  || 'questionSubmit=Get+Answer'
               END as link
               FROM ApidbTuning.SnpSummary ss, ApidbTuning.geneattributes ga
               WHERE ga.source_id = ss.source_id 
