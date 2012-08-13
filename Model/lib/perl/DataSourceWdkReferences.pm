@@ -56,8 +56,16 @@ sub setData {
  
     foreach my $reference (@{$references}) {
       my $subType = $reference->{dataSourceSubType};
-      $data{"$type:$subType"} = $reference->{wdkReference};
-      $display{"$type:$subType"} = $reference->{display}; 
+      if ($subType =~ /,/){
+        my @subtypes = split(/,/,$subType);
+        foreach my $element (@subtypes) {
+        $data{"$type:$element"} = $reference->{wdkReference};
+        $display{"$type:$element"} = $reference->{display};
+        }
+      } else {
+        $data{"$type:$subType"} = $reference->{wdkReference};
+        $display{"$type:$subType"} = $reference->{display};
+      } 
     } 
   }
   $self->{data} = \%data;
