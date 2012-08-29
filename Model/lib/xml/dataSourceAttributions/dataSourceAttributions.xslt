@@ -114,7 +114,7 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 <xsl:attribute name="href">
 <xsl:value-of select="url" disable-output-escaping="yes" />
 </xsl:attribute>
-<xsl:value-of select="linkDescription" disable-output-escaping="yes" />
+<xsl:value-of select="linkDescription" disable-output-escaping="yes" /> (<xsl:value-of select="url" disable-output-escaping="yes" />)
 </a>
 
 
