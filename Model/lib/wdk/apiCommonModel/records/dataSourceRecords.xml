@@ -75,12 +75,14 @@
                queryRef="DataSourceTables.Isolates">
             <columnAttribute name="data_source_name"  inReportMaker="false" internal="true"/>
             <columnAttribute name="source_id" inReportMaker="true" internal="true"/>
+            <columnAttribute name="strain" inReportMaker="true" internal="true"/>
+            <columnAttribute name="contact_name" inReportMaker="true" internal="true"/>
             <linkAttribute name="isolate_link" inReportMaker="false" internal="false"
                            displayName="Isolate Source Id">
 
                  <displayText>
                     <![CDATA[
-                    $$source_id$$
+                    $$source_id$$ - ($$strain$$) $$contact_name$$
                     ]]>
                  </displayText>
                  <url>
@@ -137,8 +139,8 @@
       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <querySet name="DataSourceAttributes" queryType="attribute" doNotTest="true"  includeProjects="InitDB,FungiDB,PiroplasmaDB,PlasmoDB,CryptoDB,MicrosporidiaDB">
 
-      <testRowCountSql includeProjects="EuPathDB">
-	 SELECT count(*) FROM ApiDBTuning.DataSourceAttribution 
+      <testRowCountSql>
+select count(*) from apidbtuning.datasourceattribution 
        </testRowCountSql>
 
 
@@ -182,7 +184,6 @@
             AND    tn.taxon_id  (+)   = ds.taxon_id
             AND    dsc.is_primary_contact (+) = 'true'
             AND    p.name  = '@PROJECT_ID@' 
-            AND    lower(ds.name) not like '%sample_rsrc'
             ORDER BY  dsa.display_category, tn.name 
           )
             ]]>
@@ -243,18 +244,29 @@
             <column name="data_source_name"/>
             <column name="project_id"/>
             <column name="source_id"/>
+            <column name="strain"/>
+            <column name="contact_name"/>
             <sql>
             <![CDATA[
-select ia.source_id, ia.project_id, ds.name as data_source_name
+select ia.source_id, 
+       ia.project_id, 
+       ds.name as data_source_name, 
+       ia.strain, 
+       apidb.tab_to_string(set(cast(COLLECT(dsc.name) as apidb.varchartab)), ', ') as contact_name
 from study.study s, apidb.datasource ds,
      sres.externaldatabase d, sres.externaldatabaserelease r,
-     rad.studybiomaterial sb, apidbtuning.isolateattributes ia
+     rad.studybiomaterial sb, apidbtuning.isolateattributes ia,
+     apidb.datasource iads , apidbtuning.datasourcecontact dsc
 where s.external_database_release_id = r.external_database_release_id
 and r.external_database_id = d.external_database_id
 and ds.external_database_name = d.name
 and ds.version = r.version
 and s.study_id = sb.study_id
 and sb.bio_material_id = ia.bio_material_id
+and ia.external_db_name = iads.external_database_name
+and ia.external_db_version = iads.version
+and iads.data_source_id = dsc.data_source_id (+)
+group by ia.source_id, ia.project_id, ds.name, ia.strain
             ]]>
             </sql>
         </sqlQuery>
