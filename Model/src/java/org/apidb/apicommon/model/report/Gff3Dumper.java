@@ -149,12 +149,12 @@ public class Gff3Dumper {
 
         // format the file name
         int pos = organism.indexOf(" ");
-        String fileName = wdkModel.getProjectId() + "-" + wdkModel.getVersion()
-                + "_";
+        String fileName = "_" + wdkModel.getProjectId() + "-" + wdkModel.getVersion()
+               ;
         if (pos >= 0) {
-            fileName += organism.substring(0, 1).toUpperCase();
-            fileName += organism.substring(pos + 1).replaceAll("\\s+", "");
-        } else fileName += organism;
+            String prefix = organism.substring(0, 1).toUpperCase();
+            fileName = prefix + organism.substring(pos + 1).replaceAll("\\s+", "") + fileName;
+        } else fileName = organism + fileName;
         fileName += ".gff";
         File gffFile = new File(baseDir, fileName);
         PrintWriter writer = new PrintWriter(new FileWriter(gffFile));
