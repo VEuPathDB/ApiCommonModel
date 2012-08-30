@@ -108,7 +108,7 @@ sub _parseXmlFile {
       }
 
       #set Type and Subtype for Display Category (when not specified).
-      my $dataSourceType = $attributionObj->{overriddingType};
+      my $dataSourceType = $attributionObj->{overridingType};
       if ($dataSourceType eq '') { 
         my $dbDataSource = $dbDataSourceObj->dataSourceHashByName($resourceName);
         $dataSourceType = $dbDataSource->{TYPE};
