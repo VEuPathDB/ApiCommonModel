@@ -51,7 +51,11 @@ sub setProjectId {
 }
 
 
+sub getInternalDataSourceNames {
+  my ($self) = @_;
 
+  return @{$self->{data}->{internalDataSources}->{resource}};
+}
 
 sub getDataSourceAttributionNames {
   my ($self) = @_;
@@ -88,7 +92,7 @@ sub _parseXmlFile {
 
   my $xmlString = `cat $dataAttributionsXmlFile`;
   my $xml = new XML::Simple();
-  $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => undef, KeyAttr => 'resource', ForceArray=>['dataSourceAttribution','contact','publication','link','wdkReference']) } ;
+  $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => undef, KeyAttr => 'resource', ForceArray=>['dataSourceAttribution','contact','publication','link','wdkReference','resource']) } ;
   die "$@\n$xmlString\nerror processing XML file $dataAttributionsXmlFile\n" if($@);
 
   if(my $dataSourceWdkRefs = $self->getDataSourceWdkReferences()) {
