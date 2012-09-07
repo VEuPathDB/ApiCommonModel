@@ -34,6 +34,24 @@ sub new {
   return $self;
 }
 
+sub isNameRegex {
+  my ($self) = @_;
+
+  my $nameIsRegex =  $self->getNameIsRegex;
+
+  if(lc($nameIsRegex) eq 'yes' || lc($nameIsRegex) eq 'true' ||
+     lc($nameIsRegex) eq 'y' || lc($nameIsRegex) eq 't' ||
+     lc($nameIsRegex) eq '1') {
+    return 1;
+  }
+  return 0;
+}
+
+
+sub getNameIsRegex {
+  return $_[0]->getParsedXml()->{nameIsRegEx};
+}
+
 
 sub dataSourceAttributions {
   my ($self) = @_;

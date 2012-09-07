@@ -54,7 +54,9 @@ sub setProjectId {
 sub getInternalDataSourceNames {
   my ($self) = @_;
 
-  return @{$self->{data}->{internalDataSources}->{resource}};
+  if(my $internalDataSources = $self->{data}->{internalDataSources}) {
+    return wantarray ? @{$internalDataSources->{resource}} : $internalDataSources->{resource};;
+  }
 }
 
 sub getDataSourceAttributionNames {
