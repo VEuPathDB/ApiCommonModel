@@ -82,7 +82,7 @@ while (my ($newName, $oldName) = each %mapping ) {
 
        <displayName><![CDATA[$displayName]]></displayName>
 
-       <summary>$description</summary>
+       <summary></summary>
 
        <protocol></protocol>
        <caveat></caveat>
