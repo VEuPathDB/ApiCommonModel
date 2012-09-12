@@ -1,6 +1,7 @@
 package org.apidb.apicommon.model.templateInjector;
 
-import org.apidb.apicommon.model.templateInjector.TemplateInjector;
+import org.apidb.apicommon.templateInjector.TemplateInjector;
+
 import java.util.Properties;
 
 public class RnaSeqInjector extends TemplateInjector {
