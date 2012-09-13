@@ -1,10 +1,10 @@
-package org.apidb.apicommon.model.templateInjector;
+package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.templateInjector.TemplateInjector;
+import org.apidb.apicommon.datasetInjector.DatasetInjector;
 
 import java.util.Properties;
 
-public class RnaSeqInjector extends TemplateInjector {
+public class RnaSeqInjector extends DatasetInjector {
 
     /* 
 	getPropValues() gets the property values provided by the datasetPresenter xml file.  they are validated
@@ -14,14 +14,18 @@ public class RnaSeqInjector extends TemplateInjector {
 
      */
 
-    public void run() {
+    public void injectTemplates() {
 
 	Properties propValues = getPropValues();
 
 	injectWdkTemplate("rnaSeqFoldChangePvalueQuestion", propValues);
+
 	injectWdkTemplate("rnaSeqFoldChangeQuestion", propValues);
+
 	injectWdkTemplate("rnaSeqPercentileQuestion", propValues);
+
 	injectWdkTemplate("expressionGraphAttribute", propValues);
+
 
 	propValues.setProperty("profileType", "foldChange");
 	injectWdkTemplate("expressionParamQuery", propValues);
@@ -31,6 +35,12 @@ public class RnaSeqInjector extends TemplateInjector {
 
 	injectGbrowseTemplate("rnaSeqCoverageTrack", propValues);
 	
+    }
+
+    public void insertReferences() {
+
+	makeWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeq_" + datasetName + "_FoldChangePValue");
+
     }
 
     // second column is for documentation
