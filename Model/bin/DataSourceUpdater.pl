@@ -51,7 +51,6 @@ else {
 }
 
 while (my ($newName, $oldName) = each %mapping ) {
-  my $legacyResource =  $source -> { 'resource' } -> {$oldName};
   my $resource =  $newName;
   my $publication = $legacyResource -> { 'publication' }[0]->{pmid};
   my $contact_name = $legacyResource -> { 'manualGet' }[0] -> { 'contact' };
@@ -59,6 +58,10 @@ while (my ($newName, $oldName) = each %mapping ) {
   my $contact_institution = $legacyResource -> { 'manualGet' }[0] -> { 'institution' };
   my $displayName = $legacyResource -> {'displayName'};
   my $descriptionText = $legacyResource -> { 'description' }[0];
+  if(ref($descriptionText) eq 'HASH') {
+    print STDERR "I AM A HASH...\n";
+    print STDERR Dumper $descriptionText;
+  }
   my $description = "<![CDATA[ $descriptionText ]]>";
   my $xmlNode ="
   <dataSourceAttribution resource=\"$resource\" overridingType=\"\" overridingSubtype=\"\" ignore=\"\">
