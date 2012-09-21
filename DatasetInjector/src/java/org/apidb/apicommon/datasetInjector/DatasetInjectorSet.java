@@ -1,5 +1,9 @@
 package org.apidb.apicommon.datasetInjector;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,8 +29,13 @@ public class DatasetInjectorSet {
   
   //////// static methods //////////////
   
-  private static Map<String, Template> parseTemplatesFile(String templatesFileName) {
+  public static Map<String, Template> parseTemplatesFile(String templatesFileName) throws IOException {
     String templatesFilePath = GUS_HOME + "/" + templatesFileName;
+    BufferedReader in = new BufferedReader(new FileReader(templatesFilePath));
+    StringBuffer templateStr = new StringBuffer();
+    while(in.ready()) {
+      String line = in.readLine();
+    }
     return new HashMap<String, Template>();
   }
 
