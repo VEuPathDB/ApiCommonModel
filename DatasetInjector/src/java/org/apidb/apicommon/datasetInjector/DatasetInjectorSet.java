@@ -15,28 +15,70 @@ import org.gusdb.fgputil.CliUtil;
 import org.gusdb.fgputil.runtime.GusHome;
 
 public class DatasetInjectorSet {
-  
+
   private static final String nl = System.getProperty("line.separator");
   private static final String GUS_HOME = GusHome.getGusHome();
 
-  
   private Map<String, Template> templatesByName;
   private Map<String, Template> templateInstancesByName;
-  
+
   public DatasetInjectorSet(Map<String, Template> templatesByName) {
     this.templatesByName = templatesByName;
   }
-  
-  //////// static methods //////////////
-  
-  public static Map<String, Template> parseTemplatesFile(String templatesFileName) throws IOException {
-    String templatesFilePath = GUS_HOME + "/" + templatesFileName;
-    BufferedReader in = new BufferedReader(new FileReader(templatesFilePath));
-    StringBuffer templateStr = new StringBuffer();
-    while(in.ready()) {
-      String line = in.readLine();
+
+  // ////// static methods //////////////
+
+  public static Map<String, Template> parseTemplatesFile(
+      String templatesFilePath) {
+    BufferedReader in = null;
+    HashMap<String, Template> templatesByName = new HashMap<String, Template>();
+
+    try {
+      try {
+        in = new BufferedReader(new FileReader(templatesFilePath));
+
+        StringBuffer templateStrBuf = new StringBuffer();
+        boolean foundFirst = false;
+        while (in.ready()) {
+          String line = in.readLine();
+          if (!foundFirst) {
+            line = line.trim();
+            if (line.startsWith("#"))
+              continue;
+            if (line.length() == 0)
+              continue;
+            if (line.equals(Template.TEMPLATE_START)) {
+              foundFirst = true;
+              templateStrBuf = new StringBuffer();
+            } else {
+              throw new UserException("Templates file " + templatesFilePath
+                  + " must start with " + Template.TEMPLATE_START);
+            }
+          } else {
+            if (line.trim().equals(Template.TEMPLATE_START)) {
+              Template template = Template.parseSingleTemplateString(
+                  templateStrBuf.toString(), templatesFilePath);
+              templatesByName.put(template.getName(), template);
+              templateStrBuf = new StringBuffer();
+            } else {
+              templateStrBuf.append(line + nl);
+            }
+          }
+        }
+        Template template = Template.parseSingleTemplateString(
+            templateStrBuf.toString(), templatesFilePath);
+        templatesByName.put(template.getName(), template);
+      } catch (FileNotFoundException ex) {
+        throw new UserException("Templates file " + templatesFilePath
+            + " not found");
+      } finally {
+        if (in != null)
+          in.close();
+      }
+    } catch (IOException ex) {
+      throw new UnexpectedException(ex);
     }
-    return new HashMap<String, Template>();
+    return templatesByName;
   }
 
   private static Options declareOptions() {
@@ -57,7 +99,6 @@ public class DatasetInjectorSet {
     return options;
   }
 
-  
   private static String getUsageNotes() {
     return
 
@@ -81,7 +122,7 @@ public class DatasetInjectorSet {
   public static void main(String[] args) throws Exception {
 
     CommandLine cmdLine = getCmdLine(args);
-    
+
     Map<String, Template> templatesByName = parseTemplatesFile("lib/dst/rnaSeqTemplates.dst");
     DatasetInjectorSet dis = new DatasetInjectorSet(templatesByName);
   }

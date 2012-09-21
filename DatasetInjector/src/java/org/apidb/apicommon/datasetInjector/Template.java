@@ -6,6 +6,7 @@ import java.util.Set;
 
 public class Template {
 
+  public static final String TEMPLATE_START = "[templateStart]";
   public static final String TEMPLATE_TEXT_START = ">templateTextStart<";
   public static final String TEMPLATE_TEXT_END = ">templateTextEnd<";
   private static final String nl = System.getProperty("line.separator");
@@ -68,7 +69,7 @@ public class Template {
       while (scanner.hasNextLine()) {
         String line = scanner.nextLine();
         if (templateText == null) {
-          line.trim();
+          line = line.trim();
           if (line.startsWith("#")) continue;
           if (line.length() == 0) continue;
           if (line.equals(TEMPLATE_TEXT_START)) {

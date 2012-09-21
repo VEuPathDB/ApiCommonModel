@@ -15,19 +15,21 @@ import org.junit.Test;
 public class DatasetInjectorSetTest {
 
   private static final String nl = System.getProperty("line.separator");
-  
+
   private static final String validPrelude = "name=rnaSeqCoverageTrack"
       + nl
       + "targetFile=ApiCommonWebsite/trunk/Site/conf/gbrowse.conf/${projectName}"
-      + nl + "prop=datasetName" + nl + "#a comment" + nl + nl + "prop=datasetDisplayName" + nl;
-  
+      + nl + "prop=datasetName" + nl + "#a comment" + nl + nl
+      + "prop=datasetDisplayName" + nl;
+
   private static final String validPreludeTrimmed = "name=rnaSeqCoverageTrack"
       + nl
       + "targetFile=ApiCommonWebsite/trunk/Site/conf/gbrowse.conf/${projectName}"
       + nl + "prop=datasetName" + nl + "prop=datasetDisplayName" + nl;
 
-  private static final String validBody = "[${datasetName}]" + nl + "feature      = NextGenSeq:${datasetName}" + nl;
-  
+  private static final String validBody = "[${datasetName}]" + nl
+      + "feature      = NextGenSeq:${datasetName}" + nl;
+
   public DatasetInjectorSetTest() {
 
   }
@@ -35,17 +37,19 @@ public class DatasetInjectorSetTest {
   @Test
   public void testCmdLine() {
     String[] cmd = { "-t", "-presenterFiles", "happy.xml" };
-//    CommandLine cl = DatasetInjectorSet.getCmdLine(cmd);
- //   assertTrue(cl.getOptionValue("presenterFiles").equals("happy.xml"));
+    // CommandLine cl = DatasetInjectorSet.getCmdLine(cmd);
+    // assertTrue(cl.getOptionValue("presenterFiles").equals("happy.xml"));
   }
 
   // test: parse of template prelude
   @Test
-  public void testTemplateParsePrelude() throws IOException { 
+  public void testTemplateParsePrelude() throws IOException {
     Template template = new Template();
-    Template.parsePrelude(validPreludeTrimmed, template, "lib/dst/testTemplates.dst");
+    Template.parsePrelude(validPreludeTrimmed, template,
+        "lib/dst/testTemplates.dst");
     assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
-    assertTrue(template.getTemplateTargetFileName().equals("ApiCommonWebsite/trunk/Site/conf/gbrowse.conf/${projectName}"));
+    assertTrue(template.getTemplateTargetFileName().equals(
+        "ApiCommonWebsite/trunk/Site/conf/gbrowse.conf/${projectName}"));
     assertTrue(template.getProps().size() == 2);
     assertTrue(template.getProps().contains("datasetName"));
   }
@@ -53,31 +57,41 @@ public class DatasetInjectorSetTest {
   @Test
   public void testTemplateStringSplitterValid() {
 
-    String[] answer = Template.splitTemplateString(validPrelude + Template.TEMPLATE_TEXT_START + nl + validBody + Template.TEMPLATE_TEXT_END + nl, "fakeFilePath");
+    String[] answer = Template.splitTemplateString(validPrelude
+        + Template.TEMPLATE_TEXT_START + nl + validBody
+        + Template.TEMPLATE_TEXT_END + nl, "fakeFilePath");
     String tmp = answer[0];
-    
+
     assertTrue(answer[0].equals(validPreludeTrimmed));
     assertTrue(answer[1].equals(validBody));
   }
-  
-  @Test (expected= UserException.class)
+
+  @Test(expected = UserException.class)
   public void testTemplateStringSplitterInvalid() {
     String prelude = "name=rnaSeqCoverageTrack"
         + nl
         + "targetFile=ApiCommonWebsite/trunk/Site/conf/gbrowse.conf/${projectName}"
         + nl + "prop=datasetName" + nl + "prop=datasetDisplayName" + nl;
-    String body = "[${datasetName}]" + nl + "feature      = NextGenSeq:${datasetName}" + nl;
+    String body = "[${datasetName}]" + nl
+        + "feature      = NextGenSeq:${datasetName}" + nl;
 
-   Template.splitTemplateString(prelude + Template.TEMPLATE_TEXT_START + nl + body + Template.TEMPLATE_TEXT_END + nl + "JUNK" + nl, "fakeFilePath");
+    Template.splitTemplateString(prelude + Template.TEMPLATE_TEXT_START + nl
+        + body + Template.TEMPLATE_TEXT_END + nl + "JUNK" + nl, "fakeFilePath");
   }
-  
-  /*
+
   // test: parse of templates
   @Test
   public void testTemplatesParse() throws IOException {
-    Map<String, Template> templatesByName = DatasetInjectorSet.parseTemplatesFile("lib/dst/testTemplates.dst");
+    String proj_home = System.getenv("PROJECT_HOME");
+    Map<String, Template> templatesByName = DatasetInjectorSet.parseTemplatesFile(proj_home
+        + "/ApiCommonShared/DatasetInjector/testData/testTemplates.dst");
+    assertTrue(templatesByName.containsKey("template1"));
+    assertTrue(templatesByName.containsKey("template2"));
+    Template t1 = templatesByName.get("template1");
+    Template t2 = templatesByName.get("template2");
+    assertTrue(t1.getTemplateText().equals("12345" + nl + "67890" + nl));
+    assertTrue(t2.getTemplateText().equals("12345" + nl + "67890" + nl + "abcde" + nl));
   }
-  */
 
   // test: validation of valid input DP xml file
 
