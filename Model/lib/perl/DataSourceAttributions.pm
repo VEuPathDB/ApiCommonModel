@@ -129,8 +129,32 @@ sub _parseXmlFile {
       my $resourceWdkRefs = $attributionObj->{wdkReference} ? $attributionObj->{wdkReference} : [];
       my $baseWdkRefs = $dataSourceWdkRefs->getDataSourceWdkRefsByName("$dataSourceType:$dataSourceSubType");
       my $displayCategory = $dataSourceWdkRefs->getDisplayCategoryByName("$dataSourceType:$dataSourceSubType");
-      
-      push @$resourceWdkRefs, @$baseWdkRefs;
+
+     my (@baseWdkReferences);
+   
+     foreach my $baseRef (@$baseWdkRefs) {
+       my $baseRefType = $baseRef->{type};
+       my $baseRefName = qq($baseRef->{name});
+       $baseRefName =~ s/\@RESOURCE\@/$resourceName/;
+
+       my $concat = 'false';
+       if (($baseRefType) && ($baseRefName)){
+         foreach my $wdkRef (@$resourceWdkRefs) {
+           if (($wdkRef->{type} eq $baseRefType) && ($wdkRef->{name} eq $baseRefName)) {
+             foreach my $txt (@{$wdkRef->{text}}) {
+               if ($txt->{name} eq 'citation') {
+                  foreach my $baseTxt (@{$baseRef->{text}}){
+                    $txt->{content} = $txt->{content}."\n".$baseTxt->{content} unless ($baseTxt->{name} ne 'citation');
+                    $concat = 'true';
+                  }
+               }
+             }
+           }
+         }
+         push (@baseWdkReferences,$baseRef) unless $concat;
+       }   
+     }      
+
       $attributionObj->{wdkReference} = $resourceWdkRefs;
 
       #download links for genome attributions
