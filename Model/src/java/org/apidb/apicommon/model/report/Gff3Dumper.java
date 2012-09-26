@@ -167,12 +167,12 @@ public class Gff3Dumper {
 
         User user = wdkModel.getSystemUser();
         Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
-        AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, 0);
+        AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, true, 0);
         Gff3Reporter seqReport = (Gff3Reporter) sqlAnswer.createReport("gff3",
                 config);
 
         Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
-        AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, 0);
+        AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, true, 0);
 
         config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
         Gff3Reporter geneReport = (Gff3Reporter) geneAnswer.createReport(

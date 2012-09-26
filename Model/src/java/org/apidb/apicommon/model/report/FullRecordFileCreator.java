@@ -135,7 +135,7 @@ public class FullRecordFileCreator extends BaseCLI {
         User user = wdkModel.getSystemUser();
         Map<String, String> paramValues = new LinkedHashMap<String, String>();
         AnswerValue answerValue = question
-                .makeAnswerValue(user, paramValues, 0);
+                .makeAnswerValue(user, paramValues, true, 0);
 
         OutputStream out = new FileOutputStream(dumpFile);
         Reporter reporter = createReporter(answerValue, cacheTable);

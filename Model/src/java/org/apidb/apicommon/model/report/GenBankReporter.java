@@ -85,7 +85,7 @@ public class GenBankReporter extends Reporter {
                 String geneQuestionName = properties.get(PROPERTY_GENE_QUESTION);
                 Question geneQuestion = (Question) wdkModel.resolveReference(geneQuestionName);
                 AnswerValue geneAnswer = geneQuestion.makeAnswerValue(answerValue.getUser(), params, 0,
-                                                                      maxPageSize, sorting,  null, 0);
+                                                                      maxPageSize, sorting,  null, true, 0);
 
                 // write non gene sequence features
                 writeSequenceFeatures(record, writer);
