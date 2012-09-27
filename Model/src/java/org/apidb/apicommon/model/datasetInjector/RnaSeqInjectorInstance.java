@@ -3,6 +3,7 @@ package org.apidb.apicommon.model.datasetInjector;
 import org.apidb.apicommon.datasetInjector.DatasetInjector;
 import org.apidb.apicommon.datasetInjector.DatasetInjectorInstance;
 
+import java.util.Map;
 import java.util.Properties;
 
 public class RnaSeqInjectorInstance implements DatasetInjectorInstance {
@@ -24,23 +25,23 @@ public class RnaSeqInjectorInstance implements DatasetInjectorInstance {
 
   public void injectTemplates() {
 
-    Properties propValues = di.getPropValues();
+    Map<String, String> propValues = di.getPropValues();
 
-    di.injectWdkTemplate("rnaSeqFoldChangePvalueQuestion", propValues);
+    di.injectTemplate("rnaSeqFoldChangePvalueQuestion", propValues);
 
-    di.injectWdkTemplate("rnaSeqFoldChangeQuestion", propValues);
+    di.injectTemplate("rnaSeqFoldChangeQuestion", propValues);
 
-    di.injectWdkTemplate("rnaSeqPercentileQuestion", propValues);
+    di.injectTemplate("rnaSeqPercentileQuestion", propValues);
 
-    di.injectWdkTemplate("expressionGraphAttribute", propValues);
+    di.injectTemplate("expressionGraphAttribute", propValues);
 
-    propValues.setProperty("profileType", "foldChange");
-    di.injectWdkTemplate("expressionParamQuery", propValues);
+    propValues.put("profileType", "foldChange");
+    di.injectTemplate("expressionParamQuery", propValues);
 
-    propValues.setProperty("profileType", "percentile");
-    di.injectWdkTemplate("expressionParamQuery", propValues);
+    propValues.put("profileType", "percentile");
+    di.injectTemplate("expressionParamQuery", propValues);
 
-    di.injectGbrowseTemplate("rnaSeqCoverageTrack", propValues);
+    di.injectTemplate("rnaSeqCoverageTrack", propValues);
 
   }
 
