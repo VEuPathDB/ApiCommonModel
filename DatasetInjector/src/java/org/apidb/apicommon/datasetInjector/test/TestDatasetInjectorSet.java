@@ -115,10 +115,10 @@ public class TestDatasetInjectorSet {
   public void testInjectTextIntoStream() {
     Template template = new Template("dontcare");
     template.setName("rnaSeqFoldChangeQuestion");
-    String targetText = "line 1" + nl + "<!– TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + "line 3" + nl;
+    String targetText = "line 1" + nl + "<!-- TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + "line 3" + nl;
     InputStream targetTextAsStream = new ByteArrayInputStream(targetText.getBytes());   
     String answer = template.injectTextIntoStream("WOOHOO" + nl, targetTextAsStream);
-    assertTrue(answer.equals("line 1" + nl + "<!– TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + nl + "WOOHOO" + nl + nl +"line 3" + nl));
+    assertTrue(answer.equals("line 1" + nl + "<!-- TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + nl + "WOOHOO" + nl + nl +"line 3" + nl));
   }
   
   @Test
@@ -136,14 +136,14 @@ public class TestDatasetInjectorSet {
     Set<Map<String, String>> propValuesSet = new HashSet<Map<String, String>>();
     propValuesSet.add(propValues1);
     propValuesSet.add(propValues2);
-    String targetText = "line 1" + nl + "<!– TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + "line 3" + nl;
+    String targetText = "line 1" + nl + "<!-- TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + "line 3" + nl;
     InputStream targetTextAsStream = new ByteArrayInputStream(targetText.getBytes());   
     String answer = template.injectInstancesIntoStream(propValuesSet, targetTextAsStream);
     String inj1 = "[HAPPY]" + nl
         + "feature      = NextGenSeq:HAPPY" + nl;
     String inj2 = "[SAD]" + nl
         + "feature      = NextGenSeq:SAD" + nl;
-    String expected = "line 1" + nl + "<!– TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + nl + inj1 + nl + inj2 + nl + nl + "line 3" + nl;
+    String expected = "line 1" + nl + "<!-- TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + nl + inj1 + nl + inj2 + nl + nl + "line 3" + nl;
     assertTrue(answer.equals(expected));
  }
 
