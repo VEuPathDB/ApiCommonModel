@@ -151,7 +151,7 @@ sub _parseXmlFile {
              }
            }
          }
-         push (@baseWdkReferences,$baseRef) unless $concat;
+         push (@baseWdkReferences,$baseRef) unless $concat eq 'true';
        }   
      }      
 
