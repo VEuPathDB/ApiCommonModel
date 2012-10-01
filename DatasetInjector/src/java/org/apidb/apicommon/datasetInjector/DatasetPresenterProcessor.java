@@ -4,13 +4,13 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.InputStreamReader;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -21,39 +21,64 @@ import org.gusdb.fgputil.CliUtil;
 public class DatasetPresenterProcessor {
 
   private static final String nl = System.getProperty("line.separator");
+  public static final String TEMPLATE_ANCHOR = "TEMPLATE_ANCHOR";
 
   // ////// static methods //////////////
 
   public static void processDatasetPresenterSet(
-      DatasetPresenterSet datasetPresenterSet, String templatesFilePath) {
+      DatasetPresenterSet datasetPresenterSet, String templatesFilePath,
+      String project_home, String gus_home) {
 
-    Map<String, Template> templateNameToTemplate = Template.parseTemplatesFile(templatesFilePath);
+    TemplateSet templateSet = new TemplateSet();
+    templateSet.parseTemplatesFile(templatesFilePath);
 
     DatasetInjectorSet datasetInjectorSet = datasetPresenterSet.getDatasetInjectorSet();
 
-    Map<String, Set<Map<String, String>>> templateInstances = datasetInjectorSet.getTemplateInstances();
+    Set<String> anchorFileNameToTemplates = templateSet.getAnchorFileNames();
 
-    for (String templateName : templateInstances.keySet()) {
-      Template template = templateNameToTemplate.get(templateName);
-      String templateTargetFileName = template.getTemplateTargetFileName();
-      String proj_home = System.getenv("PROJECT_HOME");
-      String gus_home = System.getenv("GUS_HOME");
-      
+    Pattern patt = Pattern.compile(TEMPLATE_ANCHOR + "\\s+(\\w+)");
+    for (String anchorFileName : anchorFileNameToTemplates) {
+      Set<String> templateNamesExpectedInThisFile = templateSet.getTemplateNamesByAnchorFileName(anchorFileName);
+      Set<String> templateNamesNotFound = new HashSet<String>(
+          templateNamesExpectedInThisFile);
+
+      String line;
       try {
-        FileInputStream targetFileStream = new FileInputStream(
-            templateTargetFileName);
-
-        String targetFileWithInjection = template.injectInstancesIntoStream(
-            templateInstances.get(templateName), targetFileStream);
-        FileWriter fw = new FileWriter("");
-        BufferedWriter bw = new BufferedWriter(fw);
-        bw.write(targetFileWithInjection);
-        bw.close();
+        BufferedWriter bw = null;
+        BufferedReader br = null;
+      try {
+        FileInputStream in = new FileInputStream(anchorFileName);
+        br = new BufferedReader(new InputStreamReader(in));
+        FileWriter fw = new FileWriter(anchorFileName);
+        bw = new BufferedWriter(fw);
+        while ((line = br.readLine()) != null) {
+          bw.append(line + nl);
+          Matcher m = patt.matcher(line);
+          bw.write(line);
+          bw.newLine();
+          if (m.find()) {
+            String templateNameInAnchor = m.group(1);
+            if (!templateNamesExpectedInThisFile.contains(templateNameInAnchor)) {
+              // throw exception
+            }
+            templateNamesNotFound.remove(templateNameInAnchor);
+            Template template = templateSet.getTemplateByName(templateNameInAnchor);
+            String textToInject = datasetInjectorSet.getTemplateInstancesAsText(template);
+            bw.write(textToInject);
+          }
+        }
       } catch (FileNotFoundException ex) {
         throw new UserException("Can't find template anchors file "
-            + templateTargetFileName);
+            + anchorFileName);
       } catch (IOException ex) {
-        throw new UserException("Can't write to template target file" + "", ex);
+        throw new UserException("Can't write to template target file "
+            + anchorFileName, ex);
+      } finally {
+        if (bw != null) bw.close();
+        if (br != null) br.close();
+      }
+      } catch (IOException ex) {
+        throw new UnexpectedException(ex);
       }
     }
   }
@@ -99,8 +124,10 @@ public class DatasetPresenterProcessor {
   public static void main(String[] args) throws Exception {
 
     CommandLine cmdLine = getCmdLine(args);
-
-    Map<String, Template> templatesByName = Template.parseTemplatesFile("lib/dst/rnaSeqTemplates.dst");
+    String project_home = System.getenv("PROJECT_HOME");
+    String gus_home = System.getenv("GUS_HOME");
+    TemplateSet templateSet = new TemplateSet();
+    templateSet.parseTemplatesFile("lib/dst/rnaSeqTemplates.dst");
   }
 
 }

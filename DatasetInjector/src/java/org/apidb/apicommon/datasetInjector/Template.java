@@ -1,12 +1,8 @@
 package org.apidb.apicommon.datasetInjector;
 
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
@@ -22,11 +18,12 @@ public class Template {
   public static final String MACRO_START = "\\$\\{";
   public static final String MACRO_END = "\\}";
 
-  private static final String nl = System.getProperty("line.separator");
+  static final String nl = System.getProperty("line.separator");
 
   private Set<String> props = new HashSet<String>();
   String templateText;
   String targetFileName;
+  String anchorFileName;
   String name;
   String templateFilePath;
 
@@ -37,48 +34,57 @@ public class Template {
     this.templateFilePath = templateFilePath;
   }
 
-  public void setName(String name) {
+  void setName(String name) {
     this.name = name;
   }
 
   // property declaration
-  public void addProp(String prop) {
+  void addProp(String prop) {
     props.add(prop);
   }
 
   // for testing
-  public void setProps(Set<String> props) {
+  void setProps(Set<String> props) {
     this.props = props;
   }
 
-  public void setTemplateText(String templateText) {
+  void setTemplateText(String templateText) {
     this.templateText = templateText;
   }
 
-  public void setTemplateTargetFileName(String templateTargetFileName) {
-    this.targetFileName = templateTargetFileName;
+  void setTargetFileName(String targetFileName) {
+    this.targetFileName = targetFileName;
   }
 
+  void setAnchorFileName(String anchorFileName) {
+    this.anchorFileName = anchorFileName;
+  }
+  
   /*
    * Getters
    */
-  public String getName() {
+  String getName() {
     return name;
   }
 
-  public Set<String> getProps() {
+  Set<String> getProps() {
     return props;
   }
 
-  public String getTemplateText() {
+  String getTemplateText() {
     return templateText;
   }
 
-  public String getTemplateTargetFileName() {
+  String getTargetFileName() {
     return targetFileName;
   }
 
-  public String getTextInstance(Map<String, String> propValues) {
+  String getAnchorFileName() {
+    return anchorFileName;
+  }
+
+
+  String getTextInstance(Map<String, String> propValues) {
     String textInstance = getTemplateText();
     for (String key : propValues.keySet()) {
       textInstance = textInstance.replaceAll(MACRO_START + key + MACRO_END,
@@ -92,7 +98,7 @@ public class Template {
    */
 
   // (lines are pre-trimmed)
-  public void parsePrelude(String prelude) {
+  void parsePrelude(String prelude) {
     Scanner scanner = new Scanner(prelude);
 
     try {
@@ -104,13 +110,21 @@ public class Template {
             + line + "' should be a name=");
       setName(a[1]);
 
-      // second line should be targetFile=
+      // second line should be anchorFile=
+      line = scanner.nextLine();
+      a = line.split("=");
+      if (!a[0].equals("anchorFile") || a.length != 2)
+        throw new UserException("In file '" + templateFilePath + "' the line '"
+            + line + "' should be a anchorFile=");
+      setAnchorFileName(a[1]);
+
+      // third line should be targetFile=
       line = scanner.nextLine();
       a = line.split("=");
       if (!a[0].equals("targetFile") || a.length != 2)
         throw new UserException("In file '" + templateFilePath + "' the line '"
             + line + "' should be a targetFile=");
-      setTemplateTargetFileName(a[1]);
+      setTargetFileName(a[1]);
 
       // the rest should be prop=
       while (scanner.hasNextLine()) {
@@ -126,7 +140,7 @@ public class Template {
     }
   }
 
-  public void validateTemplateText() {
+  void validateTemplateText() {
     String answer = getTemplateText();
     for (String key : props) {
       answer = answer.replaceAll(MACRO_START + key + MACRO_END, "FOUND");
@@ -147,16 +161,20 @@ public class Template {
   /*
    * Injection methods
    */
-  public String injectInstancesIntoStream(Set<Map<String, String>> instances,
-      InputStream targetTextAsStream) {
+  String getInstancesAsText(List<Map<String, String>> instances) {
     StringBuffer buf = new StringBuffer();
     for (Map<String, String> instance : instances) {
       buf.append(getTextInstance(instance) + nl);
     }
-    return injectTextIntoStream(buf.toString(), targetTextAsStream);
+    return buf.toString();
+  }
+  
+  String injectInstancesIntoStream(List<Map<String, String>> instances,
+      InputStream targetTextAsStream) {
+    return injectTextIntoStream(getInstancesAsText(instances), targetTextAsStream);
   }
 
-  public String injectTextIntoStream(String textToInject,
+  String injectTextIntoStream(String textToInject,
       InputStream targetTextAsStream) {
     Scanner scanner = new Scanner(targetTextAsStream);
     StringBuffer buf = new StringBuffer();
@@ -175,13 +193,13 @@ public class Template {
     return buf.toString();
   }
 
-  public boolean validatePropertiesInstance(Map<String, String> propValues) {
+  boolean validatePropertiesInstance(Map<String, String> propValues) {
     return propValues.keySet().containsAll(getProps());
   }
 
   // /////////// Static methods //////////
 
-  public static Template parseSingleTemplateString(String templateInputString,
+  static Template parseSingleTemplateString(String templateInputString,
       String templateFilePath) {
     String[] parts = splitTemplateString(templateInputString, templateFilePath);
     Template template = new Template(templateFilePath);
@@ -192,7 +210,7 @@ public class Template {
   }
 
   // expects a string ending with >templateTextEnd<
-  public static String[] splitTemplateString(String templateInputString,
+  static String[] splitTemplateString(String templateInputString,
       String templateFilePath) {
     Scanner scanner = new Scanner(templateInputString);
     StringBuffer prelude = new StringBuffer();
@@ -237,60 +255,6 @@ public class Template {
     } finally {
       scanner.close();
     }
-  }
-
-  public static Map<String, Template> parseTemplatesFile(
-      String templatesFilePath) {
-    BufferedReader in = null;
-    HashMap<String, Template> templatesByName = new HashMap<String, Template>();
-
-    try {
-      try {
-        in = new BufferedReader(new FileReader(templatesFilePath));
-
-        StringBuffer templateStrBuf = new StringBuffer();
-        boolean foundFirst = false;
-        while (in.ready()) {
-          String line = in.readLine();
-          if (!foundFirst) {
-            line = line.trim();
-            if (line.startsWith("#"))
-              continue;
-            if (line.length() == 0)
-              continue;
-            if (line.equals(Template.TEMPLATE_START)) {
-              foundFirst = true;
-              templateStrBuf = new StringBuffer();
-            } else {
-              throw new UserException("Templates file " + templatesFilePath
-                  + " must start with " + Template.TEMPLATE_START);
-            }
-          } else {
-            if (line.trim().equals(Template.TEMPLATE_START)) {
-              Template template = Template.parseSingleTemplateString(
-                  templateStrBuf.toString(), templatesFilePath);
-              template.validateTemplateText();
-              templatesByName.put(template.getName(), template);
-              templateStrBuf = new StringBuffer();
-            } else {
-              templateStrBuf.append(line + nl);
-            }
-          }
-        }
-        Template template = Template.parseSingleTemplateString(
-            templateStrBuf.toString(), templatesFilePath);
-        templatesByName.put(template.getName(), template);
-      } catch (FileNotFoundException ex) {
-        throw new UserException("Templates file " + templatesFilePath
-            + " not found");
-      } finally {
-        if (in != null)
-          in.close();
-      }
-    } catch (IOException ex) {
-      throw new UnexpectedException(ex);
-    }
-    return templatesByName;
   }
 
 }

@@ -1,9 +1,7 @@
 package org.apidb.apicommon.datasetInjector;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.gusdb.fgputil.xml.NamedValue;
 
@@ -19,39 +17,50 @@ public class DatasetInjector {
   private DatasetInjectorSet datasetInjectorSet;
   private Map<String, String> propValues = new HashMap<String, String>();
   private String datasetName;
+  private DatasetPresenter datasetPresenter;
+  private String datasetInjectorInstanceClassName;
 
   /*
    * Model construction methods
    */
-  public void setClass(String datasetInjectorInstanceClassName) {
+  void setClass(String datasetInjectorInstanceClassName) {
+
+    this.datasetInjectorInstanceClassName = datasetInjectorInstanceClassName;
     Class<? extends DatasetInjectorInstance> injectorInstanceClass = null;
     try {
       injectorInstanceClass = Class.forName(datasetInjectorInstanceClassName).asSubclass(
           DatasetInjectorInstance.class);
       dii = injectorInstanceClass.newInstance();
+      dii.setDatasetInjector(this);
     } catch (ClassNotFoundException | IllegalAccessException
         | InstantiationException ex) {
       throw new UserException(
           "Can't find DatasetInjectorInstance java class with name '"
-              + datasetInjectorInstanceClassName + "'");
+              + datasetInjectorInstanceClassName + "'", ex);
     }
   }
 
-  public void addProp(NamedValue propValue) {
+  void addProp(NamedValue propValue) {
+    if (propValues.containsKey(propValue.getName())) {
+      throw new UserException("A datasetInector in datasetPresenter '"
+          + datasetPresenter.getDatasetName() + "' has redundant property: "
+          + propValue.getName());
+    }
     propValues.put(propValue.getName(), propValue.getValue());
   }
 
-  public void inheritDatasetProps(DatasetPresenter dataset) {
-    for (String key : dataset.getPropValues().keySet()) {
+  void inheritDatasetProps(DatasetPresenter datasetPresenter) {
+    this.datasetPresenter = datasetPresenter;
+    for (String key : datasetPresenter.getPropValues().keySet()) {
       if (propValues.containsKey(key))
         throw new UserException("In DatasetPresenter "
-            + dataset.getDatasetName() + " DatasetInjector for class "
+            + datasetPresenter.getDatasetName() + " DatasetInjector for class "
             + "in dataset ");
-      propValues.put(key, dataset.getPropValues().get(key));
+      propValues.put(key, datasetPresenter.getPropValues().get(key));
     }
   }
-  
-  public void setDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
+
+  void setDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
     this.datasetInjectorSet = datasetInjectorSet;
   }
 
@@ -66,19 +75,31 @@ public class DatasetInjector {
     return datasetName;
   }
 
+  DatasetInjectorInstance getDatasetInjectorInstance() {
+    return dii;
+  }
+
   /*
    * Facade methods
    */
-  public String[][] getPropertiesDeclaration() {
-    return dii.getPropertiesDeclaration();
-  }
 
-  // instance injects multiple templates, calling back to this to do each one (see methods called by instance)
+  // instance injects multiple templates, calling back to the injectTemplate()
+  // method
+  // to do each one (see methods called by instance)
   public void injectTemplates() {
+    String[][] propsDeclaration = dii.getPropertiesDeclaration();
+    for (String[] decl : propsDeclaration) {
+      if (!propValues.containsKey(decl[0])) {
+        throw new UserException("A datasetInjector for class "
+            + datasetInjectorInstanceClassName + " in DatasetPresenter "
+            + datasetName + " is missing the required property " + decl[0]);
+      }
+    }
     dii.injectTemplates();
   }
-  
-  // instance inserts multiple references, calling back to this to do each one (see methods called by instance)
+
+  // instance inserts multiple references, calling back to this to do each one
+  // (see methods called by instance)
   public void insertReferences() {
     dii.insertReferences();
   }
@@ -92,5 +113,5 @@ public class DatasetInjector {
 
   // discovers datasetName from propValues
   public void makeWdkReference(String recordClass, String type, String name) {}
-  
+
 }

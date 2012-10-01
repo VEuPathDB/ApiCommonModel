@@ -1,20 +1,30 @@
 package org.apidb.apicommon.datasetInjector;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+
+
 
 public class DatasetPresenterSet {
   
-  Set<DatasetPresenter> presenters= new HashSet<DatasetPresenter>();
+  List<DatasetPresenter> presenters= new ArrayList<DatasetPresenter>();
   
-  public void addDatasetPresenter(DatasetPresenter presenter) {
+  /*
+   * Called at Model construction
+   */
+   void addDatasetPresenter(DatasetPresenter presenter) {
     presenters.add(presenter);
   }
   
-  public DatasetInjectorSet getDatasetInjectorSet() {
+   /*
+    * Called at processing time.
+    * Each datasetPresenter in this DatasetInjectorSet might have more than
+    *  one injector.  gather all the injectors into a DatasetInjectorSet
+    */
+   DatasetInjectorSet getDatasetInjectorSet() {
     DatasetInjectorSet datasetInjectorSet = new DatasetInjectorSet();
     for (DatasetPresenter presenter : presenters) {
-      Set<DatasetInjector> datasetInjectors = presenter.getDatasetInjectors();
+      List<DatasetInjector> datasetInjectors = presenter.getDatasetInjectors();
       for (DatasetInjector datasetInjector : datasetInjectors) {
         datasetInjectorSet.addDatasetInjector(datasetInjector);
       }
