@@ -130,7 +130,6 @@ sub _parseXmlFile {
       my $baseWdkRefs = $dataSourceWdkRefs->getDataSourceWdkRefsByName("$dataSourceType:$dataSourceSubType");
       my $displayCategory = $dataSourceWdkRefs->getDisplayCategoryByName("$dataSourceType:$dataSourceSubType");
 
-     my (@baseWdkReferences);
    
      foreach my $baseRef (@$baseWdkRefs) {
        my $baseRefType = $baseRef->{type};
@@ -151,7 +150,7 @@ sub _parseXmlFile {
              }
            }
          }
-         push (@baseWdkReferences,$baseRef) unless $concat eq 'true';
+         push (@$resourceWdkRefs,$baseRef) unless $concat eq 'true';
        }   
      }      
 
