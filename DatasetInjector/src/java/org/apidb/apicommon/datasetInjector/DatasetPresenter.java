@@ -6,12 +6,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.gusdb.fgputil.xml.NamedValue;
+import org.gusdb.fgputil.xml.Text;
 
 public class DatasetPresenter {
   
   Map<String, String> propValues = new HashMap<String, String>();
 
-  private List<DatasetInjector> datasetInjectors = new ArrayList<DatasetInjector>();
+  private List<DatasetInjectorConstructor> datasetInjectors = new ArrayList<DatasetInjectorConstructor>();
   
   public void setDatasetName(String datasetName) {
     propValues.put("datasetName", datasetName);
@@ -21,8 +22,8 @@ public class DatasetPresenter {
     return propValues.get("datasetName");
   }
   
-  public void setDatasetDescrip(String datasetDescrip) {
-    propValues.put("datasetDescrip", datasetDescrip);
+  public void setDatasetDescrip(Text datasetDescrip) {
+    propValues.put("datasetDescrip", datasetDescrip.getText());
   }
   
   public void setDatasetDisplayName(String datasetDisplayName) {
@@ -41,12 +42,12 @@ public class DatasetPresenter {
     propValues.put("organismShortName", organismShortName);
   }
   
-  public void addDatasetInjector(DatasetInjector datasetInjector) {
+  public void addDatasetInjector(DatasetInjectorConstructor datasetInjector) {
     datasetInjectors.add(datasetInjector);
     datasetInjector.inheritDatasetProps(this);
   }
   
-  public List<DatasetInjector> getDatasetInjectors() {
+  public List<DatasetInjectorConstructor> getDatasetInjectors() {
     return datasetInjectors;
   }
   

@@ -75,9 +75,9 @@ public class TestDatasetInjectorSet {
   @Test
   public void test_Template_splitTemplateString() {
 
-    String[] answer = Template.splitTemplateString(validPrelude
-        + Template.TEMPLATE_TEXT_START + nl + validTemplateText
-        + Template.TEMPLATE_TEXT_END + nl, "fakeFilePath");
+    String[] answer = TemplateSetParser.splitTemplateString(validPrelude
+        + TemplateSetParser.TEMPLATE_TEXT_START + nl + validTemplateText
+        + TemplateSetParser.TEMPLATE_TEXT_END + nl, "fakeFilePath");
 
     assertTrue(answer[0].equals(validPreludeTrimmed));
     assertTrue(answer[1].equals(validTemplateText));
@@ -85,8 +85,8 @@ public class TestDatasetInjectorSet {
 
   @Test(expected = UserException.class)
   public void test_Template_splitTemplateString2() {
-    Template.splitTemplateString(validPrelude + Template.TEMPLATE_TEXT_START
-        + nl + validTemplateText + Template.TEMPLATE_TEXT_END + nl + "JUNK"
+    TemplateSetParser.splitTemplateString(validPrelude + TemplateSetParser.TEMPLATE_TEXT_START
+        + nl + validTemplateText + TemplateSetParser.TEMPLATE_TEXT_END + nl + "JUNK"
         + nl, "fakeFilePath");
   }
 
@@ -140,7 +140,7 @@ public class TestDatasetInjectorSet {
   public void test_TemplateSet_parseTemplatesFile() {
     String proj_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
-    templateSet.parseTemplatesFile(proj_home
+    TemplateSetParser.parseTemplatesFile(templateSet, proj_home
         + "/ApiCommonShared/DatasetInjector/testData/testTemplates.dst");
 
     assertTrue(templateSet.getTemplateByName("template1") != null);
@@ -150,20 +150,22 @@ public class TestDatasetInjectorSet {
     assertTrue(t1.getTemplateText().equals("12345" + nl + "67890" + nl));
     assertTrue(t2.getTemplateText().equals(
         "12345" + nl + "67890" + nl + "abcde" + nl));
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains("template1"));
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains("template2"));
   }
 
   @Test
   public void test_DatasetInjector_setClass() {
-    DatasetInjector di = new DatasetInjector();
-    String className = "org.apidb.apicommon.model.datasetInjector.RnaSeqInjectorInstance";
+    DatasetInjectorConstructor di = new DatasetInjectorConstructor();
+    String className = "org.apidb.apicommon.model.datasetInjector.RnaSeqInjector";
     di.setClass(className);
-    assertTrue(di.getDatasetInjectorInstance().getClass().getName().equals(
+    assertTrue(di.getDatasetInjector().getClass().getName().equals(
         className));
   }
 
   @Test
   public void test_DatasetInjector_inheritDatasetProps() {
-    DatasetInjector di = new DatasetInjector();
+    DatasetInjectorConstructor di = new DatasetInjectorConstructor();
     DatasetPresenter dp = new DatasetPresenter();
     di.addProp(new NamedValue("size", "too_small"));
     di.addProp(new NamedValue("color", "ugly"));
@@ -180,23 +182,24 @@ public class TestDatasetInjectorSet {
 
     DatasetPresenter dp1 = new DatasetPresenter();
     dp1.setDatasetName("happy");
-    DatasetInjector di1 = new DatasetInjector();
-    di1.setClass("org.apidb.apicommon.model.datasetInjector.TestInjectorInstance");
+    DatasetInjectorConstructor di1 = new DatasetInjectorConstructor();
+    di1.setClass("org.apidb.apicommon.model.datasetInjector.TestInjector");
     dp1.addDatasetInjector(di1);
-    DatasetInjector di2 = new DatasetInjector();
-    di2.setClass("org.apidb.apicommon.model.datasetInjector.TestInjectorInstance");
+    DatasetInjectorConstructor di2 = new DatasetInjectorConstructor();
+    di2.setClass("org.apidb.apicommon.model.datasetInjector.TestInjector");
     dp1.addDatasetInjector(di2);
     dps.addDatasetPresenter(dp1);
 
     DatasetPresenter dp2 = new DatasetPresenter();
     dp2.setDatasetName("sad");
-    DatasetInjector di3 = new DatasetInjector();
-    di3.setClass("org.apidb.apicommon.model.datasetInjector.TestInjectorInstance");
+    DatasetInjectorConstructor di3 = new DatasetInjectorConstructor();
+    di3.setClass("org.apidb.apicommon.model.datasetInjector.TestInjector");
     dp2.addDatasetInjector(di3);
     dps.addDatasetPresenter(dp2);
 
     // run "inject" to produce a set of template instances
-    DatasetInjectorSet dis = dps.getDatasetInjectorSet();
+    DatasetInjectorSet dis = new DatasetInjectorSet();
+    dps.addToDatasetInjectorSet(dis);
 
     List<Map<String, String>> fakeTemplate1Instances = dis.getTemplateInstances("fakeTemplate1");
     assertTrue(fakeTemplate1Instances.size() == 3);

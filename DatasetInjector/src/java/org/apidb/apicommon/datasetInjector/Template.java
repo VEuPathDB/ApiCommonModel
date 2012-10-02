@@ -11,9 +11,6 @@ import java.util.regex.Pattern;
 
 public class Template {
 
-  public static final String TEMPLATE_START = "[templateStart]";
-  public static final String TEMPLATE_TEXT_START = ">templateTextStart<";
-  public static final String TEMPLATE_TEXT_END = ">templateTextEnd<";
   public static final String TEMPLATE_ANCHOR = "TEMPLATE_ANCHOR";
   public static final String MACRO_START = "\\$\\{";
   public static final String MACRO_END = "\\}";
@@ -195,66 +192,6 @@ public class Template {
 
   boolean validatePropertiesInstance(Map<String, String> propValues) {
     return propValues.keySet().containsAll(getProps());
-  }
-
-  // /////////// Static methods //////////
-
-  static Template parseSingleTemplateString(String templateInputString,
-      String templateFilePath) {
-    String[] parts = splitTemplateString(templateInputString, templateFilePath);
-    Template template = new Template(templateFilePath);
-    template.parsePrelude(parts[0]);
-    template.setTemplateText(parts[1]);
-    template.validateTemplateText();
-    return template;
-  }
-
-  // expects a string ending with >templateTextEnd<
-  static String[] splitTemplateString(String templateInputString,
-      String templateFilePath) {
-    Scanner scanner = new Scanner(templateInputString);
-    StringBuffer prelude = new StringBuffer();
-    StringBuffer templateText = null;
-    try {
-
-      // prelude and template text
-      while (scanner.hasNextLine()) {
-        String line = scanner.nextLine();
-        if (templateText == null) {
-          line = line.trim();
-          if (line.startsWith("#"))
-            continue;
-          if (line.length() == 0)
-            continue;
-          if (line.equals(TEMPLATE_TEXT_START)) {
-            templateText = new StringBuffer();
-          } else {
-            prelude.append(line + nl);
-          }
-        } else {
-          if (line.equals(TEMPLATE_TEXT_END))
-            break;
-          templateText.append(line + nl);
-        }
-      }
-
-      // past end of template text
-      while (scanner.hasNextLine()) {
-        String line = scanner.nextLine();
-        if (line.startsWith("#"))
-          continue;
-        if (line.length() == 0)
-          continue;
-        throw new UserException("Template file '" + templateFilePath
-            + "' has an invalid template.  The line '" + line
-            + "' is outside a " + TEMPLATE_TEXT_END);
-      }
-
-      String[] answer = { prelude.toString(), templateText.toString() };
-      return answer;
-    } finally {
-      scanner.close();
-    }
   }
 
 }

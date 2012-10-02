@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
 
 /*
  * A set of DatasetInjectors.   Can provide an associated set of templateName->propBundles
@@ -48,7 +49,9 @@ public class DatasetInjectorSet {
       allTemplateInstances.put(templateName, new ArrayList<Map<String, String>>());
     }
     allTemplateInstances.get(templateName).add(propValues);
-
   }
 
+  Set<String> getTemplateNamesUsed() {
+    return allTemplateInstances.keySet();
+  }
 }

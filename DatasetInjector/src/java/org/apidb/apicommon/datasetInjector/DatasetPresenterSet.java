@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-
 public class DatasetPresenterSet {
   
   List<DatasetPresenter> presenters= new ArrayList<DatasetPresenter>();
@@ -21,15 +20,13 @@ public class DatasetPresenterSet {
     * Each datasetPresenter in this DatasetInjectorSet might have more than
     *  one injector.  gather all the injectors into a DatasetInjectorSet
     */
-   DatasetInjectorSet getDatasetInjectorSet() {
-    DatasetInjectorSet datasetInjectorSet = new DatasetInjectorSet();
+   void addToDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
     for (DatasetPresenter presenter : presenters) {
-      List<DatasetInjector> datasetInjectors = presenter.getDatasetInjectors();
-      for (DatasetInjector datasetInjector : datasetInjectors) {
-        datasetInjectorSet.addDatasetInjector(datasetInjector);
+      List<DatasetInjectorConstructor> datasetInjectorConstructors = presenter.getDatasetInjectors();
+      for (DatasetInjectorConstructor datasetInjectorConstructor : datasetInjectorConstructors) {
+        datasetInjectorSet.addDatasetInjector(datasetInjectorConstructor.getDatasetInjector());
       }
     }
-    return datasetInjectorSet;
   }
 
 }

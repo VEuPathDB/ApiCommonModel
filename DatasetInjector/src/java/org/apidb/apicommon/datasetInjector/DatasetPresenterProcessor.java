@@ -7,7 +7,9 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,21 +20,60 @@ import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
 import org.gusdb.fgputil.CliUtil;
 
+/**
+ * Add one or more sets of DatasetPresenters into a model by injecting their
+ * templates into target anchor files.
+ * 
+ * All DatasetPresenters for a model must be processed together. There is no
+ * incremental adding of a DatasetPresenter to the model. All target anchor
+ * files are cleaned and rewritten by this process. (The process does not clean out target anchor files no longer reference by the template set.)
+ * 
+ * @author steve
+ * 
+ */
 public class DatasetPresenterProcessor {
 
   private static final String nl = System.getProperty("line.separator");
   public static final String TEMPLATE_ANCHOR = "TEMPLATE_ANCHOR";
+  private TemplateSet templateSet;
+  private DatasetInjectorSet datasetInjectorSet;
+  private List<DatasetPresenterSet> datasetPresenterSets = new ArrayList<DatasetPresenterSet>();
 
-  // ////// static methods //////////////
+  void addDatasetPresenterSet(DatasetPresenterSet datasetPresenterSet) {
+    this.datasetPresenterSets.add(datasetPresenterSet);
+  }
 
-  public static void processDatasetPresenterSet(
-      DatasetPresenterSet datasetPresenterSet, String templatesFilePath,
+  void setTemplateSet(TemplateSet templateSet) {
+    this.templateSet = templateSet;
+  }
+
+  /**
+   * Get a DatasetInjectorSet from all the datasetPresenterSets in
+   * this.datasetPresenterSets.
+   * 
+   * Pass templatesFilesPath to this.templateSet so it
+   * can intitialize itself (parse).
+   * 
+   * Get a list of anchor file names from the templateSet and iterate through
+   * those. Scan each anchor file:
+   * <ul>
+   * <li>find each anchor in the file (pattern match)</li>
+   * <li>use the template name in the anchor to get a Template from the
+   * TemplateSet</li>
+   * <li>use the Template to get its instances from the datasetInjectorSet</li>
+   * <li>check that the template anchors found in the file agree with the
+   * templates the set expects for that anchor file</li>
+   * </ul>
+   * 
+   * @param templatesFilePath
+   * @param project_home
+   * @param gus_home
+   */
+  public void processDatasetPresenterSet(String templatesFilePath,
       String project_home, String gus_home) {
 
-    TemplateSet templateSet = new TemplateSet();
-    templateSet.parseTemplatesFile(templatesFilePath);
-
-    DatasetInjectorSet datasetInjectorSet = datasetPresenterSet.getDatasetInjectorSet();
+    TemplateSetParser.parseTemplatesFile(templateSet, templatesFilePath);
+    initDatasetInjectorSet();
 
     Set<String> anchorFileNameToTemplates = templateSet.getAnchorFileNames();
 
@@ -46,42 +87,55 @@ public class DatasetPresenterProcessor {
       try {
         BufferedWriter bw = null;
         BufferedReader br = null;
-      try {
-        FileInputStream in = new FileInputStream(anchorFileName);
-        br = new BufferedReader(new InputStreamReader(in));
-        FileWriter fw = new FileWriter(anchorFileName);
-        bw = new BufferedWriter(fw);
-        while ((line = br.readLine()) != null) {
-          bw.append(line + nl);
-          Matcher m = patt.matcher(line);
-          bw.write(line);
-          bw.newLine();
-          if (m.find()) {
-            String templateNameInAnchor = m.group(1);
-            if (!templateNamesExpectedInThisFile.contains(templateNameInAnchor)) {
-              // throw exception
+        try {
+          FileInputStream in = new FileInputStream(anchorFileName);
+          br = new BufferedReader(new InputStreamReader(in));
+          FileWriter fw = new FileWriter(anchorFileName);
+          bw = new BufferedWriter(fw);
+          while ((line = br.readLine()) != null) {
+            bw.append(line + nl);
+            Matcher m = patt.matcher(line);
+            bw.write(line);
+            bw.newLine();
+            if (m.find()) {
+              String templateNameInAnchor = m.group(1);
+              if (!templateNamesExpectedInThisFile.contains(templateNameInAnchor)) {
+                // throw exception
+              }
+              templateNamesNotFound.remove(templateNameInAnchor);
+              Template template = templateSet.getTemplateByName(templateNameInAnchor);
+              String textToInject = datasetInjectorSet.getTemplateInstancesAsText(template);
+              bw.write(textToInject);
             }
-            templateNamesNotFound.remove(templateNameInAnchor);
-            Template template = templateSet.getTemplateByName(templateNameInAnchor);
-            String textToInject = datasetInjectorSet.getTemplateInstancesAsText(template);
-            bw.write(textToInject);
           }
+        } catch (FileNotFoundException ex) {
+          throw new UserException("Can't find template anchors file "
+              + anchorFileName);
+        } catch (IOException ex) {
+          throw new UserException("Can't write to template target file "
+              + anchorFileName, ex);
+        } finally {
+          if (bw != null)
+            bw.close();
+          if (br != null)
+            br.close();
         }
-      } catch (FileNotFoundException ex) {
-        throw new UserException("Can't find template anchors file "
-            + anchorFileName);
-      } catch (IOException ex) {
-        throw new UserException("Can't write to template target file "
-            + anchorFileName, ex);
-      } finally {
-        if (bw != null) bw.close();
-        if (br != null) br.close();
-      }
       } catch (IOException ex) {
         throw new UnexpectedException(ex);
       }
     }
   }
+  
+  void initDatasetInjectorSet() {
+    datasetInjectorSet = new DatasetInjectorSet();
+    for (DatasetPresenterSet datasetPresenterSet : datasetPresenterSets) {
+      datasetPresenterSet.addToDatasetInjectorSet(datasetInjectorSet);
+    }
+
+ 
+  }
+
+  // ////// static methods //////////////
 
   private static Options declareOptions() {
     Options options = new Options();
@@ -127,7 +181,7 @@ public class DatasetPresenterProcessor {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
     TemplateSet templateSet = new TemplateSet();
-    templateSet.parseTemplatesFile("lib/dst/rnaSeqTemplates.dst");
+    TemplateSetParser.parseTemplatesFile(templateSet, "lib/dst/rnaSeqTemplates.dst");
   }
 
 }
