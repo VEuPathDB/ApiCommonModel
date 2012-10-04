@@ -14,6 +14,7 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
+import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wsf.util.BaseCLI;
 
@@ -90,7 +91,7 @@ public class BasketFixer extends BaseCLI {
         }
     }
 
-    public void fixBasket(WdkModel wdkModel, String type, String aliasTable, String idColumn) throws SQLException {
+    public void fixBasket(WdkModel wdkModel, String type, String aliasTable, String idColumn) throws WdkModelException {
         logger.info("Fixing "+type+" basket...");
 
         Map<Integer, Map<String, String>> users = getDeprecatedIds(wdkModel,
@@ -103,7 +104,7 @@ public class BasketFixer extends BaseCLI {
 
     private Map<Integer, Map<String, String>> getDeprecatedIds(
             WdkModel wdkModel, String type, String aliasTable, String idColumn)
-            throws SQLException {
+            throws WdkModelException {
         Map<Integer, Map<String, String>> users = new HashMap<Integer, Map<String, String>>();
 
         String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
@@ -185,14 +186,18 @@ public class BasketFixer extends BaseCLI {
             }
             logger.info("total " + users.size()
                     + " users needs to be changed.");
-        } finally {
+        }
+        catch (SQLException e) {
+        	throw new WdkModelException(e);
+        }
+        finally {
             SqlUtils.closeResultSet(resultSet);
         }
         return users;
     }
 
     private void changeIds(WdkModel wdkModel, String type, int userId,
-            Map<String, String> ids) throws SQLException {
+            Map<String, String> ids) throws WdkModelException {
         logger.info("Updating basket for user #" + userId);
         
         String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
@@ -212,7 +217,7 @@ public class BasketFixer extends BaseCLI {
             psDelete = SqlUtils.getPreparedStatement(dataSource,
                     sqlDelete.toString());
 
-	    int count = 0;	// <ADD-AG 050111>
+            int count = 0;	// <ADD-AG 050111>
 
             for (String oldId : ids.keySet()) {
                 String newId = ids.get(oldId);
@@ -235,21 +240,25 @@ public class BasketFixer extends BaseCLI {
                     psUpdate.addBatch();
                 }
 
-		// <ADD-AG 050111> ------------------------------------------------------
-		count++;
-		if (count % 500 == 0) {
-			psUpdate.executeBatch();
-             		psDelete.executeBatch();
-			logger.info("Rows processed by changeIds = " + count + ".");
-		}
-		// </ADD-AG 050111> -----------------------------------------------------
+				// <ADD-AG 050111> ------------------------------------------------------
+				count++;
+				if (count % 500 == 0) {
+					psUpdate.executeBatch();
+		             		psDelete.executeBatch();
+					logger.info("Rows processed by changeIds = " + count + ".");
+				}
+				// </ADD-AG 050111> -----------------------------------------------------
 
             }
-             psUpdate.executeBatch();
-             psDelete.executeBatch();
+            psUpdate.executeBatch();
+            psDelete.executeBatch();
 
-	     logger.info("Total rows processed by changeIds = " + count + ".");	// <ADD-AG 050111>
-        } finally {
+            logger.info("Total rows processed by changeIds = " + count + ".");	// <ADD-AG 050111>
+        }
+        catch (SQLException e) {
+        	throw new WdkModelException(e);
+        }
+        finally {
             SqlUtils.closeStatement(psUpdate);
             SqlUtils.closeStatement(psDelete);
         }

@@ -352,7 +352,7 @@ public class Gff3CachedReporter extends Reporter {
     }
 
     @Override
-    protected void initialize() throws SQLException {
+    protected void initialize() throws WdkModelException {
         // do nothing
     }
 }

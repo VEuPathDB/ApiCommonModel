@@ -152,7 +152,7 @@ public class Gff3Reporter extends Reporter {
     }
 
     @Override
-    protected void initialize() throws SQLException {
+    protected void initialize() throws WdkModelException {
         // check required properties
         tableCache = properties.get(PROPERTY_TABLE_CACHE);
         recordName = properties.get(PROPERTY_GFF_RECORD_NAME);
@@ -262,7 +262,7 @@ public class Gff3Reporter extends Reporter {
      * @throws JSONException
      * @throws WdkUserException
      */
-    void writeRecords(PrintWriter writer) throws WdkModelException,
+	void writeRecords(PrintWriter writer) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
         Question question = getQuestion();
@@ -315,8 +315,8 @@ public class Gff3Reporter extends Reporter {
                     } else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
                         formatGeneRecord(record, recordBuffer);
                     } else {
-                        throw new WdkModelException("Unsupported record type: "
-                                + rcName);
+                    	SqlUtils.closeStatement(psInsert);
+                        throw new WdkModelException("Unsupported record type: " + rcName);
                     }
                     String content = recordBuffer.toString();
 
@@ -491,7 +491,7 @@ public class Gff3Reporter extends Reporter {
      * @throws JSONException
      * @throws WdkUserException
      */
-    void writeSequences(PrintWriter writer) throws WdkModelException,
+	void writeSequences(PrintWriter writer) throws WdkModelException,
             SQLException, NoSuchAlgorithmException, JSONException,
             WdkUserException {
         Question question = getQuestion();
@@ -622,8 +622,8 @@ public class Gff3Reporter extends Reporter {
                             }
                         }
                     } else {
-                        throw new WdkModelException("Unsupported record type: "
-                                + rcName);
+                    	SqlUtils.closeStatement(psInsert);
+                        throw new WdkModelException("Unsupported record type: " + rcName);
                     }
                 }
             }

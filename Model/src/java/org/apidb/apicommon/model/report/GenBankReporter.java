@@ -367,7 +367,7 @@ public class GenBankReporter extends Reporter {
        }
 
 @Override
-    protected void initialize() throws SQLException {
+    protected void initialize() throws WdkModelException {
     // do nothing
 }
 }

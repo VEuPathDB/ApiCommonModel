@@ -283,7 +283,7 @@ public class FullRecordCachedReporter extends Reporter {
     }
 
     @Override
-    protected void initialize() throws SQLException {
+    protected void initialize() throws WdkModelException {
     // do nothing
     }
 }

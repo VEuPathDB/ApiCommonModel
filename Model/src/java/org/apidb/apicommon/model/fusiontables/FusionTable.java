@@ -138,6 +138,7 @@ public class FusionTable {
 
 	/* Loop through result set, one column per iteration */
 
+	@SuppressWarnings("resource")
 	Scanner scanner = new Scanner(request.getResponseStream(),"UTF-8");
 	boolean processingHeader = true;
 	int columnNumber = 1;
@@ -207,6 +208,7 @@ public class FusionTable {
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
 	request.execute();
 	
+	@SuppressWarnings("resource")
 	Scanner scanner = new Scanner(request.getResponseStream(),"UTF-8");
 	boolean processingHeader = true;
 	int columnNumber = 0;
