@@ -94,7 +94,7 @@ sub _parseXmlFile {
 
   my $xmlString = `cat $dataAttributionsXmlFile`;
   my $xml = new XML::Simple();
-  $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => undef, KeyAttr => 'resource', ForceArray=>['dataSourceAttribution','contact','publication','link','wdkReference','resource']) } ;
+  $self->{data} = eval{ $xml->XMLin($xmlString, SuppressEmpty => 1, KeyAttr => 'resource', ForceArray=>['dataSourceAttribution','contact','publication','link','wdkReference','resource']) } ;
   die "$@\n$xmlString\nerror processing XML file $dataAttributionsXmlFile\n" if($@);
 
   if(my $dataSourceWdkRefs = $self->getDataSourceWdkReferences()) {
@@ -129,7 +129,7 @@ sub _parseXmlFile {
       my $resourceWdkRefs = $attributionObj->{wdkReference} ? $attributionObj->{wdkReference} : [];
       my $baseWdkRefs = $dataSourceWdkRefs->getDataSourceWdkRefsByName("$dataSourceType:$dataSourceSubType");
       my $displayCategory = $dataSourceWdkRefs->getDisplayCategoryByName("$dataSourceType:$dataSourceSubType");
-
+      $displayCategory = 'Miscellaneous' if (!$displayCategory);
    
      foreach my $baseRef (@$baseWdkRefs) {
        my $baseRefType = $baseRef->{type};
