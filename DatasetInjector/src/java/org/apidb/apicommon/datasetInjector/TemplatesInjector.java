@@ -72,10 +72,13 @@ public class TemplatesInjector {
 
     initDatasetInjectorSet();
 
-    Set<String> anchorFileNameToTemplates = templateSet.getAnchorFileNames();
+    Set<String> anchorFileNames = templateSet.getAnchorFileNames();
 
     Pattern patt = Pattern.compile(TEMPLATE_ANCHOR + "\\s+(\\w+)");
-    for (String anchorFileName : anchorFileNameToTemplates) {
+    for (String anchorFileName : anchorFileNames) {
+      String targetFileName = Template.getTargetFileName(anchorFileName);
+      String anchorFilePath = project_home + "/" + anchorFileName;
+      String targetFilePath = gus_home + "/" + targetFileName;
       Set<String> templateNamesExpectedInThisFile = templateSet.getTemplateNamesByAnchorFileName(anchorFileName);
       Set<String> templateNamesNotFound = new HashSet<String>(
           templateNamesExpectedInThisFile);
@@ -85,9 +88,9 @@ public class TemplatesInjector {
         BufferedWriter bw = null;
         BufferedReader br = null;
         try {
-          FileInputStream in = new FileInputStream(anchorFileName);
+          FileInputStream in = new FileInputStream(anchorFilePath);
           br = new BufferedReader(new InputStreamReader(in));
-          FileWriter fw = new FileWriter(anchorFileName);
+          FileWriter fw = new FileWriter(targetFilePath);
           bw = new BufferedWriter(fw);
           while ((line = br.readLine()) != null) {
             bw.append(line + nl);
@@ -108,10 +111,10 @@ public class TemplatesInjector {
           }
         } catch (FileNotFoundException ex) {
           throw new UserException("Can't find template anchors file "
-              + anchorFileName);
+              + anchorFilePath, ex);
         } catch (IOException ex) {
           throw new UserException("Can't write to template target file "
-              + anchorFileName, ex);
+              + targetFilePath, ex);
         } finally {
           if (bw != null)
             bw.close();

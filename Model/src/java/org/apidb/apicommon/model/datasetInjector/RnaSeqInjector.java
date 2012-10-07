@@ -41,7 +41,8 @@ public class RnaSeqInjector extends  DatasetInjector {
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
   public String[][] getPropertiesDeclaration() {
-    String [][] declaration = {};
+    String [][] declaration = {{"datasetName", "la la la"},
+        {"datasetSummary", ""}};
     return declaration;
   }
 }

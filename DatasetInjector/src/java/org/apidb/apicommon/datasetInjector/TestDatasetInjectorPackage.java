@@ -163,7 +163,7 @@ public class TestDatasetInjectorPackage {
     String proj_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
     TemplatesFileParser.parseTemplatesFile(templateSet, proj_home
-        + "/ApiCommonShared/DatasetInjector/testData/testTemplates.dst");
+        + "/ApiCommonShared/DatasetInjector/testData/test1_templates.dst");
 
     assertTrue(templateSet.getTemplateByName("template1") != null);
     assertTrue(templateSet.getTemplateByName("template2") != null);
@@ -252,7 +252,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parse(project_home
-        + "/ApiCommonShared/DatasetInjector/testData/presenterSet1.xml");
+        + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
     assertTrue(dps.getSize() == 2);
     DatasetPresenter dp1 = dps.getDatasetPresenters().get(0);
     DatasetPresenter dp2 = dps.getDatasetPresenters().get(1);
@@ -276,11 +276,11 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
     String templatesFilePath = project_home
-        + "/ApiCommonShared/DatasetInjector/testData/testTemplates.dst";
+        + "/ApiCommonShared/DatasetInjector/testData/test3_templates.dst";
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     DatasetPresenterSet dps = dpp.parse(project_home
-        + "/ApiCommonShared/DatasetInjector/testData/presenterSet1.xml");
+        + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
     TemplateSet templateSet = new TemplateSet();
     TemplatesFileParser.parseTemplatesFile(templateSet, templatesFilePath);
     

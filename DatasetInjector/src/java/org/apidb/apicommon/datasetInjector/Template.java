@@ -98,8 +98,7 @@ public class Template {
   }
 
   String getTargetFileName() {
-    String[] splitPath = anchorFileName.split("/lib/");
-    return "lib/" + splitPath[1];
+    return getTargetFileName(anchorFileName);
   }
 
   String getAnchorFileName() {
@@ -211,6 +210,11 @@ public class Template {
    */
   boolean validatePropertiesInstance(Map<String, String> propValues) {
     return propValues.keySet().containsAll(getProps());
+  }
+  
+  static String getTargetFileName(String anchorFileName) {
+    String[] splitPath = anchorFileName.split("/lib/");
+    return "lib/" + splitPath[1];
   }
 
 }
