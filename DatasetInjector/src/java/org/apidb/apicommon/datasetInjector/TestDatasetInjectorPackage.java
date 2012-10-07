@@ -15,19 +15,24 @@ import java.util.Set;
 import org.gusdb.fgputil.xml.NamedValue;
 import org.junit.Test;
 
-public class TestDatasetInjectorSet {
+/**
+ * JUnit tests for the datasetInjector package
+ * 
+ * @author steve
+ * 
+ */
+public class TestDatasetInjectorPackage {
 
   private static final String nl = System.getProperty("line.separator");
 
   private static final String validPrelude = "name=rnaSeqCoverageTrack" + nl
       + "anchorFile=ApiCommonShared/Model/lib/gbr/${projectName}.conf" + nl
-      + "targetFile=lib/gbr/${projectName}.conf" + nl + "prop=datasetName" + nl
-      + "#a comment" + nl + nl + "prop=datasetDisplayName" + nl;
+      + "prop=datasetName" + nl + "#a comment" + nl + nl
+      + "prop=datasetDisplayName" + nl;
 
   private static final String validPreludeTrimmed = "name=rnaSeqCoverageTrack"
       + nl + "anchorFile=ApiCommonShared/Model/lib/gbr/${projectName}.conf"
-      + nl + "targetFile=lib/gbr/${projectName}.conf" + nl + "prop=datasetName"
-      + nl + "prop=datasetDisplayName" + nl;
+      + nl + "prop=datasetName" + nl + "prop=datasetDisplayName" + nl;
 
   private static final String validTemplateText = "[${datasetName}]" + nl
       + "feature      = NextGenSeq:${datasetName}" + nl;
@@ -62,7 +67,7 @@ public class TestDatasetInjectorSet {
   @Test
   public void test_Template_parsePrelude() throws IOException {
     Template template = new Template("dontcare");
-    template.parsePrelude(validPreludeTrimmed);
+    TemplatesFileParser.parsePrelude(validPreludeTrimmed, template, "dontcare");
     assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
     assertTrue(template.getAnchorFileName().equals(
         "ApiCommonShared/Model/lib/gbr/${projectName}.conf"));
@@ -75,9 +80,9 @@ public class TestDatasetInjectorSet {
   @Test
   public void test_Template_splitTemplateString() {
 
-    String[] answer = TemplateSetParser.splitTemplateString(validPrelude
-        + TemplateSetParser.TEMPLATE_TEXT_START + nl + validTemplateText
-        + TemplateSetParser.TEMPLATE_TEXT_END + nl, "fakeFilePath");
+    String[] answer = TemplatesFileParser.splitTemplateString(validPrelude
+        + TemplatesFileParser.TEMPLATE_TEXT_START + nl + validTemplateText
+        + TemplatesFileParser.TEMPLATE_TEXT_END + nl, "fakeFilePath");
 
     assertTrue(answer[0].equals(validPreludeTrimmed));
     assertTrue(answer[1].equals(validTemplateText));
@@ -85,9 +90,10 @@ public class TestDatasetInjectorSet {
 
   @Test(expected = UserException.class)
   public void test_Template_splitTemplateString2() {
-    TemplateSetParser.splitTemplateString(validPrelude + TemplateSetParser.TEMPLATE_TEXT_START
-        + nl + validTemplateText + TemplateSetParser.TEMPLATE_TEXT_END + nl + "JUNK"
-        + nl, "fakeFilePath");
+    TemplatesFileParser.splitTemplateString(validPrelude
+        + TemplatesFileParser.TEMPLATE_TEXT_START + nl + validTemplateText
+        + TemplatesFileParser.TEMPLATE_TEXT_END + nl + "JUNK" + nl,
+        "fakeFilePath");
   }
 
   @Test
@@ -108,26 +114,42 @@ public class TestDatasetInjectorSet {
 
   @Test
   public void test_Template_injectInstancesIntoStream() {
+
+    // make template
     Template template = new Template("dontcare");
     template.setName("rnaSeqFoldChangeQuestion");
     Set<String> props = new HashSet<String>();
     props.add("datasetName");
     template.setProps(props);
     template.setTemplateText(validTemplateText);
+
+    // make template instances
     Map<String, String> propValues1 = new HashMap<String, String>();
     propValues1.put("datasetName", "HAPPY");
+    TemplateInstance templateInstance1 = new TemplateInstance(
+        template.getName(), propValues1);
+
     Map<String, String> propValues2 = new HashMap<String, String>();
     propValues2.put("datasetName", "SAD");
-    List<Map<String, String>> propValuesSet = new ArrayList<Map<String, String>>();
-    propValuesSet.add(propValues1);
-    propValuesSet.add(propValues2);
+    TemplateInstance templateInstance2 = new TemplateInstance(
+        template.getName(), propValues2);
+
+    List<TemplateInstance> templateInstances = new ArrayList<TemplateInstance>();
+    templateInstances.add(templateInstance1);
+    templateInstances.add(templateInstance2);
+
+    // make target text
     String targetText = "line 1" + nl
         + "<!-- TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + "line 3"
         + nl;
     InputStream targetTextAsStream = new ByteArrayInputStream(
         targetText.getBytes());
-    String answer = template.injectInstancesIntoStream(propValuesSet,
+
+    // inject instances into target
+    String answer = template.injectInstancesIntoStream(templateInstances,
         targetTextAsStream);
+
+    // format expected result
     String inj1 = "[HAPPY]" + nl + "feature      = NextGenSeq:HAPPY" + nl;
     String inj2 = "[SAD]" + nl + "feature      = NextGenSeq:SAD" + nl;
     String expected = "line 1" + nl
@@ -140,7 +162,7 @@ public class TestDatasetInjectorSet {
   public void test_TemplateSet_parseTemplatesFile() {
     String proj_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
-    TemplateSetParser.parseTemplatesFile(templateSet, proj_home
+    TemplatesFileParser.parseTemplatesFile(templateSet, proj_home
         + "/ApiCommonShared/DatasetInjector/testData/testTemplates.dst");
 
     assertTrue(templateSet.getTemplateByName("template1") != null);
@@ -150,17 +172,18 @@ public class TestDatasetInjectorSet {
     assertTrue(t1.getTemplateText().equals("12345" + nl + "67890" + nl));
     assertTrue(t2.getTemplateText().equals(
         "12345" + nl + "67890" + nl + "abcde" + nl));
-    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains("template1"));
-    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains("template2"));
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains(
+        "template1"));
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains(
+        "template2"));
   }
 
   @Test
   public void test_DatasetInjector_setClass() {
     DatasetInjectorConstructor di = new DatasetInjectorConstructor();
-    String className = "org.apidb.apicommon.model.datasetInjector.RnaSeqInjector";
-    di.setClass(className);
-    assertTrue(di.getDatasetInjector().getClass().getName().equals(
-        className));
+    String className = "org.apidb.apicommon.model.datasetInjector.TestInjector";
+    di.setClassName(className);
+    assertTrue(di.getDatasetInjector().getClass().getName().equals(className));
   }
 
   @Test
@@ -183,17 +206,17 @@ public class TestDatasetInjectorSet {
     DatasetPresenter dp1 = new DatasetPresenter();
     dp1.setDatasetName("happy");
     DatasetInjectorConstructor di1 = new DatasetInjectorConstructor();
-    di1.setClass("org.apidb.apicommon.model.datasetInjector.TestInjector");
+    di1.setClassName("org.apidb.apicommon.model.datasetInjector.TestInjector");
     dp1.addDatasetInjector(di1);
     DatasetInjectorConstructor di2 = new DatasetInjectorConstructor();
-    di2.setClass("org.apidb.apicommon.model.datasetInjector.TestInjector");
+    di2.setClassName("org.apidb.apicommon.model.datasetInjector.TestInjector");
     dp1.addDatasetInjector(di2);
     dps.addDatasetPresenter(dp1);
 
     DatasetPresenter dp2 = new DatasetPresenter();
     dp2.setDatasetName("sad");
     DatasetInjectorConstructor di3 = new DatasetInjectorConstructor();
-    di3.setClass("org.apidb.apicommon.model.datasetInjector.TestInjector");
+    di3.setClassName("org.apidb.apicommon.model.datasetInjector.TestInjector");
     dp2.addDatasetInjector(di3);
     dps.addDatasetPresenter(dp2);
 
@@ -201,36 +224,70 @@ public class TestDatasetInjectorSet {
     DatasetInjectorSet dis = new DatasetInjectorSet();
     dps.addToDatasetInjectorSet(dis);
 
-    List<Map<String, String>> fakeTemplate1Instances = dis.getTemplateInstances("fakeTemplate1");
+    List<TemplateInstance> fakeTemplate1Instances = dis.getTemplateInstanceSet().getTemplateInstances(
+        "fakeTemplate1");
     assertTrue(fakeTemplate1Instances.size() == 3);
-    assertTrue(fakeTemplate1Instances.get(0).get("datasetName").equals("happy"));
-    assertTrue(fakeTemplate1Instances.get(1).get("datasetName").equals("happy"));
-    assertTrue(fakeTemplate1Instances.get(2).get("datasetName").equals("sad"));
+    assertTrue(fakeTemplate1Instances.get(0).getPropValue("datasetName").equals(
+        "happy"));
+    assertTrue(fakeTemplate1Instances.get(1).getPropValue("datasetName").equals(
+        "happy"));
+    assertTrue(fakeTemplate1Instances.get(2).getPropValue("datasetName").equals(
+        "sad"));
 
-    List<Map<String, String>> fakeTemplate2Instances = dis.getTemplateInstances("fakeTemplate2");
+    List<TemplateInstance> fakeTemplate2Instances = dis.getTemplateInstanceSet().getTemplateInstances(
+        "fakeTemplate2");
     assertTrue(fakeTemplate2Instances.size() == 3);
-    assertTrue(fakeTemplate2Instances.get(0).get("datasetName").equals("happy"));
-    assertTrue(fakeTemplate2Instances.get(1).get("datasetName").equals("happy"));
-    assertTrue(fakeTemplate2Instances.get(2).get("datasetName").equals("sad"));
+    assertTrue(fakeTemplate2Instances.get(0).getPropValue("datasetName").equals(
+        "happy"));
+    assertTrue(fakeTemplate2Instances.get(1).getPropValue("datasetName").equals(
+        "happy"));
+    assertTrue(fakeTemplate2Instances.get(2).getPropValue("datasetName").equals(
+        "sad"));
 
   }
 
-  // test: validation of valid input DP xml file
+  @Test
+  public void test_DatasetPresenterParser_parse() {
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    String project_home = System.getenv("PROJECT_HOME");
 
-  // test: validation of invalid input DP xml file
+    DatasetPresenterSet dps = dpp.parse(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/presenterSet1.xml");
+    assertTrue(dps.getSize() == 2);
+    DatasetPresenter dp1 = dps.getDatasetPresenters().get(0);
+    DatasetPresenter dp2 = dps.getDatasetPresenters().get(1);
+    assertTrue(dp1.getDatasetName().equals("Stunnenberg_RNA-Seq"));
+    assertTrue(dp2.getDatasetName().equals("Very_Happy"));
+    assertTrue(dp2.getPropValue("datasetDisplayName").equals("In good spirits"));
+    assertTrue(dp2.getPropValue("datasetShortDisplayName").equals("good"));
+    assertTrue(dp2.getPropValue("organismShortName").equals("H. Sap"));
+    assertTrue(dp2.getPropValue("projectName").equals("PlasmoDB"));
+    assertTrue(dp2.getPropValue("buildNumberIntroduced").equals("17"));
+//    assertTrue(dp2.getPropValue("isSingleStrand").equals("true"));
+    assertTrue(dp1.getDatasetInjectors().size() == 1);
+    assertTrue(dp2.getDatasetInjectors().size() == 1);
+    DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
+    assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
+  }
 
-  // test: parse of DP xml file with single <datasetPresenter> and
-  // <datasetInjector>.
-  // - confirm construction of DatasetInjector
-  // - confirm setting of standard properties (acquired from <datasetPresenter>)
+  @Test
+  public void test_TemplatesInjector_processDatasetPresenterSet() {
 
-  // test: construct RnaSeqInjectorInstance
+    String project_home = System.getenv("PROJECT_HOME");
+    String gus_home = System.getenv("GUS_HOME");
+    String templatesFilePath = project_home
+        + "/ApiCommonShared/DatasetInjector/testData/testTemplates.dst";
 
-  // test: parse of xml file with two DatasetInjectorInstances -- confirm got
-  // two DIIs
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    DatasetPresenterSet dps = dpp.parse(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/presenterSet1.xml");
+    TemplateSet templateSet = new TemplateSet();
+    TemplatesFileParser.parseTemplatesFile(templateSet, templatesFilePath);
+    
+    TemplatesInjector templatesInjector = new TemplatesInjector(dps, templateSet);
+    
+    templatesInjector.processDatasetPresenterSet(templatesFilePath,
+        project_home, gus_home);
+  }
 
-  // test: given a set of DIIs, call injectTemplates on each. check that the
-  // correct set of TemplateInstances is added
-
-  // test: for one TemplateInstance, inject into the target file
 }

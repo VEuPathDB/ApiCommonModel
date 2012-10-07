@@ -21,17 +21,18 @@ import org.apache.commons.cli.Options;
 import org.gusdb.fgputil.CliUtil;
 
 /**
- * Add one or more sets of DatasetPresenters into a model by injecting their
- * templates into target anchor files.
+ * Add one or more sets of DatasetPresenters into the presentation layer by
+ * injecting their templates into target anchor files.
  * 
  * All DatasetPresenters for a model must be processed together. There is no
  * incremental adding of a DatasetPresenter to the model. All target anchor
- * files are cleaned and rewritten by this process. (The process does not clean out target anchor files no longer reference by the template set.)
+ * files are cleaned and rewritten by this process. (The process does not clean
+ * out target anchor files no longer reference by the template set.)
  * 
  * @author steve
  * 
  */
-public class DatasetPresenterProcessor {
+public class TemplatesInjector {
 
   private static final String nl = System.getProperty("line.separator");
   public static final String TEMPLATE_ANCHOR = "TEMPLATE_ANCHOR";
@@ -39,11 +40,8 @@ public class DatasetPresenterProcessor {
   private DatasetInjectorSet datasetInjectorSet;
   private List<DatasetPresenterSet> datasetPresenterSets = new ArrayList<DatasetPresenterSet>();
 
-  void addDatasetPresenterSet(DatasetPresenterSet datasetPresenterSet) {
+  public TemplatesInjector(DatasetPresenterSet datasetPresenterSet, TemplateSet templateSet) {
     this.datasetPresenterSets.add(datasetPresenterSet);
-  }
-
-  void setTemplateSet(TemplateSet templateSet) {
     this.templateSet = templateSet;
   }
 
@@ -51,8 +49,8 @@ public class DatasetPresenterProcessor {
    * Get a DatasetInjectorSet from all the datasetPresenterSets in
    * this.datasetPresenterSets.
    * 
-   * Pass templatesFilesPath to this.templateSet so it
-   * can intitialize itself (parse).
+   * Pass templatesFilesPath to this.templateSet so it can intitialize itself
+   * (parse).
    * 
    * Get a list of anchor file names from the templateSet and iterate through
    * those. Scan each anchor file:
@@ -72,7 +70,6 @@ public class DatasetPresenterProcessor {
   public void processDatasetPresenterSet(String templatesFilePath,
       String project_home, String gus_home) {
 
-    TemplateSetParser.parseTemplatesFile(templateSet, templatesFilePath);
     initDatasetInjectorSet();
 
     Set<String> anchorFileNameToTemplates = templateSet.getAnchorFileNames();
@@ -104,7 +101,8 @@ public class DatasetPresenterProcessor {
               }
               templateNamesNotFound.remove(templateNameInAnchor);
               Template template = templateSet.getTemplateByName(templateNameInAnchor);
-              String textToInject = datasetInjectorSet.getTemplateInstancesAsText(template);
+              String textToInject = datasetInjectorSet.getTemplateInstanceSet().getTemplateInstancesAsText(
+                  template);
               bw.write(textToInject);
             }
           }
@@ -125,14 +123,17 @@ public class DatasetPresenterProcessor {
       }
     }
   }
-  
+
+  /**
+   * Iterate across all DatasetPresenterSets and have them add their
+   * DatasetInjectors to a DatasetInjectorSet
+   */
   void initDatasetInjectorSet() {
     datasetInjectorSet = new DatasetInjectorSet();
     for (DatasetPresenterSet datasetPresenterSet : datasetPresenterSets) {
       datasetPresenterSet.addToDatasetInjectorSet(datasetInjectorSet);
     }
 
- 
   }
 
   // ////// static methods //////////////
@@ -181,7 +182,8 @@ public class DatasetPresenterProcessor {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
     TemplateSet templateSet = new TemplateSet();
-    TemplateSetParser.parseTemplatesFile(templateSet, "lib/dst/rnaSeqTemplates.dst");
+    TemplatesFileParser.parseTemplatesFile(templateSet,
+        "lib/dst/rnaSeqTemplates.dst");
   }
 
 }

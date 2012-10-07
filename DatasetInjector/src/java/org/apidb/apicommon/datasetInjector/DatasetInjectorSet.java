@@ -1,57 +1,58 @@
 package org.apidb.apicommon.datasetInjector;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
-import java.util.Set;
 
-/*
- * A set of DatasetInjectors.   Can provide an associated set of templateName->propBundles
+/**
+ * A set of DatasetInjector subclasses. This set has the information needed to
+ * construct a parallel TemplateInstanceSet. At processing time it iterates
+ * through its members asking them to construct the template instances they need
+ * to inject.
+ * 
+ * @author steve
+ * 
  */
 public class DatasetInjectorSet {
 
   private List<DatasetInjector> datasetInjectors = new ArrayList<DatasetInjector>();
-  private Map<String, List<Map<String, String>>> allTemplateInstances = null;
+  private TemplateInstanceSet templateInstanceSet;
 
-  /*
-   * Model construction
+  /**
+   * Add a member to this set.
+   * 
+   * Called at processing time.
    */
   void addDatasetInjector(DatasetInjector datasetInjector) {
     datasetInjectors.add(datasetInjector);
     datasetInjector.setDatasetInjectorSet(this);
   }
 
-  /*
-   * Called at processing time
+  /**
+   * Transform this DatasetInjectorSet into a TemplateInstanceSet. Calls each
+   * injector and asks it construct TemplateInstances and add them to the
+   * TemplateInstanceSet
+   * 
+   * Called at processing time.
+   * 
    */
-  String getTemplateInstancesAsText(Template template) {
-    return template.getInstancesAsText(allTemplateInstances.get(template.getName()));
-  }
-
-  List<Map<String, String>> getTemplateInstances(String templateName) {
-    if (allTemplateInstances == null) {
-      allTemplateInstances = new HashMap<String, List<Map<String, String>>>();
-
-      // injectors call back to addTemplateInstance()
-      for (DatasetInjector injector : datasetInjectors) {
-        injector.injectTemplates();
+  TemplateInstanceSet getTemplateInstanceSet() {
+    if (templateInstanceSet == null) {
+      templateInstanceSet = new TemplateInstanceSet();
+      for (DatasetInjector datasetInjector : datasetInjectors) {
+        datasetInjector.injectTemplates();
       }
     }
-
-    return allTemplateInstances.get(templateName);
+    return templateInstanceSet;
   }
 
-  // called by each injector, for each of its templates, when its
-  // injectTemplates() is called
-  void addTemplateInstance(String templateName, Map<String, String> propValues) {
-    if (!allTemplateInstances.containsKey(templateName)) {
-      allTemplateInstances.put(templateName, new ArrayList<Map<String, String>>());
-    }
-    allTemplateInstances.get(templateName).add(propValues);
+  /**
+   * Inject a template instance into the TemplateInstanceSet this
+   * DatasetInjectorSet is constructing.
+   * 
+   * Called at processing time.
+   */
+  void injectTemplateInstance(TemplateInstance templateInstance) {
+    templateInstanceSet.addTemplateInstance(templateInstance);
   }
 
-  Set<String> getTemplateNamesUsed() {
-    return allTemplateInstances.keySet();
-  }
 }

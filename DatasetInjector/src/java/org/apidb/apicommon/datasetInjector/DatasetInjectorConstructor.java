@@ -6,9 +6,10 @@ import java.util.Map;
 import org.gusdb.fgputil.xml.NamedValue;
 
 /**
- * A constructor of a DatasetInjector. At model construction time, this object
- * is given the name of the injector class and its property values. At
- * processing time it is called to construct and initialize the injector.
+ * A constructor of a DatasetInjector subclass. At model construction time, this
+ * object is given the name of the DatasetInjector subclass and its property
+ * values. At processing time it is called to construct and initialize the
+ * DatasetInjector subclass.
  */
 
 public class DatasetInjectorConstructor {
@@ -18,14 +19,25 @@ public class DatasetInjectorConstructor {
   private Map<String, String> propValues = new HashMap<String, String>();
   private String datasetName;
 
-  /*
-   * Model construction methods
+  /**
+   * Set the name of the DatasetInjector subclass to construct. Must be a
+   * subclass of DatasetInjector.
+   * 
+   * Called at model construction time.
    */
-  void setClass(String datasetInjectorClassName) {
+  public void setClassName(String datasetInjectorClassName) {
     this.datasetInjectorClassName = datasetInjectorClassName;
   }
 
-  void addProp(NamedValue propValue) {
+  /**
+   * Add a property value to pass to the constructed DatasetInjector subclass.
+   * Property values added here in addition to those inherited by the containing
+   * DatasetPresenter. Must not conflict with existing properties.
+   * 
+   * Called at model construction time.
+   * 
+   */
+  public void addProp(NamedValue propValue) {
     if (propValues.containsKey(propValue.getName())) {
       throw new UserException("A datasetInector in datasetPresenter '"
           + datasetName + "' has redundant property: " + propValue.getName());
@@ -33,6 +45,15 @@ public class DatasetInjectorConstructor {
     propValues.put(propValue.getName(), propValue.getValue());
   }
 
+  /**
+   * Inherit property values from a DatasetPresenter (typically the containing
+   * one). Must not conflict with existing properties.
+   * 
+   * Called at model construction time.
+   * 
+   * @param datasetPresenter
+   *          DatasetPresenter to inherit from.
+   */
   void inheritDatasetProps(DatasetPresenter datasetPresenter) {
     datasetName = datasetPresenter.getDatasetName();
     for (String key : datasetPresenter.getPropValues().keySet()) {
@@ -43,10 +64,27 @@ public class DatasetInjectorConstructor {
     }
   }
 
+  /**
+   * Provide the property values added to this object.
+   * 
+   * Called at processing time.
+   * 
+   * @return Map of key-value pairs
+   */
   Map<String, String> getPropValues() {
     return propValues;
   }
+  
+  String getDatasetInjectorClassName() {
+    return datasetInjectorClassName;
+  }
 
+  /**
+   * Use reflection to construct a subclass of DatasetInjector. Initialize the
+   * subclass's property values with those from this object.
+   * 
+   * Called at processing time.
+   */
   DatasetInjector getDatasetInjector() {
     DatasetInjector di = null;
     Class<? extends DatasetInjector> injectorClass = null;
@@ -56,9 +94,8 @@ public class DatasetInjectorConstructor {
       di = injectorClass.newInstance();
     } catch (ClassNotFoundException | IllegalAccessException
         | InstantiationException ex) {
-      throw new UserException(
-          "Can't find DatasetInjector java class with name '"
-              + datasetInjectorClassName + "'", ex);
+      throw new UserException("Can't find DatasetInjector subclass with name '"
+          + datasetInjectorClassName + "'", ex);
     }
 
     di.addPropValues(propValues);
