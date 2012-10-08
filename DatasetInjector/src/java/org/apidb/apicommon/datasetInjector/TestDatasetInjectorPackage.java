@@ -3,6 +3,7 @@ package org.apidb.apicommon.datasetInjector;
 import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -225,7 +226,7 @@ public class TestDatasetInjectorPackage {
     dps.addToDatasetInjectorSet(dis);
 
     List<TemplateInstance> fakeTemplate1Instances = dis.getTemplateInstanceSet().getTemplateInstances(
-        "fakeTemplate1");
+        "test3_template1");
     assertTrue(fakeTemplate1Instances.size() == 3);
     assertTrue(fakeTemplate1Instances.get(0).getPropValue("datasetName").equals(
         "happy"));
@@ -235,7 +236,7 @@ public class TestDatasetInjectorPackage {
         "sad"));
 
     List<TemplateInstance> fakeTemplate2Instances = dis.getTemplateInstanceSet().getTemplateInstances(
-        "fakeTemplate2");
+        "test3_template2");
     assertTrue(fakeTemplate2Instances.size() == 3);
     assertTrue(fakeTemplate2Instances.get(0).getPropValue("datasetName").equals(
         "happy"));
@@ -261,7 +262,7 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getPropValue("datasetDisplayName").equals("In good spirits"));
     assertTrue(dp2.getPropValue("datasetShortDisplayName").equals("good"));
     assertTrue(dp2.getPropValue("organismShortName").equals("H. Sap"));
-    assertTrue(dp2.getPropValue("projectName").equals("PlasmoDB"));
+    assertTrue(dp2.getPropValue("projectName").equals("ToxoDB"));
     assertTrue(dp2.getPropValue("buildNumberIntroduced").equals("17"));
 //    assertTrue(dp2.getPropValue("isSingleStrand").equals("true"));
     assertTrue(dp1.getDatasetInjectors().size() == 1);
@@ -288,6 +289,11 @@ public class TestDatasetInjectorPackage {
     
     templatesInjector.processDatasetPresenterSet(templatesFilePath,
         project_home, gus_home);
+    File expected = new File(project_home + "/ApiCommonShared/DatasetInjector/testData/test3_answer.txt");
+    File got = new File(gus_home + "/lib/test/test3_anchors.txt");
+    long gotl = got.length();
+    long expl = expected.length();
+    assertTrue(got.length() == expected.length());  // hard to imagine they could be the same size and not identical.
   }
 
 }

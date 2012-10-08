@@ -93,14 +93,13 @@ public class TemplatesInjector {
           FileWriter fw = new FileWriter(targetFilePath);
           bw = new BufferedWriter(fw);
           while ((line = br.readLine()) != null) {
-            bw.append(line + nl);
-            Matcher m = patt.matcher(line);
             bw.write(line);
             bw.newLine();
+            Matcher m = patt.matcher(line);
             if (m.find()) {
               String templateNameInAnchor = m.group(1);
               if (!templateNamesExpectedInThisFile.contains(templateNameInAnchor)) {
-                // throw exception
+                throw new UserException("Anchor file " + anchorFilePath + " contains an anchor referencing a template with name '" + templateNameInAnchor + "'. There is no template with that name.");
               }
               templateNamesNotFound.remove(templateNameInAnchor);
               Template template = templateSet.getTemplateByName(templateNameInAnchor);

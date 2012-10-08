@@ -7,9 +7,9 @@ public class TestInjector extends DatasetInjector {
   public void injectTemplates() {
 
 
-    injectTemplate("fakeTemplate1");
+    injectTemplate("test3_template1");
 
-    injectTemplate("fakeTemplate2");
+    injectTemplate("test3_template2");
   }
 
   public void insertReferences() {
