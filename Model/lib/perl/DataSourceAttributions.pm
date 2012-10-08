@@ -133,7 +133,7 @@ sub _parseXmlFile {
    
      foreach my $baseRef (@$baseWdkRefs) {
        my $baseRefType = $baseRef->{type};
-       my $baseRefName = qq($baseRef->{name});
+       my $baseRefName = $baseRef->{name};
        $baseRefName =~ s/\@RESOURCE\@/$resourceName/;
 
        my $concat = 'false';
@@ -143,7 +143,7 @@ sub _parseXmlFile {
              foreach my $txt (@{$wdkRef->{text}}) {
                if ($txt->{name} eq 'citation') {
                   foreach my $baseTxt (@{$baseRef->{text}}){
-                    $txt->{content} = $txt->{content}."\n".$baseTxt->{content} unless ($baseTxt->{name} ne 'citation');
+                    $txt->{content} = $baseTxt->{content}."\n".$txt->{content} unless ($baseTxt->{name} ne 'citation');
                     $concat = 'true';
                   }
                }
