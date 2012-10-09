@@ -333,7 +333,9 @@ public class TestDatasetInjectorPackage {
   
   @Test
   public void test_TemplatesInjector_parseAndProcess() {
-    TemplatesInjector.parseAndProcess("lib/test", "lib/test");  // if it doesn't throw an exception we are good
+    String gus_home = System.getenv("GUS_HOME");
+    
+    TemplatesInjector.parseAndProcess(gus_home + "/lib/test", gus_home + "/lib/test");  // if it doesn't throw an exception we are good
   }
 
 }

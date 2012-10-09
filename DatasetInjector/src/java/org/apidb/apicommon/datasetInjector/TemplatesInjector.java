@@ -2,6 +2,7 @@ package org.apidb.apicommon.datasetInjector;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
@@ -165,8 +166,8 @@ public class TemplatesInjector {
     // parse command line
     Options options = declareOptions();
     String cmdlineSyntax = cmdName
-        + "-templatesDir templates_dir -presentersDir presenters_dir";
-    String cmdDescrip = "Read provided dataset presenter files and either inject templates into the presentation layer.";
+        + " -templatesDir templates_dir -presentersDir presenters_dir";
+    String cmdDescrip = "Read provided dataset presenter files and inject templates into the presentation layer.";
     CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
         getUsageNotes(), options, args);
 
@@ -177,11 +178,17 @@ public class TemplatesInjector {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
     
+    File templ = new File(templatesDir);
+    if (!templ.isDirectory()) throw new UserException("Templates dir " + templatesDir + " must be an existing directory");
+
+    File pres = new File(presentersDir);
+    if (!pres.isDirectory()) throw new UserException("Presenters dir " + presentersDir + " must be an existing directory");
+
     DatasetPresenterParser dpp = new DatasetPresenterParser();
-    DatasetPresenterSet datasetPresenterSet = dpp.parseDir(gus_home + "/" + presentersDir);
+    DatasetPresenterSet datasetPresenterSet = dpp.parseDir(presentersDir);
     
     TemplateSet templateSet = new TemplateSet();
-    TemplatesParser.parseTemplatesDir(templateSet, gus_home + "/" + templatesDir);
+    TemplatesParser.parseTemplatesDir(templateSet, templatesDir);
     
     TemplatesInjector templatesInjector = new TemplatesInjector(datasetPresenterSet, templateSet);
     
