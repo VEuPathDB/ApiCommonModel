@@ -173,25 +173,30 @@ public class TemplatesInjector {
 
     return cmdLine;
   }
-  
+
   static void parseAndProcess(String templatesDir, String presentersDir) {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
-    
+
     File templ = new File(templatesDir);
-    if (!templ.isDirectory()) throw new UserException("Templates dir " + templatesDir + " must be an existing directory");
+    if (!templ.isDirectory())
+      throw new UserException("Templates dir " + templatesDir
+          + " must be an existing directory");
 
     File pres = new File(presentersDir);
-    if (!pres.isDirectory()) throw new UserException("Presenters dir " + presentersDir + " must be an existing directory");
+    if (!pres.isDirectory())
+      throw new UserException("Presenters dir " + presentersDir
+          + " must be an existing directory");
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     DatasetPresenterSet datasetPresenterSet = dpp.parseDir(presentersDir);
-    
+
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesDir(templateSet, templatesDir);
-    
-    TemplatesInjector templatesInjector = new TemplatesInjector(datasetPresenterSet, templateSet);
-    
+
+    TemplatesInjector templatesInjector = new TemplatesInjector(
+        datasetPresenterSet, templateSet);
+
     templatesInjector.processDatasetPresenterSet(project_home, gus_home);
 
   }
@@ -200,7 +205,12 @@ public class TemplatesInjector {
     CommandLine cmdLine = getCmdLine(args);
     String templatesDir = cmdLine.getOptionValue("templatesDir");
     String presentersDir = cmdLine.getOptionValue("presentersDir");
-    parseAndProcess(templatesDir, presentersDir);
+    try {
+      parseAndProcess(templatesDir, presentersDir);
+    } catch (UserException ex) {
+      System.err.println(nl + "Error: " + ex.getMessage() + nl);
+      System.exit(1);
+    }
   }
 
 }
