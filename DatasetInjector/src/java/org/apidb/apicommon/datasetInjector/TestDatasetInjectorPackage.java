@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.cli.CommandLine;
 import org.gusdb.fgputil.xml.NamedValue;
 import org.junit.Test;
 
@@ -39,13 +40,6 @@ public class TestDatasetInjectorPackage {
       + "feature      = NextGenSeq:${datasetName}" + nl;
 
   @Test
-  public void testCmdLine() {
-    String[] cmd = { "-t", "-presenterFiles", "happy.xml" };
-    // CommandLine cl = DatasetInjectorSet.getCmdLine(cmd);
-    // assertTrue(cl.getOptionValue("presenterFiles").equals("happy.xml"));
-  }
-
-  @Test
   public void test_Template_validateTemplateText() {
     Template template = new Template("dontcare");
     Set<String> props = new HashSet<String>();
@@ -55,6 +49,7 @@ public class TestDatasetInjectorPackage {
     template.validateTemplateText();
   }
 
+  // invalid template: contains macro without a property
   @Test(expected = UserException.class)
   public void test_Template_validateTemplateText2() {
     Template template = new Template("dontcare");
@@ -62,39 +57,6 @@ public class TestDatasetInjectorPackage {
     template.setProps(props);
     template.setTemplateText(validTemplateText);
     template.validateTemplateText();
-  }
-
-  // test: parse of template prelude
-  @Test
-  public void test_Template_parsePrelude() throws IOException {
-    Template template = new Template("dontcare");
-    TemplatesFileParser.parsePrelude(validPreludeTrimmed, template, "dontcare");
-    assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
-    assertTrue(template.getAnchorFileName().equals(
-        "ApiCommonShared/Model/lib/gbr/${projectName}.conf"));
-    assertTrue(template.getTargetFileName().equals(
-        "lib/gbr/${projectName}.conf"));
-    assertTrue(template.getProps().size() == 2);
-    assertTrue(template.getProps().contains("datasetName"));
-  }
-
-  @Test
-  public void test_Template_splitTemplateString() {
-
-    String[] answer = TemplatesFileParser.splitTemplateString(validPrelude
-        + TemplatesFileParser.TEMPLATE_TEXT_START + nl + validTemplateText
-        + TemplatesFileParser.TEMPLATE_TEXT_END + nl, "fakeFilePath");
-
-    assertTrue(answer[0].equals(validPreludeTrimmed));
-    assertTrue(answer[1].equals(validTemplateText));
-  }
-
-  @Test(expected = UserException.class)
-  public void test_Template_splitTemplateString2() {
-    TemplatesFileParser.splitTemplateString(validPrelude
-        + TemplatesFileParser.TEMPLATE_TEXT_START + nl + validTemplateText
-        + TemplatesFileParser.TEMPLATE_TEXT_END + nl + "JUNK" + nl,
-        "fakeFilePath");
   }
 
   @Test
@@ -159,11 +121,44 @@ public class TestDatasetInjectorPackage {
     assertTrue(answer.equals(expected));
   }
 
+  // test: parse of template prelude
   @Test
-  public void test_TemplateSet_parseTemplatesFile() {
+  public void test_TemplatesParser_parsePrelude() throws IOException {
+    Template template = new Template("dontcare");
+    TemplatesParser.parsePrelude(validPreludeTrimmed, template, "dontcare");
+    assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
+    assertTrue(template.getAnchorFileName().equals(
+        "ApiCommonShared/Model/lib/gbr/${projectName}.conf"));
+    assertTrue(template.getTargetFileName().equals(
+        "lib/gbr/${projectName}.conf"));
+    assertTrue(template.getProps().size() == 2);
+    assertTrue(template.getProps().contains("datasetName"));
+  }
+
+  @Test
+  public void test_TemplatesParser_splitTemplateString() {
+
+    String[] answer = TemplatesParser.splitTemplateString(validPrelude
+        + TemplatesParser.TEMPLATE_TEXT_START + nl + validTemplateText
+        + TemplatesParser.TEMPLATE_TEXT_END + nl, "fakeFilePath");
+
+    assertTrue(answer[0].equals(validPreludeTrimmed));
+    assertTrue(answer[1].equals(validTemplateText));
+  }
+  
+  @Test(expected = UserException.class)
+  public void test_TemplatesParser_splitTemplateString_2() {
+    TemplatesParser.splitTemplateString(validPrelude
+        + TemplatesParser.TEMPLATE_TEXT_START + nl + validTemplateText
+        + TemplatesParser.TEMPLATE_TEXT_END + nl + "JUNK" + nl,
+        "fakeFilePath");
+  }
+
+  @Test
+  public void test_TemplatesParser_parseTemplatesFile() {
     String proj_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
-    TemplatesFileParser.parseTemplatesFile(templateSet, proj_home
+    TemplatesParser.parseTemplatesFile(templateSet, proj_home
         + "/ApiCommonShared/DatasetInjector/testData/test1_templates.dst");
 
     assertTrue(templateSet.getTemplateByName("template1") != null);
@@ -173,11 +168,32 @@ public class TestDatasetInjectorPackage {
     assertTrue(t1.getTemplateText().equals("12345" + nl + "67890" + nl));
     assertTrue(t2.getTemplateText().equals(
         "12345" + nl + "67890" + nl + "abcde" + nl));
-    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains(
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonShared/DatasetInjector/lib/test/test3_anchors.txt").contains(
         "template1"));
-    assertTrue(templateSet.getTemplateNamesByAnchorFileName("file1").contains(
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonShared/DatasetInjector/lib/test/test3_anchors.txt").contains(
         "template2"));
   }
+  
+  @Test
+  public void test_TemplatesParser_getTemplateFilesInDir() {
+    String proj_home = System.getenv("PROJECT_HOME");
+    List<File> templateFiles = TemplatesParser.getTemplateFilesInDir(proj_home + "/ApiCommonShared/DatasetInjector/testData");
+    assertTrue(templateFiles.size() >= 2);
+    for (File file : templateFiles) {
+      assertTrue(file.getName().endsWith(".dst"));
+    }
+  }
+  
+  @Test
+  public void test_TemplatesParser_parseDir() {
+    String project_home = System.getenv("PROJECT_HOME");
+    TemplateSet templateSet = new TemplateSet();
+    TemplatesParser.parseTemplatesDir(templateSet, project_home
+        + "/ApiCommonShared/DatasetInjector/testData");
+    assertTrue(templateSet.getSize() >= 4);
+  }
+  
+
 
   @Test
   public void test_DatasetInjector_setClass() {
@@ -248,11 +264,11 @@ public class TestDatasetInjectorPackage {
   }
 
   @Test
-  public void test_DatasetPresenterParser_parse() {
+  public void test_DatasetPresenterParser_parseFile() {
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     String project_home = System.getenv("PROJECT_HOME");
 
-    DatasetPresenterSet dps = dpp.parse(project_home
+    DatasetPresenterSet dps = dpp.parseFile(project_home
         + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
     assertTrue(dps.getSize() == 2);
     DatasetPresenter dp1 = dps.getDatasetPresenters().get(0);
@@ -264,13 +280,24 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getPropValue("organismShortName").equals("H. Sap"));
     assertTrue(dp2.getPropValue("projectName").equals("ToxoDB"));
     assertTrue(dp2.getPropValue("buildNumberIntroduced").equals("17"));
-//    assertTrue(dp2.getPropValue("isSingleStrand").equals("true"));
+    assertTrue(dp2.getPropValue("datasetDescrip").equals("Well life is groovy, no?"));
     assertTrue(dp1.getDatasetInjectors().size() == 1);
     assertTrue(dp2.getDatasetInjectors().size() == 1);
     DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
     assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
+    assertTrue(dic.getPropValue("isSingleStrand").equals("true"));
   }
 
+  @Test
+  public void test_DatasetPresenterParser_parseDir() {
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    String project_home = System.getenv("PROJECT_HOME");
+
+    DatasetPresenterSet dps = dpp.parseDir(project_home
+        + "/ApiCommonShared/DatasetInjector/testData");
+    assertTrue(dps.getSize() >= 4);
+  }
+  
   @Test
   public void test_TemplatesInjector_processDatasetPresenterSet() {
 
@@ -280,20 +307,33 @@ public class TestDatasetInjectorPackage {
         + "/ApiCommonShared/DatasetInjector/testData/test3_templates.dst";
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
-    DatasetPresenterSet dps = dpp.parse(project_home
+    DatasetPresenterSet dps = dpp.parseFile(project_home
         + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
     TemplateSet templateSet = new TemplateSet();
-    TemplatesFileParser.parseTemplatesFile(templateSet, templatesFilePath);
+    TemplatesParser.parseTemplatesFile(templateSet, templatesFilePath);
     
     TemplatesInjector templatesInjector = new TemplatesInjector(dps, templateSet);
     
-    templatesInjector.processDatasetPresenterSet(templatesFilePath,
-        project_home, gus_home);
     File expected = new File(project_home + "/ApiCommonShared/DatasetInjector/testData/test3_answer.txt");
     File got = new File(gus_home + "/lib/test/test3_anchors.txt");
-    long gotl = got.length();
-    long expl = expected.length();
+    if (got.exists()) got.delete();
+    
+    templatesInjector.processDatasetPresenterSet(project_home, gus_home);
+
     assertTrue(got.length() == expected.length());  // hard to imagine they could be the same size and not identical.
+  }
+  
+  @Test
+  public void test_TemplatesInjector_getCmdLine() {
+    String[] args = { "-presentersDir", "lib/xml/datasetPresenters", "-templatesDir", "lib/dst"};
+    CommandLine cl = TemplatesInjector.getCmdLine(args);
+    assertTrue(cl.getOptionValue("presentersDir").equals("lib/xml/datasetPresenters"));
+    assertTrue(cl.getOptionValue("templatesDir").equals("lib/dst"));
+  }
+  
+  @Test
+  public void test_TemplatesInjector_parseAndProcess() {
+    TemplatesInjector.parseAndProcess("lib/test", "lib/test");  // if it doesn't throw an exception we are good
   }
 
 }

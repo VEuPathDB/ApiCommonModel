@@ -1,9 +1,12 @@
 package org.apidb.apicommon.datasetInjector;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -32,12 +35,41 @@ import java.util.Scanner;
  * @author steve
  * 
  */
-public class TemplatesFileParser {
+public class TemplatesParser {
 
   public static final String TEMPLATE_START = "[templateStart]";
   public static final String TEMPLATE_TEXT_START = ">templateTextStart<";
   public static final String TEMPLATE_TEXT_END = ">templateTextEnd<";
   static final String nl = System.getProperty("line.separator");
+
+  /**
+   * Parse all .dst files in the provided directory and add the constructed
+   * Templates to the target TemplatesSet.
+   * 
+   * @see #parseTemplatesFile(TemplateSet, String)
+   * @param targetTemplateSet
+   *          A TemplateSet to add the constructed Templates to.
+   * @param templatesDirPath
+   *          Full path to a directory containing one or more .dst files
+   */
+  static void parseTemplatesDir(TemplateSet targetTemplateSet,
+      String templatesDirPath) {
+    List<File> templateFiles = getTemplateFilesInDir(templatesDirPath);
+    for (File templateFile : templateFiles) {
+      parseTemplatesFile(targetTemplateSet, templatesDirPath + "/" + templateFile.getName());
+    }
+  }
+
+  static List<File> getTemplateFilesInDir(String templatesDirPath) {
+    File dir = new File(templatesDirPath);
+    List<File> templateFiles = new ArrayList<File>();
+
+    for (File file : dir.listFiles()) {
+      if (file.isFile() && file.getName().endsWith(".dst"))
+        templateFiles.add(file);
+    }
+    return templateFiles;
+  }
 
   /**
    * Open the provided templates file, parse it, and add the Templates to the
@@ -194,10 +226,14 @@ public class TemplatesFileParser {
   }
 
   /**
-   * Parse the prelude portion of a template string.  
-   * @param prelude The prelude as a string
-   * @param template The template to add the prelude fields to.
-   * @param templateFilePath The path of the file the template was found in.
+   * Parse the prelude portion of a template string.
+   * 
+   * @param prelude
+   *          The prelude as a string
+   * @param template
+   *          The template to add the prelude fields to.
+   * @param templateFilePath
+   *          The path of the file the template was found in.
    */
   static void parsePrelude(String prelude, Template template,
       String templateFilePath) {

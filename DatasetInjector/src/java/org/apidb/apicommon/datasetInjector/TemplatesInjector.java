@@ -15,8 +15,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
 import org.gusdb.fgputil.CliUtil;
 
@@ -40,7 +38,8 @@ public class TemplatesInjector {
   private DatasetInjectorSet datasetInjectorSet;
   private List<DatasetPresenterSet> datasetPresenterSets = new ArrayList<DatasetPresenterSet>();
 
-  public TemplatesInjector(DatasetPresenterSet datasetPresenterSet, TemplateSet templateSet) {
+  public TemplatesInjector(DatasetPresenterSet datasetPresenterSet,
+      TemplateSet templateSet) {
     this.datasetPresenterSets.add(datasetPresenterSet);
     this.templateSet = templateSet;
   }
@@ -63,12 +62,10 @@ public class TemplatesInjector {
    * templates the set expects for that anchor file</li>
    * </ul>
    * 
-   * @param templatesFilePath
    * @param project_home
    * @param gus_home
    */
-  public void processDatasetPresenterSet(String templatesFilePath,
-      String project_home, String gus_home) {
+  public void processDatasetPresenterSet(String project_home, String gus_home) {
 
     initDatasetInjectorSet();
 
@@ -99,7 +96,10 @@ public class TemplatesInjector {
             if (m.find()) {
               String templateNameInAnchor = m.group(1);
               if (!templateNamesExpectedInThisFile.contains(templateNameInAnchor)) {
-                throw new UserException("Anchor file " + anchorFilePath + " contains an anchor referencing a template with name '" + templateNameInAnchor + "'. There is no template with that name.");
+                throw new UserException("Anchor file " + anchorFilePath
+                    + " contains an anchor referencing a template with name '"
+                    + templateNameInAnchor
+                    + "'. There is no template with that name.");
               }
               templateNamesNotFound.remove(templateNameInAnchor);
               Template template = templateSet.getTemplateByName(templateNameInAnchor);
@@ -143,17 +143,12 @@ public class TemplatesInjector {
   private static Options declareOptions() {
     Options options = new Options();
 
-    OptionGroup actions = new OptionGroup();
-    Option template = new Option("t", "Inject templates");
-    actions.addOption(template);
+    CliUtil.addOption(options, "templatesDir",
+        "a directory containing one or more template (.dst) files", true, true);
 
-    Option ref = new Option("r", "Make references");
-    actions.addOption(ref);
-
-    options.addOptionGroup(actions);
-
-    CliUtil.addOption(options, "presenterFiles",
-        "one or more dataset presenter xml files", true, true);
+    CliUtil.addOption(options, "presentersDir",
+        "a directory containing one or more dataset presenter xml files", true,
+        true);
 
     return options;
   }
@@ -164,28 +159,41 @@ public class TemplatesInjector {
     nl + "";
   }
 
-  public static CommandLine getCmdLine(String[] args) {
+  static CommandLine getCmdLine(String[] args) {
     String cmdName = System.getProperty("cmdName");
 
     // parse command line
     Options options = declareOptions();
     String cmdlineSyntax = cmdName
-        + "<-t | -r> -presenterFiles presenterFile1 ...";
-    String cmdDescrip = "Read provided dataset presenter files and either inject templates or make dataset references";
+        + "-templatesDir templates_dir -presentersDir presenters_dir";
+    String cmdDescrip = "Read provided dataset presenter files and either inject templates into the presentation layer.";
     CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
         getUsageNotes(), options, args);
 
     return cmdLine;
   }
-
-  public static void main(String[] args) throws Exception {
-
-    CommandLine cmdLine = getCmdLine(args);
+  
+  static void parseAndProcess(String templatesDir, String presentersDir) {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
+    
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    DatasetPresenterSet datasetPresenterSet = dpp.parseDir(gus_home + "/" + presentersDir);
+    
     TemplateSet templateSet = new TemplateSet();
-    TemplatesFileParser.parseTemplatesFile(templateSet,
-        "lib/dst/rnaSeqTemplates.dst");
+    TemplatesParser.parseTemplatesDir(templateSet, gus_home + "/" + templatesDir);
+    
+    TemplatesInjector templatesInjector = new TemplatesInjector(datasetPresenterSet, templateSet);
+    
+    templatesInjector.processDatasetPresenterSet(project_home, gus_home);
+
+  }
+
+  public static void main(String[] args) throws Exception {
+    CommandLine cmdLine = getCmdLine(args);
+    String templatesDir = cmdLine.getOptionValue("templatesDir");
+    String presentersDir = cmdLine.getOptionValue("presentersDir");
+    parseAndProcess(templatesDir, presentersDir);
   }
 
 }

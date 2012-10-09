@@ -2,6 +2,8 @@ package org.apidb.apicommon.datasetInjector;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.digester.Digester;
 import org.gusdb.fgputil.xml.NamedValue;
@@ -48,7 +50,7 @@ public class DatasetPresenterParser extends XmlParser {
   }
 
 
-  public DatasetPresenterSet parse(String xmlFileName) {
+  DatasetPresenterSet parseFile(String xmlFileName) {
 
     DatasetPresenterSet datasetPresenterSet = null;
     try {
@@ -60,4 +62,29 @@ public class DatasetPresenterParser extends XmlParser {
     return datasetPresenterSet;
   }
 
+  DatasetPresenterSet parseDir(String presenterXmlDirPath) {
+    DatasetPresenterSet bigDatasetPresenterSet = new DatasetPresenterSet();
+    List<File> presenterFiles = getPresenterXmlFilesInDir(presenterXmlDirPath);
+    for (File presenterFile : presenterFiles) {
+      bigDatasetPresenterSet.addDatasetPresenterSet(parseFile(presenterXmlDirPath + "/" + presenterFile.getName()));
+    }
+
+    return bigDatasetPresenterSet;
+  }
+
+static List<File> getPresenterXmlFilesInDir(String presentersDirPath) {
+  File dir = new File(presentersDirPath);
+  List<File> presenterFiles = new ArrayList<File>();
+
+  for (File file : dir.listFiles()) {
+    if (file.isFile() && file.getName().endsWith(".xml"))
+      presenterFiles.add(file);
+  }
+  return presenterFiles;
 }
+
+
+}
+
+
+

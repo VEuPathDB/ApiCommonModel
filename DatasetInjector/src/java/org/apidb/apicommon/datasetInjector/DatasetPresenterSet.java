@@ -29,11 +29,20 @@ public class DatasetPresenterSet {
   }
 
   /**
-   * Add DatasetInjector subclasses constructable by this set to a DatasetInjectorSet.  Traverse the tree to find all DatasetPresenters
-   * and in turn their DatasetInjectorConstructors. The latter each construct a
+   * Add the members of a DatasetPresenterSet to this set (during model
+   * construction).
+   */
+  void addDatasetPresenterSet(DatasetPresenterSet datasetPresenterSet) {
+    presenters.addAll(datasetPresenterSet.getDatasetPresenters());
+  }
+
+  /**
+   * Add DatasetInjector subclasses constructable by this set to a
+   * DatasetInjectorSet. Traverse the tree to find all DatasetPresenters and in
+   * turn their DatasetInjectorConstructors. The latter each construct a
    * DatasetInjector subclass which is added to the DatasetInjectorSet
    * 
-   *  Called at processing time. 
+   * Called at processing time.
    */
   void addToDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
     for (DatasetPresenter presenter : presenters) {
@@ -42,11 +51,11 @@ public class DatasetPresenterSet {
       }
     }
   }
-  
+
   int getSize() {
     return presenters.size();
   }
-  
+
   List<DatasetPresenter> getDatasetPresenters() {
     return Collections.unmodifiableList(presenters);
   }

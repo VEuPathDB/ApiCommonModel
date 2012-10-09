@@ -80,6 +80,12 @@ public class Template {
    */
   void setAnchorFileName(String anchorFileName) {
     this.anchorFileName = anchorFileName;
+    String[] splitPath = anchorFileName.split("/lib/");
+    if (splitPath.length != 2)
+      throw new UserException("In templates file " + templateFilePath
+          + " template '" + name + "' contains anchorFileName '"
+          + anchorFileName + "' which is not in the form xxxx/lib/yyyy (where xxxx is a path and yyyy is a path)");
+ 
   }
 
   /*
@@ -149,7 +155,8 @@ public class Template {
    * each.
    * 
    * @param templateInstances
-   * @return A text string that is the concatenation of the text instances of the provided TemplateInstances
+   * @return A text string that is the concatenation of the text instances of
+   *         the provided TemplateInstances
    * @see #getInstanceAsText(TemplateInstance)
    */
   String getInstancesAsText(List<TemplateInstance> templateInstances) {
@@ -166,7 +173,8 @@ public class Template {
    * 
    * @param instances
    * @param targetTextAsStream
-   * @return the target text from the stream as a String with macros substituted in.
+   * @return the target text from the stream as a String with macros substituted
+   *         in.
    * @see #injectTextIntoStream(String, InputStream)
    */
   String injectInstancesIntoStream(List<TemplateInstance> instances,
@@ -176,13 +184,14 @@ public class Template {
   }
 
   /**
-   * Scan through the provided target text and place the provided injectable text
-   * into the stream on the line after an anchor that references this
+   * Scan through the provided target text and place the provided injectable
+   * text into the stream on the line after an anchor that references this
    * template's name
    * 
    * @param textToInject
    * @param targetTextAsStream
-   * @return the target text from the stream as a String with macros substituted in.
+   * @return the target text from the stream as a String with macros substituted
+   *         in.
    */
   String injectTextIntoStream(String textToInject,
       InputStream targetTextAsStream) {
@@ -204,14 +213,16 @@ public class Template {
   }
 
   /**
-   * Validate that the provided set of property values includes all properties required by this template.
+   * Validate that the provided set of property values includes all properties
+   * required by this template.
+   * 
    * @param propValues
    * @return true if valid
    */
   boolean validatePropertiesInstance(Map<String, String> propValues) {
     return propValues.keySet().containsAll(getProps());
   }
-  
+
   static String getTargetFileName(String anchorFileName) {
     String[] splitPath = anchorFileName.split("/lib/");
     return "lib/" + splitPath[1];

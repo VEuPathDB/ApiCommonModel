@@ -75,6 +75,10 @@ public class DatasetInjectorConstructor {
     return propValues;
   }
   
+  String getPropValue(String propName) {
+    return propValues.get(propName);    
+  }
+  
   String getDatasetInjectorClassName() {
     return datasetInjectorClassName;
   }

@@ -56,4 +56,8 @@ public class TemplateSet {
   Set<String> getTemplateNamesByAnchorFileName(String anchorFileName) {
     return anchorFileNameToTemplateNames.get(anchorFileName);
   }
+  
+  int getSize() {
+    return nameToTemplate.size();
+  }
 }
