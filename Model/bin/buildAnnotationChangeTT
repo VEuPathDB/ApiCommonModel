@@ -339,7 +339,7 @@ sub getFeatureGeneAndProduct {
 
     my $ua = new LWP::UserAgent;
     my $url = "http://www.genedb.org/services/feature/hierarchy?uniqueName=$feature";
-    print STDERR "getting info for feature \"$feature\"\n" if $debug;
+    print STDERR "getting info for feature \"$feature\" with URL \"$url\"\n" if $debug;
     my $request;
     my $response;
 
@@ -347,18 +347,43 @@ sub getFeatureGeneAndProduct {
     $response = $ua->request($request);
 
     if (!$response->is_success || $response->content =~ /<error /) {
+      print STDERR "error getting feature hierarchy for feature \"$feature\" with URL \"$url\"\n";
 	return('', '')
     }
 
     my $simple = XML::Simple->new();
-    my $info = $simple->XMLin($response->content, forcearray => 1, KeyAttr => [] );
+    my $contentString = $response->content;
+    $contentString = removeBogusCharacters($contentString);
+
+    my $info = $simple->XMLin($contentString, forcearray => 1, KeyAttr => [] );
     # print STDERRR "info:\n" . Dumper($info). "\n";
 
     my $gene = $info->{results}->[0]->{result}->[0]->{uniqueName};
 
     my $product;
-    foreach my $term (@{$info->{results}->[0]->{result}->[0]->{children}->[0]->{children}->[0]->{terms}->[0]->{term}}) {
+
+    # some features have terms. . .
+    foreach my $term (@{$info->{results}->[0]->{result}->[0]->{terms}->[0]->{term}}) {
+      $product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+    }
+
+    # . . . and some features have chidren that have terms
+    foreach my $child (@{$info->{results}->[0]->{result}->[0]->{children}}) {
+      foreach my $term (@{$child->{terms}->[0]->{term}}) {
 	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+      }
+    }
+
+    # . . . and some features have chidren whose children have terms
+    foreach my $child (@{$info->{results}->[0]->{result}->[0]->{children}->[0]->{children}}) {
+      foreach my $term (@{$child->{terms}->[0]->{term}}) {
+
+	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+      }
+    }
+
+    if (!$product && $contentString =~ /genedb_products/) {
+      print STDERR "web-service parse failure: response to URL \"$url\" contains \"genedb_products\", but a (non-null) product was not found in it.\n";
     }
 
     return($gene, $product);
@@ -417,4 +442,22 @@ sub indexChanges {
       on AnnotationChange$suffix (gene, change_date) tablespace INDX
 SQL
 
+}
+
+sub removeBogusCharacters {
+
+  # Some of the text in the values in the XML returned by GeneDB
+  # contain non-printing characters
+  # (e.g. http://www.genedb.org/services/feature/hierarchy?uniqueName=TcCLB.507993.369:pep
+  #  -- look for the phrase "10 hits per gene")
+  # These are the bane of XML::Simple, and must be removed. This function replaces
+  # them with spaces.
+
+  my ($contentString) = @_;
+  for (my $i = 0; $i < length($contentString); $i++) {
+    substr($contentString, $i, 1, " ")
+      if ord(substr($contentString, $i, 1)) > 127;
+  }
+
+  return $contentString;
 }
