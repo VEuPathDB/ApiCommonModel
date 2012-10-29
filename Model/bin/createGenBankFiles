@@ -66,29 +66,38 @@ while (my $tblFile = readdir(DIR)) {
 
   open(TBL, $tblFile) or die "Cannot open file $tblFile for reading: $!";
 
-  my $defline = <TBL>;
-  chomp $defline;
-  my ($junk, $sequenceId) = split(/\t/, $defline);
 
+  my ($sequenceId, $newTblFile);
+
+  my %distinctFiles;
+
+  while(<TBL>) {
+    chomp;
+    if(/\>Feature/) {
+      my @a = split(/\t/, $_);
+      $sequenceId = $a[1];
+
+      $distinctFiles{$sequenceIdToGenbankFile->{$sequenceId}}++;
+
+      $newTblFile = $sequenceId . ".tbl";
+
+
+      open(OUT, "> $newTblFile") or die "Cannot open $newTblFile for writing:$!";
+    }
+    print OUT "$_\n";
+  }
 
   close TBL;
 
-  my $newTblFile = $sequenceId . ".tbl";
-  my $fasta = $sequenceId . ".fsa";
 
-  rename($tblFile, $newTblFile);
+  foreach my $gbFile (keys %distinctFiles) {
+    my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'embl');
 
-
-  my $gbFile = $sequenceIdToGenbankFile->{$sequenceId};
-
-  my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'genbank');
-
-  my $seqioFsa = Bio::SeqIO->new(-format => 'Fasta', -file => "> $fasta");
-
-  while(my $seq = $seqio->next_seq()) {
-    next unless($seq->id eq $sequenceId);
-
-    $seqioFsa->write_seq($seq);
+    while(my $seq = $seqio->next_seq()) {
+      my $fasta = $seq->id . ".fsa";
+      my $seqioFsa = Bio::SeqIO->new(-format => 'Fasta', -file => "> $fasta");
+      $seqioFsa->write_seq($seq);
+    }
   }
 }
 
@@ -120,11 +129,13 @@ and gf.row_alg_invocation_id = ap.algorithm_invocation_id";
   $sh->execute();
 
   while(my ($sequence, $file) = $sh->fetchrow_array()) {
-    $file =~ s/^\/files\/cbil\/data\/cbil/\/eupath\/data/;
+#    $file =~ s/^\/files\/cbil\/data\/cbil/\/eupath\/data/;
     $rv{$sequence} = $file;
 
 
   }
+
+
 
   $sh->finish();
 
