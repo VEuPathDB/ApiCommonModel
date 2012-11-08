@@ -206,33 +206,33 @@ public class DetailTableLoader extends BaseCLI {
         Connection updateConnection = updateDataSource.getConnection();
         logger.debug("Connection obtained...");
 
-        // Because this is a EuPathDB program, we can assume that the pk
-        // has two columns: project and id.
-        // the name of the id might differ across record types, so we will
-        // not hardcode it, rather put it in a variable called pkName
         String[] pkColumns = table.getRecordClass()
                 .getPrimaryKeyAttributeField().getColumnRefs();
-        String pkName = pkColumns[0].toUpperCase();
-        String pk2 = pkColumns[1].toUpperCase();
+	String pkNames;
+	String pkBind;
 
-        if (!pk2.equals("PROJECT_ID"))
-            throw new WdkModelException("Unexpected primary key type: " + pk2);
+	// So far (November 2012) WDK data types all have one- or two-column primary key.
+        switch (pkColumns.length) {
+	case 1: pkNames = pkColumns[0]; pkBind = "?"; break;
+	case 2: pkNames = pkColumns[0] + ", " + pkColumns[1]; pkBind = "?,?"; break;
+	default: throw new WdkModelException("DetailTableLoader assumes that a primary key comprises no more than 2 columns");
+	}
 
-        String insertSql = "insert into " + detailTable + " (" + pkName
-                + ", project_id, field_name, field_title, row_count, content, "
-                + " modification_date) values(?,?,?,?,?,?,?)";
+        String insertSql = "insert into " + detailTable + " (" + pkNames
+                + ", field_name, field_title, row_count, content, "
+                + " modification_date) values(" + pkBind + ",?,?,?,?,?)";
         try {
             logger.debug("disabling auto commit...");
             updateConnection.setAutoCommit(false);
             logger.debug("deleting old result...");
-            deleteRows(idSql, table.getName(), updateConnection);
+            deleteRows(idSql, pkNames, table.getName(), updateConnection);
 
             PreparedStatement insertStmt = updateConnection
                     .prepareStatement(insertSql);
             logger.info("Dumping table [" + table.getName() + "]");
             logger.debug("aggregating data...");
             int[] counts = aggregateLocally(table, idSql, insertStmt,
-                    insertSql, pkName);
+                    insertSql, pkColumns);
             long startCommit = System.currentTimeMillis();
             updateConnection.commit();
             long end = System.currentTimeMillis();
@@ -257,13 +257,12 @@ public class DetailTableLoader extends BaseCLI {
         }
     }
 
-    private void deleteRows(String idSql, String fieldName,
+    private void deleteRows(String idSql, String pkNames, String fieldName,
             Connection connection) throws WdkUserException, WdkModelException,
             SQLException {
         long start = System.currentTimeMillis();
         StringBuilder sql = new StringBuilder("DELETE FROM " + detailTable);
-        sql.append(" WHERE source_id IN (SELECT source_id FROM (");
-        sql.append(idSql + "))");
+        sql.append(" WHERE (" + pkNames + ") IN (" + idSql + ")");
         sql.append(" AND " + COLUMN_FIELD_NAME + "= '" + fieldName + "'");
         logger.info("Removing previous rows [" + fieldName + "]");
         logger.debug("\n" + sql);
@@ -275,21 +274,21 @@ public class DetailTableLoader extends BaseCLI {
     }
 
     private int[] aggregateLocally(TableField table, String idSql,
-            PreparedStatement insertStmt, String insertSql, String pkName)
+            PreparedStatement insertStmt, String insertSql, String[] pkColumns)
             throws WdkModelException, SQLException, WdkUserException {
 
         String title = getTableTitle(table);
 
-        String wrappedSql = getWrappedSql(table, idSql, pkName);
+        String wrappedSql = getWrappedSql(table, idSql, pkColumns);
 
         logger.debug("wrapped sql:\n" + wrappedSql);
         ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
                 wrappedSql, "api-report-detail-aggregate-" + table.getName(),
                 2000);
-        String srcId = "";
-        String prj = "";
-        String prevSrcId = "";
-        String prevPrj = "";
+        String pk0 = "";
+        String pk1 = "";
+        String prevPk0 = "";
+        String prevPk1 = "";
         StringBuilder aggregatedContent = new StringBuilder();
         int insertCount = 0;
         int detailCount = 0;
@@ -297,19 +296,21 @@ public class DetailTableLoader extends BaseCLI {
         boolean first = true;
         long insertTime = 0;
         while (resultSet.next()) {
-            srcId = resultSet.getString(pkName);
-            prj = resultSet.getString("PROJECT_ID");
-            if (!first && (!srcId.equals(prevSrcId) || !prj.equals(prevPrj))) {
-                insertTime += insertDetailRow(insertStmt, insertSql,
-                        aggregatedContent, rowCount, table, prevSrcId, prevPrj,
-                        title);
+            pk0 = resultSet.getString(pkColumns[0]);
+	    if (pkColumns.length > 1) {
+		pk1 = resultSet.getString(pkColumns[1]);
+	    }
+            if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
+                insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent,
+					      rowCount, table, pk0, pk1,
+					      title, pkColumns.length);
                 insertCount++;
                 aggregatedContent = new StringBuilder();
                 rowCount = 0;
             }
             first = false;
-            prevSrcId = srcId;
-            prevPrj = prj;
+            prevPk0 = pk0;
+            prevPk1 = pk1;
 
             // aggregate the columns of one row
             String formattedValues[] = formatAttributeValues(resultSet, table);
@@ -326,8 +327,8 @@ public class DetailTableLoader extends BaseCLI {
         }
         if (aggregatedContent.length() != 0) {
             insertTime += insertDetailRow(insertStmt, insertSql,
-                    aggregatedContent, rowCount, table, prevSrcId, prevPrj,
-                    title);
+                    aggregatedContent, rowCount, table, prevPk0, prevPk1,
+                    title, pkColumns.length);
             insertCount++;
         }
         int[] counts = { insertCount, detailCount, (int) insertTime };
@@ -347,21 +348,27 @@ public class DetailTableLoader extends BaseCLI {
         return title.toString();
     }
 
-    private String getWrappedSql(TableField table, String idSql, String pkName)
+    private String getWrappedSql(TableField table, String idSql, String[] pkColumns)
             throws WdkModelException {
 
         String queryName = table.getQuery().getFullName();
         String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName))
                 .getSql();
+	String pkPredicates = "idq." + pkColumns[0] + " = tq." + pkColumns[0] + "\n";
+	String pkList = "tq." + pkColumns[0];
+
+        if (pkColumns.length > 1) {
+	    pkPredicates = "AND idq." + pkColumns[1] + " = tq." + pkColumns[1] + "\n";
+	    pkList = "tq." + pkColumns[0] + ", " + "tq." + pkColumns[1];
+	}
 
         String sql = "select tq.*" + "\n" + "FROM (ID_QUERY) idq," + "\n"
                 + "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq"
-                + "\n" + "WHERE idq.project_id = tq.project_id" + "\n"
-                + "AND idq.PK_NAME = tq.PK_NAME" + "\n"
-                + "ORDER BY tq.PK_NAME, tq.project_id, tq.row_num";
+                + "\n" + "WHERE\n"
+                + pkPredicates
+                + "ORDER BY " + pkList + ", tq.row_num";
         sql = sql.replace("ID_QUERY", idSql);
         sql = sql.replace("TABLE_QUERY", tableSql);
-        sql = sql.replace("PK_NAME", pkName);
         // System.err.println(sql);
         return sql;
     }
@@ -447,7 +454,7 @@ public class DetailTableLoader extends BaseCLI {
      */
     private long insertDetailRow(PreparedStatement insertStmt,
             String insertSql, StringBuilder contentBuf, int rowCount,
-            TableField table, String srcId, String project, String title)
+				 TableField table, String pk0, String pk1, String title, int pkCount)
             throws WdkModelException, SQLException, WdkUserException {
 
         long start = System.currentTimeMillis();
@@ -456,17 +463,19 @@ public class DetailTableLoader extends BaseCLI {
         String content = contentBuf.toString();
         DBPlatform platform = wdkModel.getQueryPlatform();
 
-        // (source_id, project_id, field_name, field_title, row_count, content,
+        // (<primary keys>, field_name, field_title, row_count, content,
         // modification_date)
-        insertStmt.setString(1, srcId);
-        insertStmt.setString(2, project);
-        insertStmt.setString(3, table.getName());
-        insertStmt.setString(4, title);
-        insertStmt.setInt(5, rowCount);
-        if (content.length() < 32766) insertStmt.setString(6, content);
-        else platform.setClobData(insertStmt, 6, content, false);
+        insertStmt.setString(1, pk0);
+	if (pkCount > 1) {
+	    insertStmt.setString(2, pk1);
+	}
+        insertStmt.setString(pkCount + 1, table.getName());
+        insertStmt.setString(pkCount + 2, title);
+        insertStmt.setInt(pkCount + 3, rowCount);
+        if (content.length() < 32766) insertStmt.setString(pkCount + 4, content);
+        else platform.setClobData(insertStmt, pkCount + 4, content, false);
 
-        insertStmt.setTimestamp(7, new Timestamp(new Date().getTime()));
+        insertStmt.setTimestamp(pkCount + 5, new Timestamp(new Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
                 "api-report-detail-insert-" + table.getName());
         return System.currentTimeMillis() - start;
