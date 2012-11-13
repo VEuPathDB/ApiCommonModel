@@ -10,7 +10,7 @@
 
 
 				<hr></hr>
-				<xsl:for-each select="dataSourceAttributions/dataSourceAttribution">
+				<xsl:for-each select="datasetPresenters/datasetPresenter">
 					<xsl:variable name="relativeNode" select="." />
 
 					<h3>
