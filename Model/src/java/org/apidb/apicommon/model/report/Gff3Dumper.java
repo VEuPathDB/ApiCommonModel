@@ -79,7 +79,7 @@ public class Gff3Dumper {
 
     public static void printUsage() {
         System.out.println();
-        System.out.println("Usage: gff3Dump -model <model_name> -organism "
+        System.out.println("Usage: gffDump -model <model_name> -organism "
                 + "<organism_list> [-dir <base_dir>]");
         System.out.println();
         System.out.println("\t\t<model_name>:\tThe name of WDK supported model;");
@@ -148,14 +148,15 @@ public class Gff3Dumper {
         logger.info("Preparing gff file....");
 
         // format the file name
-        int pos = organism.indexOf(" ");
-        String fileName = "_" + wdkModel.getProjectId() + "-" + wdkModel.getVersion()
-               ;
+        String prefix = wdkModel.getProjectId() + "-" + wdkModel.getVersion() + "_";
+	String organismAbbrev = organism;
+        int pos = organism.indexOf(" ");  // if it has spaces then compose abbrev
         if (pos >= 0) {
-            String prefix = organism.substring(0, 1).toUpperCase();
-            fileName = prefix + organism.substring(pos + 1).replaceAll("\\s+", "") + fileName;
-        } else fileName = organism + fileName;
-        fileName += ".gff";
+            String genusAbbrev = organism.substring(0, 1).toUpperCase();
+            organismAbbrev = genusAbbrev + organism.substring(pos + 1).replaceAll("\\s+", "");
+        }
+        String fileName = prefix + organismAbbrev + ".gff";
+
         File gffFile = new File(baseDir, fileName);
         PrintWriter writer = new PrintWriter(new FileWriter(gffFile));
 
