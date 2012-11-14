@@ -204,7 +204,8 @@ public class FusionTable {
 	}
 
 	String selectQuery = new String("select * from " + datasetId);
-	URL url = new URL(SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8"));
+	String urlString = SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8");
+	URL url = new URL(urlString);
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
 	request.execute();
 	
@@ -232,7 +233,7 @@ public class FusionTable {
 		// if a set of expected columns was given, check that this is in it
 		if (expectedColumns.length() > 0) {
 		    if (!expectedColumnSet.contains(decoded))
-			throw new Exception("column \"" + decoded + "\" not contained in expected-column list \"" + expectedColumns + "\"");
+			throw new Exception("column \"" + decoded + "\" not contained in expected-column list \"" + expectedColumns + "\" from URL \"" + urlString + "\"");
 		}
 
 		if (!match.group(4).equals(",")) { // last column; process row
@@ -242,7 +243,7 @@ public class FusionTable {
 
 		    // compare counts of expected vs. received columns
 		    if (expectedColumnSet.size() != columnCount) {
-			throw new Exception("expected " + expectedColumnSet.size() + " columns; received " + columnCount);
+			throw new Exception("expected " + expectedColumnSet.size() + " columns; received " + columnCount + " from URL \"" + urlString);
 		    }
 		}
 	    } else {
