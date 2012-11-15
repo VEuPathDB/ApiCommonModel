@@ -23,7 +23,7 @@ public class DatasetPresenter {
 
   private List<DatasetInjectorConstructor> datasetInjectors = new ArrayList<DatasetInjectorConstructor>();
 
-  public void setDatasetName(String datasetName) {
+  public void setName(String datasetName) {
     propValues.put("datasetName", datasetName);
   }
 
@@ -39,12 +39,12 @@ public class DatasetPresenter {
     propValues.put("datasetDescrip", datasetDescrip.getText());
   }
 
-  public void setDatasetDisplayName(String datasetDisplayName) {
-    propValues.put("datasetDisplayName", datasetDisplayName);
+  public void setDatasetDisplayName(Text datasetDisplayName) {
+    propValues.put("datasetDisplayName", datasetDisplayName.getText());
   }
 
-  public void setDatasetShortDisplayName(String datasetShortDisplayName) {
-    propValues.put("datasetShortDisplayName", datasetShortDisplayName);
+  public void setDatasetShortDisplayName(Text datasetShortDisplayName) {
+    propValues.put("datasetShortDisplayName", datasetShortDisplayName.getText());
   }
 
   public void setProjectName(String projectName) {
