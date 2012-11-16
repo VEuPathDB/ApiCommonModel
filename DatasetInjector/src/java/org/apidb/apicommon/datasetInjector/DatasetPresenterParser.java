@@ -76,6 +76,36 @@ public class DatasetPresenterParser extends XmlParser {
         "setText", 0);
 
     configureNode(digester,
+        "datasetPresenters/datasetPresenter/contactId",
+        Text.class, "addContactId");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/contactId",
+        "setText", 0);
+
+    configureNode(digester,
+        "datasetPresenters/datasetPresenter/pubmedId",
+        Text.class, "addPubmedId");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/pubmedId",
+        "setText", 0);
+
+    configureNode(digester,
+        "datasetPresenters/datasetPresenter/link",
+        HyperLink.class, "addLink");
+
+    configureNode(digester,
+        "datasetPresenters/datasetPresenter/link/url",
+        Text.class, "setUrl");
+    digester.addCallMethod(
+        "datasetPresenters/datasetPresenter/link/url", "setText",
+        0);
+
+    configureNode(digester,
+        "datasetPresenters/datasetPresenter/link/description",
+        Text.class, "setDescription");
+    digester.addCallMethod(
+        "datasetPresenters/datasetPresenter/link/description", "setText",
+        0);
+
+    configureNode(digester,
         "datasetPresenters/datasetPresenter/templateInjector",
         DatasetInjectorConstructor.class, "addDatasetInjector");
 

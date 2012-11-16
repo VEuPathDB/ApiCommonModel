@@ -30,6 +30,9 @@ public class DatasetPresenter {
   private String releasePolicy;
 
   private List<DatasetInjectorConstructor> datasetInjectors = new ArrayList<DatasetInjectorConstructor>();
+  private List<String> contactIds = new ArrayList<String>();
+  private List<String> pubmedIds = new ArrayList<String>();
+  private List<HyperLink> links = new ArrayList<HyperLink>();
 
   public void setName(String datasetName) {
     propValues.put("datasetName", datasetName);
@@ -110,7 +113,31 @@ public class DatasetPresenter {
   public String getAcknowledgement() {
     return acknowledgement;
   }
+  
+  public void addContactId(Text contactId) {
+    contactIds.add(contactId.getText());
+  }
+  
+  public List<String> getContactIds() {
+    return contactIds;
+  }
 
+  public void addPubmedId(Text pubmedId) {
+    pubmedIds.add(pubmedId.getText());
+  }
+
+  public List<String> getPubmedIds() {
+    return pubmedIds;
+  }
+
+  public void addLink(HyperLink link) {
+    links.add(link);
+  }
+  
+  public List<HyperLink> getLinks() {
+    return links;
+  }
+  
   public void addDatasetInjector(DatasetInjectorConstructor datasetInjector) {
     datasetInjectors.add(datasetInjector);
     datasetInjector.inheritDatasetProps(this);
