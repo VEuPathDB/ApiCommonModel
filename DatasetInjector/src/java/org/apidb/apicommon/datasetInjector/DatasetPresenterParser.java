@@ -90,7 +90,7 @@ public class DatasetPresenterParser extends XmlParser {
     configureNode(digester,
         "datasetPresenters/datasetPresenter/link",
         HyperLink.class, "addLink");
-
+    
     configureNode(digester,
         "datasetPresenters/datasetPresenter/link/url",
         Text.class, "setUrl");
