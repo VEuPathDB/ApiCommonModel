@@ -98,11 +98,9 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 							<dt><b>Contacts:</b></dt>
 						
 						<dd>
-							<xsl:for-each select="./contacts/contact">
-								<xsl:value-of select="name" disable-output-escaping="yes" />
-								<xsl:if test="string-length(institution) &gt; 0">
-								  (<xsl:value-of select="institution" disable-output-escaping="yes" />)
-								</xsl:if>
+							<xsl:for-each select="./contacts/contactId">
+								<xsl:value-of select="." disable-output-escaping="yes" />
+
 								<br />
 							</xsl:for-each>
 						</dd>
@@ -114,7 +112,16 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 <xsl:attribute name="href">
 <xsl:value-of select="url" disable-output-escaping="yes" />
 </xsl:attribute>
-<xsl:value-of select="linkDescription" disable-output-escaping="yes" /> (<xsl:value-of select="url" disable-output-escaping="yes" />)
+
+<xsl:choose>
+  <xsl:when test="linkDescription != ''">
+   <xsl:value-of select="linkDescription" disable-output-escaping="yes" />
+    </xsl:when>
+    <xsl:otherwise>
+     <xsl:value-of select="url" disable-output-escaping="yes" />
+    </xsl:otherwise>
+    </xsl:choose>
+
 </a>
 
 
