@@ -281,6 +281,12 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getPropValue("projectName").equals("ToxoDB"));
     assertTrue(dp2.getPropValue("buildNumberIntroduced").equals("17"));
     assertTrue(dp2.getPropValue("datasetDescrip").equals("Well life is groovy, no?"));
+    assertTrue(dp2.getPropValue("summary").equals("grooves"));
+    assertTrue(dp2.getCaveat().equals("a caveat"));
+    assertTrue(dp2.getAcknowledgement().equals("an acknowledgement"));
+    assertTrue(dp2.getProtocol().equals("a protocol"));
+    assertTrue(dp2.getDisplayCategory().equals("a displayCategory"));
+    assertTrue(dp2.getReleasePolicy().equals("a releasePolicy"));
     assertTrue(dp1.getDatasetInjectors().size() == 1);
     assertTrue(dp2.getDatasetInjectors().size() == 1);
     DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);

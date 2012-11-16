@@ -45,6 +45,36 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod("datasetPresenters/datasetPresenter/description",
         "setText", 0);
 
+    configureNode(digester, "datasetPresenters/datasetPresenter/caveat",
+        Text.class, "setCaveat");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/caveat",
+        "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/displayCategory",
+        Text.class, "setDisplayCategory");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/displayCategory",
+        "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/protocol",
+        Text.class, "setProtocol");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/protocol",
+        "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/releasePolicy",
+        Text.class, "setReleasePolicy");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/releasePolicy",
+        "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/summary",
+        Text.class, "setSummary");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/summary",
+        "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/acknowledgement",
+        Text.class, "setAcknowledgement");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/acknowledgement",
+        "setText", 0);
+
     configureNode(digester,
         "datasetPresenters/datasetPresenter/templateInjector",
         DatasetInjectorConstructor.class, "addDatasetInjector");

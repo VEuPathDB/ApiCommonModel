@@ -19,7 +19,15 @@ import org.gusdb.fgputil.xml.Text;
  */
 public class DatasetPresenter {
 
+  // use prop values for properties that might be injected into templates.
   Map<String, String> propValues = new HashMap<String, String>();
+  
+  // use instance variables for properties that have no chance of being injected.
+  private String displayCategory;
+  private String protocol;
+  private String acknowledgement;
+  private String caveat;
+  private String releasePolicy;
 
   private List<DatasetInjectorConstructor> datasetInjectors = new ArrayList<DatasetInjectorConstructor>();
 
@@ -47,7 +55,11 @@ public class DatasetPresenter {
     propValues.put("datasetShortDisplayName", datasetShortDisplayName.getText());
   }
 
-  public void setProjectName(String projectName) {
+  public void setSummary(Text summary) {
+    propValues.put("summary", summary.getText());
+  }
+
+ public void setProjectName(String projectName) {
     propValues.put("projectName", projectName);
   }
 
@@ -57,6 +69,46 @@ public class DatasetPresenter {
 
   public void setBuildNumberIntroduced(String buildNumberIntroduced) {
     propValues.put("buildNumberIntroduced", buildNumberIntroduced);
+  }
+  
+  public void setDisplayCategory(Text displayCategory) {
+    this.displayCategory = displayCategory.getText();
+  }
+  
+  public String getDisplayCategory() {
+    return displayCategory;
+  }
+
+  public void setCaveat(Text caveat) {
+    this.caveat = caveat.getText();
+  }
+  
+  public String getCaveat() {
+    return caveat;
+  }
+
+  public void setReleasePolicy(Text releasePolicy) {
+    this.releasePolicy = releasePolicy.getText();
+  }
+  
+  public String getReleasePolicy() {
+    return releasePolicy;
+  }
+
+  public void setProtocol(Text protocol) {
+    this.protocol = protocol.getText();
+  }
+  
+  public String getProtocol() {
+    return protocol;
+  }
+
+  public void setAcknowledgement(Text acknowledgement) {
+    this.acknowledgement = acknowledgement.getText();
+  }
+  
+  public String getAcknowledgement() {
+    return acknowledgement;
   }
 
   public void addDatasetInjector(DatasetInjectorConstructor datasetInjector) {
