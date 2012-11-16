@@ -15,7 +15,7 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
          <th>email</th>
       </tr>
       <xsl:for-each select="contacts/contact">
-      <xsl:sort select="name"/>
+      <xsl:sort select="contactId"/>
       <tr>
         <td><xsl:value-of select="contactId"/></td>
         <td><xsl:value-of select="name"/></td>
