@@ -7,27 +7,35 @@ use DBI;
 use Getopt::Long qw(GetOptions);
 use ApiCommonData::Load::TuningConfig::Utils;
 
-my ($propfile, $instance, $schema, $password, $suffix);
-GetOptions("propfile=s" => \$propfile,
-           "instance=s" => \$instance,
-           "schema=s" => \$schema,
-           "password=s" => \$password,
-           "suffix=s" => \$suffix,
-	  );
+usage() unless scalar(@ARGV) == 4;
 
+my ($instance, $suffix, $propfile, $mode) = shift @ARGV;
 
-($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+usage() if ($mode !~ /create|drop|dropConstraints/);
+
+my ($schema, $password);
+
+($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, "", "");
+
 my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
 
 $|=1;
 
-createTables($dbh, $schema, $suffix);
+if ($mode eq "dropConstraints") {
+  dropConstraints($dbh, $schema, $suffix);  # (also drops sequences)
+} else {
+if ($mode eq "drop") {
+  dropConstraints($dbh, $schema, $suffix);
+  dropTables($dbh, $schema, $suffix);
+} else {
+  createTables($dbh, $schema, $suffix);
+}
 
 sub createTables {
     my ($dbh, $schema, $suffix) = @_;
 
     $dbh->do(<<SQL) or die "creating DatasetPresenter table";
-      create table $Schema.DatasetPresenter$suffix (
+      create table $schema.DatasetPresenter$suffix (
         dataset_presenter_id         number(12),
         name                         varchar2(200),
         dataset_name_regex           varchar2(200),
@@ -45,13 +53,13 @@ sub createTables {
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetPresenter table";
-      create sequence $Schema.DatasetPresenter${suffix}_sq
+      create sequence $schema.DatasetPresenter${suffix}_sq
 SQL
 
     ###############################################
 
     $dbh->do(<<SQL) or die "creating DatasetContact table";
-      create table $Schema.DatasetContact$suffix (
+      create table $schema.DatasetContact$suffix (
         dataset_contact_id           number(12),
         dataset_presenter_id         number(12),
         is_primary_contact           varchar2(20),
@@ -68,19 +76,19 @@ SQL
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetContact table";
-      create sequence $Schema.DatasetContact${suffix}_sq
+      create sequence $schema.DatasetContact${suffix}_sq
 SQL
 
     $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetContact table";
-        alter table $Schema.DatasetContact$suffix add constraint Dataset_contact${suffix}_fk
-        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+        alter table $schema.DatasetContact$suffix add constraint Dataset_contact${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
 SQL
 
 
    #######################################################
 
     $dbh->do(<<SQL) or die "creating DatasetHyperLink table";
-      create table $Schema.DatasetHyperLinkL$suffix (
+      create table $schema.DatasetHyperLinkL$suffix (
         dataset_link_id                  number(12),
         dataset_presenter_id             number(12),
         url_type                         varchar2(20),
@@ -91,19 +99,19 @@ SQL
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetHyperLink table";
-      create sequence $Schema.DatasetHyperLink${suffix}_sq
+      create sequence $schema.DatasetHyperLink${suffix}_sq
 SQL
 
     $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetHyperLink table";
-        alter table $Schema.DatasetHyperLink$suffix add constraint Dataset_hyperlink${suffix}_fk
-        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+        alter table $schema.DatasetHyperLink$suffix add constraint Dataset_hyperlink${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
 SQL
 
 
    #######################################################
 
     $dbh->do(<<SQL) or die "creating DatasetPublication table";
-      create table $Schema.DatasetPublication$suffix (
+      create table $schema.DatasetPublication$suffix (
         dataset_publication_id       number(12),
         dataset_presenter_id         number(12),
         pmid                         varchar2(60),
@@ -113,19 +121,40 @@ SQL
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetPublication table";
-      create sequence $Schema.DatasetPub${suffix}_sq
+      create sequence $schema.DatasetPub${suffix}_sq
 SQL
 
     $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetPublication table";
-        alter table $Schema.DatasetAttrPublication$suffix add constraint Dataset_pub${suffix}_fk
-        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+        alter table $schema.DatasetPublication$suffix add constraint Dataset_pub${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
+SQL
+
+
+   #######################################################
+
+    $dbh->do(<<SQL) or die "creating DatasetTaxon table";
+      create table $schema.DatasetTaxon$suffix (
+        dataset_taxon_id          number(12),
+        dataset_presenter_id      number(12),
+        taxon_id                  number(12),
+        constraint DatasetTax${suffix}_pk primary key (dataset_taxon_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetTaxon table";
+      create sequence $schema.DatasetTax${suffix}_sq
+SQL
+
+    $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetTaxon table";
+        alter table $schema.DatasetTaxon$suffix add constraint Dataset_tax${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
 SQL
 
 
    #######################################################
 
     $dbh->do(<<SQL) or die "creating DatasetModelReference table";
-      create table $Schema.DatasetModelReference$suffix (
+      create table $schema.DatasetModelReference$suffix (
         dataset_model_ref_id   number(12),
         dataset_presenter_id         number(12),
         record_type                  varchar2(50),
@@ -136,19 +165,19 @@ SQL
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetModelReference table";
-      create sequence $Schema.DatasetModelRef${suffix}_sq
+      create sequence $schema.DatasetModelRef${suffix}_sq
 SQL
 
     $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetReference table";
-        alter table $Schema.DatasetModelReference$suffix add constraint Dataset_model_ref${suffix}_fk
-        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+        alter table $schema.DatasetModelReference$suffix add constraint Dataset_model_ref${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
 SQL
 
 
    #######################################################
 
     $dbh->do(<<SQL) or die "creating DatasetModelReferenceText table";
-      create table $Schema.DatasetModelReferenceText$suffix (
+      create table $schema.DatasetModelReferenceText$suffix (
         dataset_model_ref_text_id         number(12),
         dataset_model_ref_id              number(12),
         name                              varchar2(100),
@@ -158,13 +187,33 @@ SQL
 SQL
 
     $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetModelReferenceText table";
-      create sequence $Schema.DatasetModelRefTxt${suffix}_sq
+      create sequence $schema.DatasetModelRefTxt${suffix}_sq
 SQL
 
     $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetModelReferenceText table";
-        alter table $Schema.DatasetModelReferenceText$suffix add constraint DatasetModelRefTxt_${suffix}_fk
-        FOREIGN KEY (dataset_model_ref_id) REFERENCES $Schema.DatasetModelReference$suffix (dataset_model_ref_id)
+        alter table $schema.DatasetModelReferenceText$suffix add constraint DatasetModelRefTxt_${suffix}_fk
+        FOREIGN KEY (dataset_model_ref_id) REFERENCES $schema.DatasetModelReference$suffix (dataset_model_ref_id)
 SQL
 
 }
 
+sub usage {
+  die "
+Create the DatasetPresenter schema (used by the tuning manager).
+
+Usage:  createDatasetPresenterSchema instance suffix propsXmlFile mode
+
+Where:
+  instance:       the name of the instance to create tables in
+
+  suffix:         the name of the suffix to append on the tables, etc, created.
+                  This is typically a number supplied by the tuning manager
+
+  propsXmlFile:   an XML file compatible with tuning manager property XML format.
+                  Required properties are:  password and schema.  (See tuningManager usage.)
+
+  mode:           create|drop|dropConstraints.  The last of these drops constraints and sequences.
+                  We do this after the tables are populated because they are no longer needed and
+                  this simplifies the tuning manager.
+";
+}
