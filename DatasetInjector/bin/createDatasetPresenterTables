@@ -1,0 +1,170 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use Getopt::Long qw(GetOptions);
+use ApiCommonData::Load::TuningConfig::Utils;
+
+my ($propfile, $instance, $schema, $password, $suffix);
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "password=s" => \$password,
+           "suffix=s" => \$suffix,
+	  );
+
+
+($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+
+$|=1;
+
+createTables($dbh, $schema, $suffix);
+
+sub createTables {
+    my ($dbh, $schema, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating DatasetPresenter table";
+      create table $Schema.DatasetPresenter$suffix (
+        dataset_presenter_id         number(12),
+        name                         varchar2(200),
+        dataset_name_regex           varchar2(200),
+        display_name                 varchar2(200),
+        short_display_name           varchar2(200),
+        summary                      varchar2(2000),
+        protocol                     varchar2(4000),
+        description                  varchar2(4000),
+        caveat                       varchar2(4000),
+        acknowledgement              varchar2(4000),
+        release_policy               varchar2(4000),
+        display_category             varchar2(60),
+        constraint DatasetPresenter${suffix}_pk primary key (dataset_presenter_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetPresenter table";
+      create sequence $Schema.DatasetPresenter${suffix}_sq
+SQL
+
+    ###############################################
+
+    $dbh->do(<<SQL) or die "creating DatasetContact table";
+      create table $Schema.DatasetContact$suffix (
+        dataset_contact_id           number(12),
+        dataset_presenter_id         number(12),
+        is_primary_contact           varchar2(20),
+        name                         varchar2(255),
+        email                        varchar2(255),
+        affiliation                  varchar2(255),
+        city                         varchar2(255),
+        state                        varchar2(255),
+        country                      varchar2(255),
+        address                      varchar2(255),
+        zip                          varchar2(25),
+        constraint DatasetContact${suffix}_pk primary key (dataset_contact_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetContact table";
+      create sequence $Schema.DatasetContact${suffix}_sq
+SQL
+
+    $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetContact table";
+        alter table $Schema.DatasetContact$suffix add constraint Dataset_contact${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+SQL
+
+
+   #######################################################
+
+    $dbh->do(<<SQL) or die "creating DatasetHyperLink table";
+      create table $Schema.DatasetHyperLinkL$suffix (
+        dataset_link_id                  number(12),
+        dataset_presenter_id             number(12),
+        url_type                         varchar2(20),
+        description                      varchar2(4000),
+        url                              varchar2(2000),
+        constraint DatasetHyperLink${suffix}_pk primary key (dataset_link_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetHyperLink table";
+      create sequence $Schema.DatasetHyperLink${suffix}_sq
+SQL
+
+    $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetHyperLink table";
+        alter table $Schema.DatasetHyperLink$suffix add constraint Dataset_hyperlink${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+SQL
+
+
+   #######################################################
+
+    $dbh->do(<<SQL) or die "creating DatasetPublication table";
+      create table $Schema.DatasetPublication$suffix (
+        dataset_publication_id       number(12),
+        dataset_presenter_id         number(12),
+        pmid                         varchar2(60),
+        citation                     varchar2(4000),
+        constraint DatasetPub${suffix}_pk primary key (dataset_publication_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetPublication table";
+      create sequence $Schema.DatasetPub${suffix}_sq
+SQL
+
+    $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetPublication table";
+        alter table $Schema.DatasetAttrPublication$suffix add constraint Dataset_pub${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+SQL
+
+
+   #######################################################
+
+    $dbh->do(<<SQL) or die "creating DatasetModelReference table";
+      create table $Schema.DatasetModelReference$suffix (
+        dataset_model_ref_id   number(12),
+        dataset_presenter_id         number(12),
+        record_type                  varchar2(50),
+        target_type                  varchar2(20),
+        target_name                  varchar2(100),
+        constraint DataSrcWdkRef${suffix}_pk primary key (dataset_reference_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetModelReference table";
+      create sequence $Schema.DatasetModelRef${suffix}_sq
+SQL
+
+    $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetReference table";
+        alter table $Schema.DatasetModelReference$suffix add constraint Dataset_model_ref${suffix}_fk
+        FOREIGN KEY (dataset_presenter_id) REFERENCES $Schema.DatasetPresenter$suffix (dataset_presenter_id)
+SQL
+
+
+   #######################################################
+
+    $dbh->do(<<SQL) or die "creating DatasetModelReferenceText table";
+      create table $Schema.DatasetModelReferenceText$suffix (
+        dataset_model_ref_text_id         number(12),
+        dataset_model_ref_id              number(12),
+        name                              varchar2(100),
+        value                             varchar2(4000),
+        constraint DataSrcWdkRefText${suffix}_pk primary key (dataset_reference_text_id)
+      )
+SQL
+
+    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetModelReferenceText table";
+      create sequence $Schema.DatasetModelRefTxt${suffix}_sq
+SQL
+
+    $dbh->do(<<SQL) or die "Adding foreign-key constraint from DatasetModelReferenceText table";
+        alter table $Schema.DatasetModelReferenceText$suffix add constraint DatasetModelRefTxt_${suffix}_fk
+        FOREIGN KEY (dataset_model_ref_id) REFERENCES $Schema.DatasetModelReference$suffix (dataset_model_ref_id)
+SQL
+
+}
+
