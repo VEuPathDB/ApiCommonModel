@@ -13,18 +13,22 @@
 	</sqlQuery>
 
 
-
 	<sqlQuery name="SubstanceId">
 	  <column name="project_id"/>
 	  <column name="source_id"/>
 	  <column name="substance_id"/>
 	  <sql>
 	    <![CDATA[
-	       SELECT comp.compound_id as source_id, subst.substance_id,
-                      '@PROJECT_ID@' AS project_id
-	       FROM apidb.PubChemSubstance subst,  apidb.PubChemCompound comp
-	       WHERE subst.property='CID' and comp.property='Mass'
-	       AND subst.value =to_char( comp.compound_id )
+      SELECT comp.compound_id as source_id, '@PROJECT_ID@' AS project_id, 
+              apidb.tab_to_string(set(cast(COLLECT(to_char(subst.substance_id)) AS apidb.varchartab)), ', ') AS substance_id
+        FROM apidb.PubChemSubstance subst,  apidb.PubChemCompound comp
+       WHERE subst.property='CID' 
+         AND subst.value = comp.compound_id
+      GROUP BY comp.compound_id
+       UNION
+      SELECT DISTINCT compound_id, '@PROJECT_ID@' AS project_id,  '-' as substance_id
+        FROM apidb.PubChemCompound 
+       WHERE compound_id  not in (SELECT value FROM apidb.PubChemSubstance WHERE property='CID')
 	    ]]>
 	  </sql>
 	</sqlQuery>
@@ -35,13 +39,19 @@
 	  <column name="synonymns"/>
 	  <sql>
 	    <![CDATA[
-	       SELECT '@PROJECT_ID@' as project_id, s1.value as source_id,
+	       SELECT s1.value as source_id, '@PROJECT_ID@' as project_id, 
 	           apidb.tab_to_string(set(CAST(COLLECT(s2.value) AS apidb.varchartab)),', ') as synonymns
-	       FROM APIDB.pubchemsubstance s1, APIDB.pubchemsubstance s2
+	       FROM apidb.pubchemsubstance s1, apidb.pubchemsubstance s2
 	       WHERE s1.property = 'CID'
 	       AND s2.property = 'synonymns'
 	       AND s1.substance_id = s2.substance_id
 	       GROUP BY s1.value
+	       UNION
+	       SELECT DISTINCT to_char(compound_id) as source_id, '@PROJECT_ID@' AS project_id,  
+	             to_char('-')  as synonymns
+	       FROM apidb.PubChemCompound 
+               WHERE compound_id  not in (SELECT value FROM apidb.PubChemSubstance WHERE property='CID')
+
 	    ]]>
 	  </sql>
 	</sqlQuery>
