@@ -31,7 +31,7 @@ public class DatasetPresenter {
 
   private List<DatasetInjectorConstructor> datasetInjectors = new ArrayList<DatasetInjectorConstructor>();
   private List<String> contactIds = new ArrayList<String>();
-  private List<String> pubmedIds = new ArrayList<String>();
+  private List<Publication> publications = new ArrayList<Publication>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
 
   public void setName(String datasetName) {
@@ -122,12 +122,12 @@ public class DatasetPresenter {
     return contactIds;
   }
 
-  public void addPubmedId(Text pubmedId) {
-    pubmedIds.add(pubmedId.getText());
+  public void addPublication(Publication publication) {
+    publications.add(publication);
   }
 
-  public List<String> getPubmedIds() {
-    return pubmedIds;
+  public List<Publication> getPublications() {
+    return publications;
   }
 
   public void addLink(HyperLink link) {

@@ -83,9 +83,10 @@ public class DatasetPresenterParser extends XmlParser {
 
     configureNode(digester,
         "datasetPresenters/datasetPresenter/pubmedId",
-        Text.class, "addPubmedId");
+        Publication.class, "addPublication");
     digester.addCallMethod("datasetPresenters/datasetPresenter/pubmedId",
-        "setText", 0);
+        "setPubmedId", 0);
+
 
     configureNode(digester,
         "datasetPresenters/datasetPresenter/link",
@@ -99,10 +100,10 @@ public class DatasetPresenterParser extends XmlParser {
         0);
 
     configureNode(digester,
-        "datasetPresenters/datasetPresenter/link/description",
-        Text.class, "setDescription");
+        "datasetPresenters/datasetPresenter/link/text",
+        Text.class, "setText");
     digester.addCallMethod(
-        "datasetPresenters/datasetPresenter/link/description", "setText",
+        "datasetPresenters/datasetPresenter/link/text", "setText",
         0);
 
     configureNode(digester,

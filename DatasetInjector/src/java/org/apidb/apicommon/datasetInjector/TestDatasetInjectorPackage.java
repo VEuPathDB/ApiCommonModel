@@ -17,8 +17,6 @@ import org.apache.commons.cli.CommandLine;
 import org.gusdb.fgputil.xml.NamedValue;
 import org.junit.Test;
 
-import org.apidb.apicommon.datasetInjector.HyperLink.LinkType;
-
 /**
  * JUnit tests for the datasetInjector package
  * 
@@ -290,13 +288,12 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getDisplayCategory().equals("a displayCategory"));
     assertTrue(dp2.getReleasePolicy().equals("a releasePolicy"));
     assertTrue(dp2.getContactIds().size() == 2);
-    assertTrue(dp2.getPubmedIds().size() == 2);
+    assertTrue(dp2.getPublications().size() == 2);
     assertTrue(dp2.getLinks().size() == 2);
     assertTrue(dp2.getContactIds().get(1).equals("bugs.bunny"));
-    assertTrue(dp2.getPubmedIds().get(1).equals("54321"));
+    assertTrue(dp2.getPublications().get(1).getPubmedId().equals("54321"));
     assertTrue(dp2.getLinks().get(1).getUrl().equals("someplace.com"));
-    assertTrue(dp2.getLinks().get(1).getDescription().equals("exciting"));
-    assertTrue(dp2.getLinks().get(1).getType() == LinkType.INTERNAL);
+    assertTrue(dp2.getLinks().get(1).getText().equals("exciting"));
     assertTrue(dp1.getDatasetInjectors().size() == 1);
     assertTrue(dp2.getDatasetInjectors().size() == 1);
     DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
