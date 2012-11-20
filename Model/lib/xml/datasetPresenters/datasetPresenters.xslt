@@ -106,9 +106,13 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 						
 						<dd>
 							<xsl:for-each select="./contactId">
-								<xsl:value-of select="." disable-output-escaping="yes" />
 
-								<br />
+		<xsl:variable name="contactId">						
+        <xsl:value-of select="." disable-output-escaping="yes" />
+        </xsl:variable>
+
+        <xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$contactId]/name"/> (<xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$contactId]/institution"/>)
+                                <br />        
 							</xsl:for-each>
 						</dd>
                             <dt><b>Links:</b></dt>
