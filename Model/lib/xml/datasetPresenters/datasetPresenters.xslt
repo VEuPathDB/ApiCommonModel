@@ -19,12 +19,19 @@
 					</h3>
 					<dl>
 						
+                           <dt><b>Short Display Name:</b></dt>
+                           <dd>
+                            <xsl:value-of select="shortDisplayName"
+                                disable-output-escaping="yes" />
+                            </dd>
+      
+      
 							<dt><b>Description:</b></dt>
 						
-						<dd>
-							<xsl:value-of select="description"
-								disable-output-escaping="yes" />
-						</dd>
+                        <dd>
+                            <xsl:value-of select="description"
+                                disable-output-escaping="yes" />
+                        </dd>
 
 						
 							<dt><b>Short Description:</b></dt>
@@ -79,7 +86,7 @@
 							<dt><b>Pubmed IDs:</b></dt>
 						
 						<dd>
-							<xsl:for-each select="./publications/publication/@pmid">
+							<xsl:for-each select="./pubmedId">
        
 <a>
 <xsl:attribute name="href">
@@ -98,7 +105,7 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 							<dt><b>Contacts:</b></dt>
 						
 						<dd>
-							<xsl:for-each select="./contacts/contactId">
+							<xsl:for-each select="./contactId">
 								<xsl:value-of select="." disable-output-escaping="yes" />
 
 								<br />
@@ -106,7 +113,7 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 						</dd>
                             <dt><b>Links:</b></dt>
                         <dd>
-                            <xsl:for-each select="./links/link">
+                            <xsl:for-each select="./link">
        
 <a>
 <xsl:attribute name="href">
@@ -114,8 +121,8 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 </xsl:attribute>
 
 <xsl:choose>
-  <xsl:when test="linkDescription != ''">
-   <xsl:value-of select="linkDescription" disable-output-escaping="yes" />
+  <xsl:when test="text != ''">
+   <xsl:value-of select="text" disable-output-escaping="yes" />
     </xsl:when>
     <xsl:otherwise>
      <xsl:value-of select="url" disable-output-escaping="yes" />
