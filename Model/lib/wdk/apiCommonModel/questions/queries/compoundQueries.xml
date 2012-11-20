@@ -43,31 +43,69 @@
       <column name="source_id"/>
       <column name="compound"/>
       <column name="enzyme"/>
-
+      <column name="reaction"/>
       <sql>
 	<![CDATA[
-            SELECT DISTINCT pc.pubchem_compound_id as source_id, pc.compound, pc.enzyme, --s.substance_id, 
-                   '@PROJECT_ID@' as project_id
-	    FROM apidbtuning.PathwayCompounds pc, apidb.pubchemsubstance s
-            WHERE lower(gene_id) LIKE REGEXP_REPLACE(REPLACE(LOWER($$single_gene_id$$), '*', '%'),'[[:space:]]', '')
-            AND s.property='CID' 
-	    AND s.value =to_char( pubchem_compound_id )
-                                               
-	    ]]>
+       SELECT DISTINCT pc.pubchem_compound_id as source_id, pubchem_substance_id as subst_id, compound, 
+              enzyme, reaction, '@PROJECT_ID@' as project_id
+         FROM dots.Transcript t, dots.translatedAaFeature taf, sres.enzymeClass ec, 
+              dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneId gi, ApidbTuning.GeneAttributes ga,
+              apidbtuning.PathwayCompounds pc
+        WHERE lower(gi.id) LIKE REGEXP_REPLACE(REPLACE(LOWER($$single_gene_id$$), '*', '%'),'[[:space:]]', '')
+          AND ga.source_id = gi.gene
+          AND ga.na_feature_id = t.parent_id
+          AND t.na_feature_id = taf.na_feature_id
+          AND taf.aa_sequence_id = asec.aa_sequence_id
+          AND asec.enzyme_class_id = ec.enzyme_class_id
+          AND pc.enzyme = ec.ec_number
+--       ORDER BY pubchem_compound_id
+	]]>
         </sql>
     </sqlQuery>
 
     <processQuery name="CompoundsByGeneID" includeProjects="EuPathDB"
 		  isCacheable='true' doNotTest="true"
 		  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
-      <paramRef ref="estParams.single_gene_id" noTranslation="true"/>
+      <paramRef ref="pathwayParams.metabolic_pathway_id" noTranslation="true"/>
       <wsColumn name="source_id" width="50" wsName="source_id"/>
       <wsColumn name="project_id" width="32" wsName="project_id"/>
       <wsColumn name="compound" width="32"/>   
       <wsColumn name="enzyme" width="32"/>   
+      <wsColumn name="reaction" width="32"/>   
     </processQuery>   
 
+
+    <sqlQuery name="CompoundsByPathway" doNotTest="true"  excludeProjects="EuPathDB"
+              displayName="compounds by pathway" isCacheable="true">
+
+      <paramRef ref="pathwayParams.metabolic_pathway_id"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="compound"/>
+      <column name="subst_id"/>
+      <sql>
+	<![CDATA[
+            SELECT DISTINCT pubchem_compound_id as source_id, pubchem_substance_id as subst_id, 
+                   compound, '@PROJECT_ID@' as project_id
+	    FROM apidbtuning.PathwayCompounds
+            WHERE network_id in ($$metabolic_pathway_id$$)                                               
+	    ]]>
+        </sql>
+    </sqlQuery>
+
+    <processQuery name="CompoundsByPathway" includeProjects="EuPathDB"
+		  isCacheable='true' doNotTest="true"
+		  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
+      <paramRef ref="estParams.single_gene_id" noTranslation="true"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="32" wsName="project_id"/>
+      <wsColumn name="compound" width="32"/>   
+      <wsColumn name="subst_id" width="32"/>   
+    </processQuery>   
+
+
    </querySet>
+
 
 
 </wdkModel>
