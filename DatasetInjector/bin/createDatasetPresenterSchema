@@ -6,9 +6,9 @@ use lib "$ENV{GUS_HOME}/lib/perl";
 use DBI;
 use ApiCommonData::Load::TuningConfig::Utils;
 
-usage() unless scalar(@ARGV) == 4;
+usage() unless scalar(@ARGV) >= 4;
 
-my ($instance, $suffix, $propfile, $mode) = shift @ARGV;
+my ($instance, $suffix, $propfile, $mode, $debug) = @ARGV;
 
 usage() unless ($mode eq '-create' || $mode eq '-drop' || $mode eq '-dropConstraints');
 
@@ -20,20 +20,20 @@ my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $sche
 
 $|=1;
 
-if ($mode eq "dropConstraints") {
-  dropConstraints($dbh, $schema, $suffix);  # (also drops sequences)
-} else {
-if ($mode eq "drop") {
+if ($mode eq "-dropConstraints") {
+  dropConstraints($dbh, $schema, $suffix); # (also drops sequences)
+} elsif ($mode eq "-drop") {
   dropConstraints($dbh, $schema, $suffix);
   dropTables($dbh, $schema, $suffix);
 } else {
   createTables($dbh, $schema, $suffix);
 }
 
-sub createTables {
-    my ($dbh, $schema, $suffix) = @_;
 
-    $dbh->do(<<SQL) or die "creating DatasetPresenter table";
+sub createTables {
+  my ($dbh, $schema, $suffix) = @_;
+
+  my $sql = "
       create table $schema.DatasetPresenter$suffix (
         dataset_presenter_id         number(12),
         name                         varchar2(200),
@@ -51,16 +51,15 @@ sub createTables {
         subtype                      varchar2(100),
         is_species_scope             number(1),
         constraint DatasetPresenter${suffix}_pk primary key (dataset_presenter_id)
-      )
-SQL
+      )";
+  runSql($dbh, $sql, 1);
 
-    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetPresenter table";
-      create sequence $schema.DatasetPresenter${suffix}_sq
-SQL
+  $sql = "create sequence $schema.DatasetPresenter${suffix}_sq";
+  runSql($dbh, $sql, 1);
 
-    ###############################################
+  ###############################################
 
-    $dbh->do(<<SQL) or die "creating DatasetContact table";
+  $sql = "
       create table $schema.DatasetContact$suffix (
         dataset_contact_id           number(12),
         dataset_presenter_id         number(12),
@@ -75,156 +74,118 @@ SQL
         zip                          varchar2(25),
         constraint DatasetContact${suffix}_pk primary key (dataset_contact_id),
         constraint DatasetContact${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
-      )
-SQL
+      )";
+  runSql($dbh, $sql, 1);
 
-    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetContact table";
-      create sequence $schema.DatasetContact${suffix}_sq
-SQL
+  $sql = "create sequence $schema.DatasetContact${suffix}_sq";
+  runSql($dbh, $sql, 1);
 
 
-   #######################################################
+  #######################################################
 
-    $dbh->do(<<SQL) or die "creating DatasetHyperLink table";
-      create table $schema.DatasetHyperLinkL$suffix (
+  $sql = "
+      create table $schema.DatasetHyperLink$suffix (
         dataset_link_id                  number(12),
         dataset_presenter_id             number(12),
         text                             varchar2(4000),
         url                              varchar2(2000),
         constraint DatasetHyperLink${suffix}_pk primary key (dataset_link_id),
-        constraint DatasetHyperLinkink${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
-      )
-SQL
-
-    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetHyperLink table";
-      create sequence $schema.DatasetHyperLink${suffix}_sq
-SQL
+        constraint DatasetHyperLink${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
+      )";
+  runSql($dbh, $sql, 1);
 
 
+  $sql = "create sequence $schema.DatasetHyperLink${suffix}_sq";
+  runSql($dbh, $sql, 1);
 
-   #######################################################
 
-    $dbh->do(<<SQL) or die "creating DatasetPublication table";
+  #######################################################
+
+  $sql = "
       create table $schema.DatasetPublication$suffix (
         dataset_publication_id       number(12),
         dataset_presenter_id         number(12),
         pmid                         varchar2(60),
         citation                     varchar2(4000),
-        constraint DatasetPub${suffix}_pk primary key (dataset_publication_id),
-        constraint DatasetPub${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
-SQL
-      )
-SQL
-
-    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetPublication table";
-      create sequence $schema.DatasetPub${suffix}_sq
-SQL
+        constraint DatasetPublication${suffix}_pk primary key (dataset_publication_id),
+        constraint DatasetPublication${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
+     )";
+  runSql($dbh, $sql, 1);
 
 
-   #######################################################
+  $sql = "create sequence $schema.DatasetPublication${suffix}_sq";
+  runSql($dbh, $sql, 1);
 
-    $dbh->do(<<SQL) or die "creating DatasetTaxon table";
+
+  #######################################################
+
+  $sql = "
       create table $schema.DatasetTaxon$suffix (
         dataset_taxon_id          number(12),
         dataset_presenter_id      number(12),
         taxon_id                  number(12),
-        constraint DatasetTax${suffix}_pk primary key (dataset_taxon_id),
-        constraint DatasetTax${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
-      )
-SQL
+        constraint DatasetTaxon${suffix}_pk primary key (dataset_taxon_id),
+        constraint DatasetTaxon${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
+      )";
+  runSql($dbh, $sql, 1);
 
-    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetTaxon table";
-      create sequence $schema.DatasetTax${suffix}_sq
-SQL
-
+  $sql = "create sequence $schema.DatasetTaxon${suffix}_sq";
+  runSql($dbh, $sql, 1);
 
 
-   #######################################################
+  #######################################################
 
-    $dbh->do(<<SQL) or die "creating DatasetModelReference table";
-      create table $schema.DatasetModelReference$suffix (
+  $sql = "
+      create table $schema.DatasetModelRef$suffix (
         dataset_model_ref_id         number(12),
         dataset_presenter_id         number(12),
         record_type                  varchar2(50),
         target_type                  varchar2(20),
         target_name                  varchar2(100),
-        constraint DatasetModelRef${suffix}_pk primary key (dataset_reference_id),
+        constraint DatasetModelRef${suffix}_pk primary key (dataset_model_ref_id),
         constraint DatasetModelRef${suffix}_fk FOREIGN KEY (dataset_presenter_id) REFERENCES $schema.DatasetPresenter$suffix (dataset_presenter_id)
-      )
-SQL
+      )";
+  runSql($dbh, $sql, 1);
 
-    $dbh->do(<<SQL) or die "creating primary-key sequence for DatasetModelReference table";
-      create sequence $schema.DatasetModelRef${suffix}_sq
-SQL
+  $sql = "create sequence $schema.DatasetModelRef${suffix}_sq";
+  runSql($dbh, $sql, 1);
 
 }
 
-sub dropTabless {
-    my ($dbh, $schema, $suffix) = @_;
+sub dropTables {
+  my ($dbh, $schema, $suffix) = @_;
 
-    $dbh->do(<<SQL) 
-      drop table $schema.DatasetPresenter${suffix}
-SQL
-    $dbh->do(<<SQL) 
-      drop table $schema.DatasetContact${suffix}
-SQL
-    $dbh->do(<<SQL) 
-      drop table $schema.DatasetHyperLink${suffix}
-SQL
-    $dbh->do(<<SQL) 
-      drop table $schema.DatasetPub${suffix}
-SQL
-    $dbh->do(<<SQL) 
-      drop table $schema.DatasetTax${suffix}
-SQL
-    $dbh->do(<<SQL) 
-      drop table $schema.DatasetModelRef${suffix}
-SQL
+  foreach my $nm ('Presenter', 'Contact', 'HyperLink', 'Publication', 'Taxon', 'ModelRef') {
+    my $sql = "drop table $schema.Dataset$nm${suffix}";
+    runSql($dbh, $sql, 0);
+
+  }
 }
 
 sub dropConstraints {
-    my ($dbh, $schema, $suffix) = @_;
+  my ($dbh, $schema, $suffix) = @_;
 
-    $dbh->do(<<SQL) 
-      drop sequence $schema.DatasetPresenter${suffix}_sq
-SQL
-    $dbh->do(<<SQL) 
-      drop sequence $schema.DatasetContact${suffix}_sq
-SQL
-    $dbh->do(<<SQL) 
-      drop sequence $schema.DatasetHyperLink${suffix}_sq
-SQL
-    $dbh->do(<<SQL) 
-      drop sequence $schema.DatasetPub${suffix}_sq
-SQL
-    $dbh->do(<<SQL) 
-      drop sequence $schema.DatasetTax${suffix}_sq
-SQL
-    $dbh->do(<<SQL) 
-      drop sequence $schema.DatasetModelRef${suffix}_sq
-SQL
-    $dbh->do(<<SQL) 
-      drop constraint $schema.DatasetContact${suffix}_fk
-SQL
-    $dbh->do(<<SQL) 
-      drop constraint $schema.DatasetHyperLink${suffix}_fk
-SQL
-    $dbh->do(<<SQL) 
-      drop constraint $schema.DatasetPub${suffix}_fk
-SQL
-    $dbh->do(<<SQL) 
-      drop constraint $schema.DatasetTax${suffix}_fk
-SQL
-    $dbh->do(<<SQL) 
-      drop constraint $schema.DatasetModelRef${suffix}_fk
-SQL
+  foreach my $nm ('Presenter', 'Contact', 'HyperLink', 'Publication', 'Taxon', 'ModelRef') {
+    my $sql = "drop sequence $schema.Dataset$nm${suffix}_sq";
+    runSql($dbh, $sql, 0);
+
+    $sql = "alter table $schema.Dataset$nm${suffix} drop constraint Dataset$nm${suffix}_fk";
+    runSql($dbh, $sql, 0);
+  }
+}
+
+sub runSql {
+  my ($dbh, $sql, $die) = @_;
+  print STDERR "\n$sql\n" if $debug;
+  my $status = $dbh->do($sql);
+  die "Failed running sql: \n$sql\n" if $die && !$status;
 }
 
 sub usage {
   die "
 Create the DatasetPresenter schema (used by the tuning manager).
 
-Usage:  createDatasetPresenterSchema instance suffix propsXmlFile mode
+Usage:  createDatasetPresenterSchema instance suffix propsXmlFile mode [-debug]
 
 Where:
   instance:       the name of the instance to create tables in
