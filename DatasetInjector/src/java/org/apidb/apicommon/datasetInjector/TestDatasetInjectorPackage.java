@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -273,6 +274,7 @@ public class TestDatasetInjectorPackage {
     assertTrue(dps.getSize() == 2);
     DatasetPresenter dp1 = dps.getDatasetPresenters().get(0);
     DatasetPresenter dp2 = dps.getDatasetPresenters().get(1);
+    assertTrue(dp1.getPropValue("buildNumberIntroduced").equals("14"));
     assertTrue(dp1.getDatasetName().equals("Stunnenberg_RNA-Seq_RSRC"));
     assertTrue(dp2.getDatasetName().equals("Very_Happy_RSRC"));
     assertTrue(dp2.getPropValue("datasetDisplayName").equals("In good spirits"));
@@ -301,6 +303,14 @@ public class TestDatasetInjectorPackage {
     assertTrue(dic.getPropValue("isSingleStrand").equals("true"));
   }
 
+  @Test
+  public void test_DatasetPresenterParser_validateXmlFile() {
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    String project_home = System.getenv("PROJECT_HOME");
+    dpp.validateXmlFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
+  }
+  
   @Test
   public void test_DatasetPresenterParser_parseDir() {
     DatasetPresenterParser dpp = new DatasetPresenterParser();
@@ -349,6 +359,16 @@ public class TestDatasetInjectorPackage {
     String gus_home = System.getenv("GUS_HOME");
     
     TemplatesInjector.parseAndProcess(gus_home + "/lib/test", gus_home + "/lib/test");  // if it doesn't throw an exception we are good
+  }
+  
+  @Test 
+  public void test_ConfigurationParser_parseFile() {
+    ConfigurationParser parser = new ConfigurationParser();
+    String project_home = System.getenv("PROJECT_HOME");
+    Configuration config = parser.parseFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/tuningProps.xml.test");
+    assertTrue(config.getPassword().equals("nonayerbusiness"));
+    assertTrue(config.getUsername().equals("prince"));
   }
 
 }

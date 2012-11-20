@@ -2,6 +2,7 @@ package org.apidb.apicommon.datasetInjector;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,10 +36,11 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod("datasetPresenters/datasetPresenter/displayName",
         "setText", 0);
 
-    configureNode(digester, "datasetPresenters/datasetPresenter/shortDisplayName",
-        Text.class, "setDatasetShortDisplayName");
-    digester.addCallMethod("datasetPresenters/datasetPresenter/shortDisplayName",
-        "setText", 0);
+    configureNode(digester,
+        "datasetPresenters/datasetPresenter/shortDisplayName", Text.class,
+        "setDatasetShortDisplayName");
+    digester.addCallMethod(
+        "datasetPresenters/datasetPresenter/shortDisplayName", "setText", 0);
 
     configureNode(digester, "datasetPresenters/datasetPresenter/description",
         Text.class, "setDatasetDescrip");
@@ -50,10 +52,11 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod("datasetPresenters/datasetPresenter/caveat",
         "setText", 0);
 
-    configureNode(digester, "datasetPresenters/datasetPresenter/displayCategory",
-        Text.class, "setDisplayCategory");
-    digester.addCallMethod("datasetPresenters/datasetPresenter/displayCategory",
-        "setText", 0);
+    configureNode(digester,
+        "datasetPresenters/datasetPresenter/displayCategory", Text.class,
+        "setDisplayCategory");
+    digester.addCallMethod(
+        "datasetPresenters/datasetPresenter/displayCategory", "setText", 0);
 
     configureNode(digester, "datasetPresenters/datasetPresenter/protocol",
         Text.class, "setProtocol");
@@ -70,41 +73,34 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod("datasetPresenters/datasetPresenter/summary",
         "setText", 0);
 
-    configureNode(digester, "datasetPresenters/datasetPresenter/acknowledgement",
-        Text.class, "setAcknowledgement");
-    digester.addCallMethod("datasetPresenters/datasetPresenter/acknowledgement",
-        "setText", 0);
-
     configureNode(digester,
-        "datasetPresenters/datasetPresenter/contactId",
+        "datasetPresenters/datasetPresenter/acknowledgement", Text.class,
+        "setAcknowledgement");
+    digester.addCallMethod(
+        "datasetPresenters/datasetPresenter/acknowledgement", "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/contactId",
         Text.class, "addContactId");
     digester.addCallMethod("datasetPresenters/datasetPresenter/contactId",
         "setText", 0);
 
-    configureNode(digester,
-        "datasetPresenters/datasetPresenter/pubmedId",
+    configureNode(digester, "datasetPresenters/datasetPresenter/pubmedId",
         Publication.class, "addPublication");
     digester.addCallMethod("datasetPresenters/datasetPresenter/pubmedId",
         "setPubmedId", 0);
 
-
-    configureNode(digester,
-        "datasetPresenters/datasetPresenter/link",
+    configureNode(digester, "datasetPresenters/datasetPresenter/link",
         HyperLink.class, "addLink");
-    
-    configureNode(digester,
-        "datasetPresenters/datasetPresenter/link/url",
-        Text.class, "setUrl");
-    digester.addCallMethod(
-        "datasetPresenters/datasetPresenter/link/url", "setText",
-        0);
 
-    configureNode(digester,
-        "datasetPresenters/datasetPresenter/link/text",
+    configureNode(digester, "datasetPresenters/datasetPresenter/link/url",
+        Text.class, "setUrl");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/link/url",
+        "setText", 0);
+
+    configureNode(digester, "datasetPresenters/datasetPresenter/link/text",
         Text.class, "setText");
-    digester.addCallMethod(
-        "datasetPresenters/datasetPresenter/link/text", "setText",
-        0);
+    digester.addCallMethod("datasetPresenters/datasetPresenter/link/text",
+        "setText", 0);
 
     configureNode(digester,
         "datasetPresenters/datasetPresenter/templateInjector",
@@ -120,13 +116,27 @@ public class DatasetPresenterParser extends XmlParser {
     return digester;
   }
 
+  void validateXmlFile(String xmlFileName) {
+    try {
+      configure();
+      File xmlFile = new File(xmlFileName);
+      URL url = xmlFile.toURI().toURL();
+      if (!validate(url)) {
+        throw new UserException("Invalid XML file " + xmlFileName);
+      }
+    } catch (IOException | SAXException ex) {
+      throw new UnexpectedException(ex);
+    }
+  }
 
   DatasetPresenterSet parseFile(String xmlFileName) {
 
     DatasetPresenterSet datasetPresenterSet = null;
     try {
       configure();
-      datasetPresenterSet = (DatasetPresenterSet)digester.parse(new File(xmlFileName));
+      validateXmlFile(xmlFileName);
+      File xmlFile = new File(xmlFileName);
+      datasetPresenterSet = (DatasetPresenterSet) digester.parse(xmlFile);
     } catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
@@ -137,25 +147,22 @@ public class DatasetPresenterParser extends XmlParser {
     DatasetPresenterSet bigDatasetPresenterSet = new DatasetPresenterSet();
     List<File> presenterFiles = getPresenterXmlFilesInDir(presenterXmlDirPath);
     for (File presenterFile : presenterFiles) {
-      bigDatasetPresenterSet.addDatasetPresenterSet(parseFile(presenterXmlDirPath + "/" + presenterFile.getName()));
+      bigDatasetPresenterSet.addDatasetPresenterSet(parseFile(presenterXmlDirPath
+          + "/" + presenterFile.getName()));
     }
 
     return bigDatasetPresenterSet;
   }
 
-static List<File> getPresenterXmlFilesInDir(String presentersDirPath) {
-  File dir = new File(presentersDirPath);
-  List<File> presenterFiles = new ArrayList<File>();
+  static List<File> getPresenterXmlFilesInDir(String presentersDirPath) {
+    File dir = new File(presentersDirPath);
+    List<File> presenterFiles = new ArrayList<File>();
 
-  for (File file : dir.listFiles()) {
-    if (file.isFile() && file.getName().endsWith(".xml"))
-      presenterFiles.add(file);
+    for (File file : dir.listFiles()) {
+      if (file.isFile() && file.getName().endsWith(".xml"))
+        presenterFiles.add(file);
+    }
+    return presenterFiles;
   }
-  return presenterFiles;
-}
-
 
 }
-
-
-

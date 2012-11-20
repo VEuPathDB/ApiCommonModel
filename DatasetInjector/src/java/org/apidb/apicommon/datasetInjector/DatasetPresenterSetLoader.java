@@ -4,7 +4,9 @@ import java.util.Map;
 
 public class DatasetPresenterSetLoader {
   
-  // get db connection
+  public DatasetPresenterSetLoader(String propFileName) {
+    
+  }
   
   // read contacts file and create contacts.
   void loadDatasetPresenterSet(DatasetPresenterSet dps, String contactsFileName) {
