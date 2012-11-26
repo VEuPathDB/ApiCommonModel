@@ -6,7 +6,6 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -298,6 +297,10 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getLinks().get(1).getText().equals("exciting"));
     assertTrue(dp1.getDatasetInjectors().size() == 1);
     assertTrue(dp2.getDatasetInjectors().size() == 1);
+    assertTrue(dp1.getModelReferences().size() == 2);
+    assertTrue(dp1.getModelReferences().get(0).getRecordClassName().equals("GeneRecord"));
+    assertTrue(dp1.getModelReferences().get(0).getTargetType().equals("question"));
+    assertTrue(dp1.getModelReferences().get(0).getTargetName().equals("someQuestion"));
     DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
     assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
     assertTrue(dic.getPropValue("isSingleStrand").equals("true"));

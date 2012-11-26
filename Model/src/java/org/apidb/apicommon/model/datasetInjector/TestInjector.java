@@ -12,7 +12,9 @@ public class TestInjector extends DatasetInjector {
     injectTemplate("test3_template2");
   }
 
-  public void insertReferences() {
+  public void addModelReferences() {
+    addWdkReference("GeneRecord", "question", "someQuestion");
+    addModelReference("track", "someTrack");
   }
   
   // second column is for documentation

@@ -1,7 +1,9 @@
 package org.apidb.apicommon.datasetInjector;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,6 +22,7 @@ public abstract class DatasetInjector {
   private Map<String, String> propValues = new HashMap<String, String>();
   private String datasetName;
   private DatasetInjectorSet datasetInjectorSet;
+  private Map<String, ModelReference> modelReferences = new HashMap<String,ModelReference>();
 
   /**
    * Subclasses use this method to declare the properties they require. These
@@ -41,10 +44,14 @@ public abstract class DatasetInjector {
    */
   protected abstract String[][] getPropertiesDeclaration();
 
+ 
   /**
-   * Insert WDK references into the presentation layer. (Not implemented yet)
+   * Subclasses call this method to add model references to the
+   * presentation layer. To do so they add a call in this method to either
+   * {@link #addWdkReference(String,String,String} or {@link #addModelReference(String, String). 
+   * 
    */
-  protected abstract void insertReferences();
+  protected abstract void addModelReferences();
 
   /**
    * Subclasses call this method to inject template instances into the
@@ -87,14 +94,43 @@ public abstract class DatasetInjector {
   }
 
   /**
-   * Subclasses should call this method inside {@link #injectTemplates()} to
-   * make a WDK reference. (Not implemented yet).
+   * Subclasses should call this method inside {@link #addModelReferences()} to
+   * make a WDK reference.
    * 
    * @param recordClass
    * @param type
    * @param name
    */
-  protected void makeWdkReference(String recordClass, String type, String name) {}
+  protected void addWdkReference(String recordClass, String type, String name) {
+    ModelReference ref = new ModelReference(recordClass, type, name, datasetName);
+    String key = type + name;
+    if (modelReferences.containsKey(key)) {
+      throw new UserException("Dataset " + datasetName + " already contains a model reference for " + type + ", " + name);
+    }
+    modelReferences.put(key, ref);
+  }
+  
+  /**
+   * Subclasses should call this method inside {@link #addModelReferences()} to
+   * make a reference to a model object that is not in the WDK (eg, GBrowse).
+   * 
+   * @param recordClass
+   * @param type
+   * @param name
+   */
+  protected void addModelReference(String type, String name) {
+    ModelReference ref = new ModelReference(type, name, datasetName);
+    String key = type + name;
+    if (modelReferences.containsKey(key)) {
+      throw new UserException("Dataset " + datasetName + " already contains a model reference for " + type + ", " + name);
+    }
+    modelReferences.put(key, ref);
+  }
+  
+  List<ModelReference> getModelReferences() {
+    return new ArrayList<ModelReference>(modelReferences.values());
+  }
+
 
   /**
    * Add property values.

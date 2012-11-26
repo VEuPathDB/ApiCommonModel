@@ -5,6 +5,8 @@ import java.util.Map;
 public class DatasetPresenterSetLoader {
   
   public DatasetPresenterSetLoader(String propFileName) {
+    ConfigurationParser parser = new ConfigurationParser();
+    Configuration config = parser.parseFile(propFileName);
     
   }
   

@@ -33,8 +33,8 @@ public class RnaSeqInjector extends  DatasetInjector {
 
   }
 
-  public void insertReferences() {
-    makeWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+  public void addModelReferences() {
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
         "GeneQuestions.GenesByRNASeq_" + getDatasetName() + "_FoldChangePValue");
   }
   

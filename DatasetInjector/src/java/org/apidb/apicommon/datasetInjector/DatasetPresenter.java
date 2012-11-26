@@ -21,15 +21,17 @@ public class DatasetPresenter {
 
   // use prop values for properties that might be injected into templates.
   Map<String, String> propValues = new HashMap<String, String>();
-  
-  // use instance variables for properties that have no chance of being injected.
+
+  // use instance variables for properties that have no chance of being
+  // injected.
   private String displayCategory;
   private String protocol;
   private String acknowledgement;
   private String caveat;
   private String releasePolicy;
+  private DatasetInjector datasetInjector;
 
-  private List<DatasetInjectorConstructor> datasetInjectors = new ArrayList<DatasetInjectorConstructor>();
+  private List<DatasetInjectorConstructor> datasetInjectorConstructors = new ArrayList<DatasetInjectorConstructor>();
   private List<String> contactIds = new ArrayList<String>();
   private List<Publication> publications = new ArrayList<Publication>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
@@ -41,7 +43,7 @@ public class DatasetPresenter {
   public String getDatasetName() {
     return propValues.get("datasetName");
   }
-  
+
   String getPropValue(String propName) {
     return propValues.get(propName);
   }
@@ -62,7 +64,7 @@ public class DatasetPresenter {
     propValues.put("summary", summary.getText());
   }
 
- public void setProjectName(String projectName) {
+  public void setProjectName(String projectName) {
     propValues.put("projectName", projectName);
   }
 
@@ -73,11 +75,11 @@ public class DatasetPresenter {
   public void setBuildNumberIntroduced(String buildNumberIntroduced) {
     propValues.put("buildNumberIntroduced", buildNumberIntroduced);
   }
-  
+
   public void setDisplayCategory(Text displayCategory) {
     this.displayCategory = displayCategory.getText();
   }
-  
+
   public String getDisplayCategory() {
     return displayCategory;
   }
@@ -85,7 +87,7 @@ public class DatasetPresenter {
   public void setCaveat(Text caveat) {
     this.caveat = caveat.getText();
   }
-  
+
   public String getCaveat() {
     return caveat;
   }
@@ -93,7 +95,7 @@ public class DatasetPresenter {
   public void setReleasePolicy(Text releasePolicy) {
     this.releasePolicy = releasePolicy.getText();
   }
-  
+
   public String getReleasePolicy() {
     return releasePolicy;
   }
@@ -101,7 +103,7 @@ public class DatasetPresenter {
   public void setProtocol(Text protocol) {
     this.protocol = protocol.getText();
   }
-  
+
   public String getProtocol() {
     return protocol;
   }
@@ -109,15 +111,15 @@ public class DatasetPresenter {
   public void setAcknowledgement(Text acknowledgement) {
     this.acknowledgement = acknowledgement.getText();
   }
-  
+
   public String getAcknowledgement() {
     return acknowledgement;
   }
-  
+
   public void addContactId(Text contactId) {
     contactIds.add(contactId.getText());
   }
-  
+
   public List<String> getContactIds() {
     return contactIds;
   }
@@ -133,23 +135,49 @@ public class DatasetPresenter {
   public void addLink(HyperLink link) {
     links.add(link);
   }
-  
+
   public List<HyperLink> getLinks() {
     return links;
   }
-  
+
+  /**
+   * Add a DatasetInjector. This method should be changed to setDatasetInjector
+   * as we no longer support multiple DasasetInjectors per DatasetPresenter
+   * 
+   * @param datasetInjector
+   */
   public void addDatasetInjector(DatasetInjectorConstructor datasetInjector) {
-    datasetInjectors.add(datasetInjector);
+    datasetInjectorConstructors.add(datasetInjector);
     datasetInjector.inheritDatasetProps(this);
   }
 
+  private DatasetInjector getDatasetInjector() {
+    if (datasetInjector == null) {
+      DatasetInjectorConstructor dic = datasetInjectorConstructors.get(0);
+      if (dic != null) {
+        datasetInjector = dic.getDatasetInjector();
+        datasetInjector.addModelReferences();
+      }
+    }
+    return datasetInjector;
+  }
+  
+  public List<ModelReference> getModelReferences() {
+    List<ModelReference> answer = new ArrayList<ModelReference>();
+    DatasetInjector di = getDatasetInjector();
+    if (di != null) {
+      answer = di.getModelReferences();
+    }
+    return answer;
+  }
+
   public List<DatasetInjectorConstructor> getDatasetInjectors() {
-    return datasetInjectors;
+    return datasetInjectorConstructors;
   }
 
   public void addProp(NamedValue propValue) {
     if (propValues.containsKey(propValue.getName())) {
-      throw new UserException("atasetPresenter '" + getDatasetName()
+      throw new UserException("datasetPresenter '" + getDatasetName()
           + "' has redundant property: " + propValue.getName());
     }
     propValues.put(propValue.getName(), propValue.getValue());
