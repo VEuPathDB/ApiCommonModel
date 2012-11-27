@@ -32,7 +32,8 @@ public class DatasetPresenter {
   private DatasetInjector datasetInjector;
 
   private List<DatasetInjectorConstructor> datasetInjectorConstructors = new ArrayList<DatasetInjectorConstructor>();
-  private List<String> contactIds = new ArrayList<String>();
+  private List<String> contactIds = new ArrayList<String>(); // includes primary
+  private String primaryContactId;
   private List<Contact> contacts;
   private List<Publication> publications = new ArrayList<Publication>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
@@ -120,6 +121,11 @@ public class DatasetPresenter {
   public void addContactId(Text contactId) {
     contactIds.add(contactId.getText());
   }
+  
+  public void setPrimaryContactId(Text contactId) {
+    primaryContactId = contactId.getText();
+    contactIds.add(contactId.getText());
+  }
 
   public List<String> getContactIds() {
     return contactIds;
@@ -137,6 +143,8 @@ public class DatasetPresenter {
               + " that has no corresponding contact in contacts file "
               + allContacts.getContactsFileName());
         }
+        contacts.add(contact);
+        if (contactId.equals(primaryContactId)) contact.setIsPrimary(true);
       }
     }
     return contacts;

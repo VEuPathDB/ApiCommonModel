@@ -393,4 +393,25 @@ public class TestDatasetInjectorPackage {
         + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
     dps.validateContactIds(project_home + "/ApiCommonShared/DatasetInjector/testData/contacts.xml.test");
   }
+  
+  @Test
+  public void test_DatasetPresenter_getContacts() {
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    String project_home = System.getenv("PROJECT_HOME");
+
+    DatasetPresenterSet dps = dpp.parseFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
+    ContactsFileParser parser = new ContactsFileParser();
+    Contacts allContacts = parser.parseFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/contacts.xml.test");
+    DatasetPresenter dp2 = dps.getDatasetPresenters().get(1);
+    List<Contact> contacts = dp2.getContacts(allContacts);
+    Contact contact1 = contacts.get(0);
+    Contact contact2 = contacts.get(1);
+    assertTrue(contact1.getIsPrimary());
+    assertTrue(contact1.getName().equals("Elmer Fudd"));
+    assertTrue(!contact2.getIsPrimary());
+    assertTrue(contact2.getName().equals("Bugs Bunny"));
+    
+  }
 }

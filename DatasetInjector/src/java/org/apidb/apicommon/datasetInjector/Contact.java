@@ -4,7 +4,7 @@ import org.gusdb.fgputil.xml.Text;
 
 public class Contact {
   private String name;
-  private boolean isPrimary;
+  private boolean isPrimary = false;
   private String email;
   private String institution;
   private String address;

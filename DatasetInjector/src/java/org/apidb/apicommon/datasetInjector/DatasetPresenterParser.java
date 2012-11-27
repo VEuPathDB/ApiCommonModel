@@ -79,6 +79,11 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod(
         "datasetPresenters/datasetPresenter/acknowledgement", "setText", 0);
 
+    configureNode(digester, "datasetPresenters/datasetPresenter/primaryContactId",
+        Text.class, "setPrimaryContactId");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/primaryContactId",
+        "setText", 0);
+
     configureNode(digester, "datasetPresenters/datasetPresenter/contactId",
         Text.class, "addContactId");
     digester.addCallMethod("datasetPresenters/datasetPresenter/contactId",
