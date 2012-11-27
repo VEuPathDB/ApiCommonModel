@@ -373,5 +373,24 @@ public class TestDatasetInjectorPackage {
     assertTrue(config.getPassword().equals("nonayerbusiness"));
     assertTrue(config.getUsername().equals("prince"));
   }
+  
+  @Test 
+  public void test_ContactsFileParser_parseFile() {
+    ContactsFileParser parser = new ContactsFileParser();
+    String project_home = System.getenv("PROJECT_HOME");
+    Contacts contacts = parser.parseFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/contacts.xml.test");
+    assertTrue(contacts.get("bugs.bunny").getName().equals("Bugs Bunny"));
+  }
 
+  // passes if there are no exceptions thrown
+  @Test
+  public void test_DatasetPresenterSet_validateContactIds() {
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    String project_home = System.getenv("PROJECT_HOME");
+
+    DatasetPresenterSet dps = dpp.parseFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/test3_presenterSet.xml");
+    dps.validateContactIds(project_home + "/ApiCommonShared/DatasetInjector/testData/contacts.xml.test");
+  }
 }

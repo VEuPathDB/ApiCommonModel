@@ -1,5 +1,7 @@
 package org.apidb.apicommon.datasetInjector;
 
+import org.gusdb.fgputil.xml.Text;
+
 public class Contact {
   private String name;
   private boolean isPrimary;
@@ -10,42 +12,51 @@ public class Contact {
   private String state;
   private String country;
   private String zip;
+  private String id;
 
 
-  public void setName(String name) {
-    this.name  = name;
+  public void setContactId(Text id) {
+    this.id  = id.getText();
+  }
+  
+  public void setName(Text name) {
+    this.name  = name.getText();
   }
   
   public void setIsPrimary(boolean isPrimary) {
     this.isPrimary = isPrimary;
   }
   
-  public void setEmail(String email) {
-    this.email  = email;
+  public void setEmail(Text email) {
+    this.email  = email.getText();
   }
   
-  public void setInstitution(String institution) {
-    this.institution  = institution;
+  public void setInstitution(Text institution) {
+    this.institution  = institution.getText();
   }
   
-  public void setAddress(String address) {
-    this.address  = address;
+  public void setAddress(Text address) {
+    this.address  = address.getText();
   }
   
-  public void setCity(String city) {
-    this.city  = city;
+  public void setCity(Text city) {
+    this.city  = city.getText();
   }
   
-  public void setState(String state) {
-    this.state  = state;
+  public void setState(Text state) {
+    this.state  = state.getText();
   }
   
-  public void setCountry(String country) {
-    this.country  = country;
+  public void setCountry(Text country) {
+    this.country  = country.getText();
   }
   
-  public void setZip(String zip) {
-    this.zip  = zip;
+  public void setZip(Text zip) {
+    this.zip  = zip.getText();
+  }
+  
+  public String getId() {
+    return id;
   }
   
   public String getName() {

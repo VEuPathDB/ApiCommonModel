@@ -1,18 +1,21 @@
 package org.apidb.apicommon.datasetInjector;
 
-import java.util.Map;
 
 public class DatasetPresenterSetLoader {
   
-  public DatasetPresenterSetLoader(String propFileName) {
-    ConfigurationParser parser = new ConfigurationParser();
-    Configuration config = parser.parseFile(propFileName);
-    
+  Contacts contacts;
+  
+  
+  public DatasetPresenterSetLoader(String propFileName, String contactsFileName) {
+    ConfigurationParser configParser = new ConfigurationParser();
+    Configuration config = configParser.parseFile(propFileName);
+    ContactsFileParser contactsParser = new ContactsFileParser();
+    contacts = contactsParser.parseFile(contactsFileName);   
   }
   
   // read contacts file and create contacts.
   void loadDatasetPresenterSet(DatasetPresenterSet dps, String contactsFileName) {
-    Map<String, Contact> contacts = ContactsFileParser.parseContactsFile(contactsFileName);
+
     for(DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
        int datasetPresenterId = loadDatasetPresenter(datasetPresenter);
        for (String contactId : datasetPresenter.getContactIds()) {

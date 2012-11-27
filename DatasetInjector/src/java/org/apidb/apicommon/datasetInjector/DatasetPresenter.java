@@ -33,6 +33,7 @@ public class DatasetPresenter {
 
   private List<DatasetInjectorConstructor> datasetInjectorConstructors = new ArrayList<DatasetInjectorConstructor>();
   private List<String> contactIds = new ArrayList<String>();
+  private List<Contact> contacts;
   private List<Publication> publications = new ArrayList<Publication>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
 
@@ -124,6 +125,23 @@ public class DatasetPresenter {
     return contactIds;
   }
 
+  public List<Contact> getContacts(Contacts allContacts) {
+    if (contacts == null) {
+      contacts = new ArrayList<Contact>();
+      for (String contactId : contactIds) {
+        Contact contact = allContacts.get(contactId);
+        if (contact == null) {
+          String datasetName = propValues.get("datasetName");
+          throw new UserException("Dataset name " + datasetName
+              + " has a contactId " + contactId
+              + " that has no corresponding contact in contacts file "
+              + allContacts.getContactsFileName());
+        }
+      }
+    }
+    return contacts;
+  }
+
   public void addPublication(Publication publication) {
     publications.add(publication);
   }
@@ -161,7 +179,7 @@ public class DatasetPresenter {
     }
     return datasetInjector;
   }
-  
+
   public List<ModelReference> getModelReferences() {
     List<ModelReference> answer = new ArrayList<ModelReference>();
     DatasetInjector di = getDatasetInjector();
