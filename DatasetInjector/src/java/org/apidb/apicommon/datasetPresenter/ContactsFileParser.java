@@ -1,4 +1,4 @@
-package org.apidb.apicommon.datasetInjector;
+package org.apidb.apicommon.datasetPresenter;
 
 import java.io.File;
 import java.io.IOException;
@@ -67,6 +67,7 @@ public class ContactsFileParser extends XmlParser {
     Contacts contacts = null;
     try {
       configure();
+      validateXmlFile(xmlFileName);
       contacts = (Contacts) digester.parse(new File(xmlFileName));
       contacts.setContactsFileName(xmlFileName);
     } catch (IOException | SAXException ex) {

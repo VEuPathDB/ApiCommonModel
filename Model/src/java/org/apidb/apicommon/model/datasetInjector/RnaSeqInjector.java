@@ -1,6 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetInjector.DatasetInjector;
+import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class RnaSeqInjector extends  DatasetInjector {
   

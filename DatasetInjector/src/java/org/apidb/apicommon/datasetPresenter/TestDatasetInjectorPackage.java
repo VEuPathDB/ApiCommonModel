@@ -1,4 +1,4 @@
-package org.apidb.apicommon.datasetInjector;
+package org.apidb.apicommon.datasetPresenter;
 
 import static org.junit.Assert.assertTrue;
 
@@ -381,6 +381,14 @@ public class TestDatasetInjectorPackage {
     Contacts contacts = parser.parseFile(project_home
         + "/ApiCommonShared/DatasetInjector/testData/contacts.xml.test");
     assertTrue(contacts.get("bugs.bunny").getName().equals("Bugs Bunny"));
+  }
+  
+  @Test
+  public void test_ContactsFileParser_validateXmlFile() {
+    ContactsFileParser parser = new ContactsFileParser();
+    String project_home = System.getenv("PROJECT_HOME");
+    parser.validateXmlFile(project_home
+        + "/ApiCommonShared/DatasetInjector/testData/contacts.xml.test");
   }
 
   // passes if there are no exceptions thrown
