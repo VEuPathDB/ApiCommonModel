@@ -601,6 +601,147 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
       </processQuery>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- by strain                                      -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <sqlQuery name="SnpsByStrain" includeProjects="PlasmoDB,ToxoDB,CryptoDB" isCacheable="true">
+ 
+        <testParamValues includeProjects="CryptoDB">
+            <paramValue name="snp_strain_m">md</paramValue>
+            <paramValue name="chromosomeOptional">chromosome 2</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="ToxoDB">
+            <paramValue name="snp_strain_m">ME49</paramValue>
+	    <paramValue name="snp_strain_a">GT1</paramValue>
+            <paramValue name="chromosomeOptional">III</paramValue>
+        </testParamValues>
+       <testParamValues includeProjects="PlasmoDB">
+            <paramValue name="snp_strain_m">Pf-Dd2</paramValue>
+            <paramValue name="snp_strain_a">Pf-3D7</paramValue>
+            <paramValue name="chromosomeOptional">1</paramValue>
+        </testParamValues>
+
+        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
+                  quote="true" queryRef="organismVQ.withChromosomesSNPs">
+              <help>Select Organism you wish to query against.</help>
+        </paramRef>
+
+         <paramRef ref="sharedParams.chromosomeOptional" queryRef="SharedVQ.ChromosomeOrderNumMultipickForSnps" multiPick="false"/>
+          <paramRef ref="sharedParams.snp_strain_a"/>
+          <paramRef ref="sharedParams.snp_strain_m"/>
+          <column name="source_id"/>
+	        <column name="project_id"/>
+          <column name="gene"/>
+          <column name="snp_location"/>
+          <column name="ref_strain"/>
+          <column name="comp_strains"/>
+          <column name="ref_allele"/>
+          <column name="comp_alleles"/>
+          <column name="phenotype"/>
+          <column name="prot_pos"/>
+          <column name="ref_product"/>
+          <column name="comp_products"/>
+
+        <sql includeProjects="PlasmoDB,ToxoDB,CryptoDB">
+            <![CDATA[
+              select * from (
+            SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product,
+              apidb.tab_to_string(set(cast(COLLECT(distinct snpq.comp_all) AS apidb.varchartab)), ', ') as comp_alleles,
+              apidb.tab_to_string(set(cast(COLLECT(distinct snpq.comp_product) AS apidb.varchartab)), ', ') as comp_products,
+              apidb.tab_to_string(set(cast(COLLECT(distinct snpq.phenotype) AS apidb.varchartab)), ', ') as phenotype,
+              apidb.tab_to_string(set(cast(COLLECT(distinct snpq.ref_strain) AS apidb.varchartab)), ', ') as ref_strain,
+              apidb.tab_to_string(set(cast(COLLECT(distinct snpq.comp_strain) AS apidb.varchartab)), ', ') as comp_strains
+            FROM
+              (-- records in apid.polymorphism are constrained that
+               -- strain_a < strain_b, so this subquery is the union of two
+               -- possibilities:
+               -- first, when ref strain name < comp strain name
+               -- (i.e. ref is strain a, comp is strain b)
+               SELECT 
+                       p.snp_source_id as source_id,
+                      seq.source_id || ':' || trim(to_char(p.start_min,'999,999,999')) as snp_location,
+                p.strain_a AS ref_strain, p.strain_b AS comp_strain,
+                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_a)
+                     ELSE p.allele_a END as ref_allele,
+                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_b)
+                     ELSE p.allele_b END as comp_all,
+                CASE WHEN p.product_a = p.product_b then 'syn' WHEN p.product_a != p.product_b THEN 'non-syn'
+                     ELSE 'non-coding' END as phenotype,
+                p.product_a AS ref_product, p.product_b AS comp_product,
+                p.position_in_protein as prot_pos,
+                p.gene_source_id as gene
+               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq, 
+                    ( select distinct organism,extdb_name as name,external_database_release_id,is_queryable
+                      from apidbtuning.snpstrains) ss
+               WHERE ss.organism = $$organism$$
+                 AND ss.is_queryable = 1
+                 AND p.external_database_release_id = ss.external_database_release_id
+                 AND seq.na_sequence_id = p.na_sequence_id
+                 AND seq.chromosome in ( $$chromosomeOptional$$ )
+                 AND p.strain_a = $$snp_strain_a$$ -- ref
+                 AND p.strain_b in ($$snp_strain_m$$) -- comp
+                 AND $$snp_strain_a$$ < p.strain_b
+              UNION
+               -- second, when comp strain name < ref strain name
+               -- (ref is strain b, comp is strain a)
+               SELECT p.snp_source_id as source_id,
+                      seq.source_id || ':' || trim(to_char(p.start_min,'999,999,999')) as snp_location,
+                p.strain_b AS ref_strain, p.strain_a AS comp_strain,
+                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_b)
+                     ELSE p.allele_b END as ref_allele,
+                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_a)
+                     ELSE p.allele_a END as comp_all,
+                CASE WHEN p.product_a = p.product_b then 'syn' WHEN p.product_a != p.product_b THEN 'non-syn'
+                     ELSE 'non-coding' END as phenotype,
+                p.product_b AS ref_product, p.product_a AS comp_product,
+                p.position_in_protein as prot_pos, p.gene_source_id as gene
+               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq,
+                    ( select distinct organism,extdb_name as name,external_database_release_id, is_queryable
+                      from apidbtuning.snpstrains) ss
+               WHERE ss.organism = $$organism$$
+                 AND ss.is_queryable = 1
+                 AND p.external_database_release_id = ss.external_database_release_id
+                 AND seq.na_sequence_id = p.na_sequence_id
+                 AND seq.chromosome in ( $$chromosomeOptional$$ )
+                 AND p.strain_b = $$snp_strain_a$$ -- ref
+                 AND p.strain_a in ($$snp_strain_m$$) -- comp
+                 AND p.strain_a < $$snp_strain_a$$
+                 ) snpq
+            GROUP BY snpq.source_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product)
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="SnpsByStrain" includeProjects="EuPathDB" doNotTest="true"
+             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" >
+
+        <testParamValues>
+            <paramValue name="snp_strain_m">md</paramValue>
+            <paramValue name="chromosomeOptional">chromosome 2</paramValue>
+            <paramValue name="organism">Cryptosporidium parvum Iowa II</paramValue>
+        </testParamValues>
+
+          <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesSNPs"  multiPick="false"  noTranslation="true">
+              <help>Select Organism you wish to query against.</help>
+          </paramRef>
+          <paramRef ref="sharedParams.chromosomeOptional" quote="false" queryRef="SharedVQ.ChromosomeOrderNumMultipickForSnps" 
+		    multiPick="false" noTranslation="true" />
+          <paramRef ref="sharedParams.snp_strain_a" quote="false"/>
+          <paramRef ref="sharedParams.snp_strain_m" quote="false"/>
+          <wsColumn name="source_id" width="50" wsName="source_id"/>
+          <wsColumn name="project_id" width="32" wsName="project_id"/>
+          <wsColumn name="gene" width="32"/>
+          <wsColumn name="snp_location" width="32"/>
+          <wsColumn name="ref_strain" width="32"/>
+          <wsColumn name="comp_strains" width="32"/>
+          <wsColumn name="ref_allele" width="32"/>
+          <wsColumn name="comp_alleles" width="32"/>
+          <wsColumn name="phenotype" width="32"/>
+          <wsColumn name="prot_pos" width="32"/>
+          <wsColumn name="ref_product" width="32"/>
+          <wsColumn name="comp_products" width="32"/>
+      </processQuery>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Allele Frequency -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
     <sqlQuery name="SnpsByAlleleFrequency" includeProjects="PlasmoDB" 
