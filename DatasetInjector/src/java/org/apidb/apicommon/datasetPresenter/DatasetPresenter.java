@@ -30,6 +30,10 @@ public class DatasetPresenter {
   private String caveat;
   private String releasePolicy;
   private DatasetInjector datasetInjector;
+  private String datasetNamePattern;
+  private String type;
+  private String subtype;
+  private Boolean isSpeciesScope;
 
   private List<DatasetInjectorConstructor> datasetInjectorConstructors = new ArrayList<DatasetInjectorConstructor>();
   private List<String> contactIds = new ArrayList<String>(); // includes primary
@@ -37,6 +41,7 @@ public class DatasetPresenter {
   private List<Contact> contacts;
   private List<Publication> publications = new ArrayList<Publication>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
+  private List<Integer> taxonIds = new ArrayList<Integer>();
 
   public void setName(String datasetName) {
     propValues.put("datasetName", datasetName);
@@ -53,29 +58,96 @@ public class DatasetPresenter {
   public void setDatasetDescrip(Text datasetDescrip) {
     propValues.put("datasetDescrip", datasetDescrip.getText());
   }
+  
+  public String getDatasetDescrip() {
+    return propValues.get("datasetDescrip");
+  }
 
   public void setDatasetDisplayName(Text datasetDisplayName) {
     propValues.put("datasetDisplayName", datasetDisplayName.getText());
+  }
+  
+  public String getDatasetDisplayName() {
+    return propValues.get("datasetDisplayName");
   }
 
   public void setDatasetShortDisplayName(Text datasetShortDisplayName) {
     propValues.put("datasetShortDisplayName", datasetShortDisplayName.getText());
   }
+  
+  public String getDatasetShortDisplayName() {
+    return propValues.get("datasetShortDisplayName");
+  }
 
   public void setSummary(Text summary) {
     propValues.put("summary", summary.getText());
+  }
+  
+  public String getSummary() {
+    return propValues.get("summary");
+  }
+  
+  public void setType(String type) {
+    this.type = type;
+  }
+  
+  public String getType() {
+    return type;
+  }
+  
+  public void setSubtype(String subtype) {
+    this.subtype = subtype;
+  }
+  
+  public String getSubtype() {
+    return subtype;
+  }
+  
+  public void setIsSpeciesScope(Boolean isSpeciesScope) {
+    this.isSpeciesScope = isSpeciesScope;
+  }
+  
+  public Boolean getIsSpeciesScope() {
+    return isSpeciesScope;
+  }
+  
+  public void setDatasetNamePattern(String pattern) {
+    if (!pattern.contains("%") || pattern.contains("*")) throw new UserException("Dataset " + getDatasetName() + " contains an illegal datasetNamePattern attribute.  It must contain one or more SQL wildcard (%) and no other type of wildcards");
+    datasetNamePattern = pattern;
+  }
+  
+  public String getDatasetNamePattern() {
+    return datasetNamePattern;
+  }
+  
+  public void addTaxonId(Integer taxonId) {
+    taxonIds.add(taxonId);
+  }
+  
+  public List<Integer> getTaxonIds() {
+    return taxonIds;
   }
 
   public void setProjectName(String projectName) {
     propValues.put("projectName", projectName);
   }
-
+  
   public void setOrganismShortName(String organismShortName) {
     propValues.put("organismShortName", organismShortName);
   }
 
   public void setBuildNumberIntroduced(String buildNumberIntroduced) {
+    try {
+      new Integer(buildNumberIntroduced);
+    } catch (Exception e) {
+      throw new UserException("Dataset " + getDatasetName() + " contains an invalid buildNumberIntroduced attribute.  It must be an integer");
+    }
     propValues.put("buildNumberIntroduced", buildNumberIntroduced);
+  }
+  
+  public Integer getBuildNumberIntroduced() {
+    if (propValues.get("buildNumberIntroduced") == null) return null;
+    return new Integer(propValues.get("buildNumberIntroduced"));
   }
 
   public void setDisplayCategory(Text displayCategory) {
