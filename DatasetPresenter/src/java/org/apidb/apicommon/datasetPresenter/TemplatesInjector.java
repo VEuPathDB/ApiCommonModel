@@ -183,13 +183,7 @@ public class TemplatesInjector {
       throw new UserException("Templates dir " + templatesDir
           + " must be an existing directory");
 
-    File pres = new File(presentersDir);
-    if (!pres.isDirectory())
-      throw new UserException("Presenters dir " + presentersDir
-          + " must be an existing directory");
-
-    DatasetPresenterParser dpp = new DatasetPresenterParser();
-    DatasetPresenterSet datasetPresenterSet = dpp.parseDir(presentersDir);
+    DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
 
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesDir(templateSet, templatesDir);

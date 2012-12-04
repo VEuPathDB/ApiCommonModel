@@ -8,6 +8,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Options;
+import org.gusdb.fgputil.CliUtil;
+
 import oracle.jdbc.driver.OracleDriver;
 
 public class DatasetPresenterSetLoader {
@@ -18,6 +22,8 @@ public class DatasetPresenterSetLoader {
   private String instance;
   private String propFileName;
   private String suffix;
+
+  static final String nl = System.lineSeparator();
 
   public DatasetPresenterSetLoader(String propFileName,
       String contactsFileName, String instance, String suffix) {
@@ -32,16 +38,15 @@ public class DatasetPresenterSetLoader {
 
   void schemaInstall() {
     manageSchema(false);
-  } 
-  
-  void schemaDropConstraints () {
+  }
+
+  void schemaDropConstraints() {
     manageSchema(true);
   }
-  
+
   void manageSchema(boolean dropConstraints) {
-    String mode = dropConstraints? "-dropConstraints" : "-create";
-    String[] cmd = { "createDatasetPresenterSchema", suffix, propFileName,
-        mode };
+    String mode = dropConstraints ? "-dropConstraints" : "-create";
+    String[] cmd = { "presenterCreateSchema", suffix, propFileName, mode };
     Process process;
     try {
       process = Runtime.getRuntime().exec(cmd);
@@ -317,4 +322,75 @@ public class DatasetPresenterSetLoader {
     }
   }
 
+  // ///////////// Static methods //////////////////////////////
+
+  private static Options declareOptions() {
+    Options options = new Options();
+
+    CliUtil.addOption(options, "presentersDir",
+        "a directory containing one or more dataset presenter xml files", true,
+        true);
+
+    CliUtil.addOption(
+        options,
+        "contactsXmlFile",
+        "an XML file containing contacts (that are referenced in the presenters files)",
+        true, true);
+
+    CliUtil.addOption(
+        options,
+        "tuningPropsXmlFile",
+        "an XML file containing database username and password, in the formate expected by the tuning manager",
+        true, true);
+
+    CliUtil.addOption(options, "instance",
+        "the name of the instance to write to", true, true);
+
+    CliUtil.addOption(
+        options,
+        "suffix",
+        "the suffix to append to all tables created (as is always done in tuning tables",
+        true, true);
+
+    return options;
+  }
+
+  private static String getUsageNotes() {
+    return
+
+    nl + "";
+  }
+
+  static CommandLine getCmdLine(String[] args) {
+    String cmdName = System.getProperty("cmdName");
+
+    // parse command line
+    Options options = declareOptions();
+    String cmdlineSyntax = cmdName
+        + " -presentersDir presenters_dir -contactsXmlFile contacts_file -tuningPropsXmlFile propFile -instance instance_name -suffix suffix";
+    String cmdDescrip = "Read provided dataset presenter files and inject templates into the presentation layer.";
+    CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
+        getUsageNotes(), options, args);
+
+    return cmdLine;
+  }
+
+  public static void main(String[] args) throws Exception {
+    CommandLine cmdLine = getCmdLine(args);
+    String presentersDir = cmdLine.getOptionValue("presentersDir");
+    String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
+    String propFile = cmdLine.getOptionValue("tuningPropsXmlFile");
+    String instance = cmdLine.getOptionValue("instance");
+    String suffix = cmdLine.getOptionValue("suffix");
+    try {
+      DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
+      DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile, contactsFile, instance, suffix);
+      dpsl.schemaInstall();
+      dpsl.loadDatasetPresenterSet(datasetPresenterSet);
+      dpsl.schemaDropConstraints();
+    } catch (UserException ex) {
+      System.err.println(nl + "Error: " + ex.getMessage() + nl);
+      System.exit(1);
+    }
+  }
 }

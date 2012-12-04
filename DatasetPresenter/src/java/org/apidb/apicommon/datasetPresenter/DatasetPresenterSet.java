@@ -1,5 +1,6 @@
 package org.apidb.apicommon.datasetPresenter;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -69,5 +70,17 @@ public class DatasetPresenterSet {
       presenter.getContacts(contacts);
     }
   } 
+
+  ////////////////////// Static methods //////////////////
+
+  static DatasetPresenterSet createFromPresentersDir(String presentersDir) {
+    File pres = new File(presentersDir);
+    if (!pres.isDirectory())
+      throw new UserException("Presenters dir " + presentersDir
+          + " must be an existing directory");
+
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    return dpp.parseDir(presentersDir);
+  }
 
 }
