@@ -4,33 +4,16 @@
         <sqlQuery name="Bfmv">
             <column name="project_id"/>
             <column name="source_id"  />
+            <column name="compound_id"  />
+            <column name="substance_id"  />
+            <column name="mol_wt"  />
+            <column name="formula"  />
            <sql>
             <![CDATA[
-                SELECT distinct to_char(compound_id) as source_id, '@PROJECT_ID@' AS project_id
-                FROM apidb.PubChemCompound
-        ]]>
-           </sql>
-	</sqlQuery>
-
-
-	<sqlQuery name="SubstanceId">
-	  <column name="project_id"/>
-	  <column name="source_id"/>
-	  <column name="substance_id"/>
-	  <sql>
-	    <![CDATA[
-      SELECT to_char(comp.compound_id) as source_id, '@PROJECT_ID@' AS project_id, 
-              apidb.tab_to_string(set(cast(COLLECT(to_char(subst.substance_id)) AS apidb.varchartab)), ', ') AS substance_id
-        FROM apidb.PubChemSubstance subst,  apidb.PubChemCompound comp
-       WHERE subst.property='CID'  and subst.type = 'standardized'
-         AND subst.value = comp.compound_id
-      GROUP BY comp.compound_id
-       UNION
-      SELECT DISTINCT to_char(compound_id), '@PROJECT_ID@' AS project_id,  '-' as substance_id
-        FROM apidb.PubChemCompound 
-       WHERE compound_id  not in (SELECT value FROM apidb.PubChemSubstance WHERE property='CID')
+                SELECT compound_id, source_id, substance_id, mol_wt, formula, '@PROJECT_ID@' AS project_id
+                FROM ApidbTuning.CompoundAttributes
 	    ]]>
-	  </sql>
+           </sql>
 	</sqlQuery>
 
 	<sqlQuery name="Synonyms">
@@ -39,19 +22,23 @@
 	  <column name="synonyms"/>
 	  <sql>
 	    <![CDATA[
-	       SELECT s1.value as source_id, '@PROJECT_ID@' as project_id, 
+	       SELECT ca.source_id, '@PROJECT_ID@' as project_id, 
 	           apidb.tab_to_string(set(CAST(COLLECT(s2.value) AS apidb.varchartab)),', ') as synonyms
-	       FROM apidb.pubchemsubstance s1, apidb.pubchemsubstance s2
+	       FROM apidb.pubchemsubstance s1, apidb.pubchemsubstance s2, ApidbTuning.CompoundAttributes ca
 	       WHERE s1.property = 'CID'
+               AND s1.value = ca.compound_id
 	       AND s2.property = 'synonyms'
 	       AND s1.substance_id = s2.substance_id
-	       GROUP BY s1.value
+	       GROUP BY ca.source_id
 	       UNION
-	       SELECT DISTINCT to_char(compound_id) as source_id, '@PROJECT_ID@' AS project_id,  
-	             to_char('-')  as synonyms
-	       FROM apidb.PubChemCompound 
-               WHERE compound_id  not in (SELECT value FROM apidb.PubChemSubstance WHERE property='CID')
-
+	       (SELECT distinct ca.source_id, '@PROJECT_ID@' as project_id, '-' as synonymns   
+	       FROM ApidbTuning.CompoundAttributes ca, apidb.PubChemSubstance s, 
+	       (SELECT distinct substance_id FROM apidb.PubChemSubstance
+	        MINUS
+	        SELECT distinct substance_id FROM apidb.PubChemSubstance WHERE property='synonyms'
+	       ) diff 
+	       WHERE s.substance_id = diff.substance_id
+	       AND ca.substance_id like diff.substance_id)
 	    ]]>
 	  </sql>
 	</sqlQuery>
