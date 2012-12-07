@@ -46,7 +46,7 @@ public class DatasetPresenterSetLoader {
 
   void manageSchema(boolean dropConstraints) {
     String mode = dropConstraints ? "-dropConstraints" : "-create";
-    String[] cmd = { "presenterCreateSchema", suffix, propFileName, mode };
+    String[] cmd = { "presenterCreateSchema", instance, suffix, propFileName, mode };
     Process process;
     try {
       process = Runtime.getRuntime().exec(cmd);
@@ -54,8 +54,8 @@ public class DatasetPresenterSetLoader {
       if (process.exitValue() != 0)
         throw new UserException(
             "Failed running command to create DatasetPresenter schema: "
-                + System.lineSeparator() + "createDatasetPresenterSchema "
-                + suffix + " " + propFileName + " " + mode);
+                + System.lineSeparator() + "presenterCreateSchema "
+	    + instance + " " + suffix + " " + propFileName + " " + mode);
       process.destroy();
     } catch (IOException | InterruptedException ex) {
       throw new UnexpectedException(ex);
@@ -68,6 +68,7 @@ public class DatasetPresenterSetLoader {
       initDbConnection();
 
       PreparedStatement datasetTableStmt = getDatasetTableStmt();
+      System.err.println("count: " + datasetTableStmt.getParameterMetaData().getParameterCount());
       PreparedStatement presenterStmt = getPresenterStmt();
       PreparedStatement contactStmt = getContactStmt();
       PreparedStatement publicationStmt = getPublicationStmt();
@@ -108,7 +109,7 @@ public class DatasetPresenterSetLoader {
       throw new UnexpectedException(e);
     } finally {
       try {
-        dbConnection.close();
+	if (dbConnection != null) dbConnection.close();
       } catch (SQLException e) {
         throw new UnexpectedException(e);
       }
@@ -118,7 +119,7 @@ public class DatasetPresenterSetLoader {
   PreparedStatement getDatasetTableStmt() throws SQLException {
     String table = config.getUsername() + ".Dataset";
     String sql = "SELECT taxon_id, type, subtype, is_species_scope " + "FROM "
-        + table + "WHERE name is like '?'";
+        + table + " WHERE name is like ?";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -134,21 +135,21 @@ public class DatasetPresenterSetLoader {
   private void loadDatasetPresenter(int datasetPresenterId,
       DatasetPresenter datasetPresenter, PreparedStatement stmt)
       throws SQLException {
-    stmt.setInt(0, datasetPresenterId);
-    stmt.setString(1, datasetPresenter.getDatasetName());
-    stmt.setString(2, datasetPresenter.getDatasetNamePattern());
-    stmt.setString(3, datasetPresenter.getDatasetDisplayName());
-    stmt.setString(4, datasetPresenter.getDatasetShortDisplayName());
-    stmt.setString(5, datasetPresenter.getSummary());
-    stmt.setString(6, datasetPresenter.getProtocol());
-    stmt.setString(7, datasetPresenter.getDatasetDescrip());
-    stmt.setString(8, datasetPresenter.getCaveat());
-    stmt.setString(9, datasetPresenter.getAcknowledgement());
-    stmt.setString(10, datasetPresenter.getReleasePolicy());
-    stmt.setString(11, datasetPresenter.getDisplayCategory());
-    stmt.setString(12, datasetPresenter.getType());
-    stmt.setString(13, datasetPresenter.getSubtype());
-    stmt.setBoolean(14, datasetPresenter.getIsSpeciesScope());
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(2, datasetPresenter.getDatasetName());
+    stmt.setString(3, datasetPresenter.getDatasetNamePattern());
+    stmt.setString(4, datasetPresenter.getDatasetDisplayName());
+    stmt.setString(5, datasetPresenter.getDatasetShortDisplayName());
+    stmt.setString(6, datasetPresenter.getSummary());
+    stmt.setString(7, datasetPresenter.getProtocol());
+    stmt.setString(8, datasetPresenter.getDatasetDescrip());
+    stmt.setString(9, datasetPresenter.getCaveat());
+    stmt.setString(10, datasetPresenter.getAcknowledgement());
+    stmt.setString(11, datasetPresenter.getReleasePolicy());
+    stmt.setString(12, datasetPresenter.getDisplayCategory());
+    stmt.setString(13, datasetPresenter.getType());
+    stmt.setString(14, datasetPresenter.getSubtype());
+    stmt.setBoolean(15, datasetPresenter.getIsSpeciesScope());
     stmt.execute();
 
   }
@@ -164,16 +165,16 @@ public class DatasetPresenterSetLoader {
 
   private void loadContact(int datasetPresenterId, Contact contact,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(0, datasetPresenterId);
-    stmt.setBoolean(1, contact.getIsPrimary());
-    stmt.setString(2, contact.getName());
-    stmt.setString(3, contact.getEmail());
-    stmt.setString(4, contact.getInstitution());
-    stmt.setString(5, contact.getAddress());
-    stmt.setString(6, contact.getCity());
-    stmt.setString(7, contact.getState());
-    stmt.setString(8, contact.getZip());
-    stmt.setString(9, contact.getCountry());
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setBoolean(2, contact.getIsPrimary());
+    stmt.setString(3, contact.getName());
+    stmt.setString(4, contact.getEmail());
+    stmt.setString(5, contact.getInstitution());
+    stmt.setString(6, contact.getAddress());
+    stmt.setString(7, contact.getCity());
+    stmt.setString(8, contact.getState());
+    stmt.setString(9, contact.getZip());
+    stmt.setString(10, contact.getCountry());
     stmt.execute();
   }
 
@@ -187,9 +188,9 @@ public class DatasetPresenterSetLoader {
 
   private void loadPublication(int datasetPresenterId, Publication publication,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(0, datasetPresenterId);
-    stmt.setString(1, publication.getPubmedId());
-    stmt.setString(2, publication.getCitation());
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(2, publication.getPubmedId());
+    stmt.setString(3, publication.getCitation());
   }
 
   PreparedStatement getTaxonStmt() throws SQLException {
@@ -202,8 +203,8 @@ public class DatasetPresenterSetLoader {
 
   private void loadTaxon(int datasetPresenterId, Integer taxonId,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(0, datasetPresenterId);
-    stmt.setInt(0, taxonId);
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setInt(2, taxonId);
     stmt.execute();
   }
 
@@ -218,10 +219,10 @@ public class DatasetPresenterSetLoader {
 
   private void loadModelReference(int datasetPresenterId, ModelReference ref,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(0, datasetPresenterId);
-    stmt.setString(1, ref.getRecordClassName());
-    stmt.setString(2, ref.getTargetType());
-    stmt.setString(3, ref.getTargetName());
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(2, ref.getRecordClassName());
+    stmt.setString(3, ref.getTargetType());
+    stmt.setString(4, ref.getTargetName());
     stmt.execute();
   }
 
@@ -235,15 +236,15 @@ public class DatasetPresenterSetLoader {
 
   private void loadLink(int datasetPresenterId, HyperLink link,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(0, datasetPresenterId);
-    stmt.setString(1, link.getText());
-    stmt.setString(2, link.getUrl());
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(2, link.getText());
+    stmt.setString(3, link.getUrl());
     stmt.execute();
   }
 
   Connection initDbConnection() {
     if (dbConnection == null) {
-      String dsn = "jdbc:oracle:oci:" + instance;
+      String dsn = "jdbc:oracle:oci:@" + instance;
       String login = config.getUsername();
       String password = config.getPassword();
       try {
@@ -283,7 +284,7 @@ public class DatasetPresenterSetLoader {
     String namePattern = datasetPresenter.getDatasetNamePattern() == null
         ? datasetPresenter.getDatasetName()
         : datasetPresenter.getDatasetNamePattern();
-    stmt.setString(0, namePattern);
+    stmt.setString(1, namePattern);
     String first_type = null;
     String first_subtype = null;
     Boolean first_isSpeciesScope = null;
