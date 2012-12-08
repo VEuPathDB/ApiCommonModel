@@ -215,8 +215,9 @@ public class DatasetPresenter {
               + " that has no corresponding contact in contacts file "
               + allContacts.getContactsFileName());
         }
-        contacts.add(contact);
+        contacts.add((Contact)contact.clone());
         if (contactId.equals(primaryContactId)) contact.setIsPrimary(true);
+
       }
     }
     return contacts;

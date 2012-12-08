@@ -68,7 +68,6 @@ public class DatasetPresenterSetLoader {
       initDbConnection();
 
       PreparedStatement datasetTableStmt = getDatasetTableStmt();
-      System.err.println("count: " + datasetTableStmt.getParameterMetaData().getParameterCount());
       PreparedStatement presenterStmt = getPresenterStmt();
       PreparedStatement contactStmt = getContactStmt();
       PreparedStatement publicationStmt = getPublicationStmt();
@@ -119,7 +118,7 @@ public class DatasetPresenterSetLoader {
   PreparedStatement getDatasetTableStmt() throws SQLException {
     String table = config.getUsername() + ".Dataset";
     String sql = "SELECT taxon_id, type, subtype, is_species_scope " + "FROM "
-        + table + " WHERE name is like ?";
+        + table + " WHERE name like ?";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -155,7 +154,7 @@ public class DatasetPresenterSetLoader {
   }
 
   PreparedStatement getContactStmt() throws SQLException {
-    String table = config.getUsername() + "DatasetContact." + suffix;
+    String table = config.getUsername() + ".DatasetContact" + suffix;
     String sql = "INSERT INTO "
         + table
         + " (dataset_contact_id, dataset_presenter_id, is_primary_contact, name, email, affiliation, address, city, state, zip, country)"
@@ -179,7 +178,7 @@ public class DatasetPresenterSetLoader {
   }
 
   PreparedStatement getPublicationStmt() throws SQLException {
-    String table = config.getUsername() + "DatasetPublication." + suffix;
+    String table = config.getUsername() + ".DatasetPublication" + suffix;
     String sql = "INSERT INTO " + table
         + " (dataset_publication_id, dataset_presenter_id, pmid, citation)"
         + " VALUES (" + table + "_sq.nextval, ?, ?, ?)";
@@ -191,10 +190,11 @@ public class DatasetPresenterSetLoader {
     stmt.setInt(1, datasetPresenterId);
     stmt.setString(2, publication.getPubmedId());
     stmt.setString(3, publication.getCitation());
+    stmt.execute();
   }
 
   PreparedStatement getTaxonStmt() throws SQLException {
-    String table = config.getUsername() + "DatasetTaxon." + suffix;
+    String table = config.getUsername() + ".DatasetTaxon" + suffix;
     String sql = "INSERT INTO " + table
         + " (dataset_taxon_id, dataset_presenter_id, taxon_id)" + " VALUES ("
         + table + "_sq.nextval, ?, ?)";
@@ -209,7 +209,7 @@ public class DatasetPresenterSetLoader {
   }
 
   PreparedStatement getReferenceStmt() throws SQLException {
-    String table = config.getUsername() + "DatasetModelRef." + suffix;
+    String table = config.getUsername() + ".DatasetModelRef" + suffix;
     String sql = "INSERT INTO "
         + table
         + " (dataset_model_ref_id, dataset_presenter_id, record_type, target_type, target_name)"
@@ -227,7 +227,7 @@ public class DatasetPresenterSetLoader {
   }
 
   PreparedStatement getLinkStmt() throws SQLException {
-    String table = config.getUsername() + "DatasetHyperLink." + suffix;
+    String table = config.getUsername() + ".DatasetHyperLink" + suffix;
     String sql = "INSERT INTO " + table
         + " (dataset_link_id, dataset_presenter_id, text, url)" + " VALUES ("
         + table + "_sq.nextval, ?, ?, ?)";
@@ -311,15 +311,13 @@ public class DatasetPresenterSetLoader {
               || (first_subtype == null && subtype != null)
               || (first_subtype != null && !subtype.equals(first_subtype))
               || (first_isSpeciesScope != isSpeciesScope))
-            throw new UserException();
+            throw new UserException("DatasetPresenter with datasetNamePattern=\"" + namePattern + "\" matches rows in the Dataset table that disagree in their type, subtype or is_species_scope columns");
         }
         datasetPresenter.addTaxonId(taxonId);
       }
     } finally {
       if (rs != null)
         rs.close();
-      if (stmt != null)
-        stmt.close();
     }
   }
 
