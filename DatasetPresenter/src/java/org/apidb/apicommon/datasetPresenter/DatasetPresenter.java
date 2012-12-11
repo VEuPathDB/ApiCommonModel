@@ -58,7 +58,7 @@ public class DatasetPresenter {
   public void setDatasetDescrip(Text datasetDescrip) {
     propValues.put("datasetDescrip", datasetDescrip.getText());
   }
-  
+
   public String getDatasetDescrip() {
     return propValues.get("datasetDescrip");
   }
@@ -66,7 +66,7 @@ public class DatasetPresenter {
   public void setDatasetDisplayName(Text datasetDisplayName) {
     propValues.put("datasetDisplayName", datasetDisplayName.getText());
   }
-  
+
   public String getDatasetDisplayName() {
     return propValues.get("datasetDisplayName");
   }
@@ -74,7 +74,7 @@ public class DatasetPresenter {
   public void setDatasetShortDisplayName(Text datasetShortDisplayName) {
     propValues.put("datasetShortDisplayName", datasetShortDisplayName.getText());
   }
-  
+
   public String getDatasetShortDisplayName() {
     return propValues.get("datasetShortDisplayName");
   }
@@ -82,48 +82,52 @@ public class DatasetPresenter {
   public void setSummary(Text summary) {
     propValues.put("summary", summary.getText());
   }
-  
+
   public String getSummary() {
     return propValues.get("summary");
   }
-  
+
   public void setType(String type) {
     this.type = type;
   }
-  
+
   public String getType() {
     return type;
   }
-  
+
   public void setSubtype(String subtype) {
     this.subtype = subtype;
   }
-  
+
   public String getSubtype() {
     return subtype;
   }
-  
+
   public void setIsSpeciesScope(Boolean isSpeciesScope) {
     this.isSpeciesScope = isSpeciesScope;
   }
-  
+
   public Boolean getIsSpeciesScope() {
     return isSpeciesScope;
   }
-  
+
   public void setDatasetNamePattern(String pattern) {
-    if (!pattern.contains("%") || pattern.contains("*")) throw new UserException("Dataset " + getDatasetName() + " contains an illegal datasetNamePattern attribute.  It must contain one or more SQL wildcard (%) and no other type of wildcards");
+    if (!pattern.contains("%") || pattern.contains("*"))
+      throw new UserException(
+          "Dataset "
+              + getDatasetName()
+              + " contains an illegal datasetNamePattern attribute.  It must contain one or more SQL wildcard (%) and no other type of wildcards");
     datasetNamePattern = pattern;
   }
-  
+
   public String getDatasetNamePattern() {
     return datasetNamePattern;
   }
-  
+
   public void addTaxonId(Integer taxonId) {
     taxonIds.add(taxonId);
   }
-  
+
   public List<Integer> getTaxonIds() {
     return taxonIds;
   }
@@ -131,7 +135,7 @@ public class DatasetPresenter {
   public void setProjectName(String projectName) {
     propValues.put("projectName", projectName);
   }
-  
+
   public void setOrganismShortName(String organismShortName) {
     propValues.put("organismShortName", organismShortName);
   }
@@ -140,13 +144,17 @@ public class DatasetPresenter {
     try {
       new Integer(buildNumberIntroduced);
     } catch (Exception e) {
-      throw new UserException("Dataset " + getDatasetName() + " contains an invalid buildNumberIntroduced attribute.  It must be an integer");
+      throw new UserException(
+          "Dataset "
+              + getDatasetName()
+              + " contains an invalid buildNumberIntroduced attribute.  It must be an integer");
     }
     propValues.put("buildNumberIntroduced", buildNumberIntroduced);
   }
-  
+
   public Integer getBuildNumberIntroduced() {
-    if (propValues.get("buildNumberIntroduced") == null) return null;
+    if (propValues.get("buildNumberIntroduced") == null)
+      return null;
     return new Integer(propValues.get("buildNumberIntroduced"));
   }
 
@@ -193,7 +201,7 @@ public class DatasetPresenter {
   public void addContactId(Text contactId) {
     contactIds.add(contactId.getText());
   }
-  
+
   public void setPrimaryContactId(Text contactId) {
     primaryContactId = contactId.getText();
     contactIds.add(contactId.getText());
@@ -215,8 +223,10 @@ public class DatasetPresenter {
               + " that has no corresponding contact in contacts file "
               + allContacts.getContactsFileName());
         }
-        contacts.add((Contact)contact.clone());
-        if (contactId.equals(primaryContactId)) contact.setIsPrimary(true);
+        Contact contactCopy = (Contact) contact.clone();
+        contacts.add(contactCopy);
+        if (contactId.equals(primaryContactId))
+          contactCopy.setIsPrimary(true);
 
       }
     }
@@ -259,6 +269,19 @@ public class DatasetPresenter {
       }
     }
     return datasetInjector;
+  }
+
+  void setDefaultDatasetInjector(
+      Map<String, Map<String, String>> defaultDatasetInjectors) {
+    if (type == null || subtype == null
+        || defaultDatasetInjectors == null
+        || !defaultDatasetInjectors.containsKey(type)
+        || !defaultDatasetInjectors.get(type).containsKey(subtype)
+        || datasetInjectorConstructors.size() != 0)
+      return;
+    DatasetInjectorConstructor constructor = new DatasetInjectorConstructor();
+    constructor.setClassName(defaultDatasetInjectors.get(type).get(subtype));
+    addDatasetInjector(constructor);
   }
 
   public List<ModelReference> getModelReferences() {

@@ -1,5 +1,6 @@
 package org.apidb.apicommon.datasetPresenter;
 
+
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -7,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
@@ -21,12 +23,14 @@ public class DatasetPresenterSetLoader {
   private Configuration config;
   private String instance;
   private String propFileName;
+  private String defaultInjectorsFileName;
   private String suffix;
 
   static final String nl = System.lineSeparator();
 
   public DatasetPresenterSetLoader(String propFileName,
-      String contactsFileName, String instance, String suffix) {
+      String contactsFileName, String defaultInjectorsFileName,
+      String instance, String suffix) {
     ConfigurationParser configParser = new ConfigurationParser();
     config = configParser.parseFile(propFileName);
     ContactsFileParser contactsParser = new ContactsFileParser();
@@ -34,6 +38,7 @@ public class DatasetPresenterSetLoader {
     this.instance = instance;
     this.propFileName = propFileName;
     this.suffix = suffix;
+    this.defaultInjectorsFileName = defaultInjectorsFileName;
   }
 
   void schemaInstall() {
@@ -46,7 +51,8 @@ public class DatasetPresenterSetLoader {
 
   void manageSchema(boolean dropConstraints) {
     String mode = dropConstraints ? "-dropConstraints" : "-create";
-    String[] cmd = { "presenterCreateSchema", instance, suffix, propFileName, mode };
+    String[] cmd = { "presenterCreateSchema", instance, suffix, propFileName,
+        mode };
     Process process;
     try {
       process = Runtime.getRuntime().exec(cmd);
@@ -54,8 +60,8 @@ public class DatasetPresenterSetLoader {
       if (process.exitValue() != 0)
         throw new UserException(
             "Failed running command to create DatasetPresenter schema: "
-                + System.lineSeparator() + "presenterCreateSchema "
-	    + instance + " " + suffix + " " + propFileName + " " + mode);
+                + System.lineSeparator() + "presenterCreateSchema " + instance
+                + " " + suffix + " " + propFileName + " " + mode);
       process.destroy();
     } catch (IOException | InterruptedException ex) {
       throw new UnexpectedException(ex);
@@ -75,9 +81,13 @@ public class DatasetPresenterSetLoader {
       PreparedStatement linkStmt = getLinkStmt();
       PreparedStatement taxonStmt = getTaxonStmt();
 
+      Map<String, Map<String, String>> defaultDatasetInjectorClasses = DatasetPresenterParser.parseDefaultInjectorsFile(defaultInjectorsFileName);
+
       for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
 
         getPresenterValuesFromDatasetTable(datasetTableStmt, datasetPresenter);
+
+        datasetPresenter.setDefaultDatasetInjector(defaultDatasetInjectorClasses);
 
         int datasetPresenterId = getNextDatasetPresenterId();
 
@@ -108,7 +118,8 @@ public class DatasetPresenterSetLoader {
       throw new UnexpectedException(e);
     } finally {
       try {
-	if (dbConnection != null) dbConnection.close();
+        if (dbConnection != null)
+          dbConnection.close();
       } catch (SQLException e) {
         throw new UnexpectedException(e);
       }
@@ -311,7 +322,10 @@ public class DatasetPresenterSetLoader {
               || (first_subtype == null && subtype != null)
               || (first_subtype != null && !subtype.equals(first_subtype))
               || (first_isSpeciesScope != isSpeciesScope))
-            throw new UserException("DatasetPresenter with datasetNamePattern=\"" + namePattern + "\" matches rows in the Dataset table that disagree in their type, subtype or is_species_scope columns");
+            throw new UserException(
+                "DatasetPresenter with datasetNamePattern=\""
+                    + namePattern
+                    + "\" matches rows in the Dataset table that disagree in their type, subtype or is_species_scope columns");
         }
         datasetPresenter.addTaxonId(taxonId);
       }
@@ -342,6 +356,12 @@ public class DatasetPresenterSetLoader {
         "an XML file containing database username and password, in the formate expected by the tuning manager",
         true, true);
 
+    CliUtil.addOption(
+        options,
+        "defaultInjectorClassesFile",
+        "a three column tab delimited file:  type, subtype, injectorClass.  Provides default injectorClasses for type/subtypes",
+        false, true);
+
     CliUtil.addOption(options, "instance",
         "the name of the instance to write to", true, true);
 
@@ -366,7 +386,7 @@ public class DatasetPresenterSetLoader {
     // parse command line
     Options options = declareOptions();
     String cmdlineSyntax = cmdName
-        + " -presentersDir presenters_dir -contactsXmlFile contacts_file -tuningPropsXmlFile propFile -instance instance_name -suffix suffix";
+        + " -presentersDir presenters_dir -contactsXmlFile contacts_file -tuningPropsXmlFile propFile -instance instance_name -suffix suffix [-defaultInjectorClassesFile tab_file]";
     String cmdDescrip = "Read provided dataset presenter files and inject templates into the presentation layer.";
     CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
         getUsageNotes(), options, args);
@@ -379,11 +399,13 @@ public class DatasetPresenterSetLoader {
     String presentersDir = cmdLine.getOptionValue("presentersDir");
     String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     String propFile = cmdLine.getOptionValue("tuningPropsXmlFile");
+    String defaultInjectorsFile = cmdLine.getOptionValue("defaultInjectorClassesFile");
     String instance = cmdLine.getOptionValue("instance");
     String suffix = cmdLine.getOptionValue("suffix");
     try {
       DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
-      DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile, contactsFile, instance, suffix);
+      DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile,
+          contactsFile, defaultInjectorsFile, instance, suffix);
       dpsl.schemaInstall();
       dpsl.loadDatasetPresenterSet(datasetPresenterSet);
       dpsl.schemaDropConstraints();

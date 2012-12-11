@@ -82,6 +82,10 @@ public class DatasetInjectorConstructor {
   String getDatasetInjectorClassName() {
     return datasetInjectorClassName;
   }
+  
+  String getClassName() {
+    return datasetInjectorClassName;
+  }
 
   /**
    * Use reflection to construct a subclass of DatasetInjector. Initialize the
