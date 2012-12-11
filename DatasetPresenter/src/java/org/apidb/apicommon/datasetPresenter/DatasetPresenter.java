@@ -141,15 +141,7 @@ public class DatasetPresenter {
   }
 
   public void setBuildNumberIntroduced(Integer buildNumberIntroduced) {
-    try {
-      new Integer(buildNumberIntroduced);
-    } catch (Exception e) {
-      throw new UserException(
-          "Dataset "
-              + getDatasetName()
-              + " contains an invalid buildNumberIntroduced attribute.  It must be an integer");
-    }
-    propValues.put("buildNumberIntroduced", buildNumberIntroduced.toString());
+     propValues.put("buildNumberIntroduced", buildNumberIntroduced.toString());
   }
 
   public Integer getBuildNumberIntroduced() {
