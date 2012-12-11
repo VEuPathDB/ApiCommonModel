@@ -140,7 +140,7 @@ public class DatasetPresenter {
     propValues.put("organismShortName", organismShortName);
   }
 
-  public void setBuildNumberIntroduced(String buildNumberIntroduced) {
+  public void setBuildNumberIntroduced(Integer buildNumberIntroduced) {
     try {
       new Integer(buildNumberIntroduced);
     } catch (Exception e) {
@@ -149,7 +149,7 @@ public class DatasetPresenter {
               + getDatasetName()
               + " contains an invalid buildNumberIntroduced attribute.  It must be an integer");
     }
-    propValues.put("buildNumberIntroduced", buildNumberIntroduced);
+    propValues.put("buildNumberIntroduced", buildNumberIntroduced.toString());
   }
 
   public Integer getBuildNumberIntroduced() {
