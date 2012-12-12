@@ -77,13 +77,6 @@ public class DatasetPresenterSetLoader {
       }
     } catch (SQLException e) {
       throw new UnexpectedException(e);
-    } finally {
-      try {
-        if (dbConnection != null)
-          dbConnection.close();
-      } catch (SQLException e) {
-        throw new UnexpectedException(e);
-      }
     }
   }
 
@@ -143,7 +136,7 @@ public class DatasetPresenterSetLoader {
   }
 
   PreparedStatement getDatasetTableStmt() throws SQLException {
-    String table = config.getUsername() + ".Dataset";
+    String table = "ApiDB.Dataset";
     String sql = "SELECT taxon_id, type, subtype, is_species_scope " + "FROM "
         + table + " WHERE name like ?";
     return dbConnection.prepareStatement(sql);
