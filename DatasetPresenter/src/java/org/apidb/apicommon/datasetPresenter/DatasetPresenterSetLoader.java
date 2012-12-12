@@ -7,7 +7,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
@@ -71,6 +73,8 @@ public class DatasetPresenterSetLoader {
     initDbConnection();
 
     try {
+      Set<String> datasetNamesInDb = findDatasetNamesInDb();
+      
       PreparedStatement datasetTableStmt = getDatasetTableStmt();
       for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
         getPresenterValuesFromDatasetTable(datasetTableStmt, datasetPresenter);
@@ -78,6 +82,11 @@ public class DatasetPresenterSetLoader {
     } catch (SQLException e) {
       throw new UnexpectedException(e);
     }
+  }
+  
+  Set<String> findDatasetNamesInDb() {
+    Set<String> datasetNamesInDb = new HashSet<String>();
+    return datasetNamesInDb;
   }
 
   // read contacts file and create contacts.

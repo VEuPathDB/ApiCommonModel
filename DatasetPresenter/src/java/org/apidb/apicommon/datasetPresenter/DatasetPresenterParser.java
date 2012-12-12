@@ -122,6 +122,10 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod(
         "datasetPresenters/datasetPresenter/templateInjector/prop", "setValue",
         0);
+    
+    configureNode(digester, "datasetPresenters/internalDataset",
+        InternalDataset.class, "addInternalDataset");
+
 
     return digester;
   }

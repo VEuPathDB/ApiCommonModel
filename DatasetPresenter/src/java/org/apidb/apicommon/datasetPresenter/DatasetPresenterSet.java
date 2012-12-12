@@ -3,7 +3,9 @@ package org.apidb.apicommon.datasetPresenter;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A set of DatasetPresenters. A DatasetPresenterSet has one or more
@@ -19,7 +21,9 @@ import java.util.List;
 public class DatasetPresenterSet {
 
   private List<DatasetPresenter> presenters = new ArrayList<DatasetPresenter>();
-  private List<String> presenterNames = new ArrayList<String>();
+  private Set<String> presenterNames = new HashSet<String>();
+  private List<InternalDataset> internalDatasets = new ArrayList<InternalDataset>();
+  private Set<String> internalDatasetNames = new HashSet<String>();  
 
   /**
    * Add a DatasetPresenter to this set.
@@ -27,10 +31,28 @@ public class DatasetPresenterSet {
    * Called at Model construction
    */
   public void addDatasetPresenter(DatasetPresenter presenter) {
-   String name = presenter.getDatasetName();
-   if (presenterNames.contains(name)) throw new UserException("DatasetPresenter already exists with name: " + name);
-   presenterNames.add(name);
+    String name = presenter.getDatasetName();
+    if (presenterNames.contains(name))
+      throw new UserException("DatasetPresenter already exists with name: "
+          + name);
+    if (internalDatasetNames.contains(name))
+      throw new UserException("InternalDataset already exists with name: "
+          + name);
+    presenterNames.add(name);
     presenters.add(presenter);
+  }
+
+  public void addInternalDataset(InternalDataset internalDataset) {
+    String name = internalDataset.getName();
+    if (presenterNames.contains(name))
+      throw new UserException("DatasetPresenter already exists with name: "
+          + name);
+    if (internalDatasetNames.contains(name))
+      throw new UserException("InternalDataset already exists with name: "
+          + name);
+    internalDatasetNames.add(name);
+    internalDatasets.add(internalDataset);
+
   }
 
   /**
@@ -65,17 +87,22 @@ public class DatasetPresenterSet {
     return Collections.unmodifiableList(presenters);
   }
   
+  List<InternalDataset> getInternalDatasets() {
+    return Collections.unmodifiableList(internalDatasets);
+  }
+
+
   void validateContactIds(String contactsFileName) {
     ContactsFileParser parser = new ContactsFileParser();
     String project_home = System.getenv("PROJECT_HOME");
     Contacts contacts = parser.parseFile(project_home
         + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
-    for (DatasetPresenter presenter: presenters) {
+    for (DatasetPresenter presenter : presenters) {
       presenter.getContacts(contacts);
     }
-  } 
+  }
 
-  ////////////////////// Static methods //////////////////
+  // //////////////////// Static methods //////////////////
 
   static DatasetPresenterSet createFromPresentersDir(String presentersDir) {
     File pres = new File(presentersDir);

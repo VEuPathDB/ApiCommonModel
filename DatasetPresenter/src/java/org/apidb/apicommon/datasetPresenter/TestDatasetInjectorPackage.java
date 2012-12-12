@@ -303,6 +303,9 @@ public class TestDatasetInjectorPackage {
     DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
     assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
     assertTrue(dic.getPropValue("isSingleStrand").equals("true"));
+    assertTrue(dps.getInternalDatasets().size() == 1);
+    assertTrue(dps.getInternalDatasets().get(0).getName().equals("dontcare"));
+    assertTrue(dps.getInternalDatasets().get(0).getDatasetNamePattern().equals("reallyDontCare"));
   }
 
   @Test
