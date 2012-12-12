@@ -19,6 +19,7 @@ import java.util.List;
 public class DatasetPresenterSet {
 
   private List<DatasetPresenter> presenters = new ArrayList<DatasetPresenter>();
+  private List<String> presenterNames = new ArrayList<String>();
 
   /**
    * Add a DatasetPresenter to this set.
@@ -26,6 +27,9 @@ public class DatasetPresenterSet {
    * Called at Model construction
    */
   public void addDatasetPresenter(DatasetPresenter presenter) {
+   String name = presenter.getDatasetName();
+   if (presenterNames.contains(name)) throw new UserException("DatasetPresenter already exists with name: " + name);
+   presenterNames.add(name);
     presenters.add(presenter);
   }
 

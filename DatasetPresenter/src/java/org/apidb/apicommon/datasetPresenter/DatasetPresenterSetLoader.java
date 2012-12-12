@@ -1,6 +1,5 @@
 package org.apidb.apicommon.datasetPresenter;
 
-
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -68,12 +67,31 @@ public class DatasetPresenterSetLoader {
     }
   }
 
+  void syncPresenterSetWithDatasetTable(DatasetPresenterSet dps) {
+    initDbConnection();
+
+    try {
+      PreparedStatement datasetTableStmt = getDatasetTableStmt();
+      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
+        getPresenterValuesFromDatasetTable(datasetTableStmt, datasetPresenter);
+      }
+    } catch (SQLException e) {
+      throw new UnexpectedException(e);
+    } finally {
+      try {
+        if (dbConnection != null)
+          dbConnection.close();
+      } catch (SQLException e) {
+        throw new UnexpectedException(e);
+      }
+    }
+  }
+
   // read contacts file and create contacts.
   void loadDatasetPresenterSet(DatasetPresenterSet dps) {
-    try {
-      initDbConnection();
+    syncPresenterSetWithDatasetTable(dps);
 
-      PreparedStatement datasetTableStmt = getDatasetTableStmt();
+    try {
       PreparedStatement presenterStmt = getPresenterStmt();
       PreparedStatement contactStmt = getContactStmt();
       PreparedStatement publicationStmt = getPublicationStmt();
@@ -84,8 +102,6 @@ public class DatasetPresenterSetLoader {
       Map<String, Map<String, String>> defaultDatasetInjectorClasses = DatasetPresenterParser.parseDefaultInjectorsFile(defaultInjectorsFileName);
 
       for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
-
-        getPresenterValuesFromDatasetTable(datasetTableStmt, datasetPresenter);
 
         datasetPresenter.setDefaultDatasetInjector(defaultDatasetInjectorClasses);
 
@@ -329,6 +345,10 @@ public class DatasetPresenterSetLoader {
         }
         datasetPresenter.addTaxonId(taxonId);
       }
+      if (!foundFirst)
+        throw new UserException("DatasetPresenter with name \""
+            + datasetPresenter.getDatasetName()
+            + "\" does not match any row in ApiDB.Dataset");
     } finally {
       if (rs != null)
         rs.close();

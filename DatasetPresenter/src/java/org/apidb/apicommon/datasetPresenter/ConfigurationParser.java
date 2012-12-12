@@ -9,8 +9,7 @@ import org.gusdb.fgputil.xml.XmlParser;
 import org.xml.sax.SAXException;
 
 /**
- * Parse an XML representation of a DatasetPresenterSet into java objects. The
- * XML schema is described in lib/rng/datasetPresenter.rng.
+ * 
  */
 public class ConfigurationParser extends XmlParser {
 
@@ -31,9 +30,9 @@ public class ConfigurationParser extends XmlParser {
     digester.addCallMethod("tuningProps/password",
         "setText", 0);
     
-    configureNode(digester, "tuningProps/username",
+    configureNode(digester, "tuningProps/schema",
         Text.class, "setUsername");
-    digester.addCallMethod("tuningProps/username",
+    digester.addCallMethod("tuningProps/schema",
         "setText", 0);
 
     return digester;
@@ -47,7 +46,7 @@ public class ConfigurationParser extends XmlParser {
       config = (Configuration) digester.parse(new File(
           xmlFileName));
       if (config.getPassword() == null) throw new UserException("Could not parse password out of tuning manager prop XML file " + xmlFileName);
-      if (config.getUsername() == null) throw new UserException("Could not parse username out of tuning manager prop XML file " + xmlFileName);
+      if (config.getUsername() == null) throw new UserException("Could not parse schema out of tuning manager prop XML file " + xmlFileName);
     } catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
