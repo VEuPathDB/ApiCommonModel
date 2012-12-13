@@ -24,6 +24,7 @@ public class DatasetPresenterSet {
   private Set<String> presenterNames = new HashSet<String>();
   private List<InternalDataset> internalDatasets = new ArrayList<InternalDataset>();
   private Set<String> internalDatasetNames = new HashSet<String>();  
+  private Set<String> namePatterns = new HashSet<String>();  
 
   /**
    * Add a DatasetPresenter to this set.
@@ -40,6 +41,13 @@ public class DatasetPresenterSet {
           + name);
     presenterNames.add(name);
     presenters.add(presenter);
+    String pattern = presenter.getDatasetNamePattern();
+    if (pattern != null) {
+      if (namePatterns.contains(pattern))
+        throw new UserException("datasetNamePattern already exists: "
+            + pattern);
+      namePatterns.add(pattern);
+    }
   }
 
   public void addInternalDataset(InternalDataset internalDataset) {
