@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +27,8 @@ public class DatasetPresenterSetLoader {
   private String propFileName;
   private String defaultInjectorsFileName;
   private String suffix;
+  private String login;
+  private DatasetPresenterSet dps = null;
 
   static final String nl = System.lineSeparator();
 
@@ -42,12 +45,20 @@ public class DatasetPresenterSetLoader {
     this.defaultInjectorsFileName = defaultInjectorsFileName;
   }
 
+  void setDatasetPresenterSet(DatasetPresenterSet dps) {
+    this.dps = dps;
+  }
+
   void schemaInstall() {
+    System.err.println("Installing DatasetPresenter schema into instance " + instance + " schema " + login + " using suffix " + suffix);
     manageSchema(false);
+    System.err.println("Install complete");
   }
 
   void schemaDropConstraints() {
+    System.err.println("Dropping integrity constraints from DatasetPresenter tables (so TuningManager can easily delete them)");
     manageSchema(true);
+    System.err.println("Drop complete");
   }
 
   void manageSchema(boolean dropConstraints) {
@@ -69,30 +80,9 @@ public class DatasetPresenterSetLoader {
     }
   }
 
-  void syncPresenterSetWithDatasetTable(DatasetPresenterSet dps) {
-    initDbConnection();
-
-    try {
-      Set<String> datasetNamesInDb = findDatasetNamesInDb();
-      
-      PreparedStatement datasetTableStmt = getDatasetTableStmt();
-      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
-        getPresenterValuesFromDatasetTable(datasetTableStmt, datasetPresenter);
-      }
-    } catch (SQLException e) {
-      throw new UnexpectedException(e);
-    }
-  }
-  
-  Set<String> findDatasetNamesInDb() {
-    Set<String> datasetNamesInDb = new HashSet<String>();
-    return datasetNamesInDb;
-  }
-
   // read contacts file and create contacts.
-  void loadDatasetPresenterSet(DatasetPresenterSet dps) {
-    syncPresenterSetWithDatasetTable(dps);
-
+  void loadDatasetPresenterSet() {
+    System.err.println("Loading DatasetPresenters into " + instance);
     try {
       PreparedStatement presenterStmt = getPresenterStmt();
       PreparedStatement contactStmt = getContactStmt();
@@ -132,6 +122,7 @@ public class DatasetPresenterSetLoader {
           loadTaxon(datasetPresenterId, taxonId, taxonStmt);
         }
       }
+      System.err.println("Loading done");
     } catch (SQLException e) {
       throw new UnexpectedException(e);
     } finally {
@@ -146,8 +137,8 @@ public class DatasetPresenterSetLoader {
 
   PreparedStatement getDatasetTableStmt() throws SQLException {
     String table = "ApiDB.Dataset";
-    String sql = "SELECT taxon_id, type, subtype, is_species_scope " + "FROM "
-        + table + " WHERE name like ?";
+    String sql = "SELECT name, taxon_id, type, subtype, is_species_scope "
+        + "FROM " + table + " WHERE name like ?";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -274,7 +265,7 @@ public class DatasetPresenterSetLoader {
   Connection initDbConnection() {
     if (dbConnection == null) {
       String dsn = "jdbc:oracle:oci:@" + instance;
-      String login = config.getUsername();
+      login = config.getUsername();
       String password = config.getPassword();
       try {
         DriverManager.registerDriver(new OracleDriver());
@@ -308,7 +299,9 @@ public class DatasetPresenterSetLoader {
   }
 
   void getPresenterValuesFromDatasetTable(PreparedStatement stmt,
-      DatasetPresenter datasetPresenter) throws SQLException {
+      DatasetPresenter datasetPresenter, Set<String> datasetNamesFoundInDb)
+      throws SQLException {
+    Set<String> datasetNamesFoundLocal = new HashSet<String>();
     ResultSet rs = null;
     String namePattern = datasetPresenter.getDatasetNamePattern() == null
         ? datasetPresenter.getDatasetName()
@@ -322,10 +315,18 @@ public class DatasetPresenterSetLoader {
 
       rs = stmt.executeQuery();
       while (rs.next()) {
-        Integer taxonId = rs.getInt(1);
-        String type = rs.getString(2);
-        String subtype = rs.getString(3);
-        Boolean isSpeciesScope = rs.getBoolean(4);
+        String name = rs.getString(1);
+        Integer taxonId = rs.getInt(2);
+        String type = rs.getString(3);
+        String subtype = rs.getString(4);
+        Boolean isSpeciesScope = rs.getBoolean(5);
+        if (datasetNamesFoundInDb.contains(name))
+          throw new UserException(
+              "DatasetPresenter with name \""
+                  + datasetPresenter.getDatasetName()
+                  + "\" has a name or name pattern that is claimed by another DatasetPresenter.  The conflicting name is: \""
+                  + name + "\"");
+        datasetNamesFoundLocal.add(name);
         if (!foundFirst) {
           foundFirst = true;
           first_type = type;
@@ -351,10 +352,61 @@ public class DatasetPresenterSetLoader {
         throw new UserException("DatasetPresenter with name \""
             + datasetPresenter.getDatasetName()
             + "\" does not match any row in ApiDB.Dataset");
+      datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
     } finally {
       if (rs != null)
         rs.close();
     }
+  }
+
+  /**
+   * 
+   * @param dps
+   * @return set of dataset names not found (or matched by) the
+   *         DatasetPresenters in the input set
+   */
+  Set<String> syncPresenterSetWithDatasetTable() {
+    initDbConnection();
+
+    try {
+      Set<String> datasetNamesFoundInDb = new HashSet<String>();
+
+      PreparedStatement datasetTableStmt = getDatasetTableStmt();
+      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
+        getPresenterValuesFromDatasetTable(datasetTableStmt, datasetPresenter,
+            datasetNamesFoundInDb);
+      }
+      Set<String> datasetNamesNotFoundInDb = new HashSet<String>(
+          findDatasetNamesInDb());
+      datasetNamesNotFoundInDb.removeAll(datasetNamesFoundInDb);
+      return datasetNamesNotFoundInDb;
+    } catch (SQLException e) {
+      throw new UnexpectedException(e);
+    }
+  }
+
+  Set<String> findDatasetNamesInDb() throws SQLException {
+    Set<String> datasetNamesInDb = new HashSet<String>();
+    String sql = "select name from apidb.dataset";
+    Statement stmt = null;
+    ResultSet rs = null;
+    try {
+      stmt = dbConnection.createStatement();
+      rs = stmt.executeQuery(sql);
+      while (rs.next()) {
+        datasetNamesInDb.add(rs.getString(1));
+      }
+    } finally {
+      if (rs != null)
+        rs.close();
+      if (stmt != null)
+        stmt.close();
+    }
+    return datasetNamesInDb;
+  }
+
+  void initialize() {
+
   }
 
   // ///////////// Static methods //////////////////////////////
@@ -390,8 +442,11 @@ public class DatasetPresenterSetLoader {
     CliUtil.addOption(
         options,
         "suffix",
-        "the suffix to append to all tables created (as is always done in tuning tables",
+        "the suffix to append to all tables created (as is always done in tuning tables).  Required but ignored if using the -report option",
         true, true);
+
+    CliUtil.addOption(options, "report",
+        "the name of the instance to write to", false, false);
 
     return options;
   }
@@ -416,21 +471,40 @@ public class DatasetPresenterSetLoader {
     return cmdLine;
   }
 
-  public static void main(String[] args) throws Exception {
-    CommandLine cmdLine = getCmdLine(args);
+  public static DatasetPresenterSetLoader constructLoader(CommandLine cmdLine) {
     String presentersDir = cmdLine.getOptionValue("presentersDir");
     String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     String propFile = cmdLine.getOptionValue("tuningPropsXmlFile");
     String defaultInjectorsFile = cmdLine.getOptionValue("defaultInjectorClassesFile");
     String instance = cmdLine.getOptionValue("instance");
     String suffix = cmdLine.getOptionValue("suffix");
+
+    System.err.println("Parsing and validating DatasetPresenters XML files found in directory " + presentersDir);
+    DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
+    DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile,
+        contactsFile, defaultInjectorsFile, instance, suffix);
+    dpsl.setDatasetPresenterSet(datasetPresenterSet);
+    Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
+    if (namesFromDbNotFound.size() != 0)
+      throw new UserException(
+          "The following Dataset names in ApiDB.Dataset are not mentioned or matched by the input DatasetPresenters:"
+              + nl + Arrays.toString(namesFromDbNotFound.toArray()));
+    System.err.println("Validation complete");
+    return dpsl;
+  }
+
+  public static void main(String[] args) throws Exception {
+    CommandLine cmdLine = getCmdLine(args);
+    
+    // does all validation of presenters against ApiDB.Dataset
+    DatasetPresenterSetLoader dpsl = constructLoader(cmdLine);
+    
     try {
-      DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
-      DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile,
-          contactsFile, defaultInjectorsFile, instance, suffix);
-      dpsl.schemaInstall();
-      dpsl.loadDatasetPresenterSet(datasetPresenterSet);
-      dpsl.schemaDropConstraints();
+      if (!cmdLine.hasOption("report")) {
+        dpsl.schemaInstall();
+        dpsl.loadDatasetPresenterSet();
+        dpsl.schemaDropConstraints();
+      }
     } catch (UserException ex) {
       System.err.println(nl + "Error: " + ex.getMessage() + nl);
       System.exit(1);
