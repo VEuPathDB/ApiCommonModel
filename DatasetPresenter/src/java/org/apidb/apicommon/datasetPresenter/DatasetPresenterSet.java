@@ -51,6 +51,7 @@ public class DatasetPresenterSet {
   }
 
   public void addInternalDataset(InternalDataset internalDataset) {
+
     String name = internalDataset.getName();
     if (presenterNames.contains(name))
       throw new UserException("DatasetPresenter already exists with name: "
@@ -61,6 +62,13 @@ public class DatasetPresenterSet {
     internalDatasetNames.add(name);
     internalDatasets.add(internalDataset);
 
+    String pattern = internalDataset.getDatasetNamePattern();
+    if (pattern != null) {
+      if (namePatterns.contains(pattern))
+        throw new UserException("datasetNamePattern already exists: "
+            + pattern);
+      namePatterns.add(pattern);
+    }
   }
 
   /**
@@ -68,7 +76,12 @@ public class DatasetPresenterSet {
    * construction).
    */
   void addDatasetPresenterSet(DatasetPresenterSet datasetPresenterSet) {
-    presenters.addAll(datasetPresenterSet.getDatasetPresenters());
+      for (DatasetPresenter presenter : datasetPresenterSet.getDatasetPresenters()) {
+	  addDatasetPresenter(presenter);
+      }
+      for (InternalDataset internalDataset : datasetPresenterSet.getInternalDatasets()) {
+	  addInternalDataset(internalDataset);
+      }
   }
 
   /**
@@ -96,7 +109,7 @@ public class DatasetPresenterSet {
   }
   
   List<InternalDataset> getInternalDatasets() {
-    return Collections.unmodifiableList(internalDatasets);
+   return Collections.unmodifiableList(internalDatasets);
   }
 
 

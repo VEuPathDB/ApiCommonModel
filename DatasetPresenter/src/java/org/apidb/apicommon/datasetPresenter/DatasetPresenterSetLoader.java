@@ -525,7 +525,7 @@ public class DatasetPresenterSetLoader {
     dpsl.setDatasetPresenterSet(datasetPresenterSet);
     Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
     if (namesFromDbNotFound.size() != 0)
-      throw new UserException(
+	System.err.println(
           "The following Dataset names in ApiDB.Dataset are not mentioned or matched by the input DatasetPresenters:"
               + nl + Arrays.toString(namesFromDbNotFound.toArray()));
     System.err.println("Validation complete");
@@ -535,10 +535,10 @@ public class DatasetPresenterSetLoader {
   public static void main(String[] args) throws Exception {
     CommandLine cmdLine = getCmdLine(args);
 
-    // does all validation of presenters against ApiDB.Dataset
-    DatasetPresenterSetLoader dpsl = constructLoader(cmdLine);
-
     try {
+      // does all validation of presenters against ApiDB.Dataset
+      DatasetPresenterSetLoader dpsl = constructLoader(cmdLine);
+
       if (!cmdLine.hasOption("report")) {
         dpsl.schemaInstall();
         dpsl.loadDatasetPresenterSet();
