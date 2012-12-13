@@ -463,7 +463,7 @@ public class DatasetPresenterSetLoader {
     // parse command line
     Options options = declareOptions();
     String cmdlineSyntax = cmdName
-        + " -presentersDir presenters_dir -contactsXmlFile contacts_file -tuningPropsXmlFile propFile -instance instance_name -suffix suffix [-defaultInjectorClassesFile tab_file]";
+        + " -presentersDir presenters_dir -contactsXmlFile contacts_file -tuningPropsXmlFile propFile -instance instance_name -suffix suffix [-defaultInjectorClassesFile tab_file] [-report]";
     String cmdDescrip = "Read provided dataset presenter files and inject templates into the presentation layer.";
     CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
         getUsageNotes(), options, args);
