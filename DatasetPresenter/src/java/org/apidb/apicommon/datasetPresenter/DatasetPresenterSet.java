@@ -69,14 +69,6 @@ public class DatasetPresenterSet {
             + pattern);
       namePatterns.add(pattern);
     }
-    
-    pattern = internalDataset.getDatasetNamePattern();
-    if (pattern != null) {
-      if (namePatterns.contains(pattern))
-        throw new UserException("datasetNamePattern already exists: "
-            + pattern);
-      namePatterns.add(pattern);
-    }
   }
 
   /**

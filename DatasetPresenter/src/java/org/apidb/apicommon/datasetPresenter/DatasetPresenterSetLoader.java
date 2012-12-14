@@ -75,7 +75,7 @@ public class DatasetPresenterSetLoader {
       }
       
       if (presenterNamesNotInDb.size() != 0) {
-        System.err.println("The following DatasetPresenters have no match in ApiDB.Dataset: " + nl + setToString(presenterNamesNotInDb));
+        System.err.println(nl + "The following DatasetPresenters have no match in ApiDB.Dataset: " + nl + setToString(presenterNamesNotInDb));
       }
 
       Set<String> dbDatasetNamesNotInPresenters = new HashSet<String>(
@@ -128,8 +128,8 @@ public class DatasetPresenterSetLoader {
         datasetNamesFoundLocal.add(name);
       }
       if (!found)
-        throw new UserException("InternalDataset with name \""
-            + internalDataset.getName()
+        throw new UserException("InternalDataset with name or pattern \""
+            + namePattern
             + "\" does not match any row in ApiDB.Dataset");
       datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
     } finally {
