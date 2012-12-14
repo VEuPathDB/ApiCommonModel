@@ -34,6 +34,7 @@ public class DatasetPresenter {
   private String type;
   private String subtype;
   private Boolean isSpeciesScope;
+  private boolean foundInDb = false;
 
   private List<DatasetInjectorConstructor> datasetInjectorConstructors = new ArrayList<DatasetInjectorConstructor>();
   private List<String> contactIds = new ArrayList<String>(); // includes primary
@@ -43,6 +44,14 @@ public class DatasetPresenter {
   private List<HyperLink> links = new ArrayList<HyperLink>();
   private List<Integer> taxonIds = new ArrayList<Integer>();
 
+  void setFoundInDb() {
+    foundInDb = true;
+  }
+  
+  boolean getFoundInDb() {
+    return foundInDb;
+  }
+  
   public void setName(String datasetName) {
     propValues.put("datasetName", datasetName);
   }

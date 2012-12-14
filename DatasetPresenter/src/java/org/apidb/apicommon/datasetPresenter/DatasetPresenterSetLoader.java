@@ -7,7 +7,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -52,7 +51,7 @@ public class DatasetPresenterSetLoader {
   /**
    * 
    * @param dps
-   * @return set of dataset names not found (or matched by) the
+   * @return set of dataset names in db not found (or matched by) the
    *         DatasetPresenters in the input set
    */
   Set<String> syncPresenterSetWithDatasetTable() {
@@ -62,22 +61,28 @@ public class DatasetPresenterSetLoader {
       Set<String> datasetNamesFoundInDb = new HashSet<String>();
 
       PreparedStatement datasetTableStmt = getDatasetTableStmt();
-      
+
       for (InternalDataset internalDataset : dps.getInternalDatasets()) {
         findInternalDatasetNamesInDb(internalDataset, datasetTableStmt,
             datasetNamesFoundInDb);
       }
 
+      Set<String> presenterNamesNotInDb = new HashSet<String>();
       for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
         getPresenterValuesFromDatasetTable(datasetPresenter, datasetTableStmt,
             datasetNamesFoundInDb);
+        if (!datasetPresenter.getFoundInDb()) presenterNamesNotInDb.add(datasetPresenter.getDatasetName());
+      }
+      
+      if (presenterNamesNotInDb.size() != 0) {
+        System.err.println("The following DatasetPresenters have no match in ApiDB.Dataset: " + nl + setToString(presenterNamesNotInDb));
       }
 
-      Set<String> datasetNamesNotFoundInDb = new HashSet<String>(
+      Set<String> dbDatasetNamesNotInPresenters = new HashSet<String>(
           findDatasetNamesInDb());
-      datasetNamesNotFoundInDb.removeAll(datasetNamesFoundInDb);
+      dbDatasetNamesNotInPresenters.removeAll(datasetNamesFoundInDb);
 
-      return datasetNamesNotFoundInDb;
+      return dbDatasetNamesNotInPresenters;
     } catch (SQLException e) {
       throw new UnexpectedException(e);
     }
@@ -145,9 +150,8 @@ public class DatasetPresenterSetLoader {
     String first_type = null;
     String first_subtype = null;
     Boolean first_isSpeciesScope = null;
-    boolean foundFirst = false;
-    try {
 
+    try {
       rs = stmt.executeQuery();
       while (rs.next()) {
         String name = rs.getString(1);
@@ -162,8 +166,8 @@ public class DatasetPresenterSetLoader {
                   + "\" has a name or name pattern that is claimed by another DatasetPresenter or InternalDataset.  The conflicting name is: \""
                   + name + "\"");
         datasetNamesFoundLocal.add(name);
-        if (!foundFirst) {
-          foundFirst = true;
+        if (!datasetPresenter.getFoundInDb()) {
+          datasetPresenter.setFoundInDb();
           first_type = type;
           first_subtype = subtype;
           first_isSpeciesScope = isSpeciesScope;
@@ -183,11 +187,8 @@ public class DatasetPresenterSetLoader {
         }
         datasetPresenter.addTaxonId(taxonId);
       }
-      if (!foundFirst)
-        throw new UserException("DatasetPresenter with name \""
-            + datasetPresenter.getDatasetName()
-            + "\" does not match any row in ApiDB.Dataset");
-      datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
+      if (datasetPresenter.getFoundInDb())
+        datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
     } finally {
       if (rs != null)
         rs.close();
@@ -525,11 +526,18 @@ public class DatasetPresenterSetLoader {
     dpsl.setDatasetPresenterSet(datasetPresenterSet);
     Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
     if (namesFromDbNotFound.size() != 0)
-	System.err.println(
+      throw new UserException(
           "The following Dataset names in ApiDB.Dataset are not mentioned or matched by the input DatasetPresenters:"
-              + nl + Arrays.toString(namesFromDbNotFound.toArray()));
+              + nl + setToString(namesFromDbNotFound));
+
     System.err.println("Validation complete");
     return dpsl;
+  }
+
+  private static String setToString(Set<String> set) {
+    StringBuffer buf = new StringBuffer();
+    for (String s : set) buf.append(s + nl);
+    return buf.toString();
   }
 
   public static void main(String[] args) throws Exception {

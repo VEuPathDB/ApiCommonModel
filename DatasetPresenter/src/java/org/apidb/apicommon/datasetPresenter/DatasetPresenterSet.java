@@ -61,8 +61,16 @@ public class DatasetPresenterSet {
           + name);
     internalDatasetNames.add(name);
     internalDatasets.add(internalDataset);
-
+    
     String pattern = internalDataset.getDatasetNamePattern();
+    if (pattern != null) {
+      if (namePatterns.contains(pattern))
+        throw new UserException("datasetNamePattern already exists: "
+            + pattern);
+      namePatterns.add(pattern);
+    }
+    
+    pattern = internalDataset.getDatasetNamePattern();
     if (pattern != null) {
       if (namePatterns.contains(pattern))
         throw new UserException("datasetNamePattern already exists: "
