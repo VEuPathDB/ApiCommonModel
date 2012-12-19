@@ -1,7 +1,5 @@
 package org.apidb.apicommon.datasetPresenter;
 
-import org.gusdb.fgputil.xml.Text;
-
 public class Publication {
   private String pubmedId;
   private String citation;
