@@ -271,11 +271,11 @@ public class TestDatasetInjectorPackage {
     DatasetPresenterSet dps = dpp.parseFile(project_home
         + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
     assertTrue(dps.getSize() == 2);
-    DatasetPresenter dp1 = dps.getDatasetPresenters().get(0);
-    DatasetPresenter dp2 = dps.getDatasetPresenters().get(1);
+    DatasetPresenter dp1 = dps.getDatasetPresenters().get("Stunnenberg_RNA-Seq_RSRC");
+    DatasetPresenter dp2 = dps.getDatasetPresenters().get("Very_Happy_RSRC");
+    assertTrue(dp1 != null);
+    assertTrue(dp2 != null);
     assertTrue(dp1.getPropValue("buildNumberIntroduced").equals("14"));
-    assertTrue(dp1.getDatasetName().equals("Stunnenberg_RNA-Seq_RSRC"));
-    assertTrue(dp2.getDatasetName().equals("Very_Happy_RSRC"));
     assertTrue(dp2.getPropValue("datasetDisplayName").equals("In good spirits"));
     assertTrue(dp2.getPropValue("datasetShortDisplayName").equals("good"));
     assertTrue(dp2.getPropValue("projectName").equals("ToxoDB"));
@@ -304,8 +304,9 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
     assertTrue(dic.getPropValue("isSingleStrand").equals("true"));
     assertTrue(dps.getInternalDatasets().size() == 1);
-    assertTrue(dps.getInternalDatasets().get(0).getName().equals("dontcare"));
-    assertTrue(dps.getInternalDatasets().get(0).getDatasetNamePattern().equals("reallyDontCare"));
+    InternalDataset intD = dps.getInternalDatasets().get("dontcare");
+    assertTrue(intD != null);
+    assertTrue(intD.getDatasetNamePattern().equals("reallyDontCare"));
   }
 
   @Test
@@ -414,7 +415,7 @@ public class TestDatasetInjectorPackage {
     ContactsFileParser parser = new ContactsFileParser();
     Contacts allContacts = parser.parseFile(project_home
         + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
-    DatasetPresenter dp2 = dps.getDatasetPresenters().get(1);
+    DatasetPresenter dp2 = dps.getDatasetPresenters().get("Very_Happy_RSRC");
     List<Contact> contacts = dp2.getContacts(allContacts);
     Contact contact1 = contacts.get(0);
     Contact contact2 = contacts.get(1);

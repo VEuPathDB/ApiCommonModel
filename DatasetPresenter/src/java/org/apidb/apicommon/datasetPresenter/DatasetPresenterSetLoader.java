@@ -62,22 +62,27 @@ public class DatasetPresenterSetLoader {
 
       PreparedStatement datasetTableStmt = getDatasetTableStmt();
 
-      for (InternalDataset internalDataset : dps.getInternalDatasets()) {
+      for (InternalDataset internalDataset : dps.getInternalDatasets().values()) {
         findInternalDatasetNamesInDb(internalDataset, datasetTableStmt,
             datasetNamesFoundInDb);
       }
 
       Set<String> presenterNamesNotInDb = new HashSet<String>();
-      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
+      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters().values()) {
         getPresenterValuesFromDatasetTable(datasetPresenter, datasetTableStmt,
             datasetNamesFoundInDb);
-        if (!datasetPresenter.getFoundInDb()) presenterNamesNotInDb.add(datasetPresenter.getDatasetName());
-      }
-      
-      if (presenterNamesNotInDb.size() != 0) {
-        System.err.println(nl + "The following DatasetPresenters have no match in ApiDB.Dataset: " + nl + setToString(presenterNamesNotInDb));
+        if (!datasetPresenter.getFoundInDb())
+          presenterNamesNotInDb.add(datasetPresenter.getDatasetName());
       }
 
+      if (presenterNamesNotInDb.size() != 0) {
+        System.err.println(nl
+            + "The following DatasetPresenters have no match in ApiDB.Dataset: "
+            + nl + setToString(presenterNamesNotInDb));
+      }
+      
+      dps.handleOverrides();
+      
       Set<String> dbDatasetNamesNotInPresenters = new HashSet<String>(
           findDatasetNamesInDb());
       dbDatasetNamesNotInPresenters.removeAll(datasetNamesFoundInDb);
@@ -126,11 +131,11 @@ public class DatasetPresenterSetLoader {
                   + "\" has a name or name pattern that is claimed by another DatasetPresenter or InternalDataset.  The conflicting name is: \""
                   + name + "\"");
         datasetNamesFoundLocal.add(name);
+        internalDataset.addNameFromDb(name);
       }
       if (!found)
         throw new UserException("InternalDataset with name or pattern \""
-            + namePattern
-            + "\" does not match any row in ApiDB.Dataset");
+            + namePattern + "\" does not match any row in ApiDB.Dataset");
       datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
     } finally {
       if (rs != null)
@@ -159,13 +164,15 @@ public class DatasetPresenterSetLoader {
         String type = rs.getString(3);
         String subtype = rs.getString(4);
         Boolean isSpeciesScope = rs.getBoolean(5);
-        if (datasetNamesFoundInDb.contains(name))
-          throw new UserException(
-              "DatasetPresenter with name \""
-                  + datasetPresenter.getDatasetName()
-                  + "\" has a name or name pattern that is claimed by another DatasetPresenter or InternalDataset.  The conflicting name is: \""
-                  + name + "\"");
-        datasetNamesFoundLocal.add(name);
+        if (datasetPresenter.getOverride() != null) {
+          if (datasetNamesFoundInDb.contains(name))
+            throw new UserException(
+                "DatasetPresenter with name \""
+                    + datasetPresenter.getDatasetName()
+                    + "\" has a name or name pattern that is claimed by another DatasetPresenter or InternalDataset.  The conflicting name is: \""
+                    + name + "\"");
+          datasetNamesFoundLocal.add(name);
+        }
         if (!datasetPresenter.getFoundInDb()) {
           datasetPresenter.setFoundInDb();
           first_type = type;
@@ -185,7 +192,7 @@ public class DatasetPresenterSetLoader {
                     + namePattern
                     + "\" matches rows in the Dataset table that disagree in their type, subtype or is_species_scope columns");
         }
-        datasetPresenter.addTaxonId(taxonId);
+        datasetPresenter.addNameTaxonPair(new NameTaxonPair(name, taxonId));
       }
       if (datasetPresenter.getFoundInDb())
         datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
@@ -255,11 +262,11 @@ public class DatasetPresenterSetLoader {
       PreparedStatement publicationStmt = getPublicationStmt();
       PreparedStatement referenceStmt = getReferenceStmt();
       PreparedStatement linkStmt = getLinkStmt();
-      PreparedStatement taxonStmt = getTaxonStmt();
+      PreparedStatement nameTaxonStmt = getNameTaxonStmt();
 
       Map<String, Map<String, String>> defaultDatasetInjectorClasses = DatasetPresenterParser.parseDefaultInjectorsFile(defaultInjectorsFileName);
 
-      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters()) {
+      for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters().values()) {
 
         datasetPresenter.setDefaultDatasetInjector(defaultDatasetInjectorClasses);
 
@@ -284,8 +291,8 @@ public class DatasetPresenterSetLoader {
           loadLink(datasetPresenterId, link, linkStmt);
         }
 
-        for (Integer taxonId : datasetPresenter.getTaxonIds()) {
-          loadTaxon(datasetPresenterId, taxonId, taxonStmt);
+        for (NameTaxonPair pair : datasetPresenter.getNameTaxonPairs()) {
+          loadNameTaxonPair(datasetPresenterId, pair, nameTaxonStmt);
         }
       }
       System.err.println("Loading done");
@@ -379,18 +386,19 @@ public class DatasetPresenterSetLoader {
     stmt.execute();
   }
 
-  PreparedStatement getTaxonStmt() throws SQLException {
-    String table = config.getUsername() + ".DatasetTaxon" + suffix;
+  PreparedStatement getNameTaxonStmt() throws SQLException {
+    String table = config.getUsername() + ".DatasetNameTaxon" + suffix;
     String sql = "INSERT INTO " + table
-        + " (dataset_taxon_id, dataset_presenter_id, taxon_id)" + " VALUES ("
-        + table + "_sq.nextval, ?, ?)";
+        + " (dataset_taxon_id, dataset_presenter_id, name, taxon_id)"
+        + " VALUES (" + table + "_sq.nextval, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadTaxon(int datasetPresenterId, Integer taxonId,
+  private void loadNameTaxonPair(int datasetPresenterId, NameTaxonPair pair,
       PreparedStatement stmt) throws SQLException {
     stmt.setInt(1, datasetPresenterId);
-    stmt.setInt(2, taxonId);
+    stmt.setString(2, pair.getName());
+    stmt.setInt(3, pair.getTaxonId());
     stmt.execute();
   }
 
@@ -536,7 +544,8 @@ public class DatasetPresenterSetLoader {
 
   private static String setToString(Set<String> set) {
     StringBuffer buf = new StringBuffer();
-    for (String s : set) buf.append(s + nl);
+    for (String s : set)
+      buf.append(s + nl);
     return buf.toString();
   }
 

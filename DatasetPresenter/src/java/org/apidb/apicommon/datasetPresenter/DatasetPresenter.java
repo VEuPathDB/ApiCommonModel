@@ -1,6 +1,7 @@
 package org.apidb.apicommon.datasetPresenter;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +43,8 @@ public class DatasetPresenter {
   private List<Contact> contacts;
   private List<Publication> publications = new ArrayList<Publication>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
-  private List<Integer> taxonIds = new ArrayList<Integer>();
+  private Map<String, NameTaxonPair> nameTaxonPairs = new HashMap<String, NameTaxonPair>(); // expanded from pattern if we have one
+  private String override = null;
 
   void setFoundInDb() {
     foundInDb = true;
@@ -132,13 +134,29 @@ public class DatasetPresenter {
   public String getDatasetNamePattern() {
     return datasetNamePattern;
   }
-
-  public void addTaxonId(Integer taxonId) {
-    taxonIds.add(taxonId);
+  
+  public void setOverride(String datasetName) {
+    this.override = datasetName;
+  }
+  
+  public String getOverride() {
+    return override;
   }
 
-  public List<Integer> getTaxonIds() {
-    return taxonIds;
+  public void addNameTaxonPair(NameTaxonPair pair) {
+    nameTaxonPairs.put(pair.getName(), pair);
+  }
+  
+  public void removeNameTaxonPair(String name) {
+    nameTaxonPairs.remove(name);
+  }
+  
+  boolean containsNameTaxonPair(String name) {
+    return nameTaxonPairs.containsKey(name);
+  }
+
+  public Collection<NameTaxonPair> getNameTaxonPairs() {
+    return nameTaxonPairs.values();
   }
 
   public void setProjectName(String projectName) {
