@@ -85,6 +85,7 @@ public class DatasetPresenterSetLoader {
       
       Set<String> dbDatasetNamesNotInPresenters = new HashSet<String>(
           findDatasetNamesInDb());
+
       dbDatasetNamesNotInPresenters.removeAll(datasetNamesFoundInDb);
 
       return dbDatasetNamesNotInPresenters;
@@ -164,7 +165,7 @@ public class DatasetPresenterSetLoader {
         String type = rs.getString(3);
         String subtype = rs.getString(4);
         Boolean isSpeciesScope = rs.getBoolean(5);
-        if (datasetPresenter.getOverride() != null) {
+        if (datasetPresenter.getOverride() == null) {
           if (datasetNamesFoundInDb.contains(name))
             throw new UserException(
                 "DatasetPresenter with name \""
@@ -194,7 +195,7 @@ public class DatasetPresenterSetLoader {
         }
         datasetPresenter.addNameTaxonPair(new NameTaxonPair(name, taxonId));
       }
-      if (datasetPresenter.getFoundInDb())
+      if (datasetPresenter.getFoundInDb()) 
         datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
     } finally {
       if (rs != null)
