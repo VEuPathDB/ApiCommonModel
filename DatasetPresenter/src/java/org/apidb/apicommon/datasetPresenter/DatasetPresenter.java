@@ -280,12 +280,10 @@ public class DatasetPresenter {
   }
 
   private DatasetInjector getDatasetInjector() {
-    if (datasetInjector == null) {
+    if (datasetInjector == null && datasetInjectorConstructors.size() != 0) {
       DatasetInjectorConstructor dic = datasetInjectorConstructors.get(0);
-      if (dic != null) {
-        datasetInjector = dic.getDatasetInjector();
-        datasetInjector.addModelReferences();
-      }
+      datasetInjector = dic.getDatasetInjector();
+      datasetInjector.addModelReferences();
     }
     return datasetInjector;
   }
