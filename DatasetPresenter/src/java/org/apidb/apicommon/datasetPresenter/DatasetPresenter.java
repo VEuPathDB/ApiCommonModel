@@ -290,7 +290,7 @@ public class DatasetPresenter {
 
   void setDefaultDatasetInjector(
       Map<String, Map<String, String>> defaultDatasetInjectors) {
-    if (type == null || subtype == null
+    if (type == null
         || defaultDatasetInjectors == null
         || !defaultDatasetInjectors.containsKey(type)
         || !defaultDatasetInjectors.get(type).containsKey(subtype)

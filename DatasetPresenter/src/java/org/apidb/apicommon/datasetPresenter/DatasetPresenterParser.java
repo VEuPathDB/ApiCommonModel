@@ -197,6 +197,15 @@ public class DatasetPresenterParser extends XmlParser {
           String[] columns = line.split("\t");
           if (columns.length != 3)
             throw new UserException("Default injectors file " + fileName + " does not have three columns in this row: " + System.getProperty("line.separator") + line + System.getProperty("line.separator"));
+
+
+          if(columns[1].equals(""))
+              columns[1] = null;
+
+          // This should not happen ... but just in case
+          if(columns[0].equals(""))
+              columns[0] = null;
+
           if (index.containsKey(columns[0])) {
             if (index.get(columns[0]).containsKey(columns[1]))
               throw new UserException("Default Injectors file " + fileName
@@ -209,6 +218,7 @@ public class DatasetPresenterParser extends XmlParser {
             index.put(columns[0], m);
           }
         }
+
       } catch (FileNotFoundException ex) {
         throw new UserException("Default Injectors file " + fileName
             + " not found");
