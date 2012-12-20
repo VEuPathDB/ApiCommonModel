@@ -196,7 +196,7 @@ public class DatasetPresenterParser extends XmlParser {
           line = line.trim();
           String[] columns = line.split("\t");
           if (columns.length != 3)
-            throw new UserException("");
+            throw new UserException("Default injectors file " + fileName + " does not have three columns in this row: " + System.getProperty("line.separator") + line + System.getProperty("line.separator"));
           if (index.containsKey(columns[0])) {
             if (index.get(columns[0]).containsKey(columns[1]))
               throw new UserException("Default Injectors file " + fileName
