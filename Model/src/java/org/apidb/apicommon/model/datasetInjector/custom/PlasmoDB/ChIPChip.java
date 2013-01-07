@@ -5,11 +5,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class ChIPChip extends DatasetInjector {
 
   public void injectTemplates() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByChIPchipPlasmo"); 
+
   }
 
   public void addModelReferences() {
-
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByChIPchipPlasmo"); 
   }
 
   // second column is for documentation
