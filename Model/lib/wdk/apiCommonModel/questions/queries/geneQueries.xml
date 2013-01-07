@@ -1925,6 +1925,94 @@ GROUP BY cds_length, na_feature_id, source_id,
         <wsColumn name="total_snps" width="10"/>
    </processQuery>
 
+
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+  <!-- Genes By HTS Snps Tajima's D test                            -->
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="GenesByTajimasDHtsSnps" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB"
+              isCacheable="true">
+
+        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" queryRef="organismVQ.withHtsSNPs" quote="true">
+                  <help>Select organism you wish to query against</help>
+        </paramRef>
+
+        <paramRef ref="sharedParams.htsSnp_strain_a" quote="true" multiPick="true"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="D"/>
+
+        <sql>
+            <![CDATA[
+ select gs.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+      (gpi.pi - (gs.S/taj.a1)) / sqrt((taj.e1 * gs.S) + (taj.e2 * gs.S * (gs.S - 1))) as D
+ FROM (-- this query gets the count of polymorphisms w/in coding regions for a set of isolates (S)
+      select gene_source_id, count(*) as S
+      from (select sf.gene_source_id, sf.position_in_cds as polymorphism_site
+            from apidbtuning.snpattributes sf, DOTS.seqvariation sv
+            where sf.type = 'HTS'
+            and sf.gene_source_id is not null
+            and sv.parent_id = sf.na_feature_id
+            and NVL(sv.allele_percent,100) >= 80
+            and sv.strain in ($$htsSnp_strain_a$$)
+            group by sf.gene_source_id, sf.position_in_cds
+            having count(distinct sv.allele) > 1)
+      group by gene_source_id
+      ) gs,
+      (-- this query gets the average number of polymorphisms w/in coding regions
+       --    for all pairwise comparisons for a set of isolates (pi)
+        select gf.source_id,pia.pi from
+        dots.genefeature gf, ( select ct.parent_id, round(sum(ct.snps) / count(*), 2) as pi
+      from
+       (select sf.parent_id,sva.strain,svb.strain,count(*) as snps
+       from dots.snpfeature sf, dots.seqvariation sva, DOTS.seqvariation svb
+       where sf.position_in_cds is not null
+       and sf.source_id like 'NGS%'
+       and sva.parent_id = sf.na_feature_id
+       and svb.parent_id = sf.na_feature_id
+       AND sva.strain in ($$htsSnp_strain_a$$)
+       AND svb.strain in ($$htsSnp_strain_a$$)
+       and sva.strain < svb.strain
+       and sva.allele != svb.allele
+       and NVL(sva.allele_percent,100) > 80
+       and NVL(svb.allele_percent,100) > 80
+       group by sf.parent_id,sva.strain,svb.strain) ct
+       group by ct.parent_id) pia
+       where pia.parent_id = gf.na_feature_id ) gpi,
+       (-- count the input strains (n) and grab the paramvalues (a1, a2,...)
+       select count(*) as n
+       from apidbtuning.isolateattributes ia,
+            apidbtuning.snpstrains ss
+       where ss.var_extdb_name = ia.external_db_name
+       and ss.strain in ($$htsSnp_strain_a$$)
+       and ia.data_type = 'HTS'
+       ) n,
+       APIDBTUNING.tajimasstats taj
+ where gs.gene_source_id = gpi.source_id
+ and n.n = taj.n
+
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="GenesByTajimasDHtsSnps" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="true"
+              isCacheable="true">
+
+
+        <paramRef ref="sharedParams.htsSnp_strain_a" quote="true" multiPick="true"/>
+        <wsColumn name="project_id" width="20"/>
+        <wsColumn name="source_id" width="50"/>
+        <wsColumn name="D" width="30"/>
+   </processQuery>
+
+
+
+
+
+
+
+
+
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- SecondaryStructure -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
