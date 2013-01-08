@@ -8,14 +8,18 @@
  
     <sqlQuery name="CompoundsByCompoundID" doNotTest="true"  excludeProjects="EuPathDB"
               displayName="ID" isCacheable="true">
-        <paramRef ref="compoundParams.pubchem_compound_id"/>
+        <paramRef ref="compoundParams.ds_pubchem_compound_id"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <sql>
             <![CDATA[
-	      SELECT source_id, '@PROJECT_ID@' as project_id
-              FROM ApidbTuning.CompoundAttributes
-	      WHERE compound_id LIKE REGEXP_REPLACE(REPLACE( $$pubchem_compound_id$$, '*', '%'), '[[:space:]]', '')
+          SELECT DISTINCT compound_source_id  as source_id, '@PROJECT_ID@' as project_id
+            FROM   apidbtuning.PathwayCompounds p, ($$ds_pubchem_compound_id$$)ds
+            WHERE  p.compound = ds.source_id
+               OR  to_char(p.compound_id) = ds.source_id
+	  --    SELECT source_id, '@PROJECT_ID@' as project_id
+          --    FROM ApidbTuning.CompoundAttributes
+	  --    WHERE compound_id LIKE REGEXP_REPLACE(REPLACE( $$pubchem_compound_id$$, '*', '%'), '[[:space:]]', '')
 
                ]]>
         </sql>
@@ -24,7 +28,7 @@
     <processQuery name="CompoundsByCompoundID" includeProjects="EuPathDB"
           isCacheable='true' doNotTest="true"
           processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
-        <paramRef ref="compoundParams.pubchem_compound_id" noTranslation="true"/>
+        <paramRef ref="compoundParams.ds_pubchem_compound_id" noTranslation="true"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
     </processQuery>   
@@ -124,6 +128,44 @@
       <wsColumn name="project_id" width="20" wsName="project_id"/>
       <wsColumn name="molecular_wt" width="32"/>   
     </processQuery>
+
+    <!-- ************************************************************ -->
+    <!-- Transform : Compounds By Gene ID -->  
+    <!-- ************************************************************ -->
+ 
+    <sqlQuery name="CompoundsByGeneID" doNotTest="true"
+              displayName="ID by gene" isCacheable="true">
+
+      <paramRef ref="geneParams.gene_result" />
+      <paramRef ref="compoundParams.compound_type" />
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="genes"/>
+      <column name="gene_count"/>
+      <column name="wdk_weight" />
+
+      <sql>
+	<![CDATA[
+       SELECT DISTINCT pc.compound_source_id as source_id, '@PROJECT_ID@' as project_id,
+              count(distinct ds.source_id) as gene_count,
+              apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as genes, max(ds.wdk_weight) as wdk_weight
+         FROM ($$gene_result$$)ds, dots.Transcript t, dots.translatedAaFeature taf, 
+              sres.enzymeClass ec, dots.aaSequenceEnzymeClass asec, 
+              ApidbTuning.GeneId gi, ApidbTuning.GeneAttributes ga,
+              apidbtuning.PathwayCompounds pc
+        WHERE ga.na_feature_id = t.parent_id
+          AND lower(gi.id) = lower(ds.source_id)
+          AND ga.source_id = gi.gene
+          AND t.na_feature_id = taf.na_feature_id
+          AND taf.aa_sequence_id = asec.aa_sequence_id
+          AND asec.enzyme_class_id = ec.enzyme_class_id
+          AND pc.enzyme = ec.ec_number
+	  AND (pc.compound_type = $$compound_type$$ OR 'either' = $$compound_type$$)
+      GROUP BY pc.compound_source_id
+	]]>
+        </sql>
+    </sqlQuery>
+
 
 
    </querySet>
