@@ -103,7 +103,7 @@ public abstract class DatasetInjector {
    */
   protected void addWdkReference(String recordClass, String type, String name) {
     ModelReference ref = new ModelReference(recordClass, type, name, datasetName);
-    String key = type + name;
+    String key = recordClass + type + name;
     if (modelReferences.containsKey(key)) {
       throw new UserException("Dataset " + datasetName + " already contains a model reference for " + type + ", " + name);
     }
