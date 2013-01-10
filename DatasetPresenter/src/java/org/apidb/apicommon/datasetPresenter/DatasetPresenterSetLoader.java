@@ -134,10 +134,13 @@ public class DatasetPresenterSetLoader {
         datasetNamesFoundLocal.add(name);
         internalDataset.addNameFromDb(name);
       }
-      if (!found)
-        throw new UserException("InternalDataset with name or pattern \""
+      if (!found) {
+          System.err.println("WARN:  InternalDataset with name or pattern \""
             + namePattern + "\" does not match any row in ApiDB.Dataset");
-      datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
+      } 
+      else {
+          datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
+      }
     } finally {
       if (rs != null)
         rs.close();
