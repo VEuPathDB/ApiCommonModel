@@ -332,6 +332,7 @@ public class DatasetPresenterSetLoader {
       DatasetPresenter datasetPresenter, PreparedStatement stmt)
       throws SQLException {
     stmt.setInt(1, datasetPresenterId);
+
     stmt.setString(2, datasetPresenter.getDatasetName());
     stmt.setString(3, datasetPresenter.getDatasetNamePattern());
     stmt.setString(4, datasetPresenter.getDatasetDisplayName());
@@ -344,8 +345,12 @@ public class DatasetPresenterSetLoader {
     stmt.setString(11, datasetPresenter.getReleasePolicy());
     stmt.setString(12, datasetPresenter.getDisplayCategory());
     stmt.setString(13, datasetPresenter.getType());
-    stmt.setString(14, datasetPresenter.getSubtype());
-    stmt.setBoolean(15, datasetPresenter.getIsSpeciesScope());
+
+    String subtype = datasetPresenter.getSubtype() == null ? "" : datasetPresenter.getSubtype();
+    boolean isSpeciesScope = datasetPresenter.getIsSpeciesScope() == null ? false : datasetPresenter.getIsSpeciesScope();
+
+    stmt.setString(14, subtype);
+    stmt.setBoolean(15, isSpeciesScope);
     stmt.execute();
 
   }
