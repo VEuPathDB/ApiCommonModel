@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector.custom.CryptoDB;
+package org.apidb.apicommon.model.datasetInjector.custom.PiroplasmaDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 

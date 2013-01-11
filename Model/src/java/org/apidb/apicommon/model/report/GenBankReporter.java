@@ -12,13 +12,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.gusdb.wdk.model.AnswerValue;
-import org.gusdb.wdk.model.AttributeValue;
-import org.gusdb.wdk.model.Question;
-import org.gusdb.wdk.model.RecordInstance;
-import org.gusdb.wdk.model.TableValue;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
+import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.question.Question;
+import org.gusdb.wdk.model.record.RecordInstance;
+import org.gusdb.wdk.model.record.TableValue;
+import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.Reporter;
 import org.json.JSONException;
 

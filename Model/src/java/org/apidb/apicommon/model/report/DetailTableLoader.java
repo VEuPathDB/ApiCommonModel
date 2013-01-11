@@ -19,14 +19,6 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
-import org.gusdb.wdk.model.AttributeField;
-import org.gusdb.wdk.model.ColumnAttributeField;
-import org.gusdb.wdk.model.FieldScope;
-import org.gusdb.wdk.model.LinkAttributeField;
-import org.gusdb.wdk.model.PrimaryKeyAttributeField;
-import org.gusdb.wdk.model.RecordClass;
-import org.gusdb.wdk.model.TableField;
-import org.gusdb.wdk.model.TextAttributeField;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -34,6 +26,14 @@ import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.dbms.DBPlatform;
 import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.SqlQuery;
+import org.gusdb.wdk.model.record.FieldScope;
+import org.gusdb.wdk.model.record.RecordClass;
+import org.gusdb.wdk.model.record.TableField;
+import org.gusdb.wdk.model.record.attribute.AttributeField;
+import org.gusdb.wdk.model.record.attribute.ColumnAttributeField;
+import org.gusdb.wdk.model.record.attribute.LinkAttributeField;
+import org.gusdb.wdk.model.record.attribute.PrimaryKeyAttributeField;
+import org.gusdb.wdk.model.record.attribute.TextAttributeField;
 import org.gusdb.wsf.util.BaseCLI;
 
 /**
