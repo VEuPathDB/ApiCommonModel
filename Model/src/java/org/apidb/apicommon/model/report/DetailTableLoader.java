@@ -358,8 +358,8 @@ public class DetailTableLoader extends BaseCLI {
 	String pkList = "tq." + pkColumns[0];
 
         if (pkColumns.length > 1) {
-	    pkPredicates = "AND idq." + pkColumns[1] + " = tq." + pkColumns[1] + "\n";
-	    pkList = "tq." + pkColumns[0] + ", " + "tq." + pkColumns[1];
+	    pkPredicates += "AND idq." + pkColumns[1] + " = tq." + pkColumns[1] + "\n";
+	    pkList += ", " + "tq." + pkColumns[1];
 	}
 
         String sql = "select tq.*" + "\n" + "FROM (ID_QUERY) idq," + "\n"
