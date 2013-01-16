@@ -73,6 +73,8 @@ public class DatasetPresenterSetLoader {
             datasetNamesFoundInDb);
         if (!datasetPresenter.getFoundInDb())
           presenterNamesNotInDb.add(datasetPresenter.getDatasetName());
+        
+        datasetPresenter.getContacts(allContacts); // validate contacts
       }
 
       if (presenterNamesNotInDb.size() != 0) {
