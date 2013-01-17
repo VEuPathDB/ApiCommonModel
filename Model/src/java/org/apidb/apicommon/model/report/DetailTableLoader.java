@@ -302,7 +302,7 @@ public class DetailTableLoader extends BaseCLI {
 	    }
             if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
                 insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent,
-					      rowCount, table, pk0, pk1,
+					      rowCount, table, prevPk0, prevPk1,
 					      title, pkColumns.length);
                 insertCount++;
                 aggregatedContent = new StringBuilder();
