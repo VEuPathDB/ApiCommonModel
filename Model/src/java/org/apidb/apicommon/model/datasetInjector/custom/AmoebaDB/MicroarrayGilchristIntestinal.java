@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector.custom.GiardiaDB;
+package org.apidb.apicommon.model.datasetInjector.custom.AmoebaDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
