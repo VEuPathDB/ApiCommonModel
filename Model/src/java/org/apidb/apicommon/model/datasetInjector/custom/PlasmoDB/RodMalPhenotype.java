@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 

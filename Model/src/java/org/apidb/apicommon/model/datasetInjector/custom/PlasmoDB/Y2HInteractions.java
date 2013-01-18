@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
@@ -17,6 +17,7 @@ public class Y2HInteractions extends DatasetInjector {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;
   }
+
 
 
 }
