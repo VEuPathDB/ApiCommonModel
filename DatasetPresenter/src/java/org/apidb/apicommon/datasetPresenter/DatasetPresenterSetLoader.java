@@ -75,6 +75,7 @@ public class DatasetPresenterSetLoader {
           presenterNamesNotInDb.add(datasetPresenter.getDatasetName());
         
         datasetPresenter.getContacts(allContacts); // validate contacts
+        datasetPresenter.getModelReferences(); // validate model references
       }
 
       if (presenterNamesNotInDb.size() != 0) {
