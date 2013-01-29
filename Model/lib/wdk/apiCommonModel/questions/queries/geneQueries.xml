@@ -1847,54 +1847,48 @@ GROUP BY cds_length, na_feature_id, source_id,
                      total as total_snps
               FROM
 (
-WITH
-  sa as
-  ( select /*+ materialize */ t1.na_feature_id, t2.cds_length,t2.source_id as gene
-    from   APIDBTUNING.snpattributes t1, APIDBTUNING.geneattributes t2
-    where t1.dataset = 'InsertSnps.pm NGS SNPs INTERNAL' and t1.type = 'HTS'
-      and t1.organism = $$organism$$
-      and t1.gene_source_id is not null
-      and t1.gene_source_id = t2.source_id),
-  sv1 as
-  ( select /*+ materialize */ parent_id, product, allele
-    from  dots.seqvariation
-    where organism = $$organism$$
-      and strain = $$htsSnp_strain_a$$
-      and (coverage >= $$hts_snps_coverage$$ or coverage is null)
-      and (allele_percent >= $$hts_snps_allele_freq$$ or allele_percent is null)
-      and (pvalue <= $$hts_snps_pvalue$$ or pvalue is null)),
-  sv2 as
-    ( select /*+ materialize */ parent_id, product, allele
-      from  dots.seqvariation
-      where organism = $$organism$$
-        and strain = $$htsSnp_strain_m$$
-        and (coverage >=  $$hts_snps_coverage$$ or coverage is null)
-        and (allele_percent >= $$hts_snps_allele_freq$$ or allele_percent is null)
-        and (pvalue <= $$hts_snps_pvalue$$ or pvalue is null))
-SELECT
-    gene as source_id, cds_length,
-    sum(is_synonymous) as synonymous,
-    sum(is_non_synonymous) as non_synonymous,
-    sum(is_non_coding) as non_coding,
-    sum(is_stop) as stop,
-    (sum(is_non_coding) + sum(is_synonymous) + sum(is_non_synonymous)) as total
-FROM
-(
-  SELECT
-    sa.gene,
-    sa.cds_length,
-    case when sv1.product is null then 1 else 0 end as is_non_coding,
-    case when sv1.product = sv2.product then 1 else 0 end as is_synonymous,
-    case when sv1.product != sv2.product then 1 else 0 end as is_non_synonymous,
-    case when sv1.product = '*' OR  sv2.product = '*' then 1 else 0 end as is_stop
-  FROM  sa, sv1, sv2
-  WHERE sa.na_feature_id = sv1.parent_id
-    AND sa.na_feature_id = sv2.parent_id
-    AND sv1.allele != sv2.allele
+  SELECT gene as source_id, cds_length,
+         sum(is_synonymous) as synonymous,
+         sum(is_non_synonymous) as non_synonymous,
+         sum(is_non_coding) as non_coding,
+         sum(is_stop) as stop,
+         (sum(is_non_coding) + sum(is_synonymous) + sum(is_non_synonymous)) as total
+  FROM
+  (
+      SELECT snp.gene as source_id,
+             snp.cds_length,
+             case when ref_product is null then 1 else 0 end as is_non_coding,
+             case when ref_product = comp_product then 1 else 0 end as is_synonymous,
+             case when ref_product != comp_product then 1 else 0 end as is_non_synonymous,
+             case when ref_product = '*' OR  comp_product = '*' then 1 else 0 end as is_stop
+      FROM  ApidbTuning.SnpAttributes snp,
+            APIDBTUNING.geneattributes ga,
+            ( SELECT ref.parent_id, 
+                     ref.allele as ref_allele, 
+                     ref.product as ref_product,
+                     comp.product as comp_product
+              FROM   dots.SeqVariation ref, dots.SeqVariation comp
+              WHERE  ref.parent_id = comp.parent_id
+                 AND ref.allele != comp.allele
+                 AND ref.organism = $$organism$$
+                 AND ref.strain = $$htsSnp_strain_a$$
+                 AND (ref.coverage >= $$hts_snps_coverage$$ or ref.coverage is null)
+                 AND (ref.allele_percent >= $$hts_snps_allele_freq$$ or ref.allele_percent is null)
+                 AND (ref.pvalue <= $$hts_snps_pvalue$$ or ref.pvalue is null)
+                 AND comp.strain in ($$htsSnp_strain_m$$)
+                 AND (comp.coverage >= $$hts_snps_coverage$$ or comp.coverage is null)
+                 AND (comp.allele_percent >= $$hts_snps_allele_freq$$ or comp.allele_percent is null)
+                 AND (comp.pvalue <= $$hts_snps_pvalue$$ or comp.pvalue is null)
+            ) variants
+      WHERE snp.na_feature_id = variants.parent_id
+        AND snp.dataset = 'InsertSnps.pm NGS SNPs INTERNAL' 
+        AND snp.type = 'HTS'
+        AND snp.organism = $$organism$$
+        AND snp.gene_source_id is not null
+        AND snp.gene_source_id = ga.source_id
   ) snpq
   GROUP BY snpq.gene, snpq.cds_length
-)
-
+) 
    WHERE non_synonymous / CASE synonymous
         WHEN 0 THEN &&approxZero&&
         ELSE synonymous END >= $$dn_ds_ratio_lower$$
