@@ -322,58 +322,48 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
 
         <sql includeProjects="PlasmoDB,ToxoDB,CryptoDB">
             <![CDATA[
-WITH
-  sa as 
-    (select /*+ materialize */ source_id, gene_source_id, na_feature_id, start_min, position_in_protein, gene_strand
-     from   APIDBTUNING.snpattributes
-     where  (chromosome in ( $$chromosomeOptional$$ ) OR lower(source_id) = lower($$sequenceId$$) ) 
-		   and dataset in ( select distinct ss.extdb_name from Apidbtuning.snpstrains ss where is_queryable = 1)),
-  sv1 as
-    (select /*+ materialize */ parent_id, organism, strain, allele, coverage, product 
-     from  dots.seqvariation
-     where organism = $$organism$$ 
-       and strain = $$snp_strain_a$$),
-  sv2 as
-    (select /*+ materialize */ parent_id, organism, strain, allele, coverage, product 
-     from  dots.seqvariation
-     where organism = $$organism$$ and strain in ($$snp_strain_m$$) )
-SELECT 
-    snpq.source_id, '@PROJECT_ID@' as project_id, snpq.gene, snpq.snp_location, snpq.prot_pos,
-    listagg(snpq.ref_allele,', ')  within group (order by snpq.ref_allele) as ref_allele,
-    listagg(snpq.ref_product,', ')  within group (order by snpq.ref_product) as ref_product,
-    listagg(snpq.comp_allele,', ')  within group (order by snpq.comp_allele) as comp_alleles,
-    listagg(snpq.comp_product,', ')  within group (order by snpq.comp_product) as comp_products,
-    listagg(snpq.phenotype,', ')  within group (order by snpq.phenotype) as phenotype,
-    listagg(snpq.ref_strain,', ')  within group (order by snpq.ref_strain) as ref_strain,
-    listagg(snpq.comp_strain,', ')  within group (order by snpq.comp_strain) as comp_strains
-FROM
-(
-SELECT sa.source_id,
-      sa.gene_source_id as gene,
-      sa.start_min as snp_location,
-      sa.position_in_protein as prot_pos,
-      --CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(sv1.allele)
-      --     ELSE sv1.allele 
-      --     END as ref_allele, 
-      sv1.allele as ref_allele, 
-      sv1.product as ref_product,
-      --CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(sv2.allele)
-      --    ELSE sv2.allele 
-      --     END as comp_allele, 
-      sv2.allele as comp_allele, 
-      sv2.product as comp_product,
-      CASE WHEN sv1.product = sv2.product then 'syn' 
-           WHEN sv1.product != sv2.product THEN 'non-syn'
-           ELSE 'non-coding' 
-      END as phenotype,
-      sv1.strain as ref_strain, 
-      sv2.strain as comp_strain
-FROM  sa, sv1, sv2 
-WHERE sa.na_feature_id = sv1.parent_id
-  and sa.na_feature_id = sv2.parent_id
-  and sv1.allele != sv2.allele
-) snpq
-GROUP BY snpq.source_id, snpq.gene, snpq.snp_location, snpq.prot_pos,snpq.ref_allele,snpq.ref_product
+SELECT snp.source_id, 
+       '@PROJECT_ID@' as project_id, 
+       snp.gene_source_id as gene, 
+       snp.start_min as snp_location,
+       snp.position_in_protein as prot_pos, 
+       variants.ref_allele, 
+       variants.ref_product, 
+       variants.comp_alleles,
+       variants.comp_products, 
+       variants.phenotype, 
+       variants.ref_strain, 
+       variants.comp_strains
+FROM ApidbTuning.SnpAttributes snp,
+    ( SELECT parent_id,
+             listagg(ref_allele,', ') within group (order by ref_allele) as ref_allele,
+             listagg(ref_product,', ') within group (order by ref_product) as ref_product,
+             listagg(comp_allele,', ') within group (order by comp_allele) as comp_alleles,
+             listagg(comp_product,', ') within group (order by comp_product) as comp_products,
+             listagg(phenotype,', ') within group (order by phenotype) as phenotype,
+             listagg(ref_strain,', ') within group (order by ref_strain) as ref_strain,
+             listagg(comp_strain,', ') within group (order by comp_strain) as comp_strains
+      FROM  (SELECT ref.parent_id, 
+                    ref.allele as ref_allele, 
+                    ref.product as ref_product,
+                    comp.allele as comp_allele, 
+                    comp.product as comp_product,
+                    case when ref.product = comp.product then 'syn'
+                         when ref.product != comp.product then 'non-syn'
+                         else 'non-coding'
+                    end as phenotype,
+                    ref.strain as ref_strain, 
+                    comp.strain as comp_strain
+             FROM   dots.SeqVariation ref, dots.SeqVariation comp
+             WHERE  ref.parent_id = comp.parent_id
+                AND ref.allele != comp.allele
+                AND ref.organism = $$organism$$
+                AND ref.strain = $$snp_strain_a$$
+                AND comp.strain in ($$snp_strain_m$$))
+             GROUP BY parent_id) variants
+WHERE snp.na_feature_id = variants.parent_id
+  AND snp.dataset in ( select distinct ss.extdb_name from Apidbtuning.snpstrains ss where is_queryable = 1)
+  AND (chromosome in ( $$chromosomeOptional$$ ) OR lower(source_id) = lower($$sequenceId$$) ) 
            ]]>
        </sql>
     </sqlQuery>
