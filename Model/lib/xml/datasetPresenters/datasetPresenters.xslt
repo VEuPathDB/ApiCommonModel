@@ -82,6 +82,11 @@
 						</dd>
 
 
+
+
+
+
+
 						
 							<dt><b>Pubmed IDs:</b></dt>
 						
@@ -105,6 +110,20 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
 							<dt><b>Contacts:</b></dt>
 						
 						<dd>
+      
+                                <xsl:for-each select="./primaryContactId">
+
+        <xsl:variable name="primaryContactId">                     
+        <xsl:value-of select="." disable-output-escaping="yes" />
+        </xsl:variable>
+<b>
+        <xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$primaryContactId]/name"/> (<xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$primaryContactId]/institution"/>)
+                              </b>
+                              
+                                <br />        
+                            </xsl:for-each>
+      
+      
 							<xsl:for-each select="./contactId">
 
 		<xsl:variable name="contactId">						
@@ -139,6 +158,22 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
                                 <br />
                             </xsl:for-each>
                         </dd>
+                        
+                        
+                        <dt><b>References</b></dt>
+                        
+                        <dd>
+                        <xsl:for-each select="./wdkReference">
+
+                           addWdkReference("<xsl:value-of select="@recordClass"/>", "<xsl:value-of select="@type"/>", "<xsl:value-of select="@name"/>"); <br />
+                        
+                        
+                        
+
+                                                </xsl:for-each>
+                        
+                        </dd>
+                        
 
 					</dl>
 
