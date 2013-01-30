@@ -49,7 +49,13 @@
 								disable-output-escaping="yes" />
 						</dd>
 
+							<dt><b>Website Usage:</b></dt>
 						
+						<dd>
+							<xsl:value-of select="usage"
+								disable-output-escaping="yes" />
+						</dd>
+
 							<dt><b>Protocol:</b></dt>
 						
 						<dd>
