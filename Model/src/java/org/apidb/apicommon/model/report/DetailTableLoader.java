@@ -267,7 +267,7 @@ public class DetailTableLoader extends BaseCLI {
         logger.info("Removing previous rows [" + fieldName + "]");
         logger.debug("\n" + sql);
         SqlUtils.executeUpdate(wdkModel, connection, sql.toString(),
-                "api-report-detail-delete-" + fieldName);
+                  fieldName+"__api-report-detail-delete");
         long end = System.currentTimeMillis();
         logger.info("Deleted rows for [" + fieldName + "] in "
                 + ((end - start) / 1000.0) + " seconds");
@@ -283,7 +283,7 @@ public class DetailTableLoader extends BaseCLI {
 
         logger.debug("wrapped sql:\n" + wrappedSql);
         ResultSet resultSet = SqlUtils.executeQuery(wdkModel, queryDataSource,
-                wrappedSql, "api-report-detail-aggregate-" + table.getName(),
+                wrappedSql,  table.getQuery().getFullName() + "__api-report-detail-aggregate",
                 2000);
         String pk0 = "";
         String pk1 = "";
@@ -477,7 +477,7 @@ public class DetailTableLoader extends BaseCLI {
 
         insertStmt.setTimestamp(pkCount + 5, new Timestamp(new Date().getTime()));
         SqlUtils.executePreparedStatement(wdkModel, insertStmt, insertSql,
-                "api-report-detail-insert-" + table.getName());
+                 table.getQuery().getFullName() + "__api-report-detail-insert");
         return System.currentTimeMillis() - start;
     }
 

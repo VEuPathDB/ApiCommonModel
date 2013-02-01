@@ -127,7 +127,7 @@ public class FullRecordFileCreator extends BaseCLI {
         RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
 
         if (cacheTable == null)
-            cacheTable = "wdk" + recordClass.getType() + "Dump";
+            cacheTable = "wdk" + recordClass.getDisplayName() + "Dump";
         if (dumpFile == null)
             dumpFile = cacheTable + ".txt";
 
