@@ -13,10 +13,12 @@ public class PubchemCompounds extends DatasetInjector {
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "table", "CompoundsMetabolicPathways");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByCompounds");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByCompoundIds");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "Properties");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "CompoundsMetabolicPathways");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "SubstanceProps");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "RelatedCompounds");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByCompoundID");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByTextSearch");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByEcReaction");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPathway");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByMolecularWeight");
