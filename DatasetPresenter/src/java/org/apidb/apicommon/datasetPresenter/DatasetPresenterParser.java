@@ -68,6 +68,11 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod("datasetPresenters/datasetPresenter/protocol",
         "setText", 0);
 
+    configureNode(digester, "datasetPresenters/datasetPresenter/usage",
+        Text.class, "setUsage");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/usage",
+        "setText", 0);
+
     configureNode(digester, "datasetPresenters/datasetPresenter/releasePolicy",
         Text.class, "setReleasePolicy");
     digester.addCallMethod("datasetPresenters/datasetPresenter/releasePolicy",

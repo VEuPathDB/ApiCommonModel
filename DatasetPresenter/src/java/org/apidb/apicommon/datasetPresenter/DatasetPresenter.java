@@ -27,6 +27,7 @@ public class DatasetPresenter {
   // injected.
   private String displayCategory;
   private String protocol;
+  private String usage;
   private String acknowledgement;
   private String caveat;
   private String releasePolicy;
@@ -207,6 +208,14 @@ public class DatasetPresenter {
 
   public String getProtocol() {
     return protocol;
+  }
+
+  public void setUsage(Text usage) {
+    this.usage = usage.getText();
+  }
+
+  public String getUsage() {
+    return usage;
   }
 
   public void setAcknowledgement(Text acknowledgement) {

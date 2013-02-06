@@ -326,34 +326,36 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetPresenter" + suffix;
     String sql = "INSERT INTO "
         + table
-        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, summary, protocol, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope)"
-        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope)"
+        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
   private void loadDatasetPresenter(int datasetPresenterId,
       DatasetPresenter datasetPresenter, PreparedStatement stmt)
       throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+      int i = 1;
+    stmt.setInt(i++, datasetPresenterId);
 
-    stmt.setString(2, datasetPresenter.getDatasetName());
-    stmt.setString(3, datasetPresenter.getDatasetNamePattern());
-    stmt.setString(4, datasetPresenter.getDatasetDisplayName());
-    stmt.setString(5, datasetPresenter.getDatasetShortDisplayName());
-    stmt.setString(6, datasetPresenter.getSummary());
-    stmt.setString(7, datasetPresenter.getProtocol());
-    stmt.setString(8, datasetPresenter.getDatasetDescrip());
-    stmt.setString(9, datasetPresenter.getCaveat());
-    stmt.setString(10, datasetPresenter.getAcknowledgement());
-    stmt.setString(11, datasetPresenter.getReleasePolicy());
-    stmt.setString(12, datasetPresenter.getDisplayCategory());
-    stmt.setString(13, datasetPresenter.getType());
+    stmt.setString(i++, datasetPresenter.getDatasetName());
+    stmt.setString(i++, datasetPresenter.getDatasetNamePattern());
+    stmt.setString(i++, datasetPresenter.getDatasetDisplayName());
+    stmt.setString(i++, datasetPresenter.getDatasetShortDisplayName());
+    stmt.setString(i++, datasetPresenter.getSummary());
+    stmt.setString(i++, datasetPresenter.getProtocol());
+    stmt.setString(i++, datasetPresenter.getUsage());
+    stmt.setString(i++, datasetPresenter.getDatasetDescrip());
+    stmt.setString(i++, datasetPresenter.getCaveat());
+    stmt.setString(i++, datasetPresenter.getAcknowledgement());
+    stmt.setString(i++, datasetPresenter.getReleasePolicy());
+    stmt.setString(i++, datasetPresenter.getDisplayCategory());
+    stmt.setString(i++, datasetPresenter.getType());
 
     String subtype = datasetPresenter.getSubtype() == null ? "" : datasetPresenter.getSubtype();
     boolean isSpeciesScope = datasetPresenter.getIsSpeciesScope() == null ? false : datasetPresenter.getIsSpeciesScope();
 
-    stmt.setString(14, subtype);
-    stmt.setBoolean(15, isSpeciesScope);
+    stmt.setString(i++, subtype);
+    stmt.setBoolean(i++, isSpeciesScope);
     stmt.execute();
 
   }
