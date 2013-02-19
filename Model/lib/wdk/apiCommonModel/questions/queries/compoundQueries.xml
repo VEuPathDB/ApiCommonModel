@@ -244,6 +244,53 @@
 
 
 
+    <sqlQuery name="CompoundsByFoldChange"
+              displayName="Compounds by fold change" isCacheable="true">
+      <paramRef ref="compoundParams.profileset" />
+      <paramRef ref="compoundParams.samples_fc_ref" />
+      <paramRef ref="compoundParams.samples_fc_comp" />
+      <paramRef ref="compoundParams.fold_change"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="fold_change"/>
+
+      <sql>
+	<![CDATA[
+    SELECT  to_char(round(one.value/two.value,4)) AS fold_change, 
+                    ca.source_id, '@PROJECT_ID@' as project_id
+    FROM 
+       (SELECT sum(pe.value) as value, p.subject_row_id 
+        FROM apidb.profileElementName pen, apidb.profile p,
+            apidb.profileElement pe, apidb.profileSet ps
+        WHERE pen.profile_element_name_id = $$samples_fc_ref$$
+           AND p.profile_set_id = pen.profile_set_id
+           AND pe.profile_id = p.profile_id
+           AND pe.element_order = pen.element_order
+           AND ps.profile_set_id = p.profile_set_id
+           GROUP BY p.subject_row_id
+       ) one,
+       (SELECT sum(pe.value) as value, p.subject_row_id 
+         FROM apidb.profileElementName pen, apidb.profile p,
+              apidb.profileElement pe, apidb.profileSet ps
+         WHERE pen.profile_element_name_id = $$samples_fc_comp$$
+           AND p.profile_set_id = pen.profile_set_id
+           AND pe.profile_id = p.profile_id
+           AND pe.element_order = pen.element_order
+           AND ps.profile_set_id = p.profile_set_id
+           GROUP BY p.subject_row_id
+         ) two,
+       apidb.pubChemCompound pbc, apidbtuning.compoundAttributes ca
+    WHERE one.subject_row_id = two.subject_row_id
+      AND two.value > 0
+      AND one.value / two.value >= $$fold_change$$
+      AND pbc.pubchem_compound_id = one.subject_row_id
+      AND ca.compound_id = pbc.compound_id
+	]]>
+        </sql>
+    </sqlQuery>
+
+
+
    </querySet>
 
 </wdkModel>
