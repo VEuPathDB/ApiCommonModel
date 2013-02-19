@@ -1909,68 +1909,60 @@ GROUP BY cds_length, na_feature_id, source_id,
                   <help>Select organism you wish to query against</help>
         </paramRef>
 
-        <paramRef ref="sharedParams.htsSnp_isolates"/>
-
+        <paramRef ref="sharedParams.htsSnp_isolates"/> 
+        <!--<paramRef ref="sharedParams.htsSnp_strain_m"/> -->
         <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="PlasmoDB,ToxoDB,AmoebaDB"/>
-        <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB"/>
-
-
-
+        <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB"/> 
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="D"/>
 
         <sql>
             <![CDATA[
- select gs.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
-        case when ((taj.e1 * gs.S) + (taj.e2 * gs.S * (gs.S - 1))) = 0 then 0
-             else (gpi.pi - (gs.S/taj.a1)) / sqrt((taj.e1 * gs.S) + (taj.e2 * gs.S * (gs.S - 1))) 
-           end as D
- FROM (-- this query gets the count of polymorphisms w/in coding regions for a set of isolates (S)
-      select gene_source_id, count(*) as S
-      from (select sf.gene_source_id, sf.position_in_cds as polymorphism_site
-            from apidbtuning.snpattributes sf, DOTS.seqvariation sv
-            where sf.type = 'HTS'
-            and sf.gene_source_id is not null
-            and sv.parent_id = sf.na_feature_id
-            and NVL(sv.allele_percent,100) >= $$hts_snps_allele_freq$$
-            and sv.strain in ($$htsSnp_isolates$$)
-            group by sf.gene_source_id, sf.position_in_cds
-            having count(distinct sv.allele) > 1)
-      group by gene_source_id
-      ) gs,
+WITH sv_var AS
+     (SELECT sv.parent_id as snp_na_feature_id, sv.allele, sv.strain,
+             sa.gene_source_id, sa.position_in_cds
+      FROM   dots.SeqVariation sv, apidbtuning.snpattributes sa
+      WHERE  strain IN ($$htsSnp_isolates$$)
+         AND sv.parent_id = sa.na_feature_id
+         AND sa.type = 'HTS'
+         AND sa.gene_source_id is not null
+         AND NVL(allele_percent,100) > $$hts_snps_allele_freq$$)
+SELECT gs.gene_source_id AS source_id, 
+       '@PROJECT_ID@' as project_id, 
+       CASE WHEN ((taj.e1 * gs.S) + (taj.e2 * gs.S * (gs.S - 1))) = 0 THEN 0
+            ELSE (gpi.pi - (gs.S/taj.a1)) / sqrt((taj.e1 * gs.S) + (taj.e2 * gs.S * (gs.S - 1))) 
+            END as D
+FROM
+      ( -- this query gets the count of polymorphisms w/in coding regions for a set of isolates (S)
+        SELECT gene_source_id, COUNT(*) AS S
+        FROM (SELECT gene_source_id, position_in_cds AS polymorphism_site
+              FROM   sv_var
+              GROUP BY gene_source_id, position_in_cds
+              HAVING COUNT(DISTINCT allele) > 1)
+        GROUP BY gene_source_id) gs,
       (-- this query gets the average number of polymorphisms w/in coding regions
-       --    for all pairwise comparisons for a set of isolates (pi)
-        select gf.source_id,pia.pi from
-        dots.genefeature gf, ( select ct.parent_id, round(sum(ct.snps) / count(*), 2) as pi
-      from
-       (select sf.parent_id,sva.strain,svb.strain,count(*) as snps
-       from dots.snpfeature sf, dots.seqvariation sva, DOTS.seqvariation svb
-       where sf.position_in_cds is not null
-			 and sf.source_id like 'NGS%'
-       and sva.parent_id = sf.na_feature_id
-       and svb.parent_id = sf.na_feature_id
-       AND sva.strain in ($$htsSnp_isolates$$)
-       AND svb.strain in ($$htsSnp_isolates$$)
-       and sva.strain < svb.strain
-       and sva.allele != svb.allele
-       and NVL(sva.allele_percent,100) > $$hts_snps_allele_freq$$
-       and NVL(svb.allele_percent,100) > $$hts_snps_allele_freq$$
-       group by sf.parent_id,sva.strain,svb.strain) ct
-       group by ct.parent_id) pia
-       where pia.parent_id = gf.na_feature_id ) gpi,
-       (-- count the input strains (n) and grab the paramvalues (a1, a2,...)
-       select count(*) as n
-       from apidbtuning.isolateattributes ia,
-            apidbtuning.snpstrains ss
-       where ss.var_extdb_name = ia.external_db_name
-       and ss.strain in ($$htsSnp_isolates$$)
-       and ia.data_type = 'HTS'
-       ) n,
-       APIDBTUNING.tajimasstats taj
- where gs.gene_source_id = gpi.source_id
- and n.n = taj.n
-
+       -- for all pairwise comparisons for a set of isolates (pi)
+       SELECT ct.gene_source_id, ROUND(SUM(ct.snps) / COUNT(*), 2) AS pi
+       FROM (SELECT sva.gene_source_id, COUNT(*) AS snps
+             FROM sv_var sva, sv_var svb
+             WHERE sva.snp_na_feature_id = svb.snp_na_feature_id
+             AND sva.allele != svb.allele
+             GROUP BY sva.gene_source_id, sva.strain, svb.strain
+            ) ct
+       GROUP BY ct.gene_source_id
+     ) gpi,
+     (-- count the input strains (n) and grab the paramvalues (a1, a2,...)
+      SELECT COUNT(*) AS n
+      FROM apidbtuning.IsolateAttributes ia,
+           apidbtuning.SnpStrains ss
+      WHERE ss.var_extdb_name = ia.external_db_name
+        AND ss.strain IN ($$htsSnp_isolates$$)
+        AND ia.data_type = 'HTS'
+     ) n,
+   ApiDBTuning.TajimasStats taj
+WHERE gs.gene_source_id = gpi.gene_source_id
+  AND n.n = taj.n 
            ]]>
        </sql>
     </sqlQuery>
