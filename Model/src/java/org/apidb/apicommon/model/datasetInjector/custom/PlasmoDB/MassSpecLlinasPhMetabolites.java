@@ -8,7 +8,8 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
   }
 
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Llinas::pHMetabolite"); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", "Llinas::pHMetabolite"); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange");
   }
 
   // second column is for documentation
