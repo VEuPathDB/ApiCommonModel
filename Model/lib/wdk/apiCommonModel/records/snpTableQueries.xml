@@ -123,7 +123,7 @@ ORDER BY var.strain
            </sql>
         </sqlQuery>
 
-        <sqlQuery name="HTSStrains" includeProjects="PlasmoDB,CryptoDB,ToxoDB,AmoebaDB,FungiDB" 
+        <sqlQuery name="HTSStrains" includeProjects="PlasmoDB,CryptoDB,AmoebaDB,FungiDB" 
               isCacheable="false">
 
            <testParamValues includeProjects="CryptoDB">
@@ -185,6 +185,79 @@ ORDER BY var.strain
              ]]>
            </sql>
         </sqlQuery>
+
+        <sqlQuery name="HTSStrains" includeProjects="ToxoDB" 
+              isCacheable="false">
+
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="strain"/>
+            <column name="allele"/>
+            <column name="allele_gene_strand"/>
+            <column name="phenotype"/>
+            <column name="product"/>
+            <column name="coverage"/>
+            <column name="pvalue"/>
+            <column name="allele_percent"/>
+            <column name="view_align"/>
+            <column name="has_align"/>
+            <column name="isolate_source_id"/>
+            <column name="haplogroup"/>
+
+            <sql>
+            <![CDATA[
+SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+       b.source_id as isolate_source_id,
+       var.strain as strain,
+       var.allele,
+       CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
+            WHEN snp.gene_source_id is null THEN ''
+            ELSE var.allele 
+       END as allele_gene_strand,
+       var.phenotype, 
+       oe.value as haplogroup,
+       CASE WHEN oe.value = '6a' THEN 6
+            WHEN oe.value = '6b' THEN 6
+            WHEN oe.value = 'unknown' THEN 0
+            ELSE to_number(oe.value)
+       END as order_num,
+       var.product,
+       var.coverage, 
+       var.allele_percent,
+       var.pvalue,
+       CASE WHEN b.source_id is null THEN ''
+            ELSE lower(snp.project_id) || 
+              '/?name=' || nas.source_id || ':' || to_char(l.start_min - 50) || '..' || to_char(l.start_min + 50) || 
+              ';l=' || s.name || '_' || var.strain || '_CoverageDensity%1E' || 
+                       s.name || '_' || var.strain || '_CoverageXyplot%1E' || 
+                       s.name || '_' || var.strain || '_Alignment%1E' ||
+              ';h_region=' || nas.source_id || ':' || to_char(l.start_min) || '..' || to_char(l.start_min + 1) || '@red'  
+       END as view_align,
+       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align
+FROM   apidbtuning.SnpAttributes snp, 
+      dots.SeqVariation var, 
+      study.study s, 
+      rad.studybiomaterial sb, 
+      study.biomaterial b, 
+      dots.snpfeature sf, 
+      dots.nalocation l, 
+      dots.nasequence nas,
+      study.ontologyentry oe,
+      study.biomaterialcharacteristic bc 
+WHERE var.parent_id = snp.na_feature_id
+ AND sf.na_feature_id = snp.na_feature_id
+ AND l.na_feature_id = sf.na_feature_id
+ AND nas.na_sequence_id = sf.na_sequence_id
+ AND var.external_database_release_id = b.external_database_release_id(+)
+ AND b.bio_material_id = sb.bio_material_id(+)
+ AND sb.study_id = s.study_id(+)
+ AND sb.bio_material_id = bc.bio_material_id 
+ AND bc.ontology_entry_id = oe.ontology_entry_id
+ AND oe.category = 'Haplogroup'
+ORDER BY order_num, var.strain
+             ]]>
+           </sql>
+        </sqlQuery> 
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Providers -->  
