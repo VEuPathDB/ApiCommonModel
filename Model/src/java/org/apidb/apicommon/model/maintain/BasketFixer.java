@@ -191,7 +191,7 @@ public class BasketFixer extends BaseCLI {
         	throw new WdkModelException(e);
         }
         finally {
-            SqlUtils.closeResultSet(resultSet);
+            SqlUtils.closeResultSetAndStatement(resultSet);
         }
         return users;
     }

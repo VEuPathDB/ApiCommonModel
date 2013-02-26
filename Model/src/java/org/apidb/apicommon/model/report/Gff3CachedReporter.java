@@ -266,7 +266,7 @@ public class Gff3CachedReporter extends Reporter {
         } catch (SQLException ex) {
             throw new WdkModelException(ex);
         } finally {
-            SqlUtils.closeResultSet(rsTable);
+            SqlUtils.closeResultSetAndStatement(rsTable);
         }
     }
 
@@ -327,7 +327,7 @@ public class Gff3CachedReporter extends Reporter {
         } catch (SQLException ex) {
             throw new WdkModelException(ex);
         } finally {
-            SqlUtils.closeResultSet(rsTable);
+            SqlUtils.closeResultSetAndStatement(rsTable);
         }
     }
 

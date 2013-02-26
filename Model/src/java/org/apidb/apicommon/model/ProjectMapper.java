@@ -174,7 +174,7 @@ public class ProjectMapper {
       organisms.put(organism, projectId);
       return projectId;
     } finally {
-      SqlUtils.closeResultSet(resultSet);
+      SqlUtils.closeResultSetAndStatement(resultSet);
     }
   }
 }
