@@ -227,9 +227,7 @@ public class GenBankFeature {
 
     protected boolean hasPartialStart(String tmpSequence) {
 
-        if (tmpSequence != null) {
-            tmpSequence = tmpSequence.substring(0, tmpSequence.length()
-                                          - (tmpSequence.length() % 3));
+        if(sequence != null && this.featureType.equals("cds")) {
 
             if (!tmpSequence.startsWith("ATG")) {
                 return(true);
@@ -240,9 +238,7 @@ public class GenBankFeature {
 
     protected boolean hasPartialEnd(String sequence) {
 
-        if (sequence != null) {
-            sequence = sequence.substring(0, sequence.length()
-                                          - (sequence.length() % 3));
+        if(sequence != null && this.featureType.equals("cds")) {
 
             if (!sequence.endsWith("TAG") && !sequence.endsWith("TAA")
                 && !sequence.endsWith("TGA")
