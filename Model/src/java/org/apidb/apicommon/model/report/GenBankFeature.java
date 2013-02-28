@@ -43,8 +43,8 @@ public class GenBankFeature {
         this.dbXrefs = new ArrayList<String>();
 
         // partial start and end will be inherited by children
-        this.hasPartialStart = hasPartialStart(sequence);
-        this.hasPartialEnd = hasPartialEnd(sequence);
+        this.hasPartialStart = hasPartialStart();
+        this.hasPartialEnd = hasPartialEnd();
     }
 
 
@@ -159,16 +159,19 @@ public class GenBankFeature {
                 start = PARTIAL_START + start;
             }
 
+
             if(this.hasPartialStart && strand.equals("reverse") && count == this.locations.size() - 1) {
-                start = PARTIAL_END + start;
+                end = PARTIAL_START + end;
             }
 
-            if(this.hasPartialStart && strand.equals("forward") && count == this.locations.size() - 1) {
+
+            if(this.hasPartialEnd && strand.equals("forward") && count == this.locations.size() - 1) {
                 end = PARTIAL_END + end;
             }
 
-            if(this.hasPartialStart && count == 0 && strand.equals("reverse")) {
-                end = PARTIAL_START + end;
+
+            if(this.hasPartialEnd && count == 0 && strand.equals("reverse")) {
+                start = PARTIAL_END + start;
             }
 
             if(strand.equals("forward")) {
@@ -186,6 +189,10 @@ public class GenBankFeature {
             }
             count++;
         }
+
+
+
+
         return(rv);
     }
 
@@ -225,24 +232,22 @@ public class GenBankFeature {
         this.sequence = sequence;
     }
 
-    protected boolean hasPartialStart(String tmpSequence) {
+    protected boolean hasPartialStart() {
 
-        if(sequence != null && this.featureType.equals("cds")) {
-
-            if (!tmpSequence.startsWith("ATG")) {
+        if(this.sequence != null && this.sequenceOntology.equals("protein coding")) {
+            if (!this.sequence.startsWith("ATG")) {
                 return(true);
             }
         }
         return(false);
     }
 
-    protected boolean hasPartialEnd(String sequence) {
+    protected boolean hasPartialEnd() {
 
-        if(sequence != null && this.featureType.equals("cds")) {
+        if(this.sequence != null && this.sequenceOntology.equals("protein coding")) {
 
-            if (!sequence.endsWith("TAG") && !sequence.endsWith("TAA")
-                && !sequence.endsWith("TGA")
-                || sequence.length() % 3 != 0) {
+            if (!this.sequence.endsWith("TAG") && !this.sequence.endsWith("TAA")
+                && !this.sequence.endsWith("TGA")) {
                 return true;
             }
         }
