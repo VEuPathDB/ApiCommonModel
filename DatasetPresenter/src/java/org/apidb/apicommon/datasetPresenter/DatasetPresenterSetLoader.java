@@ -282,6 +282,7 @@ public class DatasetPresenterSetLoader {
         loadDatasetPresenter(datasetPresenterId, datasetPresenter,
             presenterStmt);
 
+
         for (Contact contact : datasetPresenter.getContacts(allContacts)) {
           loadContact(datasetPresenterId, contact, contactStmt);
         }
@@ -301,6 +302,7 @@ public class DatasetPresenterSetLoader {
         for (NameTaxonPair pair : datasetPresenter.getNameTaxonPairs()) {
           loadNameTaxonPair(datasetPresenterId, pair, nameTaxonStmt);
         }
+
       }
       System.err.println("Loading done");
     } catch (SQLException e) {
@@ -357,7 +359,6 @@ public class DatasetPresenterSetLoader {
     stmt.setString(i++, subtype);
     stmt.setBoolean(i++, isSpeciesScope);
     stmt.execute();
-
   }
 
   PreparedStatement getContactStmt() throws SQLException {
@@ -397,7 +398,15 @@ public class DatasetPresenterSetLoader {
     stmt.setInt(1, datasetPresenterId);
     stmt.setString(2, publication.getPubmedId());
     stmt.setString(3, publication.getCitation());
-    stmt.execute();
+
+    try {
+        stmt.execute();
+    } catch (SQLException e) {
+        System.out.println("*****Error Loading Publication*****");
+        System.out.println(publication.toString());
+        throw(e);
+    }
+    
   }
 
   PreparedStatement getNameTaxonStmt() throws SQLException {
