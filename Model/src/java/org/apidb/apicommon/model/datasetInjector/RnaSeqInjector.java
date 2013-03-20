@@ -14,15 +14,29 @@ public class RnaSeqInjector extends  DatasetInjector {
    */
 
   public void injectTemplates() {
-    
-    injectTemplate("rnaSeqFoldChangePvalueQuestion");
 
-    injectTemplate("rnaSeqFoldChangeQuestion");
+      String isPairedEnd = getPropValue("isPairedEnd");
+      if(Boolean.parseBoolean(isPairedEnd)) {
+          setPropValue("exprMetric", "fpkm");
+      } else {
+          setPropValue("exprMetric", "rpkm");
+      }
 
-    injectTemplate("rnaSeqPercentileQuestion");
+      injectTemplate("rnaSeqExpressionGraphAttributes");
 
-    injectTemplate("expressionGraphAttribute");
+      injectTemplate("rnaSeqProfileSetParamQuery");
+      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
+      injectTemplate("rnaSeqFoldChangeQuestion");
+      injectTemplate("rnaSeqPercentileQuestion");
+
+      String hasFishersExactTest = getPropValue("hasFishersExactTestData");
+      if(Boolean.parseBoolean(hasFishersExactTest)) {
+          injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
+      }
+
+
+      /*    
     setPropValue("profileType", "foldChange");
     injectTemplate("expressionParamQuery");
 
@@ -30,7 +44,7 @@ public class RnaSeqInjector extends  DatasetInjector {
     injectTemplate("expressionParamQuery");
 
     injectTemplate("rnaSeqCoverageTrack");
-
+      */
   }
 
   public void addModelReferences() {
@@ -41,8 +55,11 @@ public class RnaSeqInjector extends  DatasetInjector {
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
   public String[][] getPropertiesDeclaration() {
-    String [][] declaration = {{"datasetName", "la la la"},
-        {"datasetSummary", ""}};
+      String [][] declaration = {{"isTimeSeries", ""},
+                                 {"hasFishersExactTestData", ""},
+                                 {"isPairedEnd", ""}
+      };
+
     return declaration;
   }
 }
