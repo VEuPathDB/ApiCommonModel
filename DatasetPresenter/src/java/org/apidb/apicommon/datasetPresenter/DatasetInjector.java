@@ -77,6 +77,12 @@ public abstract class DatasetInjector {
     propValues.put(key, value);
   }
 
+  protected String getPropValue(String key) {
+      return propValues.get(key);
+  }
+
+
+
   protected String getDatasetName() {
     return datasetName;
   }
@@ -165,5 +171,6 @@ public abstract class DatasetInjector {
   void setDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
     this.datasetInjectorSet = datasetInjectorSet;
   }
+
 
 }

@@ -161,8 +161,12 @@ public class Template {
    */
   String getInstancesAsText(List<TemplateInstance> templateInstances) {
     StringBuffer buf = new StringBuffer();
-    for (TemplateInstance instance : templateInstances) {
-      buf.append(getInstanceAsText(instance) + nl);
+
+    // getting null pointer when template exists in dst file but not called anywhere
+    if(templateInstances != null) {
+        for (TemplateInstance instance : templateInstances) {
+            buf.append(getInstanceAsText(instance) + nl);
+        }
     }
     return buf.toString();
   }
