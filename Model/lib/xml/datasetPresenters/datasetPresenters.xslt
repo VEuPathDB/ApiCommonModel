@@ -123,7 +123,7 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
         <xsl:value-of select="." disable-output-escaping="yes" />
         </xsl:variable>
 <b>
-        <xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$primaryContactId]/name"/> (<xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$primaryContactId]/institution"/>)
+        <xsl:value-of select="document('contacts/contacts.xml')/contacts/contact[contactId=$primaryContactId]/name"/> (<xsl:value-of select="document('contacts/contacts.xml')/contacts/contact[contactId=$primaryContactId]/institution"/>)
                               </b>
                               
                                 <br />        
@@ -136,7 +136,7 @@ http://www.ncbi.nlm.nih.gov/pubmed/?term=<xsl:value-of select="." disable-output
         <xsl:value-of select="." disable-output-escaping="yes" />
         </xsl:variable>
 
-        <xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$contactId]/name"/> (<xsl:value-of select="document('contacts.xml')/contacts/contact[contactId=$contactId]/institution"/>)
+        <xsl:value-of select="document('contacts/contacts.xml')/contacts/contact[contactId=$contactId]/name"/> (<xsl:value-of select="document('contacts/contacts.xml')/contacts/contact[contactId=$contactId]/institution"/>)
                                 <br />        
 							</xsl:for-each>
 						</dd>
