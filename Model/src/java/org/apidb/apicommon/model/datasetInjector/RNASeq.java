@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class RnaSeqInjector extends  DatasetInjector {
+public class RNASeq extends  DatasetInjector {
   
   /*
    * getPropValues() gets the property values provided by the datasetPresenter
