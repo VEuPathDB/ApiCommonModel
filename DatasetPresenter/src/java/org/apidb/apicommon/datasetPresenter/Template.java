@@ -228,8 +228,36 @@ public class Template {
   }
 
   static String getTargetFileName(String anchorFileName) {
-    String[] splitPath = anchorFileName.split("/lib/");
-    return "lib/" + splitPath[1];
+    String[] splitPath = anchorFileName.split("/");
+    String preLib = "";
+    String postLib = "";
+    boolean seenLib = false;
+    boolean hasPerl = false;
+
+    for(int i = 0; i < splitPath.length; i++) {
+        if(splitPath[i].equals("lib")) {
+            seenLib = true;
+            continue;
+        }
+
+        if(splitPath[i].equals("perl")) {
+            hasPerl = true;
+            continue;
+        }
+        if(seenLib) {
+            postLib = postLib + "/" + splitPath[i];
+        } else {
+            preLib = preLib + "/" + splitPath[i];
+        }
+    }
+
+    String prefix = "lib";
+    if(hasPerl) {
+        prefix = prefix + "/perl";
+        postLib = preLib + postLib;
+    }
+    
+    return prefix + postLib;
   }
 
 }
