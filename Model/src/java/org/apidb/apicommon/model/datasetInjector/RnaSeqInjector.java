@@ -15,6 +15,15 @@ public class RnaSeqInjector extends  DatasetInjector {
 
   public void injectTemplates() {
 
+      String projectName = getPropValue("projectName");
+      String isEuPathDBSite = getPropValue("isEuPathDBSite");
+      if(Boolean.parseBoolean(isEuPathDBSite)) {
+          setPropValue("includeProjects", projectName + ",EuPathDB");
+          // TODO: split out param query templates and add them here!
+      } else {
+          setPropValue("includeProjects", projectName);
+      }
+
       String isPairedEnd = getPropValue("isPairedEnd");
       if(Boolean.parseBoolean(isPairedEnd)) {
           setPropValue("exprMetric", "fpkm");
@@ -36,14 +45,16 @@ public class RnaSeqInjector extends  DatasetInjector {
       }
 
 
+      injectTemplate("rnaSeqCoverageTrack");
+
+      injectTemplate("rnaSeqStrandNonSpecificGraph");
+
+
+
       /*    
-    setPropValue("profileType", "foldChange");
-    injectTemplate("expressionParamQuery");
 
-    setPropValue("profileType", "percentile");
-    injectTemplate("expressionParamQuery");
 
-    injectTemplate("rnaSeqCoverageTrack");
+    injectTemplate("rnaSeqJunctionsTrack");
       */
   }
 
@@ -57,7 +68,11 @@ public class RnaSeqInjector extends  DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {{"isTimeSeries", ""},
                                  {"hasFishersExactTestData", ""},
-                                 {"isPairedEnd", ""}
+                                 {"isPairedEnd", ""},
+                                 {"isEuPathDBSite", ""},
+                                 {"graphColor", ""},
+                                 {"graphBottomMarginSize", ""}
+
       };
 
     return declaration;
