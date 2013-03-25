@@ -65,9 +65,14 @@ public class RNASeq extends  DatasetInjector {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                     "GenesByRNASeq" + getDatasetName());
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                    "GenesByRNASeq" + getDatasetName() + "PValue");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                     "GenesByRNASeq" + getDatasetName() + "Percentile");
+
+    String hasFishersExactTest = getPropValue("hasFishersExactTestData");
+    if(Boolean.parseBoolean(hasFishersExactTest)) {
+        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                        "GenesByRNASeq" + getDatasetName() + "PValue");
+    }
+
   }
   
   // declare properties required beyond those inherited from the datasetPresenter
