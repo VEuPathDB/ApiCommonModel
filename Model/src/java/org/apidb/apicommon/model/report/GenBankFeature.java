@@ -95,7 +95,7 @@ public class GenBankFeature {
 
 
         for(String dbXref : this.dbXrefs) {
-            rv = rv + "\t\t\tdb_xref\t\"" + dbXref + "\"\n";
+            rv = rv + "\t\t\tdb_xref\t" + dbXref + "\n";
         }
 
 
