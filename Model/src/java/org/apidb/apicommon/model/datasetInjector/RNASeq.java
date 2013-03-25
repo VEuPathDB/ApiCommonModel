@@ -14,12 +14,14 @@ public class RNASeq extends  DatasetInjector {
    */
 
   public void injectTemplates() {
+      // TODO: split out param query templates (not urgent)
+      // TODO: which graphs for the gene record page?
 
       String projectName = getPropValue("projectName");
       String isEuPathDBSite = getPropValue("isEuPathDBSite");
       if(Boolean.parseBoolean(isEuPathDBSite)) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
-          // TODO: split out param query templates and add them here!
+
       } else {
           setPropValue("includeProjects", projectName);
       }
@@ -32,10 +34,8 @@ public class RNASeq extends  DatasetInjector {
       }
 
       injectTemplate("rnaSeqExpressionGraphAttributes");
-
       injectTemplate("rnaSeqProfileSetParamQuery");
       injectTemplate("rnaSeqPctProfileSetParamQuery");
-
       injectTemplate("rnaSeqFoldChangeQuestion");
       injectTemplate("rnaSeqPercentileQuestion");
 
@@ -44,18 +44,21 @@ public class RNASeq extends  DatasetInjector {
           injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
       }
 
-
       injectTemplate("rnaSeqCoverageTrack");
-
       injectTemplate("rnaSeqStrandNonSpecificGraph");
 
+      String hasJunctions = getPropValue("hasJunctions");
+      if(Boolean.parseBoolean(hasJunctions)) {
+          String organism = getPropValue("organism");
+          char firstLetter = organism.charAt(0);
+          String[] orgWords = organism.split(" ");
+          String orgAbbrev = firstLetter + ". " + orgWords[1];
 
+          setPropValue("orgAbbrev", orgAbbrev);
 
-      /*    
+          injectTemplate("rnaSeqJunctionsTrack");
+      }
 
-
-    injectTemplate("rnaSeqJunctionsTrack");
-      */
   }
 
   public void addModelReferences() {
@@ -71,7 +74,11 @@ public class RNASeq extends  DatasetInjector {
                                  {"isPairedEnd", ""},
                                  {"isEuPathDBSite", ""},
                                  {"graphColor", ""},
-                                 {"graphBottomMarginSize", ""}
+                                 {"graphBottomMarginSize", ""},
+                                 {"hasJunctions", ""},
+                                 {"organism", ""},
+                                 {"organismShortName", ""}
+
 
       };
 
