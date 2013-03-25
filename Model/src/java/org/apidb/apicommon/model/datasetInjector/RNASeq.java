@@ -63,7 +63,11 @@ public class RNASeq extends  DatasetInjector {
 
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-        "GeneQuestions.GenesByRNASeq_" + getDatasetName() + "_FoldChangePValue");
+                    "GenesByRNASeq" + getDatasetName());
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                    "GenesByRNASeq" + getDatasetName() + "PValue");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                    "GenesByRNASeq" + getDatasetName() + "Percentile");
   }
   
   // declare properties required beyond those inherited from the datasetPresenter
