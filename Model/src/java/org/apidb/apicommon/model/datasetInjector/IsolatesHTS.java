@@ -5,6 +5,28 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class IsolatesHTS extends DatasetInjector {
 
   public void injectTemplates() {
+      String datasetName = getDatasetName();
+
+      System.out.println("inject HTS SNP Samples");
+
+      String[] datasetWords = datasetName.split("_");
+      setPropValue("organismAbbrev", datasetWords[0]);
+
+      // trim off the prefix and suffix from the experiment name
+      String experimentRsrc = datasetName.replaceFirst(datasetWords[0] + "_SNP_", "");
+      String experimentName = experimentRsrc.replaceFirst("_RSRC", "");
+      setPropValue("experimentName", experimentName);
+
+      String sampleList = getPropValue("sampleList");
+      String[] samples = sampleList.split(" ");
+      for(int i = 0; i < samples.length; i++) {
+          setPropValue("sampleName", samples[i]);
+
+          injectTemplate("htsSnpSampleDatabase");
+          injectTemplate("htsSnpSampleCoverageXYTrack");
+          injectTemplate("htsSnpSampleCoverageDensityTracks");
+          injectTemplate("htsSnpSampleAlignmentTrack");
+      }
   }
 
   public void addModelReferences() {
@@ -46,8 +68,10 @@ public class IsolatesHTS extends DatasetInjector {
 
   // second column is for documentation
   public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
+      String [][] declaration = {{"sampleList", "space del list of sample (sample name = directory name in webservices)"}
+      };
+
+    return declaration;
   }
 
 
