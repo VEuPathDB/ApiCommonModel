@@ -17,6 +17,10 @@ public class RNASeq extends  DatasetInjector {
       // TODO: split out param query templates (not urgent)
       // TODO: which graphs for the gene record page?
 
+      String datasetName = getDatasetName();
+      String[] datasetWords = datasetName.split("_");
+      setPropValue("organismAbbrev", datasetWords[0]);
+
       String projectName = getPropValue("projectName");
       String isEuPathDBSite = getPropValue("isEuPathDBSite");
       if(Boolean.parseBoolean(isEuPathDBSite)) {
@@ -33,29 +37,42 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("exprMetric", "rpkm");
       }
 
-      injectTemplate("rnaSeqExpressionGraphAttributes");
-      injectTemplate("rnaSeqProfileSetParamQuery");
-      injectTemplate("rnaSeqPctProfileSetParamQuery");
-      injectTemplate("rnaSeqFoldChangeQuestion");
-      injectTemplate("rnaSeqPercentileQuestion");
+      injectTemplate("rnaSeqAttributeCategory");
+
+      // Strand Specific Could be factored into subclasses
+      String isStrandSpecific = getPropValue("isStrandSpecific");
+      if(Boolean.parseBoolean(isStrandSpecific)) {
+          setPropValue("exprGraphAttr", datasetName + 
+                       "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
+          setPropValue("pctGraphAttr", datasetName + 
+                       "_sense_pct_graph," + datasetName + "_antisense_pct_graph");
+
+          injectTemplate("rnaSeqSsExpressionGraphAttributes");
+          injectTemplate("rnaSeqSsProfileSetParamQuery");
+          injectTemplate("rnaSeqSsPctProfileSetParamQuery");
+          injectTemplate("rnaSeqStrandSpecificGraph");
+      
+      } else {
+          setPropValue("exprGraphAttr", datasetName + "_expr_graph");
+          setPropValue("pctGraphAttr", datasetName + "_pct_graph");
+
+          injectTemplate("rnaSeqExpressionGraphAttributes");
+          injectTemplate("rnaSeqProfileSetParamQuery");
+          injectTemplate("rnaSeqPctProfileSetParamQuery");
+          injectTemplate("rnaSeqStrandNonSpecificGraph");
+      }
 
       String hasFishersExactTest = getPropValue("hasFishersExactTestData");
       if(Boolean.parseBoolean(hasFishersExactTest)) {
           injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
       }
 
+      injectTemplate("rnaSeqFoldChangeQuestion");
+      injectTemplate("rnaSeqPercentileQuestion");
       injectTemplate("rnaSeqCoverageTrack");
-      injectTemplate("rnaSeqStrandNonSpecificGraph");
 
       String hasJunctions = getPropValue("hasJunctions");
       if(Boolean.parseBoolean(hasJunctions)) {
-          String organism = getPropValue("organism");
-          char firstLetter = organism.charAt(0);
-          String[] orgWords = organism.split(" ");
-          String orgAbbrev = firstLetter + ". " + orgWords[1];
-
-          setPropValue("orgAbbrev", orgAbbrev);
-
           injectTemplate("rnaSeqJunctionsTrack");
       }
 
@@ -66,6 +83,8 @@ public class RNASeq extends  DatasetInjector {
                     "GenesByRNASeq" + getDatasetName());
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                     "GenesByRNASeq" + getDatasetName() + "Percentile");
+
+    // TODO: Add reference for Graph
 
     String hasFishersExactTest = getPropValue("hasFishersExactTestData");
     if(Boolean.parseBoolean(hasFishersExactTest)) {
@@ -85,10 +104,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphColor", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"hasJunctions", ""},
-                                 {"organism", ""},
-                                 {"organismShortName", ""}
-
-
+                                 {"isStrandSpecific", ""}
       };
 
     return declaration;
