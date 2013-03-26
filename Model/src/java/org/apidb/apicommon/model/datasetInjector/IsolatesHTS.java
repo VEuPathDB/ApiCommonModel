@@ -7,8 +7,6 @@ public class IsolatesHTS extends DatasetInjector {
   public void injectTemplates() {
       String datasetName = getDatasetName();
 
-      System.out.println("inject HTS SNP Samples");
-
       String[] datasetWords = datasetName.split("_");
       setPropValue("organismAbbrev", datasetWords[0]);
 
