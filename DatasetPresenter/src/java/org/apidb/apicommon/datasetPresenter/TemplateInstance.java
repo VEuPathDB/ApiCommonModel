@@ -1,6 +1,7 @@
 package org.apidb.apicommon.datasetPresenter;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 /**
@@ -19,7 +20,7 @@ public class TemplateInstance {
    */
   public TemplateInstance(String templateName, Map<String, String> propValues) {
     this.templateName = templateName;
-    this.propValues = propValues;
+    this.propValues = new HashMap<String, String>(propValues);
   }
   
   String getTemplateName() {
