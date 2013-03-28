@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
