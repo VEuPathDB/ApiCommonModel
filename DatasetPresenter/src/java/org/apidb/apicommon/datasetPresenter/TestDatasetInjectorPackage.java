@@ -127,9 +127,9 @@ public class TestDatasetInjectorPackage {
     Template template = new Template("dontcare");
     TemplatesParser.parsePrelude(validPreludeTrimmed, template, "dontcare");
     assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
-    assertTrue(template.getAnchorFileName().equals(
+    assertTrue(template.getAnchorFileNameRaw().equals(
         "ApiCommonShared/Model/lib/gbr/${projectName}.conf"));
-    assertTrue(template.getTargetFileName().equals(
+    assertTrue(template.getFirstTargetFileName().equals(
         "lib/gbr/${projectName}.conf"));
     assertTrue(template.getProps().size() == 2);
     assertTrue(template.getProps().contains("datasetName"));
@@ -159,19 +159,19 @@ public class TestDatasetInjectorPackage {
     String proj_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesFile(templateSet, proj_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test1_templates.dst");
+        + "/ApiCommonShared/DatasetPresenter/testData/test3_templates.dst");
 
-    assertTrue(templateSet.getTemplateByName("template1") != null);
-    assertTrue(templateSet.getTemplateByName("template2") != null);
-    Template t1 = templateSet.getTemplateByName("template1");
-    Template t2 = templateSet.getTemplateByName("template2");
-    assertTrue(t1.getTemplateText().equals("12345" + nl + "67890" + nl));
+    assertTrue(templateSet.getTemplateByName("test3_template1") != null);
+    assertTrue(templateSet.getTemplateByName("test3_template2") != null);
+    Template t1 = templateSet.getTemplateByName("test3_template1");
+    Template t2 = templateSet.getTemplateByName("test3_template2");
+    assertTrue(t1.getTemplateText().equals("12345" + nl + "${projectName}" + nl + "67890" + nl));
     assertTrue(t2.getTemplateText().equals(
-        "12345" + nl + "67890" + nl + "abcde" + nl));
+        "Hello Everybody ${datasetShortDisplayName} Happy Birthday" + nl));
     assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/test3_anchors.txt").contains(
-        "template1"));
+        "test3_template1"));
     assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/test3_anchors.txt").contains(
-        "template2"));
+        "test3_template2"));
   }
   
   @Test
@@ -197,10 +197,12 @@ public class TestDatasetInjectorPackage {
 
   @Test
   public void test_DatasetInjector_setClass() {
-    DatasetInjectorConstructor di = new DatasetInjectorConstructor();
-    String className = "org.apidb.apicommon.model.datasetInjector.TestInjector";
-    di.setClassName(className);
-    assertTrue(di.getDatasetInjector().getClass().getName().equals(className));
+    DatasetInjectorConstructor dic = new DatasetInjectorConstructor();
+    String className = "org.apidb.apicommon.datasetPresenter.TestInjector";
+    dic.setClassName(className);
+    Class<?> c = dic.getDatasetInjector().getClass();
+    String name = c.getName();
+    assertTrue(name.equals(className));
   }
 
   @Test
@@ -223,17 +225,17 @@ public class TestDatasetInjectorPackage {
     DatasetPresenter dp1 = new DatasetPresenter();
     dp1.setName("happy");
     DatasetInjectorConstructor di1 = new DatasetInjectorConstructor();
-    di1.setClassName("org.apidb.apicommon.model.datasetInjector.TestInjector");
+    di1.setClassName("org.apidb.apicommon.datasetPresenter.TestInjector");
     dp1.addDatasetInjector(di1);
     DatasetInjectorConstructor di2 = new DatasetInjectorConstructor();
-    di2.setClassName("org.apidb.apicommon.model.datasetInjector.TestInjector");
+    di2.setClassName("org.apidb.apicommon.datasetPresenter.TestInjector");
     dp1.addDatasetInjector(di2);
     dps.addDatasetPresenter(dp1);
 
     DatasetPresenter dp2 = new DatasetPresenter();
     dp2.setName("sad");
     DatasetInjectorConstructor di3 = new DatasetInjectorConstructor();
-    di3.setClassName("org.apidb.apicommon.model.datasetInjector.TestInjector");
+    di3.setClassName("org.apidb.apicommon.datasetPresenter.TestInjector");
     dp2.addDatasetInjector(di3);
     dps.addDatasetPresenter(dp2);
 
@@ -301,7 +303,7 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp1.getModelReferences().get(0).getTargetType().equals("question"));
     assertTrue(dp1.getModelReferences().get(0).getTargetName().equals("someQuestion"));
     DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
-    assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
+    assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.datasetPresenter.TestInjector"));
     assertTrue(dic.getPropValue("isSingleStrand").equals("true"));
     assertTrue(dps.getInternalDatasets().size() == 1);
     InternalDataset intD = dps.getInternalDatasets().get("dontcare");
@@ -433,8 +435,8 @@ public class TestDatasetInjectorPackage {
     Map<String, Map<String, String>> map = DatasetPresenterParser.parseDefaultInjectorsFile(project_home
         + "/ApiCommonShared/DatasetPresenter/testData/defaultInjectors.tab");
    assertTrue(map.size() == 2);
-   assertTrue(map.get("rnaSeq").get("paired").equals("org.apidb.apicommon.model.datasetInjector.RnaSeqInjector"));
-   assertTrue(map.get("test").get("happy").equals("org.apidb.apicommon.model.datasetInjector.TestInjector"));
+   assertTrue(map.get("rnaSeq").get("paired").equals("org.apidb.apicommon.datasetPresenter.RnaSeqInjector"));
+   assertTrue(map.get("test").get("happy").equals("org.apidb.apicommon.datasetPresenter.TestInjector"));
   }
   
   @Test
@@ -447,6 +449,6 @@ public class TestDatasetInjectorPackage {
     dp.setType("rnaSeq");
     dp.setSubtype("paired");
     dp.setDefaultDatasetInjector(map);
-    assertTrue(dp.getDatasetInjectors().get(0).getClassName().equals("org.apidb.apicommon.model.datasetInjector.RnaSeqInjector"));
+    assertTrue(dp.getDatasetInjectors().get(0).getClassName().equals("org.apidb.apicommon.datasetPresenter.RnaSeqInjector"));
   }
 }

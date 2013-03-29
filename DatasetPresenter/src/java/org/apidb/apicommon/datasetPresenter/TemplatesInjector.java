@@ -9,6 +9,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -70,16 +71,15 @@ public class TemplatesInjector {
 
     initDatasetInjectorSet();
 
-    Set<String> anchorFileNames = templateSet.getAnchorFileNames();
+    Collection<AnchorFile> anchorFiles = templateSet.getAnchorFiles();
 
     Pattern patt = Pattern.compile(TEMPLATE_ANCHOR + "\\s+(\\w+)");
-    for (String anchorFileName : anchorFileNames) {
-      String targetFileName = Template.getTargetFileName(anchorFileName);
-      String anchorFilePath = project_home + "/" + anchorFileName;
+    for (AnchorFile anchorFile : anchorFiles) {
+      String targetFileName = anchorFile.getTargetFileName();
+      String anchorFilePath = project_home + "/" + anchorFile.getName();
       String targetFilePath = gus_home + "/" + targetFileName;
-      Set<String> templateNamesExpectedInThisFile = templateSet.getTemplateNamesByAnchorFileName(anchorFileName);
       Set<String> templateNamesNotFound = new HashSet<String>(
-          templateNamesExpectedInThisFile);
+          anchorFile.getPointingTemplateNames());
 
       String line;
       try {
@@ -96,7 +96,7 @@ public class TemplatesInjector {
             Matcher m = patt.matcher(line);
             if (m.find()) {
               String templateNameInAnchor = m.group(1);
-              if (!templateNamesExpectedInThisFile.contains(templateNameInAnchor)) {
+              if (!anchorFile.getPointingTemplateNames().contains(templateNameInAnchor)) {
                 throw new UserException("Anchor file " + anchorFilePath
                     + " contains an anchor referencing a template with name '"
                     + templateNameInAnchor

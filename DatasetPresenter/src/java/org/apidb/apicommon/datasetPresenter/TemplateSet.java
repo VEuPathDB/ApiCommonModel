@@ -1,7 +1,7 @@
 package org.apidb.apicommon.datasetPresenter;
 
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -14,8 +14,7 @@ import java.util.Set;
 public class TemplateSet {
 
   Map<String, Template> nameToTemplate = new HashMap<String, Template>();
-  Map<String, Set<String>> anchorFileNameToTemplateNames = new HashMap<String, Set<String>>();
-
+  Map<String, AnchorFile> anchorFiles = new HashMap<String, AnchorFile>();
 
   /**
    * Add a Template to this set. Must have a unique template name.
@@ -27,11 +26,15 @@ public class TemplateSet {
       throw new UserException("Duplicate template found: " + template.getName()
           + Template.nl + "Templates file: " + templatesFilePath);
     nameToTemplate.put(template.getName(), template);
-    String anchorFileName = template.getAnchorFileName();
-    if (!anchorFileNameToTemplateNames.containsKey(anchorFileName)) {
-      anchorFileNameToTemplateNames.put(anchorFileName, new HashSet<String>());
+
+    for (String anchorFileName : template.getAnchorFileNames()) {
+      if (!anchorFiles.containsKey(anchorFileName)) {
+        AnchorFile anchorFile = new AnchorFile(anchorFileName);
+        anchorFiles.put(anchorFileName, anchorFile);
+      }
+      AnchorFile anchorFile = anchorFiles.get(anchorFileName);
+      anchorFile.addPointingTemplate(template);
     }
-    anchorFileNameToTemplateNames.get(anchorFileName).add(template.getName());
   }
 
   Template getTemplateByName(String name) {
@@ -43,8 +46,8 @@ public class TemplateSet {
    * (An anchor file may contain anchors for more than one Template.)
    * 
    */
-  Set<String> getAnchorFileNames() {
-    return anchorFileNameToTemplateNames.keySet();
+  Collection<AnchorFile> getAnchorFiles() {
+    return anchorFiles.values();
   }
 
   /**
@@ -54,9 +57,9 @@ public class TemplateSet {
    * @param anchorFileName
    */
   Set<String> getTemplateNamesByAnchorFileName(String anchorFileName) {
-    return anchorFileNameToTemplateNames.get(anchorFileName);
+    return anchorFiles.get(anchorFileName).getPointingTemplateNames();
   }
-  
+
   int getSize() {
     return nameToTemplate.size();
   }

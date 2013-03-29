@@ -1,6 +1,8 @@
 package org.apidb.apicommon.datasetPresenter;
 
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +31,8 @@ public class Template {
 
   private Set<String> props = new HashSet<String>();
   private String templateText;
-  private String anchorFileName;
+  private String anchorFileNameRaw;
+  private Map<String, String> anchorFileNameProject = new HashMap<String, String>();
   private String name;
   private String templateFilePath;
 
@@ -79,13 +82,18 @@ public class Template {
    * @param anchorFileName
    */
   void setAnchorFileName(String anchorFileName) {
-    this.anchorFileName = anchorFileName;
+    this.anchorFileNameRaw = anchorFileName;
     String[] splitPath = anchorFileName.split("/lib/");
     if (splitPath.length != 2)
-      throw new UserException("In templates file " + templateFilePath
-          + " template '" + name + "' contains anchorFileName '"
-          + anchorFileName + "' which is not in the form xxxx/lib/yyyy (where xxxx is a path and yyyy is a path)");
- 
+      throw new UserException(
+          "In templates file "
+              + templateFilePath
+              + " template '"
+              + name
+              + "' contains anchorFileName '"
+              + anchorFileName
+              + "' which is not in the form xxxx/lib/yyyy (where xxxx is a path and yyyy is a path)");
+    anchorFileNameProject.put(anchorFileName, null);
   }
 
   /*
@@ -103,12 +111,18 @@ public class Template {
     return templateText;
   }
 
-  String getTargetFileName() {
-    return getTargetFileName(anchorFileName);
+  // used for unit testing
+  String getFirstTargetFileName() {
+    return AnchorFile.getTargetFileName(anchorFileNameRaw);
   }
 
-  String getAnchorFileName() {
-    return anchorFileName;
+  // used for unit testing
+  String getAnchorFileNameRaw() {
+    return anchorFileNameRaw;
+  }
+
+  Set<String> getAnchorFileNames() {
+    return Collections.unmodifiableSet(anchorFileNameProject.keySet());
   }
 
   /**
@@ -162,11 +176,12 @@ public class Template {
   String getInstancesAsText(List<TemplateInstance> templateInstances) {
     StringBuffer buf = new StringBuffer();
 
-    // getting null pointer when template exists in dst file but not called anywhere
-    if(templateInstances != null) {
-        for (TemplateInstance instance : templateInstances) {
-            buf.append(getInstanceAsText(instance) + nl);
-        }
+    // getting null pointer when template exists in dst file but not called
+    // anywhere
+    if (templateInstances != null) {
+      for (TemplateInstance instance : templateInstances) {
+        buf.append(getInstanceAsText(instance) + nl);
+      }
     }
     return buf.toString();
   }
@@ -225,39 +240,6 @@ public class Template {
    */
   boolean validatePropertiesInstance(Map<String, String> propValues) {
     return propValues.keySet().containsAll(getProps());
-  }
-
-  static String getTargetFileName(String anchorFileName) {
-    String[] splitPath = anchorFileName.split("/");
-    String preLib = "";
-    String postLib = "";
-    boolean seenLib = false;
-    boolean hasPerl = false;
-
-    for(int i = 0; i < splitPath.length; i++) {
-        if(splitPath[i].equals("lib")) {
-            seenLib = true;
-            continue;
-        }
-
-        if(splitPath[i].equals("perl")) {
-            hasPerl = true;
-            continue;
-        }
-        if(seenLib) {
-            postLib = postLib + "/" + splitPath[i];
-        } else {
-            preLib = preLib + "/" + splitPath[i];
-        }
-    }
-
-    String prefix = "lib";
-    if(hasPerl) {
-        prefix = prefix + "/perl";
-        postLib = preLib + postLib;
-    }
-    
-    return prefix + postLib;
   }
 
 }
