@@ -104,8 +104,9 @@ public class TemplatesInjector {
               }
               templateNamesNotFound.remove(templateNameInAnchor);
               Template template = templateSet.getTemplateByName(templateNameInAnchor);
+
               String textToInject = datasetInjectorSet.getTemplateInstanceSet().getTemplateInstancesAsText(
-                  template);
+                  template, anchorFile.getName());
               bw.write(textToInject);
             }
           }

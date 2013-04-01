@@ -28,12 +28,12 @@ public class TestDatasetInjectorPackage {
   private static final String nl = System.getProperty("line.separator");
 
   private static final String validPrelude = "name=rnaSeqCoverageTrack" + nl
-      + "anchorFile=ApiCommonShared/Model/lib/gbr/${projectName}.conf" + nl
+      + "anchorFile=ApiCommonShared/Model/lib/gbrowse/WhateverDB.conf" + nl
       + "prop=datasetName" + nl + "#a comment" + nl + nl
       + "prop=datasetDisplayName" + nl;
 
   private static final String validPreludeTrimmed = "name=rnaSeqCoverageTrack"
-      + nl + "anchorFile=ApiCommonShared/Model/lib/gbr/${projectName}.conf"
+      + nl + "anchorFile=ApiCommonShared/Model/lib/gbrowse/WhateverDB.conf"
       + nl + "prop=datasetName" + nl + "prop=datasetDisplayName" + nl;
 
   private static final String validTemplateText = "[${datasetName}]" + nl
@@ -110,7 +110,7 @@ public class TestDatasetInjectorPackage {
 
     // inject instances into target
     String answer = template.injectInstancesIntoStream(templateInstances,
-        targetTextAsStream);
+        targetTextAsStream, "dontcare");
 
     // format expected result
     String inj1 = "[HAPPY]" + nl + "feature      = NextGenSeq:HAPPY" + nl;
@@ -121,16 +121,24 @@ public class TestDatasetInjectorPackage {
     assertTrue(answer.equals(expected));
   }
 
+  @Test
+  public void test_Template_setAnchorFileName() {
+    Template template = new Template("dontknow");
+    template.setAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/${projectName}.conf");
+    assertTrue(template.getAnchorFileProject("ApiCommonShared/DatasetPresenter/lib/test/PlasmoDB.conf").equals("PlasmoDB"));
+    assertTrue(template.getAnchorFileProject("ApiCommonShared/DatasetPresenter/lib/test/ToxoDB.conf").equals("ToxoDB"));
+  }
+  
   // test: parse of template prelude
   @Test
   public void test_TemplatesParser_parsePrelude() throws IOException {
-    Template template = new Template("dontcare");
-    TemplatesParser.parsePrelude(validPreludeTrimmed, template, "dontcare");
+    Template template = new Template("dontknow");
+    TemplatesParser.parsePrelude(validPreludeTrimmed, template, "dontknow");
     assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
-    assertTrue(template.getAnchorFileNameRaw().equals(
-        "ApiCommonShared/Model/lib/gbr/${projectName}.conf"));
+    assertTrue(template.getRawAnchorFileName().equals(
+        "ApiCommonShared/Model/lib/gbrowse/WhateverDB.conf"));
     assertTrue(template.getFirstTargetFileName().equals(
-        "lib/gbr/${projectName}.conf"));
+        "lib/gbrowse/WhateverDB.conf"));
     assertTrue(template.getProps().size() == 2);
     assertTrue(template.getProps().contains("datasetName"));
   }

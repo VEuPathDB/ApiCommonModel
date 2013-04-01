@@ -39,10 +39,10 @@ public class TemplateInstanceSet {
   /**
    * Get this set of TemplateInstances as text (the concatenation of each).
    */
-  String getTemplateInstancesAsText(Template template) {
-    return template.getInstancesAsText(templateInstancesByTemplateName.get(template.getName()));
+  String getTemplateInstancesAsText(Template template, String anchorFileName) {
+    return template.getInstancesAsText(templateInstancesByTemplateName.get(template.getName()), anchorFileName);
   }
-
+  
   /**
    * Get a list of TemplateInstances in this set that are instances of the provided Template.
    * @param templateName
