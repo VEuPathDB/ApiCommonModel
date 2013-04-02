@@ -122,6 +122,52 @@ public class TestDatasetInjectorPackage {
   }
 
   @Test
+  public void test_Template_getInstancesAsText() {
+
+    // make template
+    Template template = new Template("dontcare");
+    template.setName("rnaSeqFoldChangeQuestion");
+    template.setAnchorFileNameProject("hello_MicroDB", "MicroDB");
+    template.setAnchorFileNameProject("hello_MacroDB", "MacroDB");
+    Set<String> props = new HashSet<String>();
+    props.add("projectName");
+    props.add("datasetName");
+    template.setProps(props);
+    template.setTemplateText(validTemplateText);
+
+    // make template instances
+    Map<String, String> propValues1 = new HashMap<String, String>();
+    propValues1.put("datasetName", "HAPPY");
+    propValues1.put("projectName", "MacroDB");
+    TemplateInstance templateInstance1 = new TemplateInstance(
+        template.getName(), propValues1);
+
+    Map<String, String> propValues2 = new HashMap<String, String>();
+    propValues2.put("datasetName", "SAD");
+    propValues2.put("projectName", "MicroDB");
+    TemplateInstance templateInstance2 = new TemplateInstance(
+        template.getName(), propValues2);
+
+    List<TemplateInstance> templateInstances = new ArrayList<TemplateInstance>();
+    templateInstances.add(templateInstance1);
+    templateInstances.add(templateInstance2);
+
+    // make target text
+    String targetText = "line 1" + nl
+        + "<!-- TEMPLATE_ANCHOR rnaSeqFoldChangeQuestion -->" + nl + "line 3"
+        + nl;
+    InputStream targetTextAsStream = new ByteArrayInputStream(
+        targetText.getBytes());
+
+    // inject instances into target
+    String answer = template.injectInstancesIntoStream(templateInstances,
+        targetTextAsStream, "hello_MicroDB");
+    
+    assertTrue(answer.contains("SAD"));
+    assertTrue(!answer.contains("HAPPY"));
+  }
+
+  @Test
   public void test_Template_setAnchorFileName() {
     Template template = new Template("dontknow");
     template.setAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/${projectName}.conf");

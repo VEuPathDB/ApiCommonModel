@@ -148,7 +148,7 @@ public class Template {
     String project_home = System.getenv("PROJECT_HOME");
 
     if (!rawAnchorFileName.contains("$")) {
-      anchorFileNameToProject.put(rawAnchorFileName, null);
+      setAnchorFileNameProject(rawAnchorFileName, null);
       return;
     }
 
@@ -175,7 +175,7 @@ public class Template {
         String pathName2 = pathName.replaceFirst(project_home + "/", "");
         String projectName = pathName2.replaceFirst(splitRaw[0], "").replaceFirst(
             splitRaw[1], "");
-        anchorFileNameToProject.put(pathName2, projectName);
+        setAnchorFileNameProject(pathName2, projectName);
       }
     } catch (IOException e) {
       throw new UserException(
@@ -302,6 +302,10 @@ public class Template {
   private String getAnchorFileErrMsgPrefix() {
     return "In templates file '" + templateFilePath + "' template '" + name
         + "' contains anchorFileName '" + rawAnchorFileName + "' ";
+  }
+  
+   void setAnchorFileNameProject(String anchorFileName, String project) {
+    anchorFileNameToProject.put(anchorFileName, project);
   }
 
   /**
