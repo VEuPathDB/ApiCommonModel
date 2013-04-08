@@ -14,24 +14,23 @@ public class RNASeq extends  DatasetInjector {
    */
 
   public void injectTemplates() {
-      // TODO: split out param query templates (not urgent)
       // TODO: which graphs for the gene record page?
+
+      String projectName = getPropValue("projectName");
 
       String datasetName = getDatasetName();
       String[] datasetWords = datasetName.split("_");
       setPropValue("organismAbbrev", datasetWords[0]);
 
-      String projectName = getPropValue("projectName");
-      String isEuPathDBSite = getPropValue("isEuPathDBSite");
-      if(Boolean.parseBoolean(isEuPathDBSite)) {
+
+      if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
 
       } else {
           setPropValue("includeProjects", projectName);
       }
 
-      String isPairedEnd = getPropValue("isPairedEnd");
-      if(Boolean.parseBoolean(isPairedEnd)) {
+      if(getPropValueAsBoolean("isPairedEnd")) {
           setPropValue("exprMetric", "fpkm");
       } else {
           setPropValue("exprMetric", "rpkm");
@@ -40,8 +39,7 @@ public class RNASeq extends  DatasetInjector {
       injectTemplate("rnaSeqAttributeCategory");
 
       // Strand Specific Could be factored into subclasses
-      String isStrandSpecific = getPropValue("isStrandSpecific");
-      if(Boolean.parseBoolean(isStrandSpecific)) {
+      if(getPropValueAsBoolean("isStrandSpecific")) {
           setPropValue("exprGraphAttr", datasetName + 
                        "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
           setPropValue("pctGraphAttr", datasetName + 
@@ -62,13 +60,18 @@ public class RNASeq extends  DatasetInjector {
           injectTemplate("rnaSeqStrandNonSpecificGraph");
       }
 
-      String hasFishersExactTest = getPropValue("hasFishersExactTestData");
-      if(Boolean.parseBoolean(hasFishersExactTest)) {
+      if(getPropValueAsBoolean("hasFishersExactTestData")) {
           injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
+          injectTemplate("rnaSeqFoldChangeWithPValueWS");
       }
 
+
       injectTemplate("rnaSeqFoldChangeQuestion");
+      injectTemplate("rnaSeqFoldChangeWS");
+
       injectTemplate("rnaSeqPercentileQuestion");
+      injectTemplate("rnaSeqPercentileWS");
+
       injectTemplate("rnaSeqCoverageTrack");
 
       String hasJunctions = getPropValue("hasJunctions");
@@ -86,8 +89,7 @@ public class RNASeq extends  DatasetInjector {
 
     // TODO: Add reference for Graph
 
-    String hasFishersExactTest = getPropValue("hasFishersExactTestData");
-    if(Boolean.parseBoolean(hasFishersExactTest)) {
+    if(getPropValueAsBoolean("hasFishersExactTestData")) {
         addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                         "GenesByRNASeq" + getDatasetName() + "PValue");
     }
