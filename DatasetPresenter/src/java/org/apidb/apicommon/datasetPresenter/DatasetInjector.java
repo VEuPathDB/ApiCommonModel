@@ -44,6 +44,20 @@ public abstract class DatasetInjector {
    */
   protected abstract String[][] getPropertiesDeclaration();
 
+
+  protected String[][] combinePropertiesDeclarations(String[][] one, String[][] two) {
+      String[][] combined = new String[one.length + two.length][2];
+
+      for(int i = 0; i < one.length; i++) {
+          combined[i] = one[i];
+      }
+      for(int i = 0; i < two.length; i++) {
+          combined[i + one.length] = two[i];
+      }
+
+      return combined;
+  }
+
  
   /**
    * Subclasses call this method to add model references to the
@@ -81,7 +95,9 @@ public abstract class DatasetInjector {
       return propValues.get(key);
   }
 
-
+  protected boolean getPropValueAsBoolean(String key) {
+      return Boolean.parseBoolean(propValues.get(key));
+  }
 
   protected String getDatasetName() {
     return datasetName;
@@ -171,6 +187,18 @@ public abstract class DatasetInjector {
   void setDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
     this.datasetInjectorSet = datasetInjectorSet;
   }
+
+
+    /***
+     *   return the first word before the underscore in a dataset name
+     *    for organism specific .. this is always the orgAbbrev
+     *   
+     */
+    protected String getOrganismAbbrevFromDatasetName() {
+        String[] datasetWords = this.datasetName.split("_");
+        return datasetWords[0];
+    }
+
 
 
 }
