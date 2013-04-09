@@ -30,47 +30,55 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("includeProjects", projectName);
       }
 
-      if(getPropValueAsBoolean("isPairedEnd")) {
-          setPropValue("exprMetric", "fpkm");
-      } else {
-          setPropValue("exprMetric", "rpkm");
-      }
 
-      injectTemplate("rnaSeqAttributeCategory");
+      if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-      // Strand Specific Could be factored into subclasses
-      if(getPropValueAsBoolean("isStrandSpecific")) {
-          setPropValue("exprGraphAttr", datasetName + 
-                       "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
-          setPropValue("pctGraphAttr", datasetName + 
-                       "_sense_pct_graph," + datasetName + "_antisense_pct_graph");
+          if(getPropValueAsBoolean("isPairedEnd")) {
+              setPropValue("exprMetric", "fpkm");
+          } else {
+              setPropValue("exprMetric", "rpkm");
+          }
 
-          injectTemplate("rnaSeqSsExpressionGraphAttributes");
-          injectTemplate("rnaSeqSsProfileSetParamQuery");
-          injectTemplate("rnaSeqSsPctProfileSetParamQuery");
-          injectTemplate("rnaSeqStrandSpecificGraph");
+          injectTemplate("rnaSeqAttributeCategory");
+
+          // Strand Specific Could be factored into subclasses
+          if(getPropValueAsBoolean("isStrandSpecific")) {
+              setPropValue("exprGraphAttr", datasetName + 
+                           "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
+              setPropValue("pctGraphAttr", datasetName + 
+                           "_sense_pct_graph," + datasetName + "_antisense_pct_graph");
+
+              injectTemplate("rnaSeqSsExpressionGraphAttributes");
+              injectTemplate("rnaSeqSsProfileSetParamQuery");
+              injectTemplate("rnaSeqSsPctProfileSetParamQuery");
+              injectTemplate("rnaSeqStrandSpecificGraph");
       
-      } else {
-          setPropValue("exprGraphAttr", datasetName + "_expr_graph");
-          setPropValue("pctGraphAttr", datasetName + "_pct_graph");
+          } else {
+              setPropValue("exprGraphAttr", datasetName + "_expr_graph");
+              setPropValue("pctGraphAttr", datasetName + "_pct_graph");
 
-          injectTemplate("rnaSeqExpressionGraphAttributes");
-          injectTemplate("rnaSeqProfileSetParamQuery");
-          injectTemplate("rnaSeqPctProfileSetParamQuery");
-          injectTemplate("rnaSeqStrandNonSpecificGraph");
+              injectTemplate("rnaSeqExpressionGraphAttributes");
+              injectTemplate("rnaSeqProfileSetParamQuery");
+              injectTemplate("rnaSeqPctProfileSetParamQuery");
+              injectTemplate("rnaSeqStrandNonSpecificGraph");
+          }
+
+
+          if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
+
+              if(getPropValueAsBoolean("hasFishersExactTestData")) {
+                  injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
+                  injectTemplate("rnaSeqFoldChangeWithPValueWS");
+              }
+
+              injectTemplate("rnaSeqFoldChangeQuestion");
+              injectTemplate("rnaSeqFoldChangeWS");
+          }
+
+          injectTemplate("rnaSeqPercentileQuestion");
+          injectTemplate("rnaSeqPercentileWS");
       }
 
-      if(getPropValueAsBoolean("hasFishersExactTestData")) {
-          injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
-          injectTemplate("rnaSeqFoldChangeWithPValueWS");
-      }
-
-
-      injectTemplate("rnaSeqFoldChangeQuestion");
-      injectTemplate("rnaSeqFoldChangeWS");
-
-      injectTemplate("rnaSeqPercentileQuestion");
-      injectTemplate("rnaSeqPercentileWS");
 
       injectTemplate("rnaSeqCoverageTrack");
 
@@ -82,18 +90,23 @@ public class RNASeq extends  DatasetInjector {
   }
 
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                    "GenesByRNASeq" + getDatasetName());
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                    "GenesByRNASeq" + getDatasetName() + "Percentile");
+      if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-    // TODO: Add reference for Graph
+          // TODO: Add reference for Graph
 
-    if(getPropValueAsBoolean("hasFishersExactTestData")) {
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GenesByRNASeq" + getDatasetName() + "PValue");
-    }
+          if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
 
+              if(getPropValueAsBoolean("hasFishersExactTestData")) {
+                  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                                  "GenesByRNASeq" + getDatasetName() + "PValue");
+              }
+
+              addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                              "GenesByRNASeq" + getDatasetName());
+
+          }
+          addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                          "GenesByRNASeq" + getDatasetName() + "Percentile");
   }
   
   // declare properties required beyond those inherited from the datasetPresenter
@@ -106,7 +119,11 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphColor", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"hasJunctions", ""},
-                                 {"isStrandSpecific", ""}
+                                 {"isStrandSpecific", ""},
+
+                                 {"isAlignedToAnnotatedGenome", ""},
+                                 {"hasMultipleSamplesForFoldChange", ""}
+
       };
 
     return declaration;
