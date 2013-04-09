@@ -107,6 +107,7 @@ public class RNASeq extends  DatasetInjector {
           }
           addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                           "GenesByRNASeq" + getDatasetName() + "Percentile");
+      }
   }
   
   // declare properties required beyond those inherited from the datasetPresenter
@@ -120,10 +121,8 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphBottomMarginSize", ""},
                                  {"hasJunctions", ""},
                                  {"isStrandSpecific", ""},
-
                                  {"isAlignedToAnnotatedGenome", ""},
                                  {"hasMultipleSamplesForFoldChange", ""}
-
       };
 
     return declaration;
