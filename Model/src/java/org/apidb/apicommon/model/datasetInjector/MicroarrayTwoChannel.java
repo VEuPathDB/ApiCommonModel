@@ -31,6 +31,20 @@ public class MicroarrayTwoChannel extends  Microarray {
 
         injectTemplate("twoChannelMicroarrayExpressionGraphAttributes");
 
+        /**
+        String excudedGraphProfileSets = getPropValue("excludedGraphProfileSets");
+        String [] excludedGraphProfileSetsArray = excludedGraphProfileSets.split(";");
+
+        String excludedGraphProfileSetsPerlString = "";
+        for(int i = 0; i < excludedGraphProfileSetArray.length; i++) {
+            excludedGraphProfileSetsPerlString = excludedGraphProfileSetsPerlString + "'" + excludedGraphProfileSetsArray[i] + "',"; // trailing comma will be tolerated
+        }
+
+        setPropValue("excludedGraphProfileSets", excludedGraphProfileSetsPerlString);
+
+        **/
+        injectTemplate("microarraySimpleTwoChannel");
+
     }
 
 
@@ -40,6 +54,7 @@ public class MicroarrayTwoChannel extends  Microarray {
         
         String [][] declaration = {{"percentileProfileSetMap", "map green and red channels to samples or conditions"},
                                    {"excludedGraphProfileSets", "sometimes... extra profile sets are loaded which we need to exclude from the graphs"},
+                                   {"graphType", "one of bar or line"},
         };
 
         return combinePropertiesDeclarations(microarrayDeclaration, declaration);
