@@ -129,6 +129,7 @@ public class DatasetPresenter {
           "Dataset "
               + getDatasetName()
               + " contains an illegal datasetNamePattern attribute.  It must contain one or more SQL wildcard (%) and no other type of wildcards");
+    propValues.put("datasetNamePattern", pattern);
     datasetNamePattern = pattern;
   }
 
@@ -176,6 +177,16 @@ public class DatasetPresenter {
     if (propValues.get("buildNumberIntroduced") == null)
       return null;
     return new Integer(propValues.get("buildNumberIntroduced"));
+  }
+
+  public void setBuildNumberRevised(Integer buildNumberRevised) {
+     propValues.put("buildNumberRevised", buildNumberRevised.toString());
+  }
+
+  public Integer getBuildNumberRevised() {
+    if (propValues.get("buildNumberRevised") == null)
+      return null;
+    return new Integer(propValues.get("buildNumberRevised"));
   }
 
   public void setDisplayCategory(Text displayCategory) {

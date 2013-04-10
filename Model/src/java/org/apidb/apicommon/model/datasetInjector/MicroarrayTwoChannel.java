@@ -31,13 +31,8 @@ public class MicroarrayTwoChannel extends  Microarray {
     public void injectTemplates() {
         super.injectTemplates();
 
-
-        System.out.println("injecting specific templates");
-
         injectTemplate("twoChannelMicroarrayExpressionGraphAttributes");
-
         injectTemplate("microarraySimpleTwoChannel");
-
     }
 
 
@@ -46,9 +41,13 @@ public class MicroarrayTwoChannel extends  Microarray {
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {{"percentileProfileSetMap", "map green and red channels to samples or conditions"},
-                                   {"excludedGraphProfileSets", "sometimes... extra profile sets are loaded which we need to exclude from the graphs"},
                                    {"graphType", "one of bar or line"},
                                    {"isDirectComparison", "true/false"},
+                                   {"sampleLabels", "OPTIONAL Prop...provide if you want to override the sample names in the db"},
+                                   {"excludedGraphProfileSets", "OPTIONAL PROP... extra profile sets are loaded which we need to exclude from the graphs"},
+                                   {"colors", "semicolon sep list of colors"},
+                                   {"forceXLabelsHorizontal", "true/false"},
+                                   {"bottomMargin", "Optionally override the default bottom margin size"},
         };
 
         return combinePropertiesDeclarations(microarrayDeclaration, declaration);

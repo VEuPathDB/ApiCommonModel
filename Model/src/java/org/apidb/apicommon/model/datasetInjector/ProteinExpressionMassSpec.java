@@ -5,6 +5,9 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class ProteinExpressionMassSpec extends DatasetInjector {
 
   public void injectTemplates() {
+
+      // inject Pbrowse
+      // inject Gbrowse
   }
 
   public void addModelReferences() {

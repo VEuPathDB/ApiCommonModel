@@ -6,9 +6,12 @@ public abstract class Microarray extends DatasetInjector {
   
     protected abstract void setDecodePercentileProp();
 
+    protected abstract boolean isDirectComparison();
+
     public void injectTemplates() {
-        String organismAbbrev = getOrganismAbbrevFromDatasetName();
-        setPropValue("organismAbbrev", organismAbbrev);
+        
+        setOrganismAbbrevFromDatasetName();
+        setGraphDatasetName();
 
         String projectName = getPropValue("projectName");
 
@@ -33,20 +36,34 @@ public abstract class Microarray extends DatasetInjector {
             // TODO:  inject ProfileSimilrity Question
         }
 
-        if(getPropValueAsBoolean("hasPageData")) {
-            injectTemplate("microarrayFoldChangeWithConfidenceQuestion");
-            injectTemplate("microarrayFoldChangeWithConfidenceWS");
+
+        if(isDirectComparison()) {
+            if(getPropValueAsBoolean("hasPageData")) {
+                // inject direct w/ page
+                // inject direct w/ page ws
+
+            }
+            else {
+                // inject direct no page
+                // inject direct no page ws
+            }
         }
-        
-        injectTemplate("microarrayFoldChangeQuestion");
-        injectTemplate("microarrayFoldChangeWS");
+        else {
+            if(getPropValueAsBoolean("hasPageData")) {
+                injectTemplate("microarrayFoldChangeWithConfidenceQuestion");
+                injectTemplate("microarrayFoldChangeWithConfidenceWS");
+            }
+            
+            injectTemplate("microarrayFoldChangeQuestion");
+            injectTemplate("microarrayFoldChangeWS");
+        }
 
         injectTemplate("microarrayPercentileWS");
         injectTemplate("microarrayPercentileQuestion");
     }
     
     public void addModelReferences() {
-
+        // TODO add direct comparison stuff!!!!
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                             "GenesByMicroarray" + getDatasetName() + "Confidence");
@@ -70,3 +87,4 @@ public abstract class Microarray extends DatasetInjector {
         return declaration;
   }
 }
+
