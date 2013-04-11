@@ -1012,12 +1012,30 @@
        </help>
        </flatVocabParam>
 
+       <flatVocabParam name="ontology_type"
+                      queryRef="SharedVQ.htsSnpOntology"
+                      prompt="Ontology Type"
+                      multiPick="false"
+                      quote="true"
+                      dependedParamRef="organismParams.organism"
+                      excludeProjects="GiardiaDB,PiroplasmaDB,MicrosporidiaDB">
+           <noTranslation value="true" includeProjects="EuPathDB" />
+ 
+       <suggest includeProjects="ToxoDB" default="Haplogroup"/>
+ 
+        <help>
+           Choose a reference from the list of strains.
+        </help>
+        </flatVocabParam>
+
+
+
        <flatVocabParam name="htsSnp_strain_m" 
                       queryRef="SharedVQ.htsSnpStrainAA"
                       prompt="Comparator"
                       multiPick="true"
                       dependedParamRef="organismParams.organism"
-                      excludeProjects="ToxoDB,GiardiaDB,PiroplasmaDB,MicrosporidiaDB">
+                      excludeProjects="TriTrypDB,ToxoDB,GiardiaDB,PiroplasmaDB,MicrosporidiaDB">
       <noTranslation value="true" includeProjects="EuPathDB" />
        <help>
               Choose comparators from the list of strains. 
@@ -1026,6 +1044,18 @@
 
        <flatVocabParam name="htsSnp_strain_m" includeProjects="ToxoDB" 
                       queryRef="SharedVQ.genotypeStrain"
+                      prompt="Comparator"
+                      multiPick="true"
+                      quote="true"
+                      displayType="treeBox">
+         <help>
+              Select a comparator strain.
+         </help>
+         <suggest selectMode="all" />
+       </flatVocabParam>
+
+       <flatVocabParam name="htsSnp_strain_m" includeProjects="TriTrypDB" 
+                      queryRef="SharedVQ.strainByOntologyType"
                       prompt="Comparator"
                       multiPick="true"
                       quote="true"
@@ -1785,6 +1815,45 @@ WHERE st.is_queryable = 1
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery> 
 
+        <sqlQuery name="htsSnpOntology" excludeProjects="GiardiaDB,PiroplasmaDB,EuPathDB,MicrosporidiaDB" doNotTest="true">
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
+          <column name="internal"/>
+          <column name="term"/>
+          <sql>
+
+SELECT distinct oe.category as term, oe.category as internal
+FROM   apidb.dataset ds,
+       sres.externaldatabase ed,
+       SRES.externaldatabaserelease edr,
+       study.study s,
+       rad.studybiomaterial sb,
+       STUDY.biomaterialcharacteristic bc,
+       study.ontologyentry oe,
+       study.biomaterial b,
+       apidbtuning.isolateattributes ia,
+       apidbtuning.snpstrains ss
+WHERE  ds.type = 'isolates'
+and ds.subtype = 'HTS_SNP'
+and ds.name not like '%SNPSample%'
+and ed.name = ds.external_database_name
+and ed.external_database_id = edr.external_database_id
+and edr.external_database_release_id = s.external_database_release_id
+and s.study_id = sb.study_id
+and sb.bio_material_id = bc.bio_material_id
+and sb.bio_material_id = b.bio_material_id
+and bc.ontology_entry_id = oe.ontology_entry_id
+--and oe.category = 'Haplogroup'
+and b.source_id = ia.source_id
+and ss.var_extdb_name = ia.external_db_name
+--and ss.organism in ($$organism$$) 
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="htsSnpOntology" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="true">
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
+            <wsColumn name="internal" width="32" wsName="internal"/>
+            <wsColumn name="term" width="32" wsName="term"/>
+        </processQuery>
 
 
         <sqlQuery name="ChromosomeOrderNumSeq" includeProjects="TriTrypDB,MicrosporidiaDB,CryptoDB,PlasmoDB,ToxoDB,PiroplasmaDB" isCacheable="true" doNotTest="true">
@@ -1969,6 +2038,89 @@ ORDER by order_num
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="parentTerm" width="100" wsName="parentTerm"/>
         </processQuery> 
+
+
+        <sqlQuery name="strainByOntologyType" includeProjects="TriTrypDB" isCacheable="true">
+            <!--<paramRef ref="sharedParams.ontology_type" quote="true" queryRef="SharedVQ.htsSnpOntology"/>   -->
+            <column name="internal"/>
+            <column name="term"/>
+            <column name="parentTerm"/>
+             <sql>
+SELECT replace(term,',', ' ') as term,
+       replace(internal,',', ' ') as internal,
+       replace(parentTerm,',', ' ') as parentTerm
+FROM (
+SELECT ia.strain as term,
+       ss.strain as internal, 
+       oe.value as parentTerm
+FROM   apidb.dataset ds, 
+       sres.externaldatabase ed, 
+       SRES.externaldatabaserelease edr, 
+       study.study s,
+       rad.studybiomaterial sb, 
+       STUDY.biomaterialcharacteristic bc, 
+       study.ontologyentry oe, 
+       study.biomaterial b,
+       apidbtuning.isolateattributes ia,
+       apidbtuning.snpstrains ss
+WHERE  ds.type = 'isolates'
+   and ds.subtype = 'HTS_SNP'
+   and ds.name not like '%SNPSample%'
+   and ed.name = ds.external_database_name
+   and ed.external_database_id = edr.external_database_id
+   and edr.external_database_release_id = s.external_database_release_id
+   and s.study_id = sb.study_id
+   and sb.bio_material_id = bc.bio_material_id
+   and sb.bio_material_id = b.bio_material_id
+   and bc.ontology_entry_id = oe.ontology_entry_id
+   --and oe.category = 'Haplogroup'
+   --and oe.category = $$ontology_type$$
+   and b.source_id = ia.source_id
+   and ss.var_extdb_name = ia.external_db_name
+UNION 
+SELECT oe.value as term,
+       oe.value as internal, 
+       oe.category as parentTerm
+FROM   apidb.dataset ds, 
+       sres.externaldatabase ed, 
+       SRES.externaldatabaserelease edr, 
+       study.study s,
+       rad.studybiomaterial sb, 
+       STUDY.biomaterialcharacteristic bc, 
+       study.ontologyentry oe, 
+       study.biomaterial b,
+       apidbtuning.isolateattributes ia,
+       apidbtuning.snpstrains ss
+WHERE  ds.type = 'isolates'
+   and ds.subtype = 'HTS_SNP'
+   and ds.name not like '%SNPSample%'
+   and ed.name = ds.external_database_name
+   and ed.external_database_id = edr.external_database_id
+   and edr.external_database_release_id = s.external_database_release_id
+   and s.study_id = sb.study_id
+   and sb.bio_material_id = bc.bio_material_id
+   and sb.bio_material_id = b.bio_material_id
+   and bc.ontology_entry_id = oe.ontology_entry_id
+   --and oe.category = 'Haplogroup'
+   --and oe.category = $$ontology_type$$
+   and b.source_id = ia.source_id
+   and ss.var_extdb_name = ia.external_db_name
+)
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="strainByOntologyType" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <!-- <paramRef ref="sharedParams.ontology_type" quote="true" queryRef="SharedVQ.htsSnpOntology"/>   -->
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="parentTerm" width="100" wsName="parentTerm"/>
+        </processQuery> 
+
+
+
+
+
+
 
 
         <sqlQuery name="EstLibrariesGenes" excludeProjects="EuPathDB" isCacheable="true">
