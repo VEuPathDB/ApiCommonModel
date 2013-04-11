@@ -6,8 +6,21 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
   public void injectTemplates() {
 
-      // inject Pbrowse
-      // inject Gbrowse
+      setOrganismAbbrevFromDatasetName();
+      String datasetName = getDatasetName();
+      String optionalOrganismAbbrev  = getPropValue("optionalOrganismAbbrev");
+      if (!optionalOrganismAbbrev.equals("")) {
+              setPropValue("organismAbbrev",optionalOrganismAbbrev);
+          }
+     
+      String datasetNamePattern  = getPropValue("datasetNamePattern");
+      if (datasetNamePattern == null || datasetNamePattern.equals("")) {
+              setPropValue("edNameParamValue",datasetName);
+      }
+      else {
+          setPropValue("edNameParamValue",datasetNamePattern);
+      }
+      injectTemplate("proteinExpressionMassSpecGBrowseTrack");
   }
 
   public void addModelReferences() {
@@ -20,9 +33,10 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
   // second column is for documentation
   public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
+      String[][] propertiesDeclaration = {{"species", "metadata for the sample organism, not the aligned organism"},
+                                          {"optionalOrganismAbbrev","for cases when sample organism is different from the aligned organism"},
+      };
+      return propertiesDeclaration;
   }
-
 
 }
