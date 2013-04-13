@@ -208,7 +208,7 @@ public abstract class DatasetInjector {
 
     protected void setGraphDatasetName() {
         String graphDatasetName = this.datasetName.replace("-", "");
-        setPropValue("datasetNameForGraphs", graphDatasetName);
+        setPropValue("graphDatasetName", graphDatasetName);
     }
     
 
