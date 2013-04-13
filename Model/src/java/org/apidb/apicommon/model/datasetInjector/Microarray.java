@@ -3,14 +3,14 @@ package org.apidb.apicommon.model.datasetInjector;
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public abstract class Microarray extends DatasetInjector {
-  
-    protected abstract void setDecodePercentileProp();
 
-    protected abstract boolean isDirectComparison();
+    protected abstract void setExprGraphVisiblePart();
+    protected abstract void setGraphModule();
+    protected abstract void setExprPlotPartModule();
 
     public void injectTemplates() {
-        
-        setOrganismAbbrevFromDatasetName();
+
+        // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 
         String projectName = getPropValue("projectName");
@@ -22,66 +22,25 @@ public abstract class Microarray extends DatasetInjector {
             setPropValue("includeProjects", projectName);
         }
 
-        // param queries can be shared
-        //  but may need special profile set name mapping
-        setDecodePercentileProp();
-
         injectTemplate("microarrayAttributeCategory");
-        injectTemplate("microarrayProfileSetParamQuery");
-        injectTemplate("microarrayPctProfileSetParamQuery");
 
+        setExprGraphVisiblePart();
+        setGraphModule();
+        setExprPlotPartModule();
 
-        if(getPropValueAsBoolean("hasSimilarityData")) {
-            // TODO:  inject ProfileSimilarity Graph
-            // TODO:  inject ProfileSimilrity Question
-        }
-
-
-        if(isDirectComparison()) {
-            if(getPropValueAsBoolean("hasPageData")) {
-                // inject direct w/ page
-                // inject direct w/ page ws
-
-            }
-            else {
-                // inject direct no page
-                // inject direct no page ws
-            }
-        }
-        else {
-            if(getPropValueAsBoolean("hasPageData")) {
-                injectTemplate("microarrayFoldChangeWithConfidenceQuestion");
-                injectTemplate("microarrayFoldChangeWithConfidenceWS");
-            }
-            
-            injectTemplate("microarrayFoldChangeQuestion");
-            injectTemplate("microarrayFoldChangeWS");
-        }
-
-        injectTemplate("microarrayPercentileWS");
-        injectTemplate("microarrayPercentileQuestion");
+        injectTemplate("microarrayGraphAttributes");
     }
     
-    public void addModelReferences() {
-        // TODO add direct comparison stuff!!!!
-        if(getPropValueAsBoolean("hasPageData")) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GenesByMicroarray" + getDatasetName() + "Confidence");
-        }
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GenesByMicroarray" + getDatasetName());
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GenesByMicroarray" + getDatasetName() + "Percentile");
-    }
-
-    
-    // declare properties required beyond those inherited from the datasetPresenter
-    // second column is for documentation
     public String[][] getPropertiesDeclaration() {
-        String [][] declaration = {{"isTimeSeries", ""},
+        String [][] declaration = {
                                    {"hasPageData", ""},
-                                   //                                   {"hasSimilarityData", ""}, // need to add special graph for this
                                    {"isEuPathDBSite", ""},
+                                   {"graphSampleLabels", "OPTIONAL Prop...provide if you want to override the sample names in the db"},
+                                   {"graphColors", "semicolon sep list of colors"},
+                                   {"excludedProfileSets", "OPTIONAL PROP... extra profile sets are loaded which we need to exclude from the graphs and questions"},
+                                   {"graphBottomMargin", "Optionally override the default bottom margin size"},
+                                   {"graphType", "one of bar or line"},
+                                   {"graphForceXLabelsHorizontal", "true/false.  NOTE:  Only valid when graphType is bar"},
         };
         
         return declaration;
