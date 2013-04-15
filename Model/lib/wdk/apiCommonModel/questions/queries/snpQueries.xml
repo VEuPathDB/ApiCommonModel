@@ -866,6 +866,9 @@ WHERE snp.na_feature_id = variants.parent_id
 
     <sqlQuery name="HtsSnpsByIsolateComparison" doNotTest="true" includeProjects="TriTrypDB" 
           isCacheable="true">
+        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withHtsSNPs">
+              <help>Select Organism you wish to query against.</help>
+        </paramRef>
         <paramRef ref="snpParams.hts_isolate_set_a"/>
         <paramRef ref="snpParams.set_a_percent"/>
         <paramRef ref="snpParams.hts_isolate_set_b"/>
@@ -878,25 +881,42 @@ WHERE snp.na_feature_id = variants.parent_id
         <column name="set_b_count"/>
         <sql>
             <![CDATA[
-              select seta.snp_source_id as source_id,'@PROJECT_ID@' as project_id,
-              seta.allele as set_a_allele,setb.allele as set_b_allele,
-              seta.total as set_a_count, setb.total as set_b_count
-              from (select isnp.snp_source_id,isnp.allele,count(*) as total
-              from ApidbTuning.IsolateSNPs isnp, ($$hts_isolate_set_a$$) ds
-              where isnp.is_source_id = ds.source_id
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= (select count(*) from ($$hts_isolate_set_a$$)) * $$set_a_percent$$ / 100) seta,
-              (select isnp.snp_source_id,isnp.allele, count(*) as total
-              from ApidbTuning.IsolateSNPs isnp, ($$hts_isolate_set_b$$) ds
-              where isnp.is_source_id = ds.source_id
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= (select count(*) from ($$hts_isolate_set_b$$)) * $$set_b_percent$$ / 100) setb
-              where seta.snp_source_id = setb.snp_source_id
-              and seta.allele != setb.allele
+With
+strain_group_a AS
+  (select parent_id as snp_na_feature_id, source_id, allele, count(*) as allele_count
+   from dots.seqvariation 
+   where strain in ($$hts_isolate_set_a$$)
+   group by parent_id, source_id, allele),
+strain_group_a_tot AS
+  (select snp_na_feature_id, sum(allele_count) total_allele_count
+   from strain_group_a 
+   group by snp_na_feature_id),
+strain_group_b AS
+  (select parent_id as snp_na_feature_id, source_id, allele, count(*) as allele_count
+   from dots.seqvariation where strain in ($$hts_isolate_set_b$$)
+   group by parent_id, source_id, allele),
+strain_group_b_tot AS
+  (select snp_na_feature_id, sum(allele_count) total_allele_count
+   from strain_group_a group by snp_na_feature_id)
+SELECT seta.source_id as source_id,
+       '@PROJECT_ID@' as project_id,
+       seta.allele as set_a_allele,
+       setb.allele as set_b_allele,
+       seta.total as set_a_count, 
+       setb.total as set_b_count 
+FROM
+  ( SELECT a.source_id, a.snp_na_feature_id, a.allele, 
+           a.allele_count/tot.total_allele_count as percent, tot.total_allele_count as total
+    FROM   strain_group_a a, strain_group_a_tot tot
+    WHERE  tot.snp_na_feature_id = a.snp_na_feature_id 
+       AND a.allele_count/tot.total_allele_count >  $$set_a_percent$$ / 100 ) seta,
+  ( SELECT b.source_id, b.snp_na_feature_id, b.allele, 
+           b.allele_count/tot.total_allele_count as percent, tot.total_allele_count as total
+    FROM   strain_group_b b, strain_group_b_tot tot
+    WHERE  tot.snp_na_feature_id = b.snp_na_feature_id
+       AND b.allele_count/tot.total_allele_count >  $$set_b_percent$$ / 100 ) setb
+WHERE seta.snp_na_feature_id = setb.snp_na_feature_id
+  AND seta.allele != setb.allele
            ]]>
        </sql>
     </sqlQuery>
