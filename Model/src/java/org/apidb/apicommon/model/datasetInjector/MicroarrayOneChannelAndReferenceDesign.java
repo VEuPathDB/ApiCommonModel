@@ -7,6 +7,11 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
     public void injectTemplates() {
         super.injectTemplates();
 
+        String decodeProfileSet = makeDecodeMappingStrings(getPropValue("profileSetNameMap"));
+        setPropValue("decodeProfileSet", decodeProfileSet);
+
+        setPercentileProfileFilter();
+
         injectTemplate("microarrayProfileSetParamQuery");
         injectTemplate("microarrayPctProfileSetParamQuery");
 
@@ -17,7 +22,6 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
             
         injectTemplate("microarrayFoldChangeQuestion");
         injectTemplate("microarrayFoldChangeWS");
-
 
         injectTemplate("microarrayPercentileWS");
         injectTemplate("microarrayPercentileQuestion");
@@ -30,7 +34,9 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
 
     }
 
-
+    protected void setPercentileProfileFilter() {
+        setPropValue("percentileProfileFilter", "%");
+    }
 
     public void addModelReferences() {
 
@@ -54,6 +60,7 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {{"isTimeSeries", ""},
+                                   {"profileSetNameMap", "Optionally replace profileset names"},
                                    //                                   {"hasSimilarityData", ""},
         };
 

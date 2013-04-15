@@ -4,32 +4,23 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class MicroarrayTwoChannelDirectComparison extends Microarray {
   
-    /***
-     *   list of key value pairs
-     *      key1=value1;key2=value2
-     *
-     *    @rv String like 'key1', 'value1', 'key2', 'value2'
-     */
-    public String makeDecodeStmtFromSampleMap(String sampleMap) {
-        String[] pairs = sampleMap.split(";");
-
-        String decode = "";
-
-        for(int i = 0; i < pairs.length; i++) {
-            String[] profileMap = pairs[i].split("=");
-            decode = decode + "'" + profileMap[0] + "', '" + profileMap[1] + "',\n";
-        }
-
-        return decode;
-    }
-
-
-
     public void injectTemplates() {
         super.injectTemplates();
 
-        injectTemplate("microarrayProfileSetParamQueryDirect");
-        injectTemplate("microarrayPctProfileSetParamQueryDirect");
+        setPropValue("decodeProfileSet", "");
+        setPropValue("percentileProfileFilter", "%");
+
+        injectTemplate("microarrayProfileSetParamQuery");
+        injectTemplate("microarrayPctProfileSetParamQuery");
+
+        String redPctSampleDecode = makeDecodeMappingStrings(getPropValue("redPctSampleMap"));
+        String greenPctSampleDecode = makeDecodeMappingStrings(getPropValue("greenPctSampleMap"));
+
+        setPropValue("redPctSampleDecode", redPctSampleDecode);
+        setPropValue("greenPctSampleDecode", greenPctSampleDecode);
+
+        injectTemplate("microarraySamplesParamQueryDirect");
+        injectTemplate("microarrayPctSamplesParamQueryDirect");
 
         if(getPropValueAsBoolean("hasPageData")) {
             injectTemplate("microarrayFoldChangeWithConfidenceQuestionDirect");
@@ -38,12 +29,6 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
             injectTemplate("microarrayFoldChangeQuestionDirect");
             injectTemplate("microarrayFoldChangeWSDirect");
         }
-
-        String redPctSampleDecode = makeDecodeStmtFromSampleMap(getPropValue("redPctSampleMap"));
-        String greenPctSampleDecode = makeDecodeStmtFromSampleMap(getPropValue("greenPctSampleMap"));
-
-        setPropValue("redPctSampleDecode", redPctSampleDecode);
-        setPropValue("greenPctSampleDecode", greenPctSampleDecode);
 
         injectTemplate("microarrayPercentileWSDirect");
         injectTemplate("microarrayPercentileQuestionDirect");
@@ -58,7 +43,7 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
 
 
     protected void setExprGraphVisiblePart() {
-        setPropValue("exprGraphVisiblePart", "expr_val");
+        setPropValue("exprGraphVisiblePart", "exprn_val");
     }
 
     protected void setGraphModule() {

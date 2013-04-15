@@ -8,6 +8,36 @@ public abstract class Microarray extends DatasetInjector {
     protected abstract void setGraphModule();
     protected abstract void setExprPlotPartModule();
 
+    
+    protected void setProfileSetFilterPattern() {
+        setPropValue("profileSetFilterPattern", "%");
+    }
+
+    /***
+     *   list of key value pairs
+     *      key1=value1;key2=value2
+     *
+     *    @rv String like 'key1', 'value1', 'key2', 'value2'
+     */
+    protected static String makeDecodeMappingStrings(String namesMap) {
+        String decode = "";
+
+        if(namesMap.equals("")) {
+            return decode;
+        }
+
+        String[] pairs = namesMap.split(";");
+
+        for(int i = 0; i < pairs.length; i++) {
+            String[] profileMap = pairs[i].split("=");
+
+            decode = decode + "'" + profileMap[0] + "', '" + profileMap[1] + "',\n";
+        }
+
+        return decode;
+    }
+
+
     public void injectTemplates() {
 
         // perl packages disallow some characters in the package name... use this to name the graphs

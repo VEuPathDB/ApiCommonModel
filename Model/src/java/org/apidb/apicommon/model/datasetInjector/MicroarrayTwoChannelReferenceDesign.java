@@ -4,6 +4,9 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class MicroarrayTwoChannelReferenceDesign extends MicroarrayOneChannelAndReferenceDesign {
   
+
+
+
     public void injectTemplates() {
         super.injectTemplates();
 
@@ -11,8 +14,14 @@ public class MicroarrayTwoChannelReferenceDesign extends MicroarrayOneChannelAnd
     }
 
 
+    // FOr Microarray Two Channel Ref Design... we want to pick either the red or green percentile profile
+    protected void setPercentileProfileFilter() {
+        String percentileProfileSetPattern = getPropValue("percentileProfileSetPattern");
+        setPropValue("percentileProfileSetPattern", percentileProfileSetPattern);
+    }
+
     protected void setExprGraphVisiblePart() {
-        setPropValue("exprGraphVisiblePart", "expr_val");
+        setPropValue("exprGraphVisiblePart", "exprn_val");
     }
 
     protected void setGraphModule() {
@@ -22,5 +31,15 @@ public class MicroarrayTwoChannelReferenceDesign extends MicroarrayOneChannelAnd
     protected void setExprPlotPartModule() {
         setPropValue("exprPlotPartModule", "LogRatio");
     }
+
+    public String[][] getPropertiesDeclaration() {
+        String[][] microarrayDeclaration = super.getPropertiesDeclaration();
+        
+        String [][] declaration = {{"percentileProfileSetPattern", "Which profileset (red/green) has the samples. (ie. not the channel w/ the common reference)."},
+        };
+
+        return combinePropertiesDeclarations(microarrayDeclaration, declaration);
+    }
+
 
 }
