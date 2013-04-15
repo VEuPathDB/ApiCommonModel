@@ -21,6 +21,14 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
           setPropValue("edNameParamValue",datasetNamePattern);
       }
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
+
+
+      if(getPropValueAsBoolean("isPhosphoProteomics")) {
+          injectTemplate("proteinExpressionMassSpecPhosphoPBrowseTrack");
+      }
+      else {
+          injectTemplate("proteinExpressionMassSpecPBrowseTrack");      
+      }      
   }
 
   public void addModelReferences() {
@@ -35,6 +43,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       String[][] propertiesDeclaration = {{"species", "metadata for the sample organism, not the aligned organism"},
                                           {"optionalOrganismAbbrev","for cases when sample organism is different from the aligned organism"},
+                                          {"isPhosphoProteomics","boolean to flag phosphoProteomics experiments for PBrowse"},
       };
       return propertiesDeclaration;
   }
