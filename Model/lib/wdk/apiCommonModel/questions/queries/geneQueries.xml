@@ -4527,71 +4527,6 @@ where one.source_id = two.source_id
     </processQuery>
 
 
-   <sqlQuery name="GenesByGenericDiffExp" includeProjects="PlasmoDB,GiardiaDB" 
-              isCacheable="true" doNotTest="true">
-
-    
-
-      <paramRef ref="geneParams.profileset_generic"/>
-      <paramRef ref="geneParams.regulated_dir"/>
-      <paramRef ref="geneParams.samples_direct_comp_generic"/>
-      <paramRef ref="geneParams.fold_difference" />
-      <paramRef ref="geneParams.protein_coding_only"/>
-      
-      <column name="project_id"/>
-      <column name="source_id"/>
-      <column name="fold_difference"/>
-      <column name="module" />
-
-      <sqlParamValue name="isLogged">1</sqlParamValue>
-      <sqlParamValue name="shift">0</sqlParamValue>
-   
-  
-      <sql>
-      <![CDATA[
-      select distinct ga.source_id, 
-             '@PROJECT_ID@' as project_id,
-             round(expression.fold_difference,2) as fold_difference,
-             expression.module
-      from (select p.source_id, 
-                    CASE WHEN &&isLogged&& = 1
-                         THEN power(2, pe.value)
-                         WHEN &&isLogged&& = 0
-                         THEN pe.value + &&shift&&
-                    END  as fold_difference,
-					pgd.module
-             from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe,
-			       apidb.profileset ps, apidbTuning.profilegraphdescrip pgd
-             where pen.profile_element_name_id = $$samples_direct_comp_generic$$
-               and p.profile_set_id = pen.profile_set_id
-               and pe.profile_id = p.profile_id
-               and pe.element_order = pen.element_order
-			   and ps.profile_set_id = p.profile_set_id
-               and ps.name = pgd.profile_name (+)) expression, 
-           ApidbTuning.GeneAttributes ga, apidb.profile p
-      where ga.source_id = expression.source_id
-        and p.profile_set_id = $$profileset_generic$$
-        and ga.na_feature_id = p.subject_row_id
-        and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-        and $$regulated_dir$$ (expression.fold_difference)  >= $$fold_difference$$
-          
-      ]]>
-      </sql>
-
-    </sqlQuery>
-    <processQuery name="GenesByGenericDiffExp" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
-      <paramRef ref="geneParams.profileset_generic"/>
-      <paramRef ref="geneParams.regulated_dir"/>
-      <paramRef ref="geneParams.samples_direct_comp_generic" />
-      <paramRef ref="geneParams.fold_difference" />
-      <paramRef ref="geneParams.protein_coding_only"/>
-
-        <wsColumn name="project_id" width="20" wsName="project_id"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="fold_difference" wsName="fold_difference"/>
-        <wsColumn name="module" wsName="module"/>
-    </processQuery>
 
     <sqlQuery name="GenesByTimeSeriesFoldChangeTbrucei" includeProjects="TriTrypDB" 
               isCacheable="true">
@@ -6791,11 +6726,53 @@ select one.source_id, '@PROJECT_ID@' as project_id,
 
 
 
+   <sqlQuery name="GenesByDirectComparisonGeneric" includeProjects="PlasmoDB,GiardiaDB" 
+              isCacheable="true" doNotTest="true">
+      <paramRef ref="geneParams.regulated_dir"/>
+      <paramRef ref="geneParams.samples_direct_comp_generic"/>
+      <paramRef ref="geneParams.fold_difference" />
+      <paramRef ref="geneParams.protein_coding_only"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="fold_difference"/>
+
+      <sql>
+      <![CDATA[
+      select ga.source_id, 
+             '@PROJECT_ID@' as project_id,
+             round(expr.fold_difference, 2) as fold_difference
+      from (select p.subject_row_id as gene_feature_id,
+                   case 
+                     when pe.value < 0 
+                     then -1/nvl(power(2, pe.value), 1) 
+                     else nvl(power(2, pe.value), 1) 
+                   end as fold_difference
+            from apidb.profileelement pe, apidb.profile p
+            where pe.profile_element_name_id = $$samples_direct_comp_generic$$
+            and pe.profile_id = p.profile_id
+           ) expr, apidbtuning.geneattributes ga
+        where ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+        and $$regulated_dir$$ (expr.fold_difference)  >= $$fold_difference$$
+        and ga.na_feature_id = expr.gene_feature_id
+      ]]>
+      </sql>
+
+    </sqlQuery>
+    <processQuery name="GenesByDirectComparisonGeneric" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
+      <paramRef ref="geneParams.regulated_dir"/>
+      <paramRef ref="geneParams.samples_direct_comp_generic" />
+      <paramRef ref="geneParams.fold_difference" />
+      <paramRef ref="geneParams.protein_coding_only"/>
+
+        <wsColumn name="project_id" width="20" wsName="project_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_difference" wsName="fold_difference"/>
+        <wsColumn name="module" wsName="module"/>
+    </processQuery>
 
 
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- GenesByWatersDifferentialExpression -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
 
     <sqlQuery name="GenesByDirectComparisonGenericPage" includeProjects="PlasmoDB,GiardiaDB" doNotTest="true"
           isCacheable='true'>
