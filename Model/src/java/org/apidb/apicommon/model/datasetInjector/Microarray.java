@@ -71,6 +71,7 @@ public abstract class Microarray extends DatasetInjector {
                                    {"graphBottomMargin", "Optionally override the default bottom margin size"},
                                    {"graphType", "one of bar or line"},
                                    {"graphForceXLabelsHorizontal", "true/false.  NOTE:  Only valid when graphType is bar"},
+                                   {"optionalQuestionDescription", "This text will be appended to fold change and percentile questions"},
         };
         
         return declaration;
