@@ -8,7 +8,8 @@ public abstract class Microarray extends DatasetInjector {
     protected abstract void setGraphModule();
     protected abstract void setExprPlotPartModule();
 
-    
+    protected abstract void setGraphYAxisDescription();
+
     protected void setProfileSetFilterPattern() {
         setPropValue("profileSetFilterPattern", "%");
     }
@@ -57,8 +58,39 @@ public abstract class Microarray extends DatasetInjector {
         setExprGraphVisiblePart();
         setGraphModule();
         setExprPlotPartModule();
+        setGraphYAxisDescription();
 
         injectTemplate("microarrayGraphAttributes");
+
+        String exprGraphVp = getPropValue("exprGraphVisiblePart");
+        setPropValue("graphVisibleParts", exprGraphVp + ",percentile");
+
+        // these are universal for injected microarray experiments
+        setPropValue("graphGenePageSection", "expression");
+
+        if(getPropValue("graphPriorityOrderGrouping").equals("")) {
+            setPropValue("graphPriorityOrderGrouping", "1");
+        }
+        
+        // need to make sure there are no single quotes in the descrip
+        String datasetDescrip = getPropValue("datasetDescrip");
+        setPropValue("datasetDescrip", datasetDescrip.replace("'", ""));
+
+        injectTemplate("genePageGraphDescriptions");
+
+        String excludeProfileSets = getPropValue("excludedProfileSets");
+
+
+        String excludedProfileSetsList = "'INTERNAL'";
+        if(!excludeProfileSets.equals("")) {
+            String[] excludedProfileSetsArr = excludeProfileSets.split(";");
+
+            for(int i = 0; i < excludedProfileSetsArr.length; i++) {
+                excludedProfileSetsList = excludedProfileSetsList + ", '" + excludedProfileSetsArr[i] + "'";
+            }
+        }
+
+        setPropValue("excludedProfileSetsList", excludedProfileSetsList);
     }
     
     public String[][] getPropertiesDeclaration() {
@@ -72,7 +104,10 @@ public abstract class Microarray extends DatasetInjector {
                                    {"graphType", "one of bar or line"},
                                    {"graphForceXLabelsHorizontal", "true/false.  NOTE:  Only valid when graphType is bar"},
                                    {"optionalQuestionDescription", "This text will be appended to fold change and percentile questions"},
+                                   {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
+                                   {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
         };
+
         
         return declaration;
   }

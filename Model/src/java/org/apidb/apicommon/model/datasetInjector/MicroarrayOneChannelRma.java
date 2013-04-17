@@ -22,5 +22,10 @@ public class MicroarrayOneChannelRma extends MicroarrayOneChannelAndReferenceDes
         setPropValue("graphModule", "Microarray::RMA");
     }
 
+    protected void setGraphYAxisDescription() {
+        String yAxisDescription = "RMA Normalized Values (log base 2) or expression percentile value.";
+
+        setPropValue("graphYAxisDescription", yAxisDescription);
+    }
 
 }
