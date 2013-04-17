@@ -23,9 +23,10 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
         injectTemplate("microarrayFoldChangeQuestion");
         injectTemplate("microarrayFoldChangeWS");
 
-        injectTemplate("microarrayPercentileWS");
-        injectTemplate("microarrayPercentileQuestion");
-
+        if(getPropValueAsBoolean("hasPercentileData")) {
+            injectTemplate("microarrayPercentileWS");
+            injectTemplate("microarrayPercentileQuestion");
+        }
 
         if(getPropValueAsBoolean("hasSimilarityData")) {
             // TODO:  inject ProfileSimilarity Graph
@@ -46,9 +47,11 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
         }
         addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                         "GenesByMicroarray" + getDatasetName());
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GenesByMicroarray" + getDatasetName() + "Percentile");
 
+        if(getPropValueAsBoolean("hasPercentileData")) {
+            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                            "GenesByMicroarray" + getDatasetName() + "Percentile");
+        }
 
         // TODO inject ProfileSimilarity Reference
     }

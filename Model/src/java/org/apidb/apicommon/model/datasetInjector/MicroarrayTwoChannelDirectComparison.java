@@ -30,8 +30,11 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
             injectTemplate("microarrayFoldChangeWSDirect");
         }
 
-        injectTemplate("microarrayPercentileWSDirect");
-        injectTemplate("microarrayPercentileQuestionDirect");
+
+        if(getPropValueAsBoolean("hasPercentileData")) {
+            injectTemplate("microarrayPercentileWSDirect");
+            injectTemplate("microarrayPercentileQuestionDirect");
+        }
 
         injectTemplate("microarraySimpleTwoChannelGraph");
     }
@@ -53,15 +56,17 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
     public void addModelReferences() {
 
         if(getPropValueAsBoolean("hasPageData")) {
-            //            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-            //                            "GenesByMicroarray" + getDatasetName() + "Confidence");
+            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                            "GenesByMicroarrayDirect" + getDatasetName() + "Confidence");
         } else {
-            //            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-            //                            "GenesByMicroarray" + getDatasetName());
+            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                            "GenesByMicroarrayDirect" + getDatasetName());
         }
 
-            //        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-            //                        "GenesByMicroarray" + getDatasetName() + "Percentile");
+        if(getPropValueAsBoolean("hasPercentileData")) {
+            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                            "GenesByMicroarrayDirect" + getDatasetName() + "Percentile");
+        }
     }
 
 
