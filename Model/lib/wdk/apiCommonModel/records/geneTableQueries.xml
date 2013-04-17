@@ -143,50 +143,31 @@
             <column name="x_axis" />
             <column name="y_axis" />
             <column name="visible_parts" />
-            <column name="attribution" />
-            <column name="dataTable" />
-            <column name="graph_species"/>
             <column name="has_graph_data"/>
-            <column name="profile_name"/>
+            <column name="dataset_name"/>
+            <column name="useDatasetCgiParam"/>
             <sql>
             <![CDATA[
-select distinct * from (
-select gg.source_id,
-       gg.project_id,
+select ga.source_id, 
+       ga.project_id, 
+       ga.organism as gene_organism, 
+       ga.species,
+       d.name as dataset_name, 
        psgene.profile_graph_ids as graph_ids,
-       gg.module,
-       gg.species as graph_species,
-       gg.gene_species as species,
-       gg.gene_organism as organism,
-       gg.mainopen,
-       gg.dataopen,
-       gg.display_name,
-       gg.description,
-       gg.x_axis,
-       gg.y_axis,
-       gg.visible_parts,
-       nvl(gg.attribution, gg.name) as attribution,
-       gg.datatable,
-       gg.profile_name,
-       case when profile_graph_ids is null then 0 else 1 end as has_graph_data,
-       gg.order_num
-from (select distinct ga.source_id, ga.project_id, ga.organism as gene_organism, ga.species as gene_species, pgd.*, d.name
-      from apidbtuning.geneattributes ga, apidbtuning.profilegraphdescrip pgd,
-           Apidb.ProfileSet ps, Sres.ExternalDatabaseRelease edr, Sres.ExternalDatabase d 
-      where pgd.type = 'expression'
-        and ps.external_database_release_id = edr.external_database_release_id
-         and edr.external_database_id = d.external_database_id
-         and ps.name = pgd.profile_name
-      ) gg,
-      (
+       case when psgene.profile_graph_ids is null then 0 else 1 end as has_graph_data,
+       tn.name as graph_organism,
+       'TRUE' as mainOpen,
+       'FALSE' as dataOpen,
+       graph_descrip.*
+from (
       -- foreach profile_set name / source id:  list all genes whose gene group contains data for that profile_set
       --        ***the profile_graph_ids are those which are valid to be graphed for the gene group
       select source_id, 
-             profile_name,
+             external_database_release_id,
              apidb.tab_to_string(set(cast(COLLECT(profile_graph_id) as apidb.varchartab)), ',') as profile_graph_ids             
       from (
       select distinct other_gene.source_id, 
-             ps.name as profile_name,
+             ps.external_database_release_id,
              this_gene.source_id as profile_graph_id
       from dots.gene g, dots.geneinstance this_gi, dots.geneinstance other_gi,
            apidbtuning.geneattributes this_gene, apidbtuning.geneattributes other_gene,
@@ -198,15 +179,39 @@ from (select distinct ga.source_id, ga.project_id, ga.organism as gene_organism,
       and this_gene.source_id = p.source_id
       and p.profile_set_id = ps.profile_set_id
       union
-      select p.source_id, ps.name as profile_name, p.source_id as profile_graph_id
+      select p.source_id, ps.external_database_release_id, p.source_id as profile_graph_id
       from apidb.profileset ps, apidb.profile p where p.profile_set_id = ps.profile_set_id
       )
-      group by source_id, profile_name                                                                                        
-      ) psgene  
-where gg.source_id = psgene.source_id (+)
-and gg.profile_name = psgene.profile_name (+)
-)
-order by order_num
+      group by source_id, external_database_release_id                                                                     
+      ) psgene, apidbtuning.geneattributes ga, apidb.datasource ds, 
+      sres.externalDatabase d, SRES.externaldatabaserelease r, sres.taxonname tn, 
+      apidbtuning.taxonspecies ts, sres.taxonname sn,
+      (
+      select '' as dataset,
+       '' as display_name,
+       '' as description,
+       '' as module,
+       '' as x_axis,
+       '' y_axis,
+       '' as visible_parts,
+       '' as type,
+       1 as order_num
+       from dual
+      -- TEMPLATE_ANCHOR genePageGraphDescriptions
+      ) graph_descrip
+where ga.source_id = psgene.source_id
+and psgene.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and d.name = ds.name
+and ds.taxon_id = tn.taxon_id
+and tn.name_class = 'scientific name'
+and ds.taxon_id = ts.taxon_id
+and ts.species_taxon_id = sn.taxon_id
+and sn.name_class = 'scientific name'
+and ga.species = sn.name
+and graph_descrip.dataset = ds.name
+and graph_descrip.type = 'expression'
+order by graph_descrip.order_num
              ]]>
             </sql>
         </sqlQuery>

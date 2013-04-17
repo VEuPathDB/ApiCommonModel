@@ -30,19 +30,30 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("includeProjects", projectName);
       }
 
+      setPropValue("graphGenePageSection", "expression");
+
 
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
           if(getPropValueAsBoolean("isPairedEnd")) {
               setPropValue("exprMetric", "fpkm");
+              setPropValue("graphYAxisDescription", "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.");
           } else {
               setPropValue("exprMetric", "rpkm");
+              setPropValue("graphYAxisDescription", "Transcript levels of reads per kilobase of exon model per million mapped reads (RPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.");
           }
+
+          String exprMetric = getPropValue("exprMetric");
 
           injectTemplate("rnaSeqAttributeCategory");
 
           // Strand Specific Could be factored into subclasses
           if(getPropValueAsBoolean("isStrandSpecific")) {
+
+              setPropValue("graphModule", "RNASeq::StrandSpecific");
+              setPropValue("graphVisibleParts", exprMetric + "_sense," + exprMetric + "_antisense,percentile_sense,percentile_antisense");
+
+
               setPropValue("exprGraphAttr", datasetName + 
                            "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
               setPropValue("pctGraphAttr", datasetName + 
@@ -54,6 +65,10 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqStrandSpecificGraph");
       
           } else {
+
+              setPropValue("graphModule", "RNASeq::StrandNonSpecific");
+              setPropValue("graphVisibleParts", exprMetric + ",percentile");
+
               setPropValue("exprGraphAttr", datasetName + "_expr_graph");
               setPropValue("pctGraphAttr", datasetName + "_pct_graph");
 
@@ -77,6 +92,14 @@ public class RNASeq extends  DatasetInjector {
 
           injectTemplate("rnaSeqPercentileQuestion");
           injectTemplate("rnaSeqPercentileWS");
+
+
+          if(getPropValue("graphPriorityOrderGrouping").equals("")) {
+              setPropValue("graphPriorityOrderGrouping", "1");
+          }
+
+          injectTemplate("genePageGraphDescriptions");
+         
       }
 
 
@@ -86,6 +109,7 @@ public class RNASeq extends  DatasetInjector {
       if(Boolean.parseBoolean(hasJunctions)) {
           injectTemplate("rnaSeqJunctionsTrack");
       }
+
 
   }
 
@@ -122,7 +146,11 @@ public class RNASeq extends  DatasetInjector {
                                  {"hasJunctions", ""},
                                  {"isStrandSpecific", ""},
                                  {"isAlignedToAnnotatedGenome", ""},
-                                 {"hasMultipleSamplesForFoldChange", ""}
+                                 {"hasMultipleSamplesForFoldChange", ""},
+                                 {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
+                                 {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
+
+
       };
 
     return declaration;
