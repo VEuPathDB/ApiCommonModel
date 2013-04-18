@@ -149,8 +149,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"hasMultipleSamplesForFoldChange", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                  {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
-
-
+                                 {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
       };
 
     return declaration;
