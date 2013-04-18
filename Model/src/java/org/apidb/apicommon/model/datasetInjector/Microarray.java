@@ -44,6 +44,10 @@ public abstract class Microarray extends DatasetInjector {
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 
+        String datasetName = getDatasetName();
+        String[] datasetWords = datasetName.split("_");
+        setPropValue("organismAbbrev", datasetWords[0]);
+
         String projectName = getPropValue("projectName");
 
         if(getPropValueAsBoolean("isEuPathDBSite")) {
