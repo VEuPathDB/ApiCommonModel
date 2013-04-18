@@ -36,10 +36,11 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
     }
 
     protected void setPercentileProfileFilter() {
-        setPropValue("percentileProfileFilter", "%");
+        setPropValue("percentileProfileSetPattern", "%");
     }
 
     public void addModelReferences() {
+        // TODO get model references from superclass??
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
