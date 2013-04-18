@@ -8,7 +8,7 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
         super.injectTemplates();
 
         setPropValue("decodeProfileSet", "");
-        setPropValue("percentileProfileFilter", "%");
+        setPropValue("percentileProfileSetPattern", "%");
 
         injectTemplate("microarrayProfileSetParamQuery");
         injectTemplate("microarrayPctProfileSetParamQuery");
