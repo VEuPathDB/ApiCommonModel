@@ -45,8 +45,7 @@ public abstract class Microarray extends DatasetInjector {
         setGraphDatasetName();
 
         String datasetName = getDatasetName();
-        String[] datasetWords = datasetName.split("_");
-        setPropValue("organismAbbrev", datasetWords[0]);
+        setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
         String projectName = getPropValue("projectName");
 
