@@ -20,9 +20,6 @@ public class SpliceSites extends  DatasetInjector {
       String datasetName = getDatasetName();
       setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
-      String exprMetric = getPropValue("exprMetric");
-
-
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
 
@@ -34,13 +31,15 @@ public class SpliceSites extends  DatasetInjector {
 
       setPropValue("graphModule", "SpliceSites");
 
-          if(getPropValueAsBoolean("isPairedEnd")) {
-              setPropValue("exprMetric", "fpkm");
-              setPropValue("graphYAxisDescription", "");
-          } else {
-              setPropValue("exprMetric", "rpkm");
-              setPropValue("graphYAxisDescription", "");
-          }
+      if(getPropValueAsBoolean("isPairedEnd")) {
+	  setPropValue("exprMetric", "fpkm");
+	  setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
+      } else {
+	  setPropValue("exprMetric", "rpkm");
+	  setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
+      }
+
+      String exprMetric = getPropValue("exprMetric");
       setPropValue("graphVisibleParts", exprMetric + ",percentile");
 
       setPropValue("exprGraphAttr", datasetName + "_expr_graph");
@@ -61,7 +60,12 @@ public class SpliceSites extends  DatasetInjector {
 
       injectTemplate("spliceSitesPctProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
-     
+
+      if(getPropValue("graphPriorityOrderGrouping").equals("")) {
+	  setPropValue("graphPriorityOrderGrouping", "5");
+      }
+
+      injectTemplate("genePageGraphDescriptions") ;    
   }
 
   public void addModelReferences() {
@@ -88,6 +92,7 @@ public class SpliceSites extends  DatasetInjector {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},
                                  {"hasMultipleSamples", "if experiment has just one sample, then NO fold-change or differential Q"},
+                                 {"isPairedEnd", ""},
                                  {"graphColor", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
