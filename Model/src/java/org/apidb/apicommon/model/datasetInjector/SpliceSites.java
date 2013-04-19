@@ -20,6 +20,9 @@ public class SpliceSites extends  DatasetInjector {
 
       setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
+      String exprMetric = getPropValue("exprMetric");
+
+
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
 
@@ -27,6 +30,27 @@ public class SpliceSites extends  DatasetInjector {
           setPropValue("includeProjects", projectName);
       }
 
+      setPropValue("graphGenePageSection", "expression");
+
+      setPropValue("graphModule", "SpliceSites");
+
+          if(getPropValueAsBoolean("isPairedEnd")) {
+              setPropValue("exprMetric", "fpkm");
+              setPropValue("graphYAxisDescription", "");
+          } else {
+              setPropValue("exprMetric", "rpkm");
+              setPropValue("graphYAxisDescription", "");
+          }
+      setPropValue("graphVisibleParts", exprMetric + ",percentile");
+
+      setPropValue("exprGraphAttr", datasetName + "_expr_graph");
+      setPropValue("pctGraphAttr", datasetName + "_pct_graph");
+
+      injectTemplate("spliceSitesAttributeCategory");
+      injectTemplate("spliceSitesExpressionGraphAttributes");
+      injectTemplate("spliceSitesGraph");
+
+  
       if(getPropValueAsBoolean("hasMultipleSamples")) {
 	  injectTemplate("spliceSitesProfileSetParamQuery");
 	  injectTemplate("spliceSitesFoldChangeQuestion");
@@ -63,7 +87,12 @@ public class SpliceSites extends  DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},
-                                 {"hasMultipleSamples", "if experiment has just one sample, then NO fold-change or differential Q"}
+                                 {"hasMultipleSamples", "if experiment has just one sample, then NO fold-change or differential Q"},
+                                 {"graphColor", ""},
+                                 {"graphBottomMarginSize", ""},
+                                 {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
+                                 {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
+                                 {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
       };
 
     return declaration;
