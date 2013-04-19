@@ -63,10 +63,17 @@ public abstract class Microarray extends DatasetInjector {
         setExprPlotPartModule();
         setGraphYAxisDescription();
 
-        injectTemplate("microarrayGraphAttributes");
+        injectTemplate("microarrayGraphAttributesExpression");
+        injectTemplate("microarrayGraphAttributesPercentile");
 
         String exprGraphVp = getPropValue("exprGraphVisiblePart");
-        setPropValue("graphVisibleParts", exprGraphVp + ",percentile");
+
+
+        if(getPropValueAsBoolean("hasPercentileData")) {        
+            setPropValue("graphVisibleParts", exprGraphVp + ",percentile");
+        } else {
+            setPropValue("graphVisibleParts", exprGraphVp);
+        }
 
         // these are universal for injected microarray experiments
         setPropValue("graphGenePageSection", "expression");
