@@ -195,8 +195,11 @@ public abstract class DatasetInjector {
      *   
      */
     protected String getOrganismAbbrevFromDatasetName() {
-        String[] datasetWords = this.datasetName.split("_");
-        return datasetWords[0];
+        if(this.datasetName.equals("")) {
+            return "";
+        }
+
+        return this.datasetName.substring(0, 1).toUpperCase() + "." + this.datasetName.substring(1, 2).toLowerCase() + ".";
     }
 
 
