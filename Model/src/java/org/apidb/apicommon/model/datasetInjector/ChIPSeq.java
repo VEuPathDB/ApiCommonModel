@@ -5,7 +5,8 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class ChIPSeq extends DatasetInjector {
 
   public void injectTemplates() {
-      setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
+      setOrganismAbbrevFromDatasetName();
+      setOrganismAbbrevInternalFromDatasetName();
 
       injectTemplate("chipSeqCoverageTrack");
   }

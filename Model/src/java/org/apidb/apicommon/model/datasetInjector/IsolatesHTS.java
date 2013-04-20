@@ -9,7 +9,8 @@ public class IsolatesHTS extends DatasetInjector {
       String[] datasetWords = datasetName.split("_");
 
 
-      setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
+      setOrganismAbbrevFromDatasetName();
+      setOrganismAbbrevInternalFromDatasetName();
 
       // trim off the prefix and suffix from the experiment name
       String experimentRsrc = datasetName.replaceFirst(datasetWords[0] + "_SNP_", "");

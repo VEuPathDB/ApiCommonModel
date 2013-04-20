@@ -19,8 +19,9 @@ public class RNASeq extends  DatasetInjector {
       String projectName = getPropValue("projectName");
 
       String datasetName = getDatasetName();
-      setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
+      setOrganismAbbrevFromDatasetName();
+      setOrganismAbbrevInternalFromDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");

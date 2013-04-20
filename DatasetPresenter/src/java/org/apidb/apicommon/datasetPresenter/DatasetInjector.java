@@ -204,8 +204,14 @@ public abstract class DatasetInjector {
 
 
     protected void setOrganismAbbrevFromDatasetName() {
+        String organismAbbrev = this.getOrganismAbbrevFromDatasetName();
+        setPropValue("organismAbbrev", organismAbbrev);
+    }
+
+
+    protected void setOrganismAbbrevInternalFromDatasetName() {
         String[] datasetWords = this.datasetName.split("_");
-        setPropValue("organismAbbrev", datasetWords[0]);
+        setPropValue("organismAbbrevInternal", datasetWords[0]);
     }
 
 
