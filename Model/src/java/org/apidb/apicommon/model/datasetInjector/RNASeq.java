@@ -149,6 +149,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                  {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
                                  {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
+                                 {"graphForceXLabelsHorizontal", "should the x axis labels be always horiz"},
       };
 
     return declaration;
