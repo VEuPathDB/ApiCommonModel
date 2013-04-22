@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.CryptoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RTPcrKissinger extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class RTPcrKissinger extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRtPcrFoldChange"); 
@@ -13,11 +10,6 @@ public class RTPcrKissinger extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Kissinger::KissingerRtPcrProfiles"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

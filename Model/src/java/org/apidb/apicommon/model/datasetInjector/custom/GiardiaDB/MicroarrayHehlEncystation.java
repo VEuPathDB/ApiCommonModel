@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.GiardiaDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class MicroarrayHehlEncystation extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class MicroarrayHehlEncystation extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GiardiaGenesByExpressionPercentileProfileTwo"); 
@@ -14,11 +11,6 @@ public class MicroarrayHehlEncystation extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Hehl::Encystation"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

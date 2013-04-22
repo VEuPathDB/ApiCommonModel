@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqTaylorPopGen extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class RNASeqTaylorPopGen extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "NeurosporaCrassaOR74A::RnaSeqPopGen"); 
@@ -13,11 +10,6 @@ public class RNASeqTaylorPopGen extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRnaSeqPercentileNcraPopGen"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

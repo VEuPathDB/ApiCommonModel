@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PiroplasmaDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class MicroarrayLauVirulence extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class MicroarrayLauVirulence extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Lau::Bbovis"); 
@@ -14,11 +11,6 @@ public class MicroarrayLauVirulence extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByLauBbovisPaGE"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

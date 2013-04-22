@@ -1,20 +1,11 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqSibleyBrady extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class RNASeqSibleyBrady extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesBySibleyRNASeqBradyzoitePct"); 
-  }
-
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
   }
 
 

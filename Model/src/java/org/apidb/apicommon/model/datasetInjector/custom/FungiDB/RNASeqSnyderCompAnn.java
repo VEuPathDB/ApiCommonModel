@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqSnyderCompAnn extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class RNASeqSnyderCompAnn extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CandidaAlbicansSC5314::RnaSeqCompAnn"); 
@@ -13,11 +10,6 @@ public class RNASeqSnyderCompAnn extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRnaSeqPercentileCalbCompAnn"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class MicroarrayRoosBrady extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class MicroarrayRoosBrady extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTimeSeriesFoldChangeBradyRoos"); 
@@ -18,12 +15,6 @@ public class MicroarrayRoosBrady extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByDifferentialMeanExpressionPct"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Dzierszinski::TzBz"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Roos::TzBz"); 
-  }
-
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
   }
 
 

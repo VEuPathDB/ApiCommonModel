@@ -1,11 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class MicroarrayWhiteCellCycle extends DatasetInjector {
+public class MicroarrayWhiteCellCycle extends CusomGenePageExpressionGraphs {
 
-  public void injectTemplates() {
-  }
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "White::CellCycle"); 
@@ -14,11 +12,6 @@ public class MicroarrayWhiteCellCycle extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByToxoProfileSimilarity"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

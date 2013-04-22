@@ -1,11 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqBoothroydOocyst extends DatasetInjector {
+public class RNASeqBoothroydOocyst extends CusomGenePageExpressionGraphs {
 
-  public void injectTemplates() {
-  }
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystFC"); 
@@ -13,11 +11,6 @@ public class RNASeqBoothroydOocyst extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystPValue"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }
