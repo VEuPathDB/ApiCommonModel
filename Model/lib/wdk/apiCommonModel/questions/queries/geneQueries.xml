@@ -6731,24 +6731,36 @@ select one.source_id, '@PROJECT_ID@' as project_id,
       <column name="project_id"/>
       <column name="source_id"/>
       <column name="fold_difference"/>
+
+      <sqlParamValue name="isLogged" includeProjects="TriTrypDB,PlasmoDB,ToxoDB">1</sqlParamValue>
+      <sqlParamValue name="shift" includeProjects="TriTrypDB,PlasmoDB,ToxoDB">0.0001</sqlParamValue>
       <sql>
       <![CDATA[
+
       select ga.source_id, 
              '@PROJECT_ID@' as project_id,
-             round(expr.fold_difference, 2) as fold_difference
-      from (select p.subject_row_id as gene_feature_id,
-                   case 
-                     when pe.value < 0 
-                     then -1/nvl(power(2, pe.value), 1) 
-                     else nvl(power(2, pe.value), 1) 
-                   end as fold_difference
+             round(max(expr.fold_difference), 2) as fold_difference
+      from (
+            select p.subject_row_id as gene_feature_id,
+                          case 
+                            when &&isLogged&& != 1 
+                            then pe.value + &&shift&&
+                            else (
+                                 case 
+                                   when pe.value < 0
+                                   then -1/nvl(power(2, pe.value), 1)
+                                   else  nvl(power(2, pe.value), 1) 
+                                   end
+                                ) 
+                            end as fold_difference
             from apidb.profileelement pe, apidb.profile p
             where pe.profile_element_name_id = $$samples_direct_comp_generic$$
             and pe.profile_id = p.profile_id
            ) expr, apidbtuning.geneattributes ga
         where ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-        and $$regulated_dir$$ (expr.fold_difference)  >= $$fold_difference$$
+        and $$regulated_dir$$ (expr.fold_difference)  >=  $$fold_difference$$
         and ga.na_feature_id = expr.gene_feature_id
+        group by ga.source_id
       ]]>
       </sql>
 
