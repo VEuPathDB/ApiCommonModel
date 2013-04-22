@@ -98,6 +98,7 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphPriorityOrderGrouping", "1");
           }
 
+          setPropValue("isGraphCustom", "false");
           injectTemplate("genePageGraphDescriptions");
          
       }

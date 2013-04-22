@@ -86,6 +86,7 @@ public abstract class Microarray extends DatasetInjector {
         String datasetDescrip = getPropValue("datasetDescrip");
         setPropValue("datasetDescrip", datasetDescrip.replace("'", ""));
 
+        setPropValue("isGraphCustom", "false");
         injectTemplate("genePageGraphDescriptions");
 
         String excludeProfileSets = getPropValue("excludedProfileSets");

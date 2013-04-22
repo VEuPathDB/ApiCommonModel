@@ -67,6 +67,7 @@ public class SpliceSites extends  DatasetInjector {
 	  setPropValue("graphPriorityOrderGrouping", "5");
       }
 
+      setPropValue("isGraphCustom", "false");
       injectTemplate("genePageGraphDescriptions") ;    
   }
 
