@@ -6,6 +6,17 @@ public abstract class CusomGenePageExpressionGraphs extends DatasetInjector {
 
   public void injectTemplates() {
 
+      String description = getPropValue("datasetDescrip");
+      setPropValue("datasetDescrip", description.replace("'", ""));
+
+      
+      String xAxis = getPropValue("graphXAxisSamplesDescription");
+      setPropValue("graphXAxisSamplesDescription", xAxis.replace("'", ""));
+
+      String yAxis = getPropValue("graphYAxisDescription");
+      setPropValue("graphYAxisDescription", yAxis.replace("'", ""));
+
+
       setPropValue("isGraphCustom", "true");
       injectTemplate("genePageGraphDescriptions");
   }

@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class MicroarrayDeRisiTimeSeries extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class MicroarrayDeRisiTimeSeries extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "OverlayIRBC::Ver2"); 
@@ -13,12 +10,6 @@ public class MicroarrayDeRisiTimeSeries extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExpressionTiming"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProfileSimilarity"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMicroarrayPercentileDerisi"); 
-  }
-
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
   }
 
 

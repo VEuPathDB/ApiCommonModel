@@ -1,11 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class MicroarrayWinzelerGametocyte extends DatasetInjector {
+public class MicroarrayWinzelerGametocyte extends CusomGenePageExpressionGraphs {
 
-  public void injectTemplates() {
-  }
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "WbcGametocytes::Ver2"); 
@@ -13,11 +11,6 @@ public class MicroarrayWinzelerGametocyte extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByGametocyteExprFoldChange"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }

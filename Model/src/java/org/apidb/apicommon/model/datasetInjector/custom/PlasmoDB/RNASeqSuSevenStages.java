@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqSuSevenStages extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class RNASeqSuSevenStages extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Su::PfSevenStages"); 
@@ -14,13 +11,6 @@ public class RNASeqSuSevenStages extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqSuSevenStagesPercentile"); 
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "gbrowse_track", "pfal3D7_Su_seven_stages_rnaSeq_RSRC_RNASeqCoverage"); 
   }
-
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
-
 
 }
 

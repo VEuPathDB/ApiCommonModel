@@ -1,11 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqNewboldBloodStage extends DatasetInjector {
-
-  public void injectTemplates() {
-  }
+public class RNASeqNewboldBloodStage extends CusomGenePageExpressionGraphs {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Newbold::IRBC"); 
@@ -13,12 +10,5 @@ public class RNASeqNewboldBloodStage extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqExpressionTimingPValue"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqPercentileNewbold"); 
   }
-
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
-
 
 }
