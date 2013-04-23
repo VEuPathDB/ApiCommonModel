@@ -38,7 +38,7 @@
          <columnAttribute name="dataset_id" internal="true" inReportMaker="false"/>
          <columnAttribute name="dataset_name" internal="true" inReportMaker="false"/>
          <columnAttribute name="dataset_name_pattern" internal="true" inReportMaker="false"/>
-         <columnAttribute name="display_name" internal="true"/>
+         <columnAttribute name="display_name_piece" internal="true"/>
          <columnAttribute name="short_display_name" internal="true"/>
          <columnAttribute name="description"/>
          <columnAttribute name="summary"/>
@@ -63,8 +63,27 @@
 
        <attributeQueryRef ref="DatasetAttributes.Organisms">
          <columnAttribute name="organisms"/>
-         <columnAttribute name="organism_count"/>
+         <columnAttribute name="organism_prefix"/>
        </attributeQueryRef>
+
+
+
+
+            <textAttribute name="display_name" displayName="Display Name" help="Dataset Display Name">
+             <display>
+                  <![CDATA[
+                           <i>$$organism_prefix</i> $$display_name_piece$$
+                  ]]>
+              </display>
+              <text>
+                  <![CDATA[
+                           $$organism_prefix$$ $$display_name_piece$$
+                  ]]>
+              </text>
+            </textAttribute>
+
+
+
      <!-- =================================================================== -->
      <!-- Tables ++++++++-->
      <!-- =================================================================== -->
@@ -251,7 +270,7 @@ select count(*) from apidbtuning.datasetpresenter
 	    <column name="dataset_id"/>
 		<column name="dataset_name"/>
         <column name="dataset_name_pattern"/>
-		<column name="display_name"/>
+		<column name="display_name_piece"/>
 		<column name="short_display_name"/>
 		<column name="description"/>
 		<column name="summary"/>
@@ -268,7 +287,7 @@ select count(*) from apidbtuning.datasetpresenter
 			            select dsp.dataset_presenter_id as dataset_id,
                    dsp.name as dataset_name,
                    dsp.dataset_name_pattern,
-                   dsp.display_name,
+                   dsp.display_name as display_name_piece,
                    dsp.short_display_name,
                    dsp.description,
                    nvl(dsp.summary, dsp.description) as summary,
@@ -315,17 +334,25 @@ select count(*) from apidbtuning.datasetpresenter
       <sqlQuery name="Organisms"  isCacheable="false">
         <column name="dataset_id"/>
         <column name="organisms"/>
-        <column name="organism_count"/>
+        <column name="organism_prefix"/>
             <sql>
             <![CDATA[
-            select dsp.dataset_presenter_id as dataset_id,
-                   listagg(tn.name, ', ') within group (order by tn.name) as organisms,
-                   count(*) as organism_count
+           select dataset_id,
+                  case when organism_count = 1 and organisms is not null
+                       then                 '<i>' || SUBSTR(organisms, 1, 1) || '. ' || 
+                      SUBSTR(organisms, INSTR(organisms, ' ', 1, 1) +1) || '</i>'
+                       else '' end as organism_prefix,
+                       organisms
+           from (
+           select dsp.dataset_presenter_id as dataset_id,
+                     listagg(tn.name, ', ') within group (order by tn.name) as organisms,
+                     count(*) as organism_count
             from apidbtuning.datasetpresenter dsp,apidbtuning.datasetnametaxon dsnt, sres.taxonname tn
             where dsp.dataset_presenter_id = dsnt.dataset_presenter_id (+)
             and dsnt.taxon_id = tn.taxon_id (+)
             and tn.name_class (+) = 'scientific name'
             group by dsp.dataset_presenter_id
+            )
             ]]>
             </sql>
       </sqlQuery>
