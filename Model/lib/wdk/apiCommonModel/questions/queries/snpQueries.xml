@@ -892,6 +892,35 @@ WHERE snp.na_feature_id = variants.parent_id
         <column name="set_b_count"/>
         <sql>
             <![CDATA[
+SELECT sf.source_id, '@PROJECT_ID@' as project_id, 
+       set_a_allele, set_b_allele, set_a_count, set_b_count
+FROM   dots.snpfeature sf,
+       ( SELECT seta.parent_id,
+                seta.allele as set_a_allele,
+                setb.allele as set_b_allele,
+                seta.total as set_a_count, 
+                setb.total as set_b_count
+         FROM  ( SELECT isnp.parent_id,isnp.allele,count(*) as total
+                 FROM   dots.seqvariation isnp
+                 WHERE  isnp.strain in ( $$hts_isolate_set_a$$ )
+                    AND isnp.allele is not null
+                 GROUP BY isnp.parent_id,isnp.allele
+                 HAVING count(*) >= ( SELECT count(*) 
+                                      FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_a$$ ) ))  *  $$set_a_percent$$ / 100
+               ) seta,
+               ( SELECT isnp.parent_id,isnp.allele, count(*) as total
+                 FROM   dots.seqvariation isnp
+                 WHERE isnp.strain in ($$hts_isolate_set_b$$)
+                   AND isnp.allele is not null
+                 GROUP BY isnp.parent_id,isnp.allele
+                 HAVING count(*) >= (SELECT count(*) 
+                                     FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_b$$ ) ))  *  $$set_b_percent$$ / 100
+               )  setb
+         WHERE seta.parent_id = setb.parent_id
+           AND seta.allele != setb.allele
+       ) iso
+WHERE iso.parent_id = sf.na_feature_id
+/**
 With
 strain_group_a AS
   (select parent_id as snp_na_feature_id, source_id, allele, count(*) as allele_count
@@ -928,6 +957,7 @@ FROM
        AND b.allele_count/tot.total_allele_count >  $$set_b_percent$$ / 100 ) setb
 WHERE seta.snp_na_feature_id = setb.snp_na_feature_id
   AND seta.allele != setb.allele
+*/
            ]]>
        </sql>
     </sqlQuery>
