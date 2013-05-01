@@ -53,11 +53,15 @@ $blastSql =~ s/\\'/'/;
 my %projectVersions;
 
 foreach(@{$apiCommonModel->{constant}}) {
-  if ($_->{name} eq "releaseVersion") {
+  if ($_->{name} eq "buildNumber") {
     my $version = $_->{content};
-    my $projectId = $_->{includeProjects};
 
-    $projectVersions{$projectId} = $version;
+    #  more than one project may be assigned the same buildNumber
+    my @projects = split(',', $_->{includeProjects});
+    foreach my $p (@projects) {
+	$projectVersions{$p} = $version;
+    }
+
   }
 }
 
@@ -82,7 +86,7 @@ while(my ($projectId) = $sh->fetchrow_array()) {
 
     my $internal = $blastType->{internal}->[0];
     my $extension = ".xnd";
-    if($internal eq 'Proteins' || $internal eq 'ORF') {
+    if($internal eq 'AnnotatedProteins' || $internal eq 'ORFs_AA') {
       $extension = ".xpd";
     }
 
@@ -94,9 +98,18 @@ while(my ($projectId) = $sh->fetchrow_array()) {
 
     while(my ($parent, $organism, $file) = $blastSh->fetchrow_array()) {
       next if($file eq '-1');
-      my $basename = basename($file);
 
-      my $filename = "$apiSiteFilesDir/webServices/$projectId/release-$version/blast/$basename" . $internal . $extension;
+
+      # example $file maybe: :
+      #  @WEBSERVICEMIRROR@/ToxoDB/build-%%buildNumber%%/Eimeriidae/blast/
+
+      my $basename = basename($file);     # name of file ("blast" for eg)
+      my $dirname = dirname ($file);
+      my $outerDir = basename($dirname);  # dir of the file  ("Eimeriidae" for eg)
+
+      print  ">> outerDir: $outerDir AND base File: $basename AND $internal\n\n";  #BB
+
+      my $filename = "$apiSiteFilesDir/webServices/$projectId/build-$version/$outerDir/$basename/" . $internal . $extension;
       unless(-e $filename) {
         print "ERROR:  Expected file not found:  $filename\n";
         $failures++;
