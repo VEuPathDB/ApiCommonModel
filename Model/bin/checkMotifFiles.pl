@@ -11,7 +11,6 @@ use Getopt::Long;
 
 use Data::Dumper;
 
-#/eupath/data/apiSiteFiles/webServices/TriTrypDB/release-3.1/motif/
 
 my ($help, $apiSiteFilesDir, $eupathDatabase);
 
@@ -56,11 +55,15 @@ $annotatedProteinsSql =~ s/\\'/'/;
 
 my %projectVersions;
 foreach(@{$apiCommonModel->{constant}}) {
-  if ($_->{name} eq "releaseVersion") {
+  if ($_->{name} eq "buildNumber") {
     my $version = $_->{content};
-    my $projectId = $_->{includeProjects};
 
-    $projectVersions{$projectId} = $version;
+    #  more than one project may be assigned the same buildNumber
+    my @projects = split(',', $_->{includeProjects});
+    foreach my $p (@projects) {
+	$projectVersions{$p} = $version;
+    }
+
   }
 }
 
@@ -88,7 +91,12 @@ while(my ($projectId) = $sh->fetchrow_array()) {
 
     while(my ($parent, $organism, $file) = $motifSh->fetchrow_array()) {
       next if($file eq '-1');
-      my $filename = "$apiSiteFilesDir/webServices/$projectId/release-$version/motif/$file";
+
+      # example $file value:
+      #  @WEBSERVICEMIRROR@/GiardiaDB/build-%%buildNumber%%/GintestinalisAssemblageB/motif/ORFs_AA.fasta
+
+      $file =~ s/\@WEBSERVICEMIRROR\@(.)*buildNumber\%\%\///g;
+      my $filename = "$apiSiteFilesDir/webServices/$projectId/build-$version/$file";
 
       unless(-e $filename) {
         print "ERROR:  Expected file not found:  $filename\n";
