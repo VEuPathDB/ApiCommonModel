@@ -25,7 +25,7 @@ public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  
         //  add all references from ProteinExpressionMassSpec first
         super.addModelReferences();
         addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Urbaniak::CompProtQuantMS"); 
-
+        addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByQuantProtDirecttbruTREU927_quantitativeMassSpec_Urbaniak_CompProt_RSRC");
 
   }
 
