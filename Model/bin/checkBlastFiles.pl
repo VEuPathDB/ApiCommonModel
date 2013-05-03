@@ -107,8 +107,6 @@ while(my ($projectId) = $sh->fetchrow_array()) {
       my $dirname = dirname ($file);
       my $outerDir = basename($dirname);  # dir of the file  ("Eimeriidae" for eg)
 
-      print  ">> outerDir: $outerDir AND base File: $basename AND $internal\n\n";  #BB
-
       my $filename = "$apiSiteFilesDir/webServices/$projectId/build-$version/$outerDir/$basename/" . $internal . $extension;
       unless(-e $filename) {
         print "ERROR:  Expected file not found:  $filename\n";
