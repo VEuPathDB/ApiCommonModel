@@ -5,6 +5,17 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class MassSpecLlinasPhMetabolites extends DatasetInjector {
 
   public void injectTemplates() {
+      String description = getPropValue("datasetDescrip");
+      setPropValue("datasetDescrip", description.replace("'", ""));
+      
+      String xAxis = getPropValue("graphXAxisSamplesDescription");
+      setPropValue("graphXAxisSamplesDescription", xAxis.replace("'", ""));
+
+      String yAxis = getPropValue("graphYAxisDescription");
+      setPropValue("graphYAxisDescription", yAxis.replace("'", ""));
+
+      setPropValue("isGraphCustom", "true");
+      injectTemplate("compoundPageGraphDescriptions");
   }
 
   public void addModelReferences() {
@@ -14,7 +25,14 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
 
   // second column is for documentation
   public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
+      //String[][] propertiesDeclaration = {};
+      String[][] propertiesDeclaration = {    {"graphModule", ""},
+                                              {"graphXAxisSamplesDescription", ""},
+                                              {"graphYAxisDescription", ""},
+                                              {"graphVisibleParts", ""},
+                                              {"graphPriorityOrderGrouping", ""},
+      };
+
     return propertiesDeclaration;
   }
 
