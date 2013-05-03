@@ -123,15 +123,15 @@ public class RNASeq extends  DatasetInjector {
 
               if(getPropValueAsBoolean("hasFishersExactTestData")) {
                   addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                                  "GenesByRNASeq" + getDatasetName() + "PValue");
+                                  "GeneQuestions.GenesByRNASeq" + getDatasetName() + "PValue");
               }
 
               addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                              "GenesByRNASeq" + getDatasetName());
+                              "GeneQuestions.GenesByRNASeq" + getDatasetName());
 
           }
           addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                          "GenesByRNASeq" + getDatasetName() + "Percentile");
+                          "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
       }
   }
   

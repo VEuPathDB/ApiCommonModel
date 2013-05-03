@@ -44,14 +44,14 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GenesByMicroarray" + getDatasetName() + "Confidence");
+                            "GeneQuestions.GenesByMicroarray" + getDatasetName() + "Confidence");
         }
         addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GenesByMicroarray" + getDatasetName());
+                        "GeneQuestions.GenesByMicroarray" + getDatasetName());
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GenesByMicroarray" + getDatasetName() + "Percentile");
+                            "GeneQuestions.GenesByMicroarray" + getDatasetName() + "Percentile");
         }
 
         // TODO inject ProfileSimilarity Reference

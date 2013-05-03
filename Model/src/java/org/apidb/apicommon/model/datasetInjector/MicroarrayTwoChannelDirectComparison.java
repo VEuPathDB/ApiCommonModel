@@ -57,15 +57,15 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GenesByMicroarrayDirect" + getDatasetName() + "Confidence");
+                            "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName() + "Confidence");
         } else {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GenesByMicroarrayDirect" + getDatasetName());
+                            "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName());
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GenesByMicroarrayDirect" + getDatasetName() + "Percentile");
+                            "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName() + "Percentile");
         }
     }
 
