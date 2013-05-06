@@ -6,6 +6,9 @@ public class RNASeqTaylorComparativeTranscriptomicsCpos extends CusomGenePageExp
 
 
   public void addModelReferences() {
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CposC735::CposComTranRnaSeq"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRnaSeqFoldChangeCposComTran"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRnaSeqPercentileCposComTran"); 
   }
 
 

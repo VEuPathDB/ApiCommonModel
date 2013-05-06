@@ -6,6 +6,9 @@ public class RNASeqTaylorComparativeTranscriptomics extends CusomGenePageExpress
 
 
   public void addModelReferences() {
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CimmRS::CimmComTranRnaSeq"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRnaSeqFoldChangeCimmComTran"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRnaSeqPercentileCimmComTran"); 
   }
 
 
