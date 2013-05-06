@@ -76,15 +76,15 @@ public class SpliceSites extends  DatasetInjector {
       // TODO: Add reference for Graph
       if(getPropValueAsBoolean("hasMultipleSamples")) {
 	  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-			  "GenesBySpliceSites" + getDatasetName() );
+			  "GeneQuestions.GenesBySpliceSites" + getDatasetName() );
 
 
 	  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-			  "GenesByDifferentialSpliceSites" + getDatasetName());
+			  "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
       }
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-		      "GenesBySpliceSites" + getDatasetName() + "Percentile");
+		      "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
 
   }
 
