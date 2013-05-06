@@ -57,7 +57,7 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName() + "Confidence");
+                            "GeneQuestions.GenesByMicroarrayDirectWithConfidence" + getDatasetName());
         } else {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                             "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName());
