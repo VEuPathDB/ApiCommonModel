@@ -199,6 +199,11 @@ public abstract class DatasetInjector {
             return "";
         }
 
+        // special case for Giardia Assemblage
+        if(this.datasetName.substring(0, 4).equals("gass")) {
+            return "G.l.";
+        }
+
         return this.datasetName.substring(0, 1).toUpperCase() + "." + this.datasetName.substring(1, 2).toLowerCase() + ".";
     }
 
