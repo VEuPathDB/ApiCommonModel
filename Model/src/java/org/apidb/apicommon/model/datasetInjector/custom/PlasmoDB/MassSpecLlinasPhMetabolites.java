@@ -5,7 +5,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class MassSpecLlinasPhMetabolites extends DatasetInjector {
 
   public void injectTemplates() {
-      String description = getPropValue("datasetDescrip");
+
+      String description = getPropValue("summary");
+      if (description.equals("")) {
+	  description = getPropValue("datasetDescrip");
+      } 
       setPropValue("datasetDescrip", description.replace("'", ""));
       
       String xAxis = getPropValue("graphXAxisSamplesDescription");
