@@ -100,6 +100,7 @@ public class SpliceSites extends  DatasetInjector {
                                  {"graphBottomMarginSize", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                  {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
+                                 {"graphForceXLabelsHorizontal", "should the x axis labels be always horiz"},
                                  {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
       };
 
