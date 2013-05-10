@@ -439,7 +439,7 @@ public class DatasetPresenterSetLoader {
     stmt.setInt(1, datasetPresenterId);
     stmt.setString(2, ref.getRecordClassName());
     stmt.setString(3, ref.getTargetType());
-    stmt.setString(4, ref.getTargetName());
+    stmt.setString(4, ref.getTargetName().replace(":", ""));
     stmt.execute();
   }
 
