@@ -199,10 +199,18 @@ public abstract class DatasetInjector {
             return "";
         }
 
-        // special case for Giardia Assemblage
+        // These conditions are a band-aid until we can read the organism xml file in EUPathDatasets
         if(this.datasetName.substring(0, 4).equals("gass")) {
             return "G.l.";
         }
+
+        if(this.datasetName.substring(0, 10).equals("PhyraPr102")) {
+            return "P.r.";
+        }
+
+
+
+
 
         return this.datasetName.substring(0, 1).toUpperCase() + "." + this.datasetName.substring(1, 2).toLowerCase() + ".";
     }
