@@ -204,8 +204,12 @@ public abstract class DatasetInjector {
             return "G.l.";
         }
 
-        if(this.datasetName.substring(0, 10).equals("PhyraPr102")) {
+        if(this.datasetName.substring(0, 5).equals("Phyra")) {
             return "P.r.";
+        }
+
+        if(this.datasetName.substring(0, 5).equals("Hyaar")) {
+            return "H.a.";
         }
 
 
