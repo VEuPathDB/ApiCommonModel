@@ -5,6 +5,14 @@ import org.apidb.apicommon.model.datasetInjector.ProteinExpressionMassSpec;
 public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  {
 
   public void injectTemplates() {
+      //inject all the templates in ProteinExpressionMassSpec first
+      super.injectTemplates();
+      
+      //if a the graph has a different dataset name, use that name for the custom graph
+      String graphDatasetName = getPropValue("graphDatasetName");
+      if(!graphDatasetName.equals("")) {
+          setPropValue("datasetName", graphDatasetName.replace("'", ""));
+      }
 
       String description = getPropValue("datasetDescrip");
       setPropValue("datasetDescrip", description.replace("'", ""));
@@ -33,7 +41,8 @@ public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  
   public String[][] getPropertiesDeclaration() {
 
       String[][] massSpecDeclaration = super.getPropertiesDeclaration();
-      String[][] declaration = {    {"graphModule", ""},
+      String[][] declaration = {    {"graphDatasetName", "This param allows for a different dataset name to be used for the graph"},
+                                    {"graphModule", ""},
                                     {"graphXAxisSamplesDescription", ""},
                                     {"graphYAxisDescription", ""},
                                     {"graphVisibleParts", ""},
