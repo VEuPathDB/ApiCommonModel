@@ -28,6 +28,9 @@ public class AnnotatedGenome extends DatasetInjector {
 
     addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolatesBySimilarity");
 
+    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "attribute", "overview");
+    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansBySourceId");
+    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
   }
 
   // second column is for documentation
