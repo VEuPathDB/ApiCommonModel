@@ -38,6 +38,10 @@ public abstract class Microarray extends DatasetInjector {
         return decode;
     }
 
+  public void addModelReferences() {
+      setGraphModule();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+  }
 
     public void injectTemplates() {
 

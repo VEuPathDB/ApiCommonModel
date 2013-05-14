@@ -54,6 +54,7 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
     }
 
     public void addModelReferences() {
+	super.addModelReferences();
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",

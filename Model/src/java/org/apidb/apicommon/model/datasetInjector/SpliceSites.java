@@ -31,7 +31,7 @@ public class SpliceSites extends  DatasetInjector {
 
       setPropValue("graphGenePageSection", "expression");
 
-      setPropValue("graphModule", "SpliceSites");
+      setGraphModule();
 
       if(getPropValueAsBoolean("isPairedEnd")) {
 	  setPropValue("exprMetric", "fpkm");
@@ -71,9 +71,16 @@ public class SpliceSites extends  DatasetInjector {
       injectTemplate("genePageGraphDescriptions") ;    
   }
 
-  public void addModelReferences() {
 
-      // TODO: Add reference for Graph
+    protected void setGraphModule() {
+	setPropValue("graphModule", "SpliceSites");
+    }
+
+
+  public void addModelReferences() {
+      setGraphModule();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+
       if(getPropValueAsBoolean("hasMultipleSamples")) {
 	  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
 			  "GeneQuestions.GenesBySpliceSites" + getDatasetName() );

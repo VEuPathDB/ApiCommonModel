@@ -40,7 +40,7 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
     }
 
     public void addModelReferences() {
-        // TODO get model references from superclass??
+	super.addModelReferences();
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",

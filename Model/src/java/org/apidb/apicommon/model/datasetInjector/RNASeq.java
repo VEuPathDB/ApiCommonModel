@@ -111,13 +111,18 @@ public class RNASeq extends  DatasetInjector {
           injectTemplate("rnaSeqJunctionsTrack");
       }
 
-
   }
+
 
   public void addModelReferences() {
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-          // TODO: Add reference for Graph
+          if(getPropValueAsBoolean("isStrandSpecific")) {
+              setPropValue("graphModule", "RNASeq::StrandSpecific");
+          } else {
+              setPropValue("graphModule", "RNASeq::StrandNonSpecific");
+	  }
+	  addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
           if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
 
