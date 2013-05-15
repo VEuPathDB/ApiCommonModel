@@ -255,4 +255,20 @@ public abstract class DatasetInjector {
     
 
 
+    protected void setShortAttribution() {
+      String shortAttribution = getPropValue("shortAttribution");
+
+      if(shortAttribution == null) {
+          Contact primaryContact = getPrimaryContact();
+
+          String contactName = primaryContact.getName();
+          int lastSpace = contactName.lastIndexOf(" ");
+
+          setPropValue("shortAttribution", "(" + contactName.substring(lastSpace + 1) + ")");
+      } 
+      else {
+          setPropValue("shortAttribution", "(" + shortAttribution + ")");
+      }
+    }
+
 }
