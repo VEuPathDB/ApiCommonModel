@@ -145,6 +145,14 @@ public class TemplatesInjector {
   private static Options declareOptions() {
     Options options = new Options();
 
+
+    CliUtil.addOption(
+        options,
+        "contactsXmlFile",
+        "an XML file containing contacts (that are referenced in the presenters files)",
+        true, true);
+
+
     CliUtil.addOption(options, "templatesDir",
         "a directory containing one or more template (.dst) files", true, true);
 
@@ -167,7 +175,7 @@ public class TemplatesInjector {
     // parse command line
     Options options = declareOptions();
     String cmdlineSyntax = cmdName
-        + " -templatesDir templates_dir -presentersDir presenters_dir";
+        + " -templatesDir templates_dir -presentersDir presenters_dir -contactsXmlFile contacts_file";
     String cmdDescrip = "Read provided dataset presenter files and inject templates into the presentation layer.";
     CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
         getUsageNotes(), options, args);
@@ -175,7 +183,7 @@ public class TemplatesInjector {
     return cmdLine;
   }
 
-  static void parseAndProcess(String templatesDir, String presentersDir) {
+    static void parseAndProcess(String templatesDir, String presentersDir, String contactsFile) {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
 
@@ -184,7 +192,21 @@ public class TemplatesInjector {
       throw new UserException("Templates dir " + templatesDir
           + " must be an existing directory");
 
+    ContactsFileParser contactsParser = new ContactsFileParser();
+    Contacts allContacts = contactsParser.parseFile(contactsFile);
+
     DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
+
+    // the "getContacts" method will add approprate contacts to each presenter
+    for (DatasetPresenter datasetPresenter : datasetPresenterSet.getDatasetPresenters().values()) {
+
+        datasetPresenter.getContacts(allContacts);
+
+        List<DatasetInjectorConstructor> datasetInjectors = datasetPresenter.getDatasetInjectors();
+        for(DatasetInjectorConstructor datasetInjector : datasetInjectors) {
+            datasetInjector.setPrimaryContact(datasetPresenter.getPrimaryContact());
+        }
+    }
 
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesDir(templateSet, templatesDir);
@@ -200,8 +222,9 @@ public class TemplatesInjector {
     CommandLine cmdLine = getCmdLine(args);
     String templatesDir = cmdLine.getOptionValue("templatesDir");
     String presentersDir = cmdLine.getOptionValue("presentersDir");
+    String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     try {
-      parseAndProcess(templatesDir, presentersDir);
+        parseAndProcess(templatesDir, presentersDir, contactsFile);
     } catch (UserException ex) {
       System.err.println(nl + "Error: " + ex.getMessage() + nl);
       System.exit(1);

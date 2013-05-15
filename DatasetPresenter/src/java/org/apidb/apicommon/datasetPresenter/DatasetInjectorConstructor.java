@@ -18,6 +18,7 @@ public class DatasetInjectorConstructor {
   private String datasetInjectorClassName;
   private Map<String, String> propValues = new HashMap<String, String>();
   private String datasetName;
+  private Contact primaryContact;
 
   /**
    * Set the name of the DatasetInjector subclass to construct. Must be a
@@ -55,7 +56,7 @@ public class DatasetInjectorConstructor {
    *          DatasetPresenter to inherit from.
    */
   void inheritDatasetProps(DatasetPresenter datasetPresenter) {
-    datasetName = datasetPresenter.getDatasetName();
+    this.datasetName = datasetPresenter.getDatasetName();
     for (String key : datasetPresenter.getPropValues().keySet()) {
       if (propValues.containsKey(key))
         throw new UserException("In DatasetPresenter " + datasetName
@@ -87,6 +88,11 @@ public class DatasetInjectorConstructor {
     return datasetInjectorClassName;
   }
 
+    void setPrimaryContact(Contact primaryContact) {
+        this.primaryContact = primaryContact;
+    }
+
+
   /**
    * Use reflection to construct a subclass of DatasetInjector. Initialize the
    * subclass's property values with those from this object.
@@ -108,6 +114,7 @@ public class DatasetInjectorConstructor {
 
     di.addPropValues(propValues);
     di.setDatasetName(datasetName);
+    di.setPrimaryContact(primaryContact);
     return di;
   }
 }

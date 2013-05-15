@@ -83,6 +83,14 @@ public class DatasetPresenter {
     return propValues.get("datasetDisplayName");
   }
 
+  public void setShortAttribution(Text shortAttribution) {
+    propValues.put("shortAttribution", shortAttribution.getText());
+  }
+
+  public String getShortAttribution() {
+    return propValues.get("shortAttribution");
+  }
+
   public void setDatasetShortDisplayName(Text datasetShortDisplayName) {
     propValues.put("datasetShortDisplayName", datasetShortDisplayName.getText());
   }
@@ -250,11 +258,30 @@ public class DatasetPresenter {
     return contactIds;
   }
 
+    public Contact getPrimaryContact() {
+
+        for(int i = 0; i < this.contacts.size(); i++) {
+            Contact contact = this.contacts.get(i);
+
+            if(contact.getIsPrimary()) {
+                return contact;
+            }
+        }
+
+        throw new UserException("Primary Contact not found in List of Contacts");
+    }
+
+
+    public List<Contact> getContacts() {
+        return this.contacts;
+    }
+
   public List<Contact> getContacts(Contacts allContacts) {
     if (contacts == null) {
       contacts = new ArrayList<Contact>();
       for (String contactId : contactIds) {
         Contact contact = allContacts.get(contactId);
+
         if (contact == null) {
           String datasetName = propValues.get("datasetName");
           throw new UserException("Dataset name " + datasetName

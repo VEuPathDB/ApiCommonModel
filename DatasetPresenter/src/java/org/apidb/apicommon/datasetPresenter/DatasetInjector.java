@@ -21,6 +21,7 @@ public abstract class DatasetInjector {
 
   private Map<String, String> propValues = new HashMap<String, String>();
   private String datasetName;
+  private Contact primaryContact;
   private DatasetInjectorSet datasetInjectorSet;
   private Map<String, ModelReference> modelReferences = new HashMap<String,ModelReference>();
 
@@ -103,6 +104,10 @@ public abstract class DatasetInjector {
     return datasetName;
   }
 
+    protected Contact getPrimaryContact() {
+        return this.primaryContact;
+    }
+
   /**
    * Subclasses should call this method inside {@link #injectTemplates()} to
    * inject a template. The template will be passed all this injector's property
@@ -179,6 +184,17 @@ public abstract class DatasetInjector {
   void setDatasetName(String datasetName) {
     this.datasetName = datasetName;
   }
+
+
+  /**
+   * Set the name of the dataset that is being injected.
+   * @param primaryContact
+   */
+  void setPrimaryContact(Contact primaryContact) {
+      this.primaryContact = primaryContact;
+  }
+
+
 
   /**
    * Set the parent DatasetInjectorSet.
