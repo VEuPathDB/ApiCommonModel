@@ -329,7 +329,7 @@ public class DatasetPresenterSetLoader {
     String sql = "INSERT INTO "
         + table
         + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope)"
-        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
