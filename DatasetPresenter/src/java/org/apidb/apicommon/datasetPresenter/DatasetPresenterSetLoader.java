@@ -328,7 +328,7 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetPresenter" + suffix;
     String sql = "INSERT INTO "
         + table
-        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope)"
+        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope)"
         + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
@@ -343,6 +343,7 @@ public class DatasetPresenterSetLoader {
     stmt.setString(i++, datasetPresenter.getDatasetNamePattern());
     stmt.setString(i++, datasetPresenter.getDatasetDisplayName());
     stmt.setString(i++, datasetPresenter.getDatasetShortDisplayName());
+    stmt.setString(i++, datasetPresenter.getShortAttribution());
     stmt.setString(i++, datasetPresenter.getSummary());
     stmt.setString(i++, datasetPresenter.getProtocol());
     stmt.setString(i++, datasetPresenter.getUsage());
