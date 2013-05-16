@@ -14,8 +14,6 @@ public class SpliceSites extends  DatasetInjector {
    */
 
   public void injectTemplates() {
-      // TODO:  graphs for the gene record page?
-
       String projectName = getPropValue("projectName");
       String datasetName = getDatasetName();
 

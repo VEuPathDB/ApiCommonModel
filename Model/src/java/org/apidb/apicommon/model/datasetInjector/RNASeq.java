@@ -14,7 +14,7 @@ public class RNASeq extends  DatasetInjector {
    */
 
   public void injectTemplates() {
-      // TODO: which graphs for the gene record page?
+      setShortAttribution();
 
       String projectName = getPropValue("projectName");
 
