@@ -80,7 +80,7 @@ public class DatasetPresenterSetLoader {
 
       if (presenterNamesNotInDb.size() != 0) {
         System.err.println(nl
-            + "The following DatasetPresenters have no match in ApiDB.Dataset: "
+            + "The following DatasetPresenters have no match in Apidb.Datasource: "
             + nl + setToString(presenterNamesNotInDb));
       }
       
@@ -139,7 +139,7 @@ public class DatasetPresenterSetLoader {
       }
       if (!found) {
           System.err.println("WARN:  InternalDataset with name or pattern \""
-            + namePattern + "\" does not match any row in ApiDB.Dataset");
+            + namePattern + "\" does not match any row in Apidb.Datasource");
       } 
       else {
           datasetNamesFoundInDb.addAll(datasetNamesFoundLocal);
@@ -211,7 +211,7 @@ public class DatasetPresenterSetLoader {
 
   Set<String> findDatasetNamesInDb() throws SQLException {
     Set<String> datasetNamesInDb = new HashSet<String>();
-    String sql = "select name from apidb.dataset";
+    String sql = "select name from apidb.datasource";
     Statement stmt = null;
     ResultSet rs = null;
     try {
@@ -318,7 +318,7 @@ public class DatasetPresenterSetLoader {
   }
 
   PreparedStatement getDatasetTableStmt() throws SQLException {
-    String table = "ApiDB.Dataset";
+    String table = "Apidb.Datasource";
     String sql = "SELECT name, taxon_id, type, subtype, is_species_scope "
         + "FROM " + table + " WHERE name like ?";
     return dbConnection.prepareStatement(sql);
@@ -559,7 +559,7 @@ public class DatasetPresenterSetLoader {
     Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
     if (namesFromDbNotFound.size() != 0)
       throw new UserException(
-          "The following Dataset names in ApiDB.Dataset are not mentioned or matched by the input DatasetPresenters:"
+          "The following Dataset names in Apidb.Datasource are not mentioned or matched by the input DatasetPresenters:"
               + nl + setToString(namesFromDbNotFound));
 
     System.err.println("Validation complete");
@@ -577,7 +577,7 @@ public class DatasetPresenterSetLoader {
     CommandLine cmdLine = getCmdLine(args);
 
     try {
-      // does all validation of presenters against ApiDB.Dataset
+      // does all validation of presenters against Apidb.Datasource
       DatasetPresenterSetLoader dpsl = constructLoader(cmdLine);
 
       if (!cmdLine.hasOption("report")) {
