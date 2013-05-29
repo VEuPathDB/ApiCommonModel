@@ -99,15 +99,12 @@ while(my ($projectId) = $sh->fetchrow_array()) {
     while(my ($parent, $organism, $file) = $blastSh->fetchrow_array()) {
       next if($file eq '-1');
 
-
       # example $file maybe: :
-      #  @WEBSERVICEMIRROR@/ToxoDB/build-%%buildNumber%%/Eimeriidae/blast/
-
-      my $basename = basename($file);     # name of file ("blast" for eg)
+      # @WEBSERVICEMIRROR@/TriTrypDB/build-%%buildNumber%%/LbraziliensisMHOMBR75M2904/blast/LbraziliensisMHOMBR75M2904
+      my $basename = basename($file);     # name of org ("LbraziliensisMHOMBR75M2904" for eg)
       my $dirname = dirname ($file);
-      my $outerDir = basename($dirname);  # dir of the file  ("Eimeriidae" for eg)
 
-      my $filename = "$apiSiteFilesDir/webServices/$projectId/build-$version/$outerDir/$basename/" . $internal . $extension;
+      my $filename = "$apiSiteFilesDir$projectId/build-$version/$basename/blast/$basename" . $internal . $extension;
       unless(-e $filename) {
         print "ERROR:  Expected file not found:  $filename\n";
         $failures++;
