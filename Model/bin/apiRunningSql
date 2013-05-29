@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+use IO::File;
+
+my ($filter, $propfile) = @ARGV;
+
+usage() unless $filter;
+
+my $propfile = $ENV{GUS_HOME} . "/config/gus.config" unless($propfile);
+
+open(F, $propfile) || die "Couldn't open prop file '$propfile'\n";
+my ($login, $password);
+while (<F>) {
+  $login = $1 if (/^databaseLogin\=(\S+)/);
+  $password = $1 if (/^databasePassword\=(\S+)/);
+}
+close(F);
+die "Couldn't parse login and password from $propfile" unless $login && $password;
+
+
+open(F, "apiTnsSummary|") || die "Couldn't run apiTnsSummary\n";
+while(<F>) {
+  if (/$filter/) {
+    /(^\w+)/ || die "Can't parse line: $_\n";
+    my $instance = $1;
+    open(C, ">apiRunningSql_tmp.sql");
+    print C "
+connect $login/$password\@$instance;
+set serveroutput on size 1000000;
+execute sys_shared.SHARED_USER.get_all_session_info;
+exit;
+";
+    close(C);
+    my $cmd = "sqlplus /nolog \@apiRunningSql_tmp.sql";
+    print
+"
+======================================================
+==============  Checking instance $instance ===========
+======================================================
+
+";
+    print `$cmd`;
+    unlink("apiRunningSql_tmp.sql");
+  }
+}
+
+sub usage {
+  die "
+
+Find all running SQL on a particular instance or on all instances on a server.
+
+Usage:  apiRunningSql instance_filter [propfile]
+
+Where:
+  instance_filter:  a term to filter lines from apiTnsSummary, to find which instances to check
+  propfile:  a propfile that has the databaseLogin= and databasePassword= properties set.  Defaults to \$GUS_HOME/config/gus.config
+
+This program runs apiTnsSummary to get a list of all servers.  This is what apiTnsSummary output looks like:
+
+apicommr.rcc.uga.edu          medlar.rcc.uga.edu            apicommdevs
+cryp017n.pcbi.upenn.edu       ares3.pcbi.upenn.edu          cryp017n
+cryp017s.rcc.uga.edu          medlar.rcc.uga.edu            cryp017s
+
+It finds lines in that output that contain the supplied instance_filter.  For each of those instances it runs the sys_shared.SHARED_USER.get_all_session_info stored procedure to find all running queries on that server.
+
+";
+}
+
+
