@@ -90,13 +90,10 @@ while(my ($projectId) = $sh->fetchrow_array()) {
     while(my ($parent, $organism, $file) = $blastSh->fetchrow_array()) {
       next if($file eq '-1');
 
-
       # example $file (in apiSiteFilesStaging) maybe: :
-      #  @WEBSERVICEMIRROR@/ToxoDB/build-%%buildNumber%%/Eimeriidae/blast/
-
-      my $basename = basename($file);     # name of file ("blast" for eg)
+      # @WEBSERVICEMIRROR@/TriTrypDB/build-%%buildNumber%%/LbraziliensisMHOMBR75M2904/blast/LbraziliensisMHOMBR75M2904
+      my $basename = basename($file);     # name of org ("LbraziliensisMHOMBR75M2904" for eg)
       my $dirname = dirname ($file);
-      my $outerDir = basename($dirname);  # dir of the file  ("Eimeriidae" for eg)
 
       # make array of $extension
       my @extensionArr = ('.xnd', '.xns', '.xnt');
@@ -104,15 +101,15 @@ while(my ($projectId) = $sh->fetchrow_array()) {
 	@extensionArr = ('.xpd', '.xps', '.xpt');
       }
 
-      # prepend file name with organismName ($outerDir)
+      # prepend file name with organismName
       foreach my $extension (@extensionArr){
-	my $filename = "$apiSiteFilesDir/webServices/$projectId/build-$version/$outerDir/$basename/" . $internal . $extension;
-	my $filenameNew = "$apiSiteFilesDir/webServices/$projectId/build-$version/$outerDir/$basename/$outerDir" . $internal . $extension;
+	my $oldLocation = "$apiSiteFilesDir$projectId/build-$version/$basename/blast/" . $internal . $extension;
+	my $newLocation = "$apiSiteFilesDir$projectId/build-$version/$basename/blast/$basename" . $internal . $extension;
 
-	if (-e $filename) {
-	  print  "mv $filename  $filenameNew\n" ;
+	if (-e $oldLocation) {
+	  print  "mv $oldLocation $newLocation\n" ;
 	} else {
-	  print "ERROR:  Expected file not found:  $filename\n";
+	  print "ERROR:  Expected file not found:  $oldLocation\n";
 	  $failures++;
 	}
       }
