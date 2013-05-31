@@ -8304,12 +8304,13 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
             <column name="display" />
             <sql excludeProjects="TrichDB">
                 <![CDATA[
-                    WITH OrganismConstraint as 
+                        WITH OrganismConstraint as 
                           (
                            select distinct ims.sample, ims.organism as organism, 
                                   '<b>'||dsp.display_Name|| ' (' ||
                                   nvl(dsp.short_attribution,substr(dsc.name,(regexp_instr(dsc.name,' ',1,regexp_count(dsc.name,' '),1))))|| ')'||'</b>'
-                                         as experiment, 
+                                         as experiment_display,
+                                  dsp.name as experiment, 
                                   ims.project_id, 
                                   ims.internal_id, ims.sort_order 
                                 from DOTS.massspecfeature msf,
@@ -8326,17 +8327,23 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                            and   ((ims.internal_id like dsp.dataset_name_pattern||'|%') or
                                   (ims.internal_id like dsp.name||'|%'))
                            and   dsc.dataset_presenter_id = dsp.dataset_presenter_id
-                           and   dsc.is_primary_contact = '1' 
+                           and   dsc.is_primary_contact = '1' )
                            and ims.project_id = '@PROJECT_ID@')   
                      select replace(replace(term,','),('''')) as term, 
                             replace(replace(parentTerm,','),('''')) as parentTerm, 
-                            term as display,
+                            display as display,
                             internal, 
                             sort_order, 
                             chars,
                             nums
                      from(
-                     select CASE WHEN mst.sample = mst.experiment
+                     select  
+                               
+                             CASE WHEN mst.sample = mst.experiment
+                                 THEN mst.experiment_display
+                                 ELSE mst.sample
+                                 END as display,
+                             CASE WHEN mst.sample = mst.experiment
                                  THEN mst.experiment
                                  ELSE mst.sample
                                  END as term,
@@ -8351,8 +8358,9 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      from OrganismConstraint mst
                      where mst.experiment is not null
                      union 
-                     select mst.experiment as term,
-                            '<b>'|| mst.organism ||'</b>' as parentTerm,
+                     select mst.experiment_display as display,
+                            mst.experiment as term,
+                            mst.organism as parentTerm,
                             '-1' as internal,
                             mst.sort_order as sort_order,
                             '' as chars,
@@ -8361,7 +8369,8 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      where mst.experiment is not null
                      and mst.experiment <> mst.sample
                      union 
-                     select '<b>'|| mst.organism ||'</b>' as term,
+                     select '<b>'|| mst.organism ||'</b>' as display,
+                            mst.organism as term,
                             substr(mst.organism,4,(instr(mst.organism,' ',1))-4) as parentTerm,
                             '-1' as internal,
                             mst.sort_order as sort_order,
@@ -8371,7 +8380,8 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      where mst.experiment is not null
                      and mst.experiment <> mst.sample
                      union 
-                     select substr(mst.organism,4,(instr(mst.organism,' ',1))-4) as term,
+                     select '<b>'||substr(mst.organism,4,(instr(mst.organism,' ',1))-4)||'</b>' as display,
+                            substr(mst.organism,4,(instr(mst.organism,' ',1))-4) as term,
                             '' as parentTerm,
                             '-1' as internal,
                             mst.sort_order as sort_order,
@@ -8380,10 +8390,8 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      from OrganismConstraint mst
                      where mst.experiment is not null
                      and mst.experiment <> mst.sample
-
                      )
                      order by sort_order, parentTerm, chars, nums, term
-
                 ]]>
             </sql>
             <sql includeProjects="TrichDB">
