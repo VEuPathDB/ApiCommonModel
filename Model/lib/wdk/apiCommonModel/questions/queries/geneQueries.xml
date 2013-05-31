@@ -1345,7 +1345,6 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
   <!-- Mass Spec -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-<!-- TODO: add Mass spec query for Trypdb -->
     <sqlQuery name="GenesByMassSpec" includeProjects="PlasmoDB,ToxoDB,CryptoDB,GiardiaDB,TriTrypDB,TrichDB,AmoebaDB" 
             isCacheable='true'>
 
@@ -1377,38 +1376,17 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="project_id" />
         <column name="sum_sequence_count" />
         <column name="sum_spectrum_count" columnType="number" width="12" />
-         
-     <!--   <sqlParamValue name="restrainOrganism" excludeProjects="TriTrypDB,PlasmoDB">
-                <![CDATA[
-                   and nas.taxon_id in ($$organism$$)
-                ]]>
-       </sqlParamValue>
-       <sqlParamValue name="restrainOrganism" includeProjects="TriTrypDB,PlasmoDB" /> -->
-
 
         <sql>
             <![CDATA[
-          select distinct ga.source_id,'@PROJECT_ID@' as project_id, seq.sum_sequence_count, spec.sum_spectrum_count
-          from apidb.massspecsummary mss,
-                dots.translatedaafeature taaf, dots.transcript t, ApidbTuning.GeneAttributes ga,
-          ( select intseq.aa_sequence_id,count(*) as sum_sequence_count
-             from (select msf.aa_sequence_id, count(*) as sum_seq_ct
-              from dots.massspecfeature msf,
-                   apidb.massspecsummary mss,
-                   dots.aalocation aal,
-                   sres.externaldatabase ed,
-                   sres.externaldatabaserelease edr
-              where msf.aa_feature_id = aal.aa_feature_id
-                and msf.external_database_release_id = edr.external_database_release_id
-                and mss.mass_spec_summary_id = msf.source_id
-                and edr.external_database_id = ed.external_database_id
-                and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
-                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
-              group by msf.aa_sequence_id,aal.start_min,aal.end_max ) intseq
-              group by intseq.aa_sequence_id
-              having count(*) >= $$min_sequence_count$$
-          ) seq,
-          (select mss.aa_sequence_id, sum(spectrum_count) as sum_spectrum_count
+          select distinct ga.source_id,
+          '@PROJECT_ID@' as project_id, 
+          seq.sum_sequence_count, 
+          seq.sum_spectrum_count
+          from apidb.massspecsummary mss, ApidbTuning.GeneAttributes ga,
+          ( select intseq.aa_sequence_id, intseq.sum_spectrum_count as sum_spectrum_count, intseq.sum_seq_ct as sum_sequence_count
+             from 
+             (select msf.aa_sequence_id, count(distinct msf.aa_feature_id) as sum_spectrum_count, count(distinct mss.mass_spec_summary_id) as sum_seq_ct
               from dots.massspecfeature msf,
                    apidb.massspecsummary mss,
                    sres.externaldatabase ed,
@@ -1418,16 +1396,12 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
                 and edr.external_database_id = ed.external_database_id
                 and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
                       ed.name||'|'||mss.sample_file in ($$ms_assay$$))
-              group by mss.aa_sequence_id
-              having sum(spectrum_count) >= $$min_spectrum_count$$
-          ) spec,
-          dots.nasequence nas
-          where mss.aa_sequence_id = taaf.aa_sequence_id
-          and taaf.na_feature_id = t.na_feature_id
-          and t.parent_id = ga.na_feature_id
-          and ga.na_sequence_id = nas.na_sequence_id
+              group by msf.aa_sequence_id ) intseq
+              where sum_seq_ct >= $$min_sequence_count$$
+              and   sum_spectrum_count >=  $$min_spectrum_count$$
+          ) seq
+          where mss.aa_sequence_id = ga.aa_sequence_id
           and mss.aa_sequence_id = seq.aa_sequence_id
-          and mss.aa_sequence_id = spec.aa_sequence_id
            ]]>
        </sql>
  
