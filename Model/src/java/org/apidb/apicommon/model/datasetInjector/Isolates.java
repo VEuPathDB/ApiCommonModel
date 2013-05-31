@@ -20,6 +20,7 @@ public class Isolates extends DatasetInjector {
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByAuthor");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolatesByTextSearch");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolatesByClustering");
+      addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolatesBySimilarity");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "table", "Reference");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "attribute", "overview");
   }
