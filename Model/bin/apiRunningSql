@@ -4,11 +4,24 @@ use strict;
 use lib "$ENV{GUS_HOME}/lib/perl";
 use IO::File;
 
-my ($filter, $propfile) = @ARGV;
+my ($filter, @opts) = @ARGV;
+
+usage() if scalar(@opts) > 2;
+
+my ($includeInactive, $propfile);
+if (scalar(@opts) == 2) {
+  $includeInactive = shift(@opts);
+  $propfile = shift(@opts);
+} elsif (scalar(@opts) == 1 && $opts[0] eq '-i') {
+  $includeInactive = '-i';
+} elsif (scalar(@opts) == 1) {
+  $propfile = $opts[0];
+}
 
 usage() unless $filter;
+usage() if $includeInactive && $includeInactive != '-i';
 
-my $propfile = $ENV{GUS_HOME} . "/config/gus.config" unless($propfile);
+$propfile = $ENV{GUS_HOME} . "/config/gus.config" unless($propfile);
 
 open(F, $propfile) || die "Couldn't open prop file '$propfile'\n";
 my ($login, $password);
@@ -22,10 +35,23 @@ die "Couldn't parse login and password from $propfile" unless $login && $passwor
 my $cmd = "sqlplus /nolog \@apiRunningSql_tmp.sql";
 
 open(F, "apiTnsSummary|") || die "Couldn't run apiTnsSummary\n";
+
+my $totalInactiveSessionsCount = 0;
+
+#eupabl1n.pcbi.upenn.edu       ares1.pcbi.upenn.edu          eupaAn, eupabl1n
 while(<F>) {
+  my $inactiveSessionsCount;
+  chomp;
   if (/$filter/) {
-    /(^\w+)/ || die "Can't parse line: $_\n";
+    /^(\w+)/ || die "Can't parse line: $_\n";  # get the service name
     my $instance = $1;
+
+    # confirm the service name is an alias (will have a space char in front)
+    # if not then use the last alias on the line (because it is easy to grab)
+    if (!/ $instance$|$instance,/) {
+      /(\w+)$/;
+      $instance = $1;
+    }
     open(C, ">apiRunningSql_tmp.sql");
     print C "
 connect $login/$password\@$instance;
@@ -35,43 +61,53 @@ exit;
 ";
     close(C);
 
+    my $t = localtime();
+
     print
 "
 ======================================================
-==============  Checking instance $instance ==========
+==============  $instance $t
 ======================================================";
 
     my @lines = `$cmd`;
     unlink("apiRunningSql_tmp.sql");
     my $chunk;
-    my $isSessionValidationSql;
+    my $statusInactive = 0;
     foreach my $line (@lines) {
       chomp $line;
       next if $line =~ /^\s+$|SQL.Plus|Copyright|Connected|sql_text|PL\/SQL procedure|Disconnected|Partitioning/;
-      $line = "" if $line =~ /^-+$/;
+      next if $line =~ /^--------+$/;
       if ($line =~ /^p_sid\=/) {
-	print $chunk unless $isSessionValidationSql;
+	print $chunk unless $statusInactive && !$includeInactive;
 	$chunk = "----------------------------------------\n$line";
-	$isSessionValidationSql = 0;
+	$statusInactive = 0;
       } else {
-	$isSessionValidationSql = 1 if ($line =~ /SELECT 'ok' FROM dual/);
+	if ($line =~ /status=INACTIVE/) {
+	  $statusInactive = 1;
+	  $inactiveSessionsCount += 1;
+	  $totalInactiveSessionsCount += 1;
+	}
 	$chunk .= "$line\n";
       }
     }
-    print $chunk unless $isSessionValidationSql;
+    print $chunk unless $statusInactive && !$includeInactive; 
+    print "\nInactive Sessions: $inactiveSessionsCount\n";
 
   }
 }
+  print "\nTotal Inactive Sessions: $totalInactiveSessionsCount\n\n";
+
 
 sub usage {
   die "
 Find all running SQL on a particular instance or on all instances on a server.
 
-Usage:  apiRunningSql instance_filter [propfile]
+Usage:  apiRunningSql instance_filter [-i] [propfile]
 
 Where:
   instance_filter:  a term to filter lines from apiTnsSummary, to find which instances to check
-  propfile:  a propfile that has the databaseLogin= and databasePassword= properties set.  Defaults to \$GUS_HOME/config/gus.config
+  -i:               a flag to include inactive sessions (excluded by default)
+  propfile:         a propfile that has the databaseLogin= and databasePassword= properties set.  Defaults to \$GUS_HOME/config/gus.config
 
 This program runs apiTnsSummary to get a list of all servers.  This is what apiTnsSummary output looks like:
 
