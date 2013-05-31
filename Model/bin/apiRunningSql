@@ -19,6 +19,7 @@ while (<F>) {
 close(F);
 die "Couldn't parse login and password from $propfile" unless $login && $password;
 
+my $cmd = "sqlplus /nolog \@apiRunningSql_tmp.sql";
 
 open(F, "apiTnsSummary|") || die "Couldn't run apiTnsSummary\n";
 while(<F>) {
@@ -33,31 +34,32 @@ execute sys_shared.SHARED_USER.get_all_session_info;
 exit;
 ";
     close(C);
-    my $cmd = "sqlplus /nolog \@apiRunningSql_tmp.sql";
+
     print
 "
 ======================================================
 ==============  Checking instance $instance ==========
 ======================================================";
 
-   # my @lines = `$cmd | egrep -v "SQL.Plus|Copyright|Connected|"`;
     my @lines = `$cmd`;
     unlink("apiRunningSql_tmp.sql");
     my $chunk;
     my $isSessionValidationSql;
     foreach my $line (@lines) {
       chomp $line;
-      next if $line =~ /^\s+|SQL.Plus|Copyright|Connected|sql_text|PL\/SQL procedure|Disconnected|Partitioning/;
+      next if $line =~ /^\s+$|SQL.Plus|Copyright|Connected|sql_text|PL\/SQL procedure|Disconnected|Partitioning/;
       $line = "" if $line =~ /^-+$/;
       if ($line =~ /^p_sid\=/) {
 	print $chunk unless $isSessionValidationSql;
 	$chunk = "----------------------------------------\n$line";
 	$isSessionValidationSql = 0;
       } else {
-	$isSessionValidationSql = 1 if ($line =~ /^status\=INACTIVE/);
+	$isSessionValidationSql = 1 if ($line =~ /SELECT 'ok' FROM dual/);
 	$chunk .= "$line\n";
       }
     }
+    print $chunk unless $isSessionValidationSql;
+
   }
 }
 
