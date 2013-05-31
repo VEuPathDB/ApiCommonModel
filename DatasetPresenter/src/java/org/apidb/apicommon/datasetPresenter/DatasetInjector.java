@@ -258,7 +258,7 @@ public abstract class DatasetInjector {
     protected void setShortAttribution() {
       String shortAttribution = getPropValue("shortAttribution");
 
-      if(shortAttribution == null) {
+      if(shortAttribution == null || shortAttribution.equals("")) {
           Contact primaryContact = getPrimaryContact();
 
           String contactName = primaryContact.getName();
