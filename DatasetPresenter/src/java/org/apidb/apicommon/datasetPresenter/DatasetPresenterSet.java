@@ -149,7 +149,8 @@ public class DatasetPresenterSet {
           + " must be an existing directory");
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
-    return dpp.parseDir(presentersDir);
+    DatasetPresenterSet dps = dpp.parseDir(presentersDir);
+    return dps;
   }
 
 }

@@ -410,7 +410,7 @@ public class TestDatasetInjectorPackage {
   
   @Test
   public void test_TemplatesInjector_getCmdLine() {
-    String[] args = { "-presentersDir", "lib/xml/datasetPresenters", "-templatesDir", "lib/dst"};
+    String[] args = { "-presentersDir", "lib/xml/datasetPresenters", "-templatesDir", "lib/dst", "-contactsXmlFile", "someFile"};
     CommandLine cl = TemplatesInjector.getCmdLine(args);
     assertTrue(cl.getOptionValue("presentersDir").equals("lib/xml/datasetPresenters"));
     assertTrue(cl.getOptionValue("templatesDir").equals("lib/dst"));
@@ -420,7 +420,7 @@ public class TestDatasetInjectorPackage {
   public void test_TemplatesInjector_parseAndProcess() {
     String gus_home = System.getenv("GUS_HOME");
     
-    TemplatesInjector.parseAndProcess(gus_home + "/lib/test", gus_home + "/lib/test", gus_home + "lib/xml/datasetPresenters/contacts/contacts.xml");  // if it doesn't throw an exception we are good
+    TemplatesInjector.parseAndProcess(gus_home + "/lib/test", gus_home + "/lib/test", gus_home + "/lib/xml/datasetPresenters/contacts/contacts.xml");  // if it doesn't throw an exception we are good
   }
   
   @Test 
@@ -504,5 +504,26 @@ public class TestDatasetInjectorPackage {
     dp.setSubtype("paired");
     dp.setDefaultDatasetInjector(map);
     assertTrue(dp.getDatasetInjectors().get(0).getClassName().equals("org.apidb.apicommon.datasetPresenter.RnaSeqInjector"));
+  }
+  
+  @Test
+  public void test_DatasetPropertiesParser_parseFile() {
+    String gus_home = System.getenv("GUS_HOME");
+    Map<String,Map<String,String>> answer = new HashMap<String,Map<String,String>>();
+    DatasetPropertiesParser.parseFile(gus_home + "/lib/prop/datasetProperties/test1.prop" +
+    		"", answer);
+    assertTrue(answer.size() == 2);
+    assertTrue(answer.get("pberANKA_primary_genome_RSRC").get("name").equals("GeneDB"));
+    assertTrue(answer.get("pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
+  }
+  
+  @Test
+  public void test_DatasetPropertiesParser_parseAllPropertyFiles() {
+    DatasetPropertiesParser dpp = new DatasetPropertiesParser();
+    Map<String,Map<String,String>> answer = dpp.parseAllPropertyFiles();
+    assertTrue(answer.size() == 4);
+    assertTrue(answer.get("pberANKA_primary_genome_RSRC").get("name").equals("GeneDB"));
+    assertTrue(answer.get("pberANKA_secondary_genome_RSRC").get("projectName").equals("HappyDB"));
+    assertTrue(answer.get("pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
   }
 }
