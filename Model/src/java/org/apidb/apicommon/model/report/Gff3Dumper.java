@@ -164,8 +164,10 @@ public class Gff3Dumper {
     // decide the path-file name
     logger.info("Preparing gff file....");
 
-    // format the file name
-    String prefix = wdkModel.getProjectId() + "-" + wdkModel.getVersion() + "_";
+    // format the file name.
+    // Instead of using version in file name, we now use CURRENT to represent the version.
+    // String prefix = wdkModel.getProjectId() + "-" + wdkModel.getVersion() + "_";
+    String prefix = wdkModel.getProjectId() + "-CURRENT_";
     String organismFile = getOrganismFileName(organism);
     String fileName = prefix + organismFile + ".gff";
 
