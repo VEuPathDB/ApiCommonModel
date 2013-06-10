@@ -15,7 +15,7 @@
           font-family: helvetica, arial, sans;
           font-size: 95%;
         }
-        #toc ul, #content {
+        #categories, #classes, #content {
           overflow-y: scroll;
         }
         #toc {
@@ -40,19 +40,39 @@
         #toc a:hover {
           color: #bb7a2a;
         }
-        #handle {
+        #toc-handle {
           border-right: 1px solid #ccc;
           border-left: 1px solid #ccc;
           width: 4px;
-          background-color: whitesmoke;
           right: 0px;
+          cursor: ew-resize;
         }
-        #handle:hover {
+        #categories {
+          height: 30%;
+        }
+        #categories ul {
+          padding-bottom: 8px;
+        }
+        #categories li.active {
+          background: #ccc;
+        }
+        #categories-handle {
+          border-top: 1px solid #ccc;
+          border-bottom: 1px solid #ccc;
+          height: 4px;
+          bottom: 0px;
+          cursor: ns-resize;
+        }
+        .ui-resizable-handle {
+          background-color: white;
+        }
+        .ui-resizable-handle:hover {
           background-color: #ccc;
+          background-color: whitesmoke;
         }
         #content {
           margin-left: 290px;
-          padding-left: 5px;
+          padding-left: 10px;
         }
         #content dt {
           font-weight: bold;
@@ -73,8 +93,16 @@
     </head>
     <body>
       <div id="toc">
-        <xsl:apply-templates mode="toc"/>
-        <div id="handle" class="ui-resizable-handle ui-resizable-e"></div>
+        <div id="categories">
+          <h3>Categories</h3>
+          <xsl:apply-templates mode="categories"/>
+          <div id="categories-handle" class="ui-resizable-handle ui-resizable-s"></div>
+        </div>
+        <div id="classes">
+          <h3>Classes</h3>
+          <xsl:apply-templates mode="classes"/>
+        </div>
+        <div id="toc-handle" class="ui-resizable-handle ui-resizable-e"></div>
       </div>
       <div id="content">
         <xsl:apply-templates />
@@ -84,23 +112,54 @@
       <script>
         jQuery(function($) {
           function setHeights() {
-            $("#toc ul").height($(window).height() - 20);
-            $("#handle").height($(window).height() - 20);
+            $("#toc").height($(window).height() - 20);
+            $("#classes").height($("#toc").height() - $("#categories").height());
             $("#content").height($(window).height() - 20);
           }
-          $("#toc").resizable({ handles: { e: "#handle" } });
+          $("#toc").resizable({ handles: { e: "#toc-handle" } });
+          $("#categories").resizable({
+            handles: { e: "#categories-handle" },
+            resize: function(e, ui) {
+              $("#classes").height($("#toc").height() - ui.size.height);
+            }
+          }).on("scroll", function() {
+            var negScrollTop = -$(this).scrollTop();
+            $("#categories-handle").css("bottom", negScrollTop);
+          });
           setHeights();
           $(window).on("resize", setHeights);
+        });
+
+        $("#categories").on("click", ".type-filter", function(e) {
+          e.preventDefault();
+          var type = $(this).data("type");
+          $("#categories li").removeClass("active");
+          if (type) {
+            $(this).parent().addClass("active");
+            $(".datasetClass").show().not("." + type).hide();
+            $(".classes li").show().not("." + type).hide();
+          } else {
+            $(".datasetClass").show();
+            $(".classes li").show();
+          }
         });
       </script>
     </body>
   </html>
 </xsl:template>
 
-<xsl:template match="datasetClasses" mode="toc">
-  <ul>
+<xsl:template match="datasetClasses" mode="categories">
+  <p><a class="type-filter" href="#all">All categories</a></p>
+  <ul class="categories">
+    <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)]">
+      <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
+    </xsl:for-each>
+  </ul>
+</xsl:template>
+<xsl:template match="datasetClasses" mode="classes">
+  <ul class="classes">
     <xsl:for-each select="datasetClass">
-      <li><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
+      <li class="{datasetLoader/@type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
     </xsl:for-each>
   </ul>
 </xsl:template>
@@ -108,61 +167,62 @@
 <xsl:template match="datasetClasses" >
 
     <xsl:for-each select="datasetClass" >
-      <a name="{@class}"/>
-      <dl>
-        <dt>Class</dt>
-        <dd> <xsl:value-of select="@class" /> </dd>
+      <div class="datasetClass {datasetLoader/@type}">
+        <a name="{@class}"/>
+        <h2>Class: <xsl:value-of select="@class" /> </h2>
 
-        <dt>Purpose</dt>
-        <dd> <xsl:value-of select="purpose" /> </dd>
+        <dl>
+          <dt>Purpose</dt>
+          <dd> <xsl:value-of select="purpose" /> </dd>
 
-        <dt>Category</dt>
-        <dd> <xsl:value-of select="@category" /> </dd>
+          <dt>Category</dt>
+          <dd> <xsl:value-of select="@category" /> </dd>
 
-        <dt>GraphFile</dt>
-        <dd> <xsl:value-of select="graphPlanFile/@name" /> </dd>
+          <dt>GraphFile</dt>
+          <dd> <xsl:value-of select="graphPlanFile/@name" /> </dd>
 
-        <dt>Properties</dt>
-        <dd>
-          <table border="1">
-           <tr><th>Property</th><th>Description</th></tr>
-           <xsl:for-each select="prop" >
-             <tr>
-               <td><xsl:value-of select="@name" /></td>
-               <td><xsl:value-of select="." /></td>
-             </tr>
-           </xsl:for-each>
-         </table>
-         </dd>
+          <dt>Properties</dt>
+          <dd>
+            <table border="1">
+             <tr><th>Property</th><th>Description</th></tr>
+             <xsl:for-each select="prop" >
+               <tr>
+                 <td><xsl:value-of select="@name" /></td>
+                 <td><xsl:value-of select="." /></td>
+               </tr>
+             </xsl:for-each>
+           </table>
+           </dd>
 
-        <dt>Resource</dt>
-        <dd><table border="1">
-              <tr>
-                <th>Resource</th>
-                <th>Version</th>
-                <th>Plugin</th>
-                <th>Scope</th>
-                <th>OrgAbbrev</th>
-              </tr>
-              <tr>
-                <td><xsl:value-of select="resource/@resource" /> </td>
-                <td><xsl:value-of select="resource/@version" /> </td>
-                <td><xsl:value-of select="resource/@plugin" /> </td>
-                <td><xsl:value-of select="resource/@scope" /> </td>
-                <td><xsl:value-of select="resource/@organismAbbrev" /> </td>
-              </tr>
-              <tr>
-                <th>manualGet: </th>
-                <td colspan="4"><xsl:value-of select="resource/manualGet/@fileOrDir" /></td>
-              </tr>
-              <tr>
-                <th>pluginArgs: </th>
-                <td colspan="4"><xsl:value-of select="resource/pluginArgs" /></td>
-              </tr>
-            </table>
-        </dd>
-      </dl>
-      <hr/>
+          <dt>Resource</dt>
+          <dd><table border="1">
+                <tr>
+                  <th>Resource</th>
+                  <th>Version</th>
+                  <th>Plugin</th>
+                  <th>Scope</th>
+                  <th>OrgAbbrev</th>
+                </tr>
+                <tr>
+                  <td><xsl:value-of select="resource/@resource" /> </td>
+                  <td><xsl:value-of select="resource/@version" /> </td>
+                  <td><xsl:value-of select="resource/@plugin" /> </td>
+                  <td><xsl:value-of select="resource/@scope" /> </td>
+                  <td><xsl:value-of select="resource/@organismAbbrev" /> </td>
+                </tr>
+                <tr>
+                  <th>manualGet: </th>
+                  <td colspan="4"><xsl:value-of select="resource/manualGet/@fileOrDir" /></td>
+                </tr>
+                <tr>
+                  <th>pluginArgs: </th>
+                  <td colspan="4"><xsl:value-of select="resource/pluginArgs" /></td>
+                </tr>
+              </table>
+          </dd>
+        </dl>
+        <hr/>
+      </div>
     </xsl:for-each>
 </xsl:template >
 </xsl:stylesheet >
