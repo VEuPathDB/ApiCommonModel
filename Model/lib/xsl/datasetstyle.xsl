@@ -8,27 +8,28 @@
   <html>
     <head>
       <title> Dataset Classes </title>
+      <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css"/>
       <style type="text/css">
         body {
           min-width: 900px;
           font-family: helvetica, arial, sans;
           font-size: 95%;
         }
-        #toc, #content {
+        #toc ul, #content {
           overflow-y: scroll;
         }
         #toc {
           float: left;
+          min-width: 280px;
           width: 280px;
           padding-right: 10px;
           word-wrap: break-word;
-          border-right: 1px solid #ccc;
           font-size: 90%;
         }
         #toc ul {
           list-style: none;
           padding-left: 10px;
-          margin-left: 0;
+          margin: 0;
         }
         #toc li {
           padding: 1px 0;
@@ -40,8 +41,19 @@
         #toc a:hover {
           color: #bb7a2a;
         }
+        #handle {
+          border-right: 1px solid #ccc;
+          border-left: 1px solid #ccc;
+          width: 4px;
+          background-color: whitesmoke;
+          right: 0px;
+        }
+        #handle:hover {
+          background-color: #ccc;
+        }
         #content {
-          margin-left: 300px;
+          margin-left: 290px;
+          padding-left: 5px;
         }
         #content dt {
           font-weight: bold;
@@ -54,30 +66,33 @@
           padding-left: 20px;
           margin-left: 0;
         }
+        th, td {
+          padding: 4px;
+          text-align: left;
+        }
       </style>
     </head>
     <body>
       <div id="toc">
         <xsl:apply-templates mode="toc"/>
+        <div id="handle" class="ui-resizable-handle ui-resizable-e"></div>
       </div>
       <div id="content">
         <xsl:apply-templates />
       </div>
-      <script type="text/javascript">
-        function setHeights() {
-          var toc = document.getElementById("toc");
-          var content = document.getElementById("content");
-          toc.style.height = (window.innerHeight) ? window.innerHeight - 20 + "px" :
-              document.documentElement.clientHeight - 30 + "px";
-          content.style.height = (window.innerHeight) ? window.innerHeight - 20 + "px" :
-              document.documentElement.clientHeight - 30 + "px";
-        }
-        setHeights();
-        if (window.addEventListener) {
-          window.addEventListener("resize", setHeights);
-        } else {
-          document.body.attachEvent("onresize", setHeights);
-        }
+      <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+      <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
+      <script>
+        jQuery(function($) {
+          function setHeights() {
+            $("#toc ul").height($(window).height() - 20);
+            $("#handle").height($(window).height() - 20);
+            $("#content").height($(window).height() - 20);
+          }
+          $("#toc").resizable({ handles: { e: "#handle" } });
+          setHeights();
+          $(window).on("resize", setHeights);
+        });
       </script>
     </body>
   </html>
@@ -110,11 +125,15 @@
 
         <dt>Properties</dt>
         <dd>
-          <ul>
+          <table border="1">
+           <tr><th>Property</th><th>Description</th></tr>
            <xsl:for-each select="prop" >
-             <li><xsl:value-of select="@name" /></li>
+             <tr>
+               <td><xsl:value-of select="@name" /></td>
+               <td><xsl:value-of select="." /></td>
+             </tr>
            </xsl:for-each>
-         </ul>
+         </table>
          </dd>
 
         <dt>Resource</dt>
