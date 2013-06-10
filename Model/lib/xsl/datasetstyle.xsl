@@ -20,10 +20,9 @@
         }
         #toc {
           float: left;
-          min-width: 280px;
           width: 280px;
           padding-right: 10px;
-          word-wrap: break-word;
+          overflow-x: auto;
           font-size: 90%;
         }
         #toc ul {
