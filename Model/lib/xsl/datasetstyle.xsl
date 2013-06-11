@@ -231,6 +231,8 @@
               </table>
           </dd>
         </dl>
+        <br/>
+        <br/>
       </div>
     </xsl:for-each>
 </xsl:template >
