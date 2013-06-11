@@ -15,6 +15,15 @@
           font-family: helvetica, arial, sans;
           font-size: 95%;
         }
+        h2 {
+          border-top: 3px solid darkred;
+          border-bottom: 3px solid darkred;
+          padding-top: 4px;
+          padding-bottom: 4px;
+        }
+        h3 {
+          margin-bottom: 0px;
+        }
         #categories, #classes, #content {
           overflow-y: scroll;
         }
@@ -150,8 +159,8 @@
 </xsl:template>
 
 <xsl:template match="datasetClasses" mode="categories">
-  <p><a class="type-filter" href="#all">All categories</a></p>
   <ul class="categories">
+    <li><a class="type-filter" href="#all">All categories</a></li>
     <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)]">
       <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
     </xsl:for-each>
@@ -179,8 +188,8 @@
           <dt>Category</dt>
           <dd> <xsl:value-of select="@category" /> </dd>
 
-          <dt>GraphFile</dt>
-          <dd> <xsl:value-of select="graphPlanFile/@name" /> </dd>
+          <dt>GraphTemplateFile</dt>
+          <dd> <xsl:value-of select="graphTemplateFile/@name" /> </dd>
 
           <dt>Properties</dt>
           <dd>
@@ -195,29 +204,29 @@
            </table>
            </dd>
 
-          <dt>Resource</dt>
+          <dt>Dataset loader</dt>
           <dd><table border="1">
                 <tr>
-                  <th>Resource</th>
+                  <th>DatasetName</th>
                   <th>Version</th>
                   <th>Plugin</th>
                   <th>Scope</th>
                   <th>OrgAbbrev</th>
                 </tr>
                 <tr>
-                  <td><xsl:value-of select="resource/@resource" /> </td>
-                  <td><xsl:value-of select="resource/@version" /> </td>
-                  <td><xsl:value-of select="resource/@plugin" /> </td>
-                  <td><xsl:value-of select="resource/@scope" /> </td>
-                  <td><xsl:value-of select="resource/@organismAbbrev" /> </td>
+                  <td><xsl:value-of select="datasetLoader/@datasetName" /> </td>
+                  <td><xsl:value-of select="datasetLoader/@version" /> </td>
+                  <td><xsl:value-of select="datasetLoader/@plugin" /> </td>
+                  <td><xsl:value-of select="datasetLoader/@scope" /> </td>
+                  <td><xsl:value-of select="datasetLoader/@organismAbbrev" /> </td>
                 </tr>
                 <tr>
                   <th>manualGet: </th>
-                  <td colspan="4"><xsl:value-of select="resource/manualGet/@fileOrDir" /></td>
+                  <td colspan="4"><xsl:value-of select="datasetLoader/manualGet/@fileOrDir" /></td>
                 </tr>
                 <tr>
                   <th>pluginArgs: </th>
-                  <td colspan="4"><xsl:value-of select="resource/pluginArgs" /></td>
+                  <td colspan="4"><xsl:value-of select="datasetLoader/pluginArgs" /></td>
                 </tr>
               </table>
           </dd>
