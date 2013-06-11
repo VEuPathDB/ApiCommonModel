@@ -231,7 +231,6 @@
               </table>
           </dd>
         </dl>
-        <hr/>
       </div>
     </xsl:for-each>
 </xsl:template >
