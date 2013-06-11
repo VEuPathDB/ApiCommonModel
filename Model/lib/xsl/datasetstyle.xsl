@@ -16,8 +16,8 @@
           font-size: 95%;
         }
         h2 {
-          border-top: 3px solid darkred;
-          border-bottom: 3px solid darkred;
+          border-top: 3px solid red;
+          border-bottom: 3px solid red;
           padding-top: 4px;
           padding-bottom: 4px;
         }
