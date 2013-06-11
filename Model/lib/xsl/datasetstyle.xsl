@@ -8,7 +8,7 @@
   <html>
     <head>
       <title> Dataset Classes </title>
-      <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css"/>
+      <link rel="stylesheet" href="//code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css"/>
       <style type="text/css">
         body {
           min-width: 900px;
@@ -107,8 +107,8 @@
       <div id="content">
         <xsl:apply-templates />
       </div>
-      <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
-      <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
+      <script src="//code.jquery.com/jquery-1.9.1.js"></script>
+      <script src="//code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
       <script>
         jQuery(function($) {
           function setHeights() {
@@ -142,6 +142,7 @@
             $(".datasetClass").show();
             $(".classes li").show();
           }
+          $("#content").scrollTop(0);
         });
       </script>
     </body>
