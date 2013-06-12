@@ -14,7 +14,6 @@
           min-width: 900px;
           font-family: helvetica, arial, sans;
           font-size: 95%;
-          background-color: #f4f4f4;
         }
         code {
           font-family: monospace;
