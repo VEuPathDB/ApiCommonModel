@@ -16,8 +16,8 @@
           font-size: 95%;
         }
         h2 {
-          border-top: 3px solid red;
-          border-bottom: 3px solid red;
+          border-top: 4px solid red;
+          border-bottom: 3px solid orange;
           padding-top: 4px;
           padding-bottom: 4px;
         }
