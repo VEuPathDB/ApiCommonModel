@@ -526,4 +526,18 @@ public class TestDatasetInjectorPackage {
     assertTrue(answer.get("pberANKA_secondary_genome_RSRC").get("projectName").equals("HappyDB"));
     assertTrue(answer.get("pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
   }
+  
+  @Test
+  public void test_DatasetPresenterParser_addPropertiesFromFile() {
+    DatasetPresenterParser dpp = new DatasetPresenterParser();
+    String project_home = System.getenv("PROJECT_HOME");
+
+    DatasetPresenterSet dps = dpp.parseFile(project_home
+        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
+    DatasetPropertiesParser propParser = new DatasetPropertiesParser();
+    Map<String,Map<String,String>> propertiesFromFiles = propParser.parseAllPropertyFiles();
+    dps.addPropertiesFromFiles(propertiesFromFiles);
+    DatasetPresenter dp1 = dps.getDatasetPresenters().get("Stunnenberg_RNA-Seq_RSRC");
+    assertTrue(dp1.getPropValue("projectName2").equals("SuperDB"));
+  }
 }

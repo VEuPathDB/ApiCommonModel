@@ -361,6 +361,10 @@ public class DatasetPresenter {
     return datasetInjectorConstructors;
   }
 
+  /**
+   * Called by digester.
+   * @param propValue
+   */
   public void addProp(NamedValue propValue) {
     if (propValues.containsKey(propValue.getName())) {
       throw new UserException("datasetPresenter '" + getDatasetName()
@@ -371,5 +375,21 @@ public class DatasetPresenter {
 
   public Map<String, String> getPropValues() {
     return propValues;
+  }
+  
+  /**
+   * Add properties parsed from datasetProperties files, passed in as a map, keyed on dataset name
+   * @param datasetNamesToProperties
+   */
+  void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties) {
+    if (!datasetNamesToProperties.containsKey(getDatasetName())) return;
+    Map<String,String> propsFromFile = datasetNamesToProperties.get(getDatasetName());
+    for (String key : propsFromFile.keySet()) {
+      if (key.equals("datasetLoaderName")) continue;  // the dataset name; redundant
+      if (key.equals("projectName")) continue;  // redundant
+      if (propValues.containsKey(key) ) throw new UserException("datasetPresenter '" + getDatasetName()
+          + "' has a property duplicated from dataset property file provided by the dataset class: " + key);
+      propValues.put(key, propsFromFile.get(key));
+    }
   }
 }

@@ -139,6 +139,12 @@ public class DatasetPresenterSet {
       }
     }        
   }
+  
+  void addPropertiesFromFiles(Map<String,Map<String,String>> datasetNamesToProperties) {
+    for (DatasetPresenter datasetPresenter : presenters.values()) {
+      datasetPresenter.addPropertiesFromFile(datasetNamesToProperties);
+    }
+  }
 
   // //////////////////// Static methods //////////////////
 
@@ -150,6 +156,9 @@ public class DatasetPresenterSet {
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     DatasetPresenterSet dps = dpp.parseDir(presentersDir);
+    DatasetPropertiesParser propParser = new DatasetPropertiesParser();
+    Map<String,Map<String,String>> propertiesFromFiles = propParser.parseAllPropertyFiles();
+    dps.addPropertiesFromFiles(propertiesFromFiles);
     return dps;
   }
 
