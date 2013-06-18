@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.gusdb.fgputil.xml.NamedValue;
 import org.gusdb.fgputil.xml.Text;
@@ -381,9 +382,12 @@ public class DatasetPresenter {
    * Add properties parsed from datasetProperties files, passed in as a map, keyed on dataset name
    * @param datasetNamesToProperties
    */
-  void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties) {
-    if (!datasetNamesToProperties.containsKey(getDatasetName())) return;
-    Map<String,String> propsFromFile = datasetNamesToProperties.get(getDatasetName());
+  void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
+    String datasetKey = propValues.containsKey("projectName")? propValues.get("projectName") + ":" + getDatasetName() : getDatasetName();
+    if (duplicateDatasetNames.contains(datasetKey)) throw new UserException("datasetPresenter '" + getDatasetName()
+        + "' is attempting to use properties from dataset '" + datasetKey + "' but that dataset is not unique in the dataset properties files");
+    if (!datasetNamesToProperties.containsKey(datasetKey)) return;
+    Map<String,String> propsFromFile = datasetNamesToProperties.get(datasetKey);
     for (String key : propsFromFile.keySet()) {
       if (key.equals("datasetLoaderName")) continue;  // the dataset name; redundant
       if (key.equals("projectName")) continue;  // redundant

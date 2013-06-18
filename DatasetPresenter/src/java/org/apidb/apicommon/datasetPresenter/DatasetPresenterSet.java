@@ -2,6 +2,7 @@ package org.apidb.apicommon.datasetPresenter;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -140,9 +141,9 @@ public class DatasetPresenterSet {
     }        
   }
   
-  void addPropertiesFromFiles(Map<String,Map<String,String>> datasetNamesToProperties) {
+  void addPropertiesFromFiles(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
     for (DatasetPresenter datasetPresenter : presenters.values()) {
-      datasetPresenter.addPropertiesFromFile(datasetNamesToProperties);
+      datasetPresenter.addPropertiesFromFile(datasetNamesToProperties, duplicateDatasetNames);
     }
   }
 
@@ -156,9 +157,11 @@ public class DatasetPresenterSet {
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     DatasetPresenterSet dps = dpp.parseDir(presentersDir);
+    Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
+    Set<String> duplicateDatasetNames = new HashSet<String>();
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
-    Map<String,Map<String,String>> propertiesFromFiles = propParser.parseAllPropertyFiles();
-    dps.addPropertiesFromFiles(propertiesFromFiles);
+    propParser.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
+    dps.addPropertiesFromFiles(propertiesFromFiles, duplicateDatasetNames);
     return dps;
   }
 

@@ -510,21 +510,24 @@ public class TestDatasetInjectorPackage {
   public void test_DatasetPropertiesParser_parseFile() {
     String gus_home = System.getenv("GUS_HOME");
     Map<String,Map<String,String>> answer = new HashMap<String,Map<String,String>>();
+    Set<String> duplicateDatasetNames = new HashSet<String>();
     DatasetPropertiesParser.parseFile(gus_home + "/lib/prop/datasetProperties/test1.prop" +
-    		"", answer);
+    		"", answer, duplicateDatasetNames);
     assertTrue(answer.size() == 2);
-    assertTrue(answer.get("pberANKA_primary_genome_RSRC").get("name").equals("GeneDB"));
-    assertTrue(answer.get("pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
+    assertTrue(answer.get("PlasmoDB:pberANKA_primary_genome_RSRC").get("name").equals("GeneDB"));
+    assertTrue(answer.get("PlasmoDB:pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
   }
   
   @Test
   public void test_DatasetPropertiesParser_parseAllPropertyFiles() {
     DatasetPropertiesParser dpp = new DatasetPropertiesParser();
-    Map<String,Map<String,String>> answer = dpp.parseAllPropertyFiles();
-    assertTrue(answer.size() == 4);
-    assertTrue(answer.get("pberANKA_primary_genome_RSRC").get("name").equals("GeneDB"));
-    assertTrue(answer.get("pberANKA_secondary_genome_RSRC").get("projectName").equals("HappyDB"));
-    assertTrue(answer.get("pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
+    Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
+    Set<String> duplicateDatasetNames = new HashSet<String>();
+    dpp.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
+    assertTrue(propertiesFromFiles.size() == 4);
+    assertTrue(propertiesFromFiles.get("PlasmoDB:pberANKA_primary_genome_RSRC").get("name").equals("GeneDB"));
+    assertTrue(propertiesFromFiles.get("PlasmoDB:pberANKA_secondary_genome_RSRC").get("projectName").equals("HappyDB"));
+    assertTrue(propertiesFromFiles.get("PlasmoDB:pberANKA_primary_genome_features_RSRC").get("ncbiTaxonId").equals("5823"));
   }
   
   @Test
@@ -535,8 +538,10 @@ public class TestDatasetInjectorPackage {
     DatasetPresenterSet dps = dpp.parseFile(project_home
         + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
-    Map<String,Map<String,String>> propertiesFromFiles = propParser.parseAllPropertyFiles();
-    dps.addPropertiesFromFiles(propertiesFromFiles);
+    Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
+    Set<String> duplicateDatasetNames = new HashSet<String>();
+    propParser.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
+    dps.addPropertiesFromFiles(propertiesFromFiles, duplicateDatasetNames);
     DatasetPresenter dp1 = dps.getDatasetPresenters().get("Stunnenberg_RNA-Seq_RSRC");
     assertTrue(dp1.getPropValue("projectName2").equals("SuperDB"));
   }
