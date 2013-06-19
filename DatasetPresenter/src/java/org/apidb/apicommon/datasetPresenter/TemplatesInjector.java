@@ -159,6 +159,10 @@ public class TemplatesInjector {
     CliUtil.addOption(options, "presentersDir",
         "a directory containing one or more dataset presenter xml files", true,
         true);
+    
+    CliUtil.addOption(options, "globalPresentersFile",
+        "an optional global presenters XML file", false,
+        true);
 
     return options;
   }
@@ -175,7 +179,7 @@ public class TemplatesInjector {
     // parse command line
     Options options = declareOptions();
     String cmdlineSyntax = cmdName
-        + " -templatesDir templates_dir -presentersDir presenters_dir -contactsXmlFile contacts_file";
+        + " -templatesDir templates_dir -presentersDir presenters_dir [-globalPresentersFile global_file] -contactsXmlFile contacts_file";
     String cmdDescrip = "Read provided dataset presenter files and inject templates into the presentation layer.";
     CommandLine cmdLine = CliUtil.parseOptions(cmdlineSyntax, cmdDescrip,
         getUsageNotes(), options, args);
@@ -183,7 +187,7 @@ public class TemplatesInjector {
     return cmdLine;
   }
 
-    static void parseAndProcess(String templatesDir, String presentersDir, String contactsFile) {
+    static void parseAndProcess(String templatesDir, String presentersDir, String globalXmlFile, String contactsFile) {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
 
@@ -195,7 +199,7 @@ public class TemplatesInjector {
     ContactsFileParser contactsParser = new ContactsFileParser();
     Contacts allContacts = contactsParser.parseFile(contactsFile);
 
-    DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
+    DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir, globalXmlFile);
 
     // the "getContacts" method will add approprate contacts to each presenter
     for (DatasetPresenter datasetPresenter : datasetPresenterSet.getDatasetPresenters().values()) {
@@ -222,9 +226,10 @@ public class TemplatesInjector {
     CommandLine cmdLine = getCmdLine(args);
     String templatesDir = cmdLine.getOptionValue("templatesDir");
     String presentersDir = cmdLine.getOptionValue("presentersDir");
+    String globalXmlFile = cmdLine.getOptionValue("globalPresentersFile");
     String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     try {
-        parseAndProcess(templatesDir, presentersDir, contactsFile);
+        parseAndProcess(templatesDir, presentersDir, globalXmlFile, contactsFile);
     } catch (UserException ex) {
       System.err.println(nl + "Error: " + ex.getMessage() + nl);
       System.exit(1);

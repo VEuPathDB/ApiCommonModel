@@ -167,13 +167,14 @@ public class DatasetPresenterParser extends XmlParser {
     return datasetPresenterSet;
   }
 
-  DatasetPresenterSet parseDir(String presenterXmlDirPath) {
+  DatasetPresenterSet parseDir(String presenterXmlDirPath, String globalXmlFile) {
     DatasetPresenterSet bigDatasetPresenterSet = new DatasetPresenterSet();
     List<File> presenterFiles = getPresenterXmlFilesInDir(presenterXmlDirPath);
     for (File presenterFile : presenterFiles) {
       bigDatasetPresenterSet.addDatasetPresenterSet(parseFile(presenterXmlDirPath
           + "/" + presenterFile.getName()));
     }
+    if (globalXmlFile != null) bigDatasetPresenterSet.addDatasetPresenterSet(parseFile(globalXmlFile));
 
     return bigDatasetPresenterSet;
   }

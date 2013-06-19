@@ -544,6 +544,7 @@ public class DatasetPresenterSetLoader {
 
   public static DatasetPresenterSetLoader constructLoader(CommandLine cmdLine) {
     String presentersDir = cmdLine.getOptionValue("presentersDir");
+    String globalPresentersFile = cmdLine.getOptionValue("globalPresentersFile");
     String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     String propFile = cmdLine.getOptionValue("tuningPropsXmlFile");
     String defaultInjectorsFile = cmdLine.getOptionValue("defaultInjectorClassesFile");
@@ -552,7 +553,7 @@ public class DatasetPresenterSetLoader {
 
     System.err.println("Parsing and validating DatasetPresenters XML files found in directory "
         + presentersDir);
-    DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir);
+    DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir, globalPresentersFile);
     DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile,
         contactsFile, defaultInjectorsFile, instance, suffix);
     dpsl.setDatasetPresenterSet(datasetPresenterSet);

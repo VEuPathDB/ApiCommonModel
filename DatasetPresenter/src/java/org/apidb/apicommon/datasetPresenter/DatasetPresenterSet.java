@@ -149,14 +149,14 @@ public class DatasetPresenterSet {
 
   // //////////////////// Static methods //////////////////
 
-  static DatasetPresenterSet createFromPresentersDir(String presentersDir) {
+  static DatasetPresenterSet createFromPresentersDir(String presentersDir, String globalXmlFile) {
     File pres = new File(presentersDir);
     if (!pres.isDirectory())
       throw new UserException("Presenters dir " + presentersDir
           + " must be an existing directory");
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
-    DatasetPresenterSet dps = dpp.parseDir(presentersDir);
+    DatasetPresenterSet dps = dpp.parseDir(presentersDir, globalXmlFile);
     Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
     Set<String> duplicateDatasetNames = new HashSet<String>();
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();

@@ -379,7 +379,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parseDir(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData");
+        + "/ApiCommonShared/DatasetPresenter/testData", null);
     assertTrue(dps.getSize() >= 4);
   }
   
@@ -420,7 +420,7 @@ public class TestDatasetInjectorPackage {
   public void test_TemplatesInjector_parseAndProcess() {
     String gus_home = System.getenv("GUS_HOME");
     
-    TemplatesInjector.parseAndProcess(gus_home + "/lib/test", gus_home + "/lib/test", gus_home + "/lib/xml/datasetPresenters/contacts/contacts.xml");  // if it doesn't throw an exception we are good
+    TemplatesInjector.parseAndProcess(gus_home + "/lib/test", gus_home + "/lib/test", null, gus_home + "/lib/xml/datasetPresenters/contacts/contacts.xml");  // if it doesn't throw an exception we are good
   }
   
   @Test 
