@@ -1,11 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector.custom.HostDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class RNASeqME49PostInfection extends DatasetInjector {
+public class RNASeqME49PostInfection extends CusomGenePageExpressionGraphs {
 
-  public void injectTemplates() {
-  }
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Gregory::TgME49RnaSeqHuman"); 
@@ -13,11 +11,6 @@ public class RNASeqME49PostInfection extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqTgME49HumanPercentile"); 
   }
 
-  // second column is for documentation
-  public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
-  }
 
 
 }
