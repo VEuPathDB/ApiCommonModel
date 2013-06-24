@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAndCoverage;
 
-public class RNASeqSibleyBrady extends CusomGenePageExpressionGraphs {
+public class RNASeqSibleyBrady extends CusomGenePageExpressionGraphsAndCoverage {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesBySibleyRNASeqBradyzoitePct"); 

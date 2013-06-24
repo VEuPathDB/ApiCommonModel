@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAndCoverage;
 
-public class RNASeqGregoryVEG extends CusomGenePageExpressionGraphs {
+public class RNASeqGregoryVEG extends CusomGenePageExpressionGraphsAndCoverage {
 
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByGregoryRNASeqTsFC"); 
