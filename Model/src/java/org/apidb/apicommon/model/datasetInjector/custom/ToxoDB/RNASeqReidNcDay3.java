@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAndCoverage;
 
-public class RNASeqReidNcDay3 extends CusomGenePageExpressionGraphs {
+public class RNASeqReidNcDay3 extends CusomGenePageExpressionGraphsAndCoverage {
 
   public void addModelReferences() {
  
