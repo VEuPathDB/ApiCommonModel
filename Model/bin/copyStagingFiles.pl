@@ -21,6 +21,14 @@ my ($help, $configFile, $apiSiteFilesDir, $includeProjects, $buildNumber);
 my $destRootDir = '/eupath/data/apiSiteFiles/webServices/';
 $destRootDir = $apiSiteFilesDir if ($apiSiteFilesDir);
 
+if ($includeProjects eq 'EuPath'){
+    $includeProjects = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB/;
+}
+
+if ($includeProjects eq 'ALL'){
+    $includeProjects = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB FungiDB/;
+}
+
 # build hash of project_id and staging_dir
 my %stagingDir;
 open (IN, "$configFile") || die "ERROR: Couldn't open prop file '$configFile'\n";;
@@ -46,8 +54,9 @@ foreach my $p (@projects) {
   print "\n$p DONE: $num_of_files_and_dirs,$num_of_dirs,$depth_traversed \n";
 
   ## fix Blast file names
-  finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
-
+  unless ($p eq 'TrichDB') {
+      finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
+  }
 }
 
 sub process_file {
@@ -68,7 +77,7 @@ sub usage {
   if($e) {
     print STDERR $e . "\n";
   }
-  print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST> -- buildNumber <NUM> (--apiSiteFilesDir <DIR>)\n";
+  print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> -- buildNumber <NUM> (--apiSiteFilesDir <DIR>)\n";
   exit;
 }
 
