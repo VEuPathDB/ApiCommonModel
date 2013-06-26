@@ -2,7 +2,8 @@
 
 use strict;
 use File::Copy::Recursive qw(dircopy);
-use File::Spec;
+use File::Path qw(rmtree);
+use File::Spec qw(splitdir);
 use File::Find;
 use File::Basename;
 use Getopt::Long;
@@ -46,6 +47,12 @@ foreach my $p (@projects) {
   die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
 
   my $destDir = "$destRootDir$p/build-$buildNumber";
+
+  ## handle the case when destDir exists
+  if (-d $destDir) {
+    print "WARNING: existing $destDir is being deleted, and will be remade.\n";
+    rmtree ($destDir);
+  }
 
   ## do the copy from Staging
   my $startDir = $stagingDir{$p};
