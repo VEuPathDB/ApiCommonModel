@@ -206,7 +206,8 @@ public class TemplatesInjector {
 
         datasetPresenter.getContacts(allContacts);
 
-        datasetPresenter.getDatasetInjectorConstructor().setPrimaryContact(datasetPresenter.getPrimaryContact());
+        if (datasetPresenter.getDatasetInjectorConstructor() != null)
+          datasetPresenter.getDatasetInjectorConstructor().setPrimaryContact(datasetPresenter.getPrimaryContact());
     }
 
     TemplateSet templateSet = new TemplateSet();
