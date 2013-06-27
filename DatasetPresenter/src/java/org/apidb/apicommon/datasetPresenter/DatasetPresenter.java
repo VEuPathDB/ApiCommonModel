@@ -393,7 +393,7 @@ public class DatasetPresenter {
       if (propValues.containsKey(key) ) throw new UserException("datasetPresenter '" + getDatasetName()
           + "' has a property duplicated from dataset property file provided by the dataset class: " + key);
       propValues.put(key, propsFromFile.get(key));
-      datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
+      if (datasetInjectorConstructor != null) datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
     }
   }
 }

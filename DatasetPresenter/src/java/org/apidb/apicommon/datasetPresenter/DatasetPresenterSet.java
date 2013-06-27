@@ -153,13 +153,17 @@ public class DatasetPresenterSet {
       throw new UserException("Presenters dir " + presentersDir
           + " must be an existing directory");
 
+    // get the presenters into memory
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     DatasetPresenterSet dps = dpp.parseDir(presentersDir, globalXmlFile);
+    
+    // add properties from dataset prop files to presenters
     Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
     Set<String> duplicateDatasetNames = new HashSet<String>();
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
     propParser.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
     dps.addPropertiesFromFiles(propertiesFromFiles, duplicateDatasetNames);
+    
     return dps;
   }
 
