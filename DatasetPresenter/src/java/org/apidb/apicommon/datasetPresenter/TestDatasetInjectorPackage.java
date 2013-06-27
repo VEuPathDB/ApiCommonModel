@@ -280,17 +280,14 @@ public class TestDatasetInjectorPackage {
     dp1.setName("happy");
     DatasetInjectorConstructor di1 = new DatasetInjectorConstructor();
     di1.setClassName("org.apidb.apicommon.datasetPresenter.TestInjector");
-    dp1.addDatasetInjector(di1);
-    DatasetInjectorConstructor di2 = new DatasetInjectorConstructor();
-    di2.setClassName("org.apidb.apicommon.datasetPresenter.TestInjector");
-    dp1.addDatasetInjector(di2);
+    dp1.setDatasetInjector(di1);
     dps.addDatasetPresenter(dp1);
 
     DatasetPresenter dp2 = new DatasetPresenter();
     dp2.setName("sad");
     DatasetInjectorConstructor di3 = new DatasetInjectorConstructor();
     di3.setClassName("org.apidb.apicommon.datasetPresenter.TestInjector");
-    dp2.addDatasetInjector(di3);
+    dp2.setDatasetInjector(di3);
     dps.addDatasetPresenter(dp2);
 
     // run "inject" to produce a set of template instances
@@ -299,22 +296,18 @@ public class TestDatasetInjectorPackage {
 
     List<TemplateInstance> fakeTemplate1Instances = dis.getTemplateInstanceSet().getTemplateInstances(
         "test3_template1");
-    assertTrue(fakeTemplate1Instances.size() == 3);
+    assertTrue(fakeTemplate1Instances.size() == 2);
     assertTrue(fakeTemplate1Instances.get(0).getPropValue("datasetName").equals(
         "happy"));
     assertTrue(fakeTemplate1Instances.get(1).getPropValue("datasetName").equals(
-        "happy"));
-    assertTrue(fakeTemplate1Instances.get(2).getPropValue("datasetName").equals(
         "sad"));
 
     List<TemplateInstance> fakeTemplate2Instances = dis.getTemplateInstanceSet().getTemplateInstances(
         "test3_template2");
-    assertTrue(fakeTemplate2Instances.size() == 3);
+    assertTrue(fakeTemplate2Instances.size() == 2);
     assertTrue(fakeTemplate2Instances.get(0).getPropValue("datasetName").equals(
         "happy"));
     assertTrue(fakeTemplate2Instances.get(1).getPropValue("datasetName").equals(
-        "happy"));
-    assertTrue(fakeTemplate2Instances.get(2).getPropValue("datasetName").equals(
         "sad"));
 
   }
@@ -350,14 +343,14 @@ public class TestDatasetInjectorPackage {
     assertTrue(dp2.getPublications().get(1).getPubmedId().equals("54321"));
     assertTrue(dp2.getLinks().get(1).getUrl().equals("someplace.com"));
     assertTrue(dp2.getLinks().get(1).getText().equals("exciting"));
-    assertTrue(dp1.getDatasetInjectors().size() == 1);
-    assertTrue(dp2.getDatasetInjectors().size() == 1);
+    assertTrue(dp1.getDatasetInjectorConstructor() != null);
+    assertTrue(dp2.getDatasetInjectorConstructor() != null);
     assertTrue(dp1.getModelReferences().size() == 2);
     assertTrue(dp1.getModelReferences().get(0).getRecordClassName().equals("GeneRecord"));
     assertTrue(dp1.getModelReferences().get(0).getTargetType().equals("question"));
     assertTrue(dp1.getModelReferences().get(0).getTargetName().equals("someQuestion"));
-    DatasetInjectorConstructor dic = dp2.getDatasetInjectors().get(0);
-    assertTrue(dp2.getDatasetInjectors().get(0).getDatasetInjectorClassName().equals("org.apidb.apicommon.datasetPresenter.TestInjector"));
+    DatasetInjectorConstructor dic = dp2.getDatasetInjectorConstructor();
+    assertTrue(dp2.getDatasetInjectorConstructor().getDatasetInjectorClassName().equals("org.apidb.apicommon.datasetPresenter.TestInjector"));
     assertTrue(dic.getPropValue("isSingleStrand").equals("true"));
     assertTrue(dps.getInternalDatasets().size() == 1);
     InternalDataset intD = dps.getInternalDatasets().get("dontcare");
@@ -503,7 +496,7 @@ public class TestDatasetInjectorPackage {
     dp.setType("rnaSeq");
     dp.setSubtype("paired");
     dp.setDefaultDatasetInjector(map);
-    assertTrue(dp.getDatasetInjectors().get(0).getClassName().equals("org.apidb.apicommon.datasetPresenter.RnaSeqInjector"));
+    assertTrue(dp.getDatasetInjectorConstructor().getClassName().equals("org.apidb.apicommon.datasetPresenter.RnaSeqInjector"));
   }
   
   @Test

@@ -39,7 +39,7 @@ public class DatasetPresenter {
   private Boolean isSpeciesScope;
   private boolean foundInDb = false;
 
-  private List<DatasetInjectorConstructor> datasetInjectorConstructors = new ArrayList<DatasetInjectorConstructor>();
+  private DatasetInjectorConstructor datasetInjectorConstructor;
   private List<String> contactIds = new ArrayList<String>(); // includes primary
   private String primaryContactId;
   private List<Contact> contacts;
@@ -317,20 +317,19 @@ public class DatasetPresenter {
   }
 
   /**
-   * Add a DatasetInjector. This method should be changed to setDatasetInjector
-   * as we no longer support multiple DasasetInjectors per DatasetPresenter
+   * Add a DatasetInjector.
    * 
    * @param datasetInjector
    */
-  public void addDatasetInjector(DatasetInjectorConstructor datasetInjector) {
-    datasetInjectorConstructors.add(datasetInjector);
+  public void setDatasetInjector(DatasetInjectorConstructor datasetInjector) {
+    if (datasetInjectorConstructor != null) throw new UserException("Adding more than one datasetInjector to datasetPresenter " + getDatasetName());
+    datasetInjectorConstructor = datasetInjector;
     datasetInjector.inheritDatasetProps(this);
   }
 
   private DatasetInjector getDatasetInjector() {
-    if (datasetInjector == null && datasetInjectorConstructors.size() != 0) {
-      DatasetInjectorConstructor dic = datasetInjectorConstructors.get(0);
-      datasetInjector = dic.getDatasetInjector();
+    if (datasetInjector == null && datasetInjectorConstructor != null) {
+      datasetInjector = datasetInjectorConstructor.getDatasetInjector();
       datasetInjector.addModelReferences();
     }
     return datasetInjector;
@@ -342,11 +341,11 @@ public class DatasetPresenter {
         || defaultDatasetInjectors == null
         || !defaultDatasetInjectors.containsKey(type)
         || !defaultDatasetInjectors.get(type).containsKey(subtype)
-        || datasetInjectorConstructors.size() != 0)
+        || datasetInjectorConstructor != null)
       return;
     DatasetInjectorConstructor constructor = new DatasetInjectorConstructor();
     constructor.setClassName(defaultDatasetInjectors.get(type).get(subtype));
-    addDatasetInjector(constructor);
+    setDatasetInjector(constructor);
   }
 
   public List<ModelReference> getModelReferences() {
@@ -358,8 +357,8 @@ public class DatasetPresenter {
     return answer;
   }
 
-  public List<DatasetInjectorConstructor> getDatasetInjectors() {
-    return datasetInjectorConstructors;
+  public DatasetInjectorConstructor getDatasetInjectorConstructor() {
+    return datasetInjectorConstructor;
   }
 
   /**
@@ -394,6 +393,7 @@ public class DatasetPresenter {
       if (propValues.containsKey(key) ) throw new UserException("datasetPresenter '" + getDatasetName()
           + "' has a property duplicated from dataset property file provided by the dataset class: " + key);
       propValues.put(key, propsFromFile.get(key));
+      datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
     }
   }
 }

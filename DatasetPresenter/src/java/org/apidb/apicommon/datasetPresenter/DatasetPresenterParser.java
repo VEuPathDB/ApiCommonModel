@@ -124,7 +124,7 @@ public class DatasetPresenterParser extends XmlParser {
 
     configureNode(digester,
         "datasetPresenters/datasetPresenter/templateInjector",
-        DatasetInjectorConstructor.class, "addDatasetInjector");
+        DatasetInjectorConstructor.class, "setDatasetInjector");
 
     configureNode(digester,
         "datasetPresenters/datasetPresenter/templateInjector/prop",

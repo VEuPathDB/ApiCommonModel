@@ -89,9 +89,7 @@ public class DatasetPresenterSet {
    */
   void addToDatasetInjectorSet(DatasetInjectorSet datasetInjectorSet) {
     for (DatasetPresenter presenter : presenters.values()) {
-      for (DatasetInjectorConstructor datasetInjectorConstructor : presenter.getDatasetInjectors()) {
-        datasetInjectorSet.addDatasetInjector(datasetInjectorConstructor.getDatasetInjector());
-      }
+      datasetInjectorSet.addDatasetInjector(presenter.getDatasetInjectorConstructor().getDatasetInjector());
     }
   }
 
