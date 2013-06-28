@@ -25,11 +25,14 @@
           padding-top: 4px;
           padding-bottom: 4px;
         }
-        h3 {
+        h3, h4 {
           margin-bottom: 0px;
         }
         h3, dt {
           color: purple;
+        }
+        table {
+          margin-top: 1em;
         }
         #categories, #classes, #content {
           overflow-y: scroll;
@@ -93,12 +96,12 @@
           margin-left: 290px;
           padding-left: 10px;
         }
-        #content dt {
-          font-weight: bold;
+        #content .section > div {
+          padding-left: 1em;
+          overflow-x: auto;
         }
-        #content dd {
-          margin-left: 10px;
-          margin-bottom: 10px;
+        #content h3.inline, #content h3.inline + div {
+          display: inline-block;
         }
         #content ul {
           padding-left: 20px;
@@ -207,128 +210,153 @@
         <a name="{@class}"/>
         <h2>Class: <xsl:value-of select="@class" /> </h2>
 
-        <dl>
           <xsl:if test="@datasetFileHint and @datasetFileHint != ''">
-            <dt>Target Dataset File</dt>
-            <dd><xsl:value-of select="@datasetFileHint"/></dd>
-          </xsl:if>
-
-          <xsl:if test="purpose and purpose != ''">
-            <dt>Purpose</dt>
-            <dd> <xsl:value-of select="purpose" /> </dd>
+            <div class="section">
+              <h3 class="inline">Target Dataset File</h3>
+              <div><xsl:value-of select="@datasetFileHint"/></div>
+            </div>
           </xsl:if>
 
           <xsl:choose>
             <xsl:when test="@category and @category != ''">
-              <dt>Category</dt>
-              <dd> <xsl:value-of select="@category" /> </dd>
+              <div class="section">
+                <h3 class="inline">Category</h3>
+                <div> <xsl:value-of select="@category" /> </div>
+              </div>
             </xsl:when>
             <xsl:when test="datasetLoader/@type and datasetLoader/@type != ''">
-              <dt>Category</dt>
-              <dd> <xsl:value-of select="datasetLoader/@type" /> </dd>
+              <div class="section">
+                <h3 class="inline">Category</h3>
+                <div> <xsl:value-of select="datasetLoader/@type" /> </div>
+              </div>
             </xsl:when>
           </xsl:choose>
 
-          <xsl:if test="qaNotes">
-            <dt>QA Notes</dt>
-            <dd><xsl:value-of select="qaNotes"/></dd>
+          <div class="section">
+            <h3 class="inline">GraphTemplateFile</h3>
+            <div> <xsl:value-of select="graphTemplateFile/@name" /> </div>
+          </div>
+
+          <xsl:if test="purpose and purpose != ''">
+            <div class="section">
+              <h3>Purpose</h3>
+              <div> <xsl:value-of select="purpose" /> </div>
+            </div>
           </xsl:if>
 
-          <dt>GraphTemplateFile</dt>
-          <dd> <xsl:value-of select="graphTemplateFile/@name" /> </dd>
+          <xsl:if test="qaNotes">
+            <div class="section">
+              <h3>QA Notes</h3>
+              <div><xsl:value-of select="qaNotes"/></div>
+            </div>
+          </xsl:if>
 
-          <dt>Properties</dt>
-          <dd>
-            <table border="1">
-             <tr><th>Property</th><th>Description</th></tr>
-             <xsl:for-each select="prop" >
-               <tr>
-                 <td><xsl:value-of select="@name" /></td>
-                 <td><xsl:value-of select="." /></td>
-               </tr>
-             </xsl:for-each>
-           </table>
-         </dd>
-
-         <xsl:if test="templateInjector">
-           <dt>Template Injectors</dt>
-           <dd>
-             <xsl:for-each select="templateInjector">
-               <table border="1">
-                 <tr><th>Name</th><th>Notes</th></tr>
-                 <tr><td><xsl:value-of select="@name"/></td><td><xsl:value-of select="@notes"/></td></tr>
-               </table>
-             </xsl:for-each>
-           </dd>
-         </xsl:if>
+          <div class="section">
+            <h3>Properties</h3>
+            <div>
+              <table border="1">
+               <tr><th>Property</th><th>Description</th></tr>
+               <xsl:for-each select="prop" >
+                 <tr>
+                   <td><xsl:value-of select="@name" /></td>
+                   <td><xsl:value-of select="." /></td>
+                 </tr>
+               </xsl:for-each>
+             </table>
+           </div>
+         </div>
 
          <xsl:if test="datasetLoader/manualGet">
-           <dt>Manual Delivery</dt>
-           <dd>
-             <xsl:for-each select="datasetLoader/manualGet">
-               <div>
-                 <b>File to get: </b>
-                 <xsl:value-of select="@fileOrDir"/>
-               </div>
-               <div>
-                 <b>Requirements for <code>final/</code> dir: </b>
-                 <xsl:value-of select="descriptionOfFinal"/>
-               </div>
-               <table border="1">
-                 <tr><th>Example</th><th>Notes</th></tr>
-                 <xsl:for-each select="example">
-                   <tr><td><xsl:value-of select="@dir"/></td><td><xsl:value-of select="."/></td></tr>
-                 </xsl:for-each>
-               </table>
-             </xsl:for-each>
-           </dd>
+           <div class="section">
+             <h3>Manual Delivery</h3>
+             <div>
+               <xsl:for-each select="datasetLoader/manualGet">
+                 <p>
+                   <b>File to get: </b>
+                   <xsl:value-of select="@fileOrDir"/>
+                 </p>
+
+                 <xsl:if test="descriptionOfFinal">
+                   <div class="section">
+                     <h4>Requirements for <code>final/</code> dir:</h4>
+                     <div><xsl:value-of select="descriptionOfFinal"/></div>
+                   </div>
+                 </xsl:if>
+
+                 <xsl:if test="example">
+                   <table border="1">
+                     <tr><th>Example</th><th>Notes</th></tr>
+                     <xsl:for-each select="example">
+                       <tr><td><xsl:value-of select="@dir"/></td><td><xsl:value-of select="."/></td></tr>
+                     </xsl:for-each>
+                   </table>
+                 </xsl:if>
+               </xsl:for-each>
+             </div>
+           </div>
          </xsl:if>
 
           <xsl:if test="datasetLoader">
             <br/>
-            <dt>Dataset loader</dt>
-            <dd>
-              <!--
-              <table border="1">
-                <tr>
-                  <th>DatasetName</th>
-                  <th>Version</th>
-                  <th>Scope</th>
-                  <th>OrgAbbrev</th>
-                </tr>
-                <tr>
-                  <td><code><xsl:value-of select="datasetLoader/@datasetName" /></code> </td>
-                  <td><code><xsl:value-of select="datasetLoader/@version" /></code> </td>
-                  <td><code><xsl:value-of select="datasetLoader/@scope" /></code> </td>
-                  <td><code><xsl:value-of select="datasetLoader/@organismAbbrev" /></code> </td>
-                </tr>
-                <tr>
-                  <th>manualGet: </th>
-                  <td colspan="3"><code><xsl:value-of select="datasetLoader/manualGet/@fileOrDir" /></code></td>
-                </tr>
-                <tr>
-                  <th>plugin: </th>
-                  <td colspan="3"><code><xsl:value-of select="datasetLoader/@plugin" /></code></td>
-                </tr>
-                <tr>
-                  <th>pluginArgs: </th>
-                  <td colspan="3"><code><xsl:value-of select="datasetLoader/pluginArgs" /></code></td>
-                </tr>
-              </table>
-              -->
-              <xsl:for-each select="datasetLoader">
-                <div class="code" style="padding-top:4px">
-                  <xsl:call-template name="node"/>
-                </div>
-              </xsl:for-each>
-            </dd>
+            <div class="section">
+              <h3>Dataset loader</h3>
+              <div>
+                <!--
+                <table border="1">
+                  <tr>
+                    <th>DatasetName</th>
+                    <th>Version</th>
+                    <th>Scope</th>
+                    <th>OrgAbbrev</th>
+                  </tr>
+                  <tr>
+                    <td><code><xsl:value-of select="datasetLoader/@datasetName" /></code> </td>
+                    <td><code><xsl:value-of select="datasetLoader/@version" /></code> </td>
+                    <td><code><xsl:value-of select="datasetLoader/@scope" /></code> </td>
+                    <td><code><xsl:value-of select="datasetLoader/@organismAbbrev" /></code> </td>
+                  </tr>
+                  <tr>
+                    <th>manualGet: </th>
+                    <td colspan="3"><code><xsl:value-of select="datasetLoader/manualGet/@fileOrDir" /></code></td>
+                  </tr>
+                  <tr>
+                    <th>plugin: </th>
+                    <td colspan="3"><code><xsl:value-of select="datasetLoader/@plugin" /></code></td>
+                  </tr>
+                  <tr>
+                    <th>pluginArgs: </th>
+                    <td colspan="3"><code><xsl:value-of select="datasetLoader/pluginArgs" /></code></td>
+                  </tr>
+                </table>
+                -->
+                <xsl:for-each select="datasetLoader">
+                  <div class="code" style="padding-top:4px">
+                    <xsl:call-template name="node"/>
+                  </div>
+                </xsl:for-each>
+              </div>
+            </div>
           </xsl:if>
-        </dl>
-        <br/>
-        <br/>
+
+         <xsl:if test="templateInjector">
+           <div class="section">
+             <h3>Template Injectors</h3>
+             <div>
+               <xsl:for-each select="templateInjector">
+                 <table border="1">
+                   <tr><th>Name</th><th>Notes</th></tr>
+                   <tr><td><xsl:value-of select="@name"/></td><td><xsl:value-of select="@notes"/></td></tr>
+                 </table>
+               </xsl:for-each>
+             </div>
+           </div>
+         </xsl:if>
+
+         <br/>
+         <br/>
       </div>
     </xsl:for-each>
-</xsl:template >
+  </xsl:template >
 </xsl:stylesheet >
   
   
