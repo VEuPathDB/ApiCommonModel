@@ -224,7 +224,7 @@
 
           <xsl:if test="@datasetFileHint and @datasetFileHint != ''">
             <div class="section">
-              <h3 class="inline">Target Dataset File</h3>
+              <h3 class="inline">Target Dataset File:</h3>
               <div><xsl:value-of select="@datasetFileHint"/></div>
             </div>
           </xsl:if>
@@ -232,20 +232,20 @@
           <xsl:choose>
             <xsl:when test="@category and @category != ''">
               <div class="section">
-                <h3 class="inline">Category</h3>
+                <h3 class="inline">Category:</h3>
                 <div> <xsl:value-of select="@category" /> </div>
               </div>
             </xsl:when>
             <xsl:when test="datasetLoader/@type and datasetLoader/@type != ''">
               <div class="section">
-                <h3 class="inline">Category</h3>
+                <h3 class="inline">Category:</h3>
                 <div> <xsl:value-of select="datasetLoader/@type" /> </div>
               </div>
             </xsl:when>
           </xsl:choose>
 
           <div class="section">
-            <h3 class="inline">GraphTemplateFile</h3>
+            <h3 class="inline">GraphTemplateFile:</h3>
             <div> <xsl:value-of select="graphTemplateFile/@name" /> </div>
           </div>
 
