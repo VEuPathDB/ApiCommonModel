@@ -276,6 +276,7 @@
                </xsl:for-each>
              </table>
 
+             <br/>
              <div class="accordion">
                <h3>Properties XML</h3>
                <div class="code">
