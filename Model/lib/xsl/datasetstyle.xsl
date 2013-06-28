@@ -17,7 +17,6 @@
         }
         code, .code {
           font-family: monospace;
-          font-size: larger;
         }
         h2 {
           border-top: 4px solid red;
@@ -111,6 +110,10 @@
           padding: 4px;
           text-align: left;
         }
+        .ui-accordion .ui-accordion-header {
+          font-size: small;
+          background: none;
+        }
       </style>
     </head>
     <body>
@@ -165,6 +168,10 @@
             $(".classes li").show();
           }
           $("#content").scrollTop(0);
+        });
+        $(".accordion").accordion({
+          collapsible: true,
+          active: false
         });
       </script>
     </body>
@@ -330,8 +337,11 @@
                 </table>
                 -->
                 <xsl:for-each select="datasetLoader">
-                  <div class="code" style="padding-top:4px">
-                    <xsl:call-template name="node"/>
+                  <div class="accordion">
+                    <h3>Raw XML</h3>
+                    <div class="code" style="padding-top:4px">
+                      <xsl:call-template name="node"/>
+                    </div>
                   </div>
                 </xsl:for-each>
               </div>
