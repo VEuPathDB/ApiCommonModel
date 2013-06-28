@@ -278,7 +278,7 @@
 
              <br/>
              <div class="accordion">
-               <h3>Properties XML</h3>
+               <h3>XML template (for cut and paste)</h3>
                <div class="code">
                  &#160;&#160;&lt;dataset class="<xsl:value-of select="@class"/>"&gt;
                  <xsl:for-each select="prop" >
