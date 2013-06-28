@@ -101,6 +101,7 @@
         }
         #content h3.inline, #content h3.inline + div {
           display: inline-block;
+          vertical-align: bottom;
         }
         #content ul {
           padding-left: 20px;
@@ -169,10 +170,14 @@
           }
           $("#content").scrollTop(0);
         });
-        $(".accordion").accordion({
-          collapsible: true,
-          active: false
-        });
+        //$(function() {
+          $(".accordion").accordion({
+            collapsible: true,
+            active: false
+            }).on( "accordionactivate", function( event, ui ) {
+              $(this).accordion("refresh");
+            } );
+          //});
       </script>
     </body>
   </html>
@@ -270,6 +275,19 @@
                  </tr>
                </xsl:for-each>
              </table>
+
+             <div class="accordion">
+               <h3>Properties XML</h3>
+               <div class="code">
+                 &#160;&#160;&lt;dataset class="<xsl:value-of select="@class"/>"&gt;
+                 <xsl:for-each select="prop" >
+                   <div>
+                     &#160;&#160;&#160;&#160;<xsl:call-template name="node"/>
+                   </div>
+                 </xsl:for-each>
+                 &#160;&#160;&lt;/dataset&gt;
+               </div>
+             </div>
            </div>
          </div>
 
@@ -338,7 +356,7 @@
                 -->
                 <xsl:for-each select="datasetLoader">
                   <div class="accordion">
-                    <h3>Raw XML</h3>
+                    <h3>Dataset loader XML</h3>
                     <div class="code" style="padding-top:4px">
                       <xsl:call-template name="node"/>
                     </div>
