@@ -298,8 +298,8 @@
              <div>
                <xsl:for-each select="datasetLoader/manualGet">
                  <p>
-                   <b>File to get: </b>
-                   <xsl:value-of select="@fileOrDir"/>
+                   <b>File location: </b>
+                   <code><xsl:value-of select="@fileOrDir"/></code>
                  </p>
 
                  <xsl:if test="descriptionOfFinal">
