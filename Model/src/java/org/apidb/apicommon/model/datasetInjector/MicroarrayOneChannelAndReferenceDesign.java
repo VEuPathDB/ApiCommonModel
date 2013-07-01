@@ -63,7 +63,7 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
     public String[][] getPropertiesDeclaration() {
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();
         
-        String [][] declaration = {{"isTimeSeries", ""},
+        String [][] declaration = {
                                    {"profileSetNameMap", "Optionally replace profileset names"},
                                    //                                   {"hasSimilarityData", ""},
         };

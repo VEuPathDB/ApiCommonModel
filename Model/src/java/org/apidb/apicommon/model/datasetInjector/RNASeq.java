@@ -35,7 +35,7 @@ public class RNASeq extends  DatasetInjector {
 
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-          if(getPropValueAsBoolean("isPairedEnd")) {
+          if(getPropValueAsBoolean("hasPairedEnds")) {
               setPropValue("exprMetric", "fpkm");
               setPropValue("graphYAxisDescription", "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.");
           } else {
@@ -143,14 +143,12 @@ public class RNASeq extends  DatasetInjector {
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
   public String[][] getPropertiesDeclaration() {
-      String [][] declaration = {{"isTimeSeries", ""},
+      String [][] declaration = {
                                  {"hasFishersExactTestData", ""},
-                                 {"isPairedEnd", ""},
                                  {"isEuPathDBSite", ""},
                                  {"graphColor", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"hasJunctions", ""},
-                                 {"isStrandSpecific", ""},
                                  {"isAlignedToAnnotatedGenome", ""},
                                  {"hasMultipleSamplesForFoldChange", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},

@@ -31,7 +31,7 @@ public class SpliceSites extends  DatasetInjector {
 
       setGraphModule();
 
-      if(getPropValueAsBoolean("isPairedEnd")) {
+      if(getPropValueAsBoolean("hasPairedEnds")) {
 	  setPropValue("exprMetric", "fpkm");
 	  setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
       } else {
@@ -100,7 +100,6 @@ public class SpliceSites extends  DatasetInjector {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},
                                  {"hasMultipleSamples", "if experiment has just one sample, then NO fold-change or differential Q"},
-                                 {"isPairedEnd", ""},
                                  {"graphColor", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
