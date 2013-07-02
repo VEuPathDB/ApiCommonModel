@@ -218,7 +218,19 @@
 <xsl:template match="datasetClasses" >
 
     <xsl:for-each select="datasetClass" >
-      <div class="datasetClass {datasetLoader/@type}">
+
+      <xsl:variable name="type">
+        <xsl:choose>
+          <xsl:when test="@category and @category != ''">
+            <xsl:value-of select="@category" />
+          </xsl:when>
+          <xsl:when test="datasetLoader/@type and datasetLoader/@type != ''">
+            <xsl:value-of select="datasetLoader/@type" />
+          </xsl:when>
+        </xsl:choose>
+      </xsl:variable>
+
+      <div class="datasetClass {$type}">
         <a name="{@class}"/>
         <h2>Class: <xsl:value-of select="@class" /> </h2>
 
@@ -229,20 +241,10 @@
             </div>
           </xsl:if>
 
-          <xsl:choose>
-            <xsl:when test="@category and @category != ''">
-              <div class="section">
-                <h3 class="inline">Category:</h3>
-                <div><xsl:value-of select="@category" /></div>
-              </div>
-            </xsl:when>
-            <xsl:when test="datasetLoader/@type and datasetLoader/@type != ''">
-              <div class="section">
-                <h3 class="inline">Category:</h3>
-                <div> <xsl:value-of select="datasetLoader/@type" /> </div>
-              </div>
-            </xsl:when>
-          </xsl:choose>
+          <div class="section">
+            <h3 class="inline">Category:</h3>
+            <div> <xsl:value-of select="$type"/> </div>
+          </div>
 
           <div class="section">
             <h3 class="inline">GraphTemplateFile:</h3>
