@@ -184,12 +184,21 @@
 </xsl:template>
 
 <xsl:template match="datasetClasses" mode="categories">
+  <!--
   <ul class="categories">
     <li><a class="type-filter" href="#all">All categories</a></li>
     <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)]">
       <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
     </xsl:for-each>
-    <xsl:for-each select="datasetClass/@category[not(.=preceding::datasetClass/@category)]">
+    <xsl:for-each select="datasetClass/@category[not(.=preceding::datasetClass/@category or .='' or .=preceding::datasetClass/datasetLoader/@type)]">
+      <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
+    </xsl:for-each>
+  </ul>
+  -->
+  <ul class="categories">
+    <li><a class="type-filter" href="#all">All categories</a></li>
+    <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)] |
+        datasetClass/@category[not(.=preceding::datasetClass/@category or .='' or .=preceding::datasetClass/datasetLoader/@type)]">
       <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
     </xsl:for-each>
   </ul>
