@@ -14,10 +14,10 @@ import javax.sql.DataSource;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
+import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -160,7 +160,7 @@ public class ProjectMapper {
 
     // organism-project hasn't been mapped, load mapping
     String sql = "SELECT cast(apidb.project_id(?) as varchar2(20)) as project_id FROM dual";
-    DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+    DataSource dataSource = wdkModel.getAppDb().getDataSource();
     ResultSet resultSet = null;
     try {
       PreparedStatement ps = SqlUtils.getPreparedStatement(dataSource, sql);

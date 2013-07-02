@@ -13,12 +13,12 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.db.SqlUtils;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
-import org.gusdb.wdk.model.dbms.DBPlatform;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.record.RecordClass;
@@ -201,9 +201,9 @@ public class FullRecordCacheCreator extends BaseCLI {
             }
             sql.append(")");
         }
-        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+        DataSource dataSource = wdkModel.getAppDb().getDataSource();
         logger.info("Removing previous rows:\n" + sql);
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+        SqlUtils.executeUpdate(dataSource, sql.toString(),
                 "api-report-full-delete");
     }
 
@@ -237,8 +237,8 @@ public class FullRecordCacheCreator extends BaseCLI {
             String cacheName = createCache(table, idSql);
             insertFromCache(table, cacheName);
             // drop cache table
-            DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-            SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
+            DataSource dataSource = wdkModel.getAppDb().getDataSource();
+            SqlUtils.executeUpdate(dataSource, "DROP TABLE "
                     + cacheName, "api-report-full-drop-table");
         } else {
             // the query doesn't contain any clob column, and the concatenated
@@ -273,11 +273,11 @@ public class FullRecordCacheCreator extends BaseCLI {
         String cacheName = "wdkdumptemp";
         String tqName = "tq";
         String idqName = "idq";
-        DBPlatform platform = wdkModel.getQueryPlatform();
-        DataSource dataSource = platform.getDataSource();
-        if (platform.checkTableExists(null, cacheName)) {
+        DatabaseInstance db = wdkModel.getAppDb();
+        DataSource dataSource = db.getDataSource();
+        if (db.getPlatform().checkTableExists(dataSource, db.getDefaultSchema(), cacheName)) {
             // drop existing table
-            SqlUtils.executeUpdate(wdkModel, dataSource, "DROP TABLE "
+            SqlUtils.executeUpdate(dataSource, "DROP TABLE "
                     + cacheName, "api-report-full-drop-table");
         }
 
@@ -290,7 +290,7 @@ public class FullRecordCacheCreator extends BaseCLI {
         sql.append(getJoinedSql(table, idSql, idqName, tqName));
 
         logger.debug("++++++ create-cache: \n" + sql);
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+        SqlUtils.executeUpdate(dataSource, sql.toString(),
                 "api-report-full-create-table");
         return cacheName;
     }
@@ -317,8 +317,8 @@ public class FullRecordCacheCreator extends BaseCLI {
         sql.append(" GROUP BY ").append(pkColumns);
 
         logger.debug("++++++ insert-from-cache: \n" + sql);
-        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+        DataSource dataSource = wdkModel.getAppDb().getDataSource();
+        SqlUtils.executeUpdate(dataSource, sql.toString(),
                 "api-report-full-insert-from-cache");
     }
 
@@ -378,9 +378,9 @@ public class FullRecordCacheCreator extends BaseCLI {
         sql.append(getJoinedSql(table, idSql, idqName, tqName));
         sql.append(" GROUP BY ").append(pkColumns);
 
-        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+        DataSource dataSource = wdkModel.getAppDb().getDataSource();
         logger.debug("++++++ insert-from-sql: \n" + sql);
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+        SqlUtils.executeUpdate(dataSource, sql.toString(),
                 "api-report-full-insert-from-sql");
     }
 

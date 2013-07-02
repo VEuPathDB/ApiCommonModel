@@ -21,12 +21,12 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.user.User;
@@ -143,7 +143,7 @@ public class Gff3Dumper {
         + "   AND ga.source_id = gf.source_id "
         + "   AND ns.taxon_id = o.taxon_id "
         + "   AND ga.project_id = ? AND ga.organism = ?";
-    DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+    DataSource dataSource = wdkModel.getAppDb().getDataSource();
     psOrganism = SqlUtils.getPreparedStatement(dataSource, sql);
 
     try {
@@ -240,8 +240,8 @@ public class Gff3Dumper {
       throws WdkUserException, WdkModelException, SQLException {
     String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN "
         + "(SELECT source_ID FROM (" + idSql + "))";
-    DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-    SqlUtils.executeUpdate(wdkModel, dataSource, sql, "gff-dump-delete-rows");
+    DataSource dataSource = wdkModel.getAppDb().getDataSource();
+    SqlUtils.executeUpdate(dataSource, sql, "gff-dump-delete-rows");
   }
 
   private String getOrganismFileName(String organism) throws WdkModelException,

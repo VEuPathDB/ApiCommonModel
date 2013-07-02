@@ -21,12 +21,12 @@ import java.util.regex.PatternSyntaxException;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.db.SqlUtils;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.dbms.DBPlatform;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
@@ -92,6 +92,7 @@ public class Gff3Reporter extends Reporter {
     super(answerValue, startIndex, endIndex);
   }
 
+  @Override
   public String getConfigInfo() {
     return "This reporter does not have config info yet.";
   }
@@ -182,8 +183,12 @@ public class Gff3Reporter extends Reporter {
         sqlQuery.append(" AND ").append(column).append(" = ?");
       }
       WdkModel wdkModel = baseAnswer.getQuestion().getWdkModel();
-      DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-      psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
+      DataSource dataSource = wdkModel.getAppDb().getDataSource();
+      try {
+        psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
+      } catch (SQLException e) {
+        throw new WdkModelException("Unable to initialize reporter.", e);
+      }
     }
   }
 
@@ -266,7 +271,7 @@ public class Gff3Reporter extends Reporter {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
     WdkModel wdkModel = question.getWdkModel();
-    DBPlatform platform = wdkModel.getQueryPlatform();
+    DatabaseInstance appDb = wdkModel.getAppDb();
 
     RecordClass recordClass = question.getRecordClass();
     String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
@@ -283,7 +288,7 @@ public class Gff3Reporter extends Reporter {
       sqlInsert.append(", ").append(column);
     }
     sqlInsert.append(") VALUES (");
-    sqlInsert.append(wdkModel.getUserPlatform().getNextIdSqlExpression(schema,
+    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema,
         table));
     sqlInsert.append(", ");
     sqlInsert.append("?, ?, ?");
@@ -296,7 +301,7 @@ public class Gff3Reporter extends Reporter {
     PreparedStatement psInsert = null;
     try {
       // want to cache the table content
-      DataSource dataSource = platform.getDataSource();
+      DataSource dataSource = appDb.getDataSource();
       psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString());
 
       // get page based answers with a maximum size (defined in
@@ -323,7 +328,7 @@ public class Gff3Reporter extends Reporter {
             if (!hasCached) {
               psInsert.setString(1, recordName);
               psInsert.setInt(2, 1);
-              platform.setClobData(psInsert, 3, content, false);
+              appDb.getPlatform().setClobData(psInsert, 3, content, false);
               Map<String, String> pkValues = record.getPrimaryKey().getValues();
               for (int index = 0; index < pkColumns.length; index++) {
                 Object value = pkValues.get(pkColumns[index]);
@@ -500,7 +505,7 @@ public class Gff3Reporter extends Reporter {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
     WdkModel wdkModel = question.getWdkModel();
-    DBPlatform platform = wdkModel.getQueryPlatform();
+    DatabaseInstance appDb = wdkModel.getAppDb();
     RecordClass recordClass = question.getRecordClass();
     String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
 
@@ -516,7 +521,7 @@ public class Gff3Reporter extends Reporter {
       sqlInsert.append(", ").append(column);
     }
     sqlInsert.append(") VALUES (");
-    sqlInsert.append(wdkModel.getUserPlatform().getNextIdSqlExpression(schema,
+    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema,
         table));
     sqlInsert.append(", ");
     sqlInsert.append("?, ?, ?");
@@ -529,7 +534,7 @@ public class Gff3Reporter extends Reporter {
     PreparedStatement psInsert = null;
     try {
       // want to cache the table content
-      DataSource dataSource = platform.getDataSource();
+      DataSource dataSource = appDb.getDataSource();
       psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString());
 
       // get page based answers with a maximum size (defined in
@@ -563,7 +568,7 @@ public class Gff3Reporter extends Reporter {
                   if (!hasCached) {
                     psInsert.setString(1, transcriptName);
                     psInsert.setInt(2, 1);
-                    platform.setClobData(psInsert, 3, sequence, false);
+                    appDb.getPlatform().setClobData(psInsert, 3, sequence, false);
                     for (int index = 0; index < pkColumns.length; index++) {
                       Object value = pkValues.get(pkColumns[index]);
                       psInsert.setObject(index + 4, value);
@@ -595,7 +600,7 @@ public class Gff3Reporter extends Reporter {
                       // save into table cache
                       psInsert.setString(1, proteinName);
                       psInsert.setInt(2, 1);
-                      platform.setClobData(psInsert, 3, sequence, false);
+                      appDb.getPlatform().setClobData(psInsert, 3, sequence, false);
                       for (int index = 0; index < pkColumns.length; index++) {
                         Object value = pkValues.get(pkColumns[index]);
                         psInsert.setObject(index + 4, value);
@@ -660,13 +665,11 @@ public class Gff3Reporter extends Reporter {
     return getValue(attributeMap.getAttributeValue(field));
   }
 
-  private String getValue(AttributeValue object) throws WdkModelException,
-      WdkUserException {
+  private String getValue(AttributeValue attrVal) throws WdkModelException {
     String value;
-    if (object == null) {
+    if (attrVal == null) {
       return null;
     } else {
-      AttributeValue attrVal = (AttributeValue) object;
       Object objValue = attrVal.getValue();
       if (objValue == null)
         return null;

@@ -14,8 +14,7 @@ import java.util.Set;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.gusdb.fgputil.CliUtil;
-
-import oracle.jdbc.driver.OracleDriver;
+import org.gusdb.fgputil.db.platform.Oracle;
 
 public class DatasetPresenterSetLoader {
 
@@ -103,7 +102,7 @@ public class DatasetPresenterSetLoader {
       login = config.getUsername();
       String password = config.getPassword();
       try {
-        DriverManager.registerDriver(new OracleDriver());
+        new Oracle(); // registers driver for Oracle
         dbConnection = DriverManager.getConnection(dsn, login, password);
       } catch (SQLException e) {
         throw new UserException("Can't connect to instance " + instance

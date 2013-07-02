@@ -12,10 +12,10 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wsf.util.BaseCLI;
 
 /**
@@ -109,7 +109,7 @@ public class BasketFixer extends BaseCLI {
 
         String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
         String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
-        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
+        DataSource dataSource = wdkModel.getAppDb().getDataSource();
         String sql = "SELECT b.user_id, b.pk_column_1 AS old_id,        "
                 + "          a." + idColumn + " AS new_id               "
                 + "   FROM " + userSchema + "user_baskets" + dblink + " b "
@@ -201,7 +201,7 @@ public class BasketFixer extends BaseCLI {
         logger.info("Updating basket for user #" + userId);
         
         String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
-        DataSource dataSource = wdkModel.getUserPlatform().getDataSource();
+        DataSource dataSource = wdkModel.getUserDb().getDataSource();
         String sqlUpdate = "UPDATE " + userSchema + "user_baskets "
                 + " SET pk_column_1 = ? "
                 + " WHERE project_id = ? AND user_id = ? "

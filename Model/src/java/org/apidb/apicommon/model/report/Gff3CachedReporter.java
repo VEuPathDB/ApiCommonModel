@@ -13,15 +13,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
-import org.gusdb.wdk.model.WdkModel;
+import org.gusdb.fgputil.db.SqlUtils;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.dbms.CacheFactory;
-import org.gusdb.wdk.model.dbms.DBPlatform;
 import org.gusdb.wdk.model.dbms.QueryInfo;
 import org.gusdb.wdk.model.dbms.ResultFactory;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.QueryInstance;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
@@ -249,17 +248,16 @@ public class Gff3CachedReporter extends Reporter {
             sql.append(" AND tc." + column + " = ac." + column);
         }
 
-        WdkModel wdkModel = getQuestion().getWdkModel();
-        DBPlatform platform = wdkModel.getQueryPlatform();
+        DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
         // get the result from database
         ResultSet rsTable = null;
         try {
-            rsTable = SqlUtils.executeQuery(wdkModel, platform.getDataSource(),
+            rsTable = SqlUtils.executeQuery(db.getDataSource(),
                     sql.toString(), "api-report-gff-select-content");
 
             while (rsTable.next()) {
-                String content = platform.getClobData(rsTable, "content");
+                String content = db.getPlatform().getClobData(rsTable, "content");
                 writer.print(content);
                 writer.flush();
             }
@@ -308,19 +306,18 @@ public class Gff3CachedReporter extends Reporter {
         sql.append(" = ").append(instanceId);
         sql.append(" ORDER BY tc.table_name ASC");
 
-        WdkModel wdkModel = getQuestion().getWdkModel();
-        DBPlatform platform = wdkModel.getQueryPlatform();
+        DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
         writer.println("##FASTA");
 
         // get the result from database
         ResultSet rsTable = null;
         try {
-            rsTable = SqlUtils.executeQuery(wdkModel, platform.getDataSource(),
+            rsTable = SqlUtils.executeQuery(db.getDataSource(),
                     sql.toString(), "api-report-gff-select-content");
 
             while (rsTable.next()) {
-                String content = platform.getClobData(rsTable, "content");
+                String content = db.getPlatform().getClobData(rsTable, "content");
                 writer.print(content);
                 writer.flush();
             }

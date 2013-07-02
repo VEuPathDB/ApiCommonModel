@@ -12,11 +12,11 @@ import java.sql.SQLException;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wsf.util.BaseCLI;
@@ -187,8 +187,8 @@ public class GffCacheCreator extends BaseCLI {
         sql.append(" WHERE source_id IN (SELECT source_id FROM (");
         sql.append(idSql + "))");
 
-        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+        DataSource dataSource = wdkModel.getAppDb().getDataSource();
+        SqlUtils.executeUpdate(dataSource, sql.toString(),
                 "api-report-gff-delete");
     }
 
@@ -201,8 +201,8 @@ public class GffCacheCreator extends BaseCLI {
                 + COLUMN_MODIFICATION_DATE + ") ");
         sql.append(subquerySql);
         logger.debug("++++++ insert-to-cache-table: \n" + sql);
-        DataSource dataSource = wdkModel.getQueryPlatform().getDataSource();
-        SqlUtils.executeUpdate(wdkModel, dataSource, sql.toString(),
+        DataSource dataSource = wdkModel.getAppDb().getDataSource();
+        SqlUtils.executeUpdate(dataSource, sql.toString(),
                 "api-report-gff-insert");
     }
 
@@ -612,7 +612,7 @@ public class GffCacheCreator extends BaseCLI {
         String schema = (idx < 0) ? null : cacheTable.substring(0, idx);
         String table = (idx < 0) ? cacheTable : cacheTable.substring(idx + 1);
         sql.append('(').append(
-                wdkModel.getUserPlatform().getNextIdSqlExpression(schema, table));
+                wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
         sql.append("), sysdate ");
     }
 

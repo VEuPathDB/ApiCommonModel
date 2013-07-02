@@ -16,11 +16,11 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.db.SqlUtils;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.dbms.DBPlatform;
-import org.gusdb.wdk.model.dbms.SqlUtils;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.record.RecordClass;
@@ -193,10 +193,10 @@ public class FullRecordCachedReporter extends Reporter {
         }
 
         // get the result from database
-        DBPlatform platform = getQuestion().getWdkModel().getQueryPlatform();
+        DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
         PreparedStatement ps = null;
         try {
-            ps = SqlUtils.getPreparedStatement(platform.getDataSource(),
+            ps = SqlUtils.getPreparedStatement(db.getDataSource(),
                     sql.toString());
 
             // get page based answers with a maximum size (defined in
@@ -230,7 +230,7 @@ public class FullRecordCachedReporter extends Reporter {
 
                         String fieldName = resultSet.getString("field_name").trim();
                         String fieldTitle = resultSet.getString("field_title").trim();
-                        String content = platform.getClobData(resultSet,
+                        String content = db.getPlatform().getClobData(resultSet,
                                 "content");
                         content = (content == null) ? "" : content.trim();
                         tableValues.put(fieldName, new String[] { fieldTitle,
