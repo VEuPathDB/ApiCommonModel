@@ -233,7 +233,7 @@
             <xsl:when test="@category and @category != ''">
               <div class="section">
                 <h3 class="inline">Category:</h3>
-                <div> <xsl:value-of select="@category" /> </div>
+                <div><xsl:value-of select="@category" /></div>
               </div>
             </xsl:when>
             <xsl:when test="datasetLoader/@type and datasetLoader/@type != ''">
