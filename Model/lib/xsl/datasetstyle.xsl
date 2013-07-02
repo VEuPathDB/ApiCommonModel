@@ -210,7 +210,18 @@
 <xsl:template match="datasetClasses" mode="classes">
   <ul class="classes">
     <xsl:for-each select="datasetClass">
-      <li class="{datasetLoader/@type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
+      <xsl:variable name="type">
+        <xsl:choose>
+          <xsl:when test="@category and @category != ''">
+            <xsl:value-of select="@category" />
+          </xsl:when>
+          <xsl:when test="datasetLoader/@type and datasetLoader/@type != ''">
+            <xsl:value-of select="datasetLoader/@type" />
+          </xsl:when>
+        </xsl:choose>
+      </xsl:variable>
+
+      <li class="{$type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
     </xsl:for-each>
   </ul>
 </xsl:template>
