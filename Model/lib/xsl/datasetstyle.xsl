@@ -257,7 +257,7 @@
           <xsl:if test="@datasetFileHint and @datasetFileHint != ''">
             <div class="section">
               <h3 class="inline">Target Dataset File:</h3>
-              <div><xsl:value-of select="@datasetFileHint"/></div>
+              <div><xsl:value-of select="@datasetFileHint"/> XML file</div>
             </div>
           </xsl:if>
 
@@ -335,7 +335,12 @@
                    <table border="1">
                      <tr><th>Example</th><th>Notes</th></tr>
                      <xsl:for-each select="example">
-                       <tr><td><xsl:value-of select="@dir"/></td><td><xsl:value-of select="."/></td></tr>
+                     <xsl:for-each select="example">
+                       <!-- this href is a challenge.  it should be https://www.cbil.upenn.edu/svn/apidb/ManualDeliveryExample/XXXX/the_dir -->
+                       <!-- where XXXX is either trunk or branches/some_branch_number, depending on where this .xsl file is in svn -->
+                       <!-- and the_dir is the value of @dir -->
+                       <tr><td><a href=""><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
+                     </xsl:for-each>
                      </xsl:for-each>
                    </table>
                  </xsl:if>
