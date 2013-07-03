@@ -14,6 +14,15 @@
           min-width: 900px;
           font-family: helvetica, arial, sans;
           font-size: 95%;
+          margin: 0px;
+        }
+        .banner {
+          background-color: lightgoldenrodyellow;
+          font-size: 85%;
+          text-align: center;
+          border-bottom: 1px solid wheat;
+          padding: 2px;
+          color: #666;
         }
         code, .code {
           font-family: monospace;
@@ -39,6 +48,7 @@
         #toc {
           float: left;
           width: 280px;
+          padding-left: 8px;
           padding-right: 10px;
           overflow-x: auto;
           font-size: 90%;
@@ -94,6 +104,7 @@
         #content {
           margin-left: 290px;
           padding-left: 10px;
+          padding-right: 8px;
         }
         #content .section > div {
           padding-left: 1em;
@@ -118,20 +129,23 @@
       </style>
     </head>
     <body>
-      <div id="toc">
-        <div id="categories">
-          <h3>Categories</h3>
-          <xsl:apply-templates mode="categories"/>
-          <div id="categories-handle" class="ui-resizable-handle ui-resizable-s"></div>
+      <div class="banner">If you want to see the raw classes.xml file, use your browser's View Source tool</div>
+      <div class="main">
+        <div id="toc">
+          <div id="categories">
+            <h3>Categories</h3>
+            <xsl:apply-templates mode="categories"/>
+            <div id="categories-handle" class="ui-resizable-handle ui-resizable-s"></div>
+          </div>
+          <div id="classes">
+            <h3>Classes</h3>
+            <xsl:apply-templates mode="classes"/>
+          </div>
+          <div id="toc-handle" class="ui-resizable-handle ui-resizable-e"></div>
         </div>
-        <div id="classes">
-          <h3>Classes</h3>
-          <xsl:apply-templates mode="classes"/>
+        <div id="content">
+          <xsl:apply-templates />
         </div>
-        <div id="toc-handle" class="ui-resizable-handle ui-resizable-e"></div>
-      </div>
-      <div id="content">
-        <xsl:apply-templates />
       </div>
       <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
       <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
@@ -170,14 +184,21 @@
           }
           $("#content").scrollTop(0);
         });
-        //$(function() {
-          $(".accordion").accordion({
-            collapsible: true,
-            active: false
-            }).on( "accordionactivate", function( event, ui ) {
-              $(this).accordion("refresh");
-            } );
-          //});
+
+        $(".accordion").accordion({
+          collapsible: true,
+          active: false
+          }).on( "accordionactivate", function( event, ui ) {
+            $(this).accordion("refresh");
+          } );
+
+        var manualBaseUrl = location.href.replace("ApiCommonShared",
+            "ManualDeliveryExample").replace(/Model.*/, "")
+
+        $(".manual-example").each(function(idx, node) {
+          var $node = $(node);
+          $node.attr("href", manualBaseUrl + $node.data("dir"));
+        });
       </script>
     </body>
   </html>
@@ -338,7 +359,7 @@
                        <!-- this href is a challenge.  it should be https://www.cbil.upenn.edu/svn/apidb/ManualDeliveryExample/XXXX/the_dir -->
                        <!-- where XXXX is either trunk or branches/some_branch_number, depending on where this .xsl file is in svn -->
                        <!-- and the_dir is the value of @dir -->
-                       <tr><td><a href=""><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
+                       <tr><td><a class="manual-example" data-dir="{@dir}" href=""><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
                      </xsl:for-each>
                    </table>
                  </xsl:if>
