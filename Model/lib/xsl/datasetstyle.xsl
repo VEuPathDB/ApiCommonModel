@@ -340,7 +340,6 @@
                        <!-- and the_dir is the value of @dir -->
                        <tr><td><a href=""><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
                      </xsl:for-each>
-                     </xsl:for-each>
                    </table>
                  </xsl:if>
                </xsl:for-each>
