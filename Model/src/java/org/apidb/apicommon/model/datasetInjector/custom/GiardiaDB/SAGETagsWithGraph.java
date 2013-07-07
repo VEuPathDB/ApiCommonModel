@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.SAGETags;
 
 public class SAGETagsWithGraph extends SAGETags {
 
+  @Override
   public void injectTemplates() {
       String description = getPropValue("datasetDescrip");
       setPropValue("datasetDescrip", description.replace("'", ""));
@@ -20,15 +21,15 @@ public class SAGETagsWithGraph extends SAGETags {
       injectTemplate("genePageGraphDescriptions");
   }
 
-
+  @Override
   public void addModelReferences() {
       // add all references from SAGETags first
       super.addModelReferences();
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Sage::McArthur");
   }
 
-
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String[][] propertiesDeclaration = {    {"graphModule", ""},
                                               {"graphXAxisSamplesDescription", ""},

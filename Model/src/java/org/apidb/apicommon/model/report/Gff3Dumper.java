@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.security.NoSuchAlgorithmException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -16,9 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import javax.sql.DataSource;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactoryConfigurationError;
 
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.db.SqlUtils;
@@ -30,12 +26,9 @@ import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.user.User;
-import org.json.JSONException;
-import org.xml.sax.SAXException;
 
 /**
  * @author xingao
- * 
  */
 public class Gff3Dumper {
 
@@ -43,25 +36,9 @@ public class Gff3Dumper {
 
   /**
    * @param args
-   * @throws WdkModelException
-   * @throws WdkUserException
-   * @throws IOException
-   * @throws ClassNotFoundException
-   * @throws IllegalAccessException
-   * @throws InstantiationException
-   * @throws JSONException
-   * @throws SQLException
-   * @throws SAXException
-   * @throws TransformerException
-   * @throws TransformerFactoryConfigurationError
-   * @throws ParserConfigurationException
-   * @throws NoSuchAlgorithmException
    */
   public static void main(String[] args) throws WdkModelException,
-      WdkUserException, IOException, NoSuchAlgorithmException,
-      ParserConfigurationException, TransformerFactoryConfigurationError,
-      TransformerException, SAXException, SQLException, JSONException,
-      InstantiationException, IllegalAccessException, ClassNotFoundException {
+      WdkUserException, IOException, SQLException {
     if (args.length != 4 && args.length != 6) {
       System.err.println("Invalid parameters.");
       printUsage();
@@ -98,11 +75,7 @@ public class Gff3Dumper {
 
   private PreparedStatement psOrganism;
 
-  public Gff3Dumper(Map<String, String> cmdArgs) throws WdkModelException,
-      NoSuchAlgorithmException, WdkUserException, ParserConfigurationException,
-      TransformerFactoryConfigurationError, TransformerException, IOException,
-      SAXException, SQLException, JSONException, InstantiationException,
-      IllegalAccessException, ClassNotFoundException {
+  public Gff3Dumper(Map<String, String> cmdArgs) throws WdkModelException {
     // get params
     String modelName = cmdArgs.get("-model");
     String organismArg = cmdArgs.get("-organism");
@@ -123,8 +96,7 @@ public class Gff3Dumper {
     this.organisms = organismArg.split(",");
   }
 
-  public void dump() throws WdkUserException, WdkModelException,
-      NoSuchAlgorithmException, IOException, SQLException, JSONException {
+  public void dump() throws WdkUserException, WdkModelException, IOException, SQLException {
 
     // TEST
     logger.info("Initializing....");
@@ -157,8 +129,7 @@ public class Gff3Dumper {
 
   private void dumpOrganism(WdkModel wdkModel, String organism,
       Map<String, String> config, String baseDir) throws WdkUserException,
-      WdkModelException, IOException, NoSuchAlgorithmException, SQLException,
-      JSONException {
+      WdkModelException, IOException, SQLException {
     long start = System.currentTimeMillis();
 
     // decide the path-file name
@@ -237,7 +208,7 @@ public class Gff3Dumper {
   }
 
   private void deleteRows(WdkModel wdkModel, String idSql, String cacheTable)
-      throws WdkUserException, WdkModelException, SQLException {
+      throws SQLException {
     String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN "
         + "(SELECT source_ID FROM (" + idSql + "))";
     DataSource dataSource = wdkModel.getAppDb().getDataSource();

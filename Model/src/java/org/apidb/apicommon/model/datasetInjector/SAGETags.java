@@ -4,9 +4,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class SAGETags extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
   }
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySageTag");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySageTagRStat");
@@ -24,6 +26,7 @@ public class SAGETags extends DatasetInjector {
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;

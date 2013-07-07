@@ -13,6 +13,7 @@ public class RNASeq extends  DatasetInjector {
    * is safe to pass all in, because unneeded ones will be ignored.
    */
 
+  @Override
   public void injectTemplates() {
       setShortAttribution();
 
@@ -114,6 +115,7 @@ public class RNASeq extends  DatasetInjector {
   }
 
 
+  @Override
   public void addModelReferences() {
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
@@ -142,6 +144,7 @@ public class RNASeq extends  DatasetInjector {
   
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
                                  {"hasFishersExactTestData", ""},

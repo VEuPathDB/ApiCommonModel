@@ -28,10 +28,6 @@ public class BasketFixer extends BaseCLI {
 
     private static final Logger logger = Logger.getLogger(BasketFixer.class);
 
-    /**
-     * @param args
-     * @throws Exception
-     */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
         BasketFixer cacher = new BasketFixer(cmdName);

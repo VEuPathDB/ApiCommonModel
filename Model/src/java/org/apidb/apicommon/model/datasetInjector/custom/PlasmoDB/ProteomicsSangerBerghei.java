@@ -4,14 +4,17 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class ProteomicsSangerBerghei extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
   }
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProteomicsProfile");
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;

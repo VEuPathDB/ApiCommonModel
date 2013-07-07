@@ -104,7 +104,7 @@ public class FusionTable {
      * @param authToken The auth token. (For more information, see
      *                  http://code.google.com/apis/gdata/auth.html#ClientLogin.)
      *
-     * @throws AuthenticationException
+     * @throws AuthenticationException if unable to authenticate with passed token
      *
      * This code instantiates the GoogleService class from the
      * Google Data APIs Client Library,

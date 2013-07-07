@@ -125,6 +125,7 @@ public class Gff3CachedReporter extends Reporter {
         }
     }
 
+    @Override
     public String getConfigInfo() {
         return "This reporter does not have config info yet.";
     }
@@ -187,9 +188,7 @@ public class Gff3CachedReporter extends Reporter {
             writeSequences(writer);
     }
 
-    private void writeHeader(PrintWriter writer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+    private void writeHeader(PrintWriter writer) throws WdkModelException {
         writer.println("##gff-version\t3");
         writer.println("##feature-ontology\tso.obo");
         writer.println("##attribute-ontology\tgff3_attributes.obo");
@@ -230,9 +229,7 @@ public class Gff3CachedReporter extends Reporter {
         writer.flush();
     }
 
-    private void writeRecords(PrintWriter writer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+    private void writeRecords(PrintWriter writer) throws WdkModelException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
@@ -268,9 +265,7 @@ public class Gff3CachedReporter extends Reporter {
         }
     }
 
-    private void writeSequences(PrintWriter writer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+    private void writeSequences(PrintWriter writer) throws WdkModelException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
@@ -329,8 +324,7 @@ public class Gff3CachedReporter extends Reporter {
     }
 
     private String getValue(AttributeValue attrVal)
-            throws NoSuchAlgorithmException, WdkModelException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException {
         String value;
         if (attrVal == null) {
             return null;

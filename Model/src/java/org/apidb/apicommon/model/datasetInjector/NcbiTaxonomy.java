@@ -4,9 +4,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class NcbiTaxonomy extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
   }
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTaxon"); 
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon"); 
@@ -15,6 +17,7 @@ public class NcbiTaxonomy extends DatasetInjector {
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;

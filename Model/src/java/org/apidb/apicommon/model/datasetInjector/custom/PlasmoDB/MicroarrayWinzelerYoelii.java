@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class MicroarrayWinzelerYoelii extends CusomGenePageExpressionGraphs {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "WinzelerYoelii::Ver2"); 
   }

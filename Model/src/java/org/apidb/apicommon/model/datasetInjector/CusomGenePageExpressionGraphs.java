@@ -4,6 +4,7 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public abstract class CusomGenePageExpressionGraphs extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
 
       String description = getPropValue("summary");
@@ -26,6 +27,7 @@ public abstract class CusomGenePageExpressionGraphs extends DatasetInjector {
 
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String[][] propertiesDeclaration = {    {"graphModule", ""},
                                               {"graphXAxisSamplesDescription", ""},

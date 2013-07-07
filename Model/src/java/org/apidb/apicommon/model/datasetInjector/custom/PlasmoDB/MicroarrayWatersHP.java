@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class MicroarrayWatersHP extends CusomGenePageExpressionGraphs {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Waters::Ver2");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.BergheiGenesByExpressionPercentile");

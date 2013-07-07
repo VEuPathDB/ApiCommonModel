@@ -9,8 +9,6 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.security.NoSuchAlgorithmException;
-import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -18,7 +16,6 @@ import org.apache.log4j.Logger;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.query.Column;
 import org.gusdb.wdk.model.query.Query;
@@ -33,7 +30,6 @@ import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.user.User;
 import org.gusdb.wsf.util.BaseCLI;
-import org.json.JSONException;
 
 /**
  * @author xingao
@@ -52,10 +48,6 @@ public class FullRecordFileCreator extends BaseCLI {
     private static final Logger logger = Logger
             .getLogger(FullRecordFileCreator.class);
 
-    /**
-     * @param args
-     * @throws Exception
-     */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
         if (cmdName == null)
@@ -163,8 +155,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private Question createQuestion(String projectId, RecordClass recordClass,
-            String idSql) throws WdkModelException, NoSuchAlgorithmException,
-            SQLException, JSONException, WdkUserException {
+            String idSql) throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
         QuestionSet questionSet = wdkModel
                 .getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
@@ -181,8 +172,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private SqlQuery createQuery(RecordClass recordClass, String idSql)
-            throws NoSuchAlgorithmException, WdkModelException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
         QuerySet querySet = wdkModel.getQuerySet(Utilities.INTERNAL_QUERY_SET);
         SqlQuery query = new SqlQuery();
@@ -204,8 +194,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException {
         Question question = answerValue.getQuestion();
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();

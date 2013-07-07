@@ -208,16 +208,9 @@ public class Gff3Reporter extends Reporter {
    * The initialize() method has to be called before this method.
    * 
    * @param writer
-   * @throws WdkModelException
-   * @throws NumberFormatException
-   * @throws NoSuchAlgorithmException
-   * @throws SQLException
-   * @throws JSONException
-   * @throws WdkUserException
    */
   void writeHeader(PrintWriter writer) throws WdkModelException,
-      NumberFormatException, NoSuchAlgorithmException, SQLException,
-      JSONException, WdkUserException {
+      NumberFormatException {
     writer.println("##gff-version\t3");
     writer.println("##feature-ontology\tso.obo");
     writer.println("##attribute-ontology\tgff3_attributes.obo");
@@ -260,14 +253,9 @@ public class Gff3Reporter extends Reporter {
    * The initialize() method has to be called before this method.
    * 
    * @param writer
-   * @throws WdkModelException
-   * @throws NoSuchAlgorithmException
-   * @throws SQLException
-   * @throws JSONException
-   * @throws WdkUserException
    */
   void writeRecords(PrintWriter writer) throws WdkModelException,
-      NoSuchAlgorithmException, SQLException, JSONException, WdkUserException {
+      SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
     WdkModel wdkModel = question.getWdkModel();
@@ -494,14 +482,9 @@ public class Gff3Reporter extends Reporter {
    * The initialize() method has to be called before this method.
    * 
    * @param writer
-   * @throws WdkModelException
-   * @throws SQLException
-   * @throws NoSuchAlgorithmException
-   * @throws JSONException
-   * @throws WdkUserException
    */
   void writeSequences(PrintWriter writer) throws WdkModelException,
-      SQLException, NoSuchAlgorithmException, JSONException, WdkUserException {
+      SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
     WdkModel wdkModel = question.getWdkModel();

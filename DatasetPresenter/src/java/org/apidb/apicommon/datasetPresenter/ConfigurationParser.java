@@ -18,6 +18,7 @@ public class ConfigurationParser extends XmlParser {
     super(System.getenv("GUS_HOME") + "/lib/rng/datasetPresenter.rng", false);
   }
 
+  @Override
   protected Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);

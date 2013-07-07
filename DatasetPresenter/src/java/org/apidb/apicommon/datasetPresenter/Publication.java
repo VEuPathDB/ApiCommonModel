@@ -30,6 +30,7 @@ public class Publication {
         return citation;
     }
 
+    @Override
     public String toString() {
         return("PMID: " + this.pubmedId + "\tCitation: " + this.citation);
     }

@@ -20,6 +20,7 @@ public class ContactsFileParser extends XmlParser {
     super(System.getenv("GUS_HOME") + "/lib/rng/contacts.rng", false);
   }
 
+  @Override
   protected Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);

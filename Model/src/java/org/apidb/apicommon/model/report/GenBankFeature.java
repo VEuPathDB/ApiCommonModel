@@ -62,6 +62,7 @@ public class GenBankFeature {
     }
 
 
+    @Override
     public String toString() {
         String genbankFeatureKey;
         if(this.featureType.equals("cds")) {

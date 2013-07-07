@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAn
 
 public class RNASeqSibleyBrady extends CusomGenePageExpressionGraphsAndCoverage {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesBySibleyRNASeqBradyzoitePct"); 
   }

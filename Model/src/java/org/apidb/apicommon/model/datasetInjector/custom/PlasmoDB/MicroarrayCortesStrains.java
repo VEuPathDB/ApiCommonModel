@@ -5,6 +5,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class MicroarrayCortesStrains extends CusomGenePageExpressionGraphs {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Cortes::TimeSeries"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Cortes::CrossStrain"); 

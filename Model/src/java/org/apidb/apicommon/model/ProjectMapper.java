@@ -17,7 +17,6 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.WdkUserException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -40,10 +39,6 @@ public class ProjectMapper {
    * 
    * @param wdkModel
    * @return
-   * @throws WdkModelException
-   * @throws SAXException
-   * @throws IOException
-   * @throws ParserConfigurationException
    */
   public synchronized static ProjectMapper getMapper(WdkModel wdkModel)
       throws WdkModelException, SAXException, IOException,
@@ -148,12 +143,9 @@ public class ProjectMapper {
    * @param organism
    * @return return projectId found by the organism. if no project id is found,
    *         return null instead.
-   * @throws WdkModelException
-   * @throws WdkUserException
-   * @throws SQLException
    */
   public synchronized String getProjectByOrganism(String organism)
-      throws WdkModelException, WdkUserException, SQLException {
+      throws SQLException {
     // organism has been mapped before, return the project id.
     if (organisms.containsKey(organism))
       return organisms.get(organism);

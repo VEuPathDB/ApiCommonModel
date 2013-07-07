@@ -4,11 +4,9 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class MicroarrayDeRisiHalfLife extends CusomGenePageExpressionGraphs {
 
-
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "DeRisiHalfLife::Combined"); 
   }
-
-
 
 }

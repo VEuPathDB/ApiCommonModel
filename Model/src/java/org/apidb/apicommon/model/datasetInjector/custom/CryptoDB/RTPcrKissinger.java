@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class RTPcrKissinger extends CusomGenePageExpressionGraphs {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRtPcrFoldChange"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCryptoRtpcrProfileSimilarity"); 

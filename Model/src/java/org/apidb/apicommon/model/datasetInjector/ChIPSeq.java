@@ -4,6 +4,7 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class ChIPSeq extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
       setShortAttribution();
       setOrganismAbbrevFromDatasetName();
@@ -12,13 +13,14 @@ public class ChIPSeq extends DatasetInjector {
       injectTemplate("chipSeqCoverageTrack");
   }
 
+  @Override
   public void addModelReferences() { }
 
 
-    public String[][] getPropertiesDeclaration() {
-        String [][] declaration = {};
-
-        return declaration;
-      }
+  @Override
+  public String[][] getPropertiesDeclaration() {
+      String [][] declaration = {};
+      return declaration;
+  }
 
 }

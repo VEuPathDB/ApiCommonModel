@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.ProteinExpressionMassSpec;
 
 public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  {
 
+  @Override
   public void injectTemplates() {
       //inject all the templates in ProteinExpressionMassSpec first
       super.injectTemplates();
@@ -29,6 +30,7 @@ public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  
       injectTemplate("genePageGraphDescriptions");
   }
 
+  @Override
   public void addModelReferences() {
         //  add all references from ProteinExpressionMassSpec first
         super.addModelReferences();
@@ -38,6 +40,7 @@ public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
 
       String[][] massSpecDeclaration = super.getPropertiesDeclaration();

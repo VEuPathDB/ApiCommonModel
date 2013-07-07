@@ -4,9 +4,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class SNPs extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
   }
 
+  @Override
   public void addModelReferences() {
     addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpBySourceId");
     addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByGeneId");
@@ -26,6 +28,7 @@ public class SNPs extends DatasetInjector {
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;

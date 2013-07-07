@@ -4,9 +4,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class AnnotatedGenome extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
   }
 
+  @Override
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "InternalQuestions.GenesByOrthologs");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByLocation");
@@ -35,6 +37,7 @@ public class AnnotatedGenome extends DatasetInjector {
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;

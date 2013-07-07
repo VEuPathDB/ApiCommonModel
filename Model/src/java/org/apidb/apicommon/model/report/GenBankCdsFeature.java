@@ -23,7 +23,7 @@ public class GenBankCdsFeature extends GenBankFeature {
         //this.codonStart = codonStart;
 
         this.ecNumbers = new ArrayList<String>();
-        this.notes = new ArrayList<String>();;
+        this.notes = new ArrayList<String>();
         //this.signalPeptides = new ArrayList<String>();
         //this.transmembraneHelixes = new ArrayList<String>();
     }
@@ -42,7 +42,7 @@ public class GenBankCdsFeature extends GenBankFeature {
         return(super.getSequence());
     }
 
-
+    @Override
     public String toString() {
         String rv = super.toString();
 

@@ -4,9 +4,11 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class EST extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
   }
 
+  @Override
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByESTOverlap");
     addWdkReference("EstRecordClasses.EstRecordClass", "attribute", "overview");
@@ -19,6 +21,7 @@ public class EST extends DatasetInjector {
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;

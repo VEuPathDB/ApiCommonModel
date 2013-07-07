@@ -1,27 +1,31 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class MicroarrayOneChannelQuantile extends MicroarrayOneChannelAndReferenceDesign {
-  
+
+    @Override
     public void injectTemplates() {
         super.injectTemplates();
 
         injectTemplate("microarraySimpleQuantileGraph");
     }
 
+    @Override
     protected void setExprPlotPartModule() {
         setPropValue("exprPlotPartModule", "QuantileNormalized");
     }
 
+    @Override
     protected void setExprGraphVisiblePart() {
         setPropValue("exprGraphVisiblePart", "exprn_val");
     }
 
+    @Override
     protected void setGraphModule() {
         setPropValue("graphModule", "Microarray::Quantile");
     }
 
+    @Override
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "Quantile Normalized Values (log base 2) or expression percentile value.";
 

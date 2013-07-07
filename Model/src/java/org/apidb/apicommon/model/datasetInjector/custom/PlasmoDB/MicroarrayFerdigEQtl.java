@@ -4,7 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class MicroarrayFerdigEQtl extends CusomGenePageExpressionGraphs {
 
-
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Ferdig::Dd2Hb3Similarity"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Ferdig::DD2_X_HB3"); 

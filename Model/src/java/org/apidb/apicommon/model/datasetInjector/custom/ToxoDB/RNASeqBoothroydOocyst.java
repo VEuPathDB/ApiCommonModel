@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAn
 
 public class RNASeqBoothroydOocyst extends CusomGenePageExpressionGraphsAndCoverage {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystFC"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystPct"); 

@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAn
 
 public class RNASeqRoosTachy extends CusomGenePageExpressionGraphsAndCoverage {
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByGregoryRNASeqTsFC"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestios.ToxoGenesByGregoryRNASeqTsPValue"); 

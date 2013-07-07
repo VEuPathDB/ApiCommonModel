@@ -38,17 +38,18 @@ public abstract class Microarray extends DatasetInjector {
         return decode;
     }
 
-  public void addModelReferences() {
+    @Override
+    public void addModelReferences() {
       setGraphModule();
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
-  }
+    }
 
+    @Override
     public void injectTemplates() {
 
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 
-        String datasetName = getDatasetName();
         setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
         String projectName = getPropValue("projectName");
@@ -107,7 +108,8 @@ public abstract class Microarray extends DatasetInjector {
 
         setPropValue("excludedProfileSetsList", excludedProfileSetsList);
     }
-    
+
+    @Override
     public String[][] getPropertiesDeclaration() {
         String [][] declaration = {
                                    {"hasPageData", ""},

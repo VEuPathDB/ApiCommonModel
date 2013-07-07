@@ -4,6 +4,7 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class IsolatesHTS extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
       String datasetName = getDatasetName();
       String[] datasetWords = datasetName.split("_");
@@ -29,6 +30,7 @@ public class IsolatesHTS extends DatasetInjector {
       }
   }
 
+  @Override
   public void addModelReferences() {
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpBySourceId");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HtsSnpsByGeneId");
@@ -69,6 +71,7 @@ public class IsolatesHTS extends DatasetInjector {
 
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {{"sampleList", "space del list of sample (sample name = directory name in webservices)"}
       };

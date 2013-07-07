@@ -4,6 +4,7 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class ProteinExpressionMassSpec extends DatasetInjector {
 
+  @Override
   public void injectTemplates() {
       setShortAttribution();
 
@@ -32,6 +33,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       }      
   }
 
+  @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMassSpec");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "OrfQuestions.OrfsByMassSpec");
@@ -41,6 +43,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
   }
 
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String[][] propertiesDeclaration = {{"species", "metadata for the sample organism, not the aligned organism"},
                                           {"optionalOrganismAbbrev","for cases when sample organism is different from the aligned organism"},

@@ -5,6 +5,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGenePageExpressionGraphs {
 
 
+    @Override
     public void injectTemplates() {
         super.injectTemplates();
 
@@ -21,7 +22,7 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
         }
     }
 
-
+    @Override
     public String[][] getPropertiesDeclaration() {
         String[][] superDeclaration = super.getPropertiesDeclaration();
         

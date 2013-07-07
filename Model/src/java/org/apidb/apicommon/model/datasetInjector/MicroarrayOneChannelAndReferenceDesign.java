@@ -1,9 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray {
-  
+
+    @Override
     public void injectTemplates() {
         super.injectTemplates();
 
@@ -39,6 +39,7 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
         setPropValue("percentileProfileSetPattern", "%");
     }
 
+    @Override
     public void addModelReferences() {
 	super.addModelReferences();
 
@@ -60,6 +61,7 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
 
 
 
+    @Override
     public String[][] getPropertiesDeclaration() {
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();
         

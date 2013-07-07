@@ -16,7 +16,6 @@ import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wsf.util.BaseCLI;
@@ -81,10 +80,6 @@ public class GffCacheCreator extends BaseCLI {
 
     private static final Logger logger = Logger.getLogger(FullRecordCacheCreator.class);
 
-    /**
-     * @param args
-     * @throws Exception
-     */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
         if (cmdName == null) cmdName = GffCacheCreator.class.getName();
@@ -108,6 +103,7 @@ public class GffCacheCreator extends BaseCLI {
         super(command, description);
     }
 
+    @Override
     protected void declareOptions() {
         addSingleValueOption(ARG_PROJECT_ID, true, null, "The ProjectId, which"
                 + " should match the directory name under $GUS_HOME, where "
@@ -181,8 +177,7 @@ public class GffCacheCreator extends BaseCLI {
         return idSql;
     }
 
-    private void deleteRows(String idSql) throws SQLException,
-            WdkModelException, WdkUserException {
+    private void deleteRows(String idSql) throws SQLException {
         StringBuffer sql = new StringBuffer("DELETE FROM " + cacheTable);
         sql.append(" WHERE source_id IN (SELECT source_id FROM (");
         sql.append(idSql + "))");
@@ -192,8 +187,7 @@ public class GffCacheCreator extends BaseCLI {
                 "api-report-gff-delete");
     }
 
-    private void insertToCacheTable(String subquerySql) throws SQLException,
-            WdkModelException, WdkUserException {
+    private void insertToCacheTable(String subquerySql) throws SQLException {
         StringBuffer sql = new StringBuffer("INSERT INTO " + cacheTable);
         sql.append(" (" + COLUMN_SOURCE_ID + ", project_id, "
                 + COLUMN_TABLE_NAME + ", " + COLUMN_ROW_COUNT + ", "
@@ -207,7 +201,7 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void dumpGeneAttributes(String idSql) throws SQLException,
-            WdkModelException, WdkUserException {
+            WdkModelException {
         String idqName = "idq";
         String aliasTable = "gffalias";
         String rnaTable = "gffrna";
@@ -496,7 +490,7 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void dumpTranscript(String idSql) throws SQLException,
-            WdkModelException, WdkUserException {
+            WdkModelException {
         String idqName = "idq";
         String seqQueryName = "seq";
         StringBuffer sql = new StringBuffer("SELECT ");
@@ -523,7 +517,7 @@ public class GffCacheCreator extends BaseCLI {
     }
 
     private void dumpProteinSequence(String idSql) throws SQLException,
-            WdkModelException, WdkUserException {
+            WdkModelException {
         String idqName = "idq";
         String cdsQueryName = "cds";
         String rnaQueryName = "rna";

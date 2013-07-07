@@ -46,10 +46,12 @@ public class GenBankReporter extends Reporter {
     // Go through the pages of gene records, writing as
     // genbank table format
 
+    @Override
     public void configure(Map<String, String> config) {
         super.configure(config);
     }
 
+    @Override
     public String getConfigInfo() {
         return "This reporter does not have config info yet.";
     }
@@ -67,9 +69,7 @@ public class GenBankReporter extends Reporter {
         writer.flush();
     }
 
-    private void pageSequences(PrintWriter writer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+    private void pageSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
 
         for (AnswerValue answerValue : this) {
             for (RecordInstance record : answerValue.getRecordInstances()) {
@@ -98,8 +98,7 @@ public class GenBankReporter extends Reporter {
     }
 
     private void writeTableFormat(AnswerValue geneAnswer, PrintWriter writer, String sequenceId)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         PageAnswerIterator pagedGenes = new PageAnswerIterator(geneAnswer, 1,
                 geneAnswer.getResultSize(), maxPageSize);
@@ -113,8 +112,7 @@ public class GenBankReporter extends Reporter {
     }
 
     private void writeSequenceFeatures(RecordInstance record, PrintWriter writer)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
         // Write feature table header w/ sequence id
         writer.println(">Feature\t" + record.getAttributeValue("source_id"));
 
@@ -126,8 +124,7 @@ public class GenBankReporter extends Reporter {
 
 
     private void writeSimpleGenomicFeature(RecordInstance record, PrintWriter writer, String tableString)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         TableValue Rows = record.getTableValue(tableString);
         for (Map<String, AttributeValue> row : Rows) {
@@ -144,8 +141,7 @@ public class GenBankReporter extends Reporter {
 
 
     private GenBankFeature makeBaseGeneFeature(RecordInstance record, String product)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
             String sourceId = record.getAttributeValue("source_id").toString();
 
@@ -209,8 +205,7 @@ public class GenBankReporter extends Reporter {
     }
 
     private List<GenBankLocation> makeGenBankLocations(RecordInstance record, String sequenceId)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         TableValue locations = record.getTableValue("GenBankLocations");
 
@@ -235,8 +230,7 @@ public class GenBankReporter extends Reporter {
 
 
     private GenBankCdsFeature makeCdsFeature(RecordInstance record, GenBankFeature geneFeature)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException {
 
         int codonStart = 0 ;
 
@@ -261,8 +255,7 @@ public class GenBankReporter extends Reporter {
 
 
     private void writeGeneFeature(RecordInstance record, PrintWriter writer, String sequenceId)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         // Exclude Deprecated Genes? or flag them?
         if (!(wdkModel.getProjectId().equals("GiardiaDB")

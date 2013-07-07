@@ -14,13 +14,14 @@ public class Contact implements Cloneable {
   private String zip;
   private String id;
 
-    public Object clone() { 
-      try { 
-	return super.clone(); 
-      } catch (Exception e) {
-	  throw new UnexpectedException(e);
-      }
+  @Override
+  public Object clone() { 
+    try { 
+      return super.clone(); 
+    } catch (Exception e) {
+      throw new UnexpectedException(e);
     }
+  }
 
   public void setContactId(Text id) {
     this.id  = id.getText();

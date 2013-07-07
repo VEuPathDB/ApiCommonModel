@@ -14,7 +14,7 @@ import java.util.Set;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.gusdb.fgputil.CliUtil;
-import org.gusdb.fgputil.db.platform.Oracle;
+import org.gusdb.fgputil.db.platform.SupportedPlatform;
 
 public class DatasetPresenterSetLoader {
 
@@ -102,11 +102,14 @@ public class DatasetPresenterSetLoader {
       login = config.getUsername();
       String password = config.getPassword();
       try {
-        new Oracle(); // registers driver for Oracle
+        SupportedPlatform.ORACLE.register(); // registers driver for Oracle
         dbConnection = DriverManager.getConnection(dsn, login, password);
+      } catch (ClassNotFoundException e) {
+        throw new UserException("Cannot find database driver.  Please add " +
+            "the driver JAR to your classpath.", e);
       } catch (SQLException e) {
-        throw new UserException("Can't connect to instance " + instance
-            + " with login info found in config file " + propFileName, e);
+        throw new UserException("Can't connect to instance " + instance +
+            " with login info found in config file " + propFileName, e);
       }
     }
     return dbConnection;

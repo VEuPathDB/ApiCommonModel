@@ -18,7 +18,6 @@ import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.record.RecordClass;
@@ -74,10 +73,6 @@ public class FullRecordCacheCreator extends BaseCLI {
     private static final Logger logger = Logger
             .getLogger(FullRecordCacheCreator.class);
 
-    /**
-     * @param args
-     * @throws Exception
-     */
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
         if (cmdName == null) cmdName = FullRecordCacheCreator.class.getName();
@@ -102,6 +97,7 @@ public class FullRecordCacheCreator extends BaseCLI {
         super(command, description);
     }
 
+    @Override
     protected void declareOptions() {
         addSingleValueOption(ARG_PROJECT_ID, true, null, "The ProjectId, which"
                 + " should match the directory name under $GUS_HOME, where "
@@ -187,7 +183,7 @@ public class FullRecordCacheCreator extends BaseCLI {
     }
 
     private void deleteRows(String idSql, String fieldNames)
-            throws WdkUserException, WdkModelException, SQLException {
+            throws SQLException {
         StringBuilder sql = new StringBuilder("DELETE FROM " + cacheTable);
         sql.append(" WHERE source_id IN (SELECT source_id FROM (");
         sql.append(idSql + "))");
@@ -213,12 +209,9 @@ public class FullRecordCacheCreator extends BaseCLI {
      * 
      * @param table
      * @param idSql
-     * @throws WdkModelException
-     * @throws SQLException
-     * @throws WdkUserException
      */
     private void dumpTable(TableField table, String idSql)
-            throws WdkModelException, SQLException, WdkUserException {
+            throws WdkModelException, SQLException {
         long start = System.currentTimeMillis();
 
         if (((SqlQuery) table.getQuery()).isClobRow()) {
@@ -264,12 +257,9 @@ public class FullRecordCacheCreator extends BaseCLI {
      * @param table
      * @param idSql
      * @return
-     * @throws SQLException
-     * @throws WdkModelException
-     * @throws WdkUserException
      */
     private String createCache(TableField table, String idSql)
-            throws SQLException, WdkModelException, WdkUserException {
+            throws SQLException, WdkModelException {
         String cacheName = "wdkdumptemp";
         String tqName = "tq";
         String idqName = "idq";
@@ -301,12 +291,9 @@ public class FullRecordCacheCreator extends BaseCLI {
      * 
      * @param table
      * @param cacheName
-     * @throws SQLException
-     * @throws WdkUserException
-     * @throws WdkModelException
      */
     private void insertFromCache(TableField table, String cacheName)
-            throws SQLException, WdkUserException, WdkModelException {
+            throws SQLException {
         String pkColumns = getPkColumns(table.getRecordClass(), null);
         StringBuilder sql = new StringBuilder("INSERT /*+ append */ INTO ");
         sql.append(cacheTable).append(getSelectSql(table, pkColumns))
@@ -330,7 +317,6 @@ public class FullRecordCacheCreator extends BaseCLI {
      * @param idqName
      * @param tqName
      * @return
-     * @throws WdkModelException
      */
     private String getJoinedSql(TableField table, String idSql, String idqName,
             String tqName) throws WdkModelException {
@@ -359,12 +345,9 @@ public class FullRecordCacheCreator extends BaseCLI {
      * 
      * @param table
      * @param idSql
-     * @throws WdkModelException
-     * @throws SQLException
-     * @throws WdkUserException
      */
     private void insertFromSql(TableField table, String idSql)
-            throws WdkModelException, SQLException, WdkUserException {
+            throws WdkModelException, SQLException {
         String idqName = "idq";
         String tqName = "tq";
         String content = getAttributesContentSql(tqName, table);
@@ -438,7 +421,6 @@ public class FullRecordCacheCreator extends BaseCLI {
      * @param tableName
      * @param table
      * @return
-     * @throws WdkModelException
      */
     private String getAttributesContentSql(String tableName, TableField table)
             throws WdkModelException {

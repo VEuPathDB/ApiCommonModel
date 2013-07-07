@@ -4,6 +4,7 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAn
 
 public class RNASeqReidNcDay3 extends CusomGenePageExpressionGraphsAndCoverage {
 
+  @Override
   public void addModelReferences() {
  
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByNcLivRNASeqExpressionPercentile"); 

@@ -13,6 +13,7 @@ public class RnaSeqInjector extends  DatasetInjector {
    * is safe to pass all in, because unneeded ones will be ignored.
    */
 
+  @Override
   public void injectTemplates() {
       // TODO: split out param query templates (not urgent)
       // TODO: which graphs for the gene record page?
@@ -78,6 +79,7 @@ public class RnaSeqInjector extends  DatasetInjector {
 
   }
 
+  @Override
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                     "GenesByRNASeq" + getDatasetName());
@@ -96,6 +98,7 @@ public class RnaSeqInjector extends  DatasetInjector {
   
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {{"isTimeSeries", ""},
                                  {"hasFishersExactTestData", ""},

@@ -13,6 +13,7 @@ public class SpliceSites extends  DatasetInjector {
    * is safe to pass all in, because unneeded ones will be ignored.
    */
 
+  @Override
   public void injectTemplates() {
       String projectName = getPropValue("projectName");
       String datasetName = getDatasetName();
@@ -70,11 +71,12 @@ public class SpliceSites extends  DatasetInjector {
   }
 
 
-    protected void setGraphModule() {
+  protected void setGraphModule() {
 	setPropValue("graphModule", "SpliceSites");
-    }
+  }
 
 
+  @Override
   public void addModelReferences() {
       setGraphModule();
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
@@ -96,6 +98,7 @@ public class SpliceSites extends  DatasetInjector {
   
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
+  @Override
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},

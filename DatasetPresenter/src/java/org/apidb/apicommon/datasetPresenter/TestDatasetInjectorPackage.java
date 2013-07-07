@@ -4,7 +4,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -177,7 +176,7 @@ public class TestDatasetInjectorPackage {
   
   // test: parse of template prelude
   @Test
-  public void test_TemplatesParser_parsePrelude() throws IOException {
+  public void test_TemplatesParser_parsePrelude() {
     Template template = new Template("dontknow");
     TemplatesParser.parsePrelude(validPreludeTrimmed, template, "dontknow");
     assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
