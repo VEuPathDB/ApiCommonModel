@@ -18,6 +18,7 @@ public class GenBankFeature {
     private String featureType;
     private String product;
 
+    private String proteinId = "";
 
     private String sequence;
 
@@ -65,8 +66,10 @@ public class GenBankFeature {
     @Override
     public String toString() {
         String genbankFeatureKey;
+
         if(this.featureType.equals("cds")) {
             genbankFeatureKey = this.featureType.toUpperCase();
+
         } 
         else if(this.featureType.equals("exon")) {
 
@@ -84,11 +87,15 @@ public class GenBankFeature {
             genbankFeatureKey = this.featureType;
         }
 
+
         String rv = locationsString(genbankFeatureKey);
-
-
         rv = rv + "\t\t\tlocus_tag\t" + this.locus + "\n";
         rv = rv + "\t\t\tproduct\t" + this.product + "\n";
+
+        if(this.featureType.equals("cds")) {
+            rv = rv + "\t\t\tprotein_id\t" + this.proteinId + "\n";
+        }
+
 
         if(this.isPseudo) {
             rv = rv + "\t\t\tpseudo\t\n";
@@ -232,6 +239,11 @@ public class GenBankFeature {
     protected void setSequence(String sequence) {
         this.sequence = sequence;
     }
+
+    protected void setProteinId(String proteinId) {
+        this.proteinId = proteinId;
+    }
+
 
     protected boolean hasPartialStart() {
 

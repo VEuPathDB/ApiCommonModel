@@ -247,8 +247,9 @@ public class GenBankReporter extends Reporter {
         
         // RULE : Include protein translation for CDS
         String proteinSequence = record.getAttributeValue("protein_sequence").toString();
+        String proteinId = record.getAttributeValue("protein_source_id").toString();
 
-        GenBankCdsFeature cdsFeature = new GenBankCdsFeature(geneFeature, proteinSequence, geneticCode, codonStart);
+        GenBankCdsFeature cdsFeature = new GenBankCdsFeature(geneFeature, proteinSequence, geneticCode, codonStart, proteinId);
 
         return(cdsFeature);
     }
