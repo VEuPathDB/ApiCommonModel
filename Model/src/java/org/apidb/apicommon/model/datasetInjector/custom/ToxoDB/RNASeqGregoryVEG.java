@@ -7,7 +7,7 @@ public class RNASeqGregoryVEG extends CusomGenePageExpressionGraphsAndCoverage {
   @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByGregoryRNASeqTsFC"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestios.ToxoGenesByGregoryRNASeqTsPValue"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByGregoryRNASeqTsPValue"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByGregoryRNASeqTsPct"); 
   }
 
