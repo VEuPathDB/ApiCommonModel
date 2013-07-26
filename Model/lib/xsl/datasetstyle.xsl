@@ -359,7 +359,7 @@
                        <!-- this href is a challenge.  it should be https://www.cbil.upenn.edu/svn/apidb/ManualDeliveryExample/XXXX/the_dir -->
                        <!-- where XXXX is either trunk or branches/some_branch_number, depending on where this .xsl file is in svn -->
                        <!-- and the_dir is the value of @dir -->
-                       <tr><td><a class="manual-example" data-dir="{@dir}" href="http://devtools.eupathdb.org/examples/{@dir}"><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
+                       <tr><td><a class="manual-example" data-dir="{@dir}" href="http://devtools.eupathdb.org/datasetExamples/{@dir}"><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
                      </xsl:for-each>
                    </table>
                  </xsl:if>
