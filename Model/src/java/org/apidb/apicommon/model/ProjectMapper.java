@@ -144,7 +144,7 @@ public class ProjectMapper {
    * @return return projectId found by the organism. if no project id is found,
    *         return null instead.
    */
-  public synchronized String getProjectByOrganism(String organism)
+  public String getProjectByOrganism(String organism)
       throws SQLException {
     // organism has been mapped before, return the project id.
     if (organisms.containsKey(organism))
