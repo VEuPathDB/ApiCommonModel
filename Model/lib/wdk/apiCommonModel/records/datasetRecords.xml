@@ -1,6 +1,6 @@
 <wdkModel>
 
-  <recordClassSet name="DatasetRecordClasses" includeProjects="HostDB,InitDB,FungiDB,PiroplasmaDB,PlasmoDB,CryptoDB,MicrosporidiaDB,ToxoDB,GiardiaDB,AmoebaDB,TriTrypDB">
+  <recordClassSet name="DatasetRecordClasses" excludeProjects="TrichDB">
 
    <recordClass name="DatasetRecordClass" displayName="Dataset">
 
@@ -227,7 +227,7 @@
       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <querySet name="DatasetAttributes" queryType="attribute" doNotTest="true"  
               isCacheable='false'
-              includeProjects="HostDB,InitDB,FungiDB,PiroplasmaDB,PlasmoDB,CryptoDB,MicrosporidiaDB,ToxoDB,GiardiaDB,AmoebaDB,TriTrypDB">
+              excludeProjects="TrichDB">
 
       <testRowCountSql>
 select count(*) from apidbtuning.datasetpresenter
@@ -336,7 +336,8 @@ select count(*) from apidbtuning.datasetpresenter
         <column name="dataset_id"/>
         <column name="organisms"/>
         <column name="organism_prefix"/>
-            <sql>
+
+            <sql excludeProjects="EuPathDB">
             <![CDATA[
 
           select dataset_id,
@@ -365,6 +366,36 @@ select count(*) from apidbtuning.datasetpresenter
             )
             ]]>
             </sql>
+
+           <sql includeProjects="EuPathDB">
+            <![CDATA[
+        select dataset_id,
+                  case when organism_count = 1 and organisms is not null and expects_multiple = 0
+                       then '<i>' || substr(organisms, 1, 1) || '.' ||
+                                     substr(organisms, first_space, decode(second_space, 0, length(organisms) + 1, second_space) - first_space) || '</i>' ||
+                                     substr(organisms, decode(second_space, 0, length(organisms) + 1, second_space))
+                       else '' end as organism_prefix,
+                       organisms
+           from (
+           select dsp.dataset_presenter_id as dataset_id,
+                     listagg(oa.organism_name, ', ') within group (order by oa.organism_name) as organisms,
+                     instr(listagg(oa.organism_name, ', ') within group (order by oa.organism_name), ' ', 1, 1) as first_space,
+                     instr(listagg(oa.organism_name, ', ') within group (order by oa.organism_name), ' ', 1, 2) as second_space,
+                     count(*) as organism_count,
+                     -- if the dataset_name_pattern starts w/ a % we won't append an organism prefix to the datasetDisplayName
+                     case when substr(dsp.dataset_name_pattern, 0, 1) = '%'
+                      then 1
+                      else 0
+                      end as expects_multiple
+            from apidbtuning.datasetpresenter dsp,apidbtuning.datasetnametaxon dsnt, apidb.datasource ds, apidbtuning.organismattributes oa
+            where dsp.dataset_presenter_id = dsnt.dataset_presenter_id (+)
+            and dsnt.name = ds.name (+)
+            and ds.taxon_id = oa.component_taxon_id (+)
+            and ds.project_id = oa.project_id (+)
+            group by dsp.dataset_presenter_id, dsp.dataset_name_pattern              
+            )
+            ]]>
+            </sql>
       </sqlQuery>
 
     </querySet>
@@ -374,7 +405,7 @@ select count(*) from apidbtuning.datasetpresenter
       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <querySet name="DatasetTables" queryType="table" 
               isCacheable='false'
-              includeProjects="HostDB,InitDB,FungiDB,PiroplasmaDB,PlasmoDB,CryptoDB,MicrosporidiaDB,ToxoDB,GiardiaDB,AmoebaDB,TriTrypDB">
+              excludeProjects="TrichDB">
 
       <sqlQuery name="Publications"  isCacheable='false'>
             <column name="dataset_id"/>
@@ -410,7 +441,7 @@ select count(*) from apidbtuning.datasetpresenter
             <column name="source_id"/>
             <column name="strain"/>
             <column name="contact_name"/>
-            <sql>
+            <sql excludeProjects="EuPathDB">
             <![CDATA[
                      select ia.source_id, 
                      ia.project_id, 
@@ -434,6 +465,19 @@ select count(*) from apidbtuning.datasetpresenter
                      group by iads.dataset_presenter_id,ia.source_id, ia.project_id, ds.name, ia.strain
             ]]>
             </sql>
+            <sql includeProjects="EuPathDB">
+            <![CDATA[
+                     select '' as source_id, 
+                     '' as project_id, 
+                     name as dataset_name, 
+                     dataset_presenter_id as dataset_id,
+                     '' as strain, 
+                     '' as  contact_name
+                     from apidbtuning.datasetpresenter ds
+                     where ds.name = 'no isolates for portal'
+            ]]>
+            </sql>
+
         </sqlQuery>
 
 
@@ -475,7 +519,7 @@ select count(*) from apidbtuning.datasetpresenter
             <column name="dataset_id"/>
             <column name="organism"/>
             <column name="version"/>
-            <sql>
+            <sql excludeProjects="EuPathDB">
             <![CDATA[
                     with TaxonScientificName as (
                     select taxon_id,name
@@ -497,6 +541,13 @@ select count(*) from apidbtuning.datasetpresenter
                     )
 
             ]]>
+            </sql>
+            <sql includeProjects="EuPathDB">
+              select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, ds.version, oa.organism_name as organism
+              from apidbtuning.datasetpresenter dsp, apidb.datasource ds, apidbtuning.organismattributes oa
+              where ds.name = dsp.name
+              and oa.project_id = ds.project_id
+              and oa.component_taxon_id = ds.taxon_id
             </sql>
         </sqlQuery>
 
