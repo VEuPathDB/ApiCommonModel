@@ -7053,6 +7053,37 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
           <suggest selectMode="none" />
         </flatVocabParam>
 
+       <flatVocabParam name="ref_samples_with_meta_data" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="GeneVQ.SamplesWithMetaData"
+                      prompt="Samples"
+                      multiPick="true"
+                      dependedParamRef="geneParams.profileset_generic,sharedParams.profile_ontology"
+                      quote="true"
+                      suppressNode="false"
+                      displayType="treeBox">
+         <help>
+              Select reference samples. 
+         </help>
+         <!-- <suggest selectMode="all" /> -->
+       </flatVocabParam>
+
+       <flatVocabParam name="comp_samples_with_meta_data" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="GeneVQ.SamplesWithMetaData"
+                      prompt="Samples"
+                      multiPick="true"
+                      dependedParamRef="geneParams.profileset_generic,sharedParams.profile_ontology"
+                      quote="true"
+                      suppressNode="false"
+                      displayType="treeBox">
+         <help>
+              Select a comparator samples. 
+         </help>
+         <!-- <suggest selectMode="all" /> -->
+       </flatVocabParam>
+
+
+
+
 
        <flatVocabParam name="profileset_generic"
                      excludeProjects="TrichDB"
@@ -7073,7 +7104,6 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                      multiPick="false">
             <help>Choose an Experiment</help> 
         </flatVocabParam>
-
 
 
 <!-- params for Splice Site Q -->
@@ -7106,7 +7136,7 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
           <suggest selectMode="none" />
         </flatVocabParam>
 
-
+        
         <stringParam name="percent_diff"
                      prompt="Predominant splice site percent minimum"
                      number="true">
@@ -9284,6 +9314,26 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
         </sqlQuery>
 
         <processQuery name="cowmanInvasionKOPct" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="320"/>
+            <wsColumn name="term" width="320"/>
+            <wsColumn name="display" width="320"/>
+        </processQuery>
+
+
+        <sqlQuery name="CromptonPS" includeProjects="PlasmoDB">
+            <column name="internal"/>
+            <column name="term"/>
+            <column name="display"/>
+            <sql>
+         Select name as term,
+                profile_set_id as internal,
+                name as display
+        from apidb.profileset
+        where name = 'Crompton Ab Microarray Profiles'
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="CromptonPS" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
             <wsColumn name="internal" width="320"/>
             <wsColumn name="term" width="320"/>
             <wsColumn name="display" width="320"/>
@@ -11723,12 +11773,66 @@ select display,term,internal,parentTerm from (
             </sql>
         </sqlQuery>
 
+        <sqlQuery name="SamplesWithMetaData" doNotTest="1" includeProjects="PlasmoDB">
+            <paramRef ref="sharedParams.profile_ontology" quote="false" queryRef="SharedVQ.profileOntology"/>
+            <paramRef ref="geneParams.profileset_generic" quote="false" queryRef="GeneVQ.GenericProfiles"/>   
+            <column name="internal" />
+            <column name="term" />
+            <column name="parentTerm"/>
+            <column name="display" />
+            <sql includeProjects="PlasmoDB" >
+             With Metadata_Tree As (
+              Select Distinct Pen.Name As Sample,
+                              Pen.Profile_Element_name_Id As Pen_Id, 
+                              BMC.value As Metadata_Value,
+                              Oe.Value As Metadata_Category
+              From
+                  Study.Study S,
+                  Apidb.Profileset Ps,
+                  Apidb.Profileelementname pen,
+                  Rad.Studybiomaterial Sbm,
+                  Study.Biosample bs,
+                  Study.Biomaterialcharacteristic Bmc,
+                  Study.Ontologyentry oe 
+              Where Ps.External_Database_Release_Id = S.External_Database_Release_Id  
+                And S.Study_Id = Sbm.Study_Id
+                And Bs.Bio_Material_Id = Sbm.Bio_Material_Id
+                And Bs.Name = Pen.Name
+                And Pen.Profile_Set_Id = Ps.Profile_Set_Id
+                And Bs.Bio_Material_Id = Bmc.Bio_Material_Id 
+                And Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+                And Oe.Ontology_Entry_Id = $$profile_ontology$$
+                and Ps.Profile_Set_Id = $$profileset_generic$$
+                group by Pen.Name,
+                         Pen.Profile_Element_name_Id, 
+                         Bmc.Value,
+                         Oe.Value
+                )
+              select internal, term, parentterm, display from (
+              Select pen_ID as internal,
+                     Sample As Term,
+                     Metadata_Value As Parentterm,
+                     Sample As Display
+              From  Metadata_Tree
+              Union
+              Select -1 as internal,
+                     Metadata_Value As Term,
+                     '' As Parentterm,
+                     Metadata_Value As Display 
+              From  Metadata_Tree
+            ) Order by parentTerm,Term
+              
+            </sql>
+        </sqlQuery>
 
-        <processQuery name="SpliceSiteSample" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <paramRef ref="geneParams.splice_site_generic" quote="false"/> 
+
+        <processQuery name="SamplesWithMetaData" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="sharedParams.profileOntology" quote="false"/> 
+            <paramRef ref="geneParams.profileset_generic" quote="false"/>
             <wsColumn name="internal" width="100" wsName="internal"/>
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>
+            <wsColumn name="parentTerm"  width="100" wsName="parentTerm"/>
         </processQuery>
 
         <!-- TEMPLATE_ANCHOR rnaSeqProfileSetParamQuery -->
