@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public abstract class Microarray extends DatasetInjector {
+public abstract class Expression extends DatasetInjector {
 
     protected abstract void setExprGraphVisiblePart();
     protected abstract void setGraphModule();

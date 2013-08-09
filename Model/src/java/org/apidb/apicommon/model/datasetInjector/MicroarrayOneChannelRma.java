@@ -1,7 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 
-public class MicroarrayOneChannelRma extends MicroarrayOneChannelAndReferenceDesign {
+public class MicroarrayOneChannelRma extends ExpressionOneChannelAndReferenceDesign {
 
     @Override
     public void injectTemplates() {

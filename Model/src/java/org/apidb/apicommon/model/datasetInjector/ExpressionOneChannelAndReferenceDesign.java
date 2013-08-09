@@ -1,7 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 
-public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray {
+public abstract class ExpressionOneChannelAndReferenceDesign extends Expression {
 
     @Override
     public void injectTemplates() {
@@ -63,14 +63,14 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
 
     @Override
     public String[][] getPropertiesDeclaration() {
-        String[][] microarrayDeclaration = super.getPropertiesDeclaration();
+        String[][] exprDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {
                                    {"profileSetNameMap", "Optionally replace profileset names"},
                                    //                                   {"hasSimilarityData", ""},
         };
 
-        return combinePropertiesDeclarations(microarrayDeclaration, declaration);
+        return combinePropertiesDeclarations(exprDeclaration, declaration);
     }
 
 

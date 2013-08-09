@@ -1,7 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 
-public class MicroarrayOneChannelQuantile extends MicroarrayOneChannelAndReferenceDesign {
+public class MicroarrayOneChannelQuantile extends ExpressionOneChannelAndReferenceDesign {
 
     @Override
     public void injectTemplates() {
