@@ -12,20 +12,20 @@ public abstract class MicroarrayOneChannelAndReferenceDesign extends Microarray 
 
         setPercentileProfileFilter();
 
-        injectTemplate("microarrayProfileSetParamQuery");
-        injectTemplate("microarrayPctProfileSetParamQuery");
+        injectTemplate("expressionProfileSetParamQuery");
+        injectTemplate("expressionPctProfileSetParamQuery");
 
         if(getPropValueAsBoolean("hasPageData")) {
-            injectTemplate("microarrayFoldChangeWithConfidenceQuestion");
+            injectTemplate("expressionFoldChangeWithConfidenceQuestion");
             injectTemplate("microarrayFoldChangeWithConfidenceWS");
         }
             
-        injectTemplate("microarrayFoldChangeQuestion");
+        injectTemplate("expressionFoldChangeQuestion");
         injectTemplate("microarrayFoldChangeWS");
 
         if(getPropValueAsBoolean("hasPercentileData")) {
+            injectTemplate("expressionPercentileQuestion");
             injectTemplate("microarrayPercentileWS");
-            injectTemplate("microarrayPercentileQuestion");
         }
 
         if(getPropValueAsBoolean("hasSimilarityData")) {

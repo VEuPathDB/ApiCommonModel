@@ -50,6 +50,8 @@ public abstract class Microarray extends DatasetInjector {
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 
+        setPropValue("dataType", "Microarray");
+
         setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
         String projectName = getPropValue("projectName");
@@ -68,8 +70,11 @@ public abstract class Microarray extends DatasetInjector {
         setExprPlotPartModule();
         setGraphYAxisDescription();
 
-        injectTemplate("microarrayGraphAttributesExpression");
-        injectTemplate("microarrayGraphAttributesPercentile");
+        injectTemplate("expressionGraphAttributesExpression");
+
+        if(getPropValueAsBoolean("hasPercentileData")) {
+            injectTemplate("expressionGraphAttributesPercentile");
+        }
 
         String exprGraphVp = getPropValue("exprGraphVisiblePart");
 

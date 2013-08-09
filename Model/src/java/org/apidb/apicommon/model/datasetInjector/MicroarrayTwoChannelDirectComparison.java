@@ -10,8 +10,8 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
         setPropValue("decodeProfileSet", "");
         setPropValue("percentileProfileSetPattern", "%");
 
-        injectTemplate("microarrayProfileSetParamQuery");
-        injectTemplate("microarrayPctProfileSetParamQuery");
+        injectTemplate("expressionProfileSetParamQuery");
+        injectTemplate("expressionPctProfileSetParamQuery");
 
         String redPctSampleDecode = makeDecodeMappingStrings(getPropValue("redPctSampleMap"));
         String greenPctSampleDecode = makeDecodeMappingStrings(getPropValue("greenPctSampleMap"));
@@ -19,21 +19,21 @@ public class MicroarrayTwoChannelDirectComparison extends Microarray {
         setPropValue("redPctSampleDecode", redPctSampleDecode);
         setPropValue("greenPctSampleDecode", greenPctSampleDecode);
 
-        injectTemplate("microarraySamplesParamQueryDirect");
-        injectTemplate("microarrayPctSamplesParamQueryDirect");
+        injectTemplate("expressionSamplesParamQueryDirect");
+        injectTemplate("expressionPctSamplesParamQueryDirect");
 
         if(getPropValueAsBoolean("hasPageData")) {
-            injectTemplate("microarrayFoldChangeWithConfidenceQuestionDirect");
+            injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
             injectTemplate("microarrayFoldChangeWithConfidenceWSDirect");
         } else {
-            injectTemplate("microarrayFoldChangeQuestionDirect");
+            injectTemplate("expressionFoldChangeQuestionDirect");
             injectTemplate("microarrayFoldChangeWSDirect");
         }
 
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("microarrayPercentileWSDirect");
-            injectTemplate("microarrayPercentileQuestionDirect");
+            injectTemplate("expressionPercentileQuestionDirect");
         }
 
         injectTemplate("microarraySimpleTwoChannelGraph");
