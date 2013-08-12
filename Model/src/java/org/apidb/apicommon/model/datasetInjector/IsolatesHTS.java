@@ -14,12 +14,11 @@ public class IsolatesHTS extends DatasetInjector {
       setOrganismAbbrevInternalFromDatasetName();
 
       // trim off the prefix and suffix from the experiment name
-      String experimentRsrc = datasetName.replaceFirst(datasetWords[0] + "_SNP_", "");
-
       // new workflow uses different naming convention for HTS isolates, need to handle both.
       // pfal3D7_SNP_Conway_HTS_SNP_RSRC (build-18)
       // pfal3D7_HTS_SNP_Conway_HTS_SNP_RSRC (build-19)
       String experimentRsrc = datasetName.replaceFirst(datasetWords[0] + "_HTS_SNP_", "");
+      experimentRsrc = datasetName.replaceFirst(datasetWords[0] + "_SNP_", "");
 
       String experimentName = experimentRsrc.replaceFirst("_RSRC", "");
       setPropValue("experimentName", experimentName);
