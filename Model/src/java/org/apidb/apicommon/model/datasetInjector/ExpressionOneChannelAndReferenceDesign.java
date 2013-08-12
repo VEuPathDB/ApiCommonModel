@@ -45,6 +45,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
     public void addModelReferences() {
 	super.addModelReferences();
 
+        setDataType();
         String dataType = getDataType();
 
         if(getPropValueAsBoolean("hasPageData")) {

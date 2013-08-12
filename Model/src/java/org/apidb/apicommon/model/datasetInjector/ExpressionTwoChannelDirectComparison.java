@@ -47,6 +47,8 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
     public void addModelReferences() {
 	super.addModelReferences();
 
+        setDataType();
+
         String dataType = getDataType();
 
         if(getPropValueAsBoolean("hasPageData")) {
