@@ -7,6 +7,8 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
     public void injectTemplates() {
         super.injectTemplates();
 
+        String lcDataType = getPropValue("dataType").toLowerCase();
+
         String decodeProfileSet = makeDecodeMappingStrings(getPropValue("profileSetNameMap"));
         setPropValue("decodeProfileSet", decodeProfileSet);
 
@@ -17,15 +19,15 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 
         if(getPropValueAsBoolean("hasPageData")) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestion");
-            injectTemplate("microarrayFoldChangeWithConfidenceWS");
+            injectTemplate(lcDataType + "FoldChangeWithConfidenceWS");
         }
             
         injectTemplate("expressionFoldChangeQuestion");
-        injectTemplate("microarrayFoldChangeWS");
+        injectTemplate(lcDataType + "FoldChangeWS");
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPercentileQuestion");
-            injectTemplate("microarrayPercentileWS");
+            injectTemplate(lcDataType + "PercentileWS");
         }
 
         if(getPropValueAsBoolean("hasSimilarityData")) {
@@ -43,16 +45,18 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
     public void addModelReferences() {
 	super.addModelReferences();
 
+        String dataType = getPropValue("dataType");
+
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesByMicroarray" + getDatasetName() + "Confidence");
+                            "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Confidence");
         }
         addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GeneQuestions.GenesByMicroarray" + getDatasetName());
+                        "GeneQuestions.GenesBy" + dataType + getDatasetName());
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesByMicroarray" + getDatasetName() + "Percentile");
+                            "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Percentile");
         }
 
         // TODO inject ProfileSimilarity Reference

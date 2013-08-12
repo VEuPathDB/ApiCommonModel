@@ -32,4 +32,8 @@ public class MicroarrayOneChannelRma extends ExpressionOneChannelAndReferenceDes
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
+    protected void setDataType() {
+        setPropValue("dataType", "Microarray");
+    }
+
 }

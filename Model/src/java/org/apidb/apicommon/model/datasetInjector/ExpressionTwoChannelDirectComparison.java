@@ -13,6 +13,8 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         injectTemplate("expressionProfileSetParamQuery");
         injectTemplate("expressionPctProfileSetParamQuery");
 
+        String lcDataType = getPropValue("dataType").toLowerCase();
+
         String redPctSampleDecode = makeDecodeMappingStrings(getPropValue("redPctSampleMap"));
         String greenPctSampleDecode = makeDecodeMappingStrings(getPropValue("greenPctSampleMap"));
 
@@ -24,19 +26,19 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         if(getPropValueAsBoolean("hasPageData")) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
-            injectTemplate("microarrayFoldChangeWithConfidenceWSDirect");
+            injectTemplate(lcDataType + "FoldChangeWithConfidenceWSDirect");
         } else {
             injectTemplate("expressionFoldChangeQuestionDirect");
-            injectTemplate("microarrayFoldChangeWSDirect");
+            injectTemplate(lcDataType + "FoldChangeWSDirect");
         }
 
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            injectTemplate("microarrayPercentileWSDirect");
+            injectTemplate(lcDataType + "PercentileWSDirect");
             injectTemplate("expressionPercentileQuestionDirect");
         }
 
-        injectTemplate("microarraySimpleTwoChannelGraph");
+
     }
 
 
@@ -45,17 +47,19 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
     public void addModelReferences() {
 	super.addModelReferences();
 
+        String dataType = getPropValue("dataType");
+
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesByMicroarrayDirectWithConfidence" + getDatasetName());
+                            "GeneQuestions.GenesBy" + dataType + "DirectWithConfidence" + getDatasetName());
         } else {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName());
+                            "GeneQuestions.GenesBy" + dataType + "Direct" + getDatasetName());
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesByMicroarrayDirect" + getDatasetName() + "Percentile");
+                            "GeneQuestions.GenesBy" + dataType + "Direct" + getDatasetName() + "Percentile");
         }
     }
 

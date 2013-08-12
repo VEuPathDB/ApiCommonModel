@@ -1,14 +1,18 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 
-public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDirectComparison {
+public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannelDirectComparison {
 
 
     @Override
     public void injectTemplates() {
+
+        // hasPageData required by Expression class but not applicable to Proteomics;  Ensure it is always false
+        setPropValue("hasPageData", "false");
+
         super.injectTemplates();
 
-        injectTemplate("microarraySimpleTwoChannelGraph");
+        //        injectTemplate("microarraySimpleTwoChannelGraph");
     }
 
     @Override
@@ -24,19 +28,23 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Microarray::TwoChannel");
+        setPropValue("graphModule", "TODO::TOTO");
     }
 
 
     @Override
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "Expression Values for 2 channel microarray experiments are log ratios (M = log2 Cy5/Cy3).  We also provide the fold difference in the right axis.  For any 2 points on the graph (M1, M2) the  fold difference is calculated by:  power(2, (M2-M1)).   or expression percentile value.";
+        String yAxisDescription = "TODO";
 
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
     protected void setDataType() {
-        setPropValue("dataType", "Microarray");
+        setPropValue("dataType", "Proteomics");
+    }
+
+    protected void setIsLogged() {
+        setPropValue("isLogged", "0"); 
     }
 
 }

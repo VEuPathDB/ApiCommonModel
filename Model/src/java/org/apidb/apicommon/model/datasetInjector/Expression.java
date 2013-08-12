@@ -4,6 +4,7 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public abstract class Expression extends DatasetInjector {
 
+    protected abstract void setDataType();
     protected abstract void setExprGraphVisiblePart();
     protected abstract void setGraphModule();
     protected abstract void setExprPlotPartModule();
@@ -13,6 +14,17 @@ public abstract class Expression extends DatasetInjector {
     protected void setProfileSetFilterPattern() {
         setPropValue("profileSetFilterPattern", "%");
     }
+
+
+    /***
+     *
+     *  used by the model (0=false, 1=true)
+     *
+     */
+    protected void setIsLogged() {
+        setPropValue("isLogged", "1"); 
+    }
+
 
     /***
      *   list of key value pairs
@@ -50,7 +62,6 @@ public abstract class Expression extends DatasetInjector {
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 
-        setPropValue("dataType", "Microarray");
 
         setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
@@ -63,12 +74,16 @@ public abstract class Expression extends DatasetInjector {
             setPropValue("includeProjects", projectName);
         }
 
-        injectTemplate("microarrayAttributeCategory");
-
+        setDataType();
         setExprGraphVisiblePart();
         setGraphModule();
         setExprPlotPartModule();
         setGraphYAxisDescription();
+        setIsLogged();
+
+        String lcDataType = getPropValue("dataType").toLowerCase();
+
+        injectTemplate(lcDataType + "AttributeCategory");
 
         injectTemplate("expressionGraphAttributesExpression");
 
@@ -85,7 +100,7 @@ public abstract class Expression extends DatasetInjector {
             setPropValue("graphVisibleParts", exprGraphVp);
         }
 
-        // these are universal for injected microarray experiments
+        // these are universal for injected expression experiments
         setPropValue("graphGenePageSection", "expression");
 
         if(getPropValue("graphPriorityOrderGrouping").equals("")) {
@@ -97,10 +112,10 @@ public abstract class Expression extends DatasetInjector {
         setPropValue("datasetDescrip", datasetDescrip.replace("'", ""));
 
         setPropValue("isGraphCustom", "false");
-        injectTemplate("genePageGraphDescriptions");
+
+        injectTemplate(lcDataType + "GraphDescriptions");
 
         String excludeProfileSets = getPropValue("excludedProfileSets");
-
 
         String excludedProfileSetsList = "'INTERNAL'";
         if(!excludeProfileSets.equals("")) {
