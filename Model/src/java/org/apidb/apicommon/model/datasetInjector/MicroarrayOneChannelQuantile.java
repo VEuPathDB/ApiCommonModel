@@ -33,7 +33,7 @@ public class MicroarrayOneChannelQuantile extends ExpressionOneChannelAndReferen
     }
 
     protected void setDataType() {
-        setPropValue("dataType", "Microarray");
+        setDataType("Microarray");
     }
 
 

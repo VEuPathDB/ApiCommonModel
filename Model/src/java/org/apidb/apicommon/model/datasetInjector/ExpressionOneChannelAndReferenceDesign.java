@@ -45,7 +45,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
     public void addModelReferences() {
 	super.addModelReferences();
 
-        String dataType = getPropValue("dataType");
+        String dataType = getDataType();
 
         if(getPropValueAsBoolean("hasPageData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",

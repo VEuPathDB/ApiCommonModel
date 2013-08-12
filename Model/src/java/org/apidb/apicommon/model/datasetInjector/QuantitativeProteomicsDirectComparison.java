@@ -40,7 +40,7 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
     }
 
     protected void setDataType() {
-        setPropValue("dataType", "Proteomics");
+        setDataType("Proteomics");
     }
 
     protected void setIsLogged() {

@@ -36,7 +36,7 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
     }
 
     protected void setDataType() {
-        setPropValue("dataType", "Microarray");
+        setDataType("Microarray");
     }
 
 }

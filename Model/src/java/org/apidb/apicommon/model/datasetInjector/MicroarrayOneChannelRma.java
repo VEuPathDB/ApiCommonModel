@@ -33,7 +33,7 @@ public class MicroarrayOneChannelRma extends ExpressionOneChannelAndReferenceDes
     }
 
     protected void setDataType() {
-        setPropValue("dataType", "Microarray");
+        setDataType("Microarray");
     }
 
 }

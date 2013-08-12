@@ -4,6 +4,17 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public abstract class Expression extends DatasetInjector {
 
+    protected String dataType;
+
+    protected void setDataType(String dataType) {
+        this.dataType = dataType;
+        setPropValue("dataType", dataType);
+    }
+
+    protected String getDataType() {
+        return this.dataType;
+    }
+
     protected abstract void setDataType();
     protected abstract void setExprGraphVisiblePart();
     protected abstract void setGraphModule();

@@ -50,7 +50,7 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
     }
 
     protected void setDataType() {
-        setPropValue("dataType", "Microarray");
+        setDataType("Microarray");
     }
 
 }
