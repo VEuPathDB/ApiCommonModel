@@ -85,12 +85,12 @@ public abstract class Expression extends DatasetInjector {
             setPropValue("includeProjects", projectName);
         }
 
+        setIsLogged();
         setDataType();
         setExprGraphVisiblePart();
         setGraphModule();
         setExprPlotPartModule();
         setGraphYAxisDescription();
-        setIsLogged();
 
         String lcDataType = getPropValue("dataType").toLowerCase();
 

@@ -6,18 +6,23 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
 
     @Override
     public void injectTemplates() {
-
         // hasPageData required by Expression class but not applicable to Proteomics;  Ensure it is always false
         setPropValue("hasPageData", "false");
 
         super.injectTemplates();
 
-        //        injectTemplate("microarraySimpleTwoChannelGraph");
+        injectTemplate("proteomicsSimpleLogRatio");
     }
 
     @Override
     protected void setExprPlotPartModule() {
-        setPropValue("exprPlotPartModule", "LogRatio");
+
+        if(getPropValue("isLogged").equals("1")) {
+            setPropValue("exprPlotPartModule", "QuantMassSpecLogged");
+        }
+        else {
+            setPropValue("exprPlotPartModule", "QuantMassSpec");
+        }
     }
 
 
@@ -28,7 +33,7 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "TODO::TOTO");
+        setPropValue("graphModule", "Proteomics::LogRatio");
     }
 
 
@@ -43,6 +48,8 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
         setDataType("Proteomics");
     }
 
+
+    // TODO:  This should be a prop passed in from the xml
     protected void setIsLogged() {
         setPropValue("isLogged", "0"); 
     }
