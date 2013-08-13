@@ -16,13 +16,7 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
 
     @Override
     protected void setExprPlotPartModule() {
-
-        if(getPropValue("isLogged").equals("1")) {
-            setPropValue("exprPlotPartModule", "QuantMassSpecLogged");
-        }
-        else {
-            setPropValue("exprPlotPartModule", "QuantMassSpec");
-        }
+        setPropValue("exprPlotPartModule", "QuantMassSpec");
     }
 
 
@@ -44,14 +38,25 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
+    @Override
     protected void setDataType() {
         setDataType("Proteomics");
     }
 
+    @Override
+    /**
+     *  Override from superclass... do nothing because we get this from the prop Declaration
+     */
+    protected void setIsLogged() {}
 
-    // TODO:  This should be a prop passed in from the xml
-    protected void setIsLogged() {
-        setPropValue("isLogged", "0"); 
+    @Override
+    public String[][] getPropertiesDeclaration() {
+        String[][] exprDeclaration = super.getPropertiesDeclaration();
+        
+        String [][] declaration = {{"isLogged", "Is the Data Logged or not"},
+        };
+
+        return combinePropertiesDeclarations(exprDeclaration, declaration);
     }
 
 }

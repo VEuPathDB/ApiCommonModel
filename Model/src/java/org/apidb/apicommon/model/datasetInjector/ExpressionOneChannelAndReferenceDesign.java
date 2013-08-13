@@ -21,9 +21,11 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
             injectTemplate("expressionFoldChangeWithConfidenceQuestion");
             injectTemplate(lcDataType + "FoldChangeWithConfidenceWS");
         }
-            
-        injectTemplate("expressionFoldChangeQuestion");
-        injectTemplate(lcDataType + "FoldChangeWS");
+
+        if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
+            injectTemplate("expressionFoldChangeQuestion");
+            injectTemplate(lcDataType + "FoldChangeWS");
+        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPercentileQuestion");
@@ -52,8 +54,11 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                             "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Confidence");
         }
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                        "GeneQuestions.GenesBy" + dataType + getDatasetName());
+
+        if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
+            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                            "GeneQuestions.GenesBy" + dataType + getDatasetName());
+        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
@@ -72,6 +77,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         
         String [][] declaration = {
                                    {"profileSetNameMap", "Optionally replace profileset names"},
+                                   {"hasMultipleSamplesForFoldChange", ""},
                                    //                                   {"hasSimilarityData", ""},
         };
 
