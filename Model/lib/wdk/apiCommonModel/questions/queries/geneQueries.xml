@@ -3686,19 +3686,18 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
       <column name="min_group_two"/>
       <column name="chose_group_one"/>
       <column name="chose_group_two"/>
-      <column name="max_percentile_one"/>
-      <column name="max_percentile_two"/>    
+      <column name="above_threshold_one"/>
+      <column name="above_threshold_two"/>    
       <column name="meta_data_category"/>
 
       <sqlParamValue includeProjects="PlasmoDB" name="isLogged">0</sqlParamValue>
-      <sqlParamValue includeProjects="PlasmoDB" name="shift">0.01</sqlParamValue>
+      <sqlParamValue includeProjects="PlasmoDB" name="lowerBound">0.000001</sqlParamValue>
    
   
       <sql>
       <![CDATA[
 			With Map As (
-			select distinct pro.source_id,
-                                   
+			Select distinct pro.source_id,
 				   Pen.Name As Element_Name, 
 				   pro.profile_id as pro_id,
 				   Pen.Profile_Element_Name_Id As Pen_Id, 
@@ -3718,15 +3717,15 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 				   And pPro.Profile_Set_Id = pPs.Profile_Set_Id 
 				   And Pro.Source_Id = Ppro.Source_Id
 				   And Pen.Name = Ppen.Name ),
-			 filtered_values as (  
+			 all_values as (  
 			 Select Distinct
 					pro.profile_set_id,
 					Pct.Source_Id, 
 					Pct.Element_Name,
 					Pe.Profile_Element_Name_Id,
-					case when ((Sinh(Pe.Value)-1)/50) > 0
+					case when ((Sinh(Pe.Value)-1)/50) > &&lowerBound&&
                                              then (Sinh(Pe.Value)-1)/50 
-                                             else 0
+                                             else &&lowerBound&&
                                              end As Value,
 					Pct.Value as percentile
 			 From
@@ -3768,18 +3767,18 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 					  Round(   Ln((1+(50*Min_Group_Two)) + Sqrt(Power((1+(50*Min_Group_Two)),2) +1)) ,6 ) As Min_Group_Two,
 					  Round(   Ln((1+(50*Chose_Group_One)) + Sqrt(Power((1+(50*Chose_Group_One)),2) +1)) ,6 ) As Chose_Group_One,
 					  Round(   Ln((1+(50*Chose_Group_Two)) + Sqrt(Power((1+(50*Chose_Group_Two)),2) +1)),6 ) As Chose_Group_Two,
-					  Round(   Max_Percentile_One ,6 ) as max_percentile_one,
-					  round(   Max_percentile_two ,6 ) as max_percentile_two
+                                          case when max_percentile_one >= $$min_expression_percentile$$ then 'yes' else 'no' end as above_threshold_one,
+                                          case when max_percentile_two >= $$min_expression_percentile$$ then 'yes' else 'no' end as above_threshold_two 
 						 From (
 				  Select One.Source_Id,
 							   Case When One.Average >= Two.Average 
-										   Then One.Average / (Two.Average + &&shift&&)
-										   Else -1 * (Two.Average  / (One.Average + &&shift&&))
-										   End As Fold_Change_Avg,
+					            		Then One.Average / Two.Average
+				                                Else -1 * Two.Average  / One.Average
+	                                                   End As Fold_Change_Avg,
 							   Case When One.Chosen >= Two.Chosen 
-										   Then One.Chosen / (Two.Chosen + &&shift&&)
-										  Else -1 * (Two.Chosen  / (One.Chosen + &&shift&&))
-									END as fold_change_chose,
+						                Then One.Chosen / Two.Chosen
+								Else -1 * Two.Chosen  / One.Chosen
+							   End as fold_change_chose,
 							   One.Average As Avg_Group_One,
 							   Two.Average As Avg_Group_Two,
 							   One.Maximum As Max_Group_One,
@@ -3806,7 +3805,7 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 									 Max(Pe.Value) As Maximum,
 									 Min(Pe.Value) As Minimum,
 								   Max(pe.percentile) as percentile
-						 From  Filtered_Values Pe
+						 From  all_Values Pe
 						 Where Pe.Profile_Element_Name_Id In ($$comp_samples_with_meta_data$$)
 						Group By Pe.Source_Id ) One,   
 					   ( Select distinct Pe.Source_Id, 
@@ -3821,16 +3820,15 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 									 Max(Pe.Value) As Maximum,
 									 Min(Pe.Value) As Minimum,
 								   max(pe.percentile) as percentile
-						 From  Filtered_Values Pe
+						 From  all_Values Pe
 						 Where Pe.Profile_Element_Name_Id In ($$ref_samples_with_meta_data$$)
 						Group By Pe.Source_Id) Two,
                                     study.OntologyEntry oe
 			Where One.Source_Id = Two.Source_Id 
-                          And Oe.ontology_entry_id = $$profile_ontology$$
-			  and (one.percentile > $$min_expression_percentile$$  or two.percentile > $$min_expression_percentile$$ )
-			  and (one.percentile < $$max_expression_percentile$$  or two.percentile < $$max_expression_percentile$$ )                                     
-			  and  ($$regulated_dir$$ ( one.chosen / two.chosen)  >= $$fold_change$$
-          OR $$regulated_dir$$ (-(two.chosen / one.chosen)) >= $$fold_change$$)
+                          and oe.ontology_entry_id = $$profile_ontology$$
+                          and (one.percentile > $$min_expression_percentile$$  or two.percentile > $$min_expression_percentile$$ )
+                          and  ($$regulated_dir$$ ( one.chosen / two.chosen)  >= $$fold_change$$
+                          or $$regulated_dir$$ (-(two.chosen / one.chosen)) >= $$fold_change$$)
 )
       ]]>
       </sql>
