@@ -10,7 +10,7 @@ public class CromptonAbMicroarray extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesbyCromptonAbFoldChange");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCromptonAbFoldChange");
   }
 
   // second column is for documentation
