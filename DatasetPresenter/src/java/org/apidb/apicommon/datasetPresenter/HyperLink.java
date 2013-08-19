@@ -5,6 +5,7 @@ import org.gusdb.fgputil.xml.Text;
 public class HyperLink {
   private String url;
   private String text;
+  private String description;
 
   public void setUrl(Text url) {
     this.url = url.getText();
@@ -20,6 +21,10 @@ public class HyperLink {
   
   public String getText() {
     return text;
+  }
+
+  public String getDescription() {
+    return description;
   }
   
   
