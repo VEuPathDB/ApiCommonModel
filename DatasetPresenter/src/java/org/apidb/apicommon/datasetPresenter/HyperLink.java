@@ -14,6 +14,10 @@ public class HyperLink {
   public void setText(Text text) {
     this.text = text.getText();
   }
+
+  public void setDescription(Text description) {
+    this.description = description.getText();
+  }
   
   public String getUrl() {
     return url;

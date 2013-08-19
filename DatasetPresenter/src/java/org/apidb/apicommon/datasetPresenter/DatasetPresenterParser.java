@@ -126,7 +126,7 @@ public class DatasetPresenterParser extends XmlParser {
     configureNode(digester, "datasetPresenters/datasetPresenter/link/description",
         Text.class, "setDescription");
     digester.addCallMethod("datasetPresenters/datasetPresenter/link/description",
-        "setDescription", 0);
+        "setText", 0);
 
     configureNode(digester,
         "datasetPresenters/datasetPresenter/templateInjector",
