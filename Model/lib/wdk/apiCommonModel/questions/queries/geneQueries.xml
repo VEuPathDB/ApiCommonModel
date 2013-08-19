@@ -3665,10 +3665,10 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.profile_ontology" quote="false"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.ref_samples_with_meta_data" quote="false"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_ref" />
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.comp_samples_with_meta_data" quote="false"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_comp"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.ref_samples_with_meta_data" selectMode="none" quote="false"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.operation_no_dependency_ref" />
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.comp_samples_with_meta_data" selectMode="none" quote="false"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.operation_no_dependency_comp"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.regulated_dir" quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.percentile_threshold" default="90"/>
@@ -3683,6 +3683,8 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
       <column name="max_group_two"/>
       <column name="min_group_one"/>
       <column name="min_group_two"/>
+      <column name="med_group_one"/>
+      <column name="med_group_two"/>
       <column name="chose_group_one"/>
       <column name="chose_group_two"/>
       <column name="above_threshold_one"/>
@@ -3690,7 +3692,7 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
       <column name="meta_data_category"/>
 
       <sqlParamValue includeProjects="PlasmoDB" name="isLogged">0</sqlParamValue>
-      <sqlParamValue includeProjects="PlasmoDB" name="lowerBound">0.000001</sqlParamValue>
+      <sqlParamValue includeProjects="PlasmoDB" name="lowerBound">0.0001</sqlParamValue>
    
   
       <sql>
@@ -3764,6 +3766,8 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 					  Round(   Ln((1+(50*Max_Group_Two)) + Sqrt(Power((1+(50*Max_Group_Two)),2) +1)) ,6  ) As Max_Group_Two,
 					  Round(   Ln((1+(50*Min_Group_One)) + Sqrt(Power((1+(50*Min_Group_One)),2) +1)) ,6 ) As Min_Group_One,
 					  Round(   Ln((1+(50*Min_Group_Two)) + Sqrt(Power((1+(50*Min_Group_Two)),2) +1)) ,6 ) As Min_Group_Two,
+					  Round(   Ln((1+(50*Min_Group_One)) + Sqrt(Power((1+(50*Min_Group_One)),2) +1)) ,6 ) As Med_Group_One,
+					  Round(   Ln((1+(50*Min_Group_Two)) + Sqrt(Power((1+(50*Min_Group_Two)),2) +1)) ,6 ) As Med_Group_Two,
 					  Round(   Ln((1+(50*Chose_Group_One)) + Sqrt(Power((1+(50*Chose_Group_One)),2) +1)) ,6 ) As Chose_Group_One,
 					  Round(   Ln((1+(50*Chose_Group_Two)) + Sqrt(Power((1+(50*Chose_Group_Two)),2) +1)),6 ) As Chose_Group_Two,
                                           case when max_percentile_one >= $$percentile_threshold$$ then 'yes' else 'no' end as above_threshold_one,
@@ -3778,46 +3782,54 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
 						                Then One.Chosen / Two.Chosen
 								Else -1 * Two.Chosen  / One.Chosen
 							   End as fold_change_chose,
-							   One.Average As Avg_Group_One,
-							   Two.Average As Avg_Group_Two,
-							   One.Maximum As Max_Group_One,
-							   Two.Maximum As Max_Group_Two,
-							   One.Minimum As Min_Group_One,
-							   Two.Minimum As Min_Group_Two,
-							   One.Chosen As Chose_Group_One,
-							   Two.Chosen As Chose_Group_Two,
+							   One.Average    As Avg_Group_One,
+							   Two.Average    As Avg_Group_Two,
+							   One.Maximum    As Max_Group_One,
+							   Two.Maximum    As Max_Group_Two,
+							   One.Minimum    As Min_Group_One,
+							   Two.Minimum    As Min_Group_Two,
+                                                           One.Median     As Med_Group_One,
+							   Two.Median     As Med_Group_Two,
+							   One.Chosen     As Chose_Group_One,
+							   Two.Chosen     As Chose_Group_Two,
 							   One.Percentile As Max_Percentile_One,
-							   two.percentile as Max_percentile_two,
-                                                           oe.value as meta_data_category
+							   two.percentile As Max_percentile_two,
+                                                           oe.value       As meta_data_category
 							   from (
 						 
 
 				  Select  Pe.Source_Id, 
-								Case When $$min_max_avg_comp$$ = 'minimum'
+								Case When $$operation_no_dependency_comp$$ = 'minimum'
 									 Then Min(Pe.Value)
-									 WHEN $$min_max_avg_comp$$ = 'maximum'
+									 WHEN $$operation_no_dependency_comp$$ = 'maximum'
 									 Then Max(Pe.Value)
-									 When $$min_max_avg_comp$$ = 'average'
+									 When $$operation_no_dependency_comp$$ = 'average'
 									 Then Avg(Pe.Value)
+									 When $$operation_no_dependency_comp$$ = 'median'
+									 Then Median(Pe.Value)
 									 End As Chosen,
 									 Avg(Pe.Value) As Average,
 									 Max(Pe.Value) As Maximum,
 									 Min(Pe.Value) As Minimum,
+									 Median(Pe.Value) As Median,
 								   Max(pe.percentile) as percentile
 						 From  all_Values Pe
 						 Where Pe.Profile_Element_Name_Id In ($$comp_samples_with_meta_data$$)
 						Group By Pe.Source_Id ) One,   
 					   ( Select distinct Pe.Source_Id, 
-								Case When $$min_max_avg_ref$$ = 'minimum'
+								Case When $$operation_no_dependency_ref$$ = 'minimum'
 									 Then Min(Pe.Value)
-									 WHEN $$min_max_avg_ref$$ = 'maximum'
+									 WHEN $$operation_no_dependency_ref$$ = 'maximum'
 									 Then Max(Pe.Value)
-									 When $$min_max_avg_ref$$ = 'average'
+									 When $$operation_no_dependency_ref$$ = 'average'
 									 Then Avg(Pe.Value)
+									 When $$operation_no_dependency_comp$$ = 'median'
+									 Then Median(Pe.Value)
 									 End As Chosen,
 									 Avg(Pe.Value) As Average,
 									 Max(Pe.Value) As Maximum,
-									 Min(Pe.Value) As Minimum,
+                                                                         Min(Pe.Value) As Minimum,
+                                                                         Median(Pe.Value) As Median,
 								   max(pe.percentile) as percentile
 						 From  all_Values Pe
 						 Where Pe.Profile_Element_Name_Id In ($$ref_samples_with_meta_data$$)
@@ -3838,9 +3850,9 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.profile_ontology"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.ref_samples_with_meta_data" quote="false"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_ref"  quote="false"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.operation_no_dependency_ref"  quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.comp_samples_with_meta_data"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_comp"  quote="false"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.operation_no_dependency_comp"  quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.regulated_dir"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_expression_percentile" default="90"/>
@@ -3856,6 +3868,8 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
         <wsColumn name="max_group_two" wsName="max_group_two"/>
         <wsColumn name="min_group_one" wsName="min_group_one"/>
         <wsColumn name="min_group_two" wsName="min_group_two"/>
+        <wsColumn name="med_group_one" wsName="med_group_one"/>
+        <wsColumn name="med_group_two" wsName="med_group_two"/>
         <wsColumn name="chose_group_one" wsName="chose_group_one"/>
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
         <wsColumn name="above_threshold_one" wsName="above_threshold_one"/>
