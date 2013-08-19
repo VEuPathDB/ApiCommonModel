@@ -32,6 +32,7 @@ public class MicroarrayOneChannelQuantile extends ExpressionOneChannelAndReferen
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
+    @Override
     protected void setDataType() {
         setDataType("Microarray");
     }

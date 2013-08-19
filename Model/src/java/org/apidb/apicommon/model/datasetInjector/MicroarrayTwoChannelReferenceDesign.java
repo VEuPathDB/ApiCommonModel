@@ -49,6 +49,7 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
+    @Override
     protected void setDataType() {
         setDataType("Microarray");
     }

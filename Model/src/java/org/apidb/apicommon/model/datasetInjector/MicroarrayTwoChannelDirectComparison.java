@@ -35,6 +35,7 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
+    @Override
     protected void setDataType() {
         setDataType("Microarray");
     }
