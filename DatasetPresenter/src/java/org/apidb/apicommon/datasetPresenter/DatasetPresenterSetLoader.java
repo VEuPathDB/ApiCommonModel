@@ -450,7 +450,7 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetHyperLink" + suffix;
     String sql = "INSERT INTO " + table
         + " (dataset_link_id, dataset_presenter_id, text, description, url)" + " VALUES ("
-        + table + "_sq.nextval, ?, ?, ?)";
+        + table + "_sq.nextval, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -458,8 +458,8 @@ public class DatasetPresenterSetLoader {
       PreparedStatement stmt) throws SQLException {
     stmt.setInt(1, datasetPresenterId);
     stmt.setString(2, link.getText());
-    stmt.setString(2, link.getDescription());
-    stmt.setString(3, link.getUrl());
+    stmt.setString(3, link.getDescription());
+    stmt.setString(4, link.getUrl());
     stmt.execute();
   }
 
