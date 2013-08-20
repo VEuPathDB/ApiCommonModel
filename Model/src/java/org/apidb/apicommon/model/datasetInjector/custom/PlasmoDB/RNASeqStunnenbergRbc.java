@@ -13,6 +13,31 @@ public class RNASeqStunnenbergRbc extends CusomGenePageExpressionGraphs {
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "gbrowse_track", "pfal3D7_Stunnenberg_rnaSeq_RSRC_RNASeqCoverage"); 
   }
 
+  public void injectTemplates() {
+      setShortAttribution();
+
+      String projectName = getPropValue("projectName");
+
+      String datasetName = getDatasetName();
+
+      setOrganismAbbrevFromDatasetName();
+      setOrganismAbbrevInternalFromDatasetName();
+
+      if(getPropValueAsBoolean("isEuPathDBSite")) {
+          setPropValue("includeProjects", projectName + ",EuPathDB");
+
+      } else {
+          setPropValue("includeProjects", projectName);
+      }
+
+      injectTemplate("rnaSeqCoverageTrack");
+
+      String hasJunctions = getPropValue("hasJunctions");
+      if(Boolean.parseBoolean(hasJunctions)) {
+          injectTemplate("rnaSeqJunctionsTrack");
+      }
+
+  }
 
 }
 
