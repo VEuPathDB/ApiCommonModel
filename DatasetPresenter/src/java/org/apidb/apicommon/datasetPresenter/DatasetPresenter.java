@@ -327,7 +327,7 @@ public class DatasetPresenter {
     datasetInjector.inheritDatasetProps(this);
   }
 
-  private DatasetInjector getDatasetInjector() {
+  protected DatasetInjector getDatasetInjector() {
     if (datasetInjector == null && datasetInjectorConstructor != null) {
       datasetInjector = datasetInjectorConstructor.getDatasetInjector();
       datasetInjector.addModelReferences();

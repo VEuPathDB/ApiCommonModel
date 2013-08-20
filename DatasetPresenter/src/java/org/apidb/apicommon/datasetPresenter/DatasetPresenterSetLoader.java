@@ -19,11 +19,14 @@ import org.gusdb.fgputil.db.platform.SupportedPlatform;
 public class DatasetPresenterSetLoader {
 
   private Contacts allContacts;
+  private HyperLinks defaultHyperLinks;
+
   private Connection dbConnection;
   private Configuration config;
   private String instance;
   private String propFileName;
   private String defaultInjectorsFileName;
+
   private String suffix;
   private String login;
   private DatasetPresenterSet dps = null;
@@ -32,11 +35,16 @@ public class DatasetPresenterSetLoader {
 
   public DatasetPresenterSetLoader(String propFileName,
       String contactsFileName, String defaultInjectorsFileName,
-      String instance, String suffix) {
+      String defaultLinksFileName, String instance, String suffix) {
     ConfigurationParser configParser = new ConfigurationParser();
     config = configParser.parseFile(propFileName);
+
     ContactsFileParser contactsParser = new ContactsFileParser();
     allContacts = contactsParser.parseFile(contactsFileName);
+
+    HyperLinksFileParser linksParser = new HyperLinksFileParser();
+    defaultHyperLinks = linksParser.parseFile(defaultLinksFileName);
+
     this.instance = instance;
     this.propFileName = propFileName;
     this.suffix = suffix;
@@ -284,6 +292,8 @@ public class DatasetPresenterSetLoader {
         loadDatasetPresenter(datasetPresenterId, datasetPresenter,
             presenterStmt);
 
+        String type = datasetPresenter.getType();
+        String subtype = datasetPresenter.getSubtype();
 
         for (Contact contact : datasetPresenter.getContacts(allContacts)) {
           loadContact(datasetPresenterId, contact, contactStmt);
@@ -295,6 +305,16 @@ public class DatasetPresenterSetLoader {
 
         for (ModelReference ref : datasetPresenter.getModelReferences()) {
           loadModelReference(datasetPresenterId, ref, referenceStmt);
+        }
+
+        if(type != null) {
+            System.err.println("TYPE=" + type);
+            System.err.println("SUBTYPE=" + subtype);
+            String key = type + "." + subtype;
+
+            for (HyperLink link : defaultHyperLinks.getHyperLinksFromTypeSubtype(key)) {
+                loadLink(datasetPresenterId, link, linkStmt);
+            }
         }
 
         for (HyperLink link : datasetPresenter.getLinks()) {
@@ -510,6 +530,12 @@ public class DatasetPresenterSetLoader {
         "a three column tab delimited file:  type, subtype, injectorClass.  Provides default injectorClasses for type/subtypes",
         false, true);
 
+    CliUtil.addOption(
+        options,
+        "defaultHyperLinksFile",
+        "an xml file which contains default links based on the injector class",
+        false, true);
+
     CliUtil.addOption(options, "instance",
         "the name of the instance to write to", true, true);
 
@@ -551,14 +577,15 @@ public class DatasetPresenterSetLoader {
     String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     String propFile = cmdLine.getOptionValue("tuningPropsXmlFile");
     String defaultInjectorsFile = cmdLine.getOptionValue("defaultInjectorClassesFile");
+    String defaultLinksFile = cmdLine.getOptionValue("defaultHyperLinksFile");
+
     String instance = cmdLine.getOptionValue("instance");
     String suffix = cmdLine.getOptionValue("suffix");
 
     System.err.println("Parsing and validating DatasetPresenters XML files found in directory "
         + presentersDir);
     DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir, globalPresentersFile);
-    DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile,
-        contactsFile, defaultInjectorsFile, instance, suffix);
+    DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile, contactsFile, defaultInjectorsFile, defaultLinksFile, instance, suffix);
     dpsl.setDatasetPresenterSet(datasetPresenterSet);
     Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
     if (namesFromDbNotFound.size() != 0)
