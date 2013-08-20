@@ -489,12 +489,44 @@ select count(*) from apidbtuning.datasetpresenter
             <column name="url"/>
             <sql>
             <![CDATA[
-                     select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url
-                     from apidbtuning.datasethyperlink ln, apidbtuning.datasetpresenter dsp
-                     where dsp.dataset_presenter_id = ln.dataset_presenter_id
-                     and url is not null
+with sequences as (
+select sa.source_id, 
+       sa.taxon_id,
+       row_number() over(partition by sa.taxon_id
+                         order by sa.chromosome_order_num, sa.length desc) as rn
+from apidbtuning.sequenceattributes sa
+where sa.is_top_level = 1)
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
+       nvl(hl.text, hl.url) as text,
+       replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', '@PROJECT_ID@'), 'DEFAULT_LC_PROJECT', lower('@PROJECT_ID@')), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk) as url
+from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk
+      from apidbtuning.datasetpresenter dsp, apidbtuning.datasetnametaxon nt, apidbtuning.organismattributes oa, sequences os
+      where dsp.dataset_presenter_id = nt.dataset_presenter_id
+      and nt.taxon_id = os.taxon_id
+      and nt.taxon_id = oa.component_taxon_id
+      and os.rn = 1 
+      ) def_seq,
+      apidbtuning.datasetpresenter dsp, apidbtuning.datasethyperlink hl
+where dsp.dataset_presenter_id = def_seq.dataset_presenter_id (+)
+and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.type = 'genome'
+and hl.url is not null
+UNION
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url
+from apidbtuning.datasethyperlink ln, apidbtuning.datasetpresenter dsp
+where dsp.dataset_presenter_id = ln.dataset_presenter_id
+and url is not null
+and (dsp.type != 'genome' or dsp.type is null)
+
             ]]>
             </sql>
+
+            <sql includeProjects="EuPathDB">
+              select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, '' as text, '' as url
+              from apidbtuning.datasetpresenter dsp
+              where dsp.name = 'no links for portal'
+            </sql>
+
         </sqlQuery>
 
 
