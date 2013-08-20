@@ -308,8 +308,6 @@ public class DatasetPresenterSetLoader {
         }
 
         if(type != null) {
-            System.err.println("TYPE=" + type);
-            System.err.println("SUBTYPE=" + subtype);
             String key = type + "." + subtype;
 
             for (HyperLink link : defaultHyperLinks.getHyperLinksFromTypeSubtype(key)) {

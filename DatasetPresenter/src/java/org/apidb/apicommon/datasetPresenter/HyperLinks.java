@@ -18,8 +18,6 @@ public class HyperLinks {
         String key = type + "." + subType;
 
 
-        System.err.println("ADDING Hyperlink for " + key);
-
         if(type == null && subType == null) {
             throw new UserException("Invalid XML file " + xmlFileName);
         }
