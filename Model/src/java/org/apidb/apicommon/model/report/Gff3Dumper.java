@@ -53,6 +53,7 @@ public class Gff3Dumper {
     dumper.dump();
 
     System.out.println("Finished.");
+    System.exit(0);
   }
 
   public static void printUsage() {
