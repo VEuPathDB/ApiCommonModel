@@ -497,7 +497,20 @@ select sa.source_id,
        row_number() over(partition by sa.taxon_id
                          order by sa.chromosome_order_num, sa.length desc) as rn
 from apidbtuning.sequenceattributes sa
-where sa.is_top_level = 1)
+where sa.is_top_level = 1),
+proteomicsgenes as (
+select ga.source_id, 
+       d.name, 
+       row_number() over(partition by d.name
+                         order by mss.aa_seq_percent_covered desc) as rn
+from APIDB.massspecsummary mss, apidbtuning.geneattributes ga,
+     SRES.externaldatabase d, SRES.externaldatabaserelease r
+where mss.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and mss.aa_sequence_id = ga.aa_sequence_id
+)
+-- MAIN QUERY STARTS HERE
+ -- first query handles genomes... replace needed macros
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
@@ -515,12 +528,40 @@ and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
 and dsp.type = 'genome'
 and hl.url is not null
 UNION
-select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
-from apidbtuning.datasethyperlink ln, apidbtuning.datasetpresenter dsp
-where dsp.dataset_presenter_id = ln.dataset_presenter_id
-and url is not null
-and (dsp.type != 'genome' or dsp.type is null)
-
+ -- this query handles proteomics... replace needed macros
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
+       nvl(hl.text, hl.url) as text,
+       hl.description,
+       replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower('@PROJECT_ID@')), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name) as url
+from (select dsp.dataset_presenter_id, pg.source_id
+      from apidbtuning.datasetpresenter dsp, apidbtuning.datasetnametaxon dsnt, proteomicsgenes pg
+      where pg.name = dsnt.name
+      and pg.rn = 1
+      and dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+      ) def_prot,
+      apidbtuning.datasetpresenter dsp, apidbtuning.datasethyperlink hl
+where dsp.dataset_presenter_id = def_prot.dataset_presenter_id (+)
+and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.type = 'protein_expression'
+and dsp.subtype is null
+and hl.url is not null
+and ((hl.url like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is not null)
+     or (hl.url not like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is null))
+UNION
+ -- Get the remaining ones
+select dataset_id, dataset_name, text, url, description 
+from (select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
+      from apidbtuning.datasethyperlink ln, apidbtuning.datasetpresenter dsp
+      where dsp.dataset_presenter_id = ln.dataset_presenter_id
+      minus
+      select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
+      from apidbtuning.datasethyperlink ln, apidbtuning.datasetpresenter dsp
+      where dsp.dataset_presenter_id = ln.dataset_presenter_id
+      and ((dsp.type = 'genome')
+        OR (dsp.type = 'protein_expression' and dsp.subtype is null)
+        )
+      )
+where url is not null
             ]]>
             </sql>
 
