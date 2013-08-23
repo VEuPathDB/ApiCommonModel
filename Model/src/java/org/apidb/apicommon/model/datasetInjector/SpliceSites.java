@@ -33,11 +33,11 @@ public class SpliceSites extends  DatasetInjector {
       setGraphModule();
 
       if(getPropValueAsBoolean("hasPairedEnds")) {
-	  setPropValue("exprMetric", "fpkm");
-	  setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
+        setPropValue("exprMetric", "fpkm");
+        setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
       } else {
-	  setPropValue("exprMetric", "rpkm");
-	  setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
+        setPropValue("exprMetric", "rpkm");
+        setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
       }
 
       String exprMetric = getPropValue("exprMetric");
@@ -52,18 +52,21 @@ public class SpliceSites extends  DatasetInjector {
 
   
       if(getPropValueAsBoolean("hasMultipleSamples")) {
-	  injectTemplate("spliceSitesProfileSetParamQuery");
-	  injectTemplate("spliceSitesFoldChangeQuestion");
+        injectTemplate("spliceSitesProfileSetParamQuery");
+        injectTemplate("spliceSitesFoldChangeQuestion");
+        injectTemplate("spliceSitesFoldChangeWS");
 
-	  injectTemplate("spliceSitesProfileSetsQuery");
-	  injectTemplate("spliceSitesDifferentialQuestion");
+        injectTemplate("spliceSitesProfileSetsQuery");
+        injectTemplate("spliceSitesDifferentialQuestion");
+        injectTemplate("spliceSitesDifferentialWS");
       }
 
       injectTemplate("spliceSitesPctProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
+      injectTemplate("spliceSitesPercentileWS");
 
       if(getPropValue("graphPriorityOrderGrouping").equals("")) {
-	  setPropValue("graphPriorityOrderGrouping", "5");
+        setPropValue("graphPriorityOrderGrouping", "5");
       }
 
       setPropValue("isGraphCustom", "false");
@@ -72,7 +75,7 @@ public class SpliceSites extends  DatasetInjector {
 
 
   protected void setGraphModule() {
-	setPropValue("graphModule", "SpliceSites");
+      setPropValue("graphModule", "SpliceSites");
   }
 
 
@@ -82,16 +85,16 @@ public class SpliceSites extends  DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
       if(getPropValueAsBoolean("hasMultipleSamples")) {
-	  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-			  "GeneQuestions.GenesBySpliceSites" + getDatasetName() );
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+        "GeneQuestions.GenesBySpliceSites" + getDatasetName() );
 
 
-	  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-			  "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+        "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
       }
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-		      "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
+          "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
 
   }
 
