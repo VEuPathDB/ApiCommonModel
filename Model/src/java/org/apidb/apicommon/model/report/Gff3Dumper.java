@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.File;
@@ -51,9 +48,9 @@ public class Gff3Dumper {
 
     Gff3Dumper dumper = new Gff3Dumper(cmdArgs);
     dumper.dump();
+    dumper.close();
 
     System.out.println("Finished.");
-    System.exit(0);
   }
 
   public static void printUsage() {
@@ -97,6 +94,10 @@ public class Gff3Dumper {
     this.organisms = organismArg.split(",");
   }
 
+  public void close() {
+    wdkModel.releaseResources();
+  }
+  
   public void dump() throws WdkUserException, WdkModelException, IOException, SQLException {
 
     // TEST
