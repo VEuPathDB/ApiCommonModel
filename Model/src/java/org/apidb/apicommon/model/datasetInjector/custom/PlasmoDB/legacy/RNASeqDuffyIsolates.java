@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
+package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB.legacy;
 
 import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
