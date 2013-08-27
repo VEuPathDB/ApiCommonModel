@@ -28,6 +28,7 @@ public class QuantProteomicsUrbaniakCompProt extends ProteinExpressionMassSpec  
 
       setPropValue("isGraphCustom", "true");
       injectTemplate("genePageGraphDescriptions");
+      injectTemplate("datasetExampleGraphDescriptions");
   }
 
   @Override

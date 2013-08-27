@@ -19,6 +19,7 @@ public class SAGETagsWithGraph extends SAGETags {
 
       setPropValue("isGraphCustom", "true");
       injectTemplate("genePageGraphDescriptions");
+      injectTemplate("datasetExampleGraphDescriptions");
   }
 
   @Override
