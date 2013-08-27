@@ -348,8 +348,8 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetPresenter" + suffix;
     String sql = "INSERT INTO "
         + table
-        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope)"
-        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope, build_number_introduced)"
+        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -379,6 +379,14 @@ public class DatasetPresenterSetLoader {
 
     stmt.setString(i++, subtype);
     stmt.setBoolean(i++, isSpeciesScope);
+
+    Integer buildNumberIntroduced = datasetPresenter.getBuildNumberIntroduced();
+
+    if(buildNumberIntroduced == null) {
+        buildNumberIntroduced = new Integer(1);
+    }
+
+    stmt.setInt(i++, buildNumberIntroduced.intValue());
     stmt.execute();
   }
 
