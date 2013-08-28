@@ -27,7 +27,7 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
 
     @Override
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "TODO";
+        String yAxisDescription = "Protein Abundance";
 
         setPropValue("graphYAxisDescription", yAxisDescription);
     }

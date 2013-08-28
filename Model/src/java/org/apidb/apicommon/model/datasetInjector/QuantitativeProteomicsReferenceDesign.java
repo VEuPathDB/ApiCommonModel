@@ -27,7 +27,7 @@ public class QuantitativeProteomicsReferenceDesign extends ExpressionOneChannelA
 
     @Override
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "TODO";
+        String yAxisDescription = "Relative Protein Abundance";
 
         setPropValue("graphYAxisDescription", yAxisDescription);
     }

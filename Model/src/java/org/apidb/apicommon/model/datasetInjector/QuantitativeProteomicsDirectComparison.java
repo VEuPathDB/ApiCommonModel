@@ -33,7 +33,7 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
 
     @Override
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "TODO";
+        String yAxisDescription = "Relative Protein Abundance";
 
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
