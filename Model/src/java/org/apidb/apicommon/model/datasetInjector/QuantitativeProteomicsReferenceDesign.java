@@ -27,7 +27,7 @@ public class QuantitativeProteomicsReferenceDesign extends ExpressionOneChannelA
 
     @Override
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "Relative Protein Abundance";
+        String yAxisDescription = "Protein Abundance values for quantitative proteomics are log2 fold change (M = log2 (comparator/reference)).  We also provide the fold difference in the right axis.  For any 2 points on the graph (M1, M2) the fold difference is calculated by:  power(2, M2)/power(2,M1).   or expression percentile value.";
 
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
