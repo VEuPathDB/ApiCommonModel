@@ -84,15 +84,15 @@ public class RNASeq extends  DatasetInjector {
 
               if(getPropValueAsBoolean("hasFishersExactTestData")) {
                   injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
-                  injectTemplate("rnaSeqFoldChangeWithPValueWS");
+                  injectTemplate("rnaSeqFoldChangeWithPValueCategories");
               }
 
               injectTemplate("rnaSeqFoldChangeQuestion");
-              injectTemplate("rnaSeqFoldChangeWS");
+              injectTemplate("rnaSeqFoldChangeCategories");
           }
 
           injectTemplate("rnaSeqPercentileQuestion");
-          injectTemplate("rnaSeqPercentileWS");
+          injectTemplate("rnaSeqPercentileCategories");
 
 
           if(getPropValue("graphPriorityOrderGrouping").equals("")) {

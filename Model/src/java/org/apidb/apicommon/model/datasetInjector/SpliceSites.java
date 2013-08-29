@@ -54,16 +54,16 @@ public class SpliceSites extends  DatasetInjector {
       if(getPropValueAsBoolean("hasMultipleSamples")) {
         injectTemplate("spliceSitesProfileSetParamQuery");
         injectTemplate("spliceSitesFoldChangeQuestion");
-        injectTemplate("spliceSitesFoldChangeWS");
+        injectTemplate("spliceSitesFoldChangeCategories");
 
         injectTemplate("spliceSitesProfileSetsQuery");
         injectTemplate("spliceSitesDifferentialQuestion");
-        injectTemplate("spliceSitesDifferentialWS");
+        injectTemplate("spliceSitesDifferentialCategories");
       }
 
       injectTemplate("spliceSitesPctProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
-      injectTemplate("spliceSitesPercentileWS");
+      injectTemplate("spliceSitesPercentileCategories");
 
       if(getPropValue("graphPriorityOrderGrouping").equals("")) {
         setPropValue("graphPriorityOrderGrouping", "5");

@@ -26,15 +26,15 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         if(getPropValueAsBoolean("hasPageData")) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
-            injectTemplate(lcDataType + "FoldChangeWithConfidenceWSDirect");
+            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
         } else {
             injectTemplate("expressionFoldChangeQuestionDirect");
-            injectTemplate(lcDataType + "FoldChangeWSDirect");
+            injectTemplate(lcDataType + "FoldChangeCategoriesDirect");
         }
 
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            injectTemplate(lcDataType + "PercentileWSDirect");
+            injectTemplate(lcDataType + "PercentileCategoriesDirect");
             injectTemplate("expressionPercentileQuestionDirect");
         }
 

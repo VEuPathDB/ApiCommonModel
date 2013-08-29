@@ -19,17 +19,17 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 
         if(getPropValueAsBoolean("hasPageData")) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestion");
-            injectTemplate(lcDataType + "FoldChangeWithConfidenceWS");
+            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
         }
 
         if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
             injectTemplate("expressionFoldChangeQuestion");
-            injectTemplate(lcDataType + "FoldChangeWS");
+            injectTemplate(lcDataType + "FoldChangeCategories");
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPercentileQuestion");
-            injectTemplate(lcDataType + "PercentileWS");
+            injectTemplate(lcDataType + "PercentileCategories");
         }
 
         if(getPropValueAsBoolean("hasSimilarityData")) {
