@@ -574,7 +574,24 @@ and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
 and dsp.type = 'protein_expression'
 and hl.url is not null
 and ((hl.url like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is not null)
-     or (hl.url not like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is null))
+     or (hl.url not like '%DEFAULT_PROTEOMICS_GENE%'))
+UNION
+-- Get the RNASeq Ones
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
+       nvl(hl.text, hl.url) as text,
+       hl.description,
+       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower('@PROJECT_ID@')), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', '@PROJECT_ID@') as url
+from APIDBTUNING.datasetexamplesourceid esi,
+      apidbtuning.datasetpresenter dsp, apidbtuning.datasethyperlink hl,
+      apidbtuning.datasetnametaxon dnt
+where dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.dataset_presenter_id = dnt.dataset_presenter_id (+)
+and esi.dataset = dnt.name
+and dsp.type = 'transcript_expression'
+and dsp.subtype = 'rnaseq'
+and hl.url is not null
+and ((hl.url like '%DEFAULT_RNASEQ_GENE%' and esi.example_source_id is not null)
+     or (hl.url not like '%DEFAULT_RNASEQ_GENE%'))
 UNION
  -- Get the remaining ones
 select dataset_id, dataset_name, text, url, description 
@@ -587,6 +604,7 @@ from (select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, n
       where dsp.dataset_presenter_id = ln.dataset_presenter_id
       and ((dsp.type = 'genome')
         OR (dsp.type = 'protein_expression')
+        OR (dsp.type = 'transcript_expression' and subtype = 'rnaseq')
         )
       )
 where url is not null
