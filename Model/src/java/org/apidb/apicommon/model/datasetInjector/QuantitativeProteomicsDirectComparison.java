@@ -4,6 +4,11 @@ package org.apidb.apicommon.model.datasetInjector;
 public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannelDirectComparison {
 
 
+    protected void setProteinCodingProps() {
+        setPropValue("defaultProteinCodingOnly", "no");
+        setPropValue("proteinCodingParamVisible", "false");
+    }
+
     @Override
     public void injectTemplates() {
         // hasPageData required by Expression class but not applicable to Proteomics;  Ensure it is always false

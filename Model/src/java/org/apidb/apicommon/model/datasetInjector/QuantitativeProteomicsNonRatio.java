@@ -3,6 +3,12 @@ package org.apidb.apicommon.model.datasetInjector;
 
 public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndReferenceDesign {
 
+    protected void setProteinCodingProps() {
+        setPropValue("defaultProteinCodingOnly", "no");
+        setPropValue("proteinCodingParamVisible", "false");
+    }
+
+
     @Override
     public void injectTemplates() {
         super.injectTemplates();

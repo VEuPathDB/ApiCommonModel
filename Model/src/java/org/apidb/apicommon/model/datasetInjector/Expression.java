@@ -27,6 +27,12 @@ public abstract class Expression extends DatasetInjector {
     }
 
 
+    protected void setProteinCodingProps() {
+        setPropValue("defaultProteinCodingOnly", "yes");
+        setPropValue("proteinCodingParamVisible", "true");
+    }
+
+
     /***
      *
      *  used by the model (0=false, 1=true)
@@ -91,6 +97,8 @@ public abstract class Expression extends DatasetInjector {
         setGraphModule();
         setExprPlotPartModule();
         setGraphYAxisDescription();
+        setProteinCodingProps();
+
 
         String lcDataType = getPropValue("dataType").toLowerCase();
 
