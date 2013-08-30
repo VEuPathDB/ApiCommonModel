@@ -3,6 +3,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 public class QuantitativeProteomicsReferenceDesign extends ExpressionOneChannelAndReferenceDesign {
 
+    @Override
     protected void setProteinCodingProps() {
         setPropValue("defaultProteinCodingOnly", "no");
         setPropValue("proteinCodingParamVisible", "false");

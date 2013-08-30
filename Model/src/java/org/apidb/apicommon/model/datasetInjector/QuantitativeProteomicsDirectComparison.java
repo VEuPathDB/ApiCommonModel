@@ -3,7 +3,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannelDirectComparison {
 
-
+    @Override
     protected void setProteinCodingProps() {
         setPropValue("defaultProteinCodingOnly", "no");
         setPropValue("proteinCodingParamVisible", "false");
