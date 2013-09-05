@@ -9,13 +9,13 @@
           <paramRef ref="snpParams.snp_id"/>
 	  <column name="source_id"/>
 	  <column name="project_id"/>
-	  <sql>
+        <sql>
 	    <![CDATA[
 	      SELECT distinct sf.source_id AS source_id, '@PROJECT_ID@' as project_id
 	      FROM dots.SnpFeature sf, ($$snp_id$$) ds
 	      WHERE sf.source_id = ds.source_id
 	    ]]>
-	  </sql>
+        </sql>
       </sqlQuery>
 
      <processQuery name="SnpBySourceId" includeProjects="EuPathDB" 
@@ -108,7 +108,7 @@ FROM
 GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product
 )
            ]]>
-       </sql>
+        </sql>
 
     </sqlQuery>
 
@@ -231,7 +231,7 @@ FROM
 GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
 )
            ]]>
-       </sql>
+        </sql>
 
     </sqlQuery>
 
@@ -368,7 +368,7 @@ WHERE snp.na_feature_id = variants.parent_id
   AND snp.dataset in ( select distinct ss.extdb_name from Apidbtuning.snpstrains ss where is_queryable = 1)
   AND (chromosome in ( $$chromosomeOptional$$ ) OR lower(source_id) = lower($$sequenceId$$) ) 
            ]]>
-       </sql>
+        </sql>
     </sqlQuery>
 
     <processQuery name="SnpsByLocation" includeProjects="EuPathDB" doNotTest="true"
@@ -517,7 +517,7 @@ WHERE snp.na_feature_id = variants.parent_id
   AND snp.type = 'HTS'
         &&chrOptional&&
            ]]>
-       </sql>
+        </sql>
 
     </sqlQuery>
 
@@ -758,7 +758,7 @@ WHERE snp.na_feature_id = variants.parent_id
           ]]>
        </sql>
 
-       <sql includeProjects="PlasmoDB,ToxoDB">
+        <sql includeProjects="PlasmoDB,ToxoDB">
             <![CDATA[
        with taxonQ as (select taxon_id from sres.TaxonName where name = $$organism$$)
        select source_id,
@@ -949,7 +949,7 @@ WHERE snp.na_feature_id = variants.parent_id
         <column name="set_b_allele"/>
         <column name="set_a_count"/>
         <column name="set_b_count"/>
-        <sql>
+        <sql excludeProjects="PlasmoDB,ToxoDB">
             <![CDATA[
 SELECT sf.source_id, '@PROJECT_ID@' as project_id, 
        set_a_allele, set_b_allele, set_a_count, set_b_count
@@ -980,47 +980,34 @@ FROM   dots.snpfeature sf,
          GROUP by seta.parent_id 
        ) iso
 WHERE iso.parent_id = sf.na_feature_id
-
-/**
-With
-strain_group_a AS
-  (select parent_id as snp_na_feature_id, source_id, allele, count(*) as allele_count
-   from dots.seqvariation 
-   where strain in ($$hts_isolate_set_a$$)
-   group by parent_id, source_id, allele),
-strain_group_a_tot AS
-  (select snp_na_feature_id, sum(allele_count) total_allele_count
-   from strain_group_a 
-   group by snp_na_feature_id),
-strain_group_b AS
-  (select parent_id as snp_na_feature_id, source_id, allele, count(*) as allele_count
-   from dots.seqvariation where strain in ($$hts_isolate_set_b$$)
-   group by parent_id, source_id, allele),
-strain_group_b_tot AS
-  (select snp_na_feature_id, sum(allele_count) total_allele_count
-   from strain_group_a group by snp_na_feature_id)
-SELECT seta.source_id as source_id,
-       '@PROJECT_ID@' as project_id,
-       seta.allele as set_a_allele,
-       setb.allele as set_b_allele,
-       seta.total as set_a_count, 
-       setb.total as set_b_count 
-FROM
-  ( SELECT a.source_id, a.snp_na_feature_id, a.allele, 
-           a.allele_count/tot.total_allele_count as percent, tot.total_allele_count as total
-    FROM   strain_group_a a, strain_group_a_tot tot
-    WHERE  tot.snp_na_feature_id = a.snp_na_feature_id 
-       AND a.allele_count/tot.total_allele_count >  $$set_a_percent$$ / 100 ) seta,
-  ( SELECT b.source_id, b.snp_na_feature_id, b.allele, 
-           b.allele_count/tot.total_allele_count as percent, tot.total_allele_count as total
-    FROM   strain_group_b b, strain_group_b_tot tot
-    WHERE  tot.snp_na_feature_id = b.snp_na_feature_id
-       AND b.allele_count/tot.total_allele_count >  $$set_b_percent$$ / 100 ) setb
-WHERE seta.snp_na_feature_id = setb.snp_na_feature_id
-  AND seta.allele != setb.allele
-*/
            ]]>
-       </sql>
+        </sql>
+        <sql includeProjects="PlasmoDB,ToxoDB">
+           <![CDATA[
+              SELECT seta.snp_source_id as source_id, 'PlasmoDB' as project_id,
+                     apidb.tab_to_string(set(cast(COLLECT(distinct seta.allele) AS apidb.varchartab)), ', ') as set_a_allele,
+                     apidb.tab_to_string(set(cast(COLLECT(distinct setb.allele) AS apidb.varchartab)), ', ') as set_b_allele,
+                     sum(seta.total) as set_a_count, 
+                     sum(setb.total) as set_b_count
+              FROM  ( SELECT isnp.snp_source_id, isnp.allele, count(*) as total
+                      FROM ApidbTuning.HtsVariant isnp
+                      WHERE  isnp.strain in ( $$hts_isolate_set_a$$ )
+                      GROUP BY isnp.snp_source_id, isnp.allele
+                      HAVING count(*) >= ( SELECT count(*) 
+                                           FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_a$$ ) ))  *  $$set_a_percent$$ / 100
+                    ) seta,
+                    ( SELECT isnp.snp_source_id, isnp.allele, count(*) as total
+                      FROM ApidbTuning.HtsVariant isnp
+                      WHERE isnp.strain in ($$hts_isolate_set_b$$)
+                      GROUP BY isnp.snp_source_id, isnp.allele
+                      HAVING count(*) >= (SELECT count(*) 
+                                          FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_b$$ ) ))  *  $$set_b_percent$$ / 100
+                    )  setb
+              WHERE seta.snp_source_id = setb.snp_source_id
+                AND seta.allele != setb.allele
+              GROUP by seta.snp_source_id
+           ]]>
+        </sql>
     </sqlQuery>
 
     <processQuery name="HtsSnpsByIsolateComparison" includeProjects="EuPathDB" doNotTest="true"
