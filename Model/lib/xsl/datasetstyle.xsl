@@ -234,6 +234,7 @@
         <xsl:call-template name="node"/>
       </div>
     </xsl:for-each>
+    <xsl:value-of select="text()"/>
     &lt;/<xsl:value-of select="name()"/>&gt;
 </xsl:template>
 
