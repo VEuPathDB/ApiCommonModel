@@ -216,7 +216,6 @@ from (
        from dual
       -- TEMPLATE_ANCHOR genePageGraphDescriptions
       -- TEMPLATE_ANCHOR microarrayGraphDescriptions
-      -- TEMPLATE_ANCHOR proteomicsGraphDescriptions
       ) graph_descrip
 where ga.source_id = psgene.source_id
 and psgene.external_database_release_id = r.external_database_release_id
@@ -234,6 +233,105 @@ order by order_num
             ]]>
             </sql>
         </sqlQuery>
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Protein Expression Graphs -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+       <sqlQuery name="ProteinExpressionGraphs" includeProjects="TriTrypDB,ToxoDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="graph_ids" />
+            <column name="module" />
+            <column name="species" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
+            <column name="display_name" />
+            <column name="description" />
+            <column name="x_axis" />
+            <column name="y_axis" />
+            <column name="visible_parts" />
+            <column name="has_graph_data"/>
+	    <column name="has_meta_data"/>
+	    <column name="meta_data_categories"/>
+            <column name="dataset_name"/>
+            <column name="is_graph_custom"/>
+            <sql>
+            <![CDATA[
+select ga.source_id, 
+       ga.project_id, 
+       ga.organism as gene_organism, 
+       ga.species,
+       d.name as dataset_name, 
+       psgene.profile_graph_ids as graph_ids,
+       case when psgene.profile_graph_ids is null then 0 else 1 end as has_graph_data,
+       tn.name as graph_organism,
+       'TRUE' as mainOpen,
+       'FALSE' as dataOpen,
+       'FALSE' as has_meta_data,
+       '' as meta_data_categories,
+       graph_descrip.*
+from (
+      -- foreach profile_set name / source id:  list all genes whose gene group contains data for that profile_set
+      --        ***the profile_graph_ids are those which are valid to be graphed for the gene group
+      select source_id, 
+             external_database_release_id,
+             apidb.tab_to_string(set(cast(COLLECT(profile_graph_id) as apidb.varchartab)), ',') as profile_graph_ids             
+      from (
+      select distinct other_gene.source_id, 
+             ps.external_database_release_id,
+             this_gene.source_id as profile_graph_id
+      from dots.gene g, dots.geneinstance this_gi, dots.geneinstance other_gi,
+           apidbtuning.geneattributes this_gene, apidbtuning.geneattributes other_gene,
+           apidb.profileset ps, apidb.profile p
+      where g.gene_id = this_gi.gene_id
+      and g.gene_id = other_gi.gene_id
+      and this_gi.na_feature_id = this_gene.na_feature_id
+      and other_gi.na_feature_id = other_gene.na_feature_id
+      and this_gene.source_id = p.source_id
+      and p.profile_set_id = ps.profile_set_id
+      union
+      select p.source_id, ps.external_database_release_id, p.source_id as profile_graph_id
+      from apidb.profileset ps, apidb.profile p where p.profile_set_id = ps.profile_set_id
+      )
+      group by source_id, external_database_release_id                                                                     
+      ) psgene, apidbtuning.geneattributes ga, apidb.datasource ds, 
+      sres.externalDatabase d, SRES.externaldatabaserelease r, sres.taxonname tn, 
+      apidbtuning.taxonspecies ts, sres.taxonname sn,
+      (
+      select '' as dataset,
+       '' as display_name,
+       '' as description,
+       '' as module,
+       '' as x_axis,
+       '' y_axis,
+       '' as visible_parts,
+       '' as is_graph_custom,
+       1 as order_num
+       from dual
+       -- TEMPLATE_ANCHOR proteomicsGraphDescriptions
+      ) graph_descrip
+where ga.source_id = psgene.source_id
+and psgene.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and d.name = ds.name
+and ds.taxon_id = tn.taxon_id
+and tn.name_class = 'scientific name'
+and ds.taxon_id = ts.taxon_id
+and ts.species_taxon_id = sn.taxon_id
+and sn.name_class = 'scientific name'
+and ga.species = sn.name
+and graph_descrip.dataset = ds.name
+order by graph_descrip.order_num
+             ]]>
+            </sql>
+        </sqlQuery>
+
+
+
+
+
+
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Phenotype Graphs -->  
@@ -329,8 +427,10 @@ order by graph_descrip.order_num
         </sqlQuery>
 
 
+
+
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Population Biology  Graphs -->  
+       <!-- Putative Function  Graphs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
 
