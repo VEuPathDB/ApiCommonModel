@@ -80,7 +80,7 @@ public class DiscoverableDatasetInjector extends DatasetInjector {
         injector.setDatasetName(getDatasetName());
         injector.setPrimaryContact(getPrimaryContact());
 
-        if (injector.discover(propValues)) {
+        if (injector.isDiscoverable() && injector.discover(propValues)) {
           injector.addPropValues(propValues);
           injectors.add(injector);
         }

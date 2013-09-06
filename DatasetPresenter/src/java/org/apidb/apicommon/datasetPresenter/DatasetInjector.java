@@ -189,7 +189,7 @@ public abstract class DatasetInjector {
    * @param propValues
    * @return    true if the injector is a match with given param values.
    */
-  protected boolean discover(Map<String, String> propValues) {
+  public boolean discover(Map<String, String> propValues) {
     String[][] propsDeclaration = getPropertiesDeclaration();
     boolean hasProp = true;
     for (String[] decl : propsDeclaration) {
@@ -201,6 +201,10 @@ public abstract class DatasetInjector {
     // if all the declared properties are present, consider this dataset
     // injector a potential match; otherwise, not match.
     return hasProp;
+  }
+  
+  public boolean isDiscoverable() {
+    return false;
   }
 
   /**
