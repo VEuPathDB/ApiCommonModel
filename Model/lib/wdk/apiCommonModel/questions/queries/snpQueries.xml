@@ -953,8 +953,10 @@ WHERE snp.na_feature_id = variants.parent_id
         <column name="project_id"/>
         <column name="set_a_allele"/>
         <column name="set_b_allele"/>
-        <column name="set_a_count"/>
-        <column name="set_b_count"/>
+        <column name="set_a_count" excludeProjects="PlasmoDB,ToxoDB"/>
+        <column name="set_b_count" excludeProjects="PlasmoDB,ToxoDB"/>
+        <column name="set_a_percent" includeProjects="PlasmoDB,ToxoDB"/>
+        <column name="set_b_percent" includeProjects="PlasmoDB,ToxoDB"/>
         <sql excludeProjects="PlasmoDB,ToxoDB">
             <![CDATA[
 SELECT sf.source_id, '@PROJECT_ID@' as project_id, 
@@ -993,16 +995,20 @@ WHERE iso.parent_id = sf.na_feature_id
               SELECT seta.snp_source_id as source_id, '@PROJECT_ID@' as project_id,
                      apidb.tab_to_string(set(cast(COLLECT(distinct seta.allele) AS apidb.varchartab)), ', ') as set_a_allele,
                      apidb.tab_to_string(set(cast(COLLECT(distinct setb.allele) AS apidb.varchartab)), ', ') as set_b_allele,
-                     sum(seta.total) as set_a_count, 
-                     sum(setb.total) as set_b_count
-              FROM  ( SELECT isnp.snp_source_id, isnp.allele, count(*) as total
+                     sum(seta_percent) as set_a_percent, 
+                     sum(setb_percent) as set_b_percent
+              FROM  ( SELECT isnp.snp_source_id, isnp.allele, count(*) as total,
+                         round(count(*) / ( SELECT count(*) 
+                          FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_a$$ ) )),3) * 100 as seta_percent
                       FROM ApidbTuning.HtsVariant isnp
                       WHERE  isnp.strain in ( $$hts_isolate_set_a$$ )
                       GROUP BY isnp.snp_source_id, isnp.allele
                       HAVING count(*) >= ( SELECT count(*) 
                                            FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_a$$ ) ))  *  $$set_a_percent$$ / 100
                     ) seta,
-                    ( SELECT isnp.snp_source_id, isnp.allele, count(*) as total
+                    ( SELECT isnp.snp_source_id, isnp.allele, count(*) as total,
+                         round(count(*) / ( SELECT count(*) 
+                          FROM TABLE( SYS.DBMS_DEBUG_VC2COLL( $$hts_isolate_set_b$$ ) )),3) * 100 as setb_percent
                       FROM ApidbTuning.HtsVariant isnp
                       WHERE isnp.strain in ($$hts_isolate_set_b$$)
                       GROUP BY isnp.snp_source_id, isnp.allele
