@@ -304,7 +304,7 @@ SELECT msf.aa_feature_id feature_id,
        aal.start_max startm,
        aal.end_max end,
        'Description=' || msf.description || '$dlm' ||
-       'Count=' || mss.spectrum_count || '$dlm' ||
+       'Count=' || 'Unavailable' || '$dlm' ||
        'ExtDbName=' || ed.name || '$dlm' ||
        'Experiment=' || dsp.display_name || '$dlm' ||
        'Sample=' || mst.sample || '$dlm' ||
@@ -374,6 +374,48 @@ WHERE msf.na_feature_id =  x.feat_id
     <sqlQuery name="domain:MassSpecPeptide">
      <sql>
 <![CDATA[
+    With Spec_Counts As (
+        Select Distinct Mss.Mass_Spec_Summary_Id As Mss_Id, 
+               Mss.Spectrum_Count As Spectrum_Count 
+        From Apidb.Massspecsummary Mss
+        Where Mss.Spectrum_Count Is Not Null and mss.spectrum_count > 0
+        Union 
+        Select Distinct Mss.Mass_Spec_Summary_Id As Mss_Id, 
+               Count(Msf.Aa_Feature_Id) As Spectrum_Count
+        From Apidb.Massspecsummary Mss,
+             Dots.Massspecfeature Msf
+        Where Mss.Mass_Spec_Summary_Id = Msf.Source_Id
+          And (Mss.Spectrum_Count Is Null or mss.spectrum_count <=0)
+        Group By Mss.Aa_Sequence_Id, Mss.Mass_Spec_Summary_Id),
+     count_by_sequence As ( 
+              Select Count (Msf.Aa_Feature_Id) As Spectrum_Count,
+                      Mss.Mass_Spec_Summary_Id As Mss_Id
+                From Apidb.Massspecsummary mss,
+                     Dots.Massspecfeature Msf
+              Where Msf.Source_Id = Mss.Mass_Spec_Summary_Id
+        Group By Mss.Mass_Spec_Summary_Id ),
+          Consistent As (
+          Select Distinct s.External_Database_Release_Id,
+                  Case when sc.spectrum_count = s.Spectrum_count
+                     Then 1
+                     Else 0
+                End As Spec_Count_Consistent
+            From ( 
+                         Select Mss.External_Database_Release_Id,
+                               Sum(Sc.Spectrum_Count) As Spectrum_Count
+                          From 
+                               Spec_Counts Sc, apidb.massspecsummary mss
+                                Where Mss_Id = Mass_Spec_Summary_Id
+                               Group By Mss.External_Database_Release_Id
+                              ) Sc,
+                         ( Select  Mss.External_Database_Release_Id,
+                                Sum(S.Spectrum_Count) As Spectrum_Count
+                            From count_by_Sequence s, Apidb.Massspecsummary mss
+                                 Where Mss_Id = Mass_Spec_Summary_Id
+                            Group By Mss.External_Database_Release_Id
+                          ) S
+          Where Sc.External_Database_Release_Id = S.External_Database_Release_Id
+ )
        SELECT distinct msf.aa_feature_id feature_id,
        'domain' type,
        '$source' source,
@@ -398,39 +440,41 @@ FROM  dots.massspecfeature msf,
       apidbtuning.datasetpresenter dsp,
       (
       select distinct msf.aa_feature_id as feat_id,
-      msf.parent_id,
-      match_count as match_count, 
+      Decode(Csc.Spec_Count_Consistent, 1, To_Char(match_count), 0, 'Unavailable') as match_count, 
       start_min, 
-      end_max,
-      experiment from (
+      end_max
+      from (
       SELECT distinct count(msf.aa_feature_id) as match_count,
       aal.start_min as start_min, 
       aal.end_max, 
-      msf.parent_id as parent_id,
-      ed.name as experiment
+      msf.source_id as msf_source_id
 FROM  dots.massspecfeature msf,
-      dots.aalocation aal,
+      dots.aaLocation aal,
+      apidbtuning.featurelocation nal,
       sres.externaldatabaserelease edr,
       sres.externaldatabase ed
-WHERE  msf.aa_sequence_id = $srcfeature_id
-      AND msf.aa_feature_id = aal.aa_feature_id
+WHERE  nal.na_sequence_id = $srcfeature_id
+      AND msf.na_feature_id = nal.na_feature_id
+      and aal.aa_feature_id = msf.aa_feature_id
       AND msf.external_database_release_id = edr.external_database_release_id
       AND edr.external_database_id = ed.external_database_id
       AND ed.name $$edName$$
-      group by ed.name, msf.parent_id, aal.start_min, aal.end_max) internal,
+      group by msf.source_id, aal.start_min, aal.end_max) internal,
       dots.massspecFeature msf,
       sres.externaldatabaserelease edr,
-      sres.externaldatabase ed
-      where msf.parent_id = internal.parent_id
+      sres.externaldatabase ed,
+      consistent csc
+      where msf.source_id = internal.msf_source_id
       AND msf.external_database_release_id = edr.external_database_release_id
       AND edr.external_database_id = ed.external_database_id
+      AND edr.external_database_release_id = csc.external_database_release_id
       AND ed.name $$edName$$
-      ) x
+      ) 
 WHERE msf.aa_feature_id =  x.feat_id
       and aal.start_min = x.start_min
       and aal.end_max= x.end_max
       AND mss.mass_spec_summary_id = msf.source_id
-      AND  (ed.name = mst.internal_id or mst.internal_id = ed.name||'|'||mss.sample_file)
+      AND mst.internal_id = ed.name||'|'||mss.sample_file
       AND msf.parent_id = taaf.aa_feature_id
       AND taaf.aa_sequence_id = $srcfeature_id
       AND taaf.aa_sequence_id = taas.aa_sequence_id
@@ -451,7 +495,7 @@ SELECT distinct msf.aa_feature_id feature_id,
        aal.start_max startm,
        aal.end_max end,
        'Description=' || msf.description || '$dlm' ||
-       'Count=' || mss.spectrum_count || '$dlm' ||
+       'Count=' || 'Unavailable' || '$dlm' ||
        'ExtDbName=' || ed.name || '$dlm' ||
        'Experiment=' || mst.sample || '$dlm' ||
        'Sample=' || mst.sample || '$dlm' ||
