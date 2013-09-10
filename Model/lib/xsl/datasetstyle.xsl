@@ -226,15 +226,17 @@
 </xsl:template>
 
 <!-- found at www.jasinskionline.com/TechnicalWiki/XSL-to-Display-Raw-XML.ashx?AspxAutoDetectCookieSupport=1 -->
-<xsl:template name="node">
+<xsl:template name="raw">
     &lt;<xsl:value-of select="name()"/> <xsl:for-each select="@*">
       <xsl:text> </xsl:text><xsl:value-of select="name()"/>="<xsl:value-of select='.'/>"</xsl:for-each>&gt;
     <xsl:for-each select="*">
       <div style="padding:0em 2em">
-        <xsl:call-template name="node"/>
+        <xsl:call-template name="raw"/>
       </div>
     </xsl:for-each>
-    <xsl:value-of select="text()"/>
+    <xsl:if test="name() != 'prop'">
+      <xsl:value-of select="text()"/>
+    </xsl:if>
     &lt;/<xsl:value-of select="name()"/>&gt;
 </xsl:template>
 
@@ -322,12 +324,12 @@
 
              <br/>
              <div class="accordion">
-               <h3>XML template (for cut and paste)</h3>
+               <h3>XML template (paste this template into your dataset file)</h3>
                <div class="code">
                  &#160;&#160;&lt;dataset class="<xsl:value-of select="@class"/>"&gt;
                  <xsl:for-each select="prop" >
                    <div>
-                     &#160;&#160;&#160;&#160;<xsl:call-template name="node"/>
+                     &#160;&#160;&#160;&#160;<xsl:call-template name="raw"/>
                    </div>
                  </xsl:for-each>
                  &#160;&#160;&lt;/dataset&gt;
@@ -406,7 +408,7 @@
                   <div class="accordion">
                     <h3>Dataset loader XML</h3>
                     <div class="code" style="padding-top:4px">
-                      <xsl:call-template name="node"/>
+                      <xsl:call-template name="raw"/>
                     </div>
                   </div>
                 </xsl:for-each>
