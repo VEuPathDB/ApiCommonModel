@@ -151,24 +151,65 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
         <paramRef ref="sharedParams.ontology_type"/>
         <paramRef ref="sharedParams.htsSnp_strain_a"/>
         <paramRef ref="sharedParams.htsSnp_strain_m"/>
-        <paramRef ref="sharedParams.hts_snps_coverage"/>
+        <paramRef ref="sharedParams.hts_snps_coverage" excludeProjects="ToxoDB,PlasmoDB"/>
 
         <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB,AmoebaDB"/> <!-- diploid -->
-        <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="ToxoDB,PlasmoDB,CryptoDB,FungiDB"/> <!-- haploid -->
-        <paramRef ref="sharedParams.hts_snps_pvalue"/>
+        <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="CryptoDB,FungiDB"/> <!-- haploid -->
+        <paramRef ref="sharedParams.hts_snps_pvalue" excludeProjects="ToxoDB,PlasmoDB"/>
         <column name="source_id"/>
         <column name="project_id"/>
-        <column name="snp_location"/>
         <column name="ref_strain"/>
         <column name="comp_strains"/>
         <column name="ref_allele"/>
         <column name="comp_alleles"/>
         <column name="phenotype"/>
-        <column name="prot_pos"/>
         <column name="ref_product"/>
         <column name="comp_products"/>
 
-        <sql>
+        <sql includeProjects="PlasmoDB,ToxoDB">
+            <![CDATA[
+select snp.* from (
+       with taxonQ as (select taxon_id from sres.TaxonName where name = $$organism$$)
+       select source_id,
+              '@PROJECT_ID@' as project_id, 
+              apidb.tab_to_string(set(cast(COLLECT(distinct ref_allele) AS apidb.varchartab)), ', ') as ref_allele,
+              apidb.tab_to_string(set(cast(COLLECT(distinct ref_product) AS apidb.varchartab)), ', ') as ref_product,
+              apidb.tab_to_string(set(cast(COLLECT(distinct comp_allele) AS apidb.varchartab)), ', ') as comp_alleles,
+              apidb.tab_to_string(set(cast(COLLECT(distinct comp_product) AS apidb.varchartab)), ', ') as comp_products,
+              apidb.tab_to_string(set(cast(COLLECT(distinct phenotype) AS apidb.varchartab)), ', ') as phenotype,
+              apidb.tab_to_string(set(cast(COLLECT(distinct ref_strain) AS apidb.varchartab)), ', ') as ref_strain,
+              apidb.tab_to_string(set(cast(COLLECT(distinct comp_strain) AS apidb.varchartab)), ', ') as comp_strains
+       from (
+             SELECT -- variant-level info
+                    ref.allele as ref_allele, 
+                    ref.product as ref_product,
+                    comp.allele as comp_allele, 
+                    comp.product as comp_product,
+                    case when ref.product = comp.product then 'syn'
+                         when ref.product != comp.product then 'non-syn'
+                         else 'non-coding'
+                    end as phenotype,
+                    ref.strain as ref_strain, 
+                    comp.strain as comp_strain,
+                    -- SNP-level info
+                    ref.snp_source_id as source_id
+             FROM   ApidbTuning.HtsVariant ref, ApidbTuning.HtsVariant comp, taxonQ
+             WHERE  ref.snp_source_id = comp.snp_source_id
+                AND ref.allele != comp.allele
+                AND ref.species_taxon_id = taxonQ.taxon_id
+                AND comp.species_taxon_id = taxonQ.taxon_id
+                AND ref.strain = $$htsSnp_strain_a$$
+                AND comp.strain in ($$htsSnp_strain_m$$)
+          )
+       group by source_id
+       ) snp, APIDBTUNING.snpattributes sa, ($$ds_gene_ids$$) ds
+       where snp.source_id = sa.source_id
+       and sa.gene_source_id = ds.source_id
+          ]]>
+       </sql>
+
+
+        <sql excludeProjects="PlasmoDB,ToxoDB">
             <![CDATA[
 select distinct * from (
 SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.snp_location,snpq.prot_pos,
@@ -435,20 +476,17 @@ WHERE snp.na_feature_id = variants.parent_id
           <paramRef ref="sharedParams.ontology_type"/>
           <paramRef ref="sharedParams.htsSnp_strain_a"/>
           <paramRef ref="sharedParams.htsSnp_strain_m"/>
-          <paramRef ref="sharedParams.hts_snps_coverage"/>
+          <paramRef ref="sharedParams.hts_snps_coverage" excludeProjects="PlasmoDB,ToxoDB"/>
           <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB,AmoebaDB"/>
-          <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="ToxoDB,PlasmoDB,CryptoDB,FungiDB"/>
-          <paramRef ref="sharedParams.hts_snps_pvalue"/>
+          <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="CryptoDB,FungiDB"/>
+          <paramRef ref="sharedParams.hts_snps_pvalue" excludeProjects="PlasmoDB,ToxoDB"/>
           <column name="source_id"/>
 	  <column name="project_id"/>
-          <column name="gene"/>
-          <column name="snp_location"/>
           <column name="ref_strain"/>
           <column name="comp_strains"/>
           <column name="ref_allele"/>
           <column name="comp_alleles"/>
           <column name="phenotype"/>
-          <column name="prot_pos"/>
           <column name="ref_product"/>
           <column name="comp_products"/>
 
@@ -464,7 +502,54 @@ WHERE snp.na_feature_id = variants.parent_id
        </sqlParamValue>
 
 
-        <sql>
+
+        <sql includeProjects="PlasmoDB,ToxoDB">
+            <![CDATA[
+select var.* from (
+       with taxonQ as (select taxon_id from sres.TaxonName where name = $$organism$$)
+       select source_id,
+              '@PROJECT_ID@' as project_id, 
+              apidb.tab_to_string(set(cast(COLLECT(distinct ref_allele) AS apidb.varchartab)), ', ') as ref_allele,
+              apidb.tab_to_string(set(cast(COLLECT(distinct ref_product) AS apidb.varchartab)), ', ') as ref_product,
+              apidb.tab_to_string(set(cast(COLLECT(distinct comp_allele) AS apidb.varchartab)), ', ') as comp_alleles,
+              apidb.tab_to_string(set(cast(COLLECT(distinct comp_product) AS apidb.varchartab)), ', ') as comp_products,
+              apidb.tab_to_string(set(cast(COLLECT(distinct phenotype) AS apidb.varchartab)), ', ') as phenotype,
+              apidb.tab_to_string(set(cast(COLLECT(distinct ref_strain) AS apidb.varchartab)), ', ') as ref_strain,
+              apidb.tab_to_string(set(cast(COLLECT(distinct comp_strain) AS apidb.varchartab)), ', ') as comp_strains
+       from (
+             SELECT -- variant-level info
+                    ref.allele as ref_allele, 
+                    ref.product as ref_product,
+                    comp.allele as comp_allele, 
+                    comp.product as comp_product,
+                    case when ref.product = comp.product then 'syn'
+                         when ref.product != comp.product then 'non-syn'
+                         else 'non-coding'
+                    end as phenotype,
+                    ref.strain as ref_strain, 
+                    comp.strain as comp_strain,
+                    -- SNP-level info
+                    ref.snp_source_id as source_id
+             FROM   ApidbTuning.HtsVariant ref, ApidbTuning.HtsVariant comp, taxonQ
+             WHERE  ref.snp_source_id = comp.snp_source_id
+                AND ref.allele != comp.allele
+                AND ref.species_taxon_id = taxonQ.taxon_id
+                AND comp.species_taxon_id = taxonQ.taxon_id
+                AND ref.strain = $$htsSnp_strain_a$$
+                AND comp.strain in ($$htsSnp_strain_m$$)
+          )
+       group by source_id
+       ) var, apidbtuning.snpattributes snp
+       where var.source_id = snp.source_id
+       AND snp.type = 'HTS'
+       AND snp.start_min >= REGEXP_REPLACE('$$start_point$$', ',| ','')
+       AND (snp.start_min <= REGEXP_REPLACE('$$end_point$$', ',| ','') OR REGEXP_REPLACE('$$end_point$$', ',| ','') = 0)
+       &&chrOptional&&
+          ]]>
+       </sql>
+
+
+        <sql excludeProjects="PlasmoDB,ToxoDB">
             <![CDATA[
 SELECT snp.source_id, 
        '@PROJECT_ID@' as project_id, 
