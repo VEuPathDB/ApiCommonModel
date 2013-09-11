@@ -296,44 +296,66 @@
         <column name="sum_spectrum_count" />
         <sql includeProjects="ToxoDB,GiardiaDB,CryptoDB">
             <![CDATA[
-            select distinct misc.source_id, '@PROJECT_ID@' as project_id,
-                            seq.sum_sequence_count, spec.sum_spectrum_count
-            from apidb.massspecsummary mss, dots.translatedaafeature taaf,  
-                 dots.miscellaneous misc, sres.sequenceontology o,
-            (select intseq.aa_sequence_id,count(*) as sum_sequence_count 
-              from (select mss.aa_sequence_id, count(*) as sum_seq_ct
-                from apidb.massspecsummary mss,
-                     dots.massspecfeature msf,
-                     dots.aalocation aal,
-                     sres.externaldatabase ed,
-                     sres.externaldatabaserelease edr
-                where mss.mass_spec_summary_id = msf.source_id
-                  and msf.aa_feature_id = aal.aa_feature_id
-                  and msf.external_database_release_id = edr.external_database_release_id
-                  and edr.external_database_id = ed.external_database_id
-                  and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
-                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
-                group by mss.aa_sequence_id,aal.start_min,aal.end_max ) intseq                  
-                group by intseq.aa_sequence_id
-                having count(*) >= $$min_sequence_count$$
-            ) seq,
-            (select mss.aa_sequence_id, sum(spectrum_count) as sum_spectrum_count
-                from apidb.massspecsummary mss,
-                     sres.externaldatabase ed,
-                     sres.externaldatabaserelease edr
-                where mss.external_database_release_id = edr.external_database_release_id
-                  and edr.external_database_id = ed.external_database_id
-                  and ((mss.sample_file is null and ed.name in ($$ms_assay$$)) or
-                      ed.name||'|'||mss.sample_file in ($$ms_assay$$))
-                group by mss.aa_sequence_id
-                having sum(spectrum_count) >= $$min_spectrum_count$$
-            ) spec
-            where mss.aa_sequence_id = taaf.aa_sequence_id
-            and taaf.na_feature_id = misc.na_feature_id
-            and misc.sequence_ontology_id = o.sequence_ontology_id
-            and o.term_name = 'ORF'
-            and mss.aa_sequence_id = seq.aa_sequence_id
-            and mss.aa_sequence_id = spec.aa_sequence_id
+
+       With            
+          Sequence As(
+             Select Source_Id,
+                     Mass_Spec_Summary_Id,
+                     Protein_Start,
+                     Protein_End,
+                     Seq_Id,
+                     Count (Spectrum) As Spectrum_Count,
+                     external_database_release_id
+              From(        
+                    Select 
+                           Misc.Source_Id                                              As Source_Id,
+                           Mss.Mass_Spec_Summary_Id                                    As Mass_Spec_Summary_Id,
+                           Taas.Aa_Sequence_Id||'-'||Aal.Start_Min||'-'||Aal.Start_Max As Spectrum,
+                           taas.aa_sequence_id                                         As seq_id,
+                           Aal.Start_Min                                               As Protein_Start,
+                           Aal.End_Max                                                 As Protein_End,
+                           msf.external_database_release_id                            
+                     From  Apidb.Massspecsummary Mss,
+                           Dots.Miscellaneous Misc,
+                           Dots.Massspecfeature Msf,
+                           Dots.Aalocation Aal,
+                           Dots.Translatedaafeature Taaf,
+                           Dots.Translatedaasequence Taas,
+                           sres.SequenceOntology o
+                     Where  Msf.Source_Id = Mss.Mass_Spec_Summary_Id
+                        and mss.aa_sequence_id = taas.aa_sequence_id
+                        AND aal.aa_feature_id = msf.aa_feature_id
+                        AND msf.parent_id = taaf.aa_feature_id
+                        And Taaf.Aa_Sequence_Id = Taas.Aa_Sequence_Id
+                        And Taaf.Na_Feature_Id = Misc.Na_Feature_Id
+                        And Misc.Sequence_Ontology_Id = O.Sequence_Ontology_Id
+                        And O.Term_Name = 'ORF'
+                        And Msf.Aa_Feature_Id = Aal.Aa_Feature_Id
+                  )
+             GROUP  BY source_id,
+                       Mass_Spec_Summary_Id,
+                       seq_id,
+                       Protein_Start,
+                       Protein_End,
+                       External_Database_Release_Id)
+        
+            Select Distinct 
+                   Seq.Source_Id, 
+                   '@PROJECT_ID@' As Project_Id,
+                    Sum(Seq.Spectrum_Count),
+                    Count(Seq.Seq_Id||'-'||Protein_Start||'-'||Protein_End)
+            From Apidb.Massspecsummary Mss, 
+                 Sequence Seq,
+                 Sres.Externaldatabase Ed,
+                 Sres.Externaldatabaserelease Edr
+          Where Mss.Mass_Spec_Summary_Id = Seq.Mass_Spec_Summary_Id
+            And Seq.External_Database_Release_Id = Edr.External_Database_Release_Id
+            And Edr.External_Database_Id = Ed.External_Database_Id
+            And Ed.Name||'|'||Mss.Sample_File In ($$ms_Assay$$)                
+          Group By Seq.Source_Id, 
+                   '@PROJECT_ID@'
+          Having Count(Seq.Seq_Id||'-'||Protein_Start||Protein_End) >= $$min_Sequence_Count$$
+             And Sum(seq.spectrum_count) >= $$min_spectrum_count$$
             ]]>
        </sql>
 
