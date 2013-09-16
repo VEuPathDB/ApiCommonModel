@@ -1565,58 +1565,92 @@ WHERE o.taxon_id = ga.taxon_id
             <column name="data_source"/>
             <sql includeProjects="TrichDB">
             <![CDATA[
-            Select ga.Source_Id,
-                   COUNT(distinct msps.Sequence) As Sequence_Count,
-                   SUM(Msps.Spectrum_Count) As Spectrum_Count,
-                   msps.Experiment,
-                   msps.Sample,
-                   ed.name As Data_Source,
-                   '@PROJECT_ID@' as project_id
-            From   ApidbTuning.Massspecpeptidesummary Msps,
-                   apidbTuning.geneAttributes ga,
-                   sres.externaldatabaserelease edr,
-                   sres.externaldatabase ed
-            Where  Edr.External_Database_Id = Ed.External_Database_Id
-              AND  msps.internal_id = ed.name
-              and  ga.source_id = msps.source_id (+)
-              And  Project_id = 'TrichDB'
-              And  Source_Type = 'gene'
-              Group By Ga.Source_Id,
-                       Msps.Experiment,
-                       Msps.Sample,
-                       '@PROJECT_ID@',
-                       ed.name
-		       ORDER BY experiment,sample
+           WITH pepcount 
+                 AS (SELECT DISTINCT source_id, 
+                                     mass_spec_summary_id, 
+                                     Substr(internal_id, 1, Instr(internal_id, '|') - 1) AS 
+                                     ed_name, 
+                                     experiment, 
+                                     sample, 
+                                     source_type, 
+                                     SUM(spectrum_count)                                 AS 
+                                        spectrum_count, 
+                                     Count(DISTINCT SEQUENCE)                            AS 
+                                        sequence_count 
+                     FROM   apidbtuning.massspecpeptidesummary msps 
+                     GROUP  BY source_id, 
+                               mass_spec_summary_id, 
+                               internal_id, 
+                               source_type, 
+                               experiment, 
+                               sample) 
+            SELECT ga.source_id, 
+                   pepcount.sequence_count                          AS sequence_count, 
+                   Nvl(mss.spectrum_count, pepcount.spectrum_count) AS spectrum_count, 
+                   pepcount.experiment, 
+                   pepcount.sample, 
+                   ed.name                                          AS data_source, 
+                   '@PROJECT_ID@'                                   AS project_id 
+            FROM   apidb.massspecsummary mss, 
+                   apidbtuning.geneattributes ga, 
+                   sres.externaldatabaserelease edr, 
+                   sres.externaldatabase ed,  
+                   pepcount 
+            WHERE  edr.external_database_id = ed.external_database_id 
+                   AND pepcount.ed_name = ed.name 
+                   AND pepcount.mass_spec_summary_id = mss.mass_spec_summary_id 
+                   AND ga.source_id = pepcount.source_id (+) 
+                   AND pepcount.source_type = 'gene' 
+                   AND  Project_id = 'TrichDB'
+            ORDER  BY experiment, 
+                      sample 
             ]]>
             </sql>
             <sql excludeProjects="TrichDB">
             <![CDATA[
-
-           Select Ga.Source_Id,
-                  Count(Distinct Msps.Sequence) As Sequence_count,
-                  Sum(Msps.Spectrum_Count) As Spectrum_Count,
-                  Msps.Experiment,
-                  msps.Sample,
-                  Dspub.Pmid As Data_Source,
-                  '@PROJECT_ID@' as Project_Id
-            From  Apidbtuning.Massspecpeptidesummary Msps,
-                  ApidbTuning.geneAttributes ga,
-                  sres.externaldatabaserelease edr,
-                  sres.externaldatabase ed,
-                  ApidbTuning.DatasetPresenter dsp,
-                  Apidbtuning.Datasetpublication Dspub
-            Where Edr.External_Database_Id = Ed.External_Database_Id
-              AND msps.internal_id like ed.name||'|%'
-              AND ga.source_id = msps.source_id (+)
-              AND (ed.name like dsp.dataset_name_pattern or ed.name = dsp.name)
-              And Dsp.Dataset_Presenter_Id = Dspub.Dataset_Presenter_Id(+)
-              And msps.source_type = 'gene'
-              Group By Ga.Source_Id,
-                       Msps.Experiment,
-                       Msps.Sample,
-                       Dspub.Pmid,
-                       '@PROJECT_ID@'
-            ORDER BY experiment,sample
+            WITH pepcount 
+                 AS (SELECT DISTINCT source_id, 
+                                     mass_spec_summary_id, 
+                                     Substr(internal_id, 1, Instr(internal_id, '|') - 1) AS 
+                                     ed_name, 
+                                     experiment, 
+                                     sample, 
+                                     source_type, 
+                                     SUM(spectrum_count)                                 AS 
+                                        spectrum_count, 
+                                     Count(DISTINCT SEQUENCE)                            AS 
+                                        sequence_count 
+                     FROM   apidbtuning.massspecpeptidesummary msps 
+                     GROUP  BY source_id, 
+                               mass_spec_summary_id, 
+                               internal_id, 
+                               source_type, 
+                               experiment, 
+                               sample) 
+            SELECT ga.source_id, 
+                   pepcount.sequence_count                          AS sequence_count, 
+                   Nvl(mss.spectrum_count, pepcount.spectrum_count) AS spectrum_count, 
+                   pepcount.experiment, 
+                   pepcount.sample, 
+                   dspub.pmid                                       AS data_source, 
+                   '@PROJECT_ID@'                                   AS project_id 
+            FROM   apidb.massspecsummary mss, 
+                   apidbtuning.geneattributes ga, 
+                   sres.externaldatabaserelease edr, 
+                   sres.externaldatabase ed, 
+                   apidbtuning.datasetpresenter dsp, 
+                   apidbtuning.datasetpublication dspub, 
+                   pepcount 
+            WHERE  edr.external_database_id = ed.external_database_id 
+                   AND pepcount.ed_name = ed.name 
+                   AND pepcount.mass_spec_summary_id = mss.mass_spec_summary_id 
+                   AND ga.source_id = pepcount.source_id (+) 
+                   AND ( ed.name LIKE dsp.dataset_name_pattern 
+                          OR ed.name = dsp.name ) 
+                   AND dsp.dataset_presenter_id = dspub.dataset_presenter_id(+) 
+                   AND pepcount.source_type = 'gene' 
+            ORDER  BY experiment, 
+                      sample 
             ]]>
             </sql>       
         </sqlQuery>
