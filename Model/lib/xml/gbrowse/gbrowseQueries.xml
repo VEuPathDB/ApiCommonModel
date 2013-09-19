@@ -1379,89 +1379,65 @@ FROM (
     <sql>
 <![CDATA[
 
-
- 
-      SELECT 
-       msf.na_feature_id feature_id,
+With Rep_To_Sum As (
+Select Rep.Mass_Spec_Summary_Id,
+        Msps.*
+  From 
+        Apidbtuning.Mspeptidesummary Msps, 
+        Apidbtuning.Representativemssummary Rep,
+        Sres.Externaldatabase Ed, 
+        sres.externalDatabaseRelease edr
+  Where Rep.Aa_Sequence_Id = Msps.Aa_Sequence_Id 
+    And Msps.Sample_File = Rep.Sample_File
+    And Rep.External_Database_Release_Id = Edr.External_Database_Release_Id
+    And Msps.External_Database_Name = Ed.Name
+    And Edr.External_Database_Id = Ed.External_Database_Id
+)
+Select
+       peptide_sequence||'_'||aa_Start_min||'_'||aa_End_max feature_id,
        'domain' type,
        '$source' source,
-       msf.parent_id, 
-       startm, 
-       end,
-       msf.source_id name, 
-       x.strand,
-       'Description=' || msf.description
+       Parent_Id, 
+       Startm, 
+       End,
+       source_id as name, 
+       strand,
+       'Description=' || ''msf.description
        || '$dlm' ||
-       'Count=' || match_count || '$dlm' ||
-       'ExtDbName=' || ed_name || '$dlm' ||
-       'Experiment=' || X.Experiment  || '$dlm' ||
-       'Sample=' || X.Sample  || '$dlm' ||
-       'PepSeq=' || y.sequence || '$dlm' ||
-       'SOTerm=' || fs.term_name || '$dlm' ||
-       'Color=' || color atts
-FROM  
-(SELECT 
-       msf.na_feature_id as feature_id,
-       nal.na_sequence_id parent_id,
-       nal.start_min startm,
-       Nal.End_Max End,
-       Decode (Nal.Is_Reversed, 0, '+1', 1, '-1', '.') Strand,
-       mst.internal_id as ed_name,
-       dsp.display_name as experiment,
-       mst.sample as sample,
-       mst.html_color as color
-FROM  dots.massspecfeature msf,
-      apidb.massspecsummary mss,
-      ApidbTuning.FeatureLocation nal,
-      sres.externaldatabaserelease edr,
-      sres.externaldatabase ed,
-      ApidbTuning.MassSpecTerms mst,
-      ApidbTuning.DatasetPresenter dsp
-WHERE msf.na_feature_id = nal.na_feature_id
- AND  nal.na_sequence_id = $srcfeature_id
- AND  nal.start_min >= $base_start
- AND  nal.end_max <= $rend
- AND  msf.external_database_release_id = edr.external_database_release_id
- and  mss.mass_spec_summary_id = msf.source_id
- AND  ed.name $$edName$$
- AND  (ed.name = mst.internal_id or mst.internal_id = ed.name||'|'||mss.sample_file)
- AND  edr.external_database_id = ed.external_database_id
- AND (ed.name like dsp.dataset_name_pattern or ed.name = dsp.name)
- ) x,
- (
-      Select Distinct Msf.na_feature_Id As feature_Id,
-      Decode(Msps.Spec_Count_Consistent, 1, To_Char(Msps.Spectrum_Count), 0, 'Unavailable') As Match_Count, 
-      Msps.Protein_Start As Start_Min, 
-      Msps.Protein_End As End_Max,
-      msps.sequence
-      From 
-      dots.massspecFeature msf,
-      sres.externaldatabaserelease edr,
-      Sres.Externaldatabase Ed,
-      apidbTuning.featureLocation nal,
-      Apidbtuning.Massspecpeptidesummary Msps
-      where msf.source_id = msps.mass_spec_summary_id
-      AND msf.external_database_release_id = edr.external_database_release_id
-      And Edr.External_Database_Id = Ed.External_Database_Id
-      And Ed.Name $$edName$$
-      And Msf.Na_Feature_Id = Nal.Na_Feature_Id
-      AND  nal.na_sequence_id = $srcfeature_id
-      ) y,
-      dots.massspecfeature msf,
-      apidb.massspecsummary mss,
-      dots.translatedaafeature taaf,
-      ApidbTuning.FeatureSo fs,
-      dots.aasequence aas, 
-      dots.aalocation aal
-Where Msf.Na_Feature_Id = X.Feature_Id
- AND  msf.na_feature_id =  y.feature_id
- AND aal.start_min = y.start_min
- AND aal.end_max= y.end_max
- AND mss.mass_spec_summary_id = msf.source_id
- AND  taaf.aa_sequence_id = msf.aa_sequence_id    
- AND  aal.aa_feature_id = msf.aa_feature_id
- AND  aas.aa_sequence_id = taaf.aa_sequence_id
- AND  taaf.na_feature_id = fs.na_feature_id
+       'Count=' || Spectrum_count || '$dlm' ||
+       'ExtDbName=' || external_database_name || '$dlm' ||
+       'Experiment=' || Experiment  || '$dlm' ||
+       'Sample=' || Sample  || '$dlm' ||
+       'PepSeq=' || peptide_Sequence || '$dlm' ||
+       'SOTerm=' || Term_Name || '$dlm' ||
+       'Color=' || html_Color Atts
+From (
+       Select Distinct
+                        Nal.na_sequence_id Parent_Id,
+                        Nal.Start_Min Startm,
+                        Nal.End_Max End,
+                        Decode (Nal.Is_Reversed, 0, '+1', 1, '-1', '.') Strand,
+                        Fs.Term_Name,
+                        Rs.*
+          From 
+                  Dots.Massspecfeature Msf,
+                  Dots.Aalocation Aal,
+                  Rep_To_Sum Rs,
+                  Apidbtuning.FeatureLocation Nal,
+                  ApidbTuning.FeatureSo fs
+          Where Msf.Na_Feature_Id = Nal.Na_Feature_Id
+            And Msf.Source_Id = Rs.Mass_Spec_Summary_Id
+            And Aal.Aa_Feature_Id = Msf.Aa_Feature_Id
+            and Msf.Na_Feature_Id = nal.Na_feature_id
+            And Rs.Aa_Start_Min = Aal.Start_Min
+            And Rs.Aa_End_Max = Aal.End_Max
+            And Fs.Na_Feature_Id = Msf.Parent_Id
+            And Term_Name != 'ORF'
+            And  Nal.Na_Sequence_Id = $srcfeature_id
+            AND  nal.start_min >= $base_start
+            AND  nal.end_max <= $rend
+)
+
 
 ]]>
     </sql>
