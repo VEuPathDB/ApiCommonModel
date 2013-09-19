@@ -1353,35 +1353,19 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <paramRef ref="sharedParams.min_spectrum_count"/>
         <column name="source_id" />
         <column name="project_id" />
-        <column name="sum_sequence_count" />
+        <column name="min_sequence_count" />
+        <column name="max_sequence_count" />
         <column name="sum_spectrum_count" columnType="number" width="12" />
         <sql>
             <![CDATA[
-        WITH pepcount 
-             AS (SELECT DISTINCT source_id, 
-                                 mass_spec_summary_id, 
-                                 SUM(spectrum_count)      AS Spectrum_Count, 
-                                 Count(DISTINCT SEQUENCE) AS Sequence_Count 
-                 FROM   apidbtuning.massspecpeptidesummary Msps 
-                 WHERE  Msps.internal_id IN ( $$ms_assay$$ ) 
-                        AND source_type = 'gene' 
-                 GROUP  BY source_id, 
-                           mass_spec_summary_id) 
-        SELECT * 
-        FROM   (SELECT pepcount.source_id, 
-                       '@PROJECT_ID@'                                        AS Project_Id, 
-                       SUM(pepcount.sequence_count)                          AS Sum_Sequence_Count, 
-                       SUM(Nvl(Mss.spectrum_count, pepcount.spectrum_count)) AS Sum_Spectrum_Count 
-                FROM   apidb.massspecsummary Mss, 
-                       pepcount 
-                WHERE  pepcount.mass_spec_summary_id = Mss.mass_spec_summary_id 
-                GROUP  BY source_id, 
-                          '@PROJECT_ID@') 
-        WHERE  sum_spectrum_count >= $$min_spectrum_count$$ 
-               AND sum_sequence_count >= $$min_sequence_count$$ 					
-]]>
-
-          
+        select source_id, '@PROJECT_ID@' as project_id, min(sequence_count) as min_sequence_count, max(sequence_count) as max_sequence_count, sum(spectrum_count) as sum_spectrum_count
+        from (
+        select source_id,  spectrum_count, sequence_count
+        from apidbtuning.msgenesummary where internal_id IN ( $$ms_assay$$ ) 
+        and sequence_count >= $$min_sequence_count$$
+        and (spectrum_count is null OR spectrum_count >= $$min_spectrum_count$$)
+        ) group by source_id
+            ]]>
        </sql>
  
     
@@ -1398,7 +1382,8 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <paramRef ref="sharedParams.min_spectrum_count" number="true"/>
         <wsColumn name="source_id" width="50" />
         <wsColumn name="project_id" width="20" />
-        <wsColumn name="sum_sequence_count" width="10" />
+        <wsColumn name="min_sequence_count" width="10" />
+        <wsColumn name="max_sequence_count" width="10" />
         <wsColumn name="sum_spectrum_count" width="10" />
     </processQuery>
 
