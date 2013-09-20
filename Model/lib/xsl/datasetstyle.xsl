@@ -150,6 +150,7 @@
       <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
       <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
       <script>
+        <![CDATA[
         jQuery(function($) {
           function setHeights() {
             $("#toc").height($(window).height() - 20);
@@ -172,9 +173,9 @@
 
         $("#categories").on("click", ".type-filter", function(e) {
           e.preventDefault();
-          var type = $(this).data("type");
+          var type = $(this).attr("href").slice(1);
           $("#categories li").removeClass("active");
-          if (type) {
+          if (type && type != 'all') {
             $(this).parent().addClass("active");
             $(".datasetClass").show().not("." + type).hide();
             $(".classes li").show().not("." + type).hide();
@@ -199,6 +200,7 @@
         //   var $node = $(node);
         //   $node.attr("href", manualBaseUrl + $node.data("dir"));
         // });
+        ]]>
       </script>
     </body>
   </html>
@@ -221,7 +223,7 @@
     <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)] |
         datasetClass/@category[not(.=preceding::datasetClass/@category or .='' or .=preceding::datasetClass/datasetLoader/@type)]">
       <xsl:sort/>
-      <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
+      <li><a class="type-filter" href="#{.}"><xsl:value-of select="."/></a></li>
     </xsl:for-each>
   </ul>
 </xsl:template>
@@ -256,7 +258,7 @@
         </xsl:choose>
       </xsl:variable>
 
-      <li class="{@category or datasetLoader/@type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
+      <li class="{$type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
     </xsl:for-each>
   </ul>
 </xsl:template>
