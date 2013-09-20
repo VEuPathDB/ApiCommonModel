@@ -220,6 +220,7 @@
     <li><a class="type-filter" href="#all">All categories</a></li>
     <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)] |
         datasetClass/@category[not(.=preceding::datasetClass/@category or .='' or .=preceding::datasetClass/datasetLoader/@type)]">
+      <xsl:sort/>
       <li><a class="type-filter" data-type="{.}" href="#{.}"><xsl:value-of select="."/></a></li>
     </xsl:for-each>
   </ul>
@@ -243,6 +244,7 @@
 <xsl:template match="datasetClasses" mode="classes">
   <ul class="classes">
     <xsl:for-each select="datasetClass">
+      <xsl:sort select="@class"/>
       <xsl:variable name="type">
         <xsl:choose>
           <xsl:when test="@category and @category != ''">
@@ -254,7 +256,7 @@
         </xsl:choose>
       </xsl:variable>
 
-      <li class="{$type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
+      <li class="{@category or datasetLoader/@type}"><a href="#{@class}"><xsl:value-of select="@class"/></a></li>
     </xsl:for-each>
   </ul>
 </xsl:template>
@@ -362,7 +364,7 @@
                        <!-- this href is a challenge.  it should be https://www.cbil.upenn.edu/svn/apidb/ManualDeliveryExample/XXXX/the_dir -->
                        <!-- where XXXX is either trunk or branches/some_branch_number, depending on where this .xsl file is in svn -->
                        <!-- and the_dir is the value of @dir -->
-                       <tr><td><a class="manual-example" data-dir="{@dir}" href="http://devtools.eupathdb.org/datasetExamples/{@dir}"><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
+                       <tr><td><a class="manual-example" data-dir="{@dir}" href="http://devtools.eupathdb.org/datasetExamples/{@dir}" target="_blank"><xsl:value-of select="@dir"/></a></td><td><xsl:value-of select="."/></td></tr>
                      </xsl:for-each>
                    </table>
                  </xsl:if>
