@@ -129,7 +129,7 @@
       </style>
     </head>
     <body>
-      <div class="banner">If you want to see the raw classes.xml file, use your browser's View Source tool</div>
+      <div class="banner">If you want to see the raw classes.xml file, use your browser's View Source tool (or type Ctrl-u)</div>
       <div class="main">
         <div id="toc">
           <div id="categories">
