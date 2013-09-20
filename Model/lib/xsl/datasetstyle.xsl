@@ -175,7 +175,7 @@
           e.preventDefault();
           var type = $(this).attr("href").slice(1);
           $("#categories li").removeClass("active");
-          if (type && type != 'all') {
+          if (type) {
             $(this).parent().addClass("active");
             $(".datasetClass").show().not("." + type).hide();
             $(".classes li").show().not("." + type).hide();
@@ -219,9 +219,12 @@
   </ul>
   -->
   <ul class="categories">
-    <li><a class="type-filter" href="#all">All categories</a></li>
-    <xsl:for-each select="datasetClass/datasetLoader/@type[not(.=preceding::datasetClass/datasetLoader/@type)] |
-        datasetClass/@category[not(.=preceding::datasetClass/@category or .='' or .=preceding::datasetClass/datasetLoader/@type)]">
+    <li><a class="type-filter" href="#">All categories</a></li>
+    <!-- choose category if present, otherwise choose type -->
+    <xsl:for-each select="
+      datasetClass/@category[not(.=preceding::datasetClass/@category or .='' or .=preceding::datasetClass/datasetLoader/@type)] |
+      datasetClass/datasetLoader/@type[../../@category='' and not(.=preceding::datasetClass/datasetLoader/@type)]
+      ">
       <xsl:sort/>
       <li><a class="type-filter" href="#{.}"><xsl:value-of select="."/></a></li>
     </xsl:for-each>
