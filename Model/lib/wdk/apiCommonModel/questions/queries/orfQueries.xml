@@ -296,16 +296,28 @@
         <column name="sum_spectrum_count" />
         <sql includeProjects="ToxoDB,GiardiaDB,CryptoDB">
             <![CDATA[
-       SELECT Distinct Source_Id,
-              '@PROJECT_ID@' as project_id, 
-              SUM (Spectrum_Count) As Sum_Spectrum_Count,
-              COUNT (Distinct Sequence) As Sum_sequence_Count
-         FROM ApidbTuning.MassSpecPeptideSummary Msps
-        WHERE Msps.Internal_Id In ($$ms_assay$$) 
-	  AND source_type = 'orf' 
-        GROUP BY source_id, '@PROJECT_ID@'
-       HAVING SUM(spectrum_count) >= $$min_spectrum_count$$
-          AND COUNT(Distinct Msps.Sequence) >= $$min_sequence_count$$
+
+select source_id, '@PROJECT_ID@' as project_id, sum(sequence_count) as sum_sequence_count, sum(spectrum_count) as sum_spectrum_count
+from (
+select distinct misc.source_id, internal_id, count(*) as sequence_count, sum(msps.spectrum_count) as spectrum_count
+from dots.miscellaneous misc, Dots.TranslatedAAFeature taaf,
+     DOTS.massspecfeature msf,
+     dots.aalocation l, APIDBTUNING.mspeptidesummary msps,
+     APIDB.massspecsummary mss
+where misc.na_feature_id = taaf.na_feature_id
+and taaf.aa_feature_id = msf.parent_id
+and msf.aa_feature_id = l.aa_feature_id
+and taaf.aa_sequence_id = msps.aa_sequence_id
+and l.start_min = msps.aa_start_min
+and l.end_max = msps.aa_end_max
+and mss.mass_spec_summary_id = msf.source_id
+and mss.sample_file = msps.sample_file
+group by misc.source_id,  internal_id
+)
+where internal_id IN ( $$ms_assay$$ ) 
+and sequence_count >= $$min_sequence_count$$
+and (spectrum_count is null OR spectrum_count >= $$min_spectrum_count$$)
+group by source_id
             ]]>
        </sql>
 
