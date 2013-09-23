@@ -7,6 +7,7 @@ import java.net.URLEncoder;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -105,6 +106,10 @@ public class ProjectMapper {
     }
   }
 
+  /**
+   * timeout, in seconds, for accessing the web service for one component.
+   * @return
+   */
   public long getTimeout() {
     return timeout;
   }
@@ -137,6 +142,10 @@ public class ProjectMapper {
     // get the site. if site doesn't exist, use the current site
     String site = projects.get(projectId);
     return (site == null) ? "" : site;
+  }
+  
+  public Collection<String> getAllProjects() {
+    return projects.keySet();
   }
 
   /**
