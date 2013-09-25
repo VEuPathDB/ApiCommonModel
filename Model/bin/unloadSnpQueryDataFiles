@@ -25,7 +25,7 @@ my $dbh = DBI->connect($gusconfig->{props}->{dbiDsn},
 
 unloadSnpData($dbh);
 
-print "DEBUG: done unloading SNP data\n";
+# print "DEBUG: done unloading SNP data\n";
 
 sub unloadSnpData {
   my ($dbh) = @_;
@@ -41,7 +41,7 @@ SQL
   $organismQ->execute()
     || die "executing organism query: " . DBI->errstr;
   while (my ($organism, $taxon_id) = $organismQ->fetchrow_array()) {
-    print "DEBUG: unloading organism \"$organism\"\n";
+    # print "DEBUG: unloading organism \"$organism\"\n";
     unloadOrganism($dbh, $organism, $taxon_id);
   }
 }
@@ -69,41 +69,50 @@ SQL
   $strainQ->execute()
     || die "executing strain query: " . DBI->errstr;
   while (my ($strain) = $strainQ->fetchrow_array()) {
-    print "DEBUG: unloading strain \"$strain\"\n";
+    # print "DEBUG: unloading strain \"$strain\"\n";
     print $strainIdFile "$strainNum\t$strain\n";
 
     my $strainFile = $organismNoSpaces . '/' . $strainNum;
     open(my $fh, '>:raw', $strainFile) || die "can't open strain file \"$strainFile\": $!\n";
 
-    my $snpQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
-      select snp.snp_source_id, var.allele, var.product, var.matches_reference
-      from (select distinct snp_source_id
-            from ApidbTuning.HtsVariant
-            where species_taxon_id = '$taxonId') snp,
-           (select hv.snp_source_id, hv.allele, hv.product, sv.matches_reference
+    my $snpQ = $dbh->prepare(<<SQL) || die "preparing SNP query: " . DBI->errstr;
+      select snp_source_id, allele, product
+      from (
+            -- there is a variation, and !matches_reference
+            select hv.snp_source_id, hv.allele, hv.product
             from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
             where hv.var_na_feature_id = sv.na_feature_id
-              and hv.strain = '$strain') var
-      where snp.snp_source_id = var.snp_source_id(+)
-      order by snp.snp_source_id
+              and hv.strain = '$strain'
+              and hv.species_taxon_id = '$taxonId'
+              and (sv.matches_reference != 1 or sv.matches_reference is null)
+           union all
+            -- no data for this location
+            select snp_source_id, null as allele, null as product
+            from (  select distinct snp_source_id
+                    from ApidbTuning.HtsVariant
+                    where species_taxon_id = '$taxonId'
+                  minus
+                    select snp_source_id
+                    from ApidbTuning.HtsVariant
+                    where strain = '$strain')
+           )
+      order by snp_source_id
 SQL
 
     $snpQ->execute()
       || die "executing SNP query: " . DBI->errstr;
     my $testRunCounter;
-    while (my ($snpId, $allele, $product, $matchesReference) = $snpQ->fetchrow_array()) {
-      last if $testRunCounter++ > 100000;
-      print "DEBUG: retrieved row: snpId=\"$snpId\" allele=\"$allele\" product=\"$product\" matchesReference=\"$matchesReference\" \n";
-      next if $matchesReference;
+    while (my ($snpId, $allele, $product) = $snpQ->fetchrow_array()) {
+      # print "DEBUG: retrieved row: snpId=\"$snpId\" allele=\"$allele\" product=\"$product\" \n";
+      # last if $testRunCounter++ > 100000;
 
       # parse apart snpId
       my ($contig, $location);
-
       if ($snpId =~ /NGS_SNP\.(.*)\.([0-9]*)$/) {
 	$contig = $1;
 	$location = $2;
       } else {
-	print STDERR "ERROR: can't find contig/loction in SNP id \"$snpId\"\n";
+	print STDERR "ERROR: can't parse SNP id \"$snpId\" for contig and location\n";
       }
 
       if (!defined($contigId{$contig})) {
@@ -114,11 +123,47 @@ SQL
 
       writeStrainRow($fh, $contigId{$contig}, $location, $allele, $product);
     }
+    close($fh);
 
     $strainNum++;
   }
-
   close($strainIdFile);
+
+  # write referenceGenome.dat
+  my $referenceFile = $organismNoSpaces . '/referenceGenome.dat';
+  open(my $ref, '>:raw', $referenceFile) || die "can't open reference file \"$referenceFile\": $!\n";
+  my $referenceQ = $dbh->prepare(<<SQL) || die "preparing reference query: " . DBI->errstr;
+      select distinct hv.snp_source_id, hv.allele, hv.product
+      from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
+      where hv.var_na_feature_id = sv.na_feature_id
+        and hv.species_taxon_id = '$taxonId'
+        and sv.matches_reference = 1
+      order by snp_source_id
+SQL
+
+  $referenceQ->execute()
+    || die "executing reference query: " . DBI->errstr;
+  my $testRunCounter;
+  while (my ($snpId, $allele, $product) = $referenceQ->fetchrow_array()) {
+    # parse apart snpId
+    my ($contig, $location);
+    if ($snpId =~ /NGS_SNP\.(.*)\.([0-9]*)$/) {
+      $contig = $1;
+      $location = $2;
+    } else {
+      print STDERR "ERROR: can't parse SNP id \"$snpId\" for contig and location\n";
+    }
+
+    if (!defined($contigId{$contig})) {
+      $contigId{$contig} = $contigNum;
+      print $contigIdFile "$contigNum\t$contig\n";
+      $contigNum++;
+    }
+
+    writeStrainRow($ref, $contigId{$contig}, $location, $allele, $product);
+  }
+  close($ref);
+
   close($contigIdFile);
 }
 
