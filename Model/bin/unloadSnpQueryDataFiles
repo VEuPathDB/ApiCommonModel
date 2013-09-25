@@ -1,0 +1,131 @@
+#!/usr/bin/perl
+
+use strict;
+use DBI;
+use Getopt::Long;
+use CBIL::Util::PropertySet;
+
+my $gusConfigFile = $ENV{GUS_HOME} . "/config/gus.config";
+my %ALLELE_HASH = ('a'=>1, 'c'=>2, 'g'=>3, 't'=>4,
+                   'A'=>1, 'C'=>2, 'G'=>3, 'T'=>4);
+
+unless(-e $gusConfigFile) {
+  print STDERR "gus.config file not found! \n";
+  exit;
+}
+
+my @properties = ();
+my $gusconfig = CBIL::Util::PropertySet->new($gusConfigFile, \@properties, 1);
+
+my $dbh = DBI->connect($gusconfig->{props}->{dbiDsn},
+		       $gusconfig->{props}->{databaseLogin},
+		       $gusconfig->{props}->{databasePassword})
+  ||  die "Couldn't connect to database: " . DBI->errstr;
+  $dbh->{RaiseError} = 1;
+
+unloadSnpData($dbh);
+
+print "DEBUG: done unloading SNP data\n";
+
+sub unloadSnpData {
+  my ($dbh) = @_;
+
+  my $organismQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
+    select name, taxon_id
+    from sres.TaxonName 
+    where name_class = 'scientific name'
+      and name in (select organism from dots.SnpFeature)
+    order by name
+SQL
+
+  $organismQ->execute()
+    || die "executing organism query: " . DBI->errstr;
+  while (my ($organism, $taxon_id) = $organismQ->fetchrow_array()) {
+    print "DEBUG: unloading organism \"$organism\"\n";
+    unloadOrganism($dbh, $organism, $taxon_id);
+  }
+}
+
+sub unloadOrganism {
+  my ($dbh, $organism, $taxonId) = @_;
+
+  my %contigId;
+  my $contigNum = 0;
+  my $strainNum = 0;
+
+  my $organismNoSpaces = $organism;
+  $organismNoSpaces =~ s/\s//g;
+  mkdir $organismNoSpaces;
+  open (my $strainIdFile, ">", "$organismNoSpaces/strainIdToName.dat") or die "opening strainIdToName.dat";
+  open (my $contigIdFile, ">", "$organismNoSpaces/contigIdToSourceId.dat") or die "opening contigIdToSourceId.dat";
+
+  my $strainQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
+    select distinct strain
+    from dots.SeqVariation
+    where organism = '$organism'
+    order by strain
+SQL
+
+  $strainQ->execute()
+    || die "executing strain query: " . DBI->errstr;
+  while (my ($strain) = $strainQ->fetchrow_array()) {
+    print "DEBUG: unloading strain \"$strain\"\n";
+    print $strainIdFile "$strainNum\t$strain\n";
+
+    my $strainFile = $organismNoSpaces . '/' . $strainNum;
+    open(my $fh, '>:raw', $strainFile) || die "can't open strain file \"$strainFile\": $!\n";
+
+    my $snpQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
+      select snp.snp_source_id, var.allele, var.product, var.matches_reference
+      from (select distinct snp_source_id
+            from ApidbTuning.HtsVariant
+            where species_taxon_id = '$taxonId') snp,
+           (select hv.snp_source_id, hv.allele, hv.product, sv.matches_reference
+            from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
+            where hv.var_na_feature_id = sv.na_feature_id
+              and hv.strain = '$strain') var
+      where snp.snp_source_id = var.snp_source_id(+)
+      order by snp.snp_source_id
+SQL
+
+    $snpQ->execute()
+      || die "executing SNP query: " . DBI->errstr;
+    my $testRunCounter;
+    while (my ($snpId, $allele, $product, $matchesReference) = $snpQ->fetchrow_array()) {
+      last if $testRunCounter++ > 100000;
+      print "DEBUG: retrieved row: snpId=\"$snpId\" allele=\"$allele\" product=\"$product\" matchesReference=\"$matchesReference\" \n";
+      next if $matchesReference;
+
+      # parse apart snpId
+      my ($contig, $location);
+
+      if ($snpId =~ /NGS_SNP\.(.*)\.([0-9]*)$/) {
+	$contig = $1;
+	$location = $2;
+      } else {
+	print STDERR "ERROR: can't find contig/loction in SNP id \"$snpId\"\n";
+      }
+
+      if (!defined($contigId{$contig})) {
+	$contigId{$contig} = $contigNum;
+	print $contigIdFile "$contigNum\t$contig\n";
+	$contigNum++;
+      }
+
+      writeStrainRow($fh, $contigId{$contig}, $location, $allele, $product);
+    }
+
+    $strainNum++;
+  }
+
+  close($strainIdFile);
+  close($contigIdFile);
+}
+
+sub writeStrainRow {
+  my ($fh, $contigId, $location, $allele, $product) = @_;
+
+  my $alleleCode = 0;
+  $alleleCode = $ALLELE_HASH{$allele} if $allele;
+  print $fh pack("n I c c", $contigId, $location, $allele, $product);
+}
