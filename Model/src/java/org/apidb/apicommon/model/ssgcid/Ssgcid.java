@@ -1,3 +1,5 @@
+package org.apidb.apicommon.model.ssgcid;
+
 import java.io.IOException;
 import java.net.URL;
 import java.util.Iterator;
@@ -82,16 +84,9 @@ public class Ssgcid {
 		insertStatement.setString(2, fieldsNode.get("eupathdb").textValue());
 		insertStatement.setString(3, fieldsNode.get("status").textValue());
 		insertStatement.setString(4, fieldsNode.get("selection_criteria").textValue());
-		insertStatement.setString(5, fieldsNode.get("has_clone").textValue());
-		insertStatement.setString(6, fieldsNode.get("has_protein").textValue());
+		insertStatement.setString(5, fieldsNode.get("has_clone").booleanValue() ? "true" : "false");
+		insertStatement.setString(6, fieldsNode.get("has_protein").booleanValue() ? "true" : "false");
 		insertStatement.executeUpdate();
-
-		String status = fieldsNode.get("status").textValue();
-		String eupathdb = fieldsNode.get("eupathdb").textValue();
-		String has_protein = fieldsNode.get("has_protein").textValue();
-		String selection_criteria = fieldsNode.get("selection_criteria").textValue();
-		String has_clone = fieldsNode.get("has_clone").textValue();
-		System.out.println(StringUtils.join(new String[] {eupathdb, status, has_protein, selection_criteria, has_clone}, "\t"));
 	    }		
 		
 	} catch (JsonProcessingException e) {
