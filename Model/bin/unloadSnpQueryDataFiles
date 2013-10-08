@@ -1,0 +1,180 @@
+#!/usr/bin/perl
+
+use strict;
+use DBI;
+use Getopt::Long;
+use CBIL::Util::PropertySet;
+
+my $gusConfigFile = $ENV{GUS_HOME} . "/config/gus.config";
+my %ALLELE_HASH = ('a'=>1, 'c'=>2, 'g'=>3, 't'=>4,
+                   'A'=>1, 'C'=>2, 'G'=>3, 'T'=>4);
+
+unless(-e $gusConfigFile) {
+  print STDERR "gus.config file not found! \n";
+  exit;
+}
+
+my @properties = ();
+my $gusconfig = CBIL::Util::PropertySet->new($gusConfigFile, \@properties, 1);
+
+my $dbh = DBI->connect($gusconfig->{props}->{dbiDsn},
+		       $gusconfig->{props}->{databaseLogin},
+		       $gusconfig->{props}->{databasePassword})
+  ||  die "Couldn't connect to database: " . DBI->errstr;
+  $dbh->{RaiseError} = 1;
+
+unloadSnpData($dbh);
+
+# print "DEBUG: done unloading SNP data\n";
+
+sub unloadSnpData {
+  my ($dbh) = @_;
+
+  my $organismQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
+    select name, taxon_id
+    from sres.TaxonName 
+    where name_class = 'scientific name'
+      and taxon_id in (select species_taxon_id from ApidbTuning.HtsVariant)
+    order by name
+SQL
+
+  $organismQ->execute()
+    || die "executing organism query: " . DBI->errstr;
+  while (my ($organism, $taxon_id) = $organismQ->fetchrow_array()) {
+    # print "DEBUG: unloading organism \"$organism\"\n";
+    unloadOrganism($dbh, $organism, $taxon_id);
+  }
+}
+
+sub unloadOrganism {
+  my ($dbh, $organism, $taxonId) = @_;
+
+  my %contigId;
+  my $contigNum = 0;
+  my $strainNum = 1; # can't have a strain 0. That means something special.
+
+  my $organismNoSpaces = $organism;
+  $organismNoSpaces =~ s/\s//g;
+  mkdir $organismNoSpaces;
+  open (my $contigIdFile, ">", "$organismNoSpaces/contigIdToSourceId.dat") or die "opening contigIdToSourceId.dat";
+
+  # write referenceGenome.dat
+  my $referenceFile = $organismNoSpaces . '/referenceGenome.dat';
+  open(my $ref, '>:raw', $referenceFile) || die "can't open reference file \"$referenceFile\": $!\n";
+  my $referenceQ = $dbh->prepare(<<SQL) || die "preparing reference query: " . DBI->errstr;
+      select *
+      from (select snp_source_id, allele, product,
+                   regexp_replace(snp_source_id, '^NGS_SNP\\.(.*)\\.[0-9]*\$', '\\1') as contig,
+                   to_number(regexp_replace(snp_source_id, '^.*\\.([0-9]*)\$', '\\1')) as location
+            from (select distinct hv.snp_source_id, hv.allele, hv.product
+                  from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
+                  where hv.var_na_feature_id = sv.na_feature_id
+                    and hv.species_taxon_id = '$taxonId'
+                    and sv.matches_reference = 1
+                  )
+           )
+      order by contig, location
+SQL
+
+  $referenceQ->execute()
+    || die "executing reference query: " . DBI->errstr;
+  my $testRunCounter;
+  while (my ($snpId, $allele, $product, $contig, $location) = $referenceQ->fetchrow_array()) {
+
+    if (!defined($contigId{$contig})) {
+      $contigId{$contig} = $contigNum;
+      print $contigIdFile "$contigNum\t$contig\n";
+      $contigNum++;
+    }
+
+    writeStrainRow($ref, $contigId{$contig}, $location, $allele, $product);
+  }
+  close($ref);
+
+  close($contigIdFile);
+
+  # unload per-strain SNP data
+  open (my $strainIdFile, ">", "$organismNoSpaces/strainIdToName.dat") or die "opening strainIdToName.dat";
+  my $strainQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
+    select distinct strain
+    from ApidbTuning.HtsVariant
+    where species_taxon_id = '$taxonId'
+    order by strain
+SQL
+
+  $strainQ->execute()
+    || die "executing strain query: " . DBI->errstr;
+  my $strainCount;
+  while (my ($strain) = $strainQ->fetchrow_array()) {
+    # print "DEBUG: unloading strain \"$strain\"\n";
+
+    # last if $strainCount++ > 50; # partial run, for testing
+    print $strainIdFile "$strainNum\t$strain\n";
+
+    my $strainFile = $organismNoSpaces . '/' . $strainNum;
+    open(my $fh, '>:raw', $strainFile) || die "can't open strain file \"$strainFile\": $!\n";
+
+    my $snpQ = $dbh->prepare(<<SQL) || die "preparing SNP query: " . DBI->errstr;
+      select *
+      from (select snp_source_id, allele, product,
+                   regexp_replace(snp_source_id, '^NGS_SNP\\.(.*)\\.[0-9]*\$', '\\1') as contig,
+                   to_number(regexp_replace(snp_source_id, '^.*\\.([0-9]*)\$', '\\1')) as location
+            from (
+                  -- there is a variation, and !matches_reference
+                  select hv.snp_source_id, hv.allele, hv.product
+                  from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
+                  where hv.var_na_feature_id = sv.na_feature_id
+                    and hv.strain = '$strain'
+                    and hv.species_taxon_id = '$taxonId'
+                    and (sv.matches_reference != 1 or sv.matches_reference is null)
+                 union all
+                  -- no data for this location
+                  select snp_source_id, null as allele, null as product
+                  from (  select distinct snp_source_id
+                          from ApidbTuning.HtsVariant
+                          where species_taxon_id = '$taxonId'
+                        minus
+                          select snp_source_id
+                          from ApidbTuning.HtsVariant
+                          where strain = '$strain')
+                 )
+              )
+      order by contig, location
+SQL
+
+    $snpQ->execute()
+      || die "executing SNP query: " . DBI->errstr;
+    my $testRunCounter;
+    while (my ($snpId, $allele, $product, $contig, $location) = $snpQ->fetchrow_array()) {
+      # print "DEBUG: retrieved row: snpId=\"$snpId\" allele=\"$allele\" product=\"$product\" \n";
+      # last if $testRunCounter++ > 100000;
+
+      if (!defined($contigId{$contig})) {
+	die "ERROR: contig \"$contig\" found in strain \"$strain\", but not in reference genome. SNP ID = \"$snpId\" ";
+      }
+
+      writeStrainRow($fh, $contigId{$contig}, $location, $allele, $product);
+    }
+    close($fh);
+
+    $strainNum++;
+  }
+  close($strainIdFile);
+
+}
+
+sub writeStrainRow {
+  my ($fh, $contigId, $location, $allele, $product) = @_;
+
+  my $alleleCode = 0;
+  $alleleCode = $ALLELE_HASH{$allele} if $allele;
+
+  my $prodCode = ord($product);
+
+  if ($location == 17915) {
+    print "DEBUG: writing row: contigId=\"$contigId\" location=\"$location\" allele=\"$allele\" alleleCode=\"$alleleCode\" product=\"$product\" prodCode=\"$prodCode\"\n";
+
+  }
+
+  print $fh pack("slcc", $contigId, $location, $alleleCode, $prodCode);
+}
