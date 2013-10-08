@@ -56,9 +56,45 @@ sub unloadOrganism {
   my $organismNoSpaces = $organism;
   $organismNoSpaces =~ s/\s//g;
   mkdir $organismNoSpaces;
-  open (my $strainIdFile, ">", "$organismNoSpaces/strainIdToName.dat") or die "opening strainIdToName.dat";
   open (my $contigIdFile, ">", "$organismNoSpaces/contigIdToSourceId.dat") or die "opening contigIdToSourceId.dat";
 
+  # write referenceGenome.dat
+  my $referenceFile = $organismNoSpaces . '/referenceGenome.dat';
+  open(my $ref, '>:raw', $referenceFile) || die "can't open reference file \"$referenceFile\": $!\n";
+  my $referenceQ = $dbh->prepare(<<SQL) || die "preparing reference query: " . DBI->errstr;
+      select *
+      from (select snp_source_id, allele, product,
+                   regexp_replace(snp_source_id, '^NGS_SNP\\.(.*)\\.[0-9]*\$', '\\1') as contig,
+                   to_number(regexp_replace(snp_source_id, '^.*\\.([0-9]*)\$', '\\1')) as location
+            from (select distinct hv.snp_source_id, hv.allele, hv.product
+                  from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
+                  where hv.var_na_feature_id = sv.na_feature_id
+                    and hv.species_taxon_id = '$taxonId'
+                    and sv.matches_reference = 1
+                  )
+           )
+      order by contig, location
+SQL
+
+  $referenceQ->execute()
+    || die "executing reference query: " . DBI->errstr;
+  my $testRunCounter;
+  while (my ($snpId, $allele, $product, $contig, $location) = $referenceQ->fetchrow_array()) {
+
+    if (!defined($contigId{$contig})) {
+      $contigId{$contig} = $contigNum;
+      print $contigIdFile "$contigNum\t$contig\n";
+      $contigNum++;
+    }
+
+    writeStrainRow($ref, $contigId{$contig}, $location, $allele, $product);
+  }
+  close($ref);
+
+  close($contigIdFile);
+
+  # unload per-strain SNP data
+  open (my $strainIdFile, ">", "$organismNoSpaces/strainIdToName.dat") or die "opening strainIdToName.dat";
   my $strainQ = $dbh->prepare(<<SQL) || die "preparing organism query: " . DBI->errstr;
     select distinct strain
     from ApidbTuning.HtsVariant
@@ -114,9 +150,7 @@ SQL
       # last if $testRunCounter++ > 100000;
 
       if (!defined($contigId{$contig})) {
-	$contigId{$contig} = $contigNum;
-	print $contigIdFile "$contigNum\t$contig\n";
-	$contigNum++;
+	die "ERROR: contig \"$contig\" found in strain \"$strain\", but not in reference genome. SNP ID = \"$snpId\" ";
       }
 
       writeStrainRow($fh, $contigId{$contig}, $location, $allele, $product);
@@ -127,40 +161,6 @@ SQL
   }
   close($strainIdFile);
 
-  # write referenceGenome.dat
-  my $referenceFile = $organismNoSpaces . '/referenceGenome.dat';
-  open(my $ref, '>:raw', $referenceFile) || die "can't open reference file \"$referenceFile\": $!\n";
-  my $referenceQ = $dbh->prepare(<<SQL) || die "preparing reference query: " . DBI->errstr;
-      select *
-      from (select snp_source_id, allele, product,
-                   regexp_replace(snp_source_id, '^NGS_SNP\\.(.*)\\.[0-9]*\$', '\\1') as contig,
-                   to_number(regexp_replace(snp_source_id, '^.*\\.([0-9]*)\$', '\\1')) as location
-            from (select distinct hv.snp_source_id, hv.allele, hv.product
-                  from ApidbTuning.HtsVariant hv, dots.SeqVariation sv
-                  where hv.var_na_feature_id = sv.na_feature_id
-                    and hv.species_taxon_id = '$taxonId'
-                    and sv.matches_reference = 1
-                  )
-           )
-      order by contig, location
-SQL
-
-  $referenceQ->execute()
-    || die "executing reference query: " . DBI->errstr;
-  my $testRunCounter;
-  while (my ($snpId, $allele, $product, $contig, $location) = $referenceQ->fetchrow_array()) {
-
-    if (!defined($contigId{$contig})) {
-      $contigId{$contig} = $contigNum;
-      print $contigIdFile "$contigNum\t$contig\n";
-      $contigNum++;
-    }
-
-    writeStrainRow($ref, $contigId{$contig}, $location, $allele, $product);
-  }
-  close($ref);
-
-  close($contigIdFile);
 }
 
 sub writeStrainRow {
