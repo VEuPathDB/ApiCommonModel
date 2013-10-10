@@ -19,6 +19,7 @@ public class DatasetInjectorConstructor {
   private Map<String, String> propValues = new HashMap<String, String>();
   private String datasetName;
   private Contact primaryContact;
+  private Map<String,Map<String, String>> globalDatasetProperties;
 
   /**
    * Set the name of the DatasetInjector subclass to construct. Must be a
@@ -88,10 +89,13 @@ public class DatasetInjectorConstructor {
     return datasetInjectorClassName;
   }
 
-    void setPrimaryContact(Contact primaryContact) {
-        this.primaryContact = primaryContact;
-    }
+  void setPrimaryContact(Contact primaryContact) {
+    this.primaryContact = primaryContact;
+  }
 
+  void setGlobalDatasetProperties(Map<String, Map<String, String>> globalDatasetProperties) {
+    this.globalDatasetProperties = globalDatasetProperties;
+  }
 
   /**
    * Use reflection to construct a subclass of DatasetInjector. Initialize the
@@ -115,6 +119,7 @@ public class DatasetInjectorConstructor {
     di.addPropValues(propValues);
     di.setDatasetName(datasetName);
     di.setPrimaryContact(primaryContact);
+    di.setGlobalDatasetProperties(globalDatasetProperties);
     return di;
   }
 }

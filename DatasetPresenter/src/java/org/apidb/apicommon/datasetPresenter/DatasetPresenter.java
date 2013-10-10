@@ -383,10 +383,18 @@ public class DatasetPresenter {
    */
   void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
     String datasetKey = propValues.containsKey("projectName")? propValues.get("projectName") + ":" + getDatasetName() : getDatasetName();
+    
     if (duplicateDatasetNames.contains(datasetKey)) throw new UserException("datasetPresenter '" + getDatasetName()
         + "' is attempting to use properties from dataset '" + datasetKey + "' but that dataset is not unique in the dataset properties files");
+    
+    // add the global dataset properties to each datasetInjectorConstructor so they can be passed to each injector.
+    // there might be a way to do this without duplicating that info across injector constructors, but it is not obvious, and this will work
+    if (datasetInjectorConstructor != null) datasetInjectorConstructor.setGlobalDatasetProperties(datasetNamesToProperties);
+    
     if (!datasetNamesToProperties.containsKey(datasetKey)) return;
+    
     Map<String,String> propsFromFile = datasetNamesToProperties.get(datasetKey);
+    
     for (String key : propsFromFile.keySet()) {
       if (key.equals("datasetLoaderName")) continue;  // the dataset name; redundant
       if (key.equals("projectName")) continue;  // redundant

@@ -24,6 +24,7 @@ public abstract class DatasetInjector {
   private Contact primaryContact;
   private DatasetInjectorSet datasetInjectorSet;
   private Map<String, ModelReference> modelReferences = new HashMap<String, ModelReference>();
+  private Map<String, Map<String, String>> globalDatasetProperties;
 
   /**
    * Subclasses use this method to declare the properties they require. These
@@ -275,6 +276,14 @@ public abstract class DatasetInjector {
   protected void setGraphDatasetName() {
     String graphDatasetName = this.datasetName.replace("-", "");
     setPropValue("graphDatasetName", graphDatasetName);
+  }
+  
+  void setGlobalDatasetProperties(Map<String, Map<String, String>> globalDatasetProps) {
+    this.globalDatasetProperties = globalDatasetProps;
+  }
+
+  Map<String, Map<String, String>> getGlobalDatasetProperties() {
+    return globalDatasetProperties;
   }
 
   protected void setShortAttribution() {
