@@ -1,26 +1,26 @@
 package org.apidb.apicommon.model.ssgcid;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Iterator;
-// requires Jackson http://wiki.fasterxml.com/JacksonDownload
+
+import oracle.jdbc.driver.OracleDriver;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.commons.lang3.StringUtils;
+// requires Jackson http://wiki.fasterxml.com/JacksonDownload
 // javac -classpath jackson-core-2.1.4.jar:jackson-databind-2.1.4.jar:commons-lang3-3.1.jar NetClientGet.java 
 // jackson annotations JsonAutoDetect is required at runtime
 // java -classpath .:jackson-core-2.1.4.jar:jackson-databind-2.1.4.jar:jackson-annotations-2.1.4.jar:commons-lang3-3.1.jar NetClientGet
-
-import java.io.BufferedReader;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.io.InputStreamReader;
-import oracle.jdbc.driver.OracleDriver;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.PreparedStatement;
 
 public class Ssgcid {
  
@@ -77,7 +77,7 @@ public class Ssgcid {
 	    Iterator<JsonNode> jsonNodeIterator = root.elements();
 	    while (jsonNodeIterator.hasNext()) {
 		JsonNode jsonNode = jsonNodeIterator.next();
-		int identifier = jsonNode.get("pk").intValue();
+		//int identifier = jsonNode.get("pk").intValue();
 		JsonNode fieldsNode = jsonNode.get("fields");
 
 		insertStatement.setString(1, jsonNode.get("pk").textValue());
