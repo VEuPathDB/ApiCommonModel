@@ -282,7 +282,7 @@ public abstract class DatasetInjector {
     this.globalDatasetProperties = globalDatasetProps;
   }
 
-  Map<String, Map<String, String>> getGlobalDatasetProperties() {
+  protected Map<String, Map<String, String>> getGlobalDatasetProperties() {
     return globalDatasetProperties;
   }
 
