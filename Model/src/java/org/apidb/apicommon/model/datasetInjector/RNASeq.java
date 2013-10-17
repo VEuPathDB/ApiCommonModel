@@ -99,7 +99,11 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphPriorityOrderGrouping", "1");
           }
 
-          setPropValue("isGraphCustom", "false");
+ // need to make sure there are no single quotes in the descrip
+         String datasetDescrip = getPropValue("datasetDescrip");
+         setPropValue("datasetDescrip", datasetDescrip.replace("'", ""));
+  
+        setPropValue("isGraphCustom", "false");
           injectTemplate("genePageGraphDescriptions");
           injectTemplate("datasetExampleGraphDescriptions");
          
