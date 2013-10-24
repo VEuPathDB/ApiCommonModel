@@ -245,8 +245,23 @@ public abstract class DatasetInjector {
       return "";
     }
 
+    try {
+      String[] tokens = this.datasetName.split("_");
+      String organismAbbrev = tokens[0];
+     
+      if(organismAbbrev.equals("")){
+        return "";
+      } else {
+        return organismAbbrev;
+      } 
+    } catch (Exception e) {
+      System.out.println(e.getMessage());
+      return "";
+    }
+
     // These conditions are a band-aid until we can read the organism xml file
     // in EUPathDatasets
+    /**
     if (this.datasetName.substring(0, 4).equals("gass")) {
       return "G.l.";
     }
@@ -261,6 +276,7 @@ public abstract class DatasetInjector {
 
     return this.datasetName.substring(0, 1).toUpperCase() + "."
         + this.datasetName.substring(1, 2).toLowerCase() + ".";
+    */
   }
 
   protected void setOrganismAbbrevFromDatasetName() {
