@@ -11,44 +11,36 @@ public class AnnotatedGenome extends DatasetInjector {
     String projectName = getPropValue("projectName");
     String organismAbbrev = getPropValue("organismAbbrev");
 
-    try {
+    Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
+    Map<String, String> orgProps = globalProps.get(projectName + ":" + organismAbbrev + "_RSRC");
 
-      Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
-      Map<String, String> orgProps = globalProps.get(projectName + ":" + organismAbbrev + "_RSRC");
+    String organismFullName = orgProps.get("organismFullName");
 
-      String organismFullName = orgProps.get("organismFullName");
+    //setPropValue("organismAbbrev", organismAbbrev);
+    setPropValue("organismFullName", organismFullName);
 
-      setPropValue("organismAbbrev", organismAbbrev);
-      setPropValue("organismFullName", organismFullName);
+    if(getPropValueAsBoolean("isEuPathDBSite")) {
+      setPropValue("includeProjects", projectName + ",EuPathDB");
+    } else {
+      setPropValue("includeProjects", projectName);
+    }   
 
-      if(getPropValueAsBoolean("isEuPathDBSite")) {
-        setPropValue("includeProjects", projectName + ",EuPathDB");
-      } else {
-        setPropValue("includeProjects", projectName);
-      }   
+    injectTemplate("geneFilter");
+    injectTemplate("geneFilterLayout");
 
-      injectTemplate("geneFilter");
-      injectTemplate("geneFilterLayout");
+    // reference strain - set distinct gene instance
+    if(orgProps.get("isReferenceStrain").equals("true")) {
 
-      // reference strain - set distinct gene instance
-      if(orgProps.get("isReferenceStrain").equals("true")) {
+      String orthomclAbbrev = orgProps.get("orthomclAbbrev");
 
-        String orthomclAbbrev = orgProps.get("orthomclAbbrev");
-        organismAbbrev = orthomclAbbrev + "_distinct_gene";
+      String[] orgs = organismFullName.split(" ");
+      String species = orgs[0] + " " + orgs[1];
 
-        String[] orgs = organismFullName.split(" ");
-        String species = orgs[0] + " " + orgs[1];
+      setPropValue("orthomclAbbrev", orthomclAbbrev);
+      setPropValue("species", species);
 
-        setPropValue("organismAbbrev", organismAbbrev);
-        setPropValue("orthomclAbbrev", orthomclAbbrev);
-        setPropValue("species", species);
-
-        injectTemplate("geneFilterLayout");
-        injectTemplate("distinctGeneFilter"); 
-      } 
-    }
-    catch(NullPointerException e) {
-      System.err.println("Caught NullPointerException: " + e.getMessage()); 
+      injectTemplate("distinctGeneFilterLayout");
+      injectTemplate("distinctGeneFilter"); 
     } 
   }
 
