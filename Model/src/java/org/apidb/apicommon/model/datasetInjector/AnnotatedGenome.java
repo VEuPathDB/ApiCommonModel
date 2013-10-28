@@ -1,7 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import java.util.Map;
+
+import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenome extends DatasetInjector {
 
@@ -12,8 +14,11 @@ public class AnnotatedGenome extends DatasetInjector {
     String organismAbbrev = getPropValue("organismAbbrev");
 
     Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
-    Map<String, String> orgProps = globalProps.get(projectName + ":" + organismAbbrev + "_RSRC");
-
+    
+    String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+    Map<String, String> orgProps = globalProps.get(orgPropsKey);
+    if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
+  
     String organismFullName = orgProps.get("organismFullName");
 
     //setPropValue("organismAbbrev", organismAbbrev);
@@ -41,7 +46,7 @@ public class AnnotatedGenome extends DatasetInjector {
 
       injectTemplate("distinctGeneFilterLayout");
       injectTemplate("distinctGeneFilter"); 
-    } 
+    }
   }
 
   @Override

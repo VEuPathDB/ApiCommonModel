@@ -228,8 +228,9 @@ public class TemplatesInjector {
     String contactsFile = cmdLine.getOptionValue("contactsXmlFile");
     try {
         parseAndProcess(templatesDir, presentersDir, globalXmlFile, contactsFile);
-    } catch (UserException ex) {
+    } catch (Exception ex) {
       System.err.println(nl + "Error: " + ex.getMessage() + nl);
+      ex.printStackTrace();
       System.exit(1);
     }
   }
