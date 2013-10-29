@@ -19,9 +19,10 @@
 ##          the dictionary (or add to it in bulk), simply modify:
 ##          ApiCommonShared/Model/lib/wdk/apiCommonModel-spelling-dict.pws
 ##
+## returns: 0 if no spelling errors exist, 1 if errors still exist
 ##
-##  todo:  add ApiCommonShared/Model/lib/xml/datasetPresenters/*.xml
-##             ApiCommonWebsite/Model/lib/*/about.xml, and news.xml
+## todo:    add ApiCommonShared/Model/lib/xml/datasetPresenters/*.xml
+##              ApiCommonWebsite/Model/lib/*/about.xml, and news.xml
 ################################################################################
 
 # define locations
@@ -44,7 +45,7 @@ requiredPrograms=( 'aspell' 'xml_spellcheck' )
 
 # copy apiCommon dictionary to user's home directory (where aspell will read it)
 function setUpDict() {
-  if [ -e $userDict ]; then
+  if [[ -e $userDict ]]; then
     # save user's current dictionary
     cp $userDict $tmpUserDict
   fi
@@ -53,7 +54,7 @@ function setUpDict() {
 
 # copy user's original dictionary back over apiCommon dictionary
 function unSetUpDict() {
-  if [ -e $tmpUserDict ]; then
+  if [[ -e $tmpUserDict ]]; then
     # restore user's dictionary
     mv $tmpUserDict $userDict
   else
@@ -85,20 +86,33 @@ function checkRequirements() {
   local allFound=true
   for program in "${requiredPrograms[@]}"; do
     local fullPath=`which $program`
-    if [ "$fullPath" == "" ]; then
+    if [[ "$fullPath" == "" ]]; then
       allFound=false
       echo "Program $program not found in path (required)."
     fi
   done
-  if [ $allFound == false ]; then
+  if [[ $allFound == false ]]; then
     echo "Please install the above program(s) and try again."
     exit 1
+  fi
+}
+
+# returns 1 (error) if previous value was 1 or 
+function getNewReturnVal() {
+  local oldReturnVal=$1
+  local tmpFile=$2
+  local wrongCount=$(wc -l $tmpFile | awk '{ print $1 }')
+  if [[ $wrongCount != 0 || $oldReturnVal = 1 ]]; then
+    echo 1
+  else
+    echo 0
   fi
 }
 
 # go through each XML file in the model and process misspelled words
 function main() {
   checkRequirements
+  returnVal=0
   for file in `find $modelDir -name "*.xml"`; do
 
     echo "******************************************************"
@@ -108,26 +122,31 @@ function main() {
     # creates a temporary file with misspelled words
     runSpellcheck $file
 
-    if [ "$1" == "list" ]; then
+    if [[ "$1" == "list" ]]; then
+      returnVal=`getNewReturnVal $returnVal $tmpFile`
       cat $tmpFile
     else
       for word in `cat $tmpFile`; do
         echo -n "Add to dictionary (y/n/exit): \"${word}\"? "
         read response
         local response=`echo "$response" | tr A-Z a-z | sed 's/ //g'`
-        if [ $response == exit ]; then
+        if [[ $response == exit ]]; then
           rm $tmpFile
           echo "Good bye!"
-          exit 0
-        elif [ $response == y ] || [ $response == yes ]; then
+          exit 1
+        elif [[ $response == y ]] || [[ $response == yes ]]; then
           echo "$word" >> $dictionary
           formatDict
           echo "  Added to dictionary: $word"
+        else
+          # did not add word to dictionary, misspelled words still exist
+          returnVal=1
         fi
       done
     fi
     rm $tmpFile
   done
+  exit $returnVal
 }
 
 main $1
