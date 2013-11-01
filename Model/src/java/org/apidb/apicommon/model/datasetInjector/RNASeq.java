@@ -31,6 +31,11 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("includeProjects", projectName);
       }
 
+      String datasetShortDisplayName = getPropValue("datasetShortDisplayName");
+      if (datasetShortDisplayName == null || datasetShortDisplayName.equals("")) {
+        throw new RuntimeException(datasetName + " datasetShortDisplayName cannot be null");
+      }
+      
       setPropValue("graphGenePageSection", "expression");
 
 
