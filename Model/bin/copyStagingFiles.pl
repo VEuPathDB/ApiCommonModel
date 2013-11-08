@@ -39,7 +39,8 @@ while (<IN>) {
 }
 close (IN);
 
-my @blastExtns = qw/xnd xns xnt xpd xps xpt/;
+my @blastExtns = qw/nhr nin nsq phr pin psq/;  # for NCBI Blast
+# my @blastExtns = qw/xnd xns xnt xpd xps xpt/;  # for WU-Blast
 
 # for each specified project
 my @projects = split(',', $includeProjects);
