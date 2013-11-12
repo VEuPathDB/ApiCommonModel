@@ -3700,16 +3700,17 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.comp_samples_with_meta_data" selectMode="none" quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.operation_no_dependency_comp"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.regulated_dir" quote="false"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.percentile_threshold" default="90"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change" default="1.2"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.p_value" default=".1"/>
 
       <column name="project_id"/>
       <column name="source_id"/>
-      <column name="fold_change_avg"/>
-      <column name="fold_change_chosen"/>
+      <column name="fold_change"/>
+      <column name="difference"/>
+      <column name="p_value"/>
       <column name="avg_group_one"/>
       <column name="avg_group_two"/>
-      <column name="max_group_one"/>
+<!--      <column name="max_group_one"/>
       <column name="max_group_two"/>
       <column name="min_group_one"/>
       <column name="min_group_two"/>
@@ -3718,7 +3719,7 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
       <column name="chose_group_one"/>
       <column name="chose_group_two"/>
       <column name="above_threshold_one"/>
-      <column name="above_threshold_two"/>    
+      <column name="above_threshold_two"/>  -->  
       <column name="meta_data_category"/>
 
       <sqlParamValue includeProjects="PlasmoDB" name="isLogged">0</sqlParamValue>
@@ -3727,150 +3728,59 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
   
       <sql>
       <![CDATA[
-			With Map As (
-			Select distinct pro.source_id,
-				   Pen.Name As Element_Name, 
-				   pro.profile_id as pro_id,
-				   Pen.Profile_Element_Name_Id As Pen_Id, 
-				   Ppro.Profile_Id As Pct_Pro_Id,
-				   Ppen.Profile_Element_Name_Id As Pct_Pen_Id
-			From Apidb.Profileset Ps, 
-				 Apidb.Profileset Pps, 
-				 Apidb.Profile Pro, 
-				 Apidb.Profile PPro,
-				 Apidb.Profileelementname Pen, 
-				 Apidb.Profileelementname Ppen
-			Where 'percentile - '||Ps.Name = Pps.Name
-				   And Pen.Profile_Set_Id = Ps.Profile_Set_Id
-				   And Pro.Profile_Set_Id = Ps.Profile_Set_Id
-				   and ps.profile_set_id = $$profileset_generic$$
-				   And Ppen.Profile_Set_Id = Pps.Profile_Set_Id
-				   And pPro.Profile_Set_Id = pPs.Profile_Set_Id 
-				   And Pro.Source_Id = Ppro.Source_Id
-				   And Pen.Name = Ppen.Name ),
-			 all_values as (  
-			 Select Distinct
-					pro.profile_set_id,
-					Pct.Source_Id, 
-					Pct.Element_Name,
-					Pe.Profile_Element_Name_Id,
-					case when ((Sinh(Pe.Value)-1)/50) > &&lowerBound&&
-                                             then (Sinh(Pe.Value)-1)/50 
-                                             else &&lowerBound&&
-                                             end As Value,
-					Pct.Value as percentile
-			 From
-			 (
-			Select Distinct Source_Id, Element_Name, Pen_Id, Value From (
-				  Select Distinct     
-					  Map.Source_Id,
-					  Map.Element_Name,
-					  Map.Pen_Id,
-					  Max(Pe.Value) As Value
-                                          
-				  From Map,
-					   Apidb.Profileelement Pe
-				  Where map.pct_pro_Id = Pe.Profile_Id
-					And Map.Pct_Pen_Id = Pe.Profile_Element_Name_Id
-				  Group By Map.Source_Id, Map.Element_Name, Map.Pen_Id
-					
-						)	Max_Pct
-						where value > 0 )		Pct,
-						 Apidb.Profile Pro, 
-						 Apidb.Profileelement Pe
-				  Where Pro.Profile_Id = Pe.Profile_Id
-					And Pct.Pen_Id = Pe.Profile_Element_Name_Id
-					And Pct.Source_Id = Pro.Source_Id
-					and pro.profile_set_id = $$profileset_generic$$
+select one.source_id,
+       '@PROJECT_ID@' as project_id,
+       round (case when avg_comp >= avg_ref
+          then avg_comp / avg_ref 
+          else -1 * avg_ref  / avg_comp
+       end, 3) as fold_change,
+       round(( Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1)) ) - (Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1))),6) as difference,
+       round(   Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1))  ,6 ) as Avg_Group_One,
+       round(   Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1)),6  ) As Avg_Group_Two,
+       p_value, 
+       oe.name as meta_data_category
+from (
+select source_id,
+       round(AVG(DECODE(source_set, 'ref', reported_value, null)),3) avg_ref,
+       round(AVG(DECODE(source_set, 'comp', reported_value, null)),3) avg_comp,
+       round(stats_t_test_indepu(source_set,reported_value),3) p_value
+From (
+  
+      select source_id,
+             pe.value as reported_value,
+             'ref' as source_set
+      from apidb.profileset ps,
+           apidb.profile p,
+           apidb.profileelementname pen,
+           apidb.profileelement pe
+      where ps.profile_set_id = p.profile_set_id
+      and   ps.profile_set_id = pen.profile_set_id
+      and   p.profile_id = pe.profile_id
+      and   pen.profile_element_name_id = pe.profile_element_name_id
+      and   ps.profile_set_id = $$profileset_generic$$
+      and   pen.profile_element_name_id in ( $$ref_samples_with_meta_data$$ )
+union
+       select source_id,
+             pe.value as reported_value,
+             'comp' as source_set
+      from apidb.profileset ps,
+           apidb.profile p,
+           apidb.profileelementname pen,
+           apidb.profileelement pe
+      where ps.profile_set_id = p.profile_set_id
+      and   ps.profile_set_id = pen.profile_set_id
+      and   p.profile_id = pe.profile_id
+      and   pen.profile_element_name_id = pe.profile_element_name_id
+      and   ps.profile_set_id = $$profileset_generic$$
+      and   pen.profile_element_name_id in ( $$comp_samples_with_meta_data$$ )
+      )
+      group by source_id) one,
+      study.OntologyEntry oe      
+      where p_value < $$p_value$$
+      and oe.ontology_entry_id = $$profile_ontology$$
+    and  ($$regulated_dir$$ ( avg_comp / avg_ref)  >= $$fold_change$$
+          or $$regulated_dir$$ (-(avg_ref / avg_comp)) >= $$fold_change$$)
 
-				  Group By Pro.Profile_Set_Id, Pct.Source_Id, Pct.Element_Name, Pe.Profile_Element_Name_Id, Pe.Value, 
-				  Pct.Value)
-				  Select '@PROJECT_ID@' as project_id,
-                                          Source_Id, 
-                                          meta_data_category as meta_data_category,
-					  Round(   Fold_Change_Avg,6 ) as Fold_change_avg,
-					  Round(   Fold_Change_Chose,6 ) as Fold_change_chosen,
-					  Round(   Ln((1+(50*Avg_Group_One)) + Sqrt(Power((1+(Avg_Group_One*50)),2) +1))  ,6 ) as Avg_Group_One,
-					  Round(   Ln((1+(50*Avg_Group_Two)) + Sqrt(Power((1+(50*Avg_Group_Two)),2) +1)),6  ) As Avg_Group_Two,
-					  Round(   Ln((1+(50*Max_Group_One)) + Sqrt(Power((1+(50*Max_Group_One)),2) +1))  ,6 ) as Max_Group_One,
-					  Round(   Ln((1+(50*Max_Group_Two)) + Sqrt(Power((1+(50*Max_Group_Two)),2) +1)) ,6  ) As Max_Group_Two,
-					  Round(   Ln((1+(50*Min_Group_One)) + Sqrt(Power((1+(50*Min_Group_One)),2) +1)) ,6 ) As Min_Group_One,
-					  Round(   Ln((1+(50*Min_Group_Two)) + Sqrt(Power((1+(50*Min_Group_Two)),2) +1)) ,6 ) As Min_Group_Two,
-					  Round(   Ln((1+(50*Min_Group_One)) + Sqrt(Power((1+(50*Min_Group_One)),2) +1)) ,6 ) As Med_Group_One,
-					  Round(   Ln((1+(50*Min_Group_Two)) + Sqrt(Power((1+(50*Min_Group_Two)),2) +1)) ,6 ) As Med_Group_Two,
-					  Round(   Ln((1+(50*Chose_Group_One)) + Sqrt(Power((1+(50*Chose_Group_One)),2) +1)) ,6 ) As Chose_Group_One,
-					  Round(   Ln((1+(50*Chose_Group_Two)) + Sqrt(Power((1+(50*Chose_Group_Two)),2) +1)),6 ) As Chose_Group_Two,
-                                          case when max_percentile_one >= $$percentile_threshold$$ then 'yes' else 'no' end as above_threshold_one,
-                                          case when max_percentile_two >= $$percentile_threshold$$ then 'yes' else 'no' end as above_threshold_two 
-						 From (
-				  Select One.Source_Id,
-							   Case When One.Average >= Two.Average 
-					            		Then One.Average / Two.Average
-				                                Else -1 * Two.Average  / One.Average
-	                                                   End As Fold_Change_Avg,
-							   Case When One.Chosen >= Two.Chosen 
-						                Then One.Chosen / Two.Chosen
-								Else -1 * Two.Chosen  / One.Chosen
-							   End as fold_change_chose,
-							   One.Average    As Avg_Group_One,
-							   Two.Average    As Avg_Group_Two,
-							   One.Maximum    As Max_Group_One,
-							   Two.Maximum    As Max_Group_Two,
-							   One.Minimum    As Min_Group_One,
-							   Two.Minimum    As Min_Group_Two,
-                                                           One.Median     As Med_Group_One,
-							   Two.Median     As Med_Group_Two,
-							   One.Chosen     As Chose_Group_One,
-							   Two.Chosen     As Chose_Group_Two,
-							   One.Percentile As Max_Percentile_One,
-							   two.percentile As Max_percentile_two,
-                                                           oe.value       As meta_data_category
-							   from (
-						 
-
-				  Select  Pe.Source_Id, 
-								Case When $$operation_no_dependency_comp$$ = 'minimum'
-									 Then Min(Pe.Value)
-									 WHEN $$operation_no_dependency_comp$$ = 'maximum'
-									 Then Max(Pe.Value)
-									 When $$operation_no_dependency_comp$$ = 'average'
-									 Then Avg(Pe.Value)
-									 When $$operation_no_dependency_comp$$ = 'median'
-									 Then Median(Pe.Value)
-									 End As Chosen,
-									 Avg(Pe.Value) As Average,
-									 Max(Pe.Value) As Maximum,
-									 Min(Pe.Value) As Minimum,
-									 Median(Pe.Value) As Median,
-								   Max(pe.percentile) as percentile
-						 From  all_Values Pe
-						 Where Pe.Profile_Element_Name_Id In ($$comp_samples_with_meta_data$$)
-						Group By Pe.Source_Id ) One,   
-					   ( Select distinct Pe.Source_Id, 
-								Case When $$operation_no_dependency_ref$$ = 'minimum'
-									 Then Min(Pe.Value)
-									 WHEN $$operation_no_dependency_ref$$ = 'maximum'
-									 Then Max(Pe.Value)
-									 When $$operation_no_dependency_ref$$ = 'average'
-									 Then Avg(Pe.Value)
-									 When $$operation_no_dependency_comp$$ = 'median'
-									 Then Median(Pe.Value)
-									 End As Chosen,
-									 Avg(Pe.Value) As Average,
-									 Max(Pe.Value) As Maximum,
-                                                                         Min(Pe.Value) As Minimum,
-                                                                         Median(Pe.Value) As Median,
-								   max(pe.percentile) as percentile
-						 From  all_Values Pe
-						 Where Pe.Profile_Element_Name_Id In ($$ref_samples_with_meta_data$$)
-						Group By Pe.Source_Id) Two,
-                                    study.OntologyEntry oe
-			Where One.Source_Id = Two.Source_Id 
-                          and oe.ontology_entry_id = $$profile_ontology$$
-                          and (one.percentile > $$percentile_threshold$$  or two.percentile > $$percentile_threshold$$ )
-                          and  ($$regulated_dir$$ ( one.chosen / two.chosen)  >= $$fold_change$$
-                          or $$regulated_dir$$ (-(two.chosen / one.chosen)) >= $$fold_change$$)
-)
       ]]>
       </sql>
 
