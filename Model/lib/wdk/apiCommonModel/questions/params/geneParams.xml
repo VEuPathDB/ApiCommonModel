@@ -12057,54 +12057,78 @@ select * from (
             <column name="parentTerm"/>
             <column name="display" />
             <sql includeProjects="PlasmoDB" >
-             With Metadata_Tree As (
-              Select Distinct Pen.Name As Sample,
-                              Pen.Profile_Element_name_Id As Pen_Id, 
-                              BMC.value As Metadata_Value,
-                              Oe.Value As Metadata_Category,
-                              Regexp_Replace(Bmc.Value,'[0-9]','') As Chars,
-                              to_number(REGEXP_REPLACE(bmc.value,'[^0-9]','')) as nums 
-              From
-                  Study.Study S,
-                  Apidb.Profileset Ps,
-                  Apidb.Profileelementname pen,
-                  Rad.Studybiomaterial Sbm,
-                  Study.Biosample bs,
-                  Study.Biomaterialcharacteristic Bmc,
-                  Study.Ontologyentry oe
-              Where Ps.External_Database_Release_Id = S.External_Database_Release_Id  
-                And S.Study_Id = Sbm.Study_Id
-                And Bs.Bio_Material_Id = Sbm.Bio_Material_Id
-                And Bs.Name = Pen.Name
-                And Pen.Profile_Set_Id = Ps.Profile_Set_Id
-                And Bs.Bio_Material_Id = Bmc.Bio_Material_Id 
-                And Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
-                And Oe.Ontology_Entry_Id = $$profile_ontology$$
-                and Ps.Profile_Set_Id = $$profileset_generic$$
-                group by Pen.Name,
-                         Pen.Profile_Element_name_Id, 
-                         Bmc.Value,
-                         Oe.Value
-                )
-              select distinct mdt.internal, mdt.term, mdt.parentterm, mdt.display, mt.chars,mt.nums
-              from (
-              
-                Select pen_ID as internal,
-                     Sample As Term,
-                     Metadata_Value As Parentterm,
-                     Sample As Display
-                From  Metadata_Tree
-                Union
-                Select -1 as internal,
-                     Metadata_Value As Term,
-                     '' As Parentterm,
-                     Metadata_Value As Display
-                From  Metadata_Tree
-              
-            ) Mdt,
-             Metadata_Tree Mt 
-            Where Mdt.Term = Mt.Metadata_Value (+)
-            Order By Mt.Chars, Mt.Nums
+
+with metadata_values as (
+select distinct
+Pen.Profile_Element_name_Id As Pen_Id,  
+oe.value as category,
+bmc.value as value
+from 
+study.biosample bm,
+STUDY.biomaterialcharacteristic bmc,
+STUDY.ontologyentry oe,
+Study.Study S,
+Apidb.Profileset Ps,
+Apidb.Profileelementname pen,
+Rad.Studybiomaterial Sbm
+where bm.bio_material_id = bmc.bio_material_id
+and bmc.ontology_entry_id =oe.ontology_entry_id
+and bmc.value is not null
+and Oe.Ontology_Entry_Id in ( $$profile_ontology$$ )
+and Ps.External_Database_Release_Id = S.External_Database_Release_Id  
+And S.Study_Id = Sbm.Study_Id
+And Bm.Bio_Material_Id = Sbm.Bio_Material_Id
+And Bm.Name = Pen.Name
+and ps.profile_set_id= $$profileset_generic$$
+and pen.profile_set_id= $$profileset_generic$$
+order by pen_id),
+ordering as (
+select category, 
+count(distinct value) as order_num
+from metadata_values
+group by category
+),
+metadata_agged_values as (
+select pen_id,  
+LISTAGG(mv.value, ',') WITHIN GROUP (ORDER BY o.order_num desc) AS value,
+LISTAGG(mv.category, ',') WITHIN GROUP (ORDER BY o.order_num desc) AS category
+from metadata_values mv, ordering o
+where mv.category = o.category
+group by pen_id
+order by Value
+)
+select display,
+       term,
+       Internal,
+       case when parentTerm = ' ()'
+            then ''
+            else parentTerm 
+            end as parentTerm,
+Regexp_Replace(parentTerm,'[0-9]','') As Chars,
+to_number(REGEXP_REPLACE(parentTerm,'[^0-9]','')) as nums 
+from (
+select distinct  
+       regexp_substr(value,'[^,]+', 1, level+1) || ' (' || regexp_substr(category,'[^,]+', 1, level+1) || ')' as parentTerm,
+       regexp_substr(value,'[^,]+', 1, level) || ' (' || regexp_substr(category,'[^,]+', 1, level) || ')' as term,
+       regexp_substr(value,'[^,]+', 1, level) as display,
+       '-1' as internal
+ from 
+metadata_agged_values
+connect by regexp_substr(value,'[^,]+', 1, level) is not null
+union 
+select distinct
+      case when instr(value,',',1,1) > 0
+           then regexp_substr(value,'[^,]+', 1, -1+regexp_count(value,'[^,]+')) || ' (' || regexp_substr(category,'[^,]+', 1, -1+regexp_count(value,'[^,]+')) || ')' 
+           else value || ' (' || category || ')'
+      end as parentTerm,
+      pen.name as term,
+      pen.name as display,
+      to_char(pen_id) as internal
+from metadata_agged_values mav, 
+     APIDB.profileelementname pen
+     where mav.pen_id = pen.profile_element_name_id) tree_terms
+order by nums,chars
+
 
 
             </sql>
