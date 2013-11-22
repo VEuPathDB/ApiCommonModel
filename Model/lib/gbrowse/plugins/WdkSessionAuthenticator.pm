@@ -4,7 +4,7 @@ use base 'Bio::Graphics::Browser2::Plugin::AuthPlugin';
 require LWP::UserAgent;
 use JSON;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 sub authenticate {
     my $self = shift;
