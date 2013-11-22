@@ -4,7 +4,7 @@ use base 'Bio::Graphics::Browser2::Plugin::AuthPlugin';
 require LWP::UserAgent;
 use JSON;
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 
 sub authenticate {
     my $self = shift;
@@ -38,6 +38,7 @@ sub authenticate {
         # {
         #   "isValid": true,
         #   "userData": {
+        #     "id" : 7145453,
         #     "displayName" : "Ryan Doherty",
         #     "email" : "rdoherty@pcbi.upenn.edu"
         #   }
@@ -47,35 +48,36 @@ sub authenticate {
         if ( $isValid ) {
             
             # cookie is valid; get data from response
+            my $wdkuserid = $jsonObj->{"userData"}->{"id"};
             my $displayName = $jsonObj->{"userData"}->{"displayName"};
             my $email = $jsonObj->{"userData"}->{"email"};
-            print STDERR "User logged in to WDK: $displayName/$email\n" if $DEBUG;
+            print STDERR "User logged in to WDK: $wdkuserid/$displayName/$email\n" if $DEBUG;
             
             # get reference to user database
             my $globals = Bio::Graphics::Browser2->open_globals;
             my $userdb = Bio::Graphics::Browser2::UserDB->new($globals);
             
-            # NOTE: user id in GBrowse is "<wdk_email>-<project_id>"
-            my $userid = $email."-".$project;
-            print STDERR "Will check for existence of username $userid\n" if $DEBUG;
+            # NOTE: user id in GBrowse is "<wdk_userid>-<project_id>"
+            my $gbuserid = $wdkuserid."-".$project;
+            print STDERR "Will check for existence of username $gbuserid\n" if $DEBUG;
             
             # must make sure this user exists and create if not
-            my $confirmedUserId = $userdb->userid_from_username($userid);
+            my $confirmedUserId = $userdb->userid_from_username($gbuserid);
             if ( $confirmedUserId eq "") {
-                print STDERR "User $userid does not yet exist; will create.\n" if $DEBUG;
+                print STDERR "User $gbuserid does not yet exist; will create.\n" if $DEBUG;
                 my $session = $globals->session;
                 my $sessionid = $session->id;
                 $session->flush();
                 print STDERR "Flushed session.  Will now create user using session.\n" if $DEBUG;
-                my ($status,undef,$message) = $userdb->do_add_user($userid,$email,$displayName,'dummy-password',$sessionid);
+                my ($status,undef,$message) = $userdb->do_add_user($gbuserid,$email,$displayName,'dummy-password',$sessionid);
                 print STDERR "Results from do_add_user: Status: $status\n" if $DEBUG;
                 print STDERR "Results from do_add_user: Message: $message\n" if $DEBUG;
-                $userdb->set_confirmed_from_username($userid);
+                $userdb->set_confirmed_from_username($gbuserid);
                 print STDERR "User set as confirmed.\n" if $DEBUG;
             } else {
                 print STDERR "Found existing user with ID: $confirmedUserId so skipping creation.\n" if $DEBUG;
             }
-            return ($userid, $displayName, $email);
+            return ($gbuserid, $displayName, $email);
         }
         else {
             # not sure what to do here; user should always be valid since GBrowse login happens right after WDK login
