@@ -6,8 +6,8 @@ public class MicroarrayCortesStrains extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Cortes::TimeSeries"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Cortes::CrossStrain"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CortesTransVar::TimeSeries"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CortesTransVar::CrossStrain"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantomeHB3"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantome3D7"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantomeD10"); 
