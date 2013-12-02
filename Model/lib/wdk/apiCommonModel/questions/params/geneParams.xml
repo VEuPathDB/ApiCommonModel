@@ -7231,7 +7231,7 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                       queryRef="GeneVQ.SamplesWithMetaDataTest"
                       prompt="Reference Samples"
                       multiPick="true"
-                      dependedParamRef="geneParams.profileset_generic,sharedParams.profile_ontology"
+                      dependedParamRef="geneParams.profileset_generic,sharedParams.profile_ontology_1,sharedParams.profile_ontology_2"
                       quote="true"
                       suppressNode="false"
                       displayType="treeBox">
@@ -7245,7 +7245,7 @@ extraordinarily homogenous, with a ~2.5% average polymorphism.
                       queryRef="GeneVQ.SamplesWithMetaDataTest"
                       prompt="Comparison Samples"
                       multiPick="true"
-                      dependedParamRef="geneParams.profileset_generic,sharedParams.profile_ontology"
+                      dependedParamRef="geneParams.profileset_generic,sharedParams.profile_ontology_1,sharedParams.profile_ontology_2"
                       quote="true"
                       suppressNode="false"
                       displayType="treeBox">
@@ -12148,19 +12148,25 @@ order by nums,chars
 
         <sqlQuery name="SamplesWithMetaDataTest" doNotTest="1" includeProjects="PlasmoDB">   
             <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false" queryRef="GeneVQ.GenericProfiles"/>
-            <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.profile_ontology" quote="false" queryRef="SharedVQ.profileOntology"/>
+            <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.profile_ontology_1" quote="false" queryRef="SharedVQ.profileOntology"/>
+            <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.profile_ontology_2" quote="false" queryRef="SharedVQ.profileOntology"/>
             <column name="internal" />
             <column name="term" />
             <column name="parentTerm"/>
             <column name="display" />
             <sql includeProjects="PlasmoDB" >
-
+           <![CDATA[
 with metadata_values as (
 select distinct
 Pen.Profile_Element_name_Id As Pen_Id,
 pen.name as name,
 oe.value as category,
-bmc.value as value
+bmc.value as value,
+case when Oe.Ontology_Entry_Id = $$profile_ontology_1$$
+     then 1
+     else 2
+end as order_num
+
 from
 study.biosample bm,
 STUDY.biomaterialcharacteristic bmc,
@@ -12172,7 +12178,7 @@ Rad.Studybiomaterial Sbm
 where bm.bio_material_id = bmc.bio_material_id
 and bmc.ontology_entry_id =oe.ontology_entry_id
 and bmc.value is not null
-and Oe.Ontology_Entry_Id in ($$profile_ontology$$)
+and Oe.Ontology_Entry_Id in ($$profile_ontology_1$$,$$profile_ontology_2$$)
 and Ps.External_Database_Release_Id = S.External_Database_Release_Id
 And S.Study_Id = Sbm.Study_Id
 And Bm.Bio_Material_Id = Sbm.Bio_Material_Id
@@ -12180,19 +12186,18 @@ And Bm.Name = Pen.Name
 and ps.profile_set_id= $$profileset_generic$$
 and pen.profile_set_id= $$profileset_generic$$
 order by pen_id),
-ordering as (
-select category,
-count(distinct value) as order_num
-from metadata_values
-group by category
-),
+--ordering as (
+--select category,
+--count(distinct value) as order_num
+--from metadata_values
+--group by category
+--),
 metadata_agged_values as (
 select pen_id,
 name,
-LISTAGG(mv.value, ' >> ') WITHIN GROUP (ORDER BY o.order_num asc) AS value,
-LISTAGG(mv.category, ' >> ') WITHIN GROUP (ORDER BY o.order_num asc) AS category
-from metadata_values mv, ordering o
-where mv.category = o.category
+LISTAGG(mv.value, ' >> ') WITHIN GROUP (ORDER BY order_num asc) AS value,
+LISTAGG(mv.category, ' >> ') WITHIN GROUP (ORDER BY order_num asc) AS category
+from metadata_values mv
 group by pen_id, name
 order by Value
 )
@@ -12200,8 +12205,8 @@ select distinct display,
 term,
 Internal,
 parentTerm,
-Regexp_Replace(parentTerm,'[0-9]','') As Chars,
-to_number(REGEXP_REPLACE(parentTerm,'[^0-9]','')) as nums
+Regexp_Replace(term,'[0-9]','') As Chars,
+to_number(REGEXP_REPLACE(term,'[^0-9]','')) as nums
 from (
 select distinct
 category as parentTerm,
@@ -12227,8 +12232,8 @@ pen_id as internal
 from
 metadata_agged_values
 )
-order by chars,nums
-
+order by nums,chars
+            ]]>
 
 
             </sql>
@@ -12236,7 +12241,8 @@ order by chars,nums
 
 
         <processQuery name="SamplesWithMetaDataTest" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <paramRef ref="sharedParams.profile_ontology" quote="false"/>
+            <paramRef ref="sharedParams.profile_ontology_1" quote="false"/>
+            <paramRef ref="sharedParams.profile_ontology_2" quote="false"/>
             <paramRef ref="geneParams.profileset_generic" quote="false"/> 
             <wsColumn name="internal" width="100" wsName="internal"/>
             <wsColumn name="term" width="100" wsName="term"/>
