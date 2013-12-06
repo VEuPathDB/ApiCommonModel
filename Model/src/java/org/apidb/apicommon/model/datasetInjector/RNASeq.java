@@ -160,6 +160,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"hasFishersExactTestData", ""},
                                  {"isEuPathDBSite", ""},
                                  {"graphColor", ""},
+                                 {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"hasJunctions", ""},
                                  {"isAlignedToAnnotatedGenome", ""},
