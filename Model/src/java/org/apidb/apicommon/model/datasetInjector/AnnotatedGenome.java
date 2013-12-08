@@ -36,13 +36,16 @@ public class AnnotatedGenome extends DatasetInjector {
     // reference strain - set distinct gene instance
     if(orgProps.get("isReferenceStrain").equals("true")) {
 
-      String orthomclAbbrev = orgProps.get("orthomclAbbrev");
+			String orthomclAbbrev = orgProps.get("orthomclAbbrev");
+				
+      String distinctAbbrev = organismAbbrev.substring(0,4);
 
       String[] orgs = organismFullName.split(" ");
       String species = orgs[0] + " " + orgs[1];
 
       setPropValue("orthomclAbbrev", orthomclAbbrev);
       setPropValue("species", species);
+      setPropValue("distinctAbbrev", distinctAbbrev);
 
       injectTemplate("distinctGeneFilterLayout");
       injectTemplate("distinctGeneFilter"); 
