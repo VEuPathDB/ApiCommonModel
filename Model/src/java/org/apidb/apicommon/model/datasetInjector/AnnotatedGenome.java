@@ -84,9 +84,7 @@ public class AnnotatedGenome extends DatasetInjector {
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-      String [][] propertiesDeclaration = {
-                                            {"isEuPathDBSite", ""},
-                                          };
+    String [][] propertiesDeclaration = { };
 
     return propertiesDeclaration;
   } 
