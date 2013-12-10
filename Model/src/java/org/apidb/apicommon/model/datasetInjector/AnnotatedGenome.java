@@ -80,12 +80,14 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
   }
 
+  // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
+      String [][] propertiesDeclaration = {
+                                            {"isEuPathDBSite", ""},
+                                          };
+
     return propertiesDeclaration;
-  }
-
-
+  } 
 }
