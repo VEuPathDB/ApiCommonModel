@@ -19,9 +19,10 @@ public class AnnotatedGenome extends DatasetInjector {
     Map<String, String> orgProps = globalProps.get(orgPropsKey);
     if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
 	  String organismFullName = orgProps.get("organismFullName");
+		
 		String[] orgs = organismFullName.split(" ");
-		String species = orgs[0] + " " + orgs[1];
-		String speciesAbbrev = orgs[0] + orgs[1];
+		String species = orgs[0] + " " + orgs[1]; // make sure orgs[1] is the correct species in geneattributes table (with spaces)
+		String speciesAbbrev = orgs[0] + "-" + orgs[1]; // make sure orgs[1] is teh correct species WITHOUT spaces, used for filter name
 
     // setting properties to be used in template
 		setPropValue("speciesAbbrev", speciesAbbrev);
@@ -31,7 +32,6 @@ public class AnnotatedGenome extends DatasetInjector {
     } else {
       setPropValue("includeProjects", projectName);
     }   
-
     injectTemplate("geneFilter");
     injectTemplate("geneFilterLayout");
 
