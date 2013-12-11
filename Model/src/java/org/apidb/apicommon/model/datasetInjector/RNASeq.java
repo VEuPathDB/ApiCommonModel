@@ -24,6 +24,9 @@ public class RNASeq extends  DatasetInjector {
       setOrganismAbbrevFromDatasetName();
       setOrganismAbbrevInternalFromDatasetName();
 
+      // perl packages disallow some characters in the package name... use this to name the graphs
+      setGraphDatasetName();
+
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
 
@@ -133,8 +136,8 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphModule", "RNASeq::StrandSpecific");
           } else {
               setPropValue("graphModule", "RNASeq::StrandNonSpecific");
-	  }
-	  addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+          }
+              addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
           if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
 
