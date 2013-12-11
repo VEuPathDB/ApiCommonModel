@@ -21,8 +21,13 @@ public class AnnotatedGenome extends DatasetInjector {
 	  String organismFullName = orgProps.get("organismFullName");
 		
 		String[] orgs = organismFullName.split(" ");
-		String species = orgs[0] + " " + orgs[1]; // make sure orgs[1] is the correct species in geneattributes table (with spaces)
-		String speciesAbbrev = orgs[0] + "-" + orgs[1]; // make sure orgs[1] is teh correct species WITHOUT spaces, used for filter name
+		// String species is used in displayNames, descriptions and as SQL parameter value;
+		// make sure orgs[1] is consistent with the species value in geneattributes table (with spaces)
+		String species = orgs[0] + " " + orgs[1]; 
+
+		// String speciesAbbrev is used in the filter instance name, so the layout can extract the table headers (family, species and strain)
+		// make sure orgs[1] is the species abbrev WITHOUT spaces
+		String speciesAbbrev = orgs[0] + "-" + orgs[1]; 
 
     // setting properties to be used in template
 		setPropValue("speciesAbbrev", speciesAbbrev);
