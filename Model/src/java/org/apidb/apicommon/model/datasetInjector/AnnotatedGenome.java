@@ -10,20 +10,22 @@ public class AnnotatedGenome extends DatasetInjector {
   @Override
   public void injectTemplates() {
 
+    // getting properties defined in .prop file
     String projectName = getPropValue("projectName");
     String organismAbbrev = getPropValue("organismAbbrev");
 
     Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
-    
     String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
     Map<String, String> orgProps = globalProps.get(orgPropsKey);
     if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
-  
-    String organismFullName = orgProps.get("organismFullName");
+	  String organismFullName = orgProps.get("organismFullName");
+		String[] orgs = organismFullName.split(" ");
+		String species = orgs[0] + " " + orgs[1];
+		String speciesAbbrev = orgs[0] + orgs[1];
 
-    //setPropValue("organismAbbrev", organismAbbrev);
+    // setting properties to be used in template
+		setPropValue("speciesAbbrev", speciesAbbrev);
     setPropValue("organismFullName", organismFullName);
-
     if(getPropValueAsBoolean("isEuPathDBSite")) {
       setPropValue("includeProjects", projectName + ",EuPathDB");
     } else {
@@ -33,20 +35,9 @@ public class AnnotatedGenome extends DatasetInjector {
     injectTemplate("geneFilter");
     injectTemplate("geneFilterLayout");
 
-    // reference strain - set distinct gene instance
-    if(orgProps.get("isReferenceStrain").equals("true")) {
-
-			String orthomclAbbrev = orgProps.get("orthomclAbbrev");
-				
-      String distinctAbbrev = organismAbbrev.substring(0,4);
-
-      String[] orgs = organismFullName.split(" ");
-      String species = orgs[0] + " " + orgs[1];
-
-      setPropValue("orthomclAbbrev", orthomclAbbrev);
+    // Only if reference strain - set distinct gene instance
+	  if(orgProps.get("isReferenceStrain").equals("true")) {
       setPropValue("species", species);
-      setPropValue("distinctAbbrev", distinctAbbrev);
-
       injectTemplate("distinctGeneFilterLayout");
       injectTemplate("distinctGeneFilter"); 
     }
