@@ -1,9 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import java.util.Map;
-
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenomeNoGeneFilter extends DatasetInjector {
 
