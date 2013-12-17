@@ -89,8 +89,8 @@ public class AnnotatedGenome extends DatasetInjector {
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-    String [][] propertiesDeclaration = { { "isEuPathDBSite", "if true, genome will be available on EuPathdB" },
-                                          { "optionalSpecies", "if species name contains two words, e.g. sp. 1" },
+    String [][] propertiesDeclaration = { //{ "isEuPathDBSite", "if true, genome will be available on EuPathdB" },
+                                          //{ "optionalSpecies", "if species name contains two words, e.g. sp. 1" },
                                         };
 
     return propertiesDeclaration;
