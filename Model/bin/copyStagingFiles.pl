@@ -55,6 +55,8 @@ foreach my $p (@projects) {
     rmtree ($destDir);
   }
 
+  local $File::Copy::Recursive::SkipFlop = 1;
+
   ## do the copy from Staging
   my $startDir = $stagingDir{$p};
   # print "copy from $startDir into $destDir\n";
