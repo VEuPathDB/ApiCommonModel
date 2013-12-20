@@ -17,12 +17,12 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         injectTemplate("expressionProfileSetParamQuery");
         injectTemplate("expressionPctProfileSetParamQuery");
 
-        if(getPropValueAsBoolean("hasPageData")) {
-            injectTemplate("expressionFoldChangeWithConfidenceQuestion");
-            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
-        }
+        if(getPropValueAsBoolean("hasMultipleSamples")) {
+            if(getPropValueAsBoolean("hasPageData")) {
+                injectTemplate("expressionFoldChangeWithConfidenceQuestion");
+                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
+            }
 
-        if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
             injectTemplate("expressionFoldChangeQuestion");
             injectTemplate(lcDataType + "FoldChangeCategories");
         }
@@ -50,12 +50,14 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         setDataType();
         String dataType = getDataType();
 
-        if(getPropValueAsBoolean("hasPageData")) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Confidence");
-        }
 
-        if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
+        if(getPropValueAsBoolean("hasMultipleSamples")) {
+
+            if(getPropValueAsBoolean("hasPageData")) {
+                addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                                "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Confidence");
+            }
+
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
                             "GeneQuestions.GenesBy" + dataType + getDatasetName());
         }
@@ -77,7 +79,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         
         String [][] declaration = {
                                    {"profileSetNameMap", "Optionally replace profileset names"},
-                                   {"hasMultipleSamplesForFoldChange", ""},
+                                   {"hasMultipleSamples", ""},
                                    //                                   {"hasSimilarityData", ""},
         };
 

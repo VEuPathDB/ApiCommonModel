@@ -16,8 +16,8 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
 
         injectTemplate("rnaSeqCoverageTrack");
 
-        String hasJunctions = getPropValue("hasJunctions");
-        if(Boolean.parseBoolean(hasJunctions)) {
+        String showIntronJunctions = getPropValue("showIntronJunctions");
+        if(Boolean.parseBoolean(showIntronJunctions)) {
             injectTemplate("rnaSeqJunctionsTrack");
         }
     }
@@ -26,7 +26,7 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
     public String[][] getPropertiesDeclaration() {
         String[][] superDeclaration = super.getPropertiesDeclaration();
         
-        String [][] declaration = {{"hasJunctions", "should we make junctions track in gbrowse?"},
+        String [][] declaration = {{"showIntronJunctions", "should we make junctions track in gbrowse?"},
         };
 
         return combinePropertiesDeclarations(superDeclaration, declaration);

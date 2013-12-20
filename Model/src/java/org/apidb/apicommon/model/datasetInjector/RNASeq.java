@@ -88,15 +88,14 @@ public class RNASeq extends  DatasetInjector {
           }
 
 
-          if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
+          if(getPropValueAsBoolean("hasMultipleSamples")) {
+              injectTemplate("rnaSeqFoldChangeQuestion");
+              injectTemplate("rnaSeqFoldChangeCategories");
 
               if(getPropValueAsBoolean("hasFishersExactTestData")) {
                   injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
                   injectTemplate("rnaSeqFoldChangeWithPValueCategories");
               }
-
-              injectTemplate("rnaSeqFoldChangeQuestion");
-              injectTemplate("rnaSeqFoldChangeCategories");
           }
 
           injectTemplate("rnaSeqPercentileQuestion");
@@ -120,8 +119,8 @@ public class RNASeq extends  DatasetInjector {
 
       injectTemplate("rnaSeqCoverageTrack");
 
-      String hasJunctions = getPropValue("hasJunctions");
-      if(Boolean.parseBoolean(hasJunctions)) {
+      String showIntronJunctions = getPropValue("showIntronJunctions");
+      if(Boolean.parseBoolean(showIntronJunctions)) {
           injectTemplate("rnaSeqJunctionsTrack");
       }
 
@@ -139,7 +138,7 @@ public class RNASeq extends  DatasetInjector {
           }
               addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
-          if(getPropValueAsBoolean("hasMultipleSamplesForFoldChange")) {
+          if(getPropValueAsBoolean("hasMultipleSamples")) {
 
               if(getPropValueAsBoolean("hasFishersExactTestData")) {
                   addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
@@ -165,9 +164,9 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphColor", ""},
                                  {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
-                                 {"hasJunctions", ""},
+                                 {"showIntronJunctions", ""},
                                  {"isAlignedToAnnotatedGenome", ""},
-                                 {"hasMultipleSamplesForFoldChange", ""},
+                                 {"hasMultipleSamples", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                  {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
                                  {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
