@@ -4,6 +4,20 @@ import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
 public class RNASeqTroemelElegansInfection extends CusomGenePageExpressionGraphs {
 
+   @Override
+   public void injectTemplates() {
+ 
+       String projectName = getPropValue("projectName");
+ 
+       String datasetName = getDatasetName();
+ 
+       setOrganismAbbrevFromDatasetName();
+       setOrganismAbbrevInternalFromDatasetName();
+ 
+       injectTemplate("rnaSeqCoverageTrack");
+       injectTemplate("rnaSeqJunctionsTrack");
+   } 
+
   @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Troemel::CelegansInfectionTimeSeries"); 
