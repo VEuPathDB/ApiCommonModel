@@ -45,6 +45,7 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByIsolatePattern");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HTSSnpsByAlleleFrequency");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HtsSnpsByIsolateComparison");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByIsolatesGroup");
 
       addWdkReference("SnpRecordClasses.SnpRecordClass", "attribute", "snp_overview");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "attribute", "gene_context");
