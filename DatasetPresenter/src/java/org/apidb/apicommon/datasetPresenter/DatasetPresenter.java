@@ -44,6 +44,7 @@ public class DatasetPresenter {
   private String primaryContactId;
   private List<Contact> contacts;
   private List<Publication> publications = new ArrayList<Publication>();
+  private List<History> histories = new ArrayList<History>();
   private List<HyperLink> links = new ArrayList<HyperLink>();
   private Map<String, NameTaxonPair> nameTaxonPairs = new HashMap<String, NameTaxonPair>(); // expanded from pattern if we have one
   private String override = null;
@@ -306,6 +307,14 @@ public class DatasetPresenter {
 
   public List<Publication> getPublications() {
     return publications;
+  }
+
+  public void addHistory(History history) {
+    histories.add(history);
+  }
+
+  public List<History> getHistories() {
+    return histories;
   }
 
   public void addLink(HyperLink link) {

@@ -110,6 +110,11 @@ public class DatasetPresenterParser extends XmlParser {
     digester.addCallMethod("datasetPresenters/datasetPresenter/pubmedId",
         "setPubmedId", 0);
 
+    configureNode(digester, "datasetPresenters/datasetPresenter/history",
+        HyperLink.class, "addHistory");
+    digester.addCallMethod("datasetPresenters/datasetPresenter/history",
+        "setComment", 0);
+
     configureNode(digester, "datasetPresenters/datasetPresenter/link",
         HyperLink.class, "addLink");
 

@@ -307,6 +307,10 @@ public class DatasetPresenterSetLoader {
           loadModelReference(datasetPresenterId, ref, referenceStmt);
         }
 
+        for (History history : datasetPresenter.getHistories()) {
+          loadHistory(datasetPresenterId, history, referenceStmt);
+        }
+
         if(type != null) {
             String key = type + "." + subtype;
 
@@ -460,6 +464,25 @@ public class DatasetPresenterSetLoader {
         + table
         + " (dataset_model_ref_id, dataset_presenter_id, record_type, target_type, target_name)"
         + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?)";
+    return dbConnection.prepareStatement(sql);
+  }
+
+  private void loadHistory(int datasetPresenterId, History history,
+      PreparedStatement stmt) throws SQLException {
+    stmt.setInt(1, datasetPresenterId);
+    stmt.setInt(2, history.getBuildNumber());
+    stmt.setString(3, history.getGenomeSource());
+    stmt.setString(4, history.getGenomeVersion());
+    stmt.setString(4, history.getComment());
+    stmt.execute();
+  }
+
+  PreparedStatement getHistoryStmt() throws SQLException {
+    String table = config.getUsername() + ".DatasetHistory" + suffix;
+    String sql = "INSERT INTO "
+        + table
+        + " (dataset_history_id, dataset_presenter_id, build_number, genome_source, genome_version, comment)"
+        + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
