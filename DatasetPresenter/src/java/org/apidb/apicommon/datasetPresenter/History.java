@@ -23,7 +23,7 @@ public class History {
   }
   
   String getGenomeVersion() {
-    return comment;
+    return genomeVersion;
   }  
   
   String getComment() {
