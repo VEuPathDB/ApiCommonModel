@@ -520,12 +520,9 @@ where chip_total_reps > $$chip_replicates_plasmo$$
         <column name="source_id"  />
         <sql >
             SELECT DISTINCT ga.source_id, '@PROJECT_ID@' as project_id
-            FROM dots.Transcript t, dots.translatedAaFeature taf,
-                 dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec, ApidbTuning.GeneAttributes ga
+            FROM dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec, ApidbTuning.GeneAttributes ga
             WHERE ga.taxon_id in ($$organism$$)
-              AND ga.na_feature_id = t.parent_id
-              AND t.na_feature_id = taf.na_feature_id
-              AND taf.aa_sequence_id = asec.aa_sequence_id
+              AND ga.aa_sequence_id = asec.aa_sequence_id
               AND asec.enzyme_class_id = ec.enzyme_class_id
               AND ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$ec_number_pattern$$),' ',''),'-', '%'),'*','%'),'any','%')
             ORDER BY ga.source_id
@@ -1310,7 +1307,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="count" />
         <sql>
             <![CDATA[
-        SELECT gf.source_id, '@PROJECT_ID@' as project_id, count(ef.source_id) AS count,
+        SELECT ga.source_id, '@PROJECT_ID@' as project_id, count(ef.source_id) AS count,
            DECODE(
              MAX(
                DECODE(ef.type, 'Not Full Set Not on Blast Hit', 1,
@@ -1322,25 +1319,14 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
                2, 'Medium',
                3, 'High',
                4, 'unknown epitope type') AS confidence
-        FROM dots.TranslatedAaSequence tas, dots.EpitopeFeature ef,
-             dots.AaLocation al,/* sres.ExternalDatabaseRelease edr,
-             sres.ExternalDatabase ed,*/ ApidbTuning.GeneAttributes gf,
-             dots.TranslatedAaFeature taf, dots.Transcript t,
+        FROM dots.EpitopeFeature ef, ApidbTuning.GeneAttributes ga,
              dots.MotifAaSequence mas
-        WHERE tas.aa_sequence_id = ef.aa_sequence_id
-          AND ef.aa_feature_id = al.aa_feature_id
+        WHERE ga.aa_sequence_id = ef.aa_sequence_id
           AND ef.motif_aa_sequence_id = mas.aa_sequence_id
-          AND tas.aa_sequence_id = taf.aa_sequence_id
-          AND taf.na_feature_id = t.na_feature_id
-          AND t.parent_id = gf.na_feature_id
-          AND gf.taxon_id in ($$organism$$)
-         /*  AND ef.external_database_release_id
-              = edr.external_database_release_id
-          AND edr.external_database_id = ed.external_database_id
-         AND ed.name in('Links to IEDB epitopes','Lbraziliensis_IEDB_Epitopes_RSRC','Linfantum_IEDB_Epitopes_RSRC','LmajorFriedlin_IEDB_Epitopes_RSRC','Tbrucei927_IEDB_Epitopes_RSRC','Tbrucei427_IEDB_Epitopes_RSRC','Tbruceigambiense_IEDB_Epitopes_RSRC','TcruziEsmeraldoLike_IEDB_Epitopes_RSRC','TcruziNonEsmeraldoLike_IEDB_Epitopes_RSRC','Pf_IEDB_Epitopes_RSRC','Pb_IEDB_Epitopes_RSRC','Pc_IEDB_Epitopes_RSRC','Pk_IEDB_Epitopes_RSRC','Pv_IEDB_Epitopes_RSRC','Py_IEDB_Epitopes_RSRC','BbovisT2Bo_IEDB_Epitopes_RSRC','TannulataAnkara_IEDB_Epitopes_RSRC' */
+          AND ga.taxon_id in ($$organism$$)
           AND ef.type IN ($$epitope_confidence$$)
-        GROUP BY gf.source_id
-        ORDER BY gf.source_id
+        GROUP BY ga.source_id
+        ORDER BY ga.source_id
            ]]>
         </sql>
     </sqlQuery>   
@@ -2036,11 +2022,10 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
         <column name="e_value"/>
         <sql>
             <![CDATA[
-            SELECT gf.source_id, '@PROJECT_ID@' as project_id, to_char(avg(df.e_value),'9.9EEEE') as e_value
-            FROM dots.DomainFeature df,dots.translatedaasequence tas,
-                 ApidbTuning.GeneAttributes gf, dots.transcript t, dots.TranslatedAAFeature taf,
+            SELECT ga.source_id, '@PROJECT_ID@' as project_id, to_char(avg(df.e_value),'9.9EEEE') as e_value
+            FROM dots.DomainFeature df, ApidbTuning.GeneAttributes ga,
                  dots.DbRefAaFeature draf, sres.DbRef dr
-            WHERE tas.aa_sequence_id = df.aa_sequence_id
+            WHERE ga.aa_sequence_id = df.aa_sequence_id
               AND df.aa_feature_id = draf.aa_feature_id
               AND draf.db_ref_id = dr.db_ref_id
               AND dr.external_database_release_id = $$domain_database$$
@@ -2049,11 +2034,8 @@ WHERE tajima.D > $$tajimaD_upper$$  OR tajima.D < $$tajimaD_lower$$
                    OR dr.primary_identifier like REPLACE($$domain_wildcard$$, '*', '%')
                    OR dr.secondary_identifier like REPLACE($$domain_wildcard$$, '*', '%')
                    OR dr.remark like REPLACE($$domain_wildcard$$, '*', '%'))
-              AND tas.taxon_id IN ($$organism$$)
-              AND tas.aa_sequence_id = taf.aa_sequence_id
-              AND taf.na_feature_id = t.na_feature_id
-              AND gf.na_feature_id = t.parent_id
-              GROUP BY gf.source_id
+              AND ga.taxon_id IN ($$organism$$)
+              GROUP BY ga.source_id
             ]]>
        </sql>
     </sqlQuery>
@@ -6700,6 +6682,7 @@ AND t2.count_per_million >=$$min_norm_count$$
       <sql>
           <![CDATA[
 select distinct ga.source_id, n.name, n.description as pathway,'@PROJECT_ID@' as project_id
+-- shouldn't join to dots.Transcript and dots.TranslatedAaFeature; aa_feature_id is denormalized into GeneAttributes
 from   dots.Transcript t, dots.translatedAaFeature taf, sres.enzymeClass ec,
        dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga,
        apidb.networkrelationship nr, apidb.networkrelationshiptype nrt,
@@ -6742,7 +6725,7 @@ and    n.network_context_id in ($$metabolic_pathway_id_with_genes$$)
       <sql>
           <![CDATA[
        SELECT distinct ga.source_id, '@PROJECT_ID@' as project_id
-         FROM dots.Transcript t, dots.translatedAaFeature taf, sres.enzymeClass ec, 
+         FROM sres.enzymeClass ec, 
               dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga,
               apidbtuning.PathwayCompounds pc
         WHERE ga.na_feature_id = t.parent_id
@@ -6779,14 +6762,13 @@ and    n.network_context_id in ($$metabolic_pathway_id_with_genes$$)
 
       <sql>
           <![CDATA[
+-- shouldn't join to dots.Transcript and dots.TranslatedAaFeature; aa_feature_id is denormalized into GeneAttributes
 select distinct ga.source_id, '@PROJECT_ID@' as project_id, max(ps.wdk_weight) as wdk_weight
 from   dots.Transcript t, dots.translatedAaFeature taf, sres.enzymeClass ec,($$pathway_result$$) ps,
        dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga,
        apidb.networkrelationship nr, apidb.networkrelationshiptype nrt,
        ApiDB.NetworkRelContext nrc,  apidb.NetworkContext n, ApiDB.NetworkRelContextLink nrl, apidb.networknode nn
-where  ga.na_feature_id = t.parent_id
-AND    t.na_feature_id = taf.na_feature_id
-AND    taf.aa_sequence_id = asec.aa_sequence_id
+where  ga.aa_sequence_id = asec.aa_sequence_id
 AND    asec.enzyme_class_id = ec.enzyme_class_id
 and    nn.display_label = ec.ec_number
 and    nr.associated_node_id = nn.network_node_id
@@ -6810,6 +6792,7 @@ group by ga.source_id
 
       <sql>
           <![CDATA[
+-- shouldn't join to dots.Transcript and dots.TranslatedAaFeature; aa_feature_id is denormalized into GeneAttributes
        SELECT distinct ga.source_id, '@PROJECT_ID@' as project_id, 
               max(ds.wdk_weight) as wdk_weight
          FROM dots.Transcript t, dots.translatedAaFeature taf, sres.enzymeClass ec,
