@@ -44,11 +44,8 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
         setDataType("Proteomics");
     }
 
-    @Override
-    /**
-     *  Override from superclass... do nothing because we get this from the prop Declaration
-     */
-    protected void setIsLogged() {}
+       
+    
 
     @Override
     public String[][] getPropertiesDeclaration() {
