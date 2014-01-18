@@ -121,6 +121,14 @@ public class RNASeq extends  DatasetInjector {
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
       if(Boolean.parseBoolean(showIntronJunctions)) {
+
+          if(projectName.equals("HostDB")) {
+              setPropValue("intronSizeLimit", "50000");
+          }
+          else {
+              setPropValue("intronSizeLimit", "5000");
+          }
+
           injectTemplate("rnaSeqJunctionsTrack");
       }
 
