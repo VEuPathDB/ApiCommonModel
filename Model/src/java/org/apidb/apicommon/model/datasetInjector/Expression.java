@@ -106,12 +106,16 @@ public abstract class Expression extends DatasetInjector {
 
         injectTemplate("expressionGraphAttributesExpression");
 
+
+
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionGraphAttributesPercentile");
         }
 
         String exprGraphVp = getPropValue("exprGraphVisiblePart");
 
+        setPropValue("graphVisibleParts", exprGraphVp);
+        injectTemplate("pathwayGraphs");
 
         if(getPropValueAsBoolean("hasPercentileData")) {        
             setPropValue("graphVisibleParts", exprGraphVp + ",percentile");
@@ -133,6 +137,7 @@ public abstract class Expression extends DatasetInjector {
         setPropValue("isGraphCustom", "false");
 
         injectTemplate(lcDataType + "GraphDescriptions");
+
         injectTemplate("datasetExampleGraphDescriptions");
 
         String excludeProfileSets = getPropValue("excludedProfileSets");

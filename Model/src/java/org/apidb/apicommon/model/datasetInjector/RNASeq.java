@@ -60,9 +60,11 @@ public class RNASeq extends  DatasetInjector {
           if(getPropValueAsBoolean("isStrandSpecific")) {
 
               setPropValue("graphModule", "RNASeq::StrandSpecific");
+
+              setPropValue("graphVisibleParts", exprMetric + "_sense");
+              injectTemplate("pathwayGraphs");
+
               setPropValue("graphVisibleParts", exprMetric + "_sense," + exprMetric + "_antisense,percentile_sense,percentile_antisense");
-
-
               setPropValue("exprGraphAttr", datasetName + 
                            "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
               setPropValue("pctGraphAttr", datasetName + 
@@ -76,6 +78,10 @@ public class RNASeq extends  DatasetInjector {
           } else {
 
               setPropValue("graphModule", "RNASeq::StrandNonSpecific");
+
+              setPropValue("graphVisibleParts", exprMetric);
+              injectTemplate("pathwayGraphs");
+
               setPropValue("graphVisibleParts", exprMetric + ",percentile");
 
               setPropValue("exprGraphAttr", datasetName + "_expr_graph");
@@ -112,6 +118,7 @@ public class RNASeq extends  DatasetInjector {
   
         setPropValue("isGraphCustom", "false");
           injectTemplate("genePageGraphDescriptions");
+
           injectTemplate("datasetExampleGraphDescriptions");
          
       }

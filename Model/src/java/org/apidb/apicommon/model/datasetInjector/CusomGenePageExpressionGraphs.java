@@ -23,6 +23,11 @@ public abstract class CusomGenePageExpressionGraphs extends DatasetInjector {
 
       setPropValue("isGraphCustom", "true");
       injectTemplate("genePageGraphDescriptions");
+
+      String graphVisibleParts = getPropValue("graphVisibleParts");
+      String [] visiblePartsArray = graphVisibleParts.split(",");
+      setPropValue("graphVisibleParts", visiblePartsArray[0]);
+      injectTemplate("pathwayGraphs");
   }
 
 
