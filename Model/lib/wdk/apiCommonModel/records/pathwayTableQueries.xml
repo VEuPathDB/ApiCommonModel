@@ -32,11 +32,19 @@ SELECT distinct Subtrs.source_id as source_id,
         '@PROJECT_ID@' as project_id,
        case when Subtrs.dir = 0 then 'Reversible'
             else 'Irreversible' end as direction 
-From (select apidb.tab_to_string(set(cast(COLLECT('<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pc.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pc.compound || '</a>') AS apidb.varchartab))) as products,
+From (--Prods        
+SELECT x.enzyme, x.dir, x.source_id, x.reaction , apidb.tab_to_string(set(cast(COLLECT( prod ) AS apidb.varchartab))) AS products
+FROM (
+select CASE WHEN (pubchem.compound = nn2.display_label) THEN
+'<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pubchem.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pubchem.compound || '</a>'
+ELSE nn2.display_label END AS prod,
              nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id
-      from   ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr,ApiDBTuning.PathwayCompounds pc, 
+      from   ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr, 
              ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc,
-             ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl
+             ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl,
+             (select pc.compound_source_id, pc.compound  
+               from ApiDBTuning.PathwayCompounds pc
+              ) pubchem
       where nn1.node_type_id = 1
       and nr.node_id = nn1.network_node_id
       and nr.associated_node_id = nn2.network_node_id
@@ -44,13 +52,23 @@ From (select apidb.tab_to_string(set(cast(COLLECT('<a href="showRecord.do?name=C
       and nrt.network_relationship_type_id = nrc.network_relationship_type_id
       and nrl.network_rel_context_id = nrc.network_rel_context_id
       and nrc.network_context_id = n.network_context_id
-      and pc.compound = nn2.display_label
-      group by n.name, nrt.display_name, nn1.display_label, nrc.source_node) Prds,
-     (select apidb.tab_to_string(set(cast(COLLECT('<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pc.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pc.compound || '</a>') AS apidb.varchartab))) as substrates,
-             nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id
+      and  nn2.display_label = pubchem.compound (+)
+      group by n.name, nrt.display_name, nn1.display_label, nrc.source_node    ,pubchem.compound ,nn2.display_label,pubchem.compound_source_id
+      ) x
+    group by  x.enzyme, x.dir, x.source_id, x.reaction) Prds,
+    ( --Substrs
+    SELECT x.enzyme, x.dir, x.source_id, x.reaction , apidb.tab_to_string(set(cast(COLLECT( substr) AS apidb.varchartab))) AS substrates
+    FROM (
+    select CASE WHEN (pubchem.compound = nn2.display_label) THEN
+'<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pubchem.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pubchem.compound || '</a>'
+ELSE nn2.display_label END AS substr,
+        nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id
       from ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr, 
-           ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc, ApiDBTuning.PathwayCompounds pc,
-           ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl 
+           ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc,
+           ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl,
+             (select pc.compound_source_id, pc.compound  
+               from ApiDBTuning.PathwayCompounds pc
+              ) pubchem 
       where nn1.node_type_id = 1
       and nr.associated_node_id = nn1.network_node_id
       and nr.node_id = nn2.network_node_id
@@ -58,8 +76,9 @@ From (select apidb.tab_to_string(set(cast(COLLECT('<a href="showRecord.do?name=C
       and nrt.network_relationship_type_id = nrc.network_relationship_type_id
       and nrl.network_rel_context_id = nrc.network_rel_context_id
       and nrc.network_context_id = n.network_context_id
-      and pc.compound = nn2.display_label
-      group by n.name, nrt.display_name, nn1.display_label, nrc.source_node) Subtrs
+      and  nn2.display_label = pubchem.compound (+)
+      group by n.name, nrt.display_name, nn1.display_label, nrc.source_node   ,pubchem.compound ,nn2.display_label,pubchem.compound_source_id) x
+    group by  x.enzyme, x.dir, x.source_id, x.reaction)   Subtrs
 Where Subtrs.dir = Prds.dir
 And   Prds.reaction = Subtrs.reaction
 And   Subtrs.enzyme = Prds.enzyme
