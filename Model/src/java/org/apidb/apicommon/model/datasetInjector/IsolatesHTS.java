@@ -32,6 +32,9 @@ public class IsolatesHTS extends DatasetInjector {
           injectTemplate("htsSnpSampleCoverageXYTrack");
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
+
+          injectTemplate("htsSnpSampleDatabaseGB");
+          injectTemplate("htsSnpSampleCoverageXYTrackGB");
       }
   }
 
