@@ -4,30 +4,65 @@ public class History {
   private Integer buildNumber;
   private String genomeSource;
   private String genomeVersion;
+  private String annotationSource;
+  private String annotationVersion;
   private String comment;
+  private Boolean firstIntroduced;
   
-  public History(Integer buildNumber, String genomeSource, String genomeVersion, String comment) {
-    
+  public void setBuildNumber(Integer buildNumber) {
     this.buildNumber = buildNumber;
+  }
+   
+  public void setGenomeSource(String genomeSource) {
     this.genomeSource = genomeSource;
+  }
+   
+  public void setGenomeVersion(String genomeVersion) {
     this.genomeVersion = genomeVersion;
+  }
+   
+  public void setAnnotationSource(String annotationSource) {
+    this.annotationSource = annotationSource;
+  }
+   
+  public void setAnnotationVersion(String annotationVersion) {
+    this.annotationVersion = annotationVersion;
+  }
+  
+  public void setComment(String comment) {
     this.comment = comment;
   }
   
-  Integer getBuildNumber() {
+  public void setFirstIntroduced(Boolean firstIntroduced) {
+    this.firstIntroduced = firstIntroduced;
+  }
+
+  public Integer getBuildNumber() {
     return buildNumber;
   }
   
-  String getGenomeSource() {
+  public String getGenomeSource() {
     return genomeSource;
   }
   
-  String getGenomeVersion() {
+  public String getGenomeVersion() {
     return genomeVersion;
   }  
   
-  String getComment() {
+  public String getAnnotationSource() {
+    return annotationSource;
+  }
+  
+  public String getAnnotationVersion() {
+    return annotationVersion;
+  }  
+  
+  public String getComment() {
     return comment;
+  }
+  
+  public Boolean getFirstIntroduced() {
+    return firstIntroduced;
   }
   
 }

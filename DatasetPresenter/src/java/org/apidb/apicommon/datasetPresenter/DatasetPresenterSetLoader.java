@@ -473,7 +473,9 @@ public class DatasetPresenterSetLoader {
     stmt.setInt(2, history.getBuildNumber());
     stmt.setString(3, history.getGenomeSource());
     stmt.setString(4, history.getGenomeVersion());
-    stmt.setString(4, history.getComment());
+    stmt.setString(5, history.getAnnotationSource());
+    stmt.setString(6, history.getAnnotationVersion());
+    stmt.setString(7, history.getComment());
     stmt.execute();
   }
 

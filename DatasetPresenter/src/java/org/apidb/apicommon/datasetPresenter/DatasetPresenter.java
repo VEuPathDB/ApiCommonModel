@@ -314,6 +314,12 @@ public class DatasetPresenter {
   }
 
   public List<History> getHistories() {
+    if (!histories.get(0).getFirstIntroduced())
+      throw new UserException(
+          "DatasetPresenter with name \""
+              + getDatasetName()
+              + "\" has a first <history> element that is not flagged as firstIntroduced=\"true\"");
+
     return histories;
   }
 
