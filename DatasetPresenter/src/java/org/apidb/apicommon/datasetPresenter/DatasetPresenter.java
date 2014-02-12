@@ -314,7 +314,7 @@ public class DatasetPresenter {
   }
 
   public List<History> getHistories() {
-    if (!histories.get(0).getFirstIntroduced())
+    if (histories.size() != 0 && !histories.get(0).getFirstIntroduced())
       throw new UserException(
           "DatasetPresenter with name \""
               + getDatasetName()

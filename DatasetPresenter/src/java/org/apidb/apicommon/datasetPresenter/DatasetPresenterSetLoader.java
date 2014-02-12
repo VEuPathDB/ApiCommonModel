@@ -279,6 +279,7 @@ public class DatasetPresenterSetLoader {
       PreparedStatement publicationStmt = getPublicationStmt();
       PreparedStatement referenceStmt = getReferenceStmt();
       PreparedStatement linkStmt = getLinkStmt();
+      PreparedStatement historyStmt = getHistoryStmt();
       PreparedStatement nameTaxonStmt = getNameTaxonStmt();
 
       Map<String, Map<String, String>> defaultDatasetInjectorClasses = DatasetPresenterParser.parseDefaultInjectorsFile(defaultInjectorsFileName);
@@ -308,7 +309,7 @@ public class DatasetPresenterSetLoader {
         }
 
         for (History history : datasetPresenter.getHistories()) {
-          loadHistory(datasetPresenterId, history, referenceStmt);
+          loadHistory(datasetPresenterId, history, historyStmt);
         }
 
         if(type != null) {
@@ -483,8 +484,8 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetHistory" + suffix;
     String sql = "INSERT INTO "
         + table
-        + " (dataset_history_id, dataset_presenter_id, build_number, genome_source, genome_version, comment)"
-        + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?, ?)";
+        + " (dataset_history_id, dataset_presenter_id, build_number, genome_source, genome_version, annotation_source, annotation_version, note)"
+        + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
