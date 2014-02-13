@@ -324,7 +324,7 @@ public class DatasetPresenter {
     } 
     // other history elements
     else {
-      if (history.getComment() == null) 
+      if (history.getComment() == null || history.getComment().trim().length() == 0) 
 	throw new UserException("DatasetPresenter with name \""
 				+ getDatasetName()
 				+ "\" has a <history> element that is missing a comment (only the first history element may omit the comment)");
@@ -335,7 +335,7 @@ public class DatasetPresenter {
   }
 
   public List<History> getHistories() {
-    return histories;
+    return histories; 
   }
 
   public void addLink(HyperLink link) {
