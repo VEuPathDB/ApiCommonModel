@@ -319,7 +319,7 @@ public class DatasetPresenter {
 			      + "\" has a <history> element that with an out-of-order build number: " + history.getBuildNumber());
 
     // first history element
-    if (history.size() == 0 ) {
+    if (histories.size() == 0 ) {
       propValues.put("buildNumberIntroduced", history.getBuildNumber().toString());
     } 
     // other history elements
@@ -328,7 +328,7 @@ public class DatasetPresenter {
 	throw new UserException("DatasetPresenter with name \""
 				+ getDatasetName()
 				+ "\" has a <history> element that is missing a comment (only the first history element may omit the comment)");
-      propValues.put("buildNumberRevised", buildNumberRevised.toString());
+      propValues.put("buildNumberRevised", history.getBuildNumber().toString());
     }
     maxHistoryBuildNumber = history.getBuildNumber();
     histories.add(history);
