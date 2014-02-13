@@ -7,7 +7,6 @@ public class History {
   private String annotationSource;
   private String annotationVersion;
   private String comment;
-  private Boolean firstIntroduced = new Boolean(false);
   
   public void setBuildNumber(Integer buildNumber) {
     this.buildNumber = buildNumber;
@@ -33,10 +32,6 @@ public class History {
     this.comment = comment;
   }
   
-  public void setFirstIntroduced(Boolean firstIntroduced) {
-    this.firstIntroduced = firstIntroduced;
-  }
-
   public Integer getBuildNumber() {
     return buildNumber;
   }
@@ -60,9 +55,4 @@ public class History {
   public String getComment() {
     return comment;
   }
-  
-  public Boolean getFirstIntroduced() {
-    return firstIntroduced;
-  }
-  
 }

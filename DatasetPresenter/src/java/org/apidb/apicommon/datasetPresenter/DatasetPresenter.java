@@ -38,6 +38,7 @@ public class DatasetPresenter {
   private String subtype;
   private Boolean isSpeciesScope;
   private boolean foundInDb = false;
+  private int maxHistoryBuildNumber = -1;
 
   private DatasetInjectorConstructor datasetInjectorConstructor;
   private List<String> contactIds = new ArrayList<String>(); // includes primary
@@ -310,16 +311,30 @@ public class DatasetPresenter {
   }
 
   public void addHistory(History history) {
+
+    // validate that the history elements have increasing build numbers 
+    if (history.getBuildNumber() <= maxHistoryBuildNumber) 
+      throw new UserException("DatasetPresenter with name \""
+			      + getDatasetName()
+			      + "\" has a <history> element that with an out-of-order build number: " + history.getBuildNumber());
+
+    // first history element
+    if (history.size() == 0 ) {
+      propValues.put("buildNumberIntroduced", history.getBuildNumber().toString());
+    } 
+    // other history elements
+    else {
+      if (history.getComment() == null) 
+	throw new UserException("DatasetPresenter with name \""
+				+ getDatasetName()
+				+ "\" has a <history> element that is missing a comment (only the first history element may omit the comment)");
+      propValues.put("buildNumberRevised", buildNumberRevised.toString());
+    }
+    maxHistoryBuildNumber = history.getBuildNumber();
     histories.add(history);
   }
 
   public List<History> getHistories() {
-    if (histories.size() != 0 && !histories.get(0).getFirstIntroduced())
-      throw new UserException(
-          "DatasetPresenter with name \""
-              + getDatasetName()
-              + "\" has a first <history> element that is not flagged as firstIntroduced=\"true\"");
-
     return histories;
   }
 
