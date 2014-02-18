@@ -12,7 +12,7 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
     @Override
     public void injectTemplates() {
         // hasPageData required by Expression class but not applicable to Proteomics;  Ensure it is always false
-        setPropValue("hasPageData", "false");
+        //   setPropValue("hasPageData", "false");
 
         super.injectTemplates();
 
