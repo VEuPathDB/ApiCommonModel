@@ -20,11 +20,11 @@ sub getDbLoginInfo {
   my $props = parsePropfile($propfile);
   die "no password supplied in propfile $propfile" unless $props->{password};
 
-  if (! $schema) {
-    $schema = $props->{schema};
-  }
+  $schema = $props->{schema}
+    if (! $schema);
 
-  die "no schema -- must be either on command line or in propfile" unless $schema;
+  $schema = "ApidbTuning"
+    if (! $schema);
 
   return ($instance, $schema, $props->{password});
 }
