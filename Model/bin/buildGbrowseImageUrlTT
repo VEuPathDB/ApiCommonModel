@@ -13,35 +13,29 @@ use Getopt::Long qw(GetOptions);
 
 use Data::Dumper;
 
-use ApiCommonData::Load::TuningConfig::Utils;
+use ApiCommonShared::Model::tmUtils;
 
-
-my ($help, $propfile,$thisProject, $instance, $schema, $password, $suffix, $subversionDir, $debug, $svnBranch);
+my ($help, $propfile, $instance, $schema, $suffix, $debug);
 
 Getopt::Long::Configure("pass_through");
 GetOptions("propfile=s" => \$propfile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
-           "password=s" => \$password,
            "suffix=s" => \$suffix,
-           "subversionDir=s" => \$subversionDir,
            "debug!" => \$debug,
            "help|h" => \$help,
-           "project=s" => \$thisProject,
-           "password=s" => \$password,
-           "branch=s" => \$svnBranch,
           );
 
-my $XMLBASE= "gbrowseImageUrls.xml";
-my $xmlFile = "/tmp/$XMLBASE";
+die "required parameter missing" unless ($propfile && $instance && $suffix);
 
-system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/lib/xml/${XMLBASE} $xmlFile");
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
-($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+# my $XMLBASE= "gbrowseImageUrls.xml";
+my $xmlFile = "$ENV{GUS_HOME}/lib/xml/gbrowseImageUrls.xml";
+
+# system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/lib/xml/${XMLBASE} $xmlFile");
 
 &run();
-
-unlink $xmlFile;
 
 sub run{
   unless(-e $xmlFile) {
@@ -49,11 +43,6 @@ sub run{
   }
 
   &usage() if($help);
-
-  my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
-
-  $dbh->{RaiseError} = 1;
-  $dbh->{AutoCommit} = 0;
 
   my $xml = XMLin($xmlFile, KeyAttr => [], ForceArray => 1, SuppressEmpty => undef);
 
@@ -75,7 +64,6 @@ sub run{
     }
     $subtrackSets->{$project}->{$name} = \@expanded;
   }
-
 
   my $insertStatement = "INSERT INTO GbrowseTracksOrganism$suffix (organism, type, gtracks) VALUES (?,?,?)";
   my $insertRow = $dbh->prepare($insertStatement);

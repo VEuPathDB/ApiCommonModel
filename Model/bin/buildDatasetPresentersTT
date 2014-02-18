@@ -9,42 +9,26 @@ use Data::Dumper;
 
 use Getopt::Long qw(GetOptions);
 
-use ApiCommonData::Load::TuningConfig::Utils;
+use ApiCommonShared::Model::tmUtils;
 use CBIL::Util::PropertySet;
 
 use DBI;
 
-
-my ($propfile, $instance, $schema, $password, $suffix, $subversionDir, $debug, $svnBranch, $report, $help);
+my ($propfile, $instance, $schema, $suffix, $debug);
+my ($propfile, $instance, $schema, $suffix, $debug, $report);
 Getopt::Long::Configure("pass_through");
 GetOptions("propfile=s" => \$propfile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
-           "password=s" => \$password,
            "suffix=s" => \$suffix,
-           "subversionDir=s" => \$subversionDir,
-           "branch=s" => \$svnBranch,
            "debug!" => \$debug,
            "report!" => \$report,
-           "help|h" => \$help,
 	  );
-
-if($help) {
-  print STDERR "REPORT usage:  buildDatasetPresentersTT --propFile <tuningManagerProp.xml> --instance=s --schema apidbtuning|apidb --report\n\n";
-  print STDERR "You should ALWAYS run in 'report' mode unless you are the tuningManger\n";
-
-  print STDERR "If you REALLY need to write the tables ...call like this.  Add a --debug to retain the TEMP Directories\n";
-  print STDERR "DANGER usage:  buildDatasetPresentersTT --propFile <tuningManagerProp.xml> --instance=s --schema apidbtuning|apidb --suffix=i --branch trunk|branches/api-build-XX\n\n";
-  exit;
-}
-
-
-($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
-
+die "required parameter missing" unless ($propfile && $instance && $suffix);
 
 my $PROJECT_HOME = $ENV{PROJECT_HOME};
 
-my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
 $|=1;
 
@@ -53,8 +37,8 @@ my $projectQuery = $dbh->prepare(<<SQL);
   from (select distinct project_id from apidbtuning.SequenceAttributes)
 SQL
 
-my $cleanup = $debug ? 0 : 1;
-my $TEMPDIR = tempdir( CLEANUP => $cleanup );
+my $TEMPDIR = tempdir( CLEANUP => 1 );
+
 
 mkdir "$TEMPDIR/dsp";
 mkdir "$TEMPDIR/etc";
@@ -74,20 +58,10 @@ my $refPath = "$TEMPDIR/etc/$refFile";
 my $linksFile = "datasetLinks.xml";
 my $linksPath = "$TEMPDIR/etc/$linksFile";
 
-
-if($report) {
-    system("cp $PROJECT_HOME/ApiCommonShared/Model/lib/xml/datasetPresenters/$globalXmlFile $globalXmlPath");
-    system("cp $PROJECT_HOME/$presentersProjectBase/Model/lib/xml/datasetPresenters/$dtdFile $dtdPath");
-    system("cp $PROJECT_HOME/ApiCommonShared/Model/lib/xml/datasetPresenters/$refFile $refPath");
-    system("cp $PROJECT_HOME/ApiCommonShared/Model/lib/xml/datasetPresenters/$linksFile $linksPath");
-}
-else {
-  system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/lib/xml/datasetPresenters/$globalXmlFile $globalXmlPath");
-  system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/$presentersProjectBase/${svnBranch}/Model/lib/xml/datasetPresenters/$dtdFile $dtdPath");
-  system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/lib/xml/datasetPresenters/$refFile $refPath");
-  system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/lib/xml/datasetPresenters/$linksFile $linksPath");
-}
-
+system("cp $PROJECT_HOME/ApiCommonShared/Model/lib/xml/datasetPresenters/$globalXmlFile $globalXmlPath");
+system("cp $PROJECT_HOME/$presentersProjectBase/Model/lib/xml/datasetPresenters/$dtdFile $dtdPath");
+system("cp $PROJECT_HOME/ApiCommonShared/Model/lib/xml/datasetPresenters/$refFile $refPath");
+system("cp $PROJECT_HOME/ApiCommonShared/Model/lib/xml/datasetPresenters/$linksFile $linksPath");
 
 $projectQuery->execute() or die "getting a list of project IDs";
 my @presenterFiles;
@@ -100,12 +74,7 @@ while (my ($project, $lowerProject) = $projectQuery->fetchrow_array()) {
   my $projectXmlFile = "${project}.xml";
   my $projectXmlPath = "$TEMPDIR/dsp/$projectXmlFile";
 
-  if($report) {
-    system("cp $PROJECT_HOME/$presentersProjectBase/Model/lib/xml/datasetPresenters/${projectXmlFile} $projectXmlPath");
-  }
-  else {
-    system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/$presentersProjectBase/${svnBranch}/Model/lib/xml/datasetPresenters/${projectXmlFile} $projectXmlPath");
-  }
+  system("cp $PROJECT_HOME/$presentersProjectBase/Model/lib/xml/datasetPresenters/${projectXmlFile} $projectXmlPath");
 
   unless(-e $projectXmlPath) {
     die "Dataset Presenter file $projectXmlPath could not be found.\n";
@@ -118,12 +87,7 @@ $projectQuery->finish();
 my $contactsXmlFile = "contacts.xml";
 my $contactsXmlPath = "$TEMPDIR/etc/$contactsXmlFile";
 
-if($report) {
-  system("cp $PROJECT_HOME/$presentersProjectBase/Model/lib/xml/datasetPresenters/contacts/$contactsXmlFile $contactsXmlPath");
-}
-else {
-  system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/$presentersProjectBase/${svnBranch}/Model/lib/xml/datasetPresenters/contacts/$contactsXmlFile $contactsXmlPath");
-}
+system("cp $PROJECT_HOME/$presentersProjectBase/Model/lib/xml/datasetPresenters/contacts/$contactsXmlFile $contactsXmlPath");
 
 if($report) {
   $suffix = 1234;
@@ -140,7 +104,7 @@ my $systemResult = system($command);
 $dbh->disconnect();
 
 unless($systemResult / 256 == 0) {
-  die "Failed Running Program: $command";
+  die "Failed Running Program";
 }
 
 

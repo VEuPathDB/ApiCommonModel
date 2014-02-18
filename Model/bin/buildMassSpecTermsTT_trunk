@@ -17,34 +17,24 @@ use Data::Dumper;
 
 use Spreadsheet::ParseExcel;
 
-use ApiCommonData::Load::TuningConfig::Utils;
+use ApiCommonShared::Model::tmUtils;
 
+my ($help, $propfile, $instance, $schema, $suffix, $debug);
 
-my ($help, $propfile,$project, $instance, $schema, $password, $suffix, $subversionDir, $debug, $svnBranch);
-
-Getopt::Long::Configure("pass_through");
 GetOptions("propfile=s" => \$propfile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
-           "password=s" => \$password,
            "suffix=s" => \$suffix,
-           "subversionDir=s" => \$subversionDir,
            "debug!" => \$debug,
            "help|h" => \$help,
-           "project=s" => \$project,
-           "password=s" => \$password,
-           "branch=s" => \$svnBranch,
           );
-my $TABFILE = "MSTermTab.xls";
-my $tabFileLocation = "/tmp/$TABFILE";
 
-system("svn export --non-interactive --trust-server-cert https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/${svnBranch}/Model/data/${TABFILE} $tabFileLocation");
+die "required parameter missing" unless ($propfile && $instance && $suffix);
 
-($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+my $tabFileLocation = "$ENV{PROJECT_HOME}/ApiCommonShared/Model/data/MSTermTab.xls";
 
 &run();
-
-unlink $tabFileLocation;
 
 sub run{
 
@@ -58,13 +48,8 @@ sub run{
 
   my $failures = 0;
 
-my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
-
-  $dbh->{RaiseError} = 1;
-  $dbh->{AutoCommit} = 0;
-  
   # parse Tab file
-  
+
   my $insertStatement = "INSERT INTO MassSpecTerms$suffix(project_id,organism,sample,internal_id,sort_order,html_color) VALUES (?,?,?,?,?,?)";
   my $insertRow = $dbh->prepare($insertStatement);
   my @lines = [];
@@ -141,7 +126,7 @@ sub usage {
   if($e) {
     print STDERR $e . "\n";
   }
-  print STDERR "usage:  createMassSpecTerms.pl --databaseInstance <instance> --userName <userName> --password <password>";
+  print STDERR "usage:  createMassSpecTerms.pl -instance <instance> -propfile <file> -suffix <NNNN> [ -schema <login> ] [ -debug ] [ -help ] \n";
   exit;
 }
 
