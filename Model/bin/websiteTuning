@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
 
 use DBI;
 use DBD::Oracle;
@@ -8,7 +9,7 @@ use Getopt::Long;
 
 use XML::Simple;
 
-use ApiCommonData::Load::TuningConfig::Utils;
+use ApiCommonShared::Model::tmUtils;
 
 my ($help, $website, $propFile, $runSangerTm, $forceUpdate, $alwaysUpdateOnly);
 
@@ -16,12 +17,12 @@ my ($help, $website, $propFile, $runSangerTm, $forceUpdate, $alwaysUpdateOnly);
             'website=s' => \$website,
             'tuningManagerPropFile=s' => \$propFile,
             'updateGeneDBAnnotation' => \$runSangerTm,
-            'forceUpdate' => \$forceUpdate,
+          # 'forceUpdate' => \$forceUpdate,  # supported by tuningManager, but not (currently) by tuningMgrMgr
             'alwaysUpdateOnly' => \$alwaysUpdateOnly
             );
 
 
-my $alwaysUpdateTables = 'MassSpecTerms,GbrowseTracksOrganism,DatasetPresenter,TrackOldAnnotation,DatasetDetail';
+# my $alwaysUpdateTables = 'MassSpecTerms,GbrowseTracksOrganism,DatasetPresenter,TrackOldAnnotation,DatasetDetail';
 my $host = `hostname;`;
 chomp $host;
 my $suffix;
@@ -35,7 +36,7 @@ my $isUgaServer;
 if($host =~ /\.uga\.edu$/) {
   $suffix = "s";
   $isUgaServer = 1;
-} 
+}
 elsif($host =~ /\.upenn\.edu$/) {
   $suffix = "n";
 }
@@ -69,8 +70,7 @@ my $aliasesXml = XMLin($aliasesXmlString,  ForceArray => 1);
 my @aliases = @{$aliasesXml->{alias}};
 
 # connect to the database using the instanceName (get the instance_nickname from apidb.instancemetainfo)
-my ($instance, $username, $pass) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo("dbi:Oracle:" . $database, $propFile);
-my $dbh = DBI->connect($instance, $username, $pass) or die DBI->errstr;
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($database, "apidb", $propFile);
 $dbh->{RaiseError} = 1;
 $dbh->{AutoCommit} = 0;
 
@@ -111,45 +111,41 @@ else {
   die "Could not resolve instance_nickname;  should be either inc,rbld or n|s clone";
 }
 
-my $tmmListCmd = "tuningMgrMgr list --propFile $propFile|grep $instanceNickname";
+my $tmmListCmd = "tuningMgrMgr list -propFile $propFile|grep $instanceNickname";
 
 my $isTmConfigured = `$tmmListCmd`;
 chomp $isTmConfigured;
 
 unless($isTmConfigured) {
-  die "WARN:  Could not resolve $instanceNickname in the tuning manager registry.  If the database has been cloned, use tuningMgrMgr to add the instance to the tuningManager's registry.";
+  die "WARN: Could not resolve $instanceNickname in the tuning manager registry. If the database has been cloned, use tuningMgrMgr to add the instance to the tuningManager's registry.";
 }
-
 
 my $forceUpdateString;
 if($forceUpdate) {
-  $forceUpdateString = "--forceUpdate";
+  $forceUpdateString = "-forceUpdate";
 }
 
 my $alwaysUpdateString;
 if($alwaysUpdateOnly) {
-  $alwaysUpdateString = "--tables $alwaysUpdateTables";
+  $alwaysUpdateString = "-alwaysUpdateOnly";
 }
-
-
 
 # need to also run the portal tuning manager if we are a "eupa" database
 if($instanceNickname =~ /^eupa/) {
-system("tuningManager --instance $instanceNickname --propFile $propFile  --doUpdate $forceUpdateString");
-
-  system("tuningManager --instance $instanceNickname --propFile $propFile --doUpdate --configFile portalTuningManagerApiDB.xml --schema apidb --doUpdate $forceUpdateString");
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile -currentEnv");
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile -configFile portalTuningManagerApiDB.xml -schema apidb -currentEnv");
 }
 else {
-# run the tuningManager
-system("tuningManager --instance $instanceNickname --propFile $propFile  --doUpdate $forceUpdateString $alwaysUpdateString");
+  # run the tuningManager
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile $forceUpdateString $alwaysUpdateString -currentEnv");
 }
 
 # need to also run the sanger tuning manager for genedb assoc projects
 if($runSangerTm) {
-  system("tuningManager --instance $instanceNickname --propFile $propFile --configFile sangerTuningManager.xml --doUpdate $forceUpdateString");
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile -configFile sangerTuningManager.xml $forceUpdateString");
 }
 
 sub usage {
-  print STDERR "websiteTuning --website=s --tuningManagerPropFile=s\n -website ex. qa.plasmodb.org (dashboard must be enabled)\n -tuningManagerPropFile is the propfile passed to the tuningmanager\n";
+  print STDERR "websiteTuning -website <domain> -tuningManagerPropFile <file>\n -website ex. qa.plasmodb.org (dashboard must be enabled)\n -tuningManagerPropFile is the propfile passed to the tuningmanager\n";
   exit;
 }
