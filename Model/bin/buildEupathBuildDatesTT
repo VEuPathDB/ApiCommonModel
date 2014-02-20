@@ -1,0 +1,79 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use DBD::Oracle;
+use YAML qw/LoadFile/;
+use Getopt::Long qw(GetOptions);
+use Data::Dumper;
+use ApiCommonShared::Model::tmUtils;
+
+my ($help, $propfile, $instance, $schema, $suffix, $debug);
+
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+          );
+
+die "required parameter missing" unless ($propfile && $instance && $suffix);
+
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+my $yamlFile = "$ENV{GUS_HOME}/lib/yaml/eupathBuildDates.yaml";
+
+&run();
+
+sub run{
+  unless(-e $yamlFile) {
+    &usage("ERROR:  $yamlFile not found");
+  }
+
+  &usage() if ($help);
+
+  my $insertStatement = "INSERT INTO EupathBuildDates$suffix (build, releaseDate) VALUES (?,?)";
+  my $insertRow = $dbh->prepare($insertStatement);
+  &createEmptyTable($dbh,$suffix);
+
+  open(my $fh, $yamlFile) || die "Can't open $yamlFile\n";
+  my $stuff = LoadFile($fh);
+  foreach my $build (keys(%$stuff)) {
+    my $date = $stuff->{$build};
+    $insertRow->execute($build, $date);
+  }
+
+  $dbh->commit();
+  $dbh->disconnect();
+}
+
+sub createEmptyTable {
+     my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating table";
+     create table EuPathBuildDates$suffix (
+	build     varchar2(3),
+        releaseDate         date
+  ) nologging
+SQL
+$dbh->{PrintError} = 0;
+
+}
+
+
+sub usage {
+  my $e = shift;
+  if($e) {
+    print STDERR $e . "\n";
+  }
+  print STDERR "usage:  buildEupathBuildDatesTT --propfile prop_file --instance instance --schema schema --suffix suffix  [--debug] [--help]";
+  exit;
+}
+
+1;
+
