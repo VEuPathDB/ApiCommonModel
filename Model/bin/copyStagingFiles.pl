@@ -55,6 +55,8 @@ foreach my $p (@projects) {
     rmtree ($destDir);
   }
 
+  umask 002; # resulting files will have mode 0644, directories 0755
+
   local $File::Copy::Recursive::SkipFlop = 1;
 
   ## do the copy from Staging
@@ -67,6 +69,9 @@ foreach my $p (@projects) {
   unless ($p eq 'TrichDB') {
       finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
   }
+
+  ## fix permissions
+  find(\&fixPerm, $destDir);
 }
 
 sub process_file {
@@ -89,6 +94,11 @@ sub usage {
   }
   print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> -- buildNumber <NUM> (--apiSiteFilesDir <DIR>)\n";
   exit;
+}
+
+sub fixPerm {
+  my $perm = -d $File::Find::name ? 0775 : 0664;
+  chmod $perm, $File::Find::name;
 }
 
 
