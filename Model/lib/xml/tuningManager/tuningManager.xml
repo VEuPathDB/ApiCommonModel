@@ -1523,6 +1523,7 @@ SELECT gene.source_id,
        protein.max_molecular_weight, protein.hydropathicity_gravy_score,
        protein.aromaticity_score, protein.cds_length, protein.protein_length,
        protein.ec_numbers,
+       protein.ec_numbers_derived,
        protein.signalp_scores, protein.signalp_peptide, protein.aa_sequence_id, protein.protein_source_id
 FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
      (SELECT gf.source_id, taf.na_feature_id, tas.aa_sequence_id,tas.molecular_weight,tas.source_id as protein_source_id,
@@ -1535,6 +1536,7 @@ FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
              asa.aromaticity_score,
              NVL(transmembrane.tm_domains, 0) AS tm_count,
              ec.ec_numbers,
+             ecDerived.ec_numbers_derived,
              sigp.scores as signalp_scores,
              substr(sigp.pep, 1, 200) as signalp_peptide
       FROM  dots.GeneFeature gf, dots.Transcript t,
@@ -1555,8 +1557,22 @@ FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
              FROM (SELECT DISTINCT asec.aa_sequence_id,
                           ec.ec_number || ' (' || ec.description || ')' AS ec_number
                    FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
-                   WHERE ec.enzyme_class_id = asec.enzyme_class_id)
+                   WHERE ec.enzyme_class_id = asec.enzyme_class_id
+		   AND NOT asec.evidence_code = 'OrthoMCLDerived')
              GROUP BY aa_sequence_id) ec,
+
+            (SELECT aa_sequence_id,
+                    SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
+                                               as apidb.varchartab)), '; '),
+                           1, 300)
+                      AS ec_numbers_derived
+             FROM (SELECT DISTINCT asec.aa_sequence_id,
+                          ec.ec_number || ' (' || ec.description || ')' AS ec_number
+                   FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
+                   WHERE ec.enzyme_class_id = asec.enzyme_class_id
+		   AND asec.evidence_code = 'OrthoMCLDerived')
+             GROUP BY aa_sequence_id) ecDerived,
+
              (SELECT spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
               ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2) as scores,
                apidb.tab_to_string(set(cast(COLLECT(decode(spf.algorithm_name,'SignalPhmm','HMM: ','NN: ') || dbms_lob.substr(s.sequence,aal.end_max,1) order by spf.algorithm_name, dbms_lob.substr(s.sequence, aal.end_max, 1)) as apidb.varchartab)), ', ') as pep
@@ -1574,7 +1590,8 @@ FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
         AND taf.aa_sequence_id = asa.aa_sequence_id
         and tas.aa_sequence_id = sigp.aa_sequence_id(+)
         AND tas.aa_sequence_id = transmembrane.aa_sequence_id(+)
-        AND tas.aa_sequence_id = ec.aa_sequence_id(+)) protein
+        AND tas.aa_sequence_id = ec.aa_sequence_id(+)
+        AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)) protein
 WHERE gene.source_id = protein.source_id(+)
       ]]>
     </sql>
@@ -1630,6 +1647,7 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        protein.max_molecular_weight, protein.hydropathicity_gravy_score,
        protein.aromaticity_score, protein.cds_length, protein.protein_length,
        protein.ec_numbers,
+       protein.ec_numbers_derived,
        ed.name AS external_db_name,
        SUBSTR(edr.version, 1, 10) AS external_db_version,
        exons.exon_count, SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
