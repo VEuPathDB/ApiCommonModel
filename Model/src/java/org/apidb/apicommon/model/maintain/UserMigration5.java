@@ -73,7 +73,7 @@ public class UserMigration5 extends BaseCLI {
     DBPlatform platform = wdkModel.getUserDb().getPlatform();
     DataSource dataSource = wdkModel.getUserDb().getDataSource();
     try {
-      rsSelect = SqlUtils.executeQuery(dataSource, sqlSelect, "migrate5-select-dataset-values");
+      rsSelect = SqlUtils.executeQuery(dataSource, sqlSelect, "migrate5-select-dataset-values", 5000);
       psUpdate = SqlUtils.getPreparedStatement(dataSource, sqlUpdate);
       StringBuilder content = new StringBuilder();
       int prevDatasetId = 0;
@@ -144,7 +144,7 @@ public class UserMigration5 extends BaseCLI {
     DBPlatform platform = wdkModel.getUserDb().getPlatform();
     DataSource dataSource = wdkModel.getUserDb().getDataSource();
     try {
-      rsStep = SqlUtils.executeQuery(dataSource, sqlStep, "migrate5-select-steps");
+      rsStep = SqlUtils.executeQuery(dataSource, sqlStep, "migrate5-select-steps", 1000);
       psClob = SqlUtils.getPreparedStatement(dataSource, sqlClob);
       psUpdate = SqlUtils.getPreparedStatement(dataSource, sqlUpdate);
       int count = 0, stepCount = 0;
