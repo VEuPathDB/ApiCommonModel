@@ -20,8 +20,11 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         setPropValue("redPctSampleDecode", redPctSampleDecode);
         setPropValue("greenPctSampleDecode", greenPctSampleDecode);
-
-        injectTemplate("expressionSamplesParamQueryDirect");
+        if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
+            injectTemplate("expressionSamplesParamQueryDirectFDR");
+        } else {
+            injectTemplate("expressionSamplesParamQueryDirect");
+        }
         injectTemplate("expressionPctSamplesParamQueryDirect");
 
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
