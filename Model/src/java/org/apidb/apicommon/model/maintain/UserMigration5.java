@@ -127,7 +127,6 @@ public class UserMigration5 extends BaseCLI {
       platform.setClobData(psUpdate, 2, content, false);
       psUpdate.setInt(3, datasetId);
       psUpdate.addBatch();
-      ;
     }
     catch (SQLException ex) {
       throw new WdkModelException(ex);
