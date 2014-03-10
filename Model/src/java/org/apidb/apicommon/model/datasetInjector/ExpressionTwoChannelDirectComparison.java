@@ -11,7 +11,6 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         setPropValue("percentileProfileSetPattern", "%");
 
         injectTemplate("expressionProfileSetParamQuery");
-        injectTemplate("expressionPctProfileSetParamQuery");
 
         String lcDataType = getPropValue("dataType").toLowerCase();
 
@@ -39,6 +38,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
+            injectTemplate("expressionPctProfileSetParamQuery");
             injectTemplate(lcDataType + "PercentileCategoriesDirect");
             injectTemplate("expressionPercentileQuestionDirect");
         }
