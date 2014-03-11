@@ -1,6 +1,5 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.model.datasetInjector.RNASeq;
 
 public class RNASeqProfileSimilarity extends RNASeq {
 
