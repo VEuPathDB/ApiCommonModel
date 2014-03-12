@@ -44,6 +44,7 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
 
     logger.debug("attributes: " + attributes);
 
+    String projectId = param.getWdkModel().getProjectId();;
     BufferedReader reader = new BufferedReader(new StringReader(content));
     String line;
     try {
@@ -54,19 +55,18 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
         if (line.startsWith(">")) // reaching sequence section, stop.
           break;
         String[] columns = line.split("\t");
-        String[] row = new String[attributes.size() + 1];
+        String[] row = new String[attributes.size() + 2];
         // column 0 is for sequence id, 3 is for start, 4, is for end, 6 is for forward/revise
         row[0] = columns[0] + ":" + columns[3] + "-" + columns[4] + ":" +
             (columns[6].equals("+") ? "f" : "r");
+        row[1] = projectId;
 
         // parsing attributes
         for (String tuple : columns[8].split(";")) {
           String[] pieces = tuple.split("=");
           String attr = pieces[0].toLowerCase();
-          if (attr.equals("id"))
-            row[0] = pieces[1];
           if (attributes.containsKey(attr)) {
-            row[attributes.get(attr) + 1] = pieces[1];
+            row[attributes.get(attr) + 2] = pieces[1];
           }
         }
         data.add(row);
@@ -90,6 +90,7 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
   private Map<String, Integer> getAttributes() throws WdkDatasetException {
     String attrs = properties.get(PROP_ATTRIBUTES);
     Map<String, Integer> attributes = new HashMap<>();
+    if (attrs == null) return attributes;
     int i = 0;
     for (String attr : attrs.split(",")) {
       attr = attr.trim().toLowerCase();
