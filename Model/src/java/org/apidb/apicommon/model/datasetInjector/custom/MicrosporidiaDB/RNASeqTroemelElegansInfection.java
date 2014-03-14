@@ -11,7 +11,6 @@ public class RNASeqTroemelElegansInfection extends CusomGenePageExpressionGraphs
     //String datasetName = getDatasetName();
 
     setOrganismAbbrevFromDatasetName();
-    setOrganismAbbrevInternalFromDatasetName();
 
     injectTemplate("rnaSeqCoverageTrack");
     injectTemplate("rnaSeqJunctionsTrack");

@@ -8,7 +8,6 @@ public class ChIPSeq extends DatasetInjector {
   public void injectTemplates() {
       setShortAttribution();
       setOrganismAbbrevFromDatasetName();
-      setOrganismAbbrevInternalFromDatasetName();
 
       injectTemplate("chipSeqCoverageTrack");
   }

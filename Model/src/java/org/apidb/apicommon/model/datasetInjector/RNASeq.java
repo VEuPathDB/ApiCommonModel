@@ -22,7 +22,6 @@ public class RNASeq extends  DatasetInjector {
       String datasetName = getDatasetName();
 
       setOrganismAbbrevFromDatasetName();
-      setOrganismAbbrevInternalFromDatasetName();
 
       // perl packages disallow some characters in the package name... use this to name the graphs
       setGraphDatasetName();

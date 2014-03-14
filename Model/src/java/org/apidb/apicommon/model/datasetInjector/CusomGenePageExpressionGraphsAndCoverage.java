@@ -11,7 +11,6 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
         setShortAttribution();
 
         setOrganismAbbrevFromDatasetName();
-        setOrganismAbbrevInternalFromDatasetName();
 
         injectTemplate("rnaSeqCoverageTrack");
 

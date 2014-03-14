@@ -19,7 +19,6 @@ public class SpliceSites extends  DatasetInjector {
       String datasetName = getDatasetName();
 
       setOrganismAbbrevFromDatasetName();
-      setOrganismAbbrevInternalFromDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");

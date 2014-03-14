@@ -11,7 +11,6 @@ public class IsolatesHTS extends DatasetInjector {
 
 
       setOrganismAbbrevFromDatasetName();
-      setOrganismAbbrevInternalFromDatasetName();
 
       // trim off the prefix and suffix from the experiment name
       // new workflow uses different naming convention for HTS isolates, need to handle both.
