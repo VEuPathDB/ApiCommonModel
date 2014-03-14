@@ -252,6 +252,20 @@ public abstract class DatasetInjector {
       if(organismAbbrev.equals("")){
         return "";
       } else {
+
+        String projectName = getPropValue("projectName");
+        Map<String, Map<String, String>> globalProps = this.getGlobalDatasetProperties();
+
+        for(int i = 0; i < tokens.length - 1; i++) {
+          String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+
+          Map<String, String> orgProps = globalProps.get(orgPropsKey);
+          if (orgProps == null) {
+            organismAbbrev +=  "_" + tokens[i+1];
+          } else {
+            return organismAbbrev;
+          }
+        } 
         return organismAbbrev;
       } 
     } catch (Exception e) {
