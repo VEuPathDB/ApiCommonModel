@@ -282,12 +282,14 @@ public abstract class DatasetInjector {
   protected void setOrganismAbbrevFromDatasetName() {
     String organismAbbrev = this.getOrganismAbbrevFromDatasetName();
     setPropValue("organismAbbrev", organismAbbrev);
+    setPropValue("organismAbbrevInternal", organismAbbrev);
   }
 
+  /**
   protected void setOrganismAbbrevInternalFromDatasetName() {
     String[] datasetWords = this.datasetName.split("_");
-    setPropValue("organismAbbrevInternal", datasetWords[0]);
   }
+  */
 
   protected void setGraphDatasetName() {
     String graphDatasetName = this.datasetName.replace("-", "");
