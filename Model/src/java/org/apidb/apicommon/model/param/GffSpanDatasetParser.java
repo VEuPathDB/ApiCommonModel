@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.param;
 
 import java.io.BufferedReader;
@@ -18,7 +15,6 @@ import org.gusdb.wdk.model.dataset.WdkDatasetException;
 
 /**
  * @author jerric
- * 
  */
 public class GffSpanDatasetParser extends AbstractDatasetParser {
 
@@ -45,7 +41,6 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
     logger.debug("attributes: " + attributes);
 
     String projectId = param.getWdkModel().getProjectId();
-    ;
     BufferedReader reader = new BufferedReader(new StringReader(content));
     String line;
     try {
