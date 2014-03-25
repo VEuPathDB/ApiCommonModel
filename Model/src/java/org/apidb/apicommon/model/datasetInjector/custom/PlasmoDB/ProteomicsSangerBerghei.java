@@ -11,6 +11,7 @@ public class ProteomicsSangerBerghei extends DatasetInjector {
   @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProteomicsProfile");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpression");
   }
 
   // second column is for documentation

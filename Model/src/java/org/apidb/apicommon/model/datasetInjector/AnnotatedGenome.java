@@ -72,6 +72,7 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "overview");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
 
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
