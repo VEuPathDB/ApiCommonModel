@@ -1,8 +1,8 @@
-package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
+package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class LinksMR4 extends DatasetInjector {
+public class EinsteinAntibodies extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -10,7 +10,8 @@ public class LinksMR4 extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMr4Reagents"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Antibody"); 
+
   }
 
   // second column is for documentation

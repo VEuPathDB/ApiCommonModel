@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
+package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
@@ -10,6 +10,7 @@ public class LinksMR4 extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Mr4Reagents"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMr4Reagents"); 
   }
 
