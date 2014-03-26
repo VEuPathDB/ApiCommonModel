@@ -7,7 +7,7 @@ import java.util.Random;
 
 import org.apidb.apicommon.model.datasetInjector.custom.AmoebaDB.MicroarrayGilchristAmoebapore;
 import org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB.ChIPChip;
-import org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB.PathwayGinsburg;
+//import org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB.PathwayGinsburg;
 import org.gusdb.fgputil.xml.Text;
 
 public class DiscoverableDatasetInjectorTest {
@@ -15,7 +15,7 @@ public class DiscoverableDatasetInjectorTest {
   public static void main(String[] args) {
     // pick test injectors
     DatasetInjector[] injectors = { new MicroarrayGilchristAmoebapore(),
-        new ChIPChip(), new PathwayGinsburg() };
+        new ChIPChip() };//, new PathwayGinsburg() };
 
     // construct property values
     Map<String, String> propValues = new HashMap<>();
