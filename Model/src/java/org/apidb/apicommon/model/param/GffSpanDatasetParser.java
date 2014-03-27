@@ -51,8 +51,8 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
         if (line.startsWith(">")) // reaching sequence section, stop.
           break;
         String[] columns = line.split("\t");
-        // if the number of columns are not 8, skip it
-        if (columns.length != 8)
+        // if the number of columns are not 9, skip it - not a valid gff line
+        if (columns.length != 9)
           continue;
 
         String[] row = new String[attributes.size() + 2];
