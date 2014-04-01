@@ -1037,6 +1037,23 @@ FROM   dual
     </sql>
   </sqlQuery>
 
+  <sqlQuery name="cnv:Array"  includeProjects="TriTrypDB">
+     <sql>
+       <![CDATA[
+SELECT a.name      as feature_id,
+       'cnv'       as type, 
+       'Array'     as source,
+       $base_start as startm,
+       $rend       as end, 
+       'sample=' || a.name as atts
+FROM   rad.protocol p,
+       rad.analysis a
+WHERE p.protocol_id = a.protocol_id
+  AND p.name ='dna_array_simple'
+       ]]>
+    </sql>
+  </sqlQuery> 
+
   <sqlQuery name="MicroArrayProbes:expressionD" includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
     <testParamValues project="PlasmoDB">
       <param name="srcfeature_id" value="$$na_seq_id_Pf3D7_06$$"/>
@@ -2681,19 +2698,26 @@ WHERE  e.na_sequence_id = $srcfeature_id
   <sqlQuery name="CGHBlock:CNV">
      <sql>
 <![CDATA[
-SELECT   feature_id,
+SELECT   feature_id || is_above_zero as feature_id,
         '$source' as source, 
          parent_id as name,
          parent_id as parent_id,
         'CGHBlock' as type,
          startm,
          end,
-        'info=' || apidb.tab_to_string(set(cast(COLLECT(attributes order by attributes) AS apidb.varchartab)), '|') || '$dlm' || 'probes=' || probes as atts
-FROM    (SELECT            gff.mapping_start as feature_id,
+         CASE WHEN sum(score) > 0 THEN 'pos'
+            ELSE 'neg'
+            END as score, 
+        'info=' || apidb.tab_to_string(set(cast(COLLECT(attributes order by attributes) AS apidb.varchartab)), '|') || '$dlm' || 
+        'probes=' || probes || '$dlm' ||
+        'total=' || sum(score) as atts
+FROM    (
+         SELECT            gff.mapping_start as feature_id ,
                            gff.NA_SEQUENCE_ID as parent_id,
                            gff.mapping_start as startm,
                            gff.mapping_end as end,
                            gff.SCORE as score,
+                           '000' as is_above_zero,
                            decode (gff.is_reversed, 0, '+1', 1, '-1', '.') as strand,
                            replace(substr(to_char(gff.attr),0, (REGEXP_INSTR(to_char(gff.attr), ';')-1)) , 'probes=') as probes,
                            'strain:' ||  replace(substr(to_char(gff.attr), REGEXP_INSTR(to_char(gff.attr), 'strain=')), 'strain=') || ',score:' || score as attributes
@@ -2706,8 +2730,29 @@ FROM    (SELECT            gff.mapping_start as feature_id,
                    AND     gff.MAPPING_START <= $rend 
                    AND     gff.MAPPING_END >= $base_start 
                    AND     gff.na_sequence_id = $srcfeature_id
+                   AND     gff.score >= 0
+         UNION
+         SELECT            gff.mapping_start as feature_id,
+                           gff.NA_SEQUENCE_ID as parent_id,
+                           gff.mapping_start as startm,
+                           gff.mapping_end as end,
+                           gff.SCORE as score,
+                           '111' as is_above_zero,
+                           decode (gff.is_reversed, 0, '+1', 1, '-1', '.') as strand,
+                           replace(substr(to_char(gff.attr),0, (REGEXP_INSTR(to_char(gff.attr), ';')-1)) , 'probes=') as probes,
+                           'strain:' ||  replace(substr(to_char(gff.attr), REGEXP_INSTR(to_char(gff.attr), 'strain=')), 'strain=') || ',score:' || score as attributes
+                   FROM    Apidb.GFF3 gff,
+                           SRES.externaldatabase db,
+                           SRES.externaldatabaserelease dbr
+                   WHERE   db.name = 'tcruCLBrenerEsmeraldo-like_Rick_Tarleton_CNV_CGH_GFF_RSRC'
+                   AND     dbr.external_database_id = db.external_database_id
+                   AND     gff.external_database_release_id = dbr.external_database_release_id 
+                   AND     gff.MAPPING_START <= $rend 
+                   AND     gff.MAPPING_END >= $base_start 
+                   AND     gff.na_sequence_id = $srcfeature_id
+                   AND     gff.score < 0
                    )
-GROUP BY feature_id, parent_id, startm,end,probes 
+GROUP BY feature_id, parent_id, startm,end,is_above_zero,probes 
 ]]>
     </sql>
   </sqlQuery>
@@ -4848,6 +4893,39 @@ AND    cpp.protocol_type = 'raw'
    ]]>
     </sql>
   </sqlQuery>
+
+  <sqlQuery name="cnv:Array:bulksubfeatures"  includeProjects="TriTrypDB">
+     <sql>
+<![CDATA[
+SELECT aef.na_feature_id as feature_id,
+       'cnv_sub' as type,
+       'Array' as source,
+       dtr.float_value as score, 
+       a.name as parent_id, 
+       nal.start_min as startm, 
+       nal.end_max as end,
+       'sample=' || a.name as atts
+FROM Dots.ArrayElementFeature aef, 
+     Rad.datatransformationresult dtr,
+     sres.externaldatabase ed, 
+     sres.externaldatabaserelease edr, 
+     DOTS.nalocation nal,
+     RAD.protocol p, 
+     rad.analysis a
+WHERE ed.external_database_id = edr.external_database_id
+  AND aef.external_database_release_id = edr.external_database_release_id
+  AND aef.na_feature_id = dtr.row_id
+  AND aef.na_feature_id = nal.na_feature_id
+  AND ed.name = 'tcruCLBrenerEsmeraldo-like_cghArrayPlatform_GPL10781_RSRC'
+  AND p.protocol_id = a.protocol_id 
+  AND p.name ='dna_array_simple'
+  AND dtr.analysis_id = a.analysis_id
+  AND aef.na_sequence_id = $srcfeature_id
+  AND nal.start_min <= $rend
+  AND nal.end_max >= $base_start
+   ]]>
+    </sql>
+  </sqlQuery> 
 
   <sqlQuery name="ChIP:ChIPchipSub_Strain:bulksubfeatures"  includeProjects="ToxoDB">
      <sql>
