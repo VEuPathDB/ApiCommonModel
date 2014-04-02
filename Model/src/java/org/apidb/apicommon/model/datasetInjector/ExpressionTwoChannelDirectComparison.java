@@ -24,7 +24,6 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         } else {
             injectTemplate("expressionSamplesParamQueryDirect");
         }
-        injectTemplate("expressionPctSamplesParamQueryDirect");
 
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
             injectTemplate("expressionFoldChangeWithFDRQuestionDirect");
@@ -38,6 +37,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
+            injectTemplate("expressionPctSamplesParamQueryDirect");
             injectTemplate("expressionPctProfileSetParamQuery");
             injectTemplate(lcDataType + "PercentileCategoriesDirect");
             injectTemplate("expressionPercentileQuestionDirect");
