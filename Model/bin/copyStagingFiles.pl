@@ -53,6 +53,7 @@ foreach my $p (@projects) {
   if (-d $destDir) {
     print "WARNING: existing $destDir is being deleted, and will be remade.\n";
     rmtree ($destDir);
+    print "Deleted existing dir; now REMAKING it.\n";
   }
 
   umask 002; # resulting files will have mode 0644, directories 0755
@@ -71,7 +72,10 @@ foreach my $p (@projects) {
   }
 
   ## fix permissions
+  print "\nFIXING file permissions \n";
   find(\&fixPerm, $destDir);
+
+  print "\nALL DONE\n";
 }
 
 sub process_file {
