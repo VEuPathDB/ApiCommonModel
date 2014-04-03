@@ -1,5 +1,5 @@
 ﻿-- the owner of this procedure needs CREATE SEQUENCE permission granted directly to him/her.
-CREATE OR REPLACE PROCEDURE update_sequence (table_name IN VARCHAR, pk_column IN VARCHAR, start_offset IN NUMBER)
+CREATE OR REPLACE PROCEDURE apidb.update_sequence (table_name IN VARCHAR, pk_column IN VARCHAR, start_offset IN NUMBER)
 IS
   sequence_name VARCHAR(1000);
   start_id NUMBER;
@@ -19,29 +19,29 @@ BEGIN
 END;
 /
 
-GRANT EXECUTE ON update_sequence TO GUS_R; 
-GRANT EXECUTE ON update_sequence TO GUS_W; 
+GRANT EXECUTE ON apidb.update_sequence TO GUS_R; 
+GRANT EXECUTE ON apidb.update_sequence TO GUS_W; 
 
 
 DECLARE
   start_seed NUMBER;
 BEGIN
-  start_seed := 3; -- 3 for N, 0 for S
-  update_sequence('userlogins5.Categories', 'category_id', start_seed);
-  update_sequence('userlogins5.CommentFile', 'file_id', start_seed);
-  update_sequence('userlogins5.CommentReference', 'comment_reference_id', start_seed);
-  update_sequence('userlogins5.Comments', 'comment_id', start_seed);
-  update_sequence('userlogins5.CommentSequence', 'comment_sequence_id', start_seed);
-  update_sequence('userlogins5.CommentStableId', 'comment_stable_id', start_seed);
-  update_sequence('userlogins5.CommentTargetCategory', 'comment_target_category_id', start_seed);
-  update_sequence('userlogins5.dataset_values', 'dataset_value_id', start_seed);
-  update_sequence('userlogins5.datasets', 'dataset_id', start_seed);
-  update_sequence('userlogins5.external_databases', 'external_database_id', start_seed);
-  update_sequence('userlogins5.favorites', 'favorite_id', start_seed);
-  update_sequence('userlogins5.locations', 'location_id', start_seed);
-  update_sequence('userlogins5.steps', 'step_id', start_seed);
-  update_sequence('userlogins5.strategies', 'strategy_id', start_seed);
-  update_sequence('userlogins5.user_baskets', 'basket_id', start_seed);
-  update_sequence('userlogins5.users', 'user_id', start_seed);
+  start_seed := 3; -- 0 for N, 3 for S
+  apidb.update_sequence('userlogins5.Categories', 'category_id', start_seed);
+  apidb.update_sequence('userlogins5.CommentFile', 'file_id', start_seed);
+  apidb.update_sequence('userlogins5.CommentReference', 'comment_reference_id', start_seed);
+  apidb.update_sequence('userlogins5.Comments', 'comment_id', start_seed);
+  apidb.update_sequence('userlogins5.CommentSequence', 'comment_sequence_id', start_seed);
+  apidb.update_sequence('userlogins5.CommentStableId', 'comment_stable_id', start_seed);
+  apidb.update_sequence('userlogins5.CommentTargetCategory', 'comment_target_category_id', start_seed);
+  apidb.update_sequence('userlogins5.dataset_values', 'dataset_value_id', start_seed);
+  apidb.update_sequence('userlogins5.datasets', 'dataset_id', start_seed);
+  apidb.update_sequence('userlogins5.external_databases', 'external_database_id', start_seed);
+  apidb.update_sequence('userlogins5.favorites', 'favorite_id', start_seed);
+  apidb.update_sequence('userlogins5.locations', 'location_id', start_seed);
+  apidb.update_sequence('userlogins5.steps', 'step_id', start_seed);
+  apidb.update_sequence('userlogins5.strategies', 'strategy_id', start_seed);
+  apidb.update_sequence('userlogins5.user_baskets', 'basket_id', start_seed);
+  apidb.update_sequence('userlogins5.users', 'user_id', start_seed);
 END;
 /

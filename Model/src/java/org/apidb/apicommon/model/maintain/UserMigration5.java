@@ -83,7 +83,7 @@ public class UserMigration5 extends BaseCLI {
         if (datasetId != prevDatasetId) { // reach a new dataset, process the previous one first.
           if (updateDataset(platform, psUpdate, prevDatasetId, content.toString())) {
             count++;
-            if (count % 100 == 0) {
+            if (count % 1000 == 0) {
               psUpdate.executeBatch();
               logger.info(count + " datasets updated.");
             }
@@ -153,12 +153,17 @@ public class UserMigration5 extends BaseCLI {
         String params = platform.getClobData(rsStep, "display_params");
         JSONObject jsParams = new JSONObject(params);
         boolean updated = processParamValues(platform, psClob, stepId, jsParams);
+        
         if (updated) {
-          platform.setClobData(psUpdate, 1, jsParams.toString(), false);
+          // while updating, change to new storage format
+          JSONObject jsContent = new JSONObject();
+          jsContent.put("params", jsParams);
+          jsContent.put("filters", new JSONObject());
+          platform.setClobData(psUpdate, 1, jsContent.toString(), false);
           psUpdate.setInt(2, stepId);
           psUpdate.addBatch();
           count++;
-          if (count % 100 == 0) {
+          if (count % 1000 == 0) {
             psUpdate.executeBatch();
             logger.info(count + " steps updated, " + stepCount + " steps processed.");
           }
