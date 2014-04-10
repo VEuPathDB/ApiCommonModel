@@ -1132,6 +1132,20 @@
          <!-- <suggest selectMode="all" /> -->
        </flatVocabParam>
 
+       <filterParam name="htsSnp_strain_filter_meta" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB,EuPathDB" 
+                      queryRef="SharedVQ.htsSnpStrainAA"
+                      metadataQueryRef="SharedVQ.StrainsMetadata"
+                      metadataSpecQueryRef="SharedVQ.StrainsMetadataSpec"
+                      prompt="Isolates"
+                      multiPick="true"
+                      dependedParamRef="organismParams.organism"
+                      quote="true"
+                      suppressNode="false">
+         <help>
+              Select isolates to compare.
+         </help>
+         <!-- <suggest selectMode="all" /> -->
+       </filterParam>
 
        <flatVocabParam name="htsSnp_strain_meta" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB,EuPathDB" 
                       queryRef="SharedVQ.strainByOntologyType"
@@ -1895,7 +1909,7 @@ WHERE st.is_queryable = 1
 
 
         <sqlQuery name="htsSnpStrainAA" excludeProjects="HostDB,GiardiaDB,PiroplasmaDB,EuPathDB,MicrosporidiaDB,HostDB" doNotTest="true">
-          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/> 
           <column name="internal"/>
           <column name="term"/>
           <sql>
@@ -1911,10 +1925,128 @@ WHERE st.is_queryable = 1
             <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/> 
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
-        </processQuery> 
+        </processQuery>
+
+        <sqlQuery name="StrainsMetadata" doNotTest="true" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB"> 
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/>   
+            <column name="term" />
+            <column name="property"/>
+            <column name="value" />
+            <sql>
+           <![CDATA[
+with categories as (
+          Select Oe.Category
+            From
+                 Apidbtuning.SnpStrains ss,
+                 Study.Biosource bs,
+                 Study.Biomaterialcharacteristic Bmc,
+                 Study.Ontologyentry oe
+           Where Bmc.Bio_Material_Id = bs.Bio_Material_Id
+             And Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+             And Bs.name = ss.strain
+             And ss.organism =  $$organism$$
+             Group by Oe.category
+             having count(distinct oe.value) >1
+           ),
+       nbym as (
+          Select distinct ss.strain, category
+            from ApidbTuning.snpStrains ss,
+                 categories cat
+            where ss.organism =  $$organism$$
+                 
+       )           
+select distinct nbym.strain as term, nbym.category as property, 
+Case when nbym.category = 'StrainOrLine' then nvl(main.value,nbym.strain)
+     else nvl(replace(main.value,'undefined','unknown'), 'unknown') 
+     end as value 
+from (
+select 
+ss.strain as term,
+oe.category as property,
+oe.value as value
+from
+study.biosource bm,
+STUDY.biomaterialcharacteristic bmc,
+STUDY.ontologyentry oe,
+apidbtuning.snpstrains ss
+where bm.bio_material_id = bmc.bio_material_id
+and bmc.ontology_entry_id =oe.ontology_entry_id
+and oe.value is not null
+and Bm.name = ss.strain
+and ss.organism =   $$organism$$
+and ss.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'  
+union
+SELECT ss.strain as term,
+      'StrainOrLine' as propertry,
+       ss.strain as value
+       from APIDBTUNING.snpstrains ss
+       where ss.organism =  $$organism$$
+         and ss.extdb_name = 'InsertSnps.pm NGS SNPs INTERNAL'
+)main, nbym
+where main.term(+) = nbym.strain
+  and main.property(+) = nbym.category
+            ]]>
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="StrainsMetadata" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/> 
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="property"  width="100" wsName="property"/>
+            <wsColumn name="value" width="100" wsName="value"/>
+ 
+        </processQuery>
+
+
+        <sqlQuery name="StrainsMetadataSpec" doNotTest="1" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB">  
+            <paramRef  ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/>  
+            <column name="property" />
+            <column name="spec_property"/>
+            <column name="spec_value" />
+            <sql>
+           <![CDATA[
+ SELECT 'Year' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'Year' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'Year' as property, 'display' as spec_property, 'Year' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'display' as spec_property, 'Host' as spec_value FROM dual
+ UNION
+ SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'GeographicLocation' as property, 'display' as spec_property, 'GeographicLocation' as spec_value FROM dual
+ UNION
+ SELECT 'StrainOrLine' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'StrainOrLine' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'StrainOrLine' as property, 'display' as spec_property, 'StrainOrLine' as spec_value FROM dual
+ UNION
+ SELECT value as property, 'description' as spec_property, NVL(definition, 'Description not available') as spec_value FROM STUDY.ontologyentry
+    WHERE value in ('Year', 'Host', 'StrainOrLine', 'GeographicLocation')
+            ]]>
+
+
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="StrainsMetadataSpec" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef  ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/>
+            <wsColumn name="property" width="100" wsName="property"/>
+            <wsColumn name="spec_property" width="100" wsName="spec_property"/>
+            <wsColumn name="spec_value"  width="100" wsName="spec_value"/>
+        </processQuery>
+
 
         <sqlQuery name="htsSnpOntology" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB" doNotTest="true">
-          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/>  
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/>  
           <column name="display"/>
           <column name="internal"/>
           <column name="term"/>
@@ -1994,7 +2126,7 @@ WHERE  ds.type = 'isolates'
         </sqlQuery>
 
         <processQuery name="htsSnpOntology" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="true">
-           <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withHtsSNPs"/>  
+           <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/>  
             <wsColumn name="internal" width="32" wsName="internal"/>
             <wsColumn name="term" width="32" wsName="term"/>
         </processQuery>
@@ -2040,6 +2172,7 @@ WHERE  ds.type = 'isolates'
           <column name="internal"/>
           <column name="term"/>
           <sql>
+
             Select * from 
             (Select Oe.Value As display,
                    Bmc.ontology_entry_id As internal,
