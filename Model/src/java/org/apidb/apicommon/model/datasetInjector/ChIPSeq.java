@@ -9,7 +9,12 @@ public class ChIPSeq extends DatasetInjector {
       setShortAttribution();
       setOrganismAbbrevFromDatasetName();
 
-      injectTemplate("chipSeqCoverageTrack");
+      if(getPropValueAsBoolean("logScaleOnly")) {
+        injectTemplate("chipSeqCoverageTrack");
+      } else {
+        injectTemplate("chipSeqCoverageTrack");
+        injectTemplate("chipSeqCoverageTrackUnlogged");
+      }
   }
 
   @Override
@@ -18,7 +23,9 @@ public class ChIPSeq extends DatasetInjector {
 
   @Override
   public String[][] getPropertiesDeclaration() {
-      String [][] declaration = {};
+      String [][] declaration = { 
+                      {"logScaleOnly", "true only show log scale, otherwise show both"}, 
+                                };
       return declaration;
   }
 
