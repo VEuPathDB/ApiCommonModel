@@ -285,6 +285,7 @@ public class DatasetPresenterSetLoader {
       Map<String, Map<String, String>> defaultDatasetInjectorClasses = DatasetPresenterParser.parseDefaultInjectorsFile(defaultInjectorsFileName);
 
       for (DatasetPresenter datasetPresenter : dps.getDatasetPresenters().values()) {
+        if (!datasetPresenter.getFoundInDb()) continue;
 
         datasetPresenter.setDefaultDatasetInjector(defaultDatasetInjectorClasses);
 
