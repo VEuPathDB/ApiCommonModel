@@ -293,10 +293,54 @@ public abstract class DatasetInjector {
     */
   }
 
+
+  protected String getOrganismAbbrevDisplayFromDatasetName() {
+    if (this.datasetName.equals("")) {
+      return "";
+    }
+
+    try {
+      String[] tokens = this.datasetName.split("_");
+      String organismAbbrev = tokens[0];
+     
+      if(organismAbbrev.equals("")){
+        return "";
+      } else {
+
+        String projectName = getPropValue("projectName");
+        Map<String, Map<String, String>> globalProps = this.getGlobalDatasetProperties();
+
+        for(int i = 0; i < tokens.length - 1; i++) {
+          String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+
+          Map<String, String> orgProps = globalProps.get(orgPropsKey);
+          if (orgProps == null) {
+            organismAbbrev +=  "_" + tokens[i+1];
+          } else {
+           String[] orgName =  orgProps.get("organismFullName").split(" ");
+            String orgAbbrevDisplay = String.valueOf(orgName[0].charAt(0));
+            for(int j = 1; j < orgName.length; j++) {
+              orgAbbrevDisplay += " " + orgName[j];
+            }
+            return orgAbbrevDisplay;
+          }
+        } 
+        return organismAbbrev;
+      } 
+    } catch (Exception e) {
+      System.out.println(e.getMessage());
+      return "";
+    }
+
+  }
+
   protected void setOrganismAbbrevFromDatasetName() {
     String organismAbbrev = this.getOrganismAbbrevFromDatasetName();
     setPropValue("organismAbbrev", organismAbbrev);
     setPropValue("organismAbbrevInternal", organismAbbrev);
+
+    String organismAbbrevDisplay = this.getOrganismAbbrevDisplayFromDatasetName();
+    setPropValue("organismAbbrevDisplay", organismAbbrevDisplay);
   }
 
   /**
