@@ -47,13 +47,7 @@ public class AntibodyArray extends DatasetInjector {
 
         setGraphModule();
         setGraphYAxisDescription();
-        injectTemplate("antibodyArrayProfileSetParamQuery");
 
-        injectTemplate("antibodyArrayQuestion");
-
-        injectTemplate("antibodyArrayFoldChangeCategories");
-
-        injectTemplate("antibodyArrayAttributeCategory");
 
         injectTemplate("antibodyArrayGraphAttributesExpression");
 
@@ -77,9 +71,7 @@ public class AntibodyArray extends DatasetInjector {
 
         setPropValue("isGraphCustom", "true");
 
-        injectTemplate("antibodyArrayGraphDescriptions");
 
-        injectTemplate("datasetExampleGraphDescriptions");
 
         String excludeProfileSets = getPropValue("excludedProfileSets");
 
@@ -93,7 +85,17 @@ public class AntibodyArray extends DatasetInjector {
         }
 
         setPropValue("excludedProfileSetsList", excludedProfileSetsList);
-    }
+        injectTemplate("antibodyArrayProfileSetParamQuery");
+
+        injectTemplate("antibodyArrayQuestion");
+
+        //   injectTemplate("antibodyArrayCategories");
+
+        injectTemplate("antibodyArrayAttributeCategory");
+        injectTemplate("antibodyArrayGraphDescriptions");
+
+        injectTemplate("datasetExampleGraphDescriptions");
+		}
 
     @Override
     public String[][] getPropertiesDeclaration() {
