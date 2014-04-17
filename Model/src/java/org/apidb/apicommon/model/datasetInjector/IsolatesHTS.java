@@ -72,7 +72,7 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "table", "Reference");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "table", "HtsContacts");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "attribute", "overview");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "HtsSNPsAlignment");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SNPsAlignment");
   }
 
 
