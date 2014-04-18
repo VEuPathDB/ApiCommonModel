@@ -256,14 +256,16 @@
       <paramRef ref="compoundParams.samples_fc_ref" />
       <paramRef ref="compoundParams.samples_fc_comp" />
       <paramRef ref="compoundParams.fold_change"/>
+      <paramRef ref="compoundParams.regulated_dir"/>
       <column name="project_id"/>
       <column name="source_id"/>
       <column name="fold_change"/>
 
       <sql>
 	<![CDATA[
-    SELECT  round(one.value/two.value,4) AS fold_change, 
-                    ca.source_id, '@PROJECT_ID@' as project_id
+    SELECT  CASE WHEN (one.value >= two.value) THEN round(one.value/two.value,4) 
+             ELSE round(two.value/one.value,4)  END AS fold_change, 
+             ca.source_id, '@PROJECT_ID@' as project_id
     FROM 
        (SELECT sum(pe.value) as value, p.subject_row_id 
         FROM apidb.profile p,apidb.profileElement pe, apidb.profileSet ps
@@ -281,8 +283,12 @@
          ) two,
        apidb.pubChemCompound pbc, apidbtuning.compoundAttributes ca
     WHERE one.subject_row_id = two.subject_row_id
-      AND two.value > 0
-      AND one.value / two.value >= $$fold_change$$
+      AND  $$regulated_dir$$ (
+            CASE WHEN (one.value >= two.value AND two.value > 0)
+                 THEN (one.value )/(two.value )
+                 WHEN (two.value > one.value  AND one.value > 0)
+                 THEN -((two.value )/(one.value ))
+                 END ) >= $$fold_change$$
       AND pbc.pubchem_compound_id = one.subject_row_id
       AND ca.compound_id = pbc.compound_id
 	]]>
