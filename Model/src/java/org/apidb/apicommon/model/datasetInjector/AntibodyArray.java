@@ -4,10 +4,6 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class AntibodyArray extends DatasetInjector {
 
-    protected void setGraphModule() {
-        setPropValue("graphModule", "Crompton::AbMicroarray");
-    }
-
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "Arcsinh(1+50x) transform of signal intensity";
 
@@ -22,8 +18,9 @@ public class AntibodyArray extends DatasetInjector {
 
     @Override
     public void addModelReferences() {
-      setGraphModule();
+        //  setGraphModule();
       addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByAntibodyArray"  + getDatasetName() );
     }
 
     @Override
@@ -45,7 +42,7 @@ public class AntibodyArray extends DatasetInjector {
         }
 
 
-        setGraphModule();
+        //        setGraphModule();
         setGraphYAxisDescription();
 
 

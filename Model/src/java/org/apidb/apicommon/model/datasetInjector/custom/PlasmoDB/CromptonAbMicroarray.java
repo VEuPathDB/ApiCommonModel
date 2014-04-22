@@ -1,12 +1,10 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import org.apidb.apicommon.model.datasetInjector.AntibodyArray;
 
-public class CromptonAbMicroarray extends DatasetInjector {
+public class CromptonAbMicroarray extends AntibodyArray {
 
-  @Override
-  public void injectTemplates() {
-  }
+
 
   @Override
   public void addModelReferences() {
@@ -17,8 +15,11 @@ public class CromptonAbMicroarray extends DatasetInjector {
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
-    return propertiesDeclaration;
+      String[][] exprDeclaration = super.getPropertiesDeclaration();
+   
+      String[][] declaration = {};
+      
+      return combinePropertiesDeclarations(exprDeclaration, declaration);
   }
 
 
