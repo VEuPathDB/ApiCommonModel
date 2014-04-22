@@ -349,6 +349,11 @@ public abstract class DatasetInjector {
   }
   */
 
+  protected String cleanString(String dirtyText) {
+      String cleanText = dirtyText.replaceAll("\\<.*?\\>", "");
+      return cleanText;
+  }
+
   protected void setGraphDatasetName() {
     String graphDatasetName = this.datasetName.replace("-", "");
     setPropValue("graphDatasetName", graphDatasetName);
