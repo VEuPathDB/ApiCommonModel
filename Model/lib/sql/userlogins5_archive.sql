@@ -1,10 +1,20 @@
-﻿
+﻿DROP TABLE userlogins5_archive.config;
+DROP TABLE userlogins5_archive.categories;
+DROP TABLE userlogins5_archive.dataset_value;
+DROP TABLE userlogins5_archive.datasets;
+DROP TABLE userlogins5_archive.favorites;
+DROP TABLE userlogins5_archive.preferences;
+DROP TABLE userlogins5_archive.strategies;
+DROP TABLE userlogins5_archive.steps;
+DROP TABLE userlogins5_archive.user_baskets;
+DROP TABLE userlogins5_archive.user_roles;
+DROP TABLE userlogins5_archive.users;
 
 /* =========================================================================
    tables in user schema
    ========================================================================= */
 
-   CREATE TABLE userlogins5_archive.config
+CREATE TABLE userlogins5_archive.config
 (
   config_name VARCHAR(100) NOT NULL,
   config_value VARCHAR(255),
@@ -40,11 +50,11 @@ CREATE TABLE userlogins5_archive.users
   country VARCHAR(255),
   PREV_USER_ID NUMBER(12),
   migration_id NUMBER(12),
-  CONSTRAINT "users_pk" PRIMARY KEY (user_id)
 );
 
-CREATE INDEX userlogins5_archive.users_idx01 ON userlogins5_archive.users (is_guest);
-CREATE INDEX userlogins5_archive.users_idx02 ON userlogins5_archive.users (prev_user_id);
+CREATE INDEX userlogins5_archive.users_idx01 ON userlogins5_archive.users (user_id);
+CREATE INDEX userlogins5_archive.users_idx02 ON userlogins5_archive.users (is_guest, register_time);
+CREATE INDEX userlogins5_archive.users_idx03 ON userlogins5_archive.users (register_time);
 
 GRANT SELECT ON userlogins5_archive.users TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.users TO GUS_W;

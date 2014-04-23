@@ -135,7 +135,8 @@ public class UserMigration5 extends BaseCLI {
   }
 
   private void fixSteps(WdkModel wdkModel, String schema) throws WdkModelException {
-    String sqlStep = "SELECT step_id, display_params FROM " + schema + "steps";
+    String sqlStep = "SELECT s.step_id, s.display_params FROM " + schema + "steps s, " + schema + "users u " +
+        " WHERE s.user_id = u.user_id AND u.is_guest = 0 AND s.display_params LIKE '%\"[C]%'";
     String sqlClob = "SELECT clob_value FROM wdkengine.clob_values WHERE clob_checksum = ?";
     String sqlUpdate = "UPDATE " + schema + "steps SET display_params = ? WHERE step_id = ?";
     ResultSet rsStep = null;

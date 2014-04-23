@@ -8,7 +8,7 @@ DELETE FROM userlogins5.datasets;
 DELETE FROM userlogins5.preferences;
 DELETE FROM userlogins5.user_roles;
 DELETE FROM userlogins5.users;
-DELETE FROM userlogins5.config;
+-- DELETE FROM userlogins5.config;
 
 INSERT INTO userlogins5.users 
       (user_id, email, passwd, is_guest, signature, register_time, last_active, last_name, first_name, middle_name,

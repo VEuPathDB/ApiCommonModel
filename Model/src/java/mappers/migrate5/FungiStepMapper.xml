@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.apidb.apicommon.model.maintain.users5.mapper.FungiStepMapper">
+
+  <resultMap id="StepMap" type="StepInfo">
+    <result column="step_id" property="id" />
+    <result column="left_child_id" property="leftChild" />
+    <result column="right_child_id" property="rightChild" />
+    <result column="display_params" property="params" />
+    
+  </resultMap>
+
+  <!-- delete guest steps that has conflicting ids with registered users in Fungi -->
+  <delete id="deleteGuestSteps">
+    DELETE FROM userlogins4.steps WHERE step_id IN
+      (SELECT s4.step_id 
+       FROM userlogins4.steps s4, userlogins4.users u4, 
+            userlogins3.steps s3, userlogins3.users u3, wdkengine.answers a
+       WHERE s4.user_id = u4.user_id AND u4.is_guest = 1 AND s4.step_id = s3.step_id
+         AND s3.user_id = u3.user_id AND u3.is_guest = 0 
+         AND s3.answer_id = a.answer_id AND a.project_id = 'FungiDB')
+  </delete>
+  
+  <delete id="deleteOldSteps">
+    DELETE FROM userlogins4.steps WHERE project_id = 'FungiDB'
+  </delete>
+  
+  <!-- insert conflict steps, excluding the users with conflict ids  -->
+  <insert id="insertConflictSteps">
+    INSERT INTO userlogins4.steps (step_id, user_id, left_child_id, right_child_id,
+           create_time, last_run_time, estimate_size, answer_filter,
+           custom_name, is_deleted, is_valid, collapsed_name, 
+           is_collapsible, assigned_weight, migration_id, 
+           project_id, project_version, question_name, display_params,
+           result_message, prev_step_id)
+    SELECT userlogins4.steps_pkseq.nextval AS step_id, s.user_id, 
+           (SELECT sl.step_id FROM userlogins3.steps sl 
+            WHERE s.user_id = sl.user_id AND s.left_child_id = sl.display_id), 
+           (SELECT sr.step_id FROM userlogins3.steps sr 
+            WHERE s.user_id = sr.user_id AND s.right_child_id = sr.display_id),
+           s.create_time, s.last_run_time, s.estimate_size, s.answer_filter,
+           s.custom_name, s.is_deleted, s.is_valid, s.collapsed_name, 
+           s.is_collapsible, s.assigned_weight, s.migration_id, 
+           a.project_id, a.project_version, a.question_name, s.display_params,
+           a.result_message, s.step_id AS prev_step_id
+    FROM userlogins3.users u, userlogins3.steps s, wdkengine.answers a
+    WHERE u.is_guest = 0 AND u.user_id = s.user_id 
+      AND s.answer_id = a.answer_id AND a.project_id = 'FungiDB'
+      AND u.user_id NOT IN (SELECT old_id FROM user_map)
+      AND s.step_id IN (SELECT step_id FROM userlogins4.steps)
+  </insert>
+  
+  <!-- insert new user steps, excluding the users with conflict ids  -->
+  <insert id="insertNewSteps">
+    INSERT INTO userlogins4.steps (step_id, user_id, left_child_id, right_child_id,
+           create_time, last_run_time, estimate_size, answer_filter,
+           custom_name, is_deleted, is_valid, collapsed_name, 
+           is_collapsible,prev_step_id, assigned_weight, migration_id, 
+           project_id, project_version, question_name, display_params,
+           result_message)
+    SELECT s.step_id, s.user_id, 
+           (SELECT sl.step_id FROM userlogins3.steps sl 
+            WHERE s.user_id = sl.user_id AND s.left_child_id = sl.display_id), 
+           (SELECT sr.step_id FROM userlogins3.steps sr 
+            WHERE s.user_id = sr.user_id AND s.right_child_id = sr.display_id),
+           s.create_time, s.last_run_time, s.estimate_size, s.answer_filter,
+           s.custom_name, s.is_deleted, s.is_valid, s.collapsed_name, 
+           s.is_collapsible, s.prev_step_id, s.assigned_weight, s.migration_id, 
+           a.project_id, a.project_version, a.question_name, s.display_params,
+           a.result_message
+    FROM userlogins3.users u, userlogins3.steps s, wdkengine.answers a
+    WHERE u.is_guest = 0 AND u.user_id = s.user_id 
+      AND s.answer_id = a.answer_id AND a.project_id = 'FungiDB'
+      AND u.user_id NOT IN (SELECT old_id FROM user_map)
+      AND s.step_id NOT IN (SELECT step_id FROM userlogins4.steps)
+  </insert>
+  
+  <!-- insert conflict steps, for only users with conflict ids  -->
+  <insert id="insertDuplicateUsersConflictSteps">
+    INSERT INTO userlogins4.steps (step_id, user_id, left_child_id, right_child_id,
+           create_time, last_run_time, estimate_size, answer_filter,
+           custom_name, is_deleted, is_valid, collapsed_name, 
+           is_collapsible, assigned_weight, migration_id, 
+           project_id, project_version, question_name, display_params,
+           result_message, prev_step_id)
+    SELECT userlogins4.steps_pkseq.nextval AS step_id, u.new_id, 
+           (SELECT sl.step_id FROM userlogins3.steps sl 
+            WHERE s.user_id = sl.user_id AND s.left_child_id = sl.display_id), 
+           (SELECT sr.step_id FROM userlogins3.steps sr 
+            WHERE s.user_id = sr.user_id AND s.right_child_id = sr.display_id),
+           s.create_time, s.last_run_time, s.estimate_size, s.answer_filter,
+           s.custom_name, s.is_deleted, s.is_valid, s.collapsed_name, 
+           s.is_collapsible, s.assigned_weight, s.migration_id, 
+           a.project_id, a.project_version, a.question_name, s.display_params,
+           a.result_message, s.step_id AS prev_step_id
+    FROM user_map u, userlogins3.steps s, wdkengine.answers a
+    WHERE u.old_id = s.user_id AND s.answer_id = a.answer_id AND a.project_id = 'FungiDB'
+      AND s.step_id IN (SELECT step_id FROM userlogins4.steps)
+  </insert>
+  
+  <!-- insert new user steps, for only users with conflict ids  -->
+  <insert id="insertDuplicateUsersNewSteps">
+    INSERT INTO userlogins4.steps (step_id, user_id, left_child_id, right_child_id,
+           create_time, last_run_time, estimate_size, answer_filter,
+           custom_name, is_deleted, is_valid, collapsed_name, 
+           is_collapsible,prev_step_id, assigned_weight, migration_id, 
+           project_id, project_version, question_name, display_params,
+           result_message)
+    SELECT s.step_id, u.new_id, 
+           (SELECT sl.step_id FROM userlogins3.steps sl 
+            WHERE s.user_id = sl.user_id AND s.left_child_id = sl.display_id), 
+           (SELECT sr.step_id FROM userlogins3.steps sr 
+            WHERE s.user_id = sr.user_id AND s.right_child_id = sr.display_id),
+           s.create_time, s.last_run_time, s.estimate_size, s.answer_filter,
+           s.custom_name, s.is_deleted, s.is_valid, s.collapsed_name, 
+           s.is_collapsible, s.prev_step_id, s.assigned_weight, s.migration_id, 
+           a.project_id, a.project_version, a.question_name, s.display_params,
+           a.result_message
+    FROM user_map u, userlogins3.steps s, wdkengine.answers a
+    WHERE u.old_id = s.user_id AND s.answer_id = a.answer_id AND a.project_id = 'FungiDB'
+      AND s.step_id NOT IN (SELECT step_id FROM userlogins4.steps)
+  </insert>
+  
+  <!-- update left child ids of Fungi steps that has been re-mapped. -->
+  <update id="updateLeftSteps">
+    UPDATE userlogins4.steps s 
+    SET left_child_id = (SELECT s1.step_id FROM userlogins4.steps s1 
+                         WHERE s1.prev_step_id = s.left_child_id AND s1.project_id = 'FungiDB')
+    WHERE s.project_id = 'FungiDB' 
+      AND s.left_child_id IN (SELECT prev_step_id FROM userlogins4.steps WHERE project_id = 'FungiDB')
+  </update>
+  
+  <!-- update right child ids of Fungi steps that has been re-mapped. -->
+  <update id="updateRightSteps">
+    UPDATE userlogins4.steps s 
+    SET right_child_id = (SELECT s1.step_id FROM userlogins4.steps s1 
+                          WHERE s1.prev_step_id = s.right_child_id AND s1.project_id = 'FungiDB')
+    WHERE s.project_id = 'FungiDB' 
+      AND s.right_child_id IN (SELECT prev_step_id FROM userlogins4.steps WHERE project_id = 'FungiDB')
+  </update>
+  
+  <!-- find all the fungi combined steps that need to be updated -->
+  <select id="selectCombinedSteps" fetchSize="1000" resultMap="StepMap">
+    SELECT step_id, left_child_id, NVL(right_child_id, 0) AS right_child_id, display_params 
+    FROM userlogins4.steps
+    WHERE project_id = 'FungiDB' AND left_child_id IS NOT NULL
+  </select>
+  
+  <update id="updateStepParams" parameterType="StepInfo">
+    UPDATE userlogins4.steps SET display_params = #{params} WHERE step_id = #{id}
+  </update>
+</mapper>

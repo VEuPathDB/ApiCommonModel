@@ -1,50 +1,70 @@
-﻿/* =========================================================================
+﻿DROP SEQUENCE userlogins5.users_pkseq;
+DROP SEQUENCE userlogins5.strategies_pkseq;
+DROP SEQUENCE userlogins5.steps_pkseq;
+DROP SEQUENCE userlogins5.datasets_pkseq;
+DROP SEQUENCE userlogins5.dataset_values_pkseq;
+DROP SEQUENCE userlogins5.user_baskets_pkseq;
+DROP SEQUENCE userlogins5.favorites_pkseq;
+DROP SEQUENCE userlogins5.categories_pkseq;
+
+
+/* =========================================================================
    create sequences
    ========================================================================= */
-CREATE SEQUENCE userlogins5.users_pkseq INCREMENT BY 1 START WITH 1;
+DECLARE
+  start_seed NUMBER;
+BEGIN
+  start_seed := 3; -- 0 for N, 3 for S
 
-GRANT SELECT ON userlogins5.users_pkseq TO GUS_R;
-GRANT SELECT ON userlogins5.users_pkseq TO GUS_W;
-
-CREATE SEQUENCE userlogins5.migration_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.migration_pkseq INCREMENT BY 10 START WITH 10 + start_seed;
 
 GRANT SELECT ON userlogins5.migration_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.migration_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.strategies_pkseq INCREMENT BY 1 START WITH 1;
+
+CREATE SEQUENCE userlogins5.users_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
+
+GRANT SELECT ON userlogins5.users_pkseq TO GUS_R;
+GRANT SELECT ON userlogins5.users_pkseq TO GUS_W;
+
+
+CREATE SEQUENCE userlogins5.strategies_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.strategies_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.strategies_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.steps_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.steps_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.steps_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.steps_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.datasets_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.datasets_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.datasets_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.datasets_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.dataset_values_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.dataset_values_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.dataset_values_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.dataset_values_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.user_baskets_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.user_baskets_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.user_baskets_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.user_baskets_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.favorites_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.favorites_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.favorites_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.favorites_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.categories_pkseq INCREMENT BY 1 START WITH 1;
+CREATE SEQUENCE userlogins5.categories_pkseq INCREMENT BY 10 START WITH 100000000 + start_seed;
 
 GRANT SELECT ON userlogins5.categories_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.categories_pkseq TO GUS_W;
+
+END;
+/
 
 
 /* =========================================================================
@@ -335,3 +355,24 @@ CREATE TABLE userlogins5.categories
 
 GRANT SELECT ON userlogins5.categories TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5.categories TO GUS_W;
+
+CREATE TABLE userlogins5.step_analysis
+(
+  analysis_id          NUMBER(12) NOT NULL,
+  step_id              NUMBER(12) NOT NULL,
+  display_name         VARCHAR(1024),
+  is_new               NUMBER(1),
+  has_params           NUMBER(1),
+  invalid_step_reason  VARCHAR(1024),
+  context_hash         VARCHAR(96),
+  context              CLOB,
+  CONSTRAINT "step_analysis_pk" PRIMARY KEY (analysis_id),
+  CONSTRAINT "step_analysis_fk01" FOREIGN KEY (step_id)
+      REFERENCES userlogins5.steps (step_id)
+);
+
+CREATE INDEX userlogins5.step_analysis_idx01 ON userlogins5.step_analysis (step_id);
+
+
+GRANT SELECT ON userlogins5.step_analysis TO GUS_R;
+GRANT INSERT, UPDATE, DELETE ON userlogins5.step_analysis TO GUS_W;
