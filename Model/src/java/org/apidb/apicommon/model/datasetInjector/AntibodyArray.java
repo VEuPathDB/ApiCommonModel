@@ -29,8 +29,7 @@ public class AntibodyArray extends DatasetInjector {
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 
-
-        setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
+        setOrganismAbbrevFromDatasetName()
 
         String projectName = getPropValue("projectName");
 
