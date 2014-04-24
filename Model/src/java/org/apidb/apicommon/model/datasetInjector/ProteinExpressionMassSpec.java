@@ -12,7 +12,8 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       String datasetName = getDatasetName();
       String optionalOrganismAbbrev  = getPropValue("optionalOrganismAbbrev");
       if (!optionalOrganismAbbrev.equals("")) {
-              setPropValue("organismAbbrev",optionalOrganismAbbrev);
+              //setPropValue("organismAbbrev",optionalOrganismAbbrev);
+              setOrganismAbbrevFromDatasetName();
           }
       String datasetDisplayName = getPropValue("datasetDisplayName");
       String cleanDatasetDisplayName = cleanString(datasetDisplayName);
