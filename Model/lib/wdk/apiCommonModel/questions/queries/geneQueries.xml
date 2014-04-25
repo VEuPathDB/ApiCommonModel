@@ -1709,158 +1709,6 @@ GROUP BY cds_length, na_feature_id, source_id,
    </processQuery>
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- Genes By HTS Snps -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="GenesByHtsSnps" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB"
-              isCacheable="true">
-
-       <testParamValues includeProjects="CryptoDB">
-            <paramValue name="htsSnp_strain_m">IowaII</paramValue>
-        </testParamValues> 	  
-        <testParamValues includeProjects="ToxoDB">
-            <paramValue name="htsSnp_strain_m">GT1</paramValue>
-        </testParamValues>
-        <testParamValues includeProjects="TriTrypDB">
-            <paramValue name="htsSnp_strain_a">Tb-427</paramValue>
-            <paramValue name="htsSnp_strain_m">Tb-927</paramValue>
-        </testParamValues>
-
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" queryRef="organismVQ.withHtsSNPs" quote="true">
-                  <help>Select organism you wish to query against</help>
-        </paramRef>
-
-        <paramRef ref="sharedParams.ontology_type"/>
-        <paramRef ref="sharedParams.htsSnp_strain_a"/>
-        <paramRef ref="sharedParams.htsSnp_strain_m" />
-        <paramRef ref="sharedParams.hts_snps_coverage"/>
-        <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB,AmoebaDB"/>
-        <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="ToxoDB,PlasmoDB,CryptoDB,FungiDB"/> <!-- diploid default -->
-        <paramRef ref="sharedParams.hts_snps_pvalue"/>
-        <paramRef ref="geneParams.snp_stat"/>
-        <paramRef ref="geneParams.occurrences_lower"/>
-        <paramRef ref="geneParams.occurrences_upper"/>
-        <paramRef ref="geneParams.dn_ds_ratio_lower"/>
-        <paramRef ref="geneParams.dn_ds_ratio_upper"/>
-        <paramRef ref="geneParams.snp_density_lower"/>
-        <paramRef ref="geneParams.snp_density_upper"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="cds_snp_density"/>
-        <column name="hts_dn_ds_ratio"/>
-        <column name="hts_num_synonymous"/>
-        <column name="hts_num_non_synonymous"/>
-        <column name="num_noncoding"/>
-        <column name="num_nonsense"/>
-        <column name="hts_total_snps"/>
-
-        <sqlParamValue name="approxZero">0.1</sqlParamValue>
-
-        <sql>
-            <![CDATA[
-              SELECT source_id, '@PROJECT_ID@' as project_id,
-                     round(non_synonymous
-                           / CASE synonymous
-                             WHEN 0 THEN null
-                             ELSE synonymous END, 2) as hts_dn_ds_ratio,
-                     non_synonymous as hts_num_non_synonymous, synonymous as hts_num_synonymous,
-                     non_coding as num_noncoding, stop as num_nonsense, cds_length,
-                     round(((non_synonymous + synonymous) / cds_length * 1000), 2) as cds_snp_density,
-                     total as hts_total_snps
-              FROM
-(
-  SELECT gene as source_id, cds_length,
-         sum(is_synonymous) as synonymous,
-         sum(is_non_synonymous) as non_synonymous,
-         sum(is_non_coding) as non_coding,
-         sum(is_stop) as stop,
-         count(distinct parent_id) as total
-  FROM
-  (
-      SELECT snp.gene_source_id as gene,
-             ga.cds_length,
-             variants.parent_id,
-             case when ref_product is null then 1 else 0 end as is_non_coding,
-             case when ref_product = comp_product then 1 else 0 end as is_synonymous,
-             case when ref_product != comp_product and ref_product is not null then 1 else 0 end as is_non_synonymous,
-             case when ref_product = '*' OR  comp_product = '*' then 1 else 0 end as is_stop
-      FROM  ApidbTuning.SnpAttributes snp,
-            APIDBTUNING.geneattributes ga,
-            ( SELECT distinct ref.parent_id, 
-                     ref.allele as ref_allele, 
-                     ref.product as ref_product,
-                     comp.product as comp_product
-              FROM   dots.SeqVariation ref, dots.SeqVariation comp
-              WHERE  ref.parent_id = comp.parent_id
-                 AND ref.allele != comp.allele
-                 AND ref.organism = $$organism$$
-                 AND comp.organism = $$organism$$
-                 AND ref.strain = $$htsSnp_strain_a$$
-                 AND (ref.coverage >= $$hts_snps_coverage$$ or ref.coverage is null)
-                 AND (ref.allele_percent >= $$hts_snps_allele_freq$$ or ref.allele_percent is null)
-                 AND (ref.pvalue <= $$hts_snps_pvalue$$ or ref.pvalue is null)
-                 AND comp.strain in ($$htsSnp_strain_m$$)
-                 AND (comp.coverage >= $$hts_snps_coverage$$ or comp.coverage is null)
-                 AND (comp.allele_percent >= $$hts_snps_allele_freq$$ or comp.allele_percent is null)
-                 AND (comp.pvalue <= $$hts_snps_pvalue$$ or comp.pvalue is null)
-            ) variants
-      WHERE snp.na_feature_id = variants.parent_id
-        --AND snp.dataset = 'InsertSnps.pm NGS SNPs INTERNAL' 
-        AND snp.type = 'HTS'
-        AND snp.organism = $$organism$$
-        AND snp.gene_source_id is not null
-        AND snp.gene_source_id = ga.source_id
-  ) snpq
-  GROUP BY snpq.gene, snpq.cds_length
-) 
-   WHERE non_synonymous / CASE synonymous
-        WHEN 0 THEN &&approxZero&&
-        ELSE synonymous END >= $$dn_ds_ratio_lower$$
-        AND (-1 = $$dn_ds_ratio_upper$$
-            OR non_synonymous / CASE synonymous
-            WHEN 0 THEN &&approxZero&&
-            ELSE synonymous end <= $$dn_ds_ratio_upper$$ )
-         AND $$snp_stat$$ >= $$occurrences_lower$$
-         AND (-1 = $$occurrences_upper$$ OR $$snp_stat$$ <= $$occurrences_upper$$)
-         AND (non_synonymous + synonymous) / cds_length * 1000 >= $$snp_density_lower$$
-         AND (-1 = $$snp_density_upper$$
-         OR (non_synonymous + synonymous) / cds_length * 1000 <= $$snp_density_upper$$)
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesByHtsSnps" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="true">
-        <testParamValues>
-            <paramValue name="htsSnp_strain_m">md</paramValue>
-        </testParamValues>
-
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
-                  noTranslation="true"  queryRef="organismVQ.withChromosomesHtsSNPs">
-                  <help>Select organism you wish to query against</help>
-        </paramRef>
-
-        <paramRef ref="sharedParams.ontology_type"/>
-        <paramRef ref="sharedParams.htsSnp_strain_a" quote="false"/>
-        <paramRef ref="sharedParams.htsSnp_strain_m" multiPick="false"  quote="false"/>
-        <paramRef ref="geneParams.snp_stat" groupRef="paramGroups.advancedParams"/>
-        <paramRef ref="geneParams.occurrences_lower" groupRef="paramGroups.advancedParams"/>
-        <paramRef ref="geneParams.occurrences_upper" groupRef="paramGroups.advancedParams"/>
-        <paramRef ref="geneParams.dn_ds_ratio_lower" groupRef="paramGroups.advancedParams"/>
-        <paramRef ref="geneParams.dn_ds_ratio_upper" groupRef="paramGroups.advancedParams"/>
-        <paramRef ref="geneParams.snp_density_lower" groupRef="paramGroups.advancedParams"/>
-        <paramRef ref="geneParams.snp_density_upper" groupRef="paramGroups.advancedParams"/>
-        <wsColumn name="project_id" width="20"/>
-        <wsColumn name="source_id" width="50"/>
-        <wsColumn name="cds_snp_density" width="10"/>
-        <wsColumn name="hts_dn_ds_ratio" width="10"/>
-        <wsColumn name="hts_num_synonymous" width="10"/>
-        <wsColumn name="hts_num_non_synonymous" width="10"/>
-        <wsColumn name="num_noncoding" width="10"/>
-        <wsColumn name="num_nonsense" width="10"/>
-        <wsColumn name="hts_total_snps" width="10"/>
-   </processQuery>
-
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Genes By NGS Snps -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
@@ -1868,20 +1716,19 @@ GROUP BY cds_length, na_feature_id, source_id,
               processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindGenesWithSnpCharsPlugin">
 
        <testParamValues includeProjects="CryptoDB">
-            <paramValue name="htsSnp_strain_m">IowaII</paramValue>
+            <paramValue name="ngsSnp_strain_meta">IowaII</paramValue>
         </testParamValues> 	  
         <testParamValues includeProjects="ToxoDB">
-            <paramValue name="htsSnp_strain_m">GT1</paramValue>
+            <paramValue name="ngsSnp_strain_meta">GT1</paramValue>
         </testParamValues>
         <testParamValues includeProjects="TriTrypDB">
-            <paramValue name="htsSnp_strain_a">Tb-427</paramValue>
-            <paramValue name="htsSnp_strain_m">Tb-927</paramValue>
+            <paramValue name="ngsSnp_strain_meta">Tb-927</paramValue>
         </testParamValues>
 
         <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" queryRef="organismVQ.withHtsSNPs" quote="true">
         </paramRef>
 
-        <paramRef ref="sharedParams.htsSnp_strain_meta" quote="false" />
+        <paramRef ref="sharedParams.ngsSnp_strain_meta" quote="false" />
 	<paramRef ref="snpParams.WebServicesPath"/>
 	<paramRef ref="snpParams.MinPercentMinorAlleles"/>
 	<paramRef ref="snpParams.MinPercentIsolateCalls"/>
