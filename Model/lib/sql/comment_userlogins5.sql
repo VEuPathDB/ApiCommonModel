@@ -38,45 +38,45 @@ DROP TABLE userlogins5.comments;
 DROP TABLE userlogins5.comment_target;
 DROP TABLE userlogins5.review_status;
 
-CREATE SEQUENCE userlogins5.comments_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.comments_pkseq START WITH 100000003 INCREMENT BY 10;
 
 GRANT select on userlogins5.comments_pkseq to GUS_W;
 GRANT select on userlogins5.comments_pkseq to GUS_R;
 
 
-CREATE SEQUENCE userlogins5.locations_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.locations_pkseq START WITH 100000003 INCREMENT BY 10;
 
 GRANT select on userlogins5.locations_pkseq to GUS_W;
 GRANT select on userlogins5.locations_pkseq to GUS_R;
 
 
-CREATE SEQUENCE userlogins5.external_databases_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.external_databases_pkseq START WITH 100000003 INCREMENT BY 10;
 
 GRANT select on userlogins5.external_databases_pkseq to GUS_W;
 GRANT select on userlogins5.external_databases_pkseq to GUS_R;
 
 
-CREATE SEQUENCE userlogins5.commentTargetCategory_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.commentTargetCategory_pkseq START WITH 100000003 INCREMENT BY 10;
 
 GRANT select on userlogins5.commentTargetCategory_pkseq to GUS_W;
 GRANT select on userlogins5.commentTargetCategory_pkseq to GUS_R;
 
 
-CREATE SEQUENCE userlogins5.commentReference_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.commentReference_pkseq START WITH 100000003 INCREMENT BY 10;
 GRANT select on userlogins5.commentReference_pkseq to GUS_W;
 GRANT select on userlogins5.commentReference_pkseq to GUS_R;
 
 
-CREATE SEQUENCE userlogins5.commentSequence_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.commentSequence_pkseq START WITH 100000003 INCREMENT BY 10;
 GRANT select on userlogins5.commentSequence_pkseq to GUS_W;
 GRANT select on userlogins5.commentSequence_pkseq to GUS_R;
 
 
-CREATE SEQUENCE userlogins5.commentFile_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.commentFile_pkseq START WITH 100000003 INCREMENT BY 10;
 GRANT select on userlogins5.commentFile_pkseq to GUS_W;
 GRANT select on userlogins5.commentFile_pkseq to GUS_R;
 
-CREATE SEQUENCE userlogins5.commentStableId_pkseq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE userlogins5.commentStableId_pkseq START WITH 100000003 INCREMENT BY 10;
 GRANT select on userlogins5.commentStableId_pkseq to GUS_W;
 GRANT select on userlogins5.commentStableId_pkseq to GUS_R;
 
