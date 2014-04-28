@@ -64,7 +64,9 @@ public class UserMigration5 extends BaseCLI {
   }
 
   private void fixDatasets(WdkModel wdkModel, String schema) throws WdkModelException {
-    String sqlSelect = "SELECT dataset_id, data1, data2, data3 FROM " + schema + "dataset_values " +
+    String sqlSelect = "SELECT d.dataset_id, dv.data1, dv.data2, dv.data3                        " +
+        " FROM " + schema + "datasets d, " + schema + "dataset_values dv " +
+        " WHERE d.dataset_id = dv.dataset_id AND d.content IS NULL " +
         " ORDER BY dataset_id ASC, dataset_value_id ASC";
     String sqlUpdate = "UPDATE " + schema + "datasets " +
         "SET content_checksum = ?, content = ? WHERE dataset_id = ?";
@@ -152,28 +154,33 @@ public class UserMigration5 extends BaseCLI {
         stepCount++;
         int stepId = rsStep.getInt("step_id");
         String params = platform.getClobData(rsStep, "display_params");
-        JSONObject jsParams = new JSONObject(params);
+        JSONObject jsContent = new JSONObject(params);
+        JSONObject jsParams;
+        if (jsContent.has("params")) {
+          jsParams = jsContent.getJSONObject("params");
+        }
+        else {
+          jsParams = jsContent;
+          jsContent = new JSONObject();
+          jsContent.put("filters", new JSONObject());
+        }
         boolean updated = processParamValues(platform, psClob, stepId, jsParams);
-        
+
         if (updated) {
           // while updating, change to new storage format
-          JSONObject jsContent = new JSONObject();
           jsContent.put("params", jsParams);
-          jsContent.put("filters", new JSONObject());
           platform.setClobData(psUpdate, 1, jsContent.toString(), false);
           psUpdate.setInt(2, stepId);
           psUpdate.addBatch();
           count++;
-          if (count % 1000 == 0) {
+          if (count % 100 == 0) {
             psUpdate.executeBatch();
             logger.info(count + " steps updated, " + stepCount + " steps processed.");
           }
         }
       }
-      if (count % 100 != 0) {
-        psUpdate.executeBatch();
-        logger.info("Totally " + count + " steps updated, " + stepCount + " steps processed.");
-      }
+      psUpdate.executeBatch();
+      logger.info("Totally " + count + " steps updated, " + stepCount + " steps processed.");
     }
     catch (SQLException | JSONException ex) {
       throw new WdkModelException(ex);
@@ -205,7 +212,7 @@ public class UserMigration5 extends BaseCLI {
             updated = true;
           }
           else
-            logger.error("checksum in step #" + stepId + " is invalid: " + checksum);
+            logger.warn("checksum in step #" + stepId + " is invalid: " + checksum);
         }
         finally {
           SqlUtils.closeResultSetOnly(resultSet);

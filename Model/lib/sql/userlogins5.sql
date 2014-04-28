@@ -356,6 +356,7 @@ CREATE TABLE userlogins5.categories
 GRANT SELECT ON userlogins5.categories TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5.categories TO GUS_W;
 
+
 CREATE TABLE userlogins5.step_analysis
 (
   analysis_id          NUMBER(12) NOT NULL,
