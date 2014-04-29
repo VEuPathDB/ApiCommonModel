@@ -32,6 +32,10 @@ public abstract class Expression extends DatasetInjector {
         setPropValue("proteinCodingParamVisible", "true");
     }
 
+    protected void setCleanGraphModule() {
+        String cleanGraphModule = getPropValue("graphModule").replace(":","");
+        setPropValue("cleanGraphModule", cleanGraphModule);
+    }
 
     /***
      *
@@ -94,6 +98,7 @@ public abstract class Expression extends DatasetInjector {
         setDataType();
         setExprGraphVisiblePart();
         setGraphModule();
+        setCleanGraphModule();
         setExprPlotPartModule();
         setGraphYAxisDescription();
         setProteinCodingProps();

@@ -17,19 +17,9 @@ public class QuantitativeProteomicsNonRatioUnlogged extends QuantitativeProteomi
 
     @Override
         protected void setIsLogged() {
-        setPropValue("isLogged", "1"); 
+        setPropValue("isLogged", "0"); 
     }
 
 
-
-    @Override
-        public String[][] getPropertiesDeclaration() {
-        String[][] exprDeclaration = super.getPropertiesDeclaration();
-        
-        String [][] declaration = {{"isLogged", "Is the Data Logged or not"},
-        };
-        
-        return combinePropertiesDeclarations(exprDeclaration, declaration);
-    }
 }
 
