@@ -26,7 +26,7 @@ import org.gusdb.wsf.util.BaseCLI;
  * @author jerric
  * 
  */
-public class MigrateUser5 extends BaseCLI {
+public class MigrateFungiDB extends BaseCLI {
 
   public static final int UPDATE_PAGE = 200;
 
@@ -43,11 +43,11 @@ public class MigrateUser5 extends BaseCLI {
       new FungiPreferenceTask(), new FungiFavoriteTask(), new FungiBasketTask(), new FungiDatasetTask(),
       new FungiStepTask(), new FungiStepParamTask(), new FungiStrategyTask() };
 
-  private static final Logger logger = Logger.getLogger(MigrateUser5.class);
+  private static final Logger logger = Logger.getLogger(MigrateFungiDB.class);
 
   public static void main(String[] args) throws Exception {
     String cmdName = System.getProperty("cmdName");
-    MigrateUser5 migrator = new MigrateUser5(cmdName);
+    MigrateFungiDB migrator = new MigrateFungiDB(cmdName);
     try {
       migrator.invoke(args);
     }
@@ -56,7 +56,7 @@ public class MigrateUser5 extends BaseCLI {
       throw ex;
     }
     finally {
-      logger.info("user migration 5 is done.");
+      logger.info("Fungi user migration is done.");
       System.exit(0);
     }
   }
@@ -64,8 +64,8 @@ public class MigrateUser5 extends BaseCLI {
   /**
    * 
    */
-  public MigrateUser5(String command) {
-    super((command != null) ? command : "apiMigrateUser5", "Migrate user into new userlogins5 schema.");
+  public MigrateFungiDB(String command) {
+    super((command != null) ? command : "apiMigrateFungiDB", "Migrate fungi users into userlogins4 schema, so that they will be migrated into userlogins5 later.");
   }
 
   @Override
