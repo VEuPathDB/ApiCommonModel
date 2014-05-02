@@ -40,6 +40,8 @@ public class FungiStepParamTask implements MigrationTask {
     for (StepInfo step : steps) {
       fixStepParams(step);
       mapper.updateStepParams(step);
+      // release memory
+      step.setParams(null);
     }
   }
 
@@ -91,6 +93,12 @@ public class FungiStepParamTask implements MigrationTask {
       // set the params back
       step.setParams(params.toString());
     }
+  }
+
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
   }
 
 }

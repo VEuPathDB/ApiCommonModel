@@ -20,19 +20,18 @@ public class UserMigration5 extends BaseCLI {
 
   private static final Logger logger = Logger.getLogger(UserMigration5.class);
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     String cmdName = System.getProperty("cmdName");
     UserMigration5 cacher = new UserMigration5(cmdName);
     try {
       cacher.invoke(args);
+      logger.info("user migration 5 is done.");
+      System.exit(0);
     }
     catch (Exception ex) {
       ex.printStackTrace();
-      throw ex;
-    }
-    finally {
-      logger.info("user migration 5 is done.");
-      System.exit(0);
+      logger.info("user migration 5 failed.");
+      System.exit(-1);
     }
   }
 

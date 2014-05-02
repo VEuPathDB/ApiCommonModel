@@ -14,4 +14,5 @@ public interface UtilityMapper {
   
   int deleteUserMap();
 
+  String selectClobValue(String checksum);
 }

@@ -11,11 +11,13 @@ import org.apidb.apicommon.model.maintain.users5.mapper.GuestMapper;
 public class GuestCleanupTask implements MigrationTask, CutoffDateAware {
 
   private static final Logger LOG = Logger.getLogger(GuestCleanupTask.class);
+  
+  private static final String USER3_SCHEMA = "userlogins3";
+  private static final String USER4_SCHEMA = "userlogins4";
 
   private Date cutoffDate;
-  
-  public GuestCleanupTask() {
-  }
+  private int user3Count;
+  private int user4Count;
   
   @Override
   public String getDisplay() {
@@ -37,6 +39,12 @@ public class GuestCleanupTask implements MigrationTask, CutoffDateAware {
     GuestMapper mapper = session.getMapper(GuestMapper.class);
     DeleteUsers4Mapper users4Mapper = session.getMapper(DeleteUsers4Mapper.class);
     DeleteUsers3Mapper users3Mapper = session.getMapper(DeleteUsers3Mapper.class);
+    
+    
+    // before doing anything, will get registered user count for later validation
+    user3Count = mapper.selectRegisteredUserCount(USER3_SCHEMA);
+    user4Count = mapper.selectRegisteredUserCount(USER4_SCHEMA);
+
 
     // temp guests are the guest users that doesn't have any steps; and any temp guests created before the
     // cutoff date will be deleted.
@@ -71,5 +79,23 @@ public class GuestCleanupTask implements MigrationTask, CutoffDateAware {
     LOG.debug(count + " guests to be deleted.");
     TaskUtility.deleteUsers(users3Mapper);
     session.commit();
+  }
+  
+  @Override
+  public boolean validate(SqlSession session) {
+    GuestMapper mapper = session.getMapper(GuestMapper.class);
+    
+    int newUser3Count = mapper.selectRegisteredUserCount(USER3_SCHEMA);
+    if (user3Count != newUser3Count) {
+      LOG.error("Registered users are mistakenly removed from " + USER3_SCHEMA);
+      return false;
+    }
+    
+    int newUser4Count = mapper.selectRegisteredUserCount(USER4_SCHEMA);
+    if (user4Count != newUser4Count) {
+      LOG.error("Registered user are mistakenly removed from " + USER4_SCHEMA);
+      return false;
+    }
+    return true;
   }
 }

@@ -71,4 +71,10 @@ public class FungiStepTask implements MigrationTask {
     count = mapper.updateRightSteps();
     LOG.debug(count + " right child steps updated.");
   }
+
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
+  }
 }

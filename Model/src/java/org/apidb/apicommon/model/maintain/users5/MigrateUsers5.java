@@ -26,11 +26,16 @@ import org.gusdb.wsf.util.BaseCLI;
  * @author jerric
  * 
  */
-public class MigrateFungiDB extends BaseCLI {
+public class MigrateUsers5 extends BaseCLI {
 
   public static final int UPDATE_PAGE = 200;
 
-  private static final String ARG_CUTOFF_DATE = "cutoffDate";
+  public static final String ARG_STAGE = "stage";
+  public static final String ARG_CUTOFF_DATE = "cutoffDate";
+
+  private static final String STAGE_PRE_RELEASE = "pre-release";
+  private static final String STAGE_RELEASE = "release";
+
   private static final String DATE_FORMAT = "yyyy/MM/dd";
 
   private static final String CONFIG_FILE = "/config/migrate-user-5.xml";
@@ -39,43 +44,50 @@ public class MigrateFungiDB extends BaseCLI {
   private static final String PROP_DB_LOGIN = "db.login";
   private static final String PROP_DB_PASSWORD = "db.password";
 
-  private static final MigrationTask[] TASK_QUEUE = { new GuestCleanupTask(), new FungiUserTask(),
-      new FungiPreferenceTask(), new FungiFavoriteTask(), new FungiBasketTask(), new FungiDatasetTask(),
-      new FungiStepTask(), new FungiStepParamTask(), new FungiStrategyTask() };
+  public static final MigrationTask[] PRE_RELEASE_TASKS = { new GuestCleanupTask(),
+      new CommentsCleanupTask(), new Users5CleanupTask() };
 
-  private static final Logger logger = Logger.getLogger(MigrateFungiDB.class);
+  public static final MigrationTask[] RELEASE_TASKS = { new FungiUserTask(), new FungiPreferenceTask(),
+      new FungiFavoriteTask(), new FungiBasketTask(), new FungiDatasetTask(), new FungiStepTask(),
+      new FungiStepParamTask(), new FungiStrategyTask(), new Users5MigrateTask(), new CommentsMigrateTask(),
+      new Users5StepParamsTask(), new Users5DatasetsTask() };
+
+  private static final Logger LOG = Logger.getLogger(MigrateUsers5.class);
 
   public static void main(String[] args) throws Exception {
     String cmdName = System.getProperty("cmdName");
-    MigrateFungiDB migrator = new MigrateFungiDB(cmdName);
+    MigrateUsers5 migrator = new MigrateUsers5(cmdName);
     try {
       migrator.invoke(args);
+      LOG.info("Userlogins5 migration is done.");
+      System.exit(0);
     }
     catch (Exception ex) {
       ex.printStackTrace();
-      throw ex;
-    }
-    finally {
-      logger.info("Fungi user migration is done.");
-      System.exit(0);
+      LOG.error("Userlogins5 migration failed.");
+      System.exit(-1);
     }
   }
 
   /**
    * 
    */
-  public MigrateFungiDB(String command) {
-    super((command != null) ? command : "apiMigrateFungiDB", "Migrate fungi users into userlogins4 schema, so that they will be migrated into userlogins5 later.");
+  public MigrateUsers5(String command) {
+    super((command != null) ? command : "apiMigrateUsers5",
+        "Migrate fungi user from userlogins3, and eupath users from userlogins4, into new userlogins5.");
   }
 
   @Override
   protected void declareOptions() {
-    addSingleValueOption(ARG_PROJECT_ID, true, null, "any project_id. Only one project is needed to provide "
-        + "connection information to the apicomm, and the data for all the projects will be fixed in the "
-        + "userlogins5 schema.");
+    addSingleValueOption(ARG_PROJECT_ID, true, null, "Required. Any project_id. Only one project is needed "
+        + " to provide connection information to the apicomm, and the data for all the projects needed to "
+        + " be fixed in the userlogins5 schema.");
 
-    addSingleValueOption(ARG_CUTOFF_DATE, false, null, "Any guest user created by this date will be backed " +
-        "up, and removed from the live schema defined in the model-config.xml. " +
+    addSingleValueOption(ARG_STAGE, true, null, "Required. The stage of the process. The valid options are " +
+        STAGE_PRE_RELEASE + ", " + STAGE_RELEASE + ".");
+
+    addSingleValueOption(ARG_CUTOFF_DATE, false, null, "Optional. Any guest user created by this date " +
+        "will be backed up, and removed from the live schema defined in  the model-config.xml. " +
         "The data should be in this format: " + DATE_FORMAT);
   }
 
@@ -83,18 +95,35 @@ public class MigrateFungiDB extends BaseCLI {
   protected void execute() throws Exception {
     String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
     String projectId = (String) getOptionValue(ARG_PROJECT_ID);
+    String stage = (String) getOptionValue(ARG_STAGE);
     Date cutoffDate = getCutoffDate();
-    logger.info("Migrating user into new userlogins5 schema... cutoffDate = " + cutoffDate);
+
+    // verify stage
+    if (!stage.equals(STAGE_PRE_RELEASE) && !stage.equals(STAGE_RELEASE))
+      throw new Exception("invalid " + ARG_STAGE + " argument: " + stage);
+
+    LOG.info("Migrating user into new userlogins5 schema... cutoffDate = " + cutoffDate);
 
     WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
     SqlSessionFactory sessionFactory = getSessionFactory(wdkModel);
 
-    for (int i = 0; i < TASK_QUEUE.length; i++) {
+    MigrationTask[] tasks = null;
+    if (stage.equals(STAGE_PRE_RELEASE)) {
+      tasks = PRE_RELEASE_TASKS;
+    }
+    else if (stage.equals(STAGE_RELEASE)) {
+      tasks = RELEASE_TASKS;
+    }
+    for (int i = 0; i < tasks.length; i++) {
       long start = System.currentTimeMillis();
-      MigrationTask task = TASK_QUEUE[i];
-      String display = "Task " + (i + 1) + "/" + TASK_QUEUE.length + ": " + task.getDisplay();
-      logger.info("Executing " + display + "...");
+      MigrationTask task = tasks[i];
+      String display = "Task " + (i + 1) + "/" + tasks.length + ": " + task.getDisplay();
+      LOG.info("Executing " + display + "...");
 
+      // set wdkModel if needed
+      if (task instanceof ModelAware) {
+        ((ModelAware) task).setModel(wdkModel);;
+      }
       // set cutoff date if needed
       if (task instanceof CutoffDateAware) {
         ((CutoffDateAware) task).setCutoffDate(cutoffDate);
@@ -105,13 +134,16 @@ public class MigrateFungiDB extends BaseCLI {
       SqlSession session = sessionFactory.openSession(executorType);
       try {
         task.execute(session);
+        if (!task.validate(session))
+          throw new Exception(display + " validation failed.");
+
         session.commit();
-        logger.info(display + " finished successfully in " + ((System.currentTimeMillis() - start) / 1000D) +
+        LOG.info(display + " finished successfully in " + ((System.currentTimeMillis() - start) / 1000D) +
             " seconds.");
       }
       catch (Exception ex) {
         session.rollback();
-        logger.error(display + " failed with error: " + ex.getMessage());
+        LOG.error(display + " failed with error: " + ex.getMessage());
         throw ex;
       }
       finally {

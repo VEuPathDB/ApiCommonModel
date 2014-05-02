@@ -41,4 +41,10 @@ public class FungiFavoriteTask implements MigrationTask {
     LOG.debug(count + " favorites for users with changed ids are inserted.");
   }
 
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
+  }
+
 }

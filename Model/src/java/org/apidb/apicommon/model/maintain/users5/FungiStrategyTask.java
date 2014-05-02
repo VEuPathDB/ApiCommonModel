@@ -65,4 +65,10 @@ public class FungiStrategyTask implements MigrationTask {
     LOG.debug(count + " root step ids updated.");
   }
 
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
+  }
+
 }

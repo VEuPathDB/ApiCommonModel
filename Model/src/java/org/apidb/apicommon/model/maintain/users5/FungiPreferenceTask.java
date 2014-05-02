@@ -46,4 +46,10 @@ public class FungiPreferenceTask implements MigrationTask {
     LOG.debug(count + " preferences for users with changed ids are inserted.");
   }
 
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
+  }
+
 }

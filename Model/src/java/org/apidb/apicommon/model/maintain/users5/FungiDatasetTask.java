@@ -41,4 +41,10 @@ public class FungiDatasetTask implements MigrationTask {
     LOG.debug(count + " datasets for users with changed ids are inserted.");
   }
 
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
+  }
+
 }

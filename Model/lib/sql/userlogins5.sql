@@ -60,6 +60,11 @@ CREATE SEQUENCE userlogins5.categories_pkseq INCREMENT BY 10 START WITH 10000000
 GRANT SELECT ON userlogins5.categories_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.categories_pkseq TO GUS_W;
 
+CREATE SEQUENCE userlogins5.step_analysis_pkseq INCREMENT BY 10 START WITH 100000003;
+
+GRANT SELECT ON userlogins5.step_analysis_pkseq TO GUS_R;
+GRANT SELECT ON userlogins5.step_analysis_pkseq TO GUS_W;
+
 
 /* =========================================================================
    tables in user schema

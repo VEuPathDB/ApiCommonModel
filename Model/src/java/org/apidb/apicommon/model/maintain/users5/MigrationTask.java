@@ -9,4 +9,6 @@ public interface MigrationTask {
   boolean isBatchEnabled();
   
   void execute(SqlSession session) throws Exception;
+  
+  boolean validate(SqlSession session);
 }

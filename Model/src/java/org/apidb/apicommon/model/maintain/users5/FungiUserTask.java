@@ -42,4 +42,10 @@ public class FungiUserTask implements MigrationTask {
     count = mapper.insertNewRoles();
     LOG.debug(count + " user roles inserted into userlogins4.");
   }
+
+  @Override
+  public boolean validate(SqlSession session) {
+    // TODO - need to add validations later
+    return true;
+  }
 }
