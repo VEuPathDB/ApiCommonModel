@@ -22,27 +22,28 @@ public class AnnotatedGenome extends DatasetInjector {
 		
 		String[] orgs = organismFullName.split(" ");
 
-		String speciesWithSpaces, species, speciesAbbrev;
-		// String species is used in displayNames, descriptions and as SQL parameter value;
-		// make sure orgs[1] is consistent with the species value in geneattributes table (with spaces)
-		// String speciesAbbrev is used in the filter instance name, so the layout can extract the table headers (family, species and strain)
-		// make sure orgs[1] is the species abbrev WITHOUT spaces
+		String speciesWithSpaces, species, familySpecies;
+		// String species is used in distinct filter: displayName, description and SQL parameter value; 
+		//      it MAY contain spaces (eg: "sp. 1")
+		// String familySpecies is used in the filter's name: both distinct filters and instance filters; 
+		//      it CANNOT contain spaces (eg: "sp.=1")
+		// This convention will allow the layout (WDK/.../AnswerFilterLayout.java) 
+		//      to extract the organism filter table headers (family, species and strain) to prepare maps that will be used by the jsp
 
 		if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
 				speciesWithSpaces = getPropValue("optionalSpecies");
 				species = orgs[0] + " " + speciesWithSpaces;
-				speciesAbbrev = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
+				familySpecies = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
 		} else {
 				species = orgs[0] + " " + orgs[1]; 
-				speciesAbbrev = orgs[0] + "-" + orgs[1]; 
+				familySpecies = orgs[0] + "-" + orgs[1]; 
 		}
 
-	
     // setting properties to be used in template
-		setPropValue("speciesAbbrev", speciesAbbrev);
+		setPropValue("familySpecies", familySpecies);
     setPropValue("organismFullName", organismFullName);
     if(getPropValueAsBoolean("isEuPathDBSite")) {
-      setPropValue("includeProjects", projectName + ",EuPathDB");
+			setPropValue("includeProjects", projectName + ",EuPathDB");
     } else {
       setPropValue("includeProjects", projectName);
     }   
