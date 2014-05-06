@@ -122,7 +122,7 @@ public class MigrateUsers5 extends BaseCLI {
 
       // set wdkModel if needed
       if (task instanceof ModelAware) {
-        ((ModelAware) task).setModel(wdkModel);;
+        ((ModelAware) task).setModel(wdkModel);
       }
       // set cutoff date if needed
       if (task instanceof CutoffDateAware) {

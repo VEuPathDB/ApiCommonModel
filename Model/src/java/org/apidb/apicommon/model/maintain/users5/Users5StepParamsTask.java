@@ -125,7 +125,7 @@ public class Users5StepParamsTask implements MigrationTask, ModelAware {
   }
 
   private boolean processParamValues(UtilityMapper mapper, int stepId, JSONObject jsParams)
-      throws SQLException, JSONException {
+      throws JSONException {
     boolean updated = false;
     String[] names = JSONObject.getNames(jsParams);
     if (names == null)
