@@ -43,6 +43,9 @@ populateGenesAndProducts($dbh, $suffix);
 renameOldChanges($dbh, $suffix);
 
 $dbh->commit() or print STDERR $dbh->errstr;
+
+checkReleaseDates($dbh);
+
 print STDERR "Saved $totalChangedGenes total changed genes from web service\n";
 
 sub getGenomeList {
@@ -169,7 +172,7 @@ sub getOfferedTaxa {
   my $ua = new LWP::UserAgent;
   my $url = "http://www.genedb.org/services/organisms/list";
 
-  print STDERR "getting list of available taxa from = $url\n";
+  print STDERR "getting list of available taxa from $url\"\n";
   my $request = new HTTP::Request('GET', $url);
   my $response = $ua->request($request);
   if (!$response->is_success) {
@@ -473,4 +476,29 @@ sub removeBogusCharacters {
   }
 
   return $contentString;
+}
+
+sub checkReleaseDates {
+
+  my ($dbh) = @_;
+
+  my $stmt = $dbh->prepare(<<SQL) or die "preparing select undated genomes";
+      select ed.name, edr.version, edr.external_database_release_id
+      from sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+      where ed.external_database_id = edr.external_database_id
+        and edr.external_database_release_id in (select external_database_release_id from dots.GeneFeature)
+        and edr.release_date is null
+SQL
+
+
+  $stmt->execute();
+
+  my $undatedGenomes;
+  while (my ($dbName, $dbVersion, $extDbRlsId) = $stmt->fetchrow_array()) {
+    $undatedGenomes = 1;
+    print STDERRR "ERROR: ExternalDatabase \"$dbName\", version \"$dbVersion\" (extDbRlsId $extDbRlsId) has a null release_date.\n";
+  }
+
+  die "\nFATAL ERROR: sres.ExternalDatabaseRelease.release_date must be populated\n"
+    if $undatedGenomes;
 }
