@@ -4063,7 +4063,7 @@ where e.na_sequence_id = ns.na_sequence_id and ns.external_database_release_id =
               subType="immuneResponse"
               organismAbbrev="${organismAbbrev}"
           >
-      <manualGet fileOrDir="${projectName}/${organismAbbrev}/microarrayAntibody/${experimentName}/${experimentVersion}/metadata">
+      <manualGet fileOrDir="${projectName}/${organismAbbrev}/proteinMicroarray/${experimentName}/${experimentVersion}/metadata">
         <dir name="metadata">
         </dir>
       </manualGet>
@@ -4189,9 +4189,9 @@ where e.na_sequence_id = ns.na_sequence_id and ns.external_database_release_id =
     <prop name="experimentVersion"></prop>
     <prop name="hasPairedEnds"/>
     <prop name="isColorspace"/>
-    <prop name="removePCRDuplicates"/>
-    <prop name="coverageWindowSize"/>
-    <prop name="extraBowtieParams"/>
+    <prop name="removePCRDuplicates">If true samtools rmdup will run after mapping</prop>
+    <prop name="coverageWindowSize">This workflow calculates coverage in windows across the genome.  Default window size is 2500 (bp)</prop>
+    <prop name="extraBowtieParams">Parameters for Bowtie(2) above and beyond the default can be added verbatim here. "None" if default is ok</prop>
 
     <graphTemplateFile name="originsOfReplicationExperiment.xml"/>
    
@@ -4238,6 +4238,7 @@ where e.na_sequence_id = ns.na_sequence_id and ns.external_database_release_id =
               organismAbbrev="${organismAbbrev}">
 
       <manualGet fileOrDir="common/empty">
+        <descriptionOfFinal>The final/ dir must contain four files per sample. These should be sampleName.fsa, sampleName.fsa.paired, sampleName.qual, sampleName.qual.paired.  Fasta files in final/ should have been trimmed of adaptors and filtered for quality if required.  If the reads are not paired-end or quality files are not available, make empty files with the appropriate names</descriptionOfFinal>
         <dir name="final">
         </dir>
       </manualGet>
@@ -4352,22 +4353,95 @@ where e.na_sequence_id = ns.na_sequence_id and ns.external_database_release_id =
     </datasetLoader>
   </datasetClass>
 
-
 <!--copy and format files from EuPathDB manualDelivery to download sites and web services-->
     <datasetClass class="copyAndFormatDownloadFilesFromManualDelivery" category="" datasetFileHint="">
-    <purpose></purpose>
-	  <prop name="projectName">&projectName;</prop>
-	  <prop name="relativeManualDeliveryDir"/>
-	  <prop name="relativeDownloadSiteDir"/>
-	  <prop name="relativeWebServiceDir"/>
-	  <prop name="datasetName"/>
-	  <prop name="formatDownloadFile"/>
-	  <prop name="argsOfFormatingDownloadFile"/>
-	  <prop name="formattedOutputName"/>
-	  <prop name="inputFileNameRegex"/>
-    <graphTemplateFile name="project.xml"/>
+        <purpose></purpose>
+        <prop name="projectName">&projectName;</prop>
+        <prop name="relativeManualDeliveryDir"/>
+        <prop name="relativeDownloadSiteDir"/>
+        <prop name="relativeWebServiceDir"/>
+        <prop name="datasetName"/>
+        <prop name="formatDownloadFile"/>
+        <prop name="argsOfFormatingDownloadFile"/>
+        <prop name="formattedOutputName"/>
+        <prop name="inputFileNameRegex"/>
+        <graphTemplateFile name="project.xml"/>
 
   </datasetClass>
+
+ 
+    <datasetClass class="smallNcRnaExperiment" category="" datasetFileHint="">
+    <purpose>Add an experiment mapping small non-coding RNAs to the genome</purpose>
+    <prop name="projectName">&projectName;</prop>
+    <prop name="organismAbbrev">&organismAbbrev;</prop>
+    <prop name="experimentName"></prop>
+    <prop name="experimentVersion"></prop>
+    <prop name="hasPairedEnds"/>
+    <prop name="isColorspace"/>
+    <prop name="removePCRDuplicates">If true samtools rmdup will run after mapping</prop>
+    <prop name="extraBowtieParams">Parameters for Bowtie(2) above and beyond the default can be added verbatim here. "None" if default is ok</prop>
+    <prop name="minReadLength">This workflow filters reads by length. Min 20 recommended unless stated by provider</prop>
+    <prop name="maxReadLength">Max 35 recommended unless stated by provider</prop>
+    <prop name="sequenceFormat">fastq (quality offset 33) or fastq-illumina (quality offset 64)</prop>
+
+    <graphTemplateFile name="smallNcRnaExperiment.xml"/>
+   
+    <datasetLoader datasetName="${organismAbbrev}_smallNcRna_${experimentName}_RSRC" version="${experimentVersion}"
+          plugin="ApiCommonData::Load::Plugin::LoadNothing"
+              scope="organism"
+              type="transcript_expression"
+              subType="smallNcRna"
+              organismAbbrev="${organismAbbrev}">
+
+      <manualGet fileOrDir="common/empty">
+
+        <dir name="final">
+        </dir>
+      </manualGet>
+
+      <unpack>rm -rf @@dataDir@@/final</unpack>
+      <!-- since mirroring is already done, now we can make a non-empty final dir -->
+      <unpack>ln -s @@manualDeliveryDir@@/${projectName}/${organismAbbrev}/rnaSeq/${experimentName}/${experimentVersion}/final/ @@dataDir@@</unpack>
+
+      <getAndUnpackOutput dir="@@dataDir@@/final" />
+
+      <pluginArgs>--dbRefExternalDatabaseSpec "%DATASET_NAME%|%DATASET_VERSION%"</pluginArgs>
+    </datasetLoader>
+
+  </datasetClass>
+
+  <datasetClass class="smallNcRnaSamples" category="" datasetFileHint="">
+    <purpose>Add samples for small non-coding RNA experiments</purpose>
+    <prop name="projectName">&projectName;</prop>
+    <prop name="organismAbbrev">&organismAbbrev;</prop>
+    <prop name="experimentName"/>
+    <prop name="experimentVersion"/>
+    <prop name="sampleName">Should match filename without extension</prop>
+
+    <graphTemplateFile name="smallNcRnaSamples.xml"/>
+
+    <datasetLoader datasetName="${organismAbbrev}_${experimentName}_${sampleName}_smallNcRnaSample_RSRC" version="dontcare"
+          plugin="ApiCommonData::Load::Plugin::LoadNothing"
+              scope="organism"
+              type="transcript_expression"
+              subType="smallNcRna"
+              organismAbbrev="${organismAbbrev}">
+
+      <manualGet fileOrDir="common/empty">
+        <descriptionOfFinal>The final/ dir must contain a fastq file for each sample, named sampleName.fastq.  Fastq files in final/ should have been trimmed of adaptors and filtered for quality if required</descriptionOfFinal>
+        <dir name="final">
+        </dir>
+      </manualGet>
+
+      <!--So far all these experiments are single ended so don't need to worry about pair files-->
+      <getAndUnpackOutput file="@@dataDir@@/../${organismAbbrev}_smallNcRna_${experimentName}_RSRC/final/${sampleName}.fastq" />
+
+      <pluginArgs>--dbRefExternalDatabaseSpec "%DATASET_NAME%|%DATASET_VERSION%"</pluginArgs>
+
+    </datasetLoader>
+  </datasetClass>
+
+
 
 </datasetClasses>
 
