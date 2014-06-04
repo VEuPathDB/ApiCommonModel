@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+use strict;
+
+use Switch;
+
 usage() unless scalar(@ARGV) >= 1;
 
 my $update = $ARGV[0] eq '-update';
@@ -8,8 +12,8 @@ shift @ARGV if $update;
 
 my @files = @ARGV;
 
-my @automaticRules = ('', '');
-my @manualRules = ('', '');
+my @automaticRules = ('SRES.ONTOLOGYTERM', 'Study.OntologyEntry', 'sres.sequenceontology', 'rad.study');
+my @manualRules = ('dots.gene', 'dots.RnaFeatureExon');
 my @allowedStatus = ('unreviewed', 'broken', 'fixed', 'absent');
 
 foreach my $file (@files) {
@@ -23,11 +27,12 @@ foreach my $file (@files) {
   my @reports;
   foreach my $rule (@automaticRules) {
     my $report = getAutomaticReport($rule, \@fileLines);
-    push($report, @reports);
+    push(@reports, $report);
   }
-  @reports = (@reports, getManualReports(\@fileLines));
+  @reports = (@reports, getManualReports(\@fileLines, $file));
   if ($update) {
-    open(F, $file) || die "Can't open file '$file' for reading\n";
+    print STDERR "update\n";
+    open(F, ">$file") || die "Can't open file '$file' for reading\n";
     my $allOk = 1;
     map { print F "$_\n"; $allOk = 0 if /broken|unreviewed/} @reports;
     if (!$allOk) {
@@ -36,82 +41,48 @@ foreach my $file (@files) {
     map { print F "$_\n"; } @fileLines;
     close(F);
   }
-  print $report;
+  print "\n$file\n" . join("\n", @reports);
 }
+print "\n";
+
+###############################################
 
 sub getAutomaticReport {
   my ($rule, $fileLines) = @_;
 
-  my @fields = ("# GUS4 STATUS", $rule, "AUTOMATIC", "absent");
+  my @fields = ("  # GUS4_STATUS", sprintf("%-30s", $rule), "auto  ", "absent");
 
-  switch ($rule) {
-    case ""
-      {
-       foreach $line (@$fileLines) {
-	 next if $line =~ /^\s*#/;
+  foreach my $line (@$fileLines) {
+
+    next if $line =~ /^\s*\#/;
+
+    switch ($rule) {
+      case "rad.study"
+	{
 	 if ($line =~ /rad.study/i || /rad::study/i) {
 	   $fields[3] = 'broken';
-	   break;
 	 }
-       }
-       break;
+	}
+      case "sres.sequenceontology"
+	{
+	 if ($line =~ /sres.sequenceontology/i || $line =~ /sres::sequenceontology/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
       }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    case ""
-      {
-       break;
-      }
-    }
+  }
   return join(' | ', @fields);
+
 }
 
 sub getManualReports {
-  my ($fileLines) = @_;
+  my ($fileLines, $file) = @_;
   my %manualStatus;
   map { $manualStatus{$_} = 'unreviewed' } @manualRules;
   my $line = 0;
   foreach my $line (@$fileLines) {
     $line++;
-    next unless /^# GUS4_STATUS\|\s+(.*)\s+\| MANUAL\s+\|\s+(\S+)/;
+    next unless /^  # GUS4_STATUS\|\s+(.*)\s+\| MANUAL\s+\|\s+(\S+)/;
     my $rule = $1;
     my $status = $2;
     die "Invalid rule '$rule' mentioned in file '$file' on line $line" unless grep(/$rule/, @manualRules);
@@ -119,13 +90,13 @@ sub getManualReports {
     $manualStatus{$rule} = $status;
   }
   my @reports;
-  my @fields = ('# GUS4_STATUS', '', 'MANUAL   ', '');
-  foreach my $rule (keys(@manualStatus)) {
+  my @fields = ('  # GUS4_STATUS', '', 'manual', '');
+  foreach my $rule (keys(%manualStatus)) {
     my $rulestr = sprintf("%-30s", $rule);
     $fields[1] = $rulestr;
     $fields[3] = $manualStatus{$rule};
     my $report = join(" | ", @fields);
-    push($report, @reports);
+    push(@reports, $report);
   }
   return @reports;
 }
@@ -143,8 +114,8 @@ Where:
 
 Comments in the target files look like this:
 
-# GUS4_STATUS  | RAD.STUDY                 | AUTOMATIC | broken
-# GUS4_STATUS  | PROTEIN                   | MANUAL    | unreviewed
+# GUS4_STATUS  | RAD.STUDY                 | auto   | broken
+# GUS4_STATUS  | PROTEIN                   | manual | unreviewed
 
 The status codes are:
   unreviewed
