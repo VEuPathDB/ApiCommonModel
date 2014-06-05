@@ -37,8 +37,8 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {{"percentileProfileSetPattern", "Which profileset (red/green) has the samples. (ie. not the channel w/ the common reference)."},
+                                   {"hasPercentileData", ""},
         };
-
         return combinePropertiesDeclarations(microarrayDeclaration, declaration);
     }
 

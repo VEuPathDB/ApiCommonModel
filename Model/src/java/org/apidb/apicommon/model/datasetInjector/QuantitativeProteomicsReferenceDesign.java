@@ -7,6 +7,7 @@ public class QuantitativeProteomicsReferenceDesign extends ExpressionOneChannelA
     protected void setProteinCodingProps() {
         setPropValue("defaultProteinCodingOnly", "no");
         setPropValue("proteinCodingParamVisible", "false");
+        setPropValue("hasPercentileData", "false");
     }
 
     @Override

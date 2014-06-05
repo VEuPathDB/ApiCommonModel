@@ -162,7 +162,6 @@ public abstract class Expression extends DatasetInjector {
     public String[][] getPropertiesDeclaration() {
         String [][] declaration = {
                                    {"hasPageData", ""},
-                                   {"hasPercentileData", ""},
                                    {"isEuPathDBSite", ""},
                                    {"graphSampleLabels", "OPTIONAL Prop...provide if you want to override the sample names in the db"},
                                    {"graphColors", "semicolon sep list of colors"},

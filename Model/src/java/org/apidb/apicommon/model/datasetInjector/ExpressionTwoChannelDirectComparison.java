@@ -1,3 +1,4 @@
+
 package org.apidb.apicommon.model.datasetInjector;
 
 
@@ -13,12 +14,13 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         injectTemplate("expressionProfileSetParamQuery");
 
         String lcDataType = getPropValue("dataType").toLowerCase();
-
-        String redPctSampleDecode = makeDecodeMappingStrings(getPropValue("redPctSampleMap"));
-        String greenPctSampleDecode = makeDecodeMappingStrings(getPropValue("greenPctSampleMap"));
-
-        setPropValue("redPctSampleDecode", redPctSampleDecode);
-        setPropValue("greenPctSampleDecode", greenPctSampleDecode);
+        if(!lcDataType.equals("proteomics")) { 
+                String redPctSampleDecode = makeDecodeMappingStrings(getPropValue("redPctSampleMap"));
+                String greenPctSampleDecode = makeDecodeMappingStrings(getPropValue("greenPctSampleMap"));
+                
+                setPropValue("redPctSampleDecode", redPctSampleDecode);
+                setPropValue("greenPctSampleDecode", greenPctSampleDecode);
+            }
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
             injectTemplate("expressionSamplesParamQueryDirectFDR");
         } else {
@@ -76,16 +78,5 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
 
 
-
-    @Override
-    public String[][] getPropertiesDeclaration() {
-        String[][] exprDeclaration = super.getPropertiesDeclaration();
-        
-        String [][] declaration = {{"redPctSampleMap", "The ProfileElementName will be Like 'A vs B' ... Need to say whether A or B maps to this channel"},
-                                   {"greenPctSampleMap", "The ProfileElementName will be Like 'A vs B' ... Need to say whether A or B maps to this channel"},
-        };
-
-        return combinePropertiesDeclarations(exprDeclaration, declaration);
-    }
 
 }

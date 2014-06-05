@@ -37,5 +37,16 @@ public class MicroarrayOneChannelQuantile extends ExpressionOneChannelAndReferen
         setDataType("Microarray");
     }
 
+    @Override
+    public String[][] getPropertiesDeclaration() {
+        String[][] exprDeclaration = super.getPropertiesDeclaration();
+        
+        String [][] declaration = {{"hasPercentileData", ""},
+        };
 
+        return combinePropertiesDeclarations(exprDeclaration, declaration);
+    }
+
+
+                                   
 }
