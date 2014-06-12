@@ -71,6 +71,7 @@ tablespace indx
       -->
     <externalDependency name="apidb.ProfileSet"/>
     <externalDependency name="sres.externaldatabase"/>
+    <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
 CREATE TABLE DatasetExampleSourceId&1 NOLOGGING AS
@@ -96,6 +97,38 @@ where p.rn = 1
     </sql>
   </tuningTable>
 
+  <tuningTable name="GeneWord" prefixEnabled="false">
+    <!-- Each row maps a gene source_id to all words found in the gene's product field
+         Used in the word enrichment analysis plugin
+         The trick sql was cribbed and modified from: nuijten.blogspot.com/2011/08/splitting-comma-delimited-string-regexp.html
+      -->
+    <internalDependency name="GeneAttributes"/>
+    <sql>
+      <![CDATA[
+CREATE TABLE GeneWord&1 NOLOGGING AS
+  select source_id, taxon_id
+      -- for each rn (1 - max_words_in_any_product), print the rn-th word.  replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
+      , regexp_replace(regexp_substr (product, '[^ ,]+', 1, rn), '[\)\(]', '') word
+   from apidbtuning.geneattributes
+   cross
+    -- create a table of integers 1 - n where n is the max number of words in any product
+    join (select rownum rn
+            from (select max (regexp_count (product, '[ ,]')) + 1 mx
+                    from apidbtuning.geneattributes
+               )
+         connect by level <= mx
+         )
+  where regexp_substr (product, '[^, ]+', 1, rn) is not null
+    order by source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create index GeneWord_idx&1 ON GeneWord&1 (source_id)
+tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
 
   <tuningTable name="OrganismAttributes" prefixEnabled="true">
     <!-- Stores per-organism information. Used by the organism record, as well
