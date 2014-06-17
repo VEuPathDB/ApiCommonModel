@@ -8,19 +8,27 @@ use File::Find;
 use File::Basename;
 use Getopt::Long;
 
-my ($help, $configFile, $apiSiteFilesDir, $includeProjects, $buildNumber);
+my ($help, $configFile, $outputDir, $includeProjects, $buildNumber, $mode);
 &GetOptions('help|h' => \$help,
+	    'mode=s' => \$mode,
             'configFile=s' => \$configFile,
-            'apiSiteFilesDir=s' => \$apiSiteFilesDir,
 	    'includeProjects=s' => \$includeProjects,
 	    'buildNumber=s' => \$buildNumber,
+            'outputDir=s' => \$outputDir
             );
 &usage() if($help);
+&usage("ERROR: mode ('copy' or 'link') must be specfied.") if (!$mode);
 &usage("ERROR: configFile not specfied.") unless(-e $configFile);
 &usage("ERROR: buildNumber not specfied.") if (!$buildNumber);
 
-my $destRootDir = '/eupath/data/apiSiteFiles/webServices/';
-$destRootDir = $apiSiteFilesDir if ($apiSiteFilesDir);
+
+my $destRootDir;
+if ($mode eq 'copy'){  ## to hard copy the files 
+    $destRootDir = '/eupath/data/apiSiteFiles/webServices/';
+} elsif ($mode eq 'link'){  ## to create similar dir structure, but have sym links to all files
+    $destRootDir = '/eupath/data/apiSiteLinks/webServices/';
+} 
+$destRootDir = $outputDir if ($outputDir);
 
 if ($includeProjects eq 'EuPath'){
     $includeProjects = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB/;
@@ -47,6 +55,8 @@ my @projects = split(',', $includeProjects);
 foreach my $p (@projects) {
   die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
 
+  umask 002; # resulting files will have mode 0644, directories 0755
+
   my $destDir = "$destRootDir$p/build-$buildNumber";
 
   ## handle the case when destDir exists
@@ -56,17 +66,22 @@ foreach my $p (@projects) {
     print "Deleted existing dir; now REMAKING it.\n";
   }
 
-  umask 002; # resulting files will have mode 0644, directories 0755
+  if ($mode eq 'copy') {
+      local $File::Copy::Recursive::SkipFlop = 1;
 
-  local $File::Copy::Recursive::SkipFlop = 1;
+      ## do the copy from Staging
+      my $startDir = $stagingDir{$p};
+      # print "copy from $startDir into $destDir\n";
+      my($num_of_files_and_dirs,$num_of_dirs,$depth_traversed) = File::Copy::Recursive::dircopy($startDir,$destDir);
+      print "\n$p DONE: $num_of_files_and_dirs,$num_of_dirs,$depth_traversed \n";
 
-  ## do the copy from Staging
-  my $startDir = $stagingDir{$p};
-  # print "copy from $startDir into $destDir\n";
-  my($num_of_files_and_dirs,$num_of_dirs,$depth_traversed) = File::Copy::Recursive::dircopy($startDir,$destDir);
-  print "\n$p DONE: $num_of_files_and_dirs,$num_of_dirs,$depth_traversed \n";
+  } elsif ($mode eq 'link') {
+      print "\n Making LINKS \n";
+      system("cp -ap -s $stagingDir{$p} $destDir");
+  }
 
   ## fix Blast file names
+  print "\n fix Blast file names \n";
   unless ($p eq 'TrichDB') {
       finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
   }
@@ -96,7 +111,7 @@ sub usage {
   if($e) {
     print STDERR $e . "\n";
   }
-  print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> -- buildNumber <NUM> (--apiSiteFilesDir <DIR>)\n";
+  print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> -- buildNumber <NUM> (--outputDir <DIR> --mode <copy|link>)\n";
   exit;
 }
 
