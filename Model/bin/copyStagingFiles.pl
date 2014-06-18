@@ -18,6 +18,10 @@ my ($help, $configFile, $outputDir, $includeProjects, $buildNumber, $mode);
             );
 &usage() if($help);
 &usage("ERROR: mode ('copy' or 'link') must be specfied.") if (!$mode);
+
+# NOT allow "copy" mode
+&usage("\nERROR: 'copy' mode is NOT ALLOWED for now.\n") if ($mode eq 'copy');
+
 &usage("ERROR: configFile not specfied.") unless(-e $configFile);
 &usage("ERROR: buildNumber not specfied.") if (!$buildNumber);
 
