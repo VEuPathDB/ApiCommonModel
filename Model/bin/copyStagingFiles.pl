@@ -34,13 +34,17 @@ if ($mode eq 'copy'){  ## to hard copy the files
 } 
 $destRootDir = $outputDir if ($outputDir);
 
+my @projects ;
 if ($includeProjects eq 'EuPath'){
-    $includeProjects = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB/;
+    @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB/;
+} elsif ($includeProjects eq 'ALL'){
+    @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB FungiDB/;
+} else {
+    @projects = split (',' , $includeProjects);
 }
 
-if ($includeProjects eq 'ALL'){
-    $includeProjects = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB FungiDB/;
-}
+
+print  "Number of projects to handle = " . ($#projects + 1) . "\n\n";
 
 # build hash of project_id and staging_dir
 my %stagingDir;
@@ -55,8 +59,8 @@ my @blastExtns = qw/nhr nin nsq phr pin psq/;  # for NCBI Blast
 # my @blastExtns = qw/xnd xns xnt xpd xps xpt/;  # for WU-Blast
 
 # for each specified project
-my @projects = split(',', $includeProjects);
 foreach my $p (@projects) {
+    print "\nHandling PROJECT = $p\n"; #BB
   die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
 
   umask 002; # resulting files will have mode 0644, directories 0755
@@ -80,21 +84,21 @@ foreach my $p (@projects) {
       print "\n$p DONE: $num_of_files_and_dirs,$num_of_dirs,$depth_traversed \n";
 
   } elsif ($mode eq 'link') {
-      print "\n Making LINKS \n";
+      print "Making LINKS \n";
       system("cp -ap -s $stagingDir{$p} $destDir");
   }
 
   ## fix Blast file names
-  print "\n fix Blast file names \n";
+  print "fix Blast file names \n";
   unless ($p eq 'TrichDB') {
       finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
   }
 
   ## fix permissions
-  print "\nFIXING file permissions \n";
+  print "Fixing file permissions \n";
   find(\&fixPerm, $destDir);
 
-  print "\nALL DONE\n";
+  print "\n$p - DONE\n";
 }
 
 sub process_file {
