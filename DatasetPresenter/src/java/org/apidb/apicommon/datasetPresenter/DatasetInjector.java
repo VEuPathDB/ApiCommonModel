@@ -5,6 +5,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.Iterator;
 
 /**
  * An abstract superclass of DatasetInjectors. Contains the information needed
@@ -381,6 +384,24 @@ public abstract class DatasetInjector {
     } else {
       setPropValue("shortAttribution", "(" + shortAttribution + ")");
     }
+  }
+
+  protected List<String> getSampleList(String prefix, String suffix){
+    /** This method returns a list of the samples associated with an experiment extracted from the global dataset properties. */
+    Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
+    Pattern sampleDatasetNamePattern = Pattern.compile(prefix + "(.*?)" + suffix);
+    List<String> sampleNames = new ArrayList<String>();
+    Iterator<String> globalPropsKeys = globalProps.keySet().iterator();
+    while (globalPropsKeys.hasNext()){
+        Matcher m = sampleDatasetNamePattern.matcher(globalPropsKeys.next());
+        if (m.find()){
+            sampleNames.add(m.group(1));
+        }
+    }
+    if (sampleNames.isEmpty()){
+        throw new UserException ("No sample names found for dataset" + datasetName);
+    }
+    return sampleNames;
   }
 
 }
