@@ -2071,275 +2071,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="SageTagLibraryTotal">
-    <!-- For each sage-tag library, store the total of the counts of all tags.
-         Used by GeneTables.SageTags.
-     -->
-    <externalDependency name="rad.DataTransformationResult"/>
-    <externalDependency name="rad.Analysis"/>
-    <externalDependency name="rad.Protocol"/>
-    <sql>
-      <![CDATA[
-        create table SageTagLibraryTotal&1 NOLOGGING as
-        select dt.analysis_id, sum(float_value) as total_count
-        from rad.DataTransformationResult dt, rad.Analysis a, rad.Protocol p
-        where dt.analysis_id = a.analysis_id
-          and a.protocol_id = p.protocol_id
-          and p.name = 'Normalization of SAGE tag frequencies to a target total intensity'
-        group by dt.analysis_id
-      ]]>
-    </sql>
-  </tuningTable>
-
-
-  <tuningTable name="SageTagAnalysisAttributes">
-    <!-- Stores information specific to a given SAGE tag within a given library.
-         Used by gene and sage-tag queries in the model, by GBrowse queries, and
-         in the creation of the tuning tables SageTagGene and SageTagAttributes.
-     -->
-    <internalDependency name="SageTagLibraryTotal"/>
-    <externalDependency name="core.TableInfo"/>
-    <externalDependency name="dots.SageTagFeature"/>
-    <externalDependency name="rad.Analysis"/>
-    <externalDependency name="rad.AnalysisInput"/>
-    <externalDependency name="rad.Assay"/>
-    <externalDependency name="rad.DataTransformationResult"/>
-    <externalDependency name="rad.LogicalGroup"/>
-    <externalDependency name="rad.LogicalGroupLink"/>
-    <externalDependency name="rad.Protocol"/>
-    <externalDependency name="rad.Quantification"/>
-    <externalDependency name="rad.SageTag"/>
-    <externalDependency name="rad.SageTagResult"/>
-    <intermediateTable name="SageTagInfo"/>
-    <intermediateTable name="SageTagGenomicOccurrence"/>
-    <intermediateTable name="SageTagQuantificationTotal"/>
-    <sql>
-      <![CDATA[
-create table SageTagInfo NOLOGGING as
-select st.composite_element_id, dtr.analysis_id, dtr.float_value as dtr_tag_count,
-       substr(st.tag, 1, 30) as sequence, r.tag_count, r.quantification_id, dtr.table_id
-from dots.SageTagFeature stf, rad.DataTransformationResult dtr, rad.SageTag st, rad.SageTagResult r
-where st.composite_element_id = dtr.row_id
-  and st.composite_element_id = stf.source_id
-  and st.composite_element_id = r.composite_element_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create table SageTagGenomicOccurrence NOLOGGING as
-select source_id, count(*) as occurrence
-from dots.SageTagFeature
-group by source_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create table SageTagQuantificationTotal nologging as
-select quantification_id, sum(tag_count) as total_raw_count
-from rad.SageTagResult
-group by quantification_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create table SageTagAnalysisAttributes&1 NOLOGGING as
-select sti.analysis_id, max(sti.dtr_tag_count) as tag_count,
-       max(ct.occurrence) as occurrence, sti.sequence,
-       sti.composite_element_id, a.name as library_name,
-       library_total.total_count as library_total_tag_count,
-       (max(sti.dtr_tag_count) * 100) / library_total.total_count
-         as library_tag_percentage,
-       sti.tag_count as raw_count, tot.total_raw_count,
-       100 *(sti.tag_count / tot.total_raw_count ) as raw_percent
-from SageTagInfo sti, SageTagGenomicOccurrence ct,
-     SageTagLibraryTotal library_total, SageTagQuantificationTotal tot,
-     core.TableInfo ti, rad.AnalysisInput ai, rad.LogicalGroup lg,
-     rad.LogicalGroupLink ll, rad.Assay a, core.TableInfo quant_ti,
-     rad.Quantification q
-where ti.name = 'SAGETag'
-  and quant_ti.name = 'Assay'
-  and sti.table_id = ti.table_id
-  and q.quantification_id = sti.quantification_id
-  and tot.quantification_id = sti.quantification_id
-  and ct.source_id = sti.composite_element_id
-  and sti.analysis_id = ai.analysis_id
-  and ai.logical_group_id = lg.logical_group_id
-  and lg.logical_group_id = ll.logical_group_id
-  and ll.row_id = a.assay_id
-  and a.name = q.name
-  and ll.table_id = quant_ti.table_id
-  and sti.analysis_id = library_total.analysis_id
-group by sti.analysis_id, sti.sequence, sti.composite_element_id,
-         a.name, library_total.total_count,
-         q.name, sti.tag_count, tot.total_raw_count
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index staa_ix&1 on SageTagAnalysisAttributes&1 (analysis_id, composite_element_id)
-tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index staa_tag_ix&1 on SageTagAnalysisAttributes&1 (composite_element_id, analysis_id)
-tablespace indx
-      ]]>
-    </sql>
-  </tuningTable>
-
-
-  <tuningTable name="SageTagGene">
-    <!-- Stores info about colocated gene-sage tag pairs. Used by the model for
-         sage tag and gene queries, and in the creation of the tuning tables
-         OrganismAttributes and SageTagAttributes.
-     -->
-    <internalDependency name="FeatureLocation"/>
-    <internalDependency name="SageTagAnalysisAttributes"/>
-    <externalDependency name="rad.DataTransformationResult"/>
-    <externalDependency name="dots.SageTagFeature"/>
-    <intermediateTable name="SageTagGeneFivePrime"/>
-    <intermediateTable name="SageTagGeneThreePrime"/>
-    <sql>
-      <![CDATA[
-create table SageTagGeneFivePrime NOLOGGING as
-   select '5' as direction, g.feature_source_id AS gene_source_id,
-          s.feature_source_id as tag_source_id,
-             min (case
-                    when g.is_reversed = 1 and s.end_max - g.end_max < 0
-                      then 0
-                    when g.is_reversed = 1 and s.end_max - g.end_max >= 0
-                      then s.end_max - g.end_max
-                    when g.is_reversed = 0 and g.start_min - s.start_min < 0
-                      then 0
-                    when g.is_reversed = 0 and g.start_min - s.start_min >= 0
-                      then g.start_min - s.start_min
-                  end) as distance,
-           dr.analysis_id, max(dr.float_value) as tag_count,
-           max(ct.occurrence) as occurrence,
-           g.na_feature_id as gene_feature_id, s.na_feature_id as tag_feature_id,
-           case when s.is_reversed = g.is_reversed then 0
-                else 1
-           end as antisense
-      from FeatureLocation g, FeatureLocation s,
-           rad.DataTransformationResult dr,
-           (select source_id , count(*) as occurrence
-            from dots.SageTagFeature
-            group by source_id) ct
-      where g.feature_type = 'GeneFeature'
-        and s.feature_type = 'SAGETagFeature'
-        and g.na_sequence_id = s.na_sequence_id
-        and s.feature_source_id = dr.row_id
-        and dr.row_id = ct.source_id
-        and (case
-               when g.is_reversed = 0
-                 then g.start_min - s.start_min
-               else s.end_max - g.end_max
-             end <= 1000
-            and case
-                  when g.is_reversed = 0
-                    then g.end_max - s.end_max
-                  else s.start_min - g.start_min
-                end >= 0)
-      group by g.feature_source_id, s.feature_source_id, dr.analysis_id,
-               g.na_feature_id, s.na_feature_id,
-               case when s.is_reversed = g.is_reversed then 0
-                    else 1
-               end
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create table SageTagGeneThreePrime NOLOGGING as
-      select '3' as direction, g.feature_source_id AS gene_source_id,
-             s.feature_source_id as tag_source_id,
-             min (case
-                    when g.is_reversed = 1 and g.start_min - s.start_min < 0
-                      then 0
-                    when g.is_reversed = 1 and g.start_min - s.start_min  >= 0
-                      then g.start_min - s.start_min
-                    when g.is_reversed = 0 and s.end_max - g.end_max < 0
-                      then 0
-                    when g.is_reversed = 0 and s.end_max - g.end_max >= 0
-                      then s.end_max - g.end_max
-                  end) as distance,
-           dr.analysis_id, max(dr.float_value) as tag_count,
-           max(ct.occurrence) as occurrence,
-           g.na_feature_id as gene_feature_id, s.na_feature_id as tag_feature_id,
-           case when s.is_reversed = g.is_reversed then 0
-                else 1
-           end as antisense
-      from FeatureLocation g, FeatureLocation s,
-           rad.DataTransformationResult dr,
-           (select source_id , count(*) as occurrence
-            from dots.SageTagFeature
-            group by source_id) ct
-            where g.feature_type = 'GeneFeature'
-              and s.feature_type = 'SAGETagFeature'
-              and g.na_sequence_id = s.na_sequence_id
-              and s.feature_source_id = dr.row_id
-              and dr.row_id = ct.source_id
-              and (case
-                     when g.is_reversed = 0
-                       then s.end_max - g.end_max
-                     else g.start_min - s.start_min end <= 1000
-                  and
-                   case
-                     when g.is_reversed = 0
-                       then s.start_min - g.start_min
-                     else g.end_max - s.end_max
-                   end >= 0)
-            group by g.feature_source_id, s.feature_source_id, dr.analysis_id,
-                     g.na_feature_id, s.na_feature_id,
-                     case when s.is_reversed = g.is_reversed then 0
-                          else 1
-                     end
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create table SageTagGene&1 NOLOGGING as
-select t.direction, t.gene_source_id, t.tag_source_id, t.distance,
-       t.analysis_id, t.occurrence, t.gene_feature_id, t.tag_feature_id,
-       t.tag_count, t.antisense,
-       case
-         when t.antisense = 0 then t.tag_count
-         else 0
-       end as sense_count,
-       case
-         when t.antisense = 0 then 0
-         else t.tag_count
-       end as antisense_count, 
-       libs.library_name
-from
-  (select * from SageTagGeneFivePrime
-   union all
-   select * from SageTagGeneThreePrime) t,
-  (select distinct(analysis_id), library_name from SageTagAnalysisAttributes) libs
-  where t.analysis_id = libs.analysis_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index stg_ix&1
-on SageTagGene&1 (gene_source_id, direction, distance, tag_source_id, tag_feature_id, antisense)
-tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index stg_2ix&1
-on SageTagGene&1 (gene_source_id, direction, distance, library_name, tag_source_id,
-                  tag_feature_id, antisense, analysis_id, tag_count, occurrence)
-tablespace indx
-      ]]>
-    </sql>
-  </tuningTable>
-
-
-
-
-  <tuningTable name="SnpAttributes">
+  <tuningTable name="SnpChipAttributes">
     <!-- Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, including SnpSummary and
          IsolateSnps.
@@ -2355,7 +2087,7 @@ tablespace indx
     <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
-CREATE TABLE SnpAttributes&1 NOLOGGING AS
+CREATE TABLE SnpChipAttributes&1 NOLOGGING AS
 SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        snp.source_id,
        snp.na_feature_id,
@@ -2431,43 +2163,48 @@ WHERE edr.external_database_release_id = snp.external_database_release_id
   AND chromosome_info.na_sequence_id = snp_loc.na_sequence_id
   and strain_info.na_feature_id = snp.na_feature_id
   AND gene_info.na_feature_id(+) = snp.parent_id
+  --AND snp.type != 'HTS'
+  --AND ed.name != 'InsertSnps.pm NGS SNPs INTERNAL'
+  AND (ed.name like '%75KGenotyping%' OR
+       ed.name like '%3KGenotyping%' OR
+       ed.name like '%IsolateBarcode%')
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create unique index SnpAttr_source_id&1 ON SnpAttributes&1 (source_id)
+create unique index SnpAttr_source_id&1 ON SnpChipAttributes&1 (source_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index Snp_nafeat_dataset_ix&1
-       ON SnpAttributes&1 (na_feature_id, dataset)
+       ON SnpChipAttributes&1 (na_feature_id, dataset)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index Snp_Seq_ix&1
-       ON SnpAttributes&1 (na_sequence_id, dataset, start_min, na_feature_id)
+       ON SnpChipAttributes&1 (na_sequence_id, dataset, start_min, na_feature_id)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index Snp_Freq_ix&1
-       ON SnpAttributes&1 (dataset,strain_count,major_allele_frequency,minor_allele_frequency)
+       ON SnpChipAttributes&1 (dataset,strain_count,major_allele_frequency,minor_allele_frequency)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpAttr_ds_org_ix&1 on snpattributes&1 (dataset,organism,na_feature_id)
+create index SnpAttr_ds_org_ix&1 on snpchipattributes&1 (dataset,organism,na_feature_id)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpVariantIx&1 on SnpAttributes&1 (type, dataset, na_feature_id, source_id, gene_source_id, start_min, position_in_protein)
+create index SnpVariantIx&1 on SnpChipAttributes&1 (type, dataset, na_feature_id, source_id, gene_source_id, start_min, position_in_protein)
 tablespace indx
       ]]>
     </sql>
@@ -2479,7 +2216,7 @@ tablespace indx
          for allele_percent > 80. Used in SNP queries, and to make the
          GoodHtsSnp tuning table.
      -->
-    <internalDependency name="SnpAttributes"/>
+    <internalDependency name="SnpChipAttributes"/>
     <externalDependency name="dots.SeqVariation"/>
     <sql>
       <![CDATA[
@@ -2489,7 +2226,7 @@ tablespace indx
                substr(max(var.product), 1, 30) as product, substr(var.strain, 1, 30) as strain,
                min(t.taxon_id) as species_taxon_id,
                substr(min(snp.source_id), 1, 50) as snp_source_id, min(snp.gene_source_id) as gene_source_id
-        from dots.SeqVariation var, SnpAttributes snp, sres.Taxon t
+        from dots.SeqVariation var, SnpChipAttributes snp, sres.Taxon t
         where var.parent_id = snp.na_feature_id
           and snp.ncbi_tax_id = t.ncbi_tax_id
           and snp.type = 'HTS'
@@ -3950,7 +3687,7 @@ tablespace indx
      -->
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="IsolateAttributes"/>
-    <internalDependency name="SnpAttributes"/>
+    <internalDependency name="SnpChipAttributes"/>
     <externalDependency name="dots.IsolateFeature"/>
     <sql>
       <![CDATA[
@@ -3963,7 +3700,7 @@ select atr.na_sequence_id as is_na_sequence_id,
        sa.na_sequence_id as snp_na_sequence_id,
        sa.start_min as snp_start_min
 from dots.IsolateFeature isof,  FeatureLocation isol, 
-     SnpAttributes sa, IsolateAttributes atr
+     SnpChipAttributes sa, IsolateAttributes atr
 where atr.na_feature_id = isof.parent_id
 and isof.na_feature_id = isol.na_feature_id
 and sa.na_sequence_id = isol.na_sequence_id
