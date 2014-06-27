@@ -1706,9 +1706,10 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        nvl(tothtssnps.hts_nonsynonymous_snps,0) as hts_nonsynonymous_snps,
        nvl(tothtssnps.hts_synonymous_snps,0) as hts_synonymous_snps,
        nvl(tothtssnps.hts_nonsyn_syn_ratio,0) as hts_nonsyn_syn_ratio, 
-       0 as five_prime_utr_length,
-       0 as three_prime_utr_length,
-       protein.signalp_scores,protein.signalp_peptide, sequence.taxon_id, protein.aa_sequence_id, protein.protein_source_id
+       0 as five_prime_utr_length, 0 as three_prime_utr_length,
+       protein.signalp_scores,protein.signalp_peptide, sequence.taxon_id,
+       protein.aa_sequence_id, protein.protein_source_id,
+       uniprot.uniprot_id, uniprot.uniprot_id_internal
 FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.SequenceOntology so,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed,
@@ -1804,7 +1805,16 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.SequenceOntology so,
      (select na_feature_id, max(name) as name
       from apidb.GeneFeatureName
       group by na_feature_id
-     ) any_name
+     ) any_name,
+     (select gene as source_id,
+             substr(listagg (id, ',') within group (order by id), 1, 240) as uniprot_id,
+             substr(listagg (id, '+or+') within group (order by id), 1, 240) as uniprot_id_internal
+      from ApidbTuning.GeneId
+      where database_name like '%uniprot_dbxref_RSRC'
+         or database_name like '%dbxref_gene2Uniprot_RSRC'
+         or database_name = 'Links to Uniprot Genes'
+      group by gene
+     ) uniprot
 WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = nl.na_feature_id
   AND nl.is_top_level = 1
@@ -1844,6 +1854,7 @@ WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = any_name.na_feature_id(+)
   AND (gf.is_predicted != 1 OR gf.is_predicted is null)
   AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
+  AND gf.source_id = uniprot.source_id(+)
       ]]>
     </sql>
 <!-- 
