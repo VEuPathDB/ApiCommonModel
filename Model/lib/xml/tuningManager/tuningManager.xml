@@ -2380,14 +2380,10 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
          AS has_nonsynonymous_allele,
        SUBSTR(snp.major_allele, 1, 40) AS major_allele,
        SUBSTR(snp.major_product, 1, 40) AS major_product,
-       SUBSTR(strain_info.minor_allele, 1, 40) AS minor_allele,
-       SUBSTR(strain_info.minor_product, 1, 40) AS minor_product,
-       strain_info.major_strains,strain_info.minor_strains,
        snp.major_allele_count, 
        round(snp.major_allele_count / (snp.major_allele_count + snp.minor_allele_count),2) as major_allele_frequency,
        snp.minor_allele_count,
        round(snp.minor_allele_count / (snp.major_allele_count + snp.minor_allele_count),2) as minor_allele_frequency,
-       strain_info.distinct_strain_count as strain_count,
        gene_info.source_id AS gene_source_id,
        DECODE(gene_info.is_reversed, 0, 'forward', 1, 'reverse')
          AS gene_strand,
@@ -2416,16 +2412,7 @@ FROM dots.SnpFeature snp, FeatureLocation snp_loc,
       SELECT na_sequence_id, null as chromosome, null as chromosome_order_num
       FROM dots.NaSequence
       WHERE subclass_view not in ('ExternalNASequence', 'VirtualSequence')
-     ) chromosome_info,
-     (select distinct sf.na_feature_id, 
-             apidb.tab_to_string(set(cast(COLLECT(distinct CASE WHEN sv.allele != sf.major_allele THEN sv.allele END order by sv.allele) as apidb.varchartab)), ', ') as minor_allele,                
-             apidb.tab_to_string(set(cast(COLLECT(distinct CASE WHEN sv.allele != sf.major_allele THEN sv.product END order by sv.product) as apidb.varchartab)), ', ') as minor_product,
-             apidb.tab_to_string(set(cast(COLLECT(CASE WHEN sv.allele != sf.major_allele THEN sv.strain END order by sv.strain) as apidb.varchartab)), ', ') as minor_strains,
-             apidb.tab_to_string(set(cast(COLLECT(CASE WHEN sv.allele = sf.major_allele THEN sv.strain END order by sv.strain) as apidb.varchartab)), ', ') as major_strains,
-             count(distinct sv.strain) as distinct_strain_count
-      from dots.SnpFeature sf, dots.SeqVariation sv
-      where sv.parent_id = sf.na_feature_id
-      group by sf.na_feature_id) strain_info
+     ) chromosome_info
 WHERE edr.external_database_release_id = snp.external_database_release_id
   AND ed.external_database_id = edr.external_database_id
   AND sequence.taxon_id = taxon.taxon_id
@@ -2435,13 +2422,8 @@ WHERE edr.external_database_release_id = snp.external_database_release_id
   AND snp_loc.is_top_level = 1
   AND sequence.na_sequence_id = snp_loc.na_sequence_id
   AND chromosome_info.na_sequence_id = snp_loc.na_sequence_id
-  and strain_info.na_feature_id = snp.na_feature_id
   AND gene_info.na_feature_id(+) = snp.parent_id
-  --AND snp.type != 'HTS'
-  --AND ed.name != 'InsertSnps.pm NGS SNPs INTERNAL'
-  AND (ed.name like '%75KGenotyping%' OR
-       ed.name like '%3KGenotyping%' OR
-       ed.name like '%IsolateBarcode%')
+  AND snp.name = 'Broad_barcode'
       ]]>
     </sql>
     <sql>
@@ -2466,7 +2448,7 @@ tablespace indx
     <sql>
       <![CDATA[
 create index SnpChip_Freq_ix&1
-       ON SnpChipAttributes&1 (dataset,strain_count,major_allele_frequency,minor_allele_frequency)
+       ON SnpChipAttributes&1 (dataset,major_allele_frequency,minor_allele_frequency)
 tablespace indx
       ]]>
     </sql>
