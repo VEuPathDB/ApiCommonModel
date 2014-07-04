@@ -69,8 +69,11 @@ tablespace indx
          each dataset gets one such row.
          Used in dataset record queries.
       -->
+    <externalDependency name="apidb.Profile"/>
     <externalDependency name="apidb.ProfileSet"/>
-    <externalDependency name="sres.externaldatabase"/>
+    <externalDependency name="apidb.ProfileElement"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
@@ -80,8 +83,8 @@ select p.source_id,
        d.name,
        row_number() over(partition by d.name
                          order by ga.chromosome_order_num, pe.value desc) as rn
-from apidb.profileset ps, apidb.profile p, APIDB.profileelement pe,
-     sres.externaldatabase d, sres.externaldatabaserelease r, apidbtuning.geneattributes ga
+from apidb.ProfileSet ps, apidb.Profile p, apidb.ProfileElement pe,
+     sres.ExternalDatabase d, sres.ExternalDatabaseRelease r, GeneAttributes ga
 where ps.profile_set_id = p.profile_set_id
 and ps.external_database_release_id = r.external_database_release_id
 and r.external_database_id = d.external_database_id
@@ -105,27 +108,28 @@ where p.rn = 1
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
-CREATE TABLE GeneWord&1 NOLOGGING AS
-  select source_id, taxon_id
-      -- for each rn (1 - max_words_in_any_product), print the rn-th word.  replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
-      , regexp_replace(regexp_substr (product, '[^ ,]+', 1, rn), '[\)\(]', '') word
-   from apidbtuning.geneattributes
-   cross
-    -- create a table of integers 1 - n where n is the max number of words in any product
-    join (select rownum rn
-            from (select max (regexp_count (product, '[ ,]')) + 1 mx
-                    from apidbtuning.geneattributes
-               )
-         connect by level <= mx
-         )
-  where regexp_substr (product, '[^, ]+', 1, rn) is not null
-    order by source_id
+        create table GeneWord&1 nologging as
+        select source_id, taxon_id,
+               -- for each rn (1 - max_words_in_any_product),
+               --    print the rn-th word.
+               --    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
+               substr(regexp_replace(regexp_substr (product, '[^ ,]+', 1, rn), '[\)\(]', ''), 1, 200) word
+        from GeneAttributes
+        cross
+               -- create a table of integers 1 - n where n is the max number of words in any product
+        join (select rownum rn
+              from (select max (regexp_count (product, '[ ,]')) + 1 mx
+                    from GeneAttributes)
+              connect by level <= mx
+             )
+        where regexp_substr (product, '[^, ]+', 1, rn) is not null
+        order by source_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index GeneWord_idx&1 ON GeneWord&1 (source_id)
-tablespace indx
+        create index GeneWord_idx&1 ON GeneWord&1 (source_id)
+        tablespace indx
       ]]>
     </sql>
   </tuningTable>
@@ -346,7 +350,7 @@ select genomestat.taxon_id,
         left outer join 
         (
         SELECT count (distinct ga.source_id) as ct, ga.taxon_id 
-        FROM   apidbtuning.sagetaggene stg, apidbtuning.geneattributes ga  
+        FROM   SageTagGene stg, GeneAttributes ga  
         WHERE  ga.source_id = stg.gene_source_id 
            AND ga.is_deprecated = 0 
         GROUP BY ga.taxon_id 
@@ -354,7 +358,7 @@ select genomestat.taxon_id,
         left outer join       
       (
        SELECT count(distinct ga.source_id) as ct, ga.taxon_id 
-       FROM apidbtuning.GeneAttributes ga, dots.snpfeature sf  
+       FROM GeneAttributes ga, dots.snpfeature sf  
        WHERE sf.parent_id = ga.na_feature_id 
          AND ga.is_deprecated = 0 
        GROUP BY ga.taxon_id 
@@ -1709,7 +1713,24 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        0 as five_prime_utr_length, 0 as three_prime_utr_length,
        protein.signalp_scores,protein.signalp_peptide, sequence.taxon_id,
        protein.aa_sequence_id, protein.protein_source_id,
-       uniprot.uniprot_id, uniprot.uniprot_id_internal
+       uniprot.uniprot_id, uniprot.uniprot_id_internal,
+       WinzelerExprStats.spz_gam_max_pct, WinzelerExprStats.spz_gam_max_expr_timing, 
+       WinzelerExprStats.spz_gam_min_expr_timing, WinzelerExprStats.spz_gam_max_fold_ind,
+       entrez_table.entrez_id, cast(null as varchar2(80)) as representative_gene,
+       0 as paralog_number, 0 as ortholog_number, olds.old_ids,
+       DerisiExpn.derisi_48hr_max_expr_timing, DerisiExpn.derisi_48hr_min_expr_timing,
+       DerisiPercentile.derisi_48hr_max_pct, DerisiExpn.derisi_48hr_max_fold_ind,
+       nvl(LegacyPlasmoExpnGraphs.graph_daily, 0) as graph_daily,
+       PruAlk72HrExpn.pru_alk_72hr_max_expr_timing,
+       PruAlk72HrExpn.pru_alk_72hr_min_expr_timing,
+       PruAlk72HrExpn.pru_alk_72hr_max_pct,
+       PruAlk72HrExpn.pru_alk_72hr_max_fold_ind,
+       PruCO272hr.pru_co2_72hr_max_expr_timing,
+       PruCO272hr.pru_co2_72hr_min_expr_timing,
+       PruCO272hr.pru_co2_72hr_max_pct,
+       PruCO272hr.pru_co2_72hr_max_fold_ind,
+       stunnenberg.rbci_rnaseq_max_expr_timing, stunnenberg.rbci_rnaseq_min_expr_timing,
+       stunnenberg.rbci_rnaseq_max_pct, stunnenberg.rbci_rnaseq_max_fold_ind
 FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.SequenceOntology so,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed,
@@ -1809,12 +1830,84 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.SequenceOntology so,
      (select gene as source_id,
              substr(listagg (id, ',') within group (order by id), 1, 240) as uniprot_id,
              substr(listagg (id, '+or+') within group (order by id), 1, 240) as uniprot_id_internal
-      from ApidbTuning.GeneId
+      from GeneId
       where database_name like '%uniprot_dbxref_RSRC'
          or database_name like '%dbxref_gene2Uniprot_RSRC'
          or database_name = 'Links to Uniprot Genes'
       group by gene
-     ) uniprot
+     ) uniprot,
+     (select p.source_id, round(p.max_percentile,1) AS spz_gam_max_pct,
+             p.time_of_max_expr AS spz_gam_max_expr_timing,
+             p.time_of_min_expr AS spz_gam_min_expr_timing,
+             round(p.ind_ratio,1) as spz_gam_max_fold_ind
+      from apidb.Profile p, apidb.ProfileSet ps
+      where ps.name = 'winzeler_cc_sorbExp'
+        and p.profile_set_id = ps.profile_set_id) WinzelerExprStats,
+     (select dbna.na_feature_id,
+             substr(listagg (db.primary_identifier, ',') within group (order by db.primary_identifier), 1, 300) as entrez_id
+      from sres.ExternalDatabaseRelease edr, sres.DbRef db,
+           dots.DbRefNaFeature dbna, sres.ExternalDatabase ed
+      where edr.external_database_release_id = db.external_database_release_id
+        and ed.external_database_id = edr.external_database_id
+        and dbna.db_ref_id = db.db_ref_id
+        and lower(ed.name) like '%entrez%'
+        group by dbna.na_feature_id
+     ) entrez_table,
+     (select drnf.na_feature_id,
+                 substr(listagg(dr.primary_identifier, ', ') within group (order by dr.primary_identifier), 1, 900) as old_ids
+          from dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+          where dr.primary_identifier is not null
+            and drnf.db_ref_id = dr.db_ref_id
+            and dr.external_database_release_id = edr.external_database_release_id
+            and edr.external_database_id = ed.external_database_id
+            and edr.id_type = 'previous id'
+          group by drnf.na_feature_id
+     ) olds,
+     (select *
+      from (select p.source_id as source_id,
+                   p.time_of_max_expr as derisi_48hr_max_expr_timing,
+                   p.time_of_min_expr as derisi_48hr_min_expr_timing,
+                   round(p.ind_ratio, 1) as derisi_48hr_max_fold_ind, 
+                   row_number() over (partition by p.source_id order by p.ind_ratio desc) as row_number
+            from apidb.Profile p, apidb.ProfileSet ps
+            where ps.name like 'DeRisi % Smoothed'
+              and p.profile_set_id = ps.profile_set_id)
+      where row_number = 1) DerisiExpn,
+     (select p.source_id,
+             round(max(p.max_percentile), 1) as  derisi_48hr_max_pct
+      from apidb.Profile p, apidb.ProfileSet ps
+      where ps.name like 'DeRisi % Smoothed'
+        and p.profile_set_id = ps.profile_set_id
+      group by p.source_id) DerisiPercentile,
+     (select p.source_id, 1 as graph_daily
+      from apidb.ProfileSet ps, apidb.Profile p
+      where ps.name = 'daily_patient-number' 
+        and p.profile_set_id = ps.profile_set_id 
+     ) LegacyPlasmoExpnGraphs,
+     (select p.source_id,
+             round(p.max_percentile, 1) as pru_alk_72hr_max_pct,
+             p.time_of_max_expr as pru_alk_72hr_max_expr_timing,
+             p.time_of_min_expr as pru_alk_72hr_min_expr_timing,
+             round(p.ind_ratio,1) as pru_alk_72hr_max_fold_ind
+      from apidb.Profile p, apidb.ProfileSet ps
+      where ps.name = 'expression profiles of Pru dHXGPRT strain Alkaline bradyzoite-inducing conditions (media pH 8.2)'
+        and p.profile_set_id = ps.profile_set_id) PruAlk72HrExpn,
+     (select p.source_id,
+             round(p.max_percentile,1) as pru_co2_72hr_max_pct,
+             p.time_of_max_expr as pru_co2_72hr_max_expr_timing,
+             p.time_of_min_expr as pru_co2_72hr_min_expr_timing,
+             round(p.ind_ratio,1) as pru_co2_72hr_max_fold_ind
+      from apidb.Profile p, apidb.ProfileSet ps
+      where ps.name = 'expression profiles of Pru dHXGPRT strain CO2-starvation bradyzoite-inducing conditions'
+        and p.profile_set_id = ps.profile_set_id) PruCO272hr,
+     (select p.source_id,
+             round(p.max_percentile, 1) as rbci_rnaseq_max_pct,
+             p.time_of_max_expr as rbci_rnaseq_max_expr_timing,
+             p.time_of_min_expr as rbci_rnaseq_min_expr_timing,
+             round(p.ind_ratio, 1) as rbci_rnaseq_max_fold_ind
+      from apidb.Profile p, apidb.ProfileSet ps
+      where ps.name = 'pfal3D7_Stunnenberg_pi_time_series_scaled'
+        and p.profile_set_id = ps.profile_set_id) stunnenberg
 WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = nl.na_feature_id
   AND nl.is_top_level = 1
@@ -1855,6 +1948,15 @@ WHERE gf.source_id = gene.source_id
   AND (gf.is_predicted != 1 OR gf.is_predicted is null)
   AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
   AND gf.source_id = uniprot.source_id(+)
+  AND gf.source_id = WinzelerExprStats.source_id(+)
+  AND gf.na_feature_id = entrez_table.na_feature_id(+)
+  AND gf.na_feature_id = olds.na_feature_id(+)
+  AND gf.source_id = DeRisiPercentile.source_id(+)
+  AND gf.source_id = DeRisiExpn.source_id(+)
+  AND gf.source_id = LegacyPlasmoExpnGraphs.source_id(+)
+  AND gf.source_id = PruAlk72HrExpn.source_id(+)
+  AND gf.source_id = PruCO272hr.source_id(+)
+  AND gf.source_id = stunnenberg.source_id(+)
       ]]>
     </sql>
 <!-- 
@@ -2016,20 +2118,6 @@ and ga.orthomcl_name is null
     </sql>
     <sql>
       <![CDATA[
-       alter table &prefixGeneAttributes&1
-       add (
-            paralog_number number,
-            ortholog_number number
-            )
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-       update &prefixGeneAttributes&1 set ortholog_number = 0,paralog_number = 0
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
        update &prefixGeneAttributes&1 gaup
        set paralog_number = (select count(*)
                                from &prefixGeneAttributes&1 g1
@@ -2041,6 +2129,23 @@ and ga.orthomcl_name is null
                                where g1.orthomcl_name = gaup.orthomcl_name
                                and g1.organism != gaup.organism)
         where gaup.gene_type = 'protein coding'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update &prefixGeneAttributes&1
+        set representative_gene = (select min(source_id)
+                                   from GeneAttributes&1 ga
+                                   where ga.gene_id = &prefixGeneAttributes&1.gene_id)
+        where representative_gene is null
+          and gene_id is not null
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update &prefixGeneAttributes&1
+        set representative_gene = source_id
+        where representative_gene is null
       ]]>
     </sql>
     <sql>
@@ -2147,6 +2252,7 @@ tablespace indx
      -->
     <internalDependency name="GenomicSequence"/>
     <internalDependency name="SequencePieceClosure"/>
+    <externalDependency name="apidb.Synteny"/>
     <externalDependency name="dots.DbRefNaSequence"/>
     <externalDependency name="sres.DbRef"/>
     <externalDependency name="sres.ExternalDatabase"/>
@@ -2177,8 +2283,8 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        SUBSTR(sequence.chromosome, 1, 20) AS chromosome,
        sequence.chromosome_order_num, so.so_id, so.term_name as sequence_type,
        nvl(virtualization.is_top_level, 1) as is_top_level,
-       sequence.na_sequence_id,
-       organism.genome_source, organism.name_for_filenames
+       sequence.na_sequence_id, organism.genome_source,
+       organism.name_for_filenames, nvl(msa.has_msa, 0) as has_msa
 FROM sres.TaxonName tn, sres.Taxon, sres.SequenceOntology so, apidb.Organism,
      &prefixGenomicSequence sequence,
      (SELECT drns.na_sequence_id, max(dr.primary_identifier) AS genbank_accession
@@ -2195,7 +2301,10 @@ FROM sres.TaxonName tn, sres.Taxon, sres.SequenceOntology so, apidb.Organism,
       FROM sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
       WHERE edr.external_database_id = ed.external_database_id) db,
      (SELECT distinct piece_na_sequence_id, 0 as is_top_level
-      FROM &prefixSequencePieceClosure) virtualization
+      FROM &prefixSequencePieceClosure) virtualization,
+     (SELECT a_na_sequence_id as na_sequence_id, 1 as has_msa
+      FROM apidb.Synteny syn
+      GROUP BY a_na_sequence_id) msa
 WHERE sequence.taxon_id = tn.taxon_id(+)
   AND (sequence.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
   AND tn.name_class = 'scientific name'
@@ -2205,7 +2314,8 @@ WHERE sequence.taxon_id = tn.taxon_id(+)
   AND sequence.na_sequence_id = genbank.na_sequence_id(+)
   AND sequence.external_database_release_id = db.external_database_release_id(+)
   AND sequence.na_sequence_id = virtualization.piece_na_sequence_id(+)
-  AND taxon.taxon_id = organism.taxon_id (+)
+  AND taxon.taxon_id = organism.taxon_id(+)
+  AND sequence.na_sequence_id = msa.na_sequence_id(+)
       ]]>
     </sql>
     <sql>
@@ -2499,7 +2609,7 @@ tablespace indx
         where snp_na_feature_id
               in (select snp_na_feature_id
                   from (select snp_na_feature_id, count(distinct allele) as allele_count
-                        from ApidbTuning.HtsVariant&1
+                        from HtsVariant&1
                         group by snp_na_feature_id)
                   where allele_count = 1)
       ]]>
@@ -2526,7 +2636,7 @@ tablespace indx
         with snp_alleles -- one row per (SNP, allele) pair
              as (select snp_na_feature_id, max(snp_source_id) as snp_source_id, max(species_taxon_id) as taxon_id,
                         allele, max(product) as product, count(*) as strain_count
-                 from ApidbTuning.HtsVariant
+                 from HtsVariant
                  group by snp_na_feature_id, allele),
              ranked_alleles -- add ranking within SNP: 1 for major allele, 2 for silver medalist, et c.
              as (select snp_na_feature_id, allele, snp_source_id, taxon_id, product, strain_count,
@@ -2962,7 +3072,7 @@ SQL
       # create index
       $dbh->do(<<SQL) or die $dbh->errstr;
         create index bpal&1
-          on ApidbTuning.BlatProtAlignLocation&1
+          on BlatProtAlignLocation&1
           (target_na_sequence_id, target_start, target_end, blat_protein_alignment_id,
            score, is_reversed, query_aa_sequence_id, percent_identity)
 SQL
@@ -3095,6 +3205,8 @@ tablespace indx
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="dots.SnpFeature"/>
     <externalDependency name="dots.SeqVariation"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
     <sql>
       <![CDATA[
 CREATE TABLE SnpStrains&1 NOLOGGING AS
@@ -3788,7 +3900,7 @@ create table TajimasStats&1 (
       use strict;
       use lib "$ENV{GUS_HOME}/lib/perl";
 
-      my $sql = "select count(*) as hts_isolates from apidbtuning.isolateattributes where data_type = 'HTS'";
+      my $sql = "select count(*) as hts_isolates from IsolateAttributes where data_type = 'HTS'";
 
       
       my $queryHandle = $dbh->prepare($sql) or die $dbh->errstr;
@@ -5157,10 +5269,11 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
       <![CDATA[
 CREATE TABLE CompoundAttributes&1 NOLOGGING AS
 SELECT comp.compound_id,  'CID:' || comp.compound_id AS source_id, 
-              apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', ') AS name,
-	      apidb.tab_to_string(set(cast(COLLECT(to_char(substSyns.name)) AS apidb.varchartab)), ', ') AS substance_name,
-              apidb.tab_to_string(set(cast(COLLECT(to_char(substTable.substance_id)) AS apidb.varchartab)), ', ') AS substance_id,
-              wtTable.mol_wt, REGEXP_REPLACE(formTable.formula,'(\d)','<sub>\1</sub>') AS formula
+              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 300) AS name,
+	      substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substSyns.name)) AS apidb.varchartab)), ', '), 1, 400) AS substance_name,
+              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substTable.substance_id)) AS apidb.varchartab)), ', '), 1, 80) AS substance_id,
+              substr(wtTable.mol_wt, 1, 20) as mol_wt,
+              substr(REGEXP_REPLACE(formTable.formula,'(\d)','<sub>\1</sub>'), 1, 300) AS formula
         FROM apidb.PubChemCompound comp,
                   (SELECT compound_id , value as name FROM apidb.PubChemCompound where property='Name') nameTable,
                   (SELECT compound_id , value as mol_wt FROM apidb.PubChemCompound where property='MolecularWeight') wtTable,
@@ -5479,7 +5592,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
       sub.citation,
       dp.summary,
       dp.description
-      from ApidbTuning.datasetpresenter dp,
+      from DatasetPresenter dp,
       (
       select distinct
       dp.dataset_presenter_id as dataset_presenter_id, 
@@ -5494,8 +5607,8 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
       dc.affiliation as institution,
       LISTAGG(dpub.pmid, ' ') WITHIN GROUP (ORDER BY dpub.pmid) as pubmed_id,
       LISTAGG(dpub.citation, '  ') WITHIN GROUP (ORDER BY dpub.citation) as citation
-      from apidbtuning.datasetpresenter dp, ApidbTuning.datasetcontact dc, 
-      ApidbTuning.datasetpublication dpub  
+      from DatasetPresenter dp, DatasetContact dc, 
+           DatasetPublication dpub  
       where dp.dataset_presenter_id = dc.dataset_presenter_id
       and   dp.dataset_presenter_id = dpub.dataset_presenter_id
       and   dc.is_primary_contact = 1
