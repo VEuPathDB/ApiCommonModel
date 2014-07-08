@@ -6,7 +6,7 @@
     <!-- SNP ID -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
       <sqlQuery name="SnpBySourceId" doNotTest="true" includeProjects="PlasmoDB"  isCacheable="true">
-          <paramRef ref="snpParams.snp_id"/>
+          <paramRef ref="snpChipParams.snp_id"/>
 	  <column name="source_id"/>
 	  <column name="project_id"/>
         <sql>
@@ -21,7 +21,7 @@
      <processQuery name="SnpBySourceId" includeProjects="EuPathDB" 
               doNotTest="true" 
               processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-          <paramRef ref="snpParams.snp_id" noTranslation="true" />
+          <paramRef ref="snpChipParams.snp_id" noTranslation="true" />
           <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
 	  <wsColumn name="source_id" width="50" wsName="source_id"/>
           <wsColumn name="project_id" width="32" wsName="project_id"/>
@@ -297,6 +297,7 @@ WHERE snp.na_feature_id = variants.parent_id
 
           <paramRef ref="sharedParams.snp_strain_a"/>
           <paramRef ref="sharedParams.snp_strain_m"/>
+          <paramRef ref="snpChipParams.snp_assay_type"/>
           <column name="source_id"/>
           <column name="project_id"/>
           <column name="gene"/>
@@ -392,10 +393,10 @@ WHERE snp.na_feature_id = variants.parent_id
 
     <sqlQuery name="SnpsByIsolatePattern" doNotTest="true" includeProjects="PlasmoDB" 
           isCacheable="true">
-        <paramRef ref="snpParams.isolate_set_a"/>
-        <paramRef ref="snpParams.set_a_percent"/>
-        <paramRef ref="snpParams.isolate_set_b"/>
-        <paramRef ref="snpParams.set_b_percent"/>
+        <paramRef ref="snpChipParams.isolate_set_a"/>
+        <paramRef ref="snpChipParams.set_a_percent"/>
+        <paramRef ref="snpChipParams.isolate_set_b"/>
+        <paramRef ref="snpChipParams.set_b_percent"/>
         <column name="source_id"/> 
         <column name="project_id"/>
         <column name="set_a_allele"/>
@@ -404,25 +405,81 @@ WHERE snp.na_feature_id = variants.parent_id
         <column name="set_b_count"/>
         <sql>
             <![CDATA[
-              select seta.snp_source_id as source_id,'@PROJECT_ID@' as project_id,
+select distinct seta.source_id,'@PROJECT_ID@' as project_id,
+       seta.allele as set_a_allele,setb.allele as set_b_allele,
+       seta.total as set_a_count, setb.total as set_b_count
+FROM
+(
+SELECT snp.source_id, var.allele, count(*) as total
+			 --s.EXTERNAL_DATABASE_RELEASE_ID
+FROM   study.study s,
+			RAD.STUDYBIOMATERIAL sbm,
+			study.biosample bs, 
+			STUDY.BIOMATERIALCHARACTERISTIC bmc,
+			 ($$isolate_set_a$$) ds,
+			dots.snpfeature snp,
+			dots.seqvariation var 
+WHERE s.study_id = sbm.study_id
+	AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+	AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+	AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
+	AND s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+	AND snp.na_feature_id = var.parent_id
+	AND bmc.value = var.strain
+	--AND bs.name = 'BC.458081'
+	AND bs.name  = ds.source_id
+	group by snp.source_id, var.allele
+  having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100
+) seta,
+(
+SELECT snp.source_id, var.allele, count(*) as total
+			 --s.EXTERNAL_DATABASE_RELEASE_ID
+FROM   study.study s,
+			RAD.STUDYBIOMATERIAL sbm,
+			study.biosample bs, 
+			STUDY.BIOMATERIALCHARACTERISTIC bmc,
+			 ($$isolate_set_a$$) ds,
+			dots.snpfeature snp,
+			dots.seqvariation var 
+WHERE s.study_id = sbm.study_id
+	AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+	AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+	AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
+	AND s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+	AND snp.na_feature_id = var.parent_id
+	AND bmc.value = var.strain
+	--AND bs.name = 'BC.458081'
+	AND bs.name  = ds.source_id
+	group by snp.source_id, var.allele
+  having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100
+) setb
+where seta.source_id = setb.source_id
+ and seta.allele != setb.allele
+
+
+/**
+       select seta.snp_source_id as source_id,'@PROJECT_ID@' as project_id,
               seta.allele as set_a_allele,setb.allele as set_b_allele,
               seta.total as set_a_count, setb.total as set_b_count
-              from (select isnp.snp_source_id,isnp.allele,count(*) as total
-              from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_a$$) ds
-              where isnp.is_source_id = ds.source_id
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100) seta,
+       from   (select isnp.snp_source_id,isnp.allele,count(*) as total
+               from   ApidbTuning.IsolateSNPs isnp, ($$isolate_set_a$$) ds
+               where isnp.is_source_id = ds.source_id
+                 and isnp.allele is not null
+                 and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
+               group by isnp.snp_source_id,isnp.allele
+               having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100
+							) seta,
               (select isnp.snp_source_id,isnp.allele, count(*) as total
-              from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_b$$) ds
-              where isnp.is_source_id = ds.source_id
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= (select count(*) from ($$isolate_set_b$$)) * $$set_b_percent$$ / 100) setb
-              where seta.snp_source_id = setb.snp_source_id
+               from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_b$$) ds
+               where isnp.is_source_id = ds.source_id
+                 and isnp.allele is not null
+                 and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
+               group by isnp.snp_source_id,isnp.allele
+               having count(*) >= (select count(*) from ($$isolate_set_b$$)) * $$set_b_percent$$ / 100
+							 ) setb
+        where seta.snp_source_id = setb.snp_source_id
               and seta.allele != setb.allele
+*/
            ]]>
        </sql>
     </sqlQuery>
@@ -430,10 +487,10 @@ WHERE snp.na_feature_id = variants.parent_id
     <processQuery name="SnpsByIsolatePattern" includeProjects="EuPathDB" doNotTest="true"
              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
         <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
-        <paramRef ref="snpParams.isolate_set_a"/>
-        <paramRef ref="snpParams.set_a_percent"/>
-        <paramRef ref="snpParams.isolate_set_b"/>
-        <paramRef ref="snpParams.set_b_percent"/>
+        <paramRef ref="snpChipParams.isolate_set_a"/>
+        <paramRef ref="snpChipParams.set_a_percent"/>
+        <paramRef ref="snpChipParams.isolate_set_b"/>
+        <paramRef ref="snpChipParams.set_b_percent"/>
    
         <wsColumn name="source_id" width="32" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
@@ -450,9 +507,9 @@ WHERE snp.na_feature_id = variants.parent_id
     <sqlQuery name="SnpsByIsolatePatternHistory" includeProjects="PlasmoDB" 
           isCacheable="true">
         <paramRef ref="sharedParams.isolateHistoryIdA"/>
-        <paramRef ref="snpParams.set_a_count"/>
+        <paramRef ref="snpChipParams.set_a_count"/>
         <paramRef ref="sharedParams.isolateHistoryIdB"/>
-        <paramRef ref="snpParams.set_b_count"/>
+        <paramRef ref="snpChipParams.set_b_count"/>
         <column name="source_id"/> 
         <column name="project_id"/>
         <column name="set_a_allele"/>
@@ -465,14 +522,14 @@ WHERE snp.na_feature_id = variants.parent_id
               0 AS wdk_weight
               from (select isnp.snp_source_id,isnp.allele
               from ApidbTuning.IsolateSNPs isnp
-              where isnp.is_source_id in (select distinct source_id from $$isolateHitoryIdA$$)
+              where isnp.is_source_id in (select distinct source_id from $$isolateHistoryIdA$$)
               and isnp.allele is not null
               and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
               group by isnp.snp_source_id,isnp.allele
               having count(*) >= $$set_a_count$$) seta,
               (select isnp.snp_source_id,isnp.allele
               from ApidbTuning.IsolateSNPs isnp
-              where isnp.is_source_id in (select distinct source_id from $$isolateHitoryIdB$$)
+              where isnp.is_source_id in (select distinct source_id from $$isolateHistoryIdB$$)
               and isnp.allele is not null
               and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
               group by isnp.snp_source_id,isnp.allele
@@ -486,9 +543,9 @@ WHERE snp.na_feature_id = variants.parent_id
     <processQuery name="SnpsByIsolatePatternHistory" includeProjects="EuPathDB"
              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
         <paramRef ref="sharedParams.isolateHistoryIdA"/>
-        <paramRef ref="snpParams.set_a_count"/>
+        <paramRef ref="snpChipParams.set_a_count"/>
         <paramRef ref="sharedParams.isolateHistoryIdB"/>
-        <paramRef ref="snpParams.set_b_count"/>
+        <paramRef ref="snpChipParams.set_b_count"/>
         <wsColumn name="source_id" width="32" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
         <wsColumn name="set_a_allele"/>
@@ -502,7 +559,7 @@ WHERE snp.na_feature_id = variants.parent_id
 
     <sqlQuery name="SnpsByIsolateType" includeProjects="PlasmoDB" 
           isCacheable="true">
-        <paramRef ref="snpParams.snp_assay_type"/>
+        <paramRef ref="snpChipParams.snp_assay_type"/>
         <column name="source_id"/> 
         <column name="project_id"/>
         <sql>
@@ -516,7 +573,7 @@ WHERE snp.na_feature_id = variants.parent_id
 
     <processQuery name="SnpsByIsolateType" includeProjects="EuPathDB"
              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="snpParams.snp_assay_type" quote="false" />
+        <paramRef ref="snpChipParams.snp_assay_type" quote="false" />
         <wsColumn name="source_id" width="32" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
     </processQuery>
@@ -530,7 +587,7 @@ WHERE snp.na_feature_id = variants.parent_id
          <testParamValues includeProjects="PlasmoDB">
             <paramValue name="isolate_id">CPHD.273727</paramValue>
          </testParamValues>
-        <paramRef ref="snpParams.isolate_id"/>
+        <paramRef ref="snpChipParams.isolate_id"/>
         <column name="source_id"/> 
         <column name="project_id"/>
         <column name="isolate_allele"/>
@@ -550,7 +607,7 @@ WHERE snp.na_feature_id = variants.parent_id
 
 
     <sqlQuery name="ByWeightFilter" isCacheable="true" doNotTest="true">
-        <paramRef ref="snpParams.snp_result"/>
+        <paramRef ref="snpChipParams.snp_result"/>
         <paramRef ref="sharedParams.min_weight" default="0"/>
         <paramRef ref="sharedParams.max_weight" default="100"/>
         <column name="project_id"/>
