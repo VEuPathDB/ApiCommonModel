@@ -1,6 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import java.util.List;
 
 public class IsolatesHTS extends DatasetInjector {
 
@@ -22,6 +23,24 @@ public class IsolatesHTS extends DatasetInjector {
       String experimentName = experimentRsrc.replaceFirst("_RSRC", "");
       setPropValue("experimentName", experimentName);
 
+
+      // use getSampleList method, refer to - https://redmine.apidb.org/issues/16510
+      String projectName = getPropValue("projectName");
+      String organismAbbrev = getPropValue("organismAbbrev");
+      String sampleNamePrefix = ":" + organismAbbrev + "_" + experimentName + "_";
+      String sampleNameSuffix = "_HTS_SNPSample_RSRC";
+      List<String> sampleNames = getSampleList(sampleNamePrefix, sampleNameSuffix);
+                          
+      for (int i=0; i<sampleNames.size(); i++){
+          setPropValue("sampleName", sampleNames.get(i));
+
+          injectTemplate("htsSnpSampleDatabase");
+          injectTemplate("htsSnpSampleCoverageXYTrack");
+          injectTemplate("htsSnpSampleCoverageDensityTracks");
+          injectTemplate("htsSnpSampleAlignmentTrack");
+      }       
+
+      /** commented out by Haiming Wang - use getSampleList method. refer to - https://redmine.apidb.org/issues/16510 
       String sampleList = getPropValue("sampleList");
       String[] samples = sampleList.split(" ");
       for(int i = 0; i < samples.length; i++) {
@@ -32,6 +51,8 @@ public class IsolatesHTS extends DatasetInjector {
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
       }
+      */
+
   }
 
   @Override
@@ -76,11 +97,13 @@ public class IsolatesHTS extends DatasetInjector {
   }
 
 
+
   // second column is for documentation
-  @Override
+    @Override
   public String[][] getPropertiesDeclaration() {
-      String [][] declaration = {{"sampleList", "space del list of sample (sample name = directory name in webservices)"}
-      };
+      //String [][] declaration = {{"sampleList", "space del list of sample (sample name = directory name in webservices)"}
+      //};
+			String[][] declaration = {};
 
     return declaration;
   }
