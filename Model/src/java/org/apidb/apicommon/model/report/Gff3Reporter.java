@@ -208,9 +208,10 @@ public class Gff3Reporter extends Reporter {
    * The initialize() method has to be called before this method.
    * 
    * @param writer
+   * @throws WdkUserException 
    */
   void writeHeader(PrintWriter writer) throws WdkModelException,
-      NumberFormatException {
+      NumberFormatException, WdkUserException {
     writer.println("##gff-version\t3");
     writer.println("##feature-ontology\tso.obo");
     writer.println("##attribute-ontology\tgff3_attributes.obo");
@@ -648,7 +649,7 @@ public class Gff3Reporter extends Reporter {
     return getValue(attributeMap.getAttributeValue(field));
   }
 
-  private String getValue(AttributeValue attrVal) throws WdkModelException {
+  private String getValue(AttributeValue attrVal) throws WdkModelException, WdkUserException {
     String value;
     if (attrVal == null) {
       return null;

@@ -177,7 +177,7 @@ public class FullRecordCachedReporter extends Reporter {
 
     private void formatRecord2Text(Set<AttributeField> attributes,
             Set<TableField> tables, PrintWriter writer)
-            throws WdkModelException, SQLException {
+            throws WdkModelException, SQLException, WdkUserException {
         logger.debug("Include empty table: " + hasEmptyTable);
 
         RecordClass recordClass = getQuestion().getRecordClass();

@@ -16,6 +16,7 @@ import org.apache.log4j.Logger;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
+import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.query.Column;
 import org.gusdb.wdk.model.query.Query;
@@ -194,7 +195,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
-            throws WdkModelException {
+            throws WdkModelException, WdkUserException {
         Question question = answerValue.getQuestion();
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();

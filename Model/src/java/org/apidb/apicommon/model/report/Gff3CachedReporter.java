@@ -188,7 +188,7 @@ public class Gff3CachedReporter extends Reporter {
             writeSequences(writer);
     }
 
-    private void writeHeader(PrintWriter writer) throws WdkModelException {
+    private void writeHeader(PrintWriter writer) throws WdkModelException, NumberFormatException, WdkUserException {
         writer.println("##gff-version\t3");
         writer.println("##feature-ontology\tso.obo");
         writer.println("##attribute-ontology\tgff3_attributes.obo");
@@ -229,7 +229,7 @@ public class Gff3CachedReporter extends Reporter {
         writer.flush();
     }
 
-    private void writeRecords(PrintWriter writer) throws WdkModelException {
+    private void writeRecords(PrintWriter writer) throws WdkModelException, WdkUserException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
@@ -324,7 +324,7 @@ public class Gff3CachedReporter extends Reporter {
     }
 
     private String getValue(AttributeValue attrVal)
-            throws WdkModelException {
+            throws WdkModelException, WdkUserException {
         String value;
         if (attrVal == null) {
             return null;

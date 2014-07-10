@@ -230,7 +230,7 @@ public class GenBankReporter extends Reporter {
 
 
     private GenBankCdsFeature makeCdsFeature(RecordInstance record, GenBankFeature geneFeature)
-            throws WdkModelException {
+            throws WdkModelException, WdkUserException {
 
         int codonStart = 0 ;
 

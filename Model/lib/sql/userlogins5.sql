@@ -6,61 +6,57 @@ DROP SEQUENCE userlogins5.dataset_values_pkseq;
 DROP SEQUENCE userlogins5.user_baskets_pkseq;
 DROP SEQUENCE userlogins5.favorites_pkseq;
 DROP SEQUENCE userlogins5.categories_pkseq;
+DROP SEQUENCE userlogins5.step_analysis_pkseq;
 
 
 /* =========================================================================
    create sequences
-   ApiCommN for 100000003, ApiCommS for 100000003
+   ApiCommN for 100000000, ApiCommS for 100000000
    ========================================================================= */
 
-CREATE SEQUENCE userlogins5.migration_pkseq INCREMENT BY 10 START WITH 100000003;
 
-GRANT SELECT ON userlogins5.migration_pkseq TO GUS_R;
-GRANT SELECT ON userlogins5.migration_pkseq TO GUS_W;
-
-
-CREATE SEQUENCE userlogins5.users_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.users_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.users_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.users_pkseq TO GUS_W;
 
 
-CREATE SEQUENCE userlogins5.strategies_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.strategies_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.strategies_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.strategies_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.steps_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.steps_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.steps_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.steps_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.datasets_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.datasets_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.datasets_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.datasets_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.dataset_values_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.dataset_values_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.dataset_values_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.dataset_values_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.user_baskets_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.user_baskets_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.user_baskets_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.user_baskets_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.favorites_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.favorites_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.favorites_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.favorites_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.categories_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.categories_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.categories_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.categories_pkseq TO GUS_W;
 
-CREATE SEQUENCE userlogins5.step_analysis_pkseq INCREMENT BY 10 START WITH 100000003;
+CREATE SEQUENCE userlogins5.step_analysis_pkseq INCREMENT BY 10 START WITH 100000000;
 
 GRANT SELECT ON userlogins5.step_analysis_pkseq TO GUS_R;
 GRANT SELECT ON userlogins5.step_analysis_pkseq TO GUS_W;

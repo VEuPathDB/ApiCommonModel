@@ -28,6 +28,8 @@ import org.gusdb.wdk.model.user.User;
  * @author xingao
  */
 public class Gff3Dumper {
+  
+  private static final int PAGE_SIZE = 1000;
 
   private static final Logger logger = Logger.getLogger(Gff3Dumper.class);
 
@@ -106,6 +108,7 @@ public class Gff3Dumper {
     // load config
     Map<String, String> config = new LinkedHashMap<String, String>();
     config.put(Reporter.FIELD_FORMAT, "text");
+    config.put(Reporter.PROPERTY_PAGE_SIZE, Integer.toString(PAGE_SIZE));
     config.put(Gff3Reporter.FIELD_HAS_TRANSCRIPT, "true");
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "true");
 
