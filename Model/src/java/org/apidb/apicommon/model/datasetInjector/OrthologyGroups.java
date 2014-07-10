@@ -14,6 +14,7 @@ public class OrthologyGroups extends DatasetInjector {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByOrthologPattern");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByOrthologs");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesOrthologousToAGivenGene");
+   addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEcNumber");
   }
 
   // second column is for documentation

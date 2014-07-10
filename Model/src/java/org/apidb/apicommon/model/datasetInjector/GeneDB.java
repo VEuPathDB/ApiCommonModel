@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class NRDB extends DatasetInjector {
+public class GeneDB extends DBXRefs {
 
   @Override
   public void injectTemplates() {
@@ -10,9 +10,8 @@ public class NRDB extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProteinDbAccession"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTextSearch"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEcNumber");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEcNumber");
   }
 
   // second column is for documentation
@@ -22,5 +21,5 @@ public class NRDB extends DatasetInjector {
     return propertiesDeclaration;
   }
 
-
+  
 }
