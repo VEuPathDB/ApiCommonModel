@@ -212,9 +212,9 @@ public class Gff3Reporter extends Reporter {
    */
   void writeHeader(PrintWriter writer) throws WdkModelException,
       NumberFormatException, WdkUserException {
-    writer.println("##gff-version\t3");
-    writer.println("##feature-ontology\tso.obo");
-    writer.println("##attribute-ontology\tgff3_attributes.obo");
+    writer.println("##gff-version 3");
+    writer.println("# feature-ontology so.obo");
+    writer.println("# attribute-ontology gff3_attributes.obo");
     writer.flush();
 
     // get the sequence regions
@@ -244,8 +244,7 @@ public class Gff3Reporter extends Reporter {
     // put sequence id into the header
     for (String seqId : regions.keySet()) {
       int[] region = regions.get(seqId);
-      writer.println("##sequence-region\t" + seqId + "\t" + region[0] + "\t"
-          + region[1]);
+      writer.println("##sequence-region " + seqId + " " + region[0] + " " + region[1]);
     }
     writer.flush();
   }
