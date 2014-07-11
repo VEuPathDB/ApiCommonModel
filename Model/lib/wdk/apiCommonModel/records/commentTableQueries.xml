@@ -33,9 +33,14 @@
       </defaultTestParamValues>
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- User Comments -->  
+       <!-- User Comments --> 
+       <!-- July 2014: edit genecomments SQL so that:   --> 
+       <!--  ++ a comment in commentstableid table with an old ID appears in the official ID gene page  -->
+       <!--  ++ the link (URL) to the comment uses 'stable_id' which needs to be the old ID existing in commentstableid table  -->
+       <!--  ++ gene count for related IDs was counting all entries in commentstableid therefore too high in many cases (counting all IDs)  -->
+       <!-- --> 
+       <!-- This might need to be done also in other comment tables (for Toxo and for other record types) if we allow aliases  --> 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
        <sqlQuery name="GeneComments" excludeProjects="ToxoDB" isCacheable="false">
             <testParamValues minRows="0" includeProjects="MicrosporidiaDB,PiroplasmaDB"/>
             <testParamValues includeProjects="CryptoDB">
@@ -62,14 +67,24 @@
             <column name="comment_target_id"/>
             <sql>
             <![CDATA[
-                    SELECT c.comment_target_id, c.project_name as project_id, csi.comment_id, 
-                           csi.stable_id, csi.stable_id as source_id, c.comment_date, c.headline,
-                           files.filecount, references.pmids, gene_counts.geneCount,
-                           u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org
-                    FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
+                     WITH gene_comment as
+                       ( 
+                         SELECT  csi.comment_id,gi.gene as source_id, MAX(csi.stable_id) as stable_id
+                          FROM  apidbtuning.geneid gi,
                          ( SELECT comment_id, stable_id from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
                           UNION
-                           SELECT comment_id, stable_id from @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@) csi,
+                           SELECT comment_id, stable_id from @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@) csi
+                         WHERE gi.id = csi.stable_id
+                         GROUP by csi.comment_id,gi.gene
+                       )
+  
+                  SELECT c.comment_target_id, c.project_name as project_id, gene_comment.comment_id, 
+                           gene_comment.source_id,gene_comment.stable_id, c.comment_date, c.headline,
+                           files.filecount, references.pmids, gene_counts.geneCount,
+                           u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org
+ 
+                   FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
+                          gene_comment,
                          (SELECT comment_id, count(*) as filecount
                           FROM @COMMENT_SCHEMA@CommentFile@COMMENT_DBLINK@
                           GROUP BY comment_id) files,
@@ -79,21 +94,22 @@
                           WHERE database_name='pubmed'
                           GROUP BY comment_id
                           ) references,
-                         (SELECT comment_id, count(stable_id) as geneCount
-                          FROM @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@
+                         (SELECT comment_id, count(source_id) as geneCount
+                          FROM gene_comment
                           GROUP BY comment_id) gene_counts
+
                     WHERE c.project_name = '@PROJECT_ID@'
                       AND c.comment_target_id = 'gene'
                       AND c.review_status_id != 'rejected'
                       AND c.review_status_id != 'task'
                       AND c.review_status_id != 'community'
                       AND c.is_visible = 1
-                      AND c.comment_id = csi.comment_id
+                      AND c.comment_id = gene_comment.comment_id
                       AND c.user_id = u.user_id
                       AND c.comment_id = files.comment_id(+)
                       AND c.comment_id = references.comment_id(+)
                       AND c.comment_id = gene_counts.comment_id(+)
-                    ORDER BY csi.comment_id desc
+                    ORDER BY gene_comment.comment_id desc
             ]]>
             </sql>
         </sqlQuery>
