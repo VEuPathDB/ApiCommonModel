@@ -25,7 +25,7 @@ public class IsolatesHTS extends DatasetInjector {
 
 
       // use getSampleList method, refer to - https://redmine.apidb.org/issues/16510
-      String projectName = getPropValue("projectName");
+      //String projectName = getPropValue("projectName");
       String organismAbbrev = getPropValue("organismAbbrev");
       String sampleNamePrefix = ":" + organismAbbrev + "_" + experimentName + "_";
       String sampleNameSuffix = "_HTS_SNPSample_RSRC";

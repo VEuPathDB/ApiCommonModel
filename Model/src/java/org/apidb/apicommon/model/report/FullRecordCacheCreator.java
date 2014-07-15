@@ -13,6 +13,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.Utilities;
@@ -27,7 +28,6 @@ import org.gusdb.wdk.model.record.attribute.ColumnAttributeField;
 import org.gusdb.wdk.model.record.attribute.LinkAttributeField;
 import org.gusdb.wdk.model.record.attribute.PrimaryKeyAttributeField;
 import org.gusdb.wdk.model.record.attribute.TextAttributeField;
-import org.gusdb.wsf.util.BaseCLI;
 
 /**
  * @author xingao
