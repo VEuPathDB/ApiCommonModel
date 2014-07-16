@@ -30,6 +30,9 @@ public class IsolatesHTS extends DatasetInjector {
       String sampleNamePrefix = ":" + organismAbbrev + "_" + experimentName + "_";
       String sampleNameSuffix = "_HTS_SNPSample_RSRC";
       List<String> sampleNames = getSampleList(sampleNamePrefix, sampleNameSuffix);
+
+      String organismAbbrevDisplay = getPropValue("organismAbbrevDisplay");
+      setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
                           
       for (int i=0; i<sampleNames.size(); i++){
           setPropValue("sampleName", sampleNames.get(i));
