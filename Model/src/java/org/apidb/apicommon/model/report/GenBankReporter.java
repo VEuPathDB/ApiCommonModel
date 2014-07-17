@@ -47,8 +47,8 @@ public class GenBankReporter extends Reporter {
     // genbank table format
 
     @Override
-    public void configure(Map<String, String> config) {
-        super.configure(config);
+    public void configure(Map<String, String> newConfig) {
+        super.configure(newConfig);
     }
 
     @Override

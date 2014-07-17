@@ -40,7 +40,6 @@ import org.gusdb.wdk.model.user.User;
  */
 public class FullRecordFileCreator extends BaseCLI {
 
-    private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
     private static final String ARG_RECORD = "record";
     private static final String ARG_CACHE_TABLE = "cacheTable";

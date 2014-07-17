@@ -107,19 +107,19 @@ public class Gff3CachedReporter extends Reporter {
      * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
      */
     @Override
-    public void configure(Map<String, String> config) {
-        super.configure(config);
+    public void configure(Map<String, String> newConfig) {
+        super.configure(newConfig);
 
         // include transcript
-        if (config.containsKey(FIELD_HAS_TRANSCRIPT)) {
-            String value = config.get(FIELD_HAS_TRANSCRIPT);
+        if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
+            String value = newConfig.get(FIELD_HAS_TRANSCRIPT);
             hasTranscript = (value.equalsIgnoreCase("yes") || value
                     .equalsIgnoreCase("true")) ? true : false;
         }
 
         // include protein
-        if (config.containsKey(FIELD_HAS_PROTEIN)) {
-            String value = config.get(FIELD_HAS_PROTEIN);
+        if (newConfig.containsKey(FIELD_HAS_PROTEIN)) {
+            String value = newConfig.get(FIELD_HAS_PROTEIN);
             hasProtein = (value.equalsIgnoreCase("yes") || value
                     .equalsIgnoreCase("true")) ? true : false;
         }

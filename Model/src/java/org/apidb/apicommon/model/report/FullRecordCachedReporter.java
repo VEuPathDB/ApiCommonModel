@@ -78,12 +78,12 @@ public class FullRecordCachedReporter extends Reporter {
      * 
      */
     @Override
-    public void configure(Map<String, String> config) {
-        super.configure(config);
+    public void configure(Map<String, String> newConfig) {
+        super.configure(newConfig);
 
         // get basic configurations
-        if (config.containsKey(FIELD_HAS_EMPTY_TABLE)) {
-            String value = config.get(FIELD_HAS_EMPTY_TABLE);
+        if (newConfig.containsKey(FIELD_HAS_EMPTY_TABLE)) {
+            String value = newConfig.get(FIELD_HAS_EMPTY_TABLE);
             hasEmptyTable = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true
                     : false;
         }

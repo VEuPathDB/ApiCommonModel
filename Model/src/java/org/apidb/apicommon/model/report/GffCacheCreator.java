@@ -30,7 +30,6 @@ public class GffCacheCreator extends BaseCLI {
     private static final String NEW_LINE = System.getProperty("line.separator");
 
     private static final String ARG_CACHE_TABLE = "cacheTable";
-    private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
 
     private static final String ARG_GFF_RECORD_NAME = "gff_record";

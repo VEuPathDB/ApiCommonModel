@@ -48,23 +48,23 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 	super.addModelReferences();
 
         setDataType();
-        String dataType = getDataType();
+        String myDataType = getDataType();
 
 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
 
             if(getPropValueAsBoolean("hasPageData")) {
                 addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                                "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Confidence");
+                                "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Confidence");
             }
 
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesBy" + dataType + getDatasetName());
+                            "GeneQuestions.GenesBy" + myDataType + getDatasetName());
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                            "GeneQuestions.GenesBy" + dataType + getDatasetName() + "Percentile");
+                            "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
         }
 
         // TODO inject ProfileSimilarity Reference

@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.OutputStream;
@@ -23,7 +20,6 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
-import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
@@ -182,7 +178,6 @@ public class Gff3Reporter extends Reporter {
       for (String column : pkColumns) {
         sqlQuery.append(" AND ").append(column).append(" = ?");
       }
-      WdkModel wdkModel = baseAnswer.getQuestion().getWdkModel();
       DataSource dataSource = wdkModel.getAppDb().getDataSource();
       try {
         psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
@@ -258,7 +253,6 @@ public class Gff3Reporter extends Reporter {
       SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
-    WdkModel wdkModel = question.getWdkModel();
     DatabaseInstance appDb = wdkModel.getAppDb();
 
     RecordClass recordClass = question.getRecordClass();
@@ -487,7 +481,6 @@ public class Gff3Reporter extends Reporter {
       SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
-    WdkModel wdkModel = question.getWdkModel();
     DatabaseInstance appDb = wdkModel.getAppDb();
     RecordClass recordClass = question.getRecordClass();
     String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
