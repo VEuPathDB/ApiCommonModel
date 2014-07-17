@@ -15,6 +15,8 @@ import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.sql.DataSource;
 
@@ -25,6 +27,7 @@ import org.gusdb.fgputil.db.platform.DBPlatform;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
+import org.gusdb.wdk.model.WdkRuntimeException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.FieldScope;
@@ -43,7 +46,32 @@ import org.gusdb.wdk.model.record.attribute.TextAttributeField;
  * 
  */
 public class DetailTableLoader extends BaseCLI {
+  
+  private static class DumpTableTask implements Runnable {
+    
+    private final DetailTableLoader loader;
+    private final String idSql;
+    private final TableField table;
+    
+    public DumpTableTask(DetailTableLoader loader, String idSql, TableField table) {
+      this.loader = loader;
+      this.idSql = idSql;
+      this.table = table;
+    }
 
+    public void run() {
+      try {
+        loader.dumpTable(table, idSql);
+      }
+      catch (WdkModelException | WdkUserException | SQLException ex) {
+        throw new WdkRuntimeException(ex);
+      }
+    }
+  }
+
+  private static final int THREAD_POOL_SIZE = 10;
+  
+  private static final String ARG_PROJECT_ID = "model";
   private static final String ARG_SQL_FILE = "sqlFile";
   private static final String ARG_RECORD = "record";
   private static final String ARG_TABLE_FIELD = "field";
@@ -130,6 +158,9 @@ public class DetailTableLoader extends BaseCLI {
     logger.debug("getting tables...");
     RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
     Map<String, TableField> tables = recordClass.getTableFieldMap();
+    
+    // dump tables in parallel
+    ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
     if (fieldNames != null) { // dump individual table
       // all tables are available in this context
       String[] names = fieldNames.split(",");
@@ -138,7 +169,7 @@ public class DetailTableLoader extends BaseCLI {
         TableField table = tables.get(fieldName);
         if (table == null)
           throw new WdkModelException("The table field doesn't exist: " + fieldName);
-        dumpTable(table, idSql);
+        executor.execute(new DumpTableTask(this, idSql, table));
       }
     }
     else { // no table specified, only dump tables with a specific flag
@@ -146,9 +177,12 @@ public class DetailTableLoader extends BaseCLI {
         String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
         if (props.length > 0 && props[0].equalsIgnoreCase("true"))
           continue;
-        dumpTable(table, idSql);
+        executor.execute(new DumpTableTask(this, idSql, table));
       }
     }
+    executor.shutdown();
+    // no need of timeout here, just wait till the end of the world; or when you CTRL+C...
+    while (!executor.isTerminated()){}
 
     long end = System.currentTimeMillis();
     logger.info("Total time: " + ((end - start) / 1000.0) + " seconds");
