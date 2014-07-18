@@ -132,7 +132,7 @@ public class DetailTableLoader extends BaseCLI {
   /*
    * (non-Javadoc)
    * 
-   * @see org.gusdb.wsf.util.BaseCLI#invoke()
+   * @see org.gusdb.fgputil.BaseCLI#invoke()
    */
   @Override
   public void execute() throws Exception {
