@@ -7,14 +7,14 @@
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
       <sqlQuery name="SnpBySourceId" doNotTest="true" includeProjects="PlasmoDB"  isCacheable="true">
           <paramRef ref="snpChipParams.snp_id"/>
-	  <column name="source_id"/>
-	  <column name="project_id"/>
+    <column name="source_id"/>
+    <column name="project_id"/>
         <sql>
-	    <![CDATA[
-	      SELECT distinct sf.source_id AS source_id, '@PROJECT_ID@' as project_id
-	      FROM dots.SnpFeature sf, ($$snp_id$$) ds
-	      WHERE sf.source_id = ds.source_id
-	    ]]>
+      <![CDATA[
+        SELECT distinct sf.source_id AS source_id, '@PROJECT_ID@' as project_id
+        FROM dots.SnpFeature sf, ($$snp_id$$) ds
+        WHERE sf.source_id = ds.source_id
+      ]]>
         </sql>
       </sqlQuery>
 
@@ -23,7 +23,7 @@
               processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
           <paramRef ref="snpChipParams.snp_id" noTranslation="true" />
           <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
-	  <wsColumn name="source_id" width="50" wsName="source_id"/>
+    <wsColumn name="source_id" width="50" wsName="source_id"/>
           <wsColumn name="project_id" width="32" wsName="project_id"/>
       </processQuery>
 
@@ -43,12 +43,13 @@
 
         <paramRef ref="sharedParams.ds_gene_ids"/> 
         <paramRef ref="organismParams.organism"  displayType="listBox" 
-				      multiPick="false" quote="true" queryRef="organismVQ.withSNPs">
+              multiPick="false" quote="true" queryRef="organismVQ.withSNPs">
               <help>Select Organism you wish to query against</help>
         </paramRef>
 
         <paramRef ref="sharedParams.snp_strain_a"/>
-        <paramRef ref="sharedParams.snp_strain_m"/>
+        <paramRef ref="sharedParams.snpchip_strain_meta"/>
+        <paramRef ref="snpChipParams.snp_assay_type"/>
         <column name="source_id"/>
         <column name="project_id"/>
         <column name="snp_location"/>
@@ -84,34 +85,41 @@ FROM
     sva.allele as allele_a, svb.allele as allele_b, svb.strain as strain_b
   FROM 
     ( SELECT /*+ ordered */ 
-      distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
-      sf.position_in_protein,sf.source_id
+          distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
+          sf.position_in_protein,sf.source_id
       FROM ($$ds_gene_ids$$) ds,
-           ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
-           dots.SeqVariation isva, dots.SeqVariation isvb,
-            ( select distinct organism,extdb_name as name,external_database_release_id
-              from apidbtuning.snpchipstrains) ss
+           ApidbTuning.GeneId gi, 
+           dots.GeneFeature gf, 
+           dots.SnpFeature sf,
+           dots.SeqVariation isva, 
+           dots.SeqVariation isvb,
+           ( select distinct organism,extdb_name as name,external_database_release_id
+              from apidbtuning.snpchipstrains ) ss
       WHERE lower(gi.id) = lower(ds.source_id)
         AND gf.source_id = gi.gene
         AND gf.na_feature_id = sf.parent_id
         AND ss.organism = $$organism$$
-        --AND ss.is_queryable = 1
         AND sf.external_database_release_id = ss.external_database_release_id
         AND sf.na_feature_id = isva.parent_id
         AND sf.na_feature_id = isvb.parent_id
         AND isva.strain = $$snp_strain_a$$                               
-        AND isvb.strain in ($$snp_strain_m$$)
-        AND isva.allele != isvb.allele ) hits,
-    dots.NaSequence nas, dots.NALocation gene_loc, dots.NALocation l,
-    dots.SeqVariation sva, dots.SeqVariation svb
+        AND isvb.strain in ($$snpchip_strain_meta$$)
+        AND isva.allele != isvb.allele 
+        AND sf.name in ($$snp_assay_type$$)
+    ) hits,
+    dots.NaSequence nas, 
+    dots.NALocation gene_loc, 
+    dots.NALocation l,
+    dots.SeqVariation sva, 
+    dots.SeqVariation svb
   WHERE hits.na_sequence_id = nas.na_sequence_id
     AND hits.gene_na_feature_id = gene_loc.na_feature_id
     AND hits.snp_na_feature_id = l.na_feature_id
     AND hits.snp_na_feature_id = sva.parent_id 
     AND hits.snp_na_feature_id = svb.parent_id 
     AND sva.strain = $$snp_strain_a$$                               
-    AND svb.strain in ($$snp_strain_m$$)                             
-    ) snpq                              
+    AND svb.strain in ($$snpchip_strain_meta$$)                             
+   ) snpq                              
 GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product
 )
            ]]>
@@ -128,7 +136,8 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
               <help>Select Organism you wish to query against</help>
         </paramRef>
         <paramRef ref="sharedParams.snp_strain_a"  quote="false"/>
-        <paramRef ref="sharedParams.snp_strain_m"  quote="false"/>
+        <paramRef ref="sharedParams.snp_strain_meta"  quote="true"/>
+        <paramRef ref="snpChipParams.snp_assay_type"/>
         <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
         <wsColumn name="source_id"  width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
@@ -184,7 +193,7 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
           <paramRef ref="sharedParams.snp_strain_a"/>
           <paramRef ref="sharedParams.snp_strain_m"/>
           <column name="source_id"/>
-	  <column name="project_id"/>
+    <column name="project_id"/>
           <column name="gene"/>
           <column name="snp_location"/>
           <column name="ref_strain"/>
@@ -258,7 +267,7 @@ WHERE snp.na_feature_id = variants.parent_id
               <help>Select Organism you wish to query against.</help>
           </paramRef>
           <paramRef ref="sharedParams.chromosomeOptional" quote="false" queryRef="SharedVQ.ChromosomeOrderNumMultipickForSnps" 
-		    multiPick="false" noTranslation="true" />
+        multiPick="false" noTranslation="true" />
           <paramRef ref="sharedParams.start_point"/>
           <paramRef ref="sharedParams.end_point"/>
           <paramRef ref="sharedParams.snp_strain_a" quote="false"/>
@@ -370,7 +379,8 @@ WHERE snp.na_feature_id = variants.parent_id
               <help>Select Organism you wish to query against.</help>
           </paramRef>
           <paramRef ref="sharedParams.snp_strain_a" quote="false"/>
-          <paramRef ref="sharedParams.snp_strain_m" quote="false"/>
+          <paramRef ref="sharedParams.snpchip_strain_meta" quote="true"/>
+          <paramRef ref="snpChipParams.snp_assay_type"/>
           <wsColumn name="source_id" width="50" wsName="source_id"/>
           <wsColumn name="project_id" width="32" wsName="project_id"/>
           <wsColumn name="gene" width="32"/>
@@ -394,13 +404,13 @@ WHERE snp.na_feature_id = variants.parent_id
     <sqlQuery name="SnpsByIsolatePattern" doNotTest="true" includeProjects="PlasmoDB" 
           isCacheable="true">
         <!-- <paramRef ref="snpChipParams.isolate_set_a"/> -->
-				<paramRef ref="organismParams.organism" prompt="Organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withSNPs">
-				  <help>Select the organism you wish to search.  Note: this is the genome to which the isolate resequencing reads were aligned.</help>
-				</paramRef>
-				<paramRef ref="sharedParams.snpchip_strain_meta_a" prompt="Set A Isolates" quote="true" />
+        <paramRef ref="organismParams.organism" prompt="Organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withSNPs">
+          <help>Select the organism you wish to search.  Note: this is the genome to which the isolate resequencing reads were aligned.</help>
+        </paramRef>
+        <paramRef ref="sharedParams.snpchip_strain_meta_a" prompt="Set A Isolates" quote="true" />
         <paramRef ref="snpChipParams.set_a_percent"/>
         <!-- <paramRef ref="snpChipParams.isolate_set_b"/> -->
-				<paramRef ref="sharedParams.snpchip_strain_meta_b" prompt="Set B Isolates" quote="true" />
+        <paramRef ref="sharedParams.snpchip_strain_meta_b" prompt="Set B Isolates" quote="true" />
         <paramRef ref="snpChipParams.set_b_percent"/>
         <column name="source_id"/> 
         <column name="project_id"/>
@@ -416,47 +426,47 @@ select distinct seta.source_id,'@PROJECT_ID@' as project_id,
 FROM
 (
 SELECT snp.source_id, var.allele, count(*) as total
-			 --s.EXTERNAL_DATABASE_RELEASE_ID
+       --s.EXTERNAL_DATABASE_RELEASE_ID
 FROM   study.study s,
-			RAD.STUDYBIOMATERIAL sbm,
-			study.biosample bs, 
-			STUDY.BIOMATERIALCHARACTERISTIC bmc,
-			dots.snpfeature snp,
-			dots.seqvariation var 
+      RAD.STUDYBIOMATERIAL sbm,
+      study.biosample bs, 
+      STUDY.BIOMATERIALCHARACTERISTIC bmc,
+      dots.snpfeature snp,
+      dots.seqvariation var 
 WHERE s.study_id = sbm.study_id
-	AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-	AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-	AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
-	AND s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-	AND snp.na_feature_id = var.parent_id
-	AND bmc.value = var.strain
-	--AND bs.name = 'BC.458081'
-	AND bs.name  = ds.source_id
- AND	var.strain in ($$snpchip_strain_meta_a$$),
-	group by snp.source_id, var.allele
+  AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+  AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+  AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
+  AND s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+  AND snp.na_feature_id = var.parent_id
+  AND bmc.value = var.strain
+  --AND bs.name = 'BC.458081'
+  AND bs.name  = ds.source_id
+ AND  var.strain in ($$snpchip_strain_meta_a$$),
+  group by snp.source_id, var.allele
   having count(*) >= (select count(*) from ($$snpchip_strain_meta_a$$)) * $$set_a_percent$$ / 100
 ) seta,
 (
 SELECT snp.source_id, var.allele, count(*) as total
-			 --s.EXTERNAL_DATABASE_RELEASE_ID
+       --s.EXTERNAL_DATABASE_RELEASE_ID
 FROM   study.study s,
-			RAD.STUDYBIOMATERIAL sbm,
-			study.biosample bs, 
-			STUDY.BIOMATERIALCHARACTERISTIC bmc,
-			 ($$snpchip_strain_meta_b$$) ds,
-			dots.snpfeature snp,
-			dots.seqvariation var 
+      RAD.STUDYBIOMATERIAL sbm,
+      study.biosample bs, 
+      STUDY.BIOMATERIALCHARACTERISTIC bmc,
+       ($$snpchip_strain_meta_b$$) ds,
+      dots.snpfeature snp,
+      dots.seqvariation var 
 WHERE s.study_id = sbm.study_id
-	AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-	AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-	AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
-	AND s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-	AND snp.na_feature_id = var.parent_id
-	AND bmc.value = var.strain
-	--AND bs.name = 'BC.458081'
-  AND	var.strain in ($$snpchip_strain_meta_b$$),
-	AND bs.name  = ds.source_id
-	group by snp.source_id, var.allele
+  AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+  AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+  AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
+  AND s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+  AND snp.na_feature_id = var.parent_id
+  AND bmc.value = var.strain
+  --AND bs.name = 'BC.458081'
+  AND  var.strain in ($$snpchip_strain_meta_b$$),
+  AND bs.name  = ds.source_id
+  group by snp.source_id, var.allele
   having count(*) >= (select count(*) from ($$snpchip_strain_meta_b$$)) * $$set_b_percent$$ / 100
 ) setb
 where seta.source_id = setb.source_id
@@ -474,7 +484,7 @@ where seta.source_id = setb.source_id
                  and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
                group by isnp.snp_source_id,isnp.allele
                having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100
-							) seta,
+              ) seta,
               (select isnp.snp_source_id,isnp.allele, count(*) as total
                from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_b$$) ds
                where isnp.is_source_id = ds.source_id
@@ -482,7 +492,7 @@ where seta.source_id = setb.source_id
                  and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
                group by isnp.snp_source_id,isnp.allele
                having count(*) >= (select count(*) from ($$isolate_set_b$$)) * $$set_b_percent$$ / 100
-							 ) setb
+               ) setb
         where seta.snp_source_id = setb.snp_source_id
               and seta.allele != setb.allele
 */
