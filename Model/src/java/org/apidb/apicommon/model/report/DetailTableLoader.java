@@ -67,8 +67,8 @@ public class DetailTableLoader extends BaseCLI {
   }
 
   private static final int THREAD_POOL_SIZE = 10;
+  private static final int INSERT_BATCH_SIZE = 100;
   
-  private static final String ARG_PROJECT_ID = "model";
   private static final String ARG_SQL_FILE = "sqlFile";
   private static final String ARG_RECORD = "record";
   private static final String ARG_TABLE_FIELD = "field";
@@ -96,6 +96,7 @@ public class DetailTableLoader extends BaseCLI {
       creator.invoke(args);
     }
     finally {
+      // always exit normally(?)
       System.exit(0);
     }
   }
@@ -218,12 +219,6 @@ public class DetailTableLoader extends BaseCLI {
       return;
     }
 
-    logger.debug("getting data source...");
-    DataSource updateDataSource = wdkModel.getAppDb().getDataSource();
-    logger.debug("getting connection...");
-    Connection updateConnection = updateDataSource.getConnection();
-    logger.debug("Connection obtained...");
-
     String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
     String pkNames;
     String pkBind;
@@ -246,16 +241,26 @@ public class DetailTableLoader extends BaseCLI {
     String insertSql = "insert into " + detailTable + " (" + pkNames +
         ", field_name, field_title, row_count, content, " + " modification_date) values(" + pkBind +
         ",?,?,?,?,?)";
+    Connection updateConnection = null;
+    PreparedStatement insertStmt = null;
     try {
+      logger.debug("getting data source...");
+      DataSource updateDataSource = wdkModel.getAppDb().getDataSource();
+      logger.debug("getting connection...");
+      updateConnection = updateDataSource.getConnection();
+      logger.debug("Connection obtained...");
+
       logger.debug("disabling auto commit...");
       updateConnection.setAutoCommit(false);
       logger.debug("deleting old result...");
       deleteRows(idSql, pkNames, table.getName(), updateConnection);
 
-      PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
+      insertStmt = updateConnection.prepareStatement(insertSql);
       logger.info("Dumping table [" + table.getName() + "]");
+
       logger.debug("aggregating data...");
       int[] counts = aggregateLocally(table, idSql, insertStmt, insertSql, pkColumns);
+
       long startCommit = System.currentTimeMillis();
       updateConnection.commit();
       long end = System.currentTimeMillis();
@@ -272,8 +277,8 @@ public class DetailTableLoader extends BaseCLI {
     finally {
       if (updateConnection != null) {
         updateConnection.setAutoCommit(true);
-        updateConnection.close();
       }
+      SqlUtils.closeQuietly(insertStmt, updateConnection);
     }
   }
 
@@ -320,9 +325,9 @@ public class DetailTableLoader extends BaseCLI {
           pk1 = resultSet.getString(pkColumns[1]);
         }
         if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
-          insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-              prevPk1, title, pkColumns.length);
           insertCount++;
+          insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
+              prevPk1, title, pkColumns.length, insertCount, false);
           aggregatedContent = new StringBuilder();
           rowCount = 0;
         }
@@ -345,9 +350,13 @@ public class DetailTableLoader extends BaseCLI {
         detailCount++;
       }
       if (aggregatedContent.length() != 0) {
-        insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-            prevPk1, title, pkColumns.length);
         insertCount++;
+        insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
+            prevPk1, title, pkColumns.length, insertCount, true);
+      }
+      else {
+        // add any remaining rows to DB
+        executeRowBatch(insertStmt, insertSql, table);
       }
       int[] counts = { insertCount, detailCount, (int) insertTime };
       return counts;
@@ -463,7 +472,8 @@ public class DetailTableLoader extends BaseCLI {
    * @param idSql
    */
   private long insertDetailRow(PreparedStatement insertStmt, String insertSql, StringBuilder contentBuf,
-      int rowCount, TableField table, String pk0, String pk1, String title, int pkCount) throws SQLException {
+      int rowCount, TableField table, String pk0, String pk1, String title, int pkCount,
+      int insertCount, boolean forceBatchUpdate) throws SQLException {
 
     long start = System.currentTimeMillis();
 
@@ -486,9 +496,19 @@ public class DetailTableLoader extends BaseCLI {
       platform.setClobData(insertStmt, pkCount + 4, content, false);
 
     insertStmt.setTimestamp(pkCount + 5, new Timestamp(new Date().getTime()));
-    SqlUtils.executePreparedStatement(insertStmt, insertSql, table.getQuery().getFullName() +
-        "__api-report-detail-insert");
+
+    insertStmt.addBatch();
+    
+    if (forceBatchUpdate || insertCount % INSERT_BATCH_SIZE == 0) {
+      executeRowBatch(insertStmt, insertSql, table);
+    }
+
     return System.currentTimeMillis() - start;
+  }
+
+  private void executeRowBatch(PreparedStatement insertStmt, String insertSql, TableField table) throws SQLException {
+    SqlUtils.executePreparedStatementBatch(insertStmt, insertSql, table.getQuery().getFullName() +
+        "__api-report-detail-batch-insert");
   }
 
 }
