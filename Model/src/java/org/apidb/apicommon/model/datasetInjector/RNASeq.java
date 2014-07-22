@@ -127,6 +127,7 @@ public class RNASeq extends  DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("rnaSeqCoverageTrack");
+      injectTemplate("rnaSeqCoverageTrackUnlogged");
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
       if(Boolean.parseBoolean(showIntronJunctions)) {
