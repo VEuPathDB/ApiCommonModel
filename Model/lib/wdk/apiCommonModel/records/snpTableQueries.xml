@@ -93,8 +93,6 @@ ORDER BY var.strain
              ]]>
            </sql>
            <sql includeProjects="ToxoDB">
-SELECT * FROM
-(
 SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
        b.source_id as isolate_source_id,
        var.strain as strain,
@@ -103,103 +101,47 @@ SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
             WHEN snp.gene_source_id is null THEN ''
             ELSE var.allele 
        END as allele_gene_strand,
-       var.phenotype, 
-       oe.value as haplogroup,
-       CASE WHEN oe.value = '6a' THEN 6
-            WHEN oe.value = '6b' THEN 6
-            WHEN oe.value = 'unknown' THEN 0
-            ELSE to_number(oe.value)
-       END as order_num,
        var.product,
        var.coverage, 
-       var.allele_percent,
-       var.pvalue,
-       CASE WHEN b.source_id is null THEN ''
-            ELSE lower(snp.project_id) || 'htssnp' || 
-              '/?name=' || nas.source_id || ':' || to_char(l.start_min - 50) || '..' || to_char(l.start_min + 50) || 
-              ';l=' || d.name || var.strain || '_CoverageDensity%1E' || 
-                       d.name || var.strain || '_CoverageXyplot%1E' || 
-                       d.name || var.strain || '_Alignment%1E' ||
-              ';h_region=' || nas.source_id || ':' || to_char(l.start_min) || '..' || to_char(l.start_min + 1) || '@red'  
-       END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align
-FROM   apidbtuning.SnpAttributes snp, 
-      dots.SeqVariation var, 
-      study.study s, 
-      rad.studybiomaterial sb, 
-      study.biomaterial b, 
-      dots.snpfeature sf, 
-      dots.nalocation l, 
-      dots.nasequence nas,
-      study.ontologyentry oe,
-      study.biomaterialcharacteristic bc, 
-      SRES.externaldatabase d,
-      sres.externaldatabaserelease r
-WHERE var.parent_id = snp.na_feature_id
- AND sf.na_feature_id = snp.na_feature_id
- AND l.na_feature_id = sf.na_feature_id
- AND nas.na_sequence_id = sf.na_sequence_id
- AND var.external_database_release_id = b.external_database_release_id(+)
- AND b.bio_material_id = sb.bio_material_id(+)
- AND sb.study_id = s.study_id(+)
- AND sb.bio_material_id = bc.bio_material_id 
- AND bc.ontology_entry_id = oe.ontology_entry_id
- AND oe.category = 'Haplogroup'
- and snp.type = 'HTS'
- and s.external_database_release_id = r.external_database_release_id
- and r.external_database_id = d.external_database_id
-UNION
-SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
-       b.source_id as isolate_source_id,
-       var.strain as strain,
-       var.allele,
-       CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN snp.gene_source_id is null THEN ''
-            ELSE var.allele 
-       END as allele_gene_strand,
-       var.phenotype, 
-       CASE WHEN var.strain = 'RH' THEN '1'
-            WHEN var.strain = 'ME49' THEN '2'
-            END as haplogroup,
-       CASE WHEN var.strain = 'RH' THEN 1
-            WHEN var.strain = 'ME49' THEN 2
-            END as order_num,
-       var.product,
-       var.coverage, 
-       var.allele_percent,
-       var.pvalue,
+       bmc.value as haplogroup, 
+       CASE WHEN bmc.value = '6a' THEN 6
+            WHEN bmc.value = '6b' THEN 6
+            WHEN bmc.value = 'unknown' THEN 0
+            ELSE to_number(bmc.value)
+       END as order_num, 
+       var.read_percent as allele_percent,
+       var.p_value as pvalue,
        CASE WHEN b.source_id is null THEN ''
             ELSE lower(snp.project_id) || 
-              '/?name=' || nas.source_id || ':' || to_char(l.start_min - 50) || '..' || to_char(l.start_min + 50) || 
-              ';l=' || d.name || var.strain || '_CoverageDensity%1E' || 
-                       d.name || var.strain || '_CoverageXyplot%1E' || 
-                       d.name || var.strain || '_Alignment%1E' ||
-              ';h_region=' || nas.source_id || ':' || to_char(l.start_min) || '..' || to_char(l.start_min + 1) || '@red'  
+              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || '_' || var.strain || 
+              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
        END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align
+       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
+       d.name 
 FROM   apidbtuning.SnpAttributes snp, 
-      dots.SeqVariation var, 
-      study.study s, 
-      rad.studybiomaterial sb, 
-      study.biomaterial b, 
-      dots.snpfeature sf, 
-      dots.nalocation l, 
-      dots.nasequence nas,
-      SRES.externaldatabase d,
-      sres.externaldatabaserelease r
-WHERE var.parent_id = snp.na_feature_id
- AND sf.na_feature_id = snp.na_feature_id
- AND l.na_feature_id = sf.na_feature_id
- AND nas.na_sequence_id = sf.na_sequence_id
- AND var.external_database_release_id = b.external_database_release_id(+)
- AND b.bio_material_id = sb.bio_material_id(+)
- AND sb.study_id = s.study_id(+)
- AND var.strain in ('ME49', 'RH')
- and snp.type = 'HTS'
- and s.external_database_release_id = r.external_database_release_id
- and r.external_database_id = d.external_database_id
-)
-order by order_num, strain 
+       apidb.SequenceVariation var, 
+       study.study s, 
+       rad.studybiomaterial sb, 
+       Study.Ontologyentry oe,
+       Study.Biomaterialcharacteristic Bmc,
+       study.biomaterial b, 
+       dots.nasequence nas,
+       SRES.externaldatabase d,
+       sres.externaldatabaserelease r
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+  AND snp.location = var.location
+  AND nas.na_sequence_id = snp.na_sequence_id
+  AND var.external_database_release_id = b.external_database_release_id(+)
+  and Bmc.Bio_Material_Id = b.Bio_Material_Id
+  AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+  AND b.bio_material_id = sb.bio_material_id(+)
+  AND sb.study_id = s.study_id(+)
+  AND s.external_database_release_id = r.external_database_release_id
+  AND r.external_database_id = d.external_database_id
+  AND oe.category ='BioMaterialCharacteristics' 
+  AND oe.value ='Haplogroup'
+ORDER BY order_num 
            </sql>
         </sqlQuery>
 
