@@ -2070,69 +2070,37 @@ select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as 
             <column name="value" />
             <sql>
            <![CDATA[
-with categories as (
 
-SELECT distinct oe.category 
-FROM   study.study s,
-       RAD.STUDYBIOMATERIAL sbm,
-			 study.biosample bs,
-			STUDY.BIOMATERIALCHARACTERISTIC bmc,
-			Study.Ontologyentry oe,
-			apidbtuning.snpchipstrains ss,
-			sres.externaldatabase ed, 
-			sres.externaldatabaserelease edr
-WHERE  s.study_id = sbm.study_id
-		AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-		AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-		AND edr.external_database_id = ed.external_database_id
-		AND s.external_database_release_id = edr.external_database_release_id
-		and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
-		AND ss.EXTERNAL_DATABASE_RELEASE_ID = edr.external_database_release_id
-    and ss.organism = $$organism$$ 
-  ),
-       nbym as (
-          Select distinct ss.strain, category
-            from ApidbTuning.snpChipStrains ss,
-                 categories cat
-            where ss.organism =  $$organism$$
-          Union  
-          select ss.strain, 'StrainOrLine' as category
-              from ApidbTuning.snpChipStrains ss
-          where ss.organism = $$organism$$
-       )           
-select distinct nbym.strain as term, nbym.category as property, 
-Case when nbym.category = 'StrainOrLine' then nvl(main.value,nbym.strain)
-     else nvl(replace(main.value,'undefined','unknown'), 'unknown') 
-     end as value 
-from (
-SELECT distinct ss.strain as term, oe.category as property, oe.value as value
-FROM   study.study s,
-       RAD.STUDYBIOMATERIAL sbm,
-			 study.biosample bs,
-			STUDY.BIOMATERIALCHARACTERISTIC bmc,
-			Study.Ontologyentry oe,
-			sres.externaldatabase ed, 
-			sres.externaldatabaserelease edr,
-			apidbtuning.snpchipstrains ss
-WHERE  s.study_id = sbm.study_id
-		AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-		AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-		AND edr.external_database_id = ed.external_database_id
-		AND s.external_database_release_id = edr.external_database_release_id
-		and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
-		-- AND snp.EXTERNAL_DATABASE_RELEASE_ID = edr.external_database_release_id
-		and ss.EXTERNAL_DATABASE_RELEASE_ID = edr.EXTERNAL_DATABASE_RELEASE_ID
-		--  AND snp.name in ('Broad_barcode','Broad_3k_chip','Broad_hd_array')
-		and ss.organism =   $$organism$$
-union
-SELECT ss.strain as term,
-      'StrainOrLine' as property,
-       ss.strain as value
-       from APIDBTUNING.snpchipstrains ss
-       where ss.organism =  $$organism$$
-)main, nbym
-where main.term(+) = nbym.strain
-  and main.property(+) = nbym.category
+
+ Select distinct ss.strain as term,
+      initcap (
+      case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
+           then (regexp_replace(bmc.value,'\s[^0-9]+',''))
+           else bmc.value
+      end) as value, 
+      oe.value as property
+ from              
+      Apidbtuning.SnpChipStrains ss,
+      Study.Biomaterialcharacteristic Bmc,
+      STUDY.biosample bs,
+      Study.Ontologyentry oe,
+      sres.externaldatabase ed,
+      sres.externaldatabaserelease edr
+ Where Bmc.Bio_Material_Id = bs.Bio_Material_Id 
+      and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+      and edr.external_database_id = ed.external_database_id
+      and ss.extdb_name = ed.name
+      and bs.external_database_release_id = edr.external_database_release_id
+      and ss.organism = $$organism$$
+      and oe.value != 'StrainOrLine'
+ Union 
+ Select distinct ss.strain as term,
+      ss.strain as value,
+      'StrainOrLine' as property
+ from Apidbtuning.SnpChipStrains ss
+
+
+
             ]]>
             </sql>
         </sqlQuery>
