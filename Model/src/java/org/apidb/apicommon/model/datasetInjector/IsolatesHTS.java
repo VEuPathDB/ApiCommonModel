@@ -23,7 +23,6 @@ public class IsolatesHTS extends DatasetInjector {
       String experimentName = experimentRsrc.replaceFirst("_RSRC", "");
       setPropValue("experimentName", experimentName);
 
-
       // use getSampleList method, refer to - https://redmine.apidb.org/issues/16510
       //String projectName = getPropValue("projectName");
       String organismAbbrev = getPropValue("organismAbbrev");
@@ -33,9 +32,12 @@ public class IsolatesHTS extends DatasetInjector {
 
       String organismAbbrevDisplay = getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
-                          
+
       for (int i=0; i<sampleNames.size(); i++){
           setPropValue("sampleName", sampleNames.get(i));
+
+          String gbrowseDBName = organismAbbrev + "_" + experimentName + "_" + sampleNames.get(i) + sampleNameSuffix;
+          setPropValue("gbrowseDBName", gbrowseDBName);
 
           injectTemplate("htsSnpSampleDatabase");
           injectTemplate("htsSnpSampleCoverageXYTrack");
@@ -106,7 +108,7 @@ public class IsolatesHTS extends DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       //String [][] declaration = {{"sampleList", "space del list of sample (sample name = directory name in webservices)"}
       //};
-			String[][] declaration = {};
+      String[][] declaration = {};
 
     return declaration;
   }
