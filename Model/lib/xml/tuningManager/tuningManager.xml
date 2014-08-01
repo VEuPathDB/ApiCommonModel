@@ -3395,6 +3395,7 @@ tablespace indx
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="study.BiomaterialCharacteristic"/>
     <externalDependency name="study.Biosource"/>
+    <externalDependency name="study.Biosample"/>
     <externalDependency name="study.OntologyEntry"/>
     <externalDependency name="study.Study"/>
     <sql>
@@ -3408,13 +3409,14 @@ select null as na_sequence_id,
        ed.name as external_db_name,
        b.source_id,
        nvl(o.name, 'Unknown') as organism,
-       nvl(strain.value, 'Unknown') as strain,
+       nvl(strain.strain, 'Unknown') as strain,
        nvl(host.value, 'Unknown') as specific_host,
        nvl(isolation_source.value, 'Unknown') as isolation_source,
        nvl(geographic_location.value, 'Unknown') as geographic_location,
       'N/A' as product,
        null as note,
-       b.description,
+       --b.description,
+       null as description,
        null as is_reference,
        project.project_id,
        'HTS' as data_type,
@@ -3424,45 +3426,63 @@ select null as na_sequence_id,
        null as length, 
        null as pcr_primers, 
        null as collected_by
- From study.Biosource b, study.Study s, 
+ From -- study.Biosource b, 
+     study.biomaterial b,
+     study.Study s, 
      rad.StudyBiomaterial sb, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
-     (select bc.bio_material_id, tn.name, tn.taxon_id
-      from study.OntologyEntry oe, sres.TaxonName tn, study.BiomaterialCharacteristic bc
-      where category = 'Organism'
-      and oe.value = tn.name
-      and bc.ontology_entry_id = oe.ontology_entry_id
+     (
+
+select distinct bs.bio_material_id, tn.name, tn.taxon_id
+from study.OntologyEntry oe,
+     study.BiomaterialCharacteristic bmc,
+     study.biomaterial bs,
+     sres.TaxonName tn
+where oe.category = 'BioMaterialCharacteristics'
+  and oe.value = 'Organism'
+  and  bmc.ontology_entry_id = oe.ontology_entry_id
+  and Bmc.Bio_Material_Id = bs.Bio_Material_Id
+  and bmc.value = tn.name 
       ) o,
-     (select bc.bio_material_id, oe.value
-      from study.OntologyEntry oe, study.BiomaterialCharacteristic bc
-      where category = 'StrainOrLine'
-      and bc.ontology_entry_id = oe.ontology_entry_id
+     (
+select distinct bmc.bio_material_id, sample.name as strain
+from study.OntologyEntry oe,
+     study.BiomaterialCharacteristic bmc,
+     study.biomaterial bs,
+     study.biosample sample
+where oe.category = 'BioMaterialCharacteristics'
+  and oe.value = 'StrainOrLine'
+  and bmc.ontology_entry_id = oe.ontology_entry_id
+  and bmc.Bio_Material_Id = bs.Bio_Material_Id
+  AND sample.external_database_release_id = bs.external_database_release_id
       ) strain,
-     (select bc.bio_material_id, oe.value, iv.term as annotated_value
-      from study.OntologyEntry oe, study.BiomaterialCharacteristic bc,
-           apidb.VocabularyBiomaterial vb, apidb.IsolateVocabulary iv
-      where category = 'Host'
-      and bc.ontology_entry_id = oe.ontology_entry_id
-      and bc.bio_material_id = vb.bio_material_id
-      and vb.isolate_vocabulary_id = iv.isolate_vocabulary_id
-      and iv.type = 'specific_host'
-      ) host,
-     (select bc.bio_material_id, oe.value, iv.term as annotated_value
-      from study.OntologyEntry oe, study.BiomaterialCharacteristic bc,
-           apidb.VocabularyBiomaterial vb, apidb.IsolateVocabulary iv
-      where category = 'BioSourceType'
-      and bc.ontology_entry_id = oe.ontology_entry_id
-      and bc.bio_material_id = vb.bio_material_id
-      and vb.isolate_vocabulary_id = iv.isolate_vocabulary_id
-      and iv.type = 'isolation_source'
+     (
+select distinct bs.bio_material_id, oe.value, oe.value as annotated_value 
+from study.OntologyEntry oe,
+     study.BiomaterialCharacteristic bmc,
+     study.biomaterial bs
+where oe.category = 'Host' and
+      bmc.ontology_entry_id = oe.ontology_entry_id and 
+      Bmc.Bio_Material_Id = bs.Bio_Material_Id
+     ) host,
+     (
+select distinct bs.bio_material_id,  bmc.value, bmc.value  as annotated_value
+from study.OntologyEntry oe,
+     study.BiomaterialCharacteristic bmc,
+     study.biomaterial bs
+where oe.category = 'BioMaterialCharacteristics'
+  and oe.value = 'BioSourceType'
+  and bmc.ontology_entry_id = oe.ontology_entry_id
+  and Bmc.Bio_Material_Id = bs.Bio_Material_Id 
       ) isolation_source,
-     (select bc.bio_material_id, oe.value, iv.term as annotated_value
-      from study.OntologyEntry oe, study.BiomaterialCharacteristic bc,
-           apidb.VocabularyBiomaterial vb, apidb.IsolateVocabulary iv
-      where category = 'GeographicLocation'
-      and bc.ontology_entry_id = oe.ontology_entry_id
-      and bc.bio_material_id = vb.bio_material_id
-      and vb.isolate_vocabulary_id = iv.isolate_vocabulary_id
-      and iv.type = 'geographic_location'
+     (
+select distinct bs.bio_material_id,  bmc.value, bmc.value as  annotated_value
+from study.OntologyEntry oe, 
+     study.BiomaterialCharacteristic bmc,
+     study.biomaterial bs
+where oe.category = 'Sample Collection Location'
+  and oe.value = 'GeographicLocation'
+  and bmc.ontology_entry_id = oe.ontology_entry_id
+  and Bmc.Bio_Material_Id = bs.Bio_Material_Id 
       ) geographic_location,
      (select distinct project_id from sequenceattributes) project
 where lower(s.name) like '%_hts%'
