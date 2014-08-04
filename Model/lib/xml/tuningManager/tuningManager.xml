@@ -1462,37 +1462,14 @@ tablespace indx
     <sql>
       <![CDATA[
 CREATE TABLE &prefixGoTermList NOLOGGING AS
-SELECT *
-FROM (  -- work around sometime Oracle bug ORA-00942
-      SELECT source_id, ontology, source,
-             apidb.tab_to_string(set(cast(COLLECT(name order by name) as apidb.varchartab)), ', ')
-               AS go_terms
-      FROM (SELECT DISTINCT gf.source_id, o.ontology, gt.name,
-                        DECODE(gail.name, 'Interpro', 'predicted', 'annotated')
-                              AS source
-            FROM dots.GeneFeature gf, dots.Transcript t,
-                 dots.TranslatedAaFeature taf, dots.GoAssociation ga,
-                 sres.GoTerm gt, dots.GoAssociationInstance gai,
-                 dots.GoAssociationInstanceLoe gail,
-                 dots.GoAssocInstEvidCode gaiec, sres.GoEvidenceCode gec,
-                 (SELECT gr.child_term_id AS go_term_id, gp.name AS ontology
-                  FROM sres.GoRelationship gr, sres.GoTerm gp
-                  WHERE gr.parent_term_id = gp.go_term_id
-                    AND gp.go_id in ('GO:0008150','GO:0003674','GO:0005575')) o
-            WHERE gf.na_feature_id = t.parent_id
-              AND t.na_feature_id = taf.na_feature_id
-              AND taf.aa_sequence_id = ga.row_id
-              AND ga.table_id = (SELECT table_id
-                                 FROM core.TableInfo
-                                 WHERE name = 'TranslatedAASequence')
-              AND ga.go_term_id = gt.go_term_id
-              AND ga.go_association_id = gai.go_association_id
-              AND gai.go_assoc_inst_loe_id = gail.go_assoc_inst_loe_id
-              AND gai.go_association_instance_id
-                  = gaiec.go_association_instance_id
-              AND gaiec.go_evidence_code_id = gec.go_evidence_code_id
-              AND gt.go_term_id = o.go_term_id)
-      GROUP BY source_id, ontology, source)
+SELECT source_id, ontology, source,
+             apidb.tab_to_string(set(cast(COLLECT(go_term_name order by go_term_name) as apidb.varchartab)), ', ') AS go_terms,
+             apidb.tab_to_string(set(cast(COLLECT(go_id order by go_term_name) as apidb.varchartab)), ', ') AS go_ids
+      FROM (SELECT source_id, ontology, 
+                        DECODE(source, 'Interpro', 'predicted', 'annotated') AS source, go_term_name, go_id
+                 FROM  GoTermSummary
+                 )
+      GROUP BY source_id, ontology, source
       ]]>
     </sql>
     <sql>
@@ -1504,44 +1481,51 @@ SELECT DISTINCT gene.source_id,
        substr(annotated_go_process.go_terms, 1, 300) AS annotated_go_process,
        substr(predicted_go_component.go_terms, 1, 300) AS predicted_go_component,
        substr(predicted_go_function.go_terms, 1, 300) AS predicted_go_function,
-       substr(predicted_go_process.go_terms, 1, 300) AS predicted_go_process
+       substr(predicted_go_process.go_terms, 1, 300) AS predicted_go_process,
+
+       substr(annotated_go_component.go_ids, 1, 300) AS annotated_go_id_component,
+       substr(annotated_go_function.go_ids, 1, 300) AS annotated_go_id_function,
+       substr(annotated_go_process.go_ids, 1, 300) AS annotated_go_id_process,
+       substr(predicted_go_component.go_ids, 1, 300) AS predicted_go_id_component,
+       substr(predicted_go_function.go_ids, 1, 300) AS predicted_go_id_function,
+       substr(predicted_go_process.go_ids, 1, 300) AS predicted_go_id_process
 FROM (SELECT DISTINCT gene AS source_id FROM &prefixGeneId) gene,
      (SELECT * FROM &prefixGoTermList
-      WHERE source = 'annotated' AND ontology = 'cellular_component')
+      WHERE source = 'annotated' AND ontology = 'Cellular Component')
        annotated_go_component,
      (SELECT * FROM &prefixGoTermList
-      WHERE source = 'annotated' AND ontology = 'molecular_function')
+      WHERE source = 'annotated' AND ontology = 'Molecular Function')
        annotated_go_function,
      (SELECT * FROM &prefixGoTermList
-      WHERE source = 'annotated' AND ontology = 'biological_process')
+      WHERE source = 'annotated' AND ontology = 'Biological Process')
        annotated_go_process,
      (SELECT * FROM &prefixGoTermList
-      WHERE source = 'predicted' AND ontology = 'cellular_component')
+      WHERE source = 'predicted' AND ontology = 'Cellular Component')
        predicted_go_component,
      (SELECT * FROM &prefixGoTermList
-      WHERE source = 'predicted' AND ontology = 'molecular_function')
+      WHERE source = 'predicted' AND ontology = 'Molecular Function')
        predicted_go_function,
      (SELECT * FROM &prefixGoTermList
-      WHERE source = 'predicted' AND ontology = 'biological_process')
+      WHERE source = 'predicted' AND ontology = 'Biological Process')
        predicted_go_process
 WHERE gene.source_id = annotated_go_component.source_id(+)
   AND 'annotated' = annotated_go_component.source(+)
-  AND 'cellular_component' = annotated_go_component.ontology(+)
+  AND 'Cellular Component' = annotated_go_component.ontology(+)
   AND gene.source_id = annotated_go_function.source_id(+)
   AND 'annotated' = annotated_go_function.source(+)
-  AND 'molecular_function' = annotated_go_function.ontology(+)
+  AND 'Molecular Function' = annotated_go_function.ontology(+)
   AND gene.source_id = annotated_go_process.source_id(+)
   AND 'annotated' = annotated_go_process.source(+)
-  AND 'biological_process' = annotated_go_process.ontology(+)
+  AND 'Biological Process' = annotated_go_process.ontology(+)
   AND gene.source_id = predicted_go_component.source_id(+)
   AND 'predicted' = predicted_go_component.source(+)
-  AND 'cellular_component' = predicted_go_component.ontology(+)
+  AND 'Cellular Component' = predicted_go_component.ontology(+)
   AND gene.source_id = predicted_go_function.source_id(+)
   AND 'predicted' = predicted_go_function.source(+)
-  AND 'molecular_function' = predicted_go_function.ontology(+)
+  AND 'Molecular Function' = predicted_go_function.ontology(+)
   AND gene.source_id = predicted_go_process.source_id(+)
   AND 'predicted' = predicted_go_process.source(+)
-  AND 'biological_process' = predicted_go_process.ontology(+)
+  AND 'Biological Process' = predicted_go_process.ontology(+)
       ]]>
     </sql>
     <sql>
@@ -1698,6 +1682,13 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        go.predicted_go_component,
        go.predicted_go_function,
        go.predicted_go_process,
+
+       go.annotated_go_id_component,
+       go.annotated_go_id_function,
+       go.annotated_go_id_process,
+       go.predicted_go_id_component,
+       go.predicted_go_id_function,
+       go.predicted_go_id_process,
        nvl(deprecated.is_deprecated, 0) as is_deprecated, gi.gene_id,
        substr(orthologs.name, 1, 60) as orthomcl_name,
        nvl(tothtssnps.total_hts_snps,0) as total_hts_snps, 
