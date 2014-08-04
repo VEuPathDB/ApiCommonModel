@@ -12,6 +12,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         setPropValue("percentileProfileSetPattern", "%");
 
         injectTemplate("expressionProfileSetParamQuery");
+        setPropValue("defaultFoldDifference","2.0"); 
 
         String lcDataType = getPropValue("dataType").toLowerCase();
         if(!lcDataType.equals("proteomics")) { 
@@ -20,7 +21,10 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
                 
                 setPropValue("redPctSampleDecode", redPctSampleDecode);
                 setPropValue("greenPctSampleDecode", greenPctSampleDecode);
-            }
+        } else {
+            setPropValue("defaultFoldDifference","1.5");
+                
+        }
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
             injectTemplate("expressionSamplesParamQueryDirectFDR");
         } else {

@@ -14,6 +14,10 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 
         setPercentileProfileFilter();
 
+        setPropValue("defaultFoldDifference","2.0"); 
+        if(lcDataType.equals("proteomics")) {
+            setPropValue("defaultFoldDifference","1.5");
+        }
         injectTemplate("expressionProfileSetParamQuery");
         injectTemplate("expressionPctProfileSetParamQuery");
 
