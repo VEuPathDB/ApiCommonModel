@@ -62,15 +62,19 @@ public class IsolatesHTS extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+      // NGS SNPs
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpBySourceId");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpsByIsolateGroup");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpsByLocation");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpsByGeneIds");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpsByTwoIsolateGroups");
+
+      /**
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpBySourceId");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HtsSnpsByGeneId");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HtsSnpsByLocation");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HtsSnpsByStrain");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByAlleleFrequency");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByIsolatePattern");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HTSSnpsByAlleleFrequency");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.HtsSnpsByIsolateComparison");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByIsolatesGroup");
+      */ 
 
       addWdkReference("SnpRecordClasses.SnpRecordClass", "attribute", "snp_overview");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "attribute", "gene_context");
