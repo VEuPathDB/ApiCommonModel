@@ -9,7 +9,6 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       setShortAttribution();
 
       setOrganismAbbrevFromDatasetName();
-      String datasetName = getDatasetName();
       String optionalOrganismAbbrev  = getPropValue("optionalOrganismAbbrev");
       if (!optionalOrganismAbbrev.equals("")) {
               //setPropValue("organismAbbrev",optionalOrganismAbbrev);
@@ -18,22 +17,18 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
                       setPropValue("OrganismAbbrevDisplay", optionalOrganismAbbrev);
                   }
           }
-      String organismAbbrevDisplay = getPropValue("organismAbbrevDisplay");
+
       String datasetDisplayName = getPropValue("datasetDisplayName");
       String cleanDatasetDisplayName = cleanString(datasetDisplayName);
       setPropValue("cleanDatasetDisplayName",cleanDatasetDisplayName);
-
-      String datasetNamePattern = getPropValue("datasetNamePattern");
-     
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
-
 
       if(getPropValueAsBoolean("isPhosphoProteomics")) {
           injectTemplate("proteinExpressionMassSpecPhosphoPBrowseTrack");
       }
       else {
-          injectTemplate("proteinExpressionMassSpecPBrowseTrack");      
-      }      
+          injectTemplate("proteinExpressionMassSpecPBrowseTrack");
+      }
   }
 
   @Override
