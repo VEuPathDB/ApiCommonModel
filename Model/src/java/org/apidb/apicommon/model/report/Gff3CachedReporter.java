@@ -18,10 +18,6 @@ import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.dbms.CacheFactory;
-import org.gusdb.wdk.model.dbms.QueryInfo;
-import org.gusdb.wdk.model.dbms.ResultFactory;
-import org.gusdb.wdk.model.query.QueryInstance;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
@@ -264,19 +260,14 @@ public class Gff3CachedReporter extends Reporter {
         }
     }
 
-    private void writeSequences(PrintWriter writer) throws WdkModelException {
+    private void writeSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
                 .getColumnRefs();
 
-        // get cache info
-        ResultFactory resultFactory = wdkModel.getResultFactory();
-        CacheFactory cacheFactory = resultFactory.getCacheFactory();
-        QueryInstance instance = baseAnswer.getIdsQueryInstance();
-        QueryInfo queryInfo = cacheFactory.getQueryInfo(instance.getQuery());
-        String cacheTable = queryInfo.getCacheTable();
-        int instanceId = instance.getInstanceId();
+        // get id sql
+        String idSql = baseAnswer.getSortedIdSql();
 
         // construct in clause
         StringBuffer sqlIn = new StringBuffer();
@@ -290,15 +281,12 @@ public class Gff3CachedReporter extends Reporter {
 
         StringBuffer sql = new StringBuffer("SELECT ");
         sql.append("tc.").append(COLUMN_CONTENT).append(" FROM ");
-        sql.append(tableCache).append(" tc, ").append(cacheTable).append(" ac");
+        sql.append(tableCache).append(" tc, (").append(idSql).append(") ac");
         sql.append(" WHERE tc.table_name IN (").append(sqlIn).append(")");
         for (String column : pkColumns) {
-            sql.append(" AND tc.").append(column).append(" = ac.")
-                    .append(column);
+            sql.append(" AND tc.").append(column).append(" = ac.").append(column);
         }
-        sql.append(" AND ac.").append(CacheFactory.COLUMN_INSTANCE_ID);
-        sql.append(" = ").append(instanceId);
-        sql.append(" ORDER BY tc.table_name ASC");
+        // sql.append(" ORDER BY tc.table_name ASC");
 
         DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
