@@ -83,8 +83,8 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "HTSStrains");
 
 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_snps_all_strains");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByHtsSnps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_hts_snps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByNgsSnps");
       //addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTajimasDHtsSnps");
 
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByIsolateId");
