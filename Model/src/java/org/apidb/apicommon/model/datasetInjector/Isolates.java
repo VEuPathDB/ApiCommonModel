@@ -10,6 +10,13 @@ public class Isolates extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+
+      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpBySourceId");
+      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByGeneId");
+      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByLocation");
+      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByStrain");
+      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByIsolatePattern");
+
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByIsolateId");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByTaxon");
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByHost");
