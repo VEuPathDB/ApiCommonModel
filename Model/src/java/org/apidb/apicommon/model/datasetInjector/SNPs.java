@@ -22,9 +22,9 @@ public class SNPs extends DatasetInjector {
     addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "Strains");
     addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "Providers_other_SNPs");
 
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySnps");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByNgsSnps");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SNPs");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_snps_all_strains");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_hts_snps");
   }
 
   // second column is for documentation
