@@ -2330,15 +2330,16 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        snp.position_in_protein,
        decode(snp.has_nonsynonymous_allele, 0, 'no', 1, 'yes') as has_nonsynonymous_allele,
        snp.major_allele, 
-			 snp.minor_allele,
+       snp.minor_allele,
        snp.major_allele_count, 
        snp.minor_allele_count,
        round(snp.major_allele_count / (snp.major_allele_count + snp.minor_allele_count),2) as major_allele_frequency,
        round(snp.minor_allele_count / (snp.major_allele_count + snp.minor_allele_count),2) as minor_allele_frequency,
        snp.major_product, 
-			 snp.minor_product,
-			 snp.distinct_strain_count,
-			 snp.distinct_allele_count,
+       snp.minor_product,
+       snp.distinct_strain_count,
+       snp.distinct_allele_count,
+       case when stopcodonsnps.total_stop_codon_snps > 0 then 1 else 0 end as has_stop_codon,
        gene_info.source_id as gene_source_id,
        decode(gene_info.is_reversed, 0, 'forward', 1, 'reverse') as gene_strand,
        SUBSTR(DBMS_LOB.SUBSTR(sequence.sequence, 60, snp.location - 60), 1, 60) AS lflank,
@@ -2355,7 +2356,14 @@ FROM apidb.Snp snp,
       FROM dots.GeneFeature gene, FeatureLocation gene_loc
       WHERE gene.na_feature_id = gene_loc.na_feature_id
             and gene_loc.is_top_level = 1) gene_info,
-
+     (
+     select snp.source_id, count(*) as total_stop_codon_snps
+     from apidb.snp snp, apidb.sequencevariation var 
+     where snp.na_sequence_id = var.ref_na_sequence_id
+       and snp.location = var.location
+         and var.product = '*' 
+         group by snp.source_id 
+     ) stopcodonsnps, 
      (SELECT na_sequence_id, chromosome, chromosome_order_num
       FROM dots.ExternalNaSequence
      UNION
@@ -2374,6 +2382,7 @@ WHERE edr.external_database_release_id = snp.external_database_release_id
   AND sequence.na_sequence_id = snp.na_sequence_id
   AND chromosome_info.na_sequence_id = snp.na_sequence_id
   AND gene_info.na_feature_id(+) = snp.gene_na_feature_id
+  and snp.source_id = stopcodonsnps.source_id(+)
       ]]>
     </sql>
 
