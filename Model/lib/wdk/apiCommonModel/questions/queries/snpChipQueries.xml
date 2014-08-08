@@ -412,6 +412,7 @@ WHERE snp.na_feature_id = variants.parent_id
         <!-- <paramRef ref="snpChipParams.isolate_set_b"/> -->
         <paramRef ref="sharedParams.snpchip_strain_meta_b" prompt="Set B Isolates" quote="true" />
         <paramRef ref="snpChipParams.set_b_percent"/>
+        <paramRef ref="snpChipParams.snp_assay_type"/>
         <column name="source_id"/> 
         <column name="project_id"/>
         <column name="set_a_allele"/>
@@ -430,9 +431,11 @@ FROM   apidbtuning.snpchipattributes snp,
        dots.seqvariation var
 WHERE snp.na_feature_id = var.parent_id
   and var.allele is not null
-  and snp.type in ('Broad_barcode', 'Broad_3k_chip', 'Broad_hd_array')
+  and snp.type in ($$snp_assay_type$$)
   and var.strain in ($$snpchip_strain_meta_a$$)
+	and snp.major_allele_frequency >= $$set_a_percent$$ /100
   group by snp.source_id, var.allele
+  --having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * $$set_a_percent$$ / 100
 ) seta,
 (
 SELECT snp.source_id, var.allele, count(*) as total
@@ -440,37 +443,14 @@ FROM   apidbtuning.snpchipattributes snp,
        dots.seqvariation var
 WHERE snp.na_feature_id = var.parent_id
   and var.allele is not null
-  and snp.type in ('Broad_barcode', 'Broad_3k_chip', 'Broad_hd_array')
+  and snp.type in ($$snp_assay_type$$)
   and var.strain in ($$snpchip_strain_meta_b$$)
+	and snp.major_allele_frequency >=  $$set_b_percent$$ /100
   group by snp.source_id, var.allele
+  --having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * $$set_b_percent$$ / 100
 ) setb
 where seta.source_id = setb.source_id
- and seta.allele != setb.allele
-
-
-/**
-       select seta.snp_source_id as source_id,'@PROJECT_ID@' as project_id,
-              seta.allele as set_a_allele,setb.allele as set_b_allele,
-              seta.total as set_a_count, setb.total as set_b_count
-       from   (select isnp.snp_source_id,isnp.allele,count(*) as total
-               from   ApidbTuning.IsolateSNPs isnp, ($$isolate_set_a$$) ds
-               where isnp.is_source_id = ds.source_id
-                 and isnp.allele is not null
-                 and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
-               group by isnp.snp_source_id,isnp.allele
-               having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100
-              ) seta,
-              (select isnp.snp_source_id,isnp.allele, count(*) as total
-               from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_b$$) ds
-               where isnp.is_source_id = ds.source_id
-                 and isnp.allele is not null
-                 and isnp.snp_db_name = 'pfal3D7_SNP_combined_Su_Broad_Sanger_gff_RSRC'
-               group by isnp.snp_source_id,isnp.allele
-               having count(*) >= (select count(*) from ($$isolate_set_b$$)) * $$set_b_percent$$ / 100
-               ) setb
-        where seta.snp_source_id = setb.snp_source_id
-              and seta.allele != setb.allele
-*/
+ and seta.allele != setb.allele 
            ]]>
        </sql>
     </sqlQuery>
