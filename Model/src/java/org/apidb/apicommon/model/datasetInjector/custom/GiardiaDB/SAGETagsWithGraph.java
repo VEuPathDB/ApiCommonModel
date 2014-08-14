@@ -27,7 +27,7 @@ public class SAGETagsWithGraph extends SAGETags {
       injectTemplate("sageTagAttributesListR");
       injectTemplate("sageTagAttributeCategory");
       injectTemplate("sageTagExpressionGraphAttributes");
-
+      injectTemplate("pathwayGraphs");
   }
 
   @Override
