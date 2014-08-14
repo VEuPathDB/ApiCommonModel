@@ -24,6 +24,7 @@ public class SAGETagsWithGraph extends SAGETags {
       injectTemplate("datasetExampleGraphDescriptions");
 
       injectTemplate("sageTagAttributesList");
+      injectTemplate("sageTagAttributesListR");
       injectTemplate("sageTagAttributeCategory");
       injectTemplate("sageTagExpressionGraphAttributes");
 
