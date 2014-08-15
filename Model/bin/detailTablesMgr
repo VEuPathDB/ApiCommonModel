@@ -2,6 +2,8 @@
 use lib "$ENV{GUS_HOME}/lib/perl";
 use Getopt::Long;
 use strict;
+use DBI;
+use ApiCommonWebsite::Model::ModelConfig;
 
 my ($config,$sqlDir,$downloadFileDir,$restartOrg,$verbose);
 &GetOptions("configFile=s" => \$config,
@@ -217,16 +219,98 @@ sub processConfig {
   foreach my $projectHsh (@{$confArr}) {
     foreach my $project (keys %{$projectHsh}) {
 
+      setIndexSync($project, $orgHsh, $projectHsh, "disable"); # turn off text-index sync
       foreach my $org (@{$projectHsh->{$project}->{'organisms'}}) {
 
 	&runLoadDetailTable($project,$org, $orgHsh,$projectHsh) if $projectHsh->{$project}->{'loadDetailTable'} eq 'yes';
 
 	&runFullRecordFile($project, $org, $orgHsh, $projectHsh->{$project}->{'release'}) if ($projectHsh->{$project}->{'createFile'} eq 'yes');
       }
+
+      setIndexSync($project, $orgHsh, $projectHsh, "enable"); # turn on text-index sync
     }
   }
 }
 
+
+sub setIndexSync {
+
+  my ($project, $orgHsh, $projectHsh, $state) = @_;
+  my %tableHsh;
+  my $startTime = time;
+
+  if ($state ne "enable" && $state ne "disable") {
+    die "index state must be either \"enable\" or \"disable\""
+  }
+
+  print STDERR "$state Oracle Text index syncing for project \|$project\"\n";
+
+  # discover database tables that will be loaded
+  foreach my $org (@{$projectHsh->{$project}->{'organisms'}}) {
+    foreach my $type (keys %{$orgHsh->{$org}}) {
+
+      my $table = $orgHsh->{$org}->{$type}->{'table'};
+      $tableHsh{$table} = 1;
+
+      # my $cmd = "loadDetailTable -record ${ucType}RecordClasses.${ucType}RecordClass -sqlFile $sqlDir/tmp_${type}.sql -detailTable $table -model $project ";
+    }
+  }
+
+  # iterate through tables to build query for Oracle Text indexes
+  my $dbh = getDbh($project);
+  my @tablePredicates;
+  foreach my $schemaTable (keys %tableHsh) {
+    # print STDERR " . . .table \|$schemaTable\"\n";
+
+    my ($schema, $table) = split /\./, $schemaTable;
+    push(@tablePredicates, "(table_owner = upper('$schema') and table_name = upper('$table'))");
+  }
+
+  if (scalar @tablePredicates == 0) {
+    print STDERR "no Oracle Text indexes found\n";
+    return;
+  }
+
+  # iterate through indexes to turn off sync
+  my $sql = "select owner, index_name from all_indexes where index_type = 'DOMAIN' and (" . join(" or ", @tablePredicates) . ")";
+  # print STDERR "sql:\n$sql\n";
+  my $indexQ = $dbh->prepare($sql) ||  die "Couldn't prepare index query: " . DBI->errstr;
+  $indexQ->execute();
+  while (my ($owner, $index) = $indexQ->fetchrow_array()) {
+
+    if ($state eq "disable") {
+      $dbh->do(<<SQL) ||  die "Turning off sync for index \"$owner.$index\": " . DBI->errstr;
+        alter index $owner.$index parameters('REPLACE METADATA SYNC (MANUAL)')
+SQL
+    } else {
+      $dbh->do(<<SQL) ||  die "Turning on sync for index \"$owner.$index\": " . DBI->errstr;
+        alter index $owner.$index parameters('REPLACE METADATA SYNC (ON COMMIT)')
+SQL
+      $dbh->do(<<SQL) ||  die "Rebuilding index \"$owner.$index\": " . DBI->errstr;
+        alter index $owner.$index rebuild
+SQL
+
+    }
+  }
+  $indexQ->finish();
+
+  my $totTime = time - $startTime;
+
+  print STDERR "DONE:\t$state $project indexes\t$totTime sec\n\n";
+}
+
+
+sub getDbh {
+  my ($project) = @_;
+
+  my $c = new ApiCommonWebsite::Model::ModelConfig($project);
+  my $u  = $c->getLogin;
+  my $pw = $c->getPassword;
+  my $dsn = $c->getDbiDsn;
+  my $dbh = DBI->connect($dsn, $u, $pw) ||  die "Couldn't connect to database: " . DBI->errstr;
+  $dbh->{RaiseError} = 1;
+  return $dbh;
+}
 
 sub runLoadDetailTable {
 
