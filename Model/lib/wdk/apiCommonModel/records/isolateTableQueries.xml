@@ -343,30 +343,21 @@ and dsa.dataset_presenter_id = dsc.dataset_presenter_id
             from ((select i.source_id, s.pvalue_mant , s.pvalue_exp,  tn.name as organism,
                    s.min_subject_start as start_min, s.max_subject_end as end_max, nas.source_id as sequence_source_id
                   from dots.similarity s, ApidbTuning.IsolateAttributes i, 
-                       core.tableinfo t, dots.nasequence nas, sres.taxonname tn
+                       dots.nasequence nas, sres.taxonname tn
                   where s.query_id = i.na_sequence_id
                   and nas.na_sequence_id = s.subject_id
-                   and t.table_id = s.subject_table_id
-                   and t.table_id = s.query_table_id
-                   and t.name = 'ExternalNASequence'
+                   and s.subject_table_id = (select table_id from core.TableInfo where name = 'ExternalNASequence')
+                   and s.subject_table_id = s.query_table_id
                    and tn.taxon_id = nas.taxon_id
                    and tn.name_class = 'scientific name'
                  ) sim left join
-                (select i.source_id, seq.source_id as sequence_id, g.source_id as gene, g.product as gene_product
-                 from  dots.similarity s, ApidbTuning.IsolateAttributes i,
-                       ApidbTuning.GeneAttributes g, core.tableinfo t, dots.nalocation l, dots.nasequence seq
-                 where s.query_id = i.na_sequence_id
-                  and s.subject_id = g.na_sequence_id
-                  and t.table_id = s.subject_table_id
-                  and t.table_id = s.query_table_id
-                  and s.min_subject_start <=  l.end_max
-                  and s.max_subject_end >= l.start_min
-                  and l.na_feature_id = g.na_feature_id
-                  and g.na_sequence_id = seq.na_sequence_id
-                  and t.name = 'ExternalNASequence'
+                (select g.source_id as gene, g.product as gene_product, loc.sequence_source_id, loc.start_min, loc.end_max
+                 from ApidbTuning.GeneAttributes g, ApidbTuning.FeatureLocation loc
+                 where g.na_feature_id = loc.na_feature_id
+                   and loc.feature_type = 'GeneFeature'
                   ) gene
-                  on gene.source_id = sim.source_id and gene.sequence_id = sim.sequence_source_id)
-             where pvalue_exp <= &&pvalueCutoff&&
+                  on gene.sequence_source_id = sim.sequence_source_id and gene.start_min <= sim.end_max and gene.end_max >= sim.start_min)
+            where pvalue_exp <= &&pvalueCutoff&&
             order by sim.pvalue_exp, pvalue_mant
             ]]>
            </sql>
