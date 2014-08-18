@@ -2322,7 +2322,8 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        decode(snp.position_in_cds, null, 'no', 'yes') as is_coding,
        snp.position_in_CDS,
        snp.position_in_protein,
-       snp.has_nonsynonymous_allele, 
+       -- has_nonsynonymous should be false if any products are stops
+       case when stopcodonsnps.total_stop_codon_snps = 0 then snp.has_nonsynonymous_allele else 0 end as has_nonsynonymous_allele,
        snp.major_allele, 
        snp.minor_allele,
        snp.major_allele_count, 
@@ -2334,7 +2335,7 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        snp.distinct_strain_count,
        snp.distinct_allele_count,
        case when stopcodonsnps.total_stop_codon_snps > 0 then 1 else 0 end as has_stop_codon,
-       case when noncodingsnps.total_noncoding_snps > 0 then 1 else 0 end as is_noncoding_snp,
+       case when snp.position_in_cds is null then 1 else 0 end as is_noncoding_snp,
        gene_info.source_id as gene_source_id,
        decode(gene_info.is_reversed, 0, 'forward', 1, 'reverse') as gene_strand,
        SUBSTR(DBMS_LOB.SUBSTR(sequence.sequence, 60, snp.location - 60), 1, 60) AS lflank,
@@ -2359,13 +2360,6 @@ FROM apidb.Snp snp,
          and var.product = '*' 
          group by snp.source_id 
      ) stopcodonsnps, 
-     ( select count(*) as total_noncoding_snps, snp.source_id
-       from  dots.genefeature gf, sres.SequenceOntology so, apidb.snp snp 
-       where gf.sequence_ontology_id = so.sequence_ontology_id
-         and snp.gene_na_feature_id = gf.na_feature_id
-         and so.term_name = 'non_protein_coding'
-       group by snp.source_id
-     ) noncodingsnps,
      (SELECT na_sequence_id, chromosome, chromosome_order_num
       FROM dots.ExternalNaSequence
      UNION
@@ -2385,7 +2379,6 @@ WHERE edr.external_database_release_id = snp.external_database_release_id
   AND chromosome_info.na_sequence_id = snp.na_sequence_id
   AND gene_info.na_feature_id(+) = snp.gene_na_feature_id
   and snp.source_id = stopcodonsnps.source_id(+)
-  and snp.source_id = noncodingsnps.source_id(+)
       ]]>
     </sql>
 
