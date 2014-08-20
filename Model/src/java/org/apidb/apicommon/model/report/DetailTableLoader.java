@@ -56,6 +56,7 @@ public class DetailTableLoader extends BaseCLI {
       this.table = table;
     }
 
+    @Override
     public void run() {
       try {
         loader.dumpTable(table, idSql);
