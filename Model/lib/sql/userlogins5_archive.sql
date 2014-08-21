@@ -56,7 +56,7 @@ CREATE TABLE userlogins5_archive.users
 );
 
 CREATE INDEX userlogins5_archive.users_idx01 ON userlogins5_archive.users (is_guest, register_time);
-CREATE INDEX userlogins5_archive.users_idx02 ON userlogins5_archive.users (register_time);
+CREATE INDEX userlogins5_archive.users_idx02 ON userlogins5_archive.users (email);
 
 GRANT SELECT ON userlogins5_archive.users TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.users TO GUS_W;

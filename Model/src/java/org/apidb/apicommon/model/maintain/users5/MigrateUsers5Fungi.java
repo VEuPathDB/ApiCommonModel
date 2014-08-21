@@ -26,7 +26,7 @@ import org.gusdb.wdk.model.config.ModelConfigUserDB;
  * @author jerric
  * 
  */
-public class MigrateUser5 extends BaseCLI {
+public class MigrateUsers5Fungi extends BaseCLI {
 
   public static final int UPDATE_PAGE = 200;
 
@@ -43,11 +43,11 @@ public class MigrateUser5 extends BaseCLI {
       new FungiPreferenceTask(), new FungiFavoriteTask(), new FungiBasketTask(), new FungiDatasetTask(),
       new FungiStepTask(), new FungiStepParamTask(), new FungiStrategyTask() };
 
-  private static final Logger logger = Logger.getLogger(MigrateUser5.class);
+  private static final Logger logger = Logger.getLogger(MigrateUsers5Fungi.class);
 
   public static void main(String[] args) throws Exception {
     String cmdName = System.getProperty("cmdName");
-    MigrateUser5 migrator = new MigrateUser5(cmdName);
+    MigrateUsers5Fungi migrator = new MigrateUsers5Fungi(cmdName);
     try {
       migrator.invoke(args);
     }
@@ -64,7 +64,7 @@ public class MigrateUser5 extends BaseCLI {
   /**
    * 
    */
-  public MigrateUser5(String command) {
+  public MigrateUsers5Fungi(String command) {
     super((command != null) ? command : "apiMigrateUser5", "Migrate user into new userlogins5 schema.");
   }
 
