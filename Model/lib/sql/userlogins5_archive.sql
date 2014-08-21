@@ -294,3 +294,24 @@ CREATE TABLE userlogins5_archive.categories
 
 GRANT SELECT ON userlogins5_archive.categories TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.categories TO GUS_W;
+
+
+CREATE TABLE userlogins5_archive.step_analysis
+(
+  analysis_id          NUMBER(12) NOT NULL,
+  step_id              NUMBER(12) NOT NULL,
+  display_name         VARCHAR(1024),
+  is_new               NUMBER(1),
+  has_params           NUMBER(1),
+  invalid_step_reason  VARCHAR(1024),
+  context_hash         VARCHAR(96),
+  context              CLOB,
+  CONSTRAINT "step_analysis_pk" PRIMARY KEY (analysis_id),
+  CONSTRAINT "step_analysis_fk01" FOREIGN KEY (step_id)
+      REFERENCES userlogins5_archive.steps (step_id)
+);
+
+CREATE INDEX userlogins5_archive.step_analysis_idx01 ON userlogins5_archive.step_analysis (step_id);
+
+GRANT SELECT ON userlogins5_archive.step_analysis TO GUS_R;
+GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.step_analysis TO GUS_W;
