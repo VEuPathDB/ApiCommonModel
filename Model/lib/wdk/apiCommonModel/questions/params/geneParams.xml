@@ -12344,7 +12344,7 @@ where ps.external_database_release_id = s.external_database_release_id
   and pen.name = bm.name
   and ps.profile_set_id in ( $$profileset_generic$$ )
   and bmc.ontology_entry_id = oe.ontology_entry_id
-  and bmc.value is not null
+  and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
   and lower(bmc.value) != 'unknown'
             ]]>
             </sql>
@@ -12357,13 +12357,14 @@ where ps.external_database_release_id = s.external_database_release_id
             <wsColumn name="property"  width="100" wsName="property"/>
         </processQuery>
 
-        <sqlQuery name="SamplesMetadataSpec" doNotTest="1" includeProjects="PlasmoDB">   
+        <sqlQuery name="SamplesMetadataSpec" doNotTest="1" includeProjects="PlasmoDB"> 
+            <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"  queryRef="GeneVQ.GenericProfiles"/>   
             <column name="property" />
             <column name="spec_property"/>
             <column name="spec_value" />
             <sql>
            <![CDATA[
-With main as  (
+With FullSpec as  (
 SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
  UNION
  SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
@@ -12745,6 +12746,28 @@ Union
 Select 'vivax' as property,  'filter' as spec_property, 'membership' as spec_value from dual
 Union
 Select 'vivax' as property,  'display' as spec_property, 'vivax' as spec_value from dual),
+Categories as (select oe.value as property
+                 from apidb.profileset ps,
+                      apidb.profileelementname pen,
+                      Study.Study S,
+                      Rad.Studybiomaterial Sbm,
+                      study.biosample bm,
+                      STUDY.biomaterialcharacteristic bmc,
+                      study.ontologyEntry oe
+                where ps.external_database_release_id = s.external_database_release_id
+                  and ps.profile_set_id =pen.profile_set_id
+                  and S.Study_Id = Sbm.Study_Id
+                  and sbm.Bio_Material_Id = bm.Bio_Material_Id
+                  and bm.bio_material_id = bmc.bio_material_id
+                  and pen.name = bm.name
+                  and ps.profile_set_id in ( $$profileset_generic$$ )
+                  and bmc.ontology_entry_id = oe.ontology_entry_id
+                  and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
+                  and lower(bmc.value) != 'unknown'
+),
+main as ( select fs.* 
+           from FullSpec fs, categories c
+          where fs.property = c.property),        
 Tree as ( SELECT oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe
            START WITH oe.value = 'BioMaterialCharacteristics'
@@ -12759,10 +12782,11 @@ TreeDisplay as ( SELECT property as property, 'display' as spec_property, initca
            Union 
            select 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
            minus
-           SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
-           FROM main
+           SELECT c.property as property, 'display' as spec_property, initcap(replace(c.property,'_',' ')) as spec_value
+           FROM main, categories c
+           WHERE main.property = c.property
 )
-Select * from main
+select * from main
 union 
 select tree.* from tree
 
