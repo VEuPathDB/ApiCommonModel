@@ -8,7 +8,6 @@ public class RNASeqReidNcDay3 extends CusomGenePageExpressionGraphsAndCoverage {
   public void addModelReferences() {
  
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByNcLivRNASeqExpressionPercentile"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Reid::NcRnaSeq" );
   }
-
-
 }
