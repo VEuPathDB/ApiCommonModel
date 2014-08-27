@@ -2085,16 +2085,21 @@ select * from (
       oe.value as property
  from              
       Apidbtuning.SnpChipStrains ss,
-      Study.Biomaterialcharacteristic Bmc,
-      STUDY.biosample bs,
-      Study.Ontologyentry oe,
+      study.study s,
+      rad.studybiomaterial sb,
+      study.biosample bs,
+      study.biomaterialcharacteristic bmc,
+      study.Ontologyentry oe,
       sres.externaldatabase ed,
       sres.externaldatabaserelease edr
- Where Bmc.Bio_Material_Id = bs.Bio_Material_Id 
+ Where  s.study_id = sb.study_id
+  and bmc.bio_material_Id = bs.bio_material_Id 
+  and sb.bio_material_id = bs.bio_material_id
       and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
       and edr.external_database_id = ed.external_database_id
       and ss.extdb_name = ed.name
-      and bs.external_database_release_id = edr.external_database_release_id
+      and s.external_database_release_id = edr.external_database_release_id
+      and ed.name like '%SNPChip%'
       and ss.organism = $$organism$$
       and oe.value != 'StrainOrLine'
  Union 
@@ -2126,24 +2131,71 @@ where value is not null
             <column name="spec_value" />
             <sql>
            <![CDATA[
+With main as  (
+ SELECT 'Host' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'display' as spec_property, 'Host' as spec_value FROM dual
+ UNION
  SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
  UNION
  SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
  UNION
  SELECT 'GeographicLocation' as property, 'display' as spec_property, 'GeographicLocation' as spec_value FROM dual
  UNION
- SELECT 'GeographicLocation' as property, 'leaf' as spec_property, 'true' as spec_value FROM dual
- UNION 
  SELECT 'StrainOrLine' as property, 'type' as spec_property, 'string' as spec_value FROM dual
  UNION
  SELECT 'StrainOrLine' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
  UNION
  SELECT 'StrainOrLine' as property, 'display' as spec_property, 'StrainOrLine' as spec_value FROM dual
- UNION
- SELECT 'StrainOrLine' as property, 'leaf' as spec_property, 'true' as spec_value FROM dual
- UNION 
- SELECT value as property, 'description' as spec_property, NVL(definition, '') as spec_value FROM STUDY.ontologyentry
-    WHERE value in ('StrainOrLine', 'GeographicLocation')
+),
+Tree as ( SELECT oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe
+           START WITH oe.value = 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category
+           minus
+           select oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           from STUDY.ontologyentry oe
+           where oe.value = 'BioMaterialCharacteristics'
+           ),
+TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
+           FROM Tree
+           Union 
+           select 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
+           minus
+           SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
+           FROM main
+)
+Select * from main
+union 
+select tree.* from tree
+
+union
+select treeDisplay.* from treeDisplay 
+union
+SELECT oe.value as property, 'description' as spec_property, definition as spec_value FROM STUDY.ontologyentry oe, main
+where oe.value = main.property
+      and oe.definition is not null
+union
+SELECT oe.value as property, 'leaf' as spec_property, 'true' as spec_value FROM STUDY.ontologyentry oe, main
+where oe.value = main.property
+--minus
+--select property PROPERTY,
+--spec_property SPEC_PROPERTY,
+--spec_value SPEC_VALUE from (
+--(select 'GeographicLocation' as property,	'parent' as spec_property,	'BioMaterialCharacteristics' as spec_value from dual
+--Union
+--select 'GeographicLocation' as property,	'parent' as spec_property,	'Sample Collection Location' as spec_value from dual
+--Union
+--select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as spec_value from dual
+--))
+
+
+
+
+
+
             ]]> 
 
             </sql>
