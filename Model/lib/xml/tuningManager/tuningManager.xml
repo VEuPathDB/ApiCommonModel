@@ -3466,7 +3466,7 @@ and b.bio_material_id = strain.bio_material_id (+)
 and b.bio_material_id = host.bio_material_id (+)
 and b.bio_material_id = isolation_source.bio_material_id (+)
 and b.bio_material_id = geographic_location.bio_material_id (+)
-UNION
+UNION -- sequence typed isolate 
 select i.na_sequence_id,
        i.na_feature_id,
        null as bio_material_id,
@@ -3577,6 +3577,84 @@ WHERE i.na_sequence_id = i_s.na_sequence_id
 and i.na_sequence_id = s_h.na_sequence_id
 and i.na_sequence_id = g_l.na_sequence_id
 and i.na_sequence_id = prod.na_sequence_id (+)
+UNION -- SNPChip: similar to HTS SNPs except metadata are loaded differently
+select null as na_sequence_id,
+       null as na_feature_id,
+       0 as bio_material_id,
+       o.taxon_id,
+       '' as external_db_version,
+       '' as external_db_name,
+       bs.name as source_id,
+       nvl(o.name, 'Unknown') as organism,
+       nvl(strain.strain, 'Unknown') as strain,
+       'Unknown' as specific_host,
+       'Unknown' as isolation_source,
+       nvl(geographic_location.value, 'Unknown') as geographic_location,
+      'N/A' as product,
+       '' as note,
+       '' as description,
+       0 as is_reference,
+       'PlasmoDB' as project_id,
+       'SNPChip' as data_type,
+       'Unknown' as annotated_specific_host,
+       'Unknown' as annotated_isolation_source,
+       geographic_location.annotated_value as annotated_geographic_location,
+       null as length, 
+       null as pcr_primers, 
+       null as collected_by
+FROM study.study s, 
+     rad.studybiomaterial sb,
+     study.biosample bs,
+     sres.ExternalDatabase ed, 
+     sres.ExternalDatabaseRelease edr,
+    ( SELECT bmc.value as strain, bmc.bio_material_id
+      FROM  study.study s,
+            rad.studybiomaterial sbm,
+            study.biosample bs,
+            study.biomaterialcharacteristic bmc,
+            study.ontologyentry oe
+      WHERE s.study_id = sbm.study_id
+        AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+        AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+        AND oe.ontology_entry_id = bmc.ONTOLOGY_ENTRY_ID
+        AND oe.category = 'BioMaterialCharacteristics' 
+        AND oe.value = 'StrainOrLine' 
+    ) strain,
+    ( SELECT tn.name, tn.taxon_id, bmc.bio_material_id
+      FROM  study.study s,
+            rad.studybiomaterial sbm,
+            study.biosample bs,
+            study.biomaterialcharacteristic bmc,
+            study.ontologyentry oe,
+            sres.taxonName tn
+      WHERE s.study_id = sbm.study_id
+        AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+        AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+        AND oe.ontology_entry_id = bmc.ONTOLOGY_ENTRY_ID
+        AND oe.category = 'BioMaterialCharacteristics' 
+        AND oe.value = 'Organism' 
+        AND tn.name = bmc.value ) o,
+    ( SELECT distinct bmc.bio_material_id, bmc.value, bmc.value as annotated_value
+      FROM  study.study s,
+            rad.studybiomaterial sbm,
+            study.biosample bs,
+            study.biomaterialcharacteristic bmc,
+            study.ontologyentry oe
+      WHERE s.study_id = sbm.study_id
+        AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+        AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
+        AND oe.ontology_entry_id = bmc.ONTOLOGY_ENTRY_ID
+        AND oe.category = 'Sample Collection Location' 
+        AND oe.value = 'GeographicLocation' 
+    ) geographic_location
+WHERE s.study_id = sb.study_id
+  and bs.BIO_MATERIAL_ID = sb.BIO_MATERIAL_ID
+  and s.external_database_release_id = edr.external_database_release_id
+  and edr.external_database_id = ed.external_database_id
+  and ed.name like '%SNPChip%'
+  and sb.bio_material_id = strain.bio_material_id(+)
+  and sb.bio_material_id = o.bio_material_id(+)
+  and sb.bio_material_id = geographic_location.bio_material_id(+)
       ]]>
     </sql>
     <sql>
