@@ -1952,14 +1952,14 @@ Select distinct ss.strain as term,
              and bs.external_database_release_id = edr.external_database_release_id
              and ss.organism = $$organism$$
              and oe.value != 'StrainOrLine'
-             and bmc.value is not null
 Union 
 Select distinct ss.strain as term,
        ss.strain as value,
        'StrainOrLine' as property
   from Apidbtuning.SnpStrains ss
-) where value is not null
+) where value is not null 
     and lower(value) != 'unknown'
+    and regexp_like(value, '.*[[:alnum:]]+.*')
 
             ]]>
             </sql>
@@ -1975,12 +1975,13 @@ Select distinct ss.strain as term,
 
 
         <sqlQuery name="StrainsMetadataSpec" doNotTest="1" includeProjects="TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB">  
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/> 
             <column name="property" />
             <column name="spec_property"/>
             <column name="spec_value" />
             <sql>
            <![CDATA[
-With main as  (
+With FullSpec as  (
  SELECT 'Year' as property, 'type' as spec_property, 'string' as spec_value FROM dual
  UNION
  SELECT 'Year' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
@@ -2011,15 +2012,46 @@ With main as  (
  UNION
  SELECT 'Haplogroup' as property, 'display' as spec_property, 'Haplogroup' as spec_value FROM dual 
 ),
-Tree as ( SELECT oe.value as property, 'parent' as spec_property, oe.category as spec_value
-           FROM STUDY.ontologyentry oe
+main as ( select fs.* 
+            from fullspec fs, 
+                 (Select distinct oe.value as property
+                    from Apidbtuning.SnpStrains ss,
+                         Study.Biomaterialcharacteristic Bmc,
+                         STUDY.biosample bs,
+                         Study.Ontologyentry oe,
+                         sres.externaldatabase ed,
+                         sres.externaldatabaserelease edr
+                   Where Bmc.Bio_Material_Id = bs.Bio_Material_Id 
+                     and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+                     and edr.external_database_id = ed.external_database_id
+                     and ss.biosample_db_name = ed.name
+                     and bs.external_database_release_id = edr.external_database_release_id
+                     and ss.organism = $$organism$$
+                     and oe.value != 'StrainOrLine'
+                     and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
+                     and lower(bmc.value) != 'unknown' 
+                   Union 
+                   Select'StrainOrLine' as property
+                     from dual
+                  ) categories
+            where fs.property = categories.property
+),
+Tree as (
+SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
+           START WITH oe.value = main.property
+                 CONNECT BY (PRIOR oe.category = oe.value)
+intersect
+(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
            START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category
-           minus
-           select oe.value as property, 'parent' as spec_property, oe.category as spec_value
-           from STUDY.ontologyentry oe
-           where oe.value = 'BioMaterialCharacteristics'
-           ),
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category != 'BioMaterialCharacteristics'
+minus
+SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
+           START WITH oe.value = 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != 'BioMaterialCharacteristics')
+),
 TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
            FROM Tree
            Union 
@@ -2052,8 +2084,6 @@ Union
 select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as spec_value from dual
 ))
             ]]>
-
-
             </sql>
         </sqlQuery>
 
@@ -2073,8 +2103,79 @@ select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as 
             <column name="value" />
             <sql>
            <![CDATA[
+select * from ( 
+ Select distinct ss.strain as term,
+      initcap (
+      case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
+           then (regexp_replace(bmc.value,'\s[^0-9]+',''))
+           else bmc.value
+      end) as value, 
+      oe.value as property
+ from              
+      Apidbtuning.SnpChipStrains ss,
+        study.study s,
+        rad.studybiomaterial sb,
+        study.biosample bs,
+        study.biomaterialcharacteristic bmc,
+        study.Ontologyentry oe
+ Where  s.study_id = sb.study_id
+   and  sb.bio_material_id = bs.bio_material_id
+   and  bmc.bio_material_Id = bs.bio_material_Id
+   and  ss.ISOLATE_ID = bs.NAME
+   and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+   and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
+   and  ss.organism = $$organism$$
+   and  oe.value != 'StrainOrLine'
+ Union 
+ Select distinct ss.strain as term,
+      ss.strain as value,
+      'StrainOrLine' as property
+ from Apidbtuning.SnpChipStrains ss
+)
+where value is not null
+  and lower(value) != 'unknown'
+            ]]>
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="SnpChipStrainsMetadata" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withSNPs"/> 
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="property"  width="100" wsName="property"/>
+            <wsColumn name="value" width="100" wsName="value"/>
+ 
+        </processQuery>
 
 
+        <sqlQuery name="SnpChipStrainsMetadataSpec" doNotTest="1" includeProjects="PlasmoDB">  
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/> 
+            <column name="property" />
+            <column name="spec_property"/>
+            <column name="spec_value" />
+            <sql>
+           <![CDATA[
+With FullSpec as  (
+ SELECT 'Host' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'Host' as property, 'display' as spec_property, 'Host' as spec_value FROM dual
+ UNION
+ SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'GeographicLocation' as property, 'display' as spec_property, 'GeographicLocation' as spec_value FROM dual
+ UNION
+ SELECT 'StrainOrLine' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'StrainOrLine' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'StrainOrLine' as property, 'display' as spec_property, 'StrainOrLine' as spec_value FROM dual
+),
+main as ( select fs.* 
+            from fullspec fs, 
+                 (
 select * from ( 
  Select distinct ss.strain as term,
       initcap (
@@ -2110,55 +2211,26 @@ select * from (
 )
 where value is not null
   and lower(value) != 'unknown'
-
-
-            ]]>
-            </sql>
-        </sqlQuery>
-
-        <processQuery name="SnpChipStrainsMetadata" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
-            <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withSNPs"/> 
-            <wsColumn name="term" width="100" wsName="term"/>
-            <wsColumn name="property"  width="100" wsName="property"/>
-            <wsColumn name="value" width="100" wsName="value"/>
- 
-        </processQuery>
-
-
-        <sqlQuery name="SnpChipStrainsMetadataSpec" doNotTest="1" includeProjects="PlasmoDB">  
-            <column name="property" />
-            <column name="spec_property"/>
-            <column name="spec_value" />
-            <sql>
-           <![CDATA[
-With main as  (
- SELECT 'Host' as property, 'type' as spec_property, 'string' as spec_value FROM dual
- UNION
- SELECT 'Host' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
- UNION
- SELECT 'Host' as property, 'display' as spec_property, 'Host' as spec_value FROM dual
- UNION
- SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
- UNION
- SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
- UNION
- SELECT 'GeographicLocation' as property, 'display' as spec_property, 'GeographicLocation' as spec_value FROM dual
- UNION
- SELECT 'StrainOrLine' as property, 'type' as spec_property, 'string' as spec_value FROM dual
- UNION
- SELECT 'StrainOrLine' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
- UNION
- SELECT 'StrainOrLine' as property, 'display' as spec_property, 'StrainOrLine' as spec_value FROM dual
+    and regexp_like(value, '.*[[:alnum:]]+.*')
+                  ) categories
+            where fs.property = categories.property
 ),
-Tree as ( SELECT oe.value as property, 'parent' as spec_property, oe.category as spec_value
-           FROM STUDY.ontologyentry oe
+Tree as (
+SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
+           START WITH oe.value = main.property
+                 CONNECT BY (PRIOR oe.category = oe.value)
+intersect
+(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
            START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category
-           minus
-           select oe.value as property, 'parent' as spec_property, oe.category as spec_value
-           from STUDY.ontologyentry oe
-           where oe.value = 'BioMaterialCharacteristics'
-           ),
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category != 'BioMaterialCharacteristics'
+minus
+SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
+           START WITH oe.value = 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != 'BioMaterialCharacteristics')
+),
 TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
            FROM Tree
            Union 
@@ -2180,20 +2252,6 @@ where oe.value = main.property
 union
 SELECT oe.value as property, 'leaf' as spec_property, 'true' as spec_value FROM STUDY.ontologyentry oe, main
 where oe.value = main.property
---minus
---select property PROPERTY,
---spec_property SPEC_PROPERTY,
---spec_value SPEC_VALUE from (
---(select 'GeographicLocation' as property,	'parent' as spec_property,	'BioMaterialCharacteristics' as spec_value from dual
---Union
---select 'GeographicLocation' as property,	'parent' as spec_property,	'Sample Collection Location' as spec_value from dual
---Union
---select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as spec_value from dual
---))
-
-
-
-
 
 
             ]]> 
@@ -2202,6 +2260,7 @@ where oe.value = main.property
         </sqlQuery>
 
         <processQuery name="SnpChipStrainsMetadataSpec" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+          <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withNgsSNPs"/> 
             <wsColumn name="property" width="100" wsName="property"/>
             <wsColumn name="spec_property" width="100" wsName="spec_property"/>
             <wsColumn name="spec_value"  width="1000" wsName="spec_value"/>
