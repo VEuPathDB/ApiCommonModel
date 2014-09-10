@@ -307,15 +307,16 @@ create table AnnotationChange$suffix (
    change_date  date,
    change       varchar2(2000),
    feature_name varchar2(50),
-   product      varchar2(300)
+   product      varchar2(200),
+   name         varchar2(30)
 ) nologging
 SQL
 
   $dbh->{PrintError} = 0;
   $dbh->do(<<SQL);
   insert into AnnotationChange$suffix
-              (gene, change_date, change, feature_name, product)
-  select gene, change_date, change, feature_name, product from AnnotationChange
+              (gene, change_date, change, feature_name, product, name)
+  select gene, change_date, change, feature_name, product, name from AnnotationChange
 SQL
   $dbh->{PrintError} = 1;
 
@@ -334,7 +335,7 @@ SQL
 
     my $updateStmt = $dbh->prepare(<<SQL) or die "preparing gene/product update statement";
       update AnnotationChange$suffix
-      set gene = ?, product = ?
+      set gene = ?, product = ?, name = ?
       where feature_name = ?
 SQL
 
@@ -343,13 +344,13 @@ SQL
   while (my ($feature) = $stmt->fetchrow_array()) {
     print STDERRR "getting gene and product for feature \"$feature\"\n" if $debug;
 
-    my ($gene, $product) = getFeatureGeneAndProduct($feature);
-    ($gene, $product) = getFeatureSynonymGeneAndProduct($feature)
+    my ($gene, $product, $name) = getFeatureGeneAndProduct($feature);
+    ($gene, $product, $name) = getFeatureSynonymGeneAndProduct($feature)
       if !$gene;
 
     if ($gene) {
-      print STDERR "set gene to \"$gene\" and product to \"$product\" for feature \"$feature\"\n" if $debug;
-      $updateStmt->execute($gene, $product, $feature) or print STDERR $dbh->errstr;
+      print STDERR "set gene to \"$gene\", product to \"$product\", and name to \"$name\" for feature \"$feature\"\n" if $debug;
+      $updateStmt->execute($gene, $product, $name, $feature) or print STDERR $dbh->errstr;
     } else {
       print STDERR "WARNING: no gene (gene \"$gene\" and product \"$product\") for feature \"$feature\"\n";
     }
@@ -382,6 +383,7 @@ sub getFeatureGeneAndProduct {
     # print STDERRR "info:\n" . Dumper($info). "\n";
 
     my $gene = $info->{results}->[0]->{result}->[0]->{uniqueName};
+    my $name = $info->{results}->[0]->{result}->[0]->{name};
 
     my $product;
 
@@ -409,7 +411,7 @@ sub getFeatureGeneAndProduct {
       print STDERR "web-service parse failure: response to URL \"$url\" contains \"genedb_products\", but a (non-null) product was not found in it.\n";
     }
 
-    return($gene, $product);
+    return($gene, $product, $name);
 }
 
 sub getFeatureSynonymGeneAndProduct {
