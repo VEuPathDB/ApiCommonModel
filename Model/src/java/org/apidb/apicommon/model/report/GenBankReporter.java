@@ -141,7 +141,7 @@ public class GenBankReporter extends Reporter {
     }
 
 
-    private GenBankFeature makeBaseGeneFeature(RecordInstance record, String product)
+    private GenBankFeature makeBaseGeneFeature(RecordInstance record, String product, String name)
             throws WdkModelException, WdkUserException {
 
             String sourceId = record.getAttributeValue("source_id").toString();
@@ -160,7 +160,7 @@ public class GenBankReporter extends Reporter {
 
             String ncbiTaxId = record.getAttributeValue("ncbi_tax_id").toString();
 
-            GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product);
+            GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product, name);
 
             geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
 
@@ -264,10 +264,11 @@ public class GenBankReporter extends Reporter {
               && record.getAttributeValue("is_deprecated").toString().equals("Yes"))) {
 
             String product = record.getAttributeValue("product").toString();
+            String name = record.getAttributeValue("name").toString();
 
             List<GenBankLocation> genbankLocations = makeGenBankLocations(record, sequenceId);
 
-            GenBankFeature geneFeature = makeBaseGeneFeature(record, product);
+            GenBankFeature geneFeature = makeBaseGeneFeature(record, product, name);
             geneFeature.setLocations(genbankLocations);
             writer.print(geneFeature);
             // RULE : Include old locus tag
