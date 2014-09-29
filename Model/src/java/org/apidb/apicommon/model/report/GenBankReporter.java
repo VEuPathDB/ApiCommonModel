@@ -119,7 +119,7 @@ public class GenBankReporter extends Reporter {
         // Add non gene features
         writeSimpleGenomicFeature(record, writer, "Repeats");
         writeSimpleGenomicFeature(record, writer, "TandemRepeats");
-        writeSimpleGenomicFeature(record, writer, "LowComplexity");
+        //writeSimpleGenomicFeature(record, writer, "LowComplexity");
     }
 
 
@@ -128,13 +128,14 @@ public class GenBankReporter extends Reporter {
 
         TableValue Rows = record.getTableValue(tableString);
         for (Map<String, AttributeValue> row : Rows) {
-            String note = row.get("note").toString();
+            String qualifierKey = row.get("qualifier_key").toString();
+            String qualifierValue = row.get("qualifier_value").toString();
             String featureKey = row.get("feature_key").toString();
             String startMin = row.get("start_min").toString();
             String endMax = row.get("end_max").toString();
             writer.println(startMin + "\t" + endMax + "\t" + featureKey + "\t\t");
-            if(note != null) {
-                writer.println("\t\t\t" + "note" + "\t" + note);
+            if(qualifierKey != null) {
+                writer.println("\t\t\t" + qualifierKey + "\t" + qualifierValue);
             }
         }
     }
