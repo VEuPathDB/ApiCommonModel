@@ -90,6 +90,11 @@ public class GenBankFeature {
             genbankFeatureKey = this.featureType;
         }
 
+        // in EuPathDB product is the concatenation of product with gene name, e.g. rifin (RIF)
+        // remove gene name from product if a gene name is available
+        if(this.name != null) {  // if gene name is available
+           product = product.replace("("+ name + ")", "");
+        }
 
         String rv = locationsString(genbankFeatureKey);
         rv = rv + "\t\t\tlocus_tag\t" + this.locus + "\n";
