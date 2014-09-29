@@ -17,6 +17,7 @@ public class GenBankFeature {
     private String sequenceOntology;
     private String featureType;
     private String product;
+    private String name;
 
     private String proteinId = "";
 
@@ -28,12 +29,13 @@ public class GenBankFeature {
     private boolean isPseudo;
 
 
-    public GenBankFeature(String locus, boolean isPseudo, String sequenceOntology, String featureType, String sequence, String product) {
+    public GenBankFeature(String locus, boolean isPseudo, String sequenceOntology, String featureType, String sequence, String product, String name) {
         this.locus = locus;
         this.isPseudo = isPseudo;
         this.sequenceOntology = sequenceOntology;
         this.sequence = sequence;
         this.product = product;
+        this.name = name;
 
         if(featureType.equals("gene") || featureType.equals("cds") || featureType.equals("exon")) {
             this.featureType = featureType;
@@ -58,6 +60,7 @@ public class GenBankFeature {
         this.dbXrefs = genbankFeature.dbXrefs;
         this.sequence = genbankFeature.sequence;
         this.product = genbankFeature.product;
+        this.name = genbankFeature.name;
 
         this.featureType = featureType;
     }
@@ -91,6 +94,10 @@ public class GenBankFeature {
         String rv = locationsString(genbankFeatureKey);
         rv = rv + "\t\t\tlocus_tag\t" + this.locus + "\n";
         rv = rv + "\t\t\tproduct\t" + this.product + "\n";
+
+        if(this.name != null) {
+           rv = rv + "\t\t\tgene\t" + this.name + "\n";
+        }
 
         if(this.featureType.equals("cds")) {
             rv = rv + "\t\t\tprotein_id\t" + this.proteinId + "\n";
