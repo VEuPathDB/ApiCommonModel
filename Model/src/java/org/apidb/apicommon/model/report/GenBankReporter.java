@@ -162,7 +162,8 @@ public class GenBankReporter extends Reporter {
 
             GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product, name);
 
-            geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
+            //db_xref type taxon should be used on an OrgRef FEATURE only - tbl2asn
+            //geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
 
             // RULE:  Alias
             TableValue aliasRows = record.getTableValue("Alias");
