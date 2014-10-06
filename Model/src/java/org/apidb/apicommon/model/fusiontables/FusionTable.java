@@ -13,7 +13,6 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -23,7 +22,10 @@ import java.util.Set;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 
-import oracle.jdbc.driver.OracleDriver;
+import org.gusdb.fgputil.db.platform.SupportedPlatform;
+import org.gusdb.fgputil.db.pool.ConnectionPoolConfig;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
+import org.gusdb.fgputil.db.pool.SimpleDbConfig;
 
 import com.google.gdata.client.ClientLoginAccountType;
 import com.google.gdata.client.GoogleService;
@@ -295,8 +297,9 @@ public class FusionTable {
 	    password = in.readLine();
 	} catch (IOException e) {
 	}
-	DriverManager.registerDriver (new OracleDriver());
-	Connection dbc = DriverManager.getConnection("jdbc:oracle:oci:@" + instance, schema, password);
+	ConnectionPoolConfig config = SimpleDbConfig.create(
+	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
+	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
 
 	FusionTable ft = new FusionTable("");
 	String columnList = new String( (args.length == 4) ? args[3] : "");
