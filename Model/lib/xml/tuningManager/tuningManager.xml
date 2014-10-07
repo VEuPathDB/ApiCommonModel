@@ -1,6 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tuningConfig>
 
+<tuningTable name="ProjectTaxon">
+    <!-- table to be used by the apidb.project_id procedure -->
+    <externalDependency name="dots.ExternalNaSequence"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="core.ProjectInfo"/>
+    <sql>
+      <![CDATA[
+   CREATE TABLE ProjectTaxon&1 NOLOGGING AS
+   -- for valid taxons
+     ( SELECT  DISTINCT substr((tn.name), 1, instr(tn.name||' ', ' ') - 1) AS taxon, pi.name AS project_id 
+       FROM dots.externalNaSequence ens, sres.taxonName tn, core.projectInfo pi
+       WHERE ens.taxon_id = tn.taxon_id AND  tn.name_class = 'scientific name' 
+       AND tn.row_project_id = pi.project_id
+     INTERSECT    
+       SELECT tn.name AS taxon, pi.name AS project_id 
+       FROM sres.taxonName tn, core.projectInfo pi 
+       WHERE tn.row_project_id = pi.project_id AND  tn.name_class = 'scientific name' 
+     ) UNION 
+   -- for other entries
+   SELECT DISTINCT tn.name AS taxon, pi.name AS project_id
+   FROM dots.externalNaSequence ens, sres.taxonName tn, core.projectInfo pi
+   WHERE ens.taxon_id = tn.taxon_id AND tn.row_project_id = pi.project_id
+   AND  substr((tn.name), 1, instr(tn.name||' ', ' ') - 1) IN 
+      (SELECT DISTINCT substr((tn.name), 1, instr(tn.name||' ', ' ') - 1)
+      FROM   dots.externalNaSequence ens, sres.taxonName tn
+      WHERE ens.taxon_id = tn.taxon_id AND tn.name_class = 'scientific name' 
+      MINUS  
+      SELECT name  FROM sres.taxonname WHERE name_class = 'scientific name' 
+    ) 
+      ]]>
+    </sql>
+  </tuningTable>
+
 
   <tuningTable name="GoTermSummary">
     <!-- GoTermSummary: each row represents one GO term assignment to one gene.
@@ -5060,34 +5093,6 @@ tablespace indx
     </sql>
   </tuningTable>
 
-
- <tuningTable name="ProjectTaxa">
-    <!-- table to be used by the apidb.project_id procedure -->
-    <internalDependency name="IsolateAttributes"/>
-    <internalDependency name="EstAttributes"/>
-    <externalDependency name="sres.taxonName"/>
-    <externalDependency name="core.projectInfo"/>
-    <sql>
-      <![CDATA[
-       CREATE TABLE ProjectTaxa&1 NOLOGGING AS
-   -- valid taxons
-     ( SELECT  DISTINCT substr((organism), 1, instr(organism||' ', ' ') - 1) AS taxa, project_id FROM IsolateAttributes 
-     UNION
-       SELECT  DISTINCT  substr((organism), 1, instr(organism||' ', ' ') - 1) AS taxa, project_id FROM EstAttributes  )
-     INTERSECT    
-     SELECT tn.name AS taxa, pi.name AS project_id FROM sres.taxonName tn, core.projectInfo pi WHERE tn.row_project_id = pi.project_id 
-
-   UNION 
-   -- handle other entries
-   SELECT  DISTINCT organism AS name, project_id FROM IsolateAttributes 
-   WHERE substr((organism), 1, instr(organism||' ', ' ') - 1) IN 
-      (SELECT  DISTINCT substr((organism), 1, instr(organism||' ', ' ') - 1) AS name FROM IsolateAttributes 
-      MINUS  
-      SELECT name  FROM sres.taxonname 
-    ) 
-      ]]>
-    </sql>
-  </tuningTable>
 
 
   <tuningTable name="OrganismAbbreviation">
