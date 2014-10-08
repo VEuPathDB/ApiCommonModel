@@ -30,7 +30,7 @@ public class GenBankReporter extends Reporter {
     //private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
 
     private static final String DB_XREF_QUALIFIER_INTERPRO = "InterPro";
-    private static final String DB_XREF_QUALIFIER_NCBI_TAXON = "taxon";
+    //private static final String DB_XREF_QUALIFIER_NCBI_TAXON = "taxon";
     private static final String DB_XREF_QUALIFIER_ENTREZ_GENE = "GeneID";
     private static final String DB_XREF_QUALIFIER_GOA = "GOA";
     private static final String DB_XREF_QUALIFIER_GI = "GI";
@@ -158,11 +158,10 @@ public class GenBankReporter extends Reporter {
                 sequence = record.getAttributeValue("transcript_sequence").toString();
             }
 
-            String ncbiTaxId = record.getAttributeValue("ncbi_tax_id").toString();
-
             GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product, name);
 
             //db_xref type taxon should be used on an OrgRef FEATURE only - tbl2asn
+            //String ncbiTaxId = record.getAttributeValue("ncbi_tax_id").toString();
             //geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
 
             // RULE:  Alias
