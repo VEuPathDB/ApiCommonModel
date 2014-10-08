@@ -299,7 +299,7 @@ public class FusionTable {
 	}
 	ConnectionPoolConfig config = SimpleDbConfig.create(
 	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
-	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
+	Connection dbc = new DatabaseInstance(config).initialize("DB").getDataSource().getConnection();
 
 	FusionTable ft = new FusionTable("");
 	String columnList = new String( (args.length == 4) ? args[3] : "");
