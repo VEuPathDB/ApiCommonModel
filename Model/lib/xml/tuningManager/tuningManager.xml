@@ -1,35 +1,52 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tuningConfig>
 
-<tuningTable name="ProjectTaxon">
-    <!-- table to be used by the apidb.project_id procedure -->
+<tuningTable name="ProjectTaxon" prefixEnabled="true">
+    <!-- map taxon names to project_ids. to be used by the apidb.project_id function -->
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="core.ProjectInfo"/>
+    <externalDependency name="apidb.Organism"/>
     <sql>
       <![CDATA[
-   CREATE TABLE ProjectTaxon&1 NOLOGGING AS
-   -- for valid taxons
-     ( SELECT  DISTINCT substr((tn.name), 1, instr(tn.name||' ', ' ') - 1) AS taxon, pi.name AS project_id 
-       FROM dots.externalNaSequence ens, sres.taxonName tn, core.projectInfo pi
-       WHERE ens.taxon_id = tn.taxon_id AND  tn.name_class = 'scientific name' 
-       AND tn.row_project_id = pi.project_id
-     INTERSECT    
-       SELECT tn.name AS taxon, pi.name AS project_id 
-       FROM sres.taxonName tn, core.projectInfo pi 
-       WHERE tn.row_project_id = pi.project_id AND  tn.name_class = 'scientific name' 
-     ) UNION 
-   -- for other entries
-   SELECT DISTINCT tn.name AS taxon, pi.name AS project_id
-   FROM dots.externalNaSequence ens, sres.taxonName tn, core.projectInfo pi
-   WHERE ens.taxon_id = tn.taxon_id AND tn.row_project_id = pi.project_id
-   AND  substr((tn.name), 1, instr(tn.name||' ', ' ') - 1) IN 
-      (SELECT DISTINCT substr((tn.name), 1, instr(tn.name||' ', ' ') - 1)
-      FROM   dots.externalNaSequence ens, sres.taxonName tn
-      WHERE ens.taxon_id = tn.taxon_id AND tn.name_class = 'scientific name' 
-      MINUS  
-      SELECT name  FROM sres.taxonname WHERE name_class = 'scientific name' 
-    ) 
+        create table &prefixProjectTaxon&1 nologging as
+        with
+          local_taxon -- a taxon found in this instance, either in dots.ExternalNaSequence or in apidb.Organism
+          as (  select distinct tn.name as taxon,
+                       substr((tn.name), 1, instr(tn.name||' ', ' ') - 1) as first_word,
+                       pi.name as project_id
+                from dots.ExternalNaSequence ens, sres.TaxonName tn, core.ProjectInfo pi
+                where ens.taxon_id = tn.taxon_id
+                  and tn.name_class = 'scientific name' 
+                  and ens.row_project_id = pi.project_id
+              -- get names from apidb.Organism.family_name_for_files
+              -- (may not be necessary)
+              union
+                select family_name_for_files as taxon,
+                       substr((family_name_for_files), 1, instr(family_name_for_files||' ', ' ') - 1) as first_word,
+                       project_name as project_id
+                from apidb.Organism
+                where family_name_for_files in (select name from sres.TaxonName)
+                ),
+          mononym -- a taxon name that's the first word of a local taxon
+          as (select distinct lower(lt.first_word) as taxon, lt.project_id
+              from local_taxon lt, sres.TaxonName tn
+              where lt.first_word = tn.name
+                and tn.name_class = 'scientific name'),
+          full_name -- the full name of a local taxon whose first name is not a taxon
+          as (select distinct lower(lt.taxon) as taxon, lt.project_id
+              from local_taxon lt, sres.TaxonName tn
+              where lt.taxon = tn.name
+                and tn.name_class = 'scientific name'
+                and lower(lt.first_word) not in (select taxon from mononym))
+          select * from mononym
+        union
+          select * from full_name
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index projtax_ix&1 on &prefixProjectTaxon&1 (taxon, project_id)
       ]]>
     </sql>
   </tuningTable>
@@ -98,7 +115,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="DatasetExampleSourceId" prefixEnabled="false">
+  <tuningTable name="DatasetExampleSourceId">
     <!-- Each row maps a dataset onto an ID for which the dataset contains data;
          each dataset gets one such row.
          Used in dataset record queries.
@@ -134,7 +151,7 @@ where p.rn = 1
     </sql>
   </tuningTable>
 
-  <tuningTable name="GeneWord" prefixEnabled="false">
+  <tuningTable name="GeneWord">
     <!-- Each row maps a gene source_id to all words found in the gene's product field
          Used in the word enrichment analysis plugin
          The trick sql was cribbed and modified from: nuijten.blogspot.com/2011/08/splitting-comma-delimited-string-regexp.html
@@ -168,7 +185,7 @@ where p.rn = 1
     </sql>
   </tuningTable>
 
-  <tuningTable name="OrganismAttributes" prefixEnabled="true">
+  <tuningTable name="OrganismAttributes">
     <!-- Stores per-organism information. Used by the organism record, as well
          as by project_id(), the function that maps an organism to a project.
       -->
@@ -1451,6 +1468,7 @@ tablespace indx
     <internalDependency name="GeneId"/>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GenomicSequence"/>
+    <internalDependency name="ProjectTaxon"/>
     <internalDependency name="TaxonSpecies"/>
     <internalDependency name="SnpAttributes"/>
     <internalDependency name="UTR"/>
@@ -2243,6 +2261,7 @@ tablespace indx
          tables.
      -->
     <internalDependency name="GenomicSequence"/>
+    <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SequencePieceClosure"/>
     <externalDependency name="apidb.Synteny"/>
     <externalDependency name="dots.DbRefNaSequence"/>
@@ -2334,6 +2353,7 @@ create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequenc
          IsolateSnps.
      -->
     <internalDependency name="FeatureLocation"/>
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="apidb.Snp"/>
@@ -2463,6 +2483,7 @@ tablespace indx
          IsolateSnps.
      -->
     <internalDependency name="FeatureLocation"/>
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.SeqVariation"/>
@@ -2683,6 +2704,7 @@ tablespace indx
      -->
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GenomicSequence"/>
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="dots.Miscellaneous"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
@@ -2737,6 +2759,7 @@ tablespace indx
     <!-- Each row represents one EST. Used widely in the model, and to make the
          tuning tables BlastTypes, OrganismAbbreviationBlast, and OrganismAttributes.
      -->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.BlatAlignment"/>
     <externalDependency name="dots.Est"/>
     <externalDependency name="dots.ExternalNaSequence"/>
@@ -3915,9 +3938,10 @@ tablespace indx
          well as by GBrowse. Propagated to portal instances for use there.
      -->
     <internalDependency name="FeatureLocation"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SageTagAnalysisAttributes"/>
     <internalDependency name="SageTagGene"/>
-    <internalDependency name="GeneAttributes"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.SageTagFeature"/>
     <externalDependency name="rad.SageTag"/>
@@ -4576,6 +4600,7 @@ where sim.query_id = extq.na_sequence_id
     <!-- Each record stores the transcript sequence of one gene. Used by the
          gene record and the sequence retrieval tool. Propagated to the portal.
      -->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.SplicedNaSequence"/>
     <externalDependency name="sres.TaxonName"/>
@@ -4605,6 +4630,7 @@ tablespace indx
     <!-- Each record stores the coding sequence of one gene. Used by the
          gene record and the sequence retrieval tool. Propagated to the portal.
      -->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.SplicedNaSequence"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
@@ -4639,6 +4665,7 @@ tablespace indx
          gene record and the sequence retrieval tool, as well as by
          buildTrackOldAnnotationTT. Propagated to the portal.
      -->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
@@ -4673,9 +4700,10 @@ tablespace indx
          sequence record. Used by generatePathoLogicFile and the sequence
          retrieval tool Propagated to portal instances.
      -->
+    <internalDependency name="ProjectTaxon"/>
+    <internalDependency name="SequenceAttributes"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="sres.TaxonName"/>
-    <internalDependency name="SequenceAttributes"/>
     <sql>
       <![CDATA[
 CREATE TABLE NaSequence&1 NOLOGGING AS
@@ -4731,6 +4759,7 @@ tablespace indx
          relevant attribute query in the WDK EST record. Propagated to portal
          instances.
      -->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="sres.SequenceOntology"/>
     <externalDependency name="sres.TaxonName"/>
@@ -4759,6 +4788,7 @@ tablespace indx
   <tuningTable name="AssemblySequence">
     <!-- Holds the sequence of an assembly.
      -->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Assembly"/>
     <externalDependency name="sres.TaxonName"/>
     <sql>
