@@ -63,7 +63,7 @@ public class Ssgcid {
 	}
 	ConnectionPoolConfig config = SimpleDbConfig.create(
 	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
-	Connection dbc = new DatabaseInstance(config).initialize("DB").getDataSource().getConnection();
+	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
 
 	createTuningTable(dbc, suffix);
 
