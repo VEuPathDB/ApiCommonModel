@@ -98,7 +98,7 @@
   </tuningTable>
 
 
-  <tuningTable name="GoTermSummary">
+  <tuningTable name="GoTermSummary" prefixEnabled="true">
     <!-- GoTermSummary: each row represents one GO term assignment to one gene.
          (Typically, a gene has multiple such assignments.) This is used for
           finding gene-GO mappings, such as for the gene-page GO table.
@@ -116,7 +116,7 @@
     <externalDependency name="sres.GoTerm"/>
     <sql>
       <![CDATA[
-CREATE TABLE GoTermSummary&1 NOLOGGING AS
+CREATE TABLE &prefixGoTermSummary&1 NOLOGGING AS
 SELECT DISTINCT gf.source_id,
        decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as is_not,
               gt.go_id, gt.go_term_id, o.ontology, gt.name AS go_term_name,
@@ -154,7 +154,7 @@ ORDER BY o.ontology, gt.go_id
     </sql>
     <sql>
       <![CDATA[
-create index GoTermSum_sourceId_idx&1 ON GoTermSummary&1 (source_id)
+create index GoTermSum_sourceId_idx&1 ON &prefixGoTermSummary&1 (source_id)
 tablespace indx
       ]]>
     </sql>
@@ -1518,6 +1518,7 @@ tablespace indx
     <internalDependency name="TaxonSpecies"/>
     <internalDependency name="SnpAttributes"/>
     <internalDependency name="UTR"/>
+    <internalDependency name="GoTermSummary"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
     <externalDependency name="apidb.GeneFeatureName"/>
     <externalDependency name="apidb.GeneFeatureProduct"/>
@@ -1566,7 +1567,7 @@ SELECT source_id, ontology, source,
              apidb.tab_to_string(set(cast(COLLECT(go_id order by go_term_name) as apidb.varchartab)), ', ') AS go_ids
       FROM (SELECT source_id, ontology, 
                         DECODE(source, 'Interpro', 'predicted', 'annotated') AS source, go_term_name, go_id
-                 FROM  GoTermSummary
+                 FROM  &prefixGoTermSummary
                  )
       GROUP BY source_id, ontology, source
       ]]>
@@ -1856,7 +1857,7 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.SequenceOntology so,
                     sum(has_stop_codon) as hts_stop_codon_snps,
                     sum(is_noncoding_snp) as hts_noncoding_snps,
                     count(*) - sum(has_nonsynonymous_allele) - sum(has_stop_codon) - sum(is_noncoding_snp)  as hts_synonymous_snps
-             from snpattributes
+             from &prefixSnpAttributes
              where  gene_source_id is not null
              group by gene_source_id 
       ) ) tothtssnps, 
@@ -1889,7 +1890,7 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.SequenceOntology so,
      (select gene as source_id,
              substr(listagg (id, ',') within group (order by id), 1, 240) as uniprot_id,
              substr(listagg (id, '+or+') within group (order by id), 1, 240) as uniprot_id_internal
-      from GeneId
+      from &prefixGeneId
       where database_name like '%uniprot_dbxref_RSRC'
          or database_name like '%dbxref_gene2Uniprot_RSRC'
          or database_name = 'Links to Uniprot Genes'
@@ -2123,7 +2124,7 @@ tablespace indx
   update &prefixGeneAttributes&1 ga
   set five_prime_utr_length = (
     select u.utr_length from
-      ( select sum(length) utr_length, na_sequence_id, parent_id, is_reversed from UTR 
+      ( select sum(length) utr_length, na_sequence_id, parent_id, is_reversed from &prefixUTR 
         where direction = 5
         group by na_sequence_id, parent_id, is_reversed ) u
     where u.parent_id = ga.na_feature_id
@@ -2136,7 +2137,7 @@ tablespace indx
   update &prefixGeneAttributes&1 ga
   set three_prime_utr_length = (
     select u.utr_length from
-      ( select sum(length) utr_length, na_sequence_id, parent_id, is_reversed from UTR 
+      ( select sum(length) utr_length, na_sequence_id, parent_id, is_reversed from &prefixUTR 
         where direction = 3
         group by na_sequence_id, parent_id, is_reversed ) u
     where u.parent_id = ga.na_feature_id
@@ -2393,7 +2394,7 @@ create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequenc
   </tuningTable>
 
   <!-- NGS SNP only -->
-  <tuningTable name="SnpAttributes">
+  <tuningTable name="SnpAttributes" prefixEnabled="true">
     <!-- Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, including SnpSummary and
          IsolateSnps.
@@ -2409,7 +2410,7 @@ create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequenc
     <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
-CREATE TABLE SnpAttributes&1 NOLOGGING AS
+CREATE TABLE &prefixSnpAttributes&1 NOLOGGING AS
 SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        ed.name as dataset,
        sequence.na_sequence_id,
@@ -2449,7 +2450,7 @@ FROM apidb.Snp snp,
      sres.TaxonName tn, dots.NaSequence sequence,
      (SELECT gene.source_id, gene_loc.is_reversed, gene.na_feature_id,
              gene_loc.na_sequence_id
-      FROM dots.GeneFeature gene, FeatureLocation gene_loc
+      FROM dots.GeneFeature gene, &prefixFeatureLocation gene_loc
       WHERE gene.na_feature_id = gene_loc.na_feature_id
             and gene_loc.is_top_level = 1) gene_info,
      (
@@ -2484,39 +2485,39 @@ WHERE edr.external_database_release_id = snp.external_database_release_id
 
     <sql>
       <![CDATA[
-create unique index SnpAttr_source_id&1 ON SnpAttributes&1 (source_id)
+create unique index SnpAttr_source_id&1 ON &prefixSnpAttributes&1 (source_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index Snp_nafeat_dataset_ix&1
-       ON SnpAttributes&1 (dataset)
+       ON &prefixSnpAttributes&1 (dataset)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index Snp_Seq_ix&1
-       ON SnpAttributes&1 (na_sequence_id, dataset, location)
+       ON &prefixSnpAttributes&1 (na_sequence_id, dataset, location)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index Snp_Freq_ix&1
-       ON SnpAttributes&1 (dataset,major_allele_frequency,minor_allele_frequency)
+       ON &prefixSnpAttributes&1 (dataset,major_allele_frequency,minor_allele_frequency)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpAttr_ds_org_ix&1 on snpattributes&1 (dataset,organism)
+create index SnpAttr_ds_org_ix&1 on &prefixSnpAttributes&1 (dataset,organism)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpVariantIx&1 on SnpAttributes&1 (dataset, source_id, gene_source_id, location, position_in_protein)
+create index SnpVariantIx&1 on &prefixSnpAttributes&1 (dataset, source_id, gene_source_id, location, position_in_protein)
 tablespace indx
       ]]>
     </sql>
@@ -2579,7 +2580,7 @@ FROM dots.SnpFeature snp, FeatureLocation snp_loc,
      sres.TaxonName tn, dots.NaSequence sequence,
      (SELECT gene.source_id, gene_loc.is_reversed, gene.na_feature_id,
              gene_loc.na_sequence_id
-      FROM dots.GeneFeature gene, FeatureLocation gene_loc
+      FROM dots.GeneFeature gene, &prefixFeatureLocation gene_loc
       WHERE gene.na_feature_id = gene_loc.na_feature_id
             and gene_loc.is_top_level = 1) gene_info,
      (SELECT na_sequence_id, chromosome, chromosome_order_num
@@ -4881,7 +4882,7 @@ SELECT na_feature_id,parent_id,na_sequence_id,start_min,end_max,direction,is_rev
                WHEN exon_loc.is_reversed = 1 THEN 3 
                ELSE 0 END direction,
           exon_loc.is_reversed
-   FROM   FeatureLocation exon_loc, dots.GeneFeature gf, sres.SequenceOntology so
+   FROM   &prefixFeatureLocation exon_loc, dots.GeneFeature gf, sres.SequenceOntology so
    WHERE  exon_loc.feature_type = 'ExonFeature'
       AND gf.na_feature_id = exon_loc.parent_id
       AND gf.sequence_ontology_id = so.sequence_ontology_id
@@ -4900,7 +4901,7 @@ SELECT na_feature_id,parent_id,na_sequence_id,start_min,end_max,direction,is_rev
           WHEN exon_loc.is_reversed = 1 THEN 5 
           ELSE 0 END direction,
           exon_loc.is_reversed
-   FROM   FeatureLocation exon_loc, dots.GeneFeature gf, sres.SequenceOntology so
+   FROM   &prefixFeatureLocation exon_loc, dots.GeneFeature gf, sres.SequenceOntology so
    WHERE  exon_loc.feature_type = 'ExonFeature'
       AND gf.na_feature_id = exon_loc.parent_id
       AND gf.sequence_ontology_id = so.sequence_ontology_id
@@ -4918,7 +4919,7 @@ SELECT na_feature_id,parent_id,na_sequence_id,start_min,end_max,direction,is_rev
                 ELSE 0
                 END direction,
            exon_loc.is_reversed
-    FROM   FeatureLocation exon_loc, dots.exonfeature ef, dots.GeneFeature gf, sres.SequenceOntology so,
+    FROM   &prefixFeatureLocation exon_loc, dots.exonfeature ef, dots.GeneFeature gf, sres.SequenceOntology so,
            (select parent_id, max(order_number) as max_order_number from dots.exonfeature
             where coding_start is not null
             group by parent_id) eo
