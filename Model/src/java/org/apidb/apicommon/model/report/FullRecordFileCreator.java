@@ -13,9 +13,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
+import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.query.Column;
 import org.gusdb.wdk.model.query.Query;
@@ -29,7 +31,6 @@ import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.user.User;
-import org.gusdb.wsf.util.BaseCLI;
 
 /**
  * @author xingao
@@ -39,7 +40,6 @@ import org.gusdb.wsf.util.BaseCLI;
  */
 public class FullRecordFileCreator extends BaseCLI {
 
-    private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
     private static final String ARG_RECORD = "record";
     private static final String ARG_CACHE_TABLE = "cacheTable";
@@ -74,7 +74,7 @@ public class FullRecordFileCreator extends BaseCLI {
     /*
      * (non-Javadoc)
      * 
-     * @see org.gusdb.wsf.util.BaseCLI#declareOptions()
+     * @see org.gusdb.fgputil.BaseCLI#declareOptions()
      */
     @Override
     protected void declareOptions() {
@@ -100,7 +100,7 @@ public class FullRecordFileCreator extends BaseCLI {
     /*
      * (non-Javadoc)
      * 
-     * @see org.gusdb.wsf.util.BaseCLI#invoke()
+     * @see org.gusdb.fgputil.BaseCLI#invoke()
      */
     @Override
     public void execute() throws Exception {
@@ -194,7 +194,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
-            throws WdkModelException {
+            throws WdkModelException, WdkUserException {
         Question question = answerValue.getQuestion();
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();

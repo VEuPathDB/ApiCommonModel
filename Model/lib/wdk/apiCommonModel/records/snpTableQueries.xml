@@ -2,12 +2,12 @@
     <querySet name="SnpTables" queryType="table" isCacheable="false" includeProjects="ToxoDB,PlasmoDB,CryptoDB,EuPathDB,AmoebaDB,TriTrypDB">
 
       <defaultTestParamValues includeProjects="PlasmoDB">
-         <paramValue name="source_id">CombinedSNP.MAL13.6332</paramValue>
+         <paramValue name="source_id">NGS_SNP.Pf3D7_11_v3.1293957</paramValue>
          <paramValue name="project_id">PlasmoDB</paramValue>
       </defaultTestParamValues>
 
       <defaultTestParamValues includeProjects="ToxoDB">
-         <paramValue name="source_id">SNP_TGME49_chrVI_485196</paramValue>
+         <paramValue name="source_id">NGS_SNP.ABPA02001362.346</paramValue>
          <paramValue name="project_id">ToxoDB</paramValue>
       </defaultTestParamValues>
 
@@ -26,7 +26,7 @@
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
         <sqlQuery name="HTSStrainsTable" includeProjects="PlasmoDB,CryptoDB,AmoebaDB,ToxoDB,TriTrypDB" 
-              isCacheable="false">
+              isCacheable="false" doNotTest="1">
 
            <testParamValues includeProjects="CryptoDB">
                <paramValue name="source_id">NGS_SNP.AAEE01000002.1096761</paramValue>
@@ -43,18 +43,16 @@
             <column name="strain"/>
             <column name="allele"/>
             <column name="allele_gene_strand"/>
-            <column name="phenotype"/>
             <column name="product"/>
             <column name="coverage"/>
-            <column name="pvalue"/>
-            <column name="allele_percent"/>
+            <column name="read_frequency"/>
             <column name="view_align"/>
             <column name="has_align"/>
             <column name="isolate_source_id"/>
             <column name="haplogroup" includeProjects="ToxoDB"/>
             <sql includeProjects="PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB">
             <![CDATA[
-SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+SELECT distinct snp.source_id, '@PROJECT_ID@' AS project_id,
        b.source_id as isolate_source_id,
        var.strain as strain,
        var.allele,
@@ -62,46 +60,40 @@ SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
             WHEN snp.gene_source_id is null THEN ''
             ELSE var.allele 
        END as allele_gene_strand,
-       var.phenotype, 
+       decode(var.strain, snp.reference_strain, 1, 2) as strain_order,
        var.product,
        var.coverage, 
-       var.allele_percent,
-       var.pvalue,
+       var.read_percent as read_frequency,
        CASE WHEN b.source_id is null THEN ''
-            ELSE lower(snp.project_id) || 'htssnp' || 
-              '/?name=' || nas.source_id || ':' || to_char(l.start_min - 50) || '..' || to_char(l.start_min + 50) || 
-              ';l=' || d.name  || var.strain || '_CoverageDensity%1E' || 
-                       d.name || var.strain || '_CoverageXyplot%1E' || 
-                       d.name || var.strain || '_Alignment%1E' ||
-              ';h_region=' || nas.source_id || ':' || to_char(l.start_min) || '..' || to_char(l.start_min + 1) || '@red'  
+            ELSE lower(snp.project_id) || 
+              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || 
+              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
        END as view_align,
        CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
        d.name 
 FROM   apidbtuning.SnpAttributes snp, 
-      dots.SeqVariation var, 
+      apidb.SequenceVariation var, 
       study.study s, 
       rad.studybiomaterial sb, 
       study.biomaterial b, 
-      dots.snpfeature sf, 
-      dots.nalocation l, 
       dots.nasequence nas,
       SRES.externaldatabase d,
       sres.externaldatabaserelease r
-WHERE var.parent_id = snp.na_feature_id
- AND sf.na_feature_id = snp.na_feature_id
- AND l.na_feature_id = sf.na_feature_id
- AND nas.na_sequence_id = sf.na_sequence_id
- AND var.external_database_release_id = b.external_database_release_id(+)
- AND b.bio_material_id = sb.bio_material_id(+)
- AND sb.study_id = s.study_id(+)
- and s.external_database_release_id = r.external_database_release_id
- and r.external_database_id = d.external_database_id
- and snp.type = 'HTS'
-ORDER BY var.strain
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+  AND snp.location = var.location
+  AND nas.na_sequence_id = snp.na_sequence_id
+  AND var.external_database_release_id = b.external_database_release_id(+)
+  AND b.bio_material_id = sb.bio_material_id(+)
+  AND sb.study_id = s.study_id(+)
+  --and s.external_database_release_id = r.external_database_release_id
+  AND r.external_database_id = d.external_database_id
+  AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+ORDER BY strain_order, var.strain
              ]]>
            </sql>
            <sql includeProjects="ToxoDB">
-SELECT * FROM
+SELECT distinct * FROM 
 (
 SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
        b.source_id as isolate_source_id,
@@ -111,51 +103,48 @@ SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
             WHEN snp.gene_source_id is null THEN ''
             ELSE var.allele 
        END as allele_gene_strand,
-       var.phenotype, 
-       oe.value as haplogroup,
-       CASE WHEN oe.value = '6a' THEN 6
-            WHEN oe.value = '6b' THEN 6
-            WHEN oe.value = 'unknown' THEN 0
-            ELSE to_number(oe.value)
-       END as order_num,
        var.product,
        var.coverage, 
-       var.allele_percent,
-       var.pvalue,
+       bmc.value as haplogroup, 
+       CASE WHEN bmc.value = '6a' THEN 6
+            WHEN bmc.value = '6b' THEN 6
+            WHEN bmc.value = 'unknown' THEN 0
+            ELSE to_number(bmc.value)
+       END as order_num, 
+       var.read_percent as read_frequency,
+       var.p_value as pvalue,
        CASE WHEN b.source_id is null THEN ''
-            ELSE lower(snp.project_id) || 'htssnp' || 
-              '/?name=' || nas.source_id || ':' || to_char(l.start_min - 50) || '..' || to_char(l.start_min + 50) || 
-              ';l=' || d.name || var.strain || '_CoverageDensity%1E' || 
-                       d.name || var.strain || '_CoverageXyplot%1E' || 
-                       d.name || var.strain || '_Alignment%1E' ||
-              ';h_region=' || nas.source_id || ':' || to_char(l.start_min) || '..' || to_char(l.start_min + 1) || '@red'  
+            ELSE lower(snp.project_id) || 
+              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || 
+              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
        END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align
+       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
+       d.name 
 FROM   apidbtuning.SnpAttributes snp, 
-      dots.SeqVariation var, 
-      study.study s, 
-      rad.studybiomaterial sb, 
-      study.biomaterial b, 
-      dots.snpfeature sf, 
-      dots.nalocation l, 
-      dots.nasequence nas,
-      study.ontologyentry oe,
-      study.biomaterialcharacteristic bc, 
-      SRES.externaldatabase d,
-      sres.externaldatabaserelease r
-WHERE var.parent_id = snp.na_feature_id
- AND sf.na_feature_id = snp.na_feature_id
- AND l.na_feature_id = sf.na_feature_id
- AND nas.na_sequence_id = sf.na_sequence_id
- AND var.external_database_release_id = b.external_database_release_id(+)
- AND b.bio_material_id = sb.bio_material_id(+)
- AND sb.study_id = s.study_id(+)
- AND sb.bio_material_id = bc.bio_material_id 
- AND bc.ontology_entry_id = oe.ontology_entry_id
- AND oe.category = 'Haplogroup'
- and snp.type = 'HTS'
- and s.external_database_release_id = r.external_database_release_id
- and r.external_database_id = d.external_database_id
+       apidb.SequenceVariation var, 
+       study.study s, 
+       rad.studybiomaterial sb, 
+       Study.Ontologyentry oe,
+       Study.Biomaterialcharacteristic Bmc,
+       study.biomaterial b, 
+       dots.nasequence nas,
+       SRES.externaldatabase d,
+       sres.externaldatabaserelease r
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+  AND snp.location = var.location
+  AND nas.na_sequence_id = snp.na_sequence_id
+  AND var.external_database_release_id = b.external_database_release_id(+)
+  and Bmc.Bio_Material_Id = b.Bio_Material_Id
+  AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+  AND b.bio_material_id = sb.bio_material_id(+)
+  AND sb.study_id = s.study_id(+)
+  --AND s.external_database_release_id = r.external_database_release_id
+  AND r.external_database_id = d.external_database_id
+  AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+  AND oe.category ='BioMaterialCharacteristics' 
+  AND oe.value ='Haplogroup'
+--ORDER BY order_num, var.strain
 UNION
 SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
        b.source_id as isolate_source_id,
@@ -165,109 +154,126 @@ SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
             WHEN snp.gene_source_id is null THEN ''
             ELSE var.allele 
        END as allele_gene_strand,
-       var.phenotype, 
-       CASE WHEN var.strain = 'RH' THEN '1'
-            WHEN var.strain = 'ME49' THEN '2'
-            END as haplogroup,
-       CASE WHEN var.strain = 'RH' THEN 1
-            WHEN var.strain = 'ME49' THEN 2
-            END as order_num,
        var.product,
        var.coverage, 
-       var.allele_percent,
-       var.pvalue,
+       decode (var.strain, 'ME49', '2', 'unknown') as haplogroup, 
+       CASE WHEN bmc.value is null THEN 0
+            ELSE to_number(bmc.value)
+       END as order_num, 
+       var.read_percent as read_frequency,
+       var.p_value as pvalue,
        CASE WHEN b.source_id is null THEN ''
             ELSE lower(snp.project_id) || 
-              '/?name=' || nas.source_id || ':' || to_char(l.start_min - 50) || '..' || to_char(l.start_min + 50) || 
-              ';l=' || d.name || var.strain || '_CoverageDensity%1E' || 
-                       d.name || var.strain || '_CoverageXyplot%1E' || 
-                       d.name || var.strain || '_Alignment%1E' ||
-              ';h_region=' || nas.source_id || ':' || to_char(l.start_min) || '..' || to_char(l.start_min + 1) || '@red'  
+              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || '_' || var.strain || 
+              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
        END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align
+       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
+       d.name 
 FROM   apidbtuning.SnpAttributes snp, 
-      dots.SeqVariation var, 
-      study.study s, 
-      rad.studybiomaterial sb, 
-      study.biomaterial b, 
-      dots.snpfeature sf, 
-      dots.nalocation l, 
-      dots.nasequence nas,
-      SRES.externaldatabase d,
-      sres.externaldatabaserelease r
-WHERE var.parent_id = snp.na_feature_id
- AND sf.na_feature_id = snp.na_feature_id
- AND l.na_feature_id = sf.na_feature_id
- AND nas.na_sequence_id = sf.na_sequence_id
- AND var.external_database_release_id = b.external_database_release_id(+)
- AND b.bio_material_id = sb.bio_material_id(+)
- AND sb.study_id = s.study_id(+)
- AND var.strain in ('ME49', 'RH')
- and snp.type = 'HTS'
- and s.external_database_release_id = r.external_database_release_id
- and r.external_database_id = d.external_database_id
+       apidb.SequenceVariation var, 
+       study.study s, 
+       rad.studybiomaterial sb, 
+       Study.Ontologyentry oe,
+       Study.Biomaterialcharacteristic Bmc,
+       study.biomaterial b, 
+       dots.nasequence nas,
+       SRES.externaldatabase d,
+       sres.externaldatabaserelease r
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+  AND snp.location = var.location
+  AND nas.na_sequence_id = snp.na_sequence_id
+  AND var.external_database_release_id = b.external_database_release_id(+)
+  AND b.bio_material_id = sb.bio_material_id(+)
+  AND sb.study_id = s.study_id(+)
+
+  and Bmc.Bio_Material_Id(+) = b.Bio_Material_Id
+  AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id(+)
+
+  --AND s.external_database_release_id = r.external_database_release_id
+  AND r.external_database_id = d.external_database_id
+	 AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+  AND oe.category is null
+  AND oe.value is null
+	and snp.REFERENCE_STRAIN = var.strain
 )
 order by order_num, strain 
+
+
            </sql>
         </sqlQuery>
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Allele count -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+       <sqlQuery name="AlleleCount" includeProjects="ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="allele_count"/>
+            <column name="allele"/>
+            <sql>
+                <![CDATA[
+           SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+                  count(*) as allele_count, var.allele
+           FROM   apidbtuning.SnpAttributes snp, 
+                  apidb.sequencevariation var
+           WHERE  snp.na_sequence_id = var.ref_na_sequence_id
+              AND snp.location = var.location
+           GROUP BY snp.source_id, var.allele
+           ORDER BY var.allele
+                ]]>
+            </sql>
+       </sqlQuery>
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Product count -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+       <sqlQuery name="ProductCount" includeProjects="ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="product_count"/>
+            <column name="product"/>
+            <sql>
+                <![CDATA[
+           SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+                  count(*) as product_count, var.product
+           FROM   apidbtuning.SnpAttributes snp, 
+                  apidb.sequencevariation var
+           WHERE  snp.na_sequence_id = var.ref_na_sequence_id
+              AND snp.location = var.location
+              AND var.product is not null
+           GROUP BY snp.source_id, var.product
+           ORDER BY var.product
+                ]]>
+            </sql>
+       </sqlQuery>
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Providers -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-        <sqlQuery name="Providers" includeProjects="ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB" 
+        <sqlQuery name="Providers" includeProjects="PlasmoDB" 
                isCacheable="false">
             <column name="source_id" />
             <column name="project_id" />
-            <column name="source_id_link"/>
+            <column name="snpchip_source_id"/>
             <column name="name"/>
-            <sqlParamValue name="name" includeProjects="ToxoDB,PlasmoDB,CryptoDB,AmoebaDB">
-                      DECODE(ed.name, 'InsertSnps.pm NGS SNPs INTERNAL', 'HTS SNPs', dsa.display_name)
-            </sqlParamValue>
-            <sqlParamValue name="name" includeProjects="TriTrypDB">
-                      DECODE(ed.name, 'InsertSnps.pm NGS SNPs INTERNAL', 'HTS SNPs', ed.name)
-            </sqlParamValue>
-            <sqlParamValue name="filter" includeProjects="PlasmoDB">
-                and sb.source_id != sa.source_id
-            </sqlParamValue>
-            <sqlParamValue name="filter" includeProjects="ToxoDB,CryptoDB,AmoebaDB,TriTrypDB">
-            </sqlParamValue>
 
-            <sql includeProjects="ToxoDB,PlasmoDB,CryptoDB,AmoebaDB">
+            <sql>
             <![CDATA[
-               SELECT sa.source_id, '@PROJECT_ID@' AS project_id,
-               sb.source_id as source_id_link,
-               &&name&& as name
-               FROM  dots.SnpFeature sa, dots.snpfeature sb, dots.nalocation la, dots.nalocation lb,
-                     sres.externaldatabase ed, sres.externaldatabaserelease edr,
-                      apidbtuning.DatasetPresenter dsa
-               WHERE sa.na_feature_id = la.na_feature_id
-                and sb.na_feature_id = lb.na_feature_id
-                and sa.na_sequence_id = sb.na_sequence_id
-                and la.start_min = lb.start_min
-                &&filter&&
-                and sb.external_database_release_id = edr.external_database_release_id
-                and edr.external_database_id = ed.external_database_id
-                and ed.name = dsa.name
+SELECT sb.source_id, '@PROJECT_ID@' AS project_id,
+       sa.source_id as snpchip_source_id, sa.dataset as name
+FROM   apidbtuning.SnpChipAttributes sa, 
+       apidbtuning.snpattributes sb
+WHERE  sa.na_sequence_id = sb.na_sequence_id
+   and sa.start_min = sb.location
+   and sb.source_id != sa.source_id
+   and sa.type in ('Broad_barcode','Broad_3k_chip','Broad_hd_array')
              ]]>
            </sql>
 
-            <sql includeProjects="TriTrypDB">
-            <![CDATA[
-               SELECT sa.source_id, '@PROJECT_ID@' AS project_id,
-               sb.source_id as source_id_link,
-               &&name&& as name
-               FROM  dots.SnpFeature sa, dots.snpfeature sb, dots.nalocation la, dots.nalocation lb,
-                     sres.externaldatabase ed, sres.externaldatabaserelease edr
-               WHERE sa.na_feature_id = la.na_feature_id
-                and sb.na_feature_id = lb.na_feature_id
-                and sa.na_sequence_id = sb.na_sequence_id
-                and la.start_min = lb.start_min
-                &&filter&&
-                and sb.external_database_release_id = edr.external_database_release_id
-                and edr.external_database_id = ed.external_database_id
-             ]]>
-           </sql>
         </sqlQuery>
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -315,130 +321,4 @@ order by order_num, strain
         </sqlQuery>
     </querySet>
 
-
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Legacy SNP / SNP Chip (PlasmoDB) table query -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <querySet name="SnpChipTables" queryType="table" isCacheable="false" includeProjects="ToxoDB,PlasmoDB,CryptoDB,EuPathDB">
-
-      <defaultTestParamValues includeProjects="PlasmoDB">
-         <paramValue name="source_id">CombinedSNP.MAL13.6332</paramValue>
-         <paramValue name="project_id">PlasmoDB</paramValue>
-      </defaultTestParamValues>
-
-      <defaultTestParamValues includeProjects="ToxoDB">
-         <paramValue name="source_id">SNP_TGME49_chrVI_485196</paramValue>
-         <paramValue name="project_id">ToxoDB</paramValue>
-      </defaultTestParamValues>
-
-      <defaultTestParamValues includeProjects="CryptoDB">
-         <paramValue name="source_id">chr3-2_66329</paramValue>
-         <paramValue name="project_id">CryptoDB</paramValue>
-      </defaultTestParamValues>
-
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Strains for sequencing SNPs -->  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-        <sqlQuery name="Strains" includeProjects="PlasmoDB,ToxoDB,CryptoDB" 
-              isCacheable="false">
-            <column name="source_id" />
-            <column name="project_id" />
-            <column name="strain"/>
-            <column name="allele"/>
-            <column name="allele_gene_strand"/>
-            <column name="phenotype"/>
-            <column name="product"/>
-            <sql>
-            <![CDATA[
-SELECT snp.source_id, 
-       '@PROJECT_ID@' AS project_id,
-       CASE WHEN var.strain = 'iowa_II' THEN 'IOWA II'
-            WHEN var.strain = 'md' THEN 'MD'
-            WHEN var.strain = 'tu114' THEN 'TU114'
-       ELSE var.strain
-       END as strain,
-       CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN snp.gene_source_id is null THEN ''
-       ELSE var.allele 
-       END as allele_gene_strand,
-       var.allele,
-       var.phenotype, 
-       var.product
-FROM   ApiDBTuning.SnpAttributes snp, 
-       DoTS.SeqVariation var, 
-       DoTS.SnpFeature sf, 
-       DoTS.NALocation l, 
-       DoTS.NASequence s
-WHERE  var.parent_id = snp.na_feature_id
-   AND sf.na_feature_id = snp.na_feature_id
-   AND l.na_feature_id = sf.na_feature_id
-   AND s.na_sequence_id = sf.na_sequence_id
-   AND snp.type != 'HTS'
-ORDER BY var.strain
-             ]]>
-           </sql>
-        </sqlQuery>
-
-        <sqlQuery name="StrainsWithMetaData" includeProjects="PlasmoDB" 
-              isCacheable="false">
-            <column name="source_id" />
-            <column name="project_id" />
-            <column name="strain"/>
-            <column name="allele"/>
-            <column name="isolate_id"/>
-            <column name="country"/>
-            <column name="allele_gene_strand"/>
-            <column name="phenotype"/>
-            <column name="product"/>
-            <sql>
-            <![CDATA[
-SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
-       strain.isolate_id, 
-       var.strain,
-       geolocation.value as country,
-       CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN sa.gene_source_id is null THEN ''
-       ELSE var.allele 
-       END as allele_gene_strand,
-       var.allele,
-       var.phenotype, 
-       var.product
-FROM  dots.snpfeature snp, 
-      dots.seqvariation var,
-      apidbtuning.SnpAttributes sa,
-      ( SELECT bmc.value as strain, bs.name as isolate_id, sbm.BIO_MATERIAL_ID, 
-              s.study_id, s.EXTERNAL_DATABASE_RELEASE_ID
-        FROM  study.study s,
-              RAD.STUDYBIOMATERIAL sbm,
-              study.biosample bs,
-              STUDY.BIOMATERIALCHARACTERISTIC bmc
-        WHERE s.study_id = sbm.study_id
-          AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-          AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-          AND bmc.ONTOLOGY_ENTRY_ID = 96 -- Strain
-      ) strain,
-      ( SELECT bmc.value, bs.name as isolate_id, sbm.BIO_MATERIAL_ID, s.study_id, s.external_database_release_id
-        FROM  study.study s,
-              RAD.STUDYBIOMATERIAL sbm,
-              study.biosample bs,
-              STUDY.BIOMATERIALCHARACTERISTIC bmc
-         WHERE s.study_id = sbm.study_id
-           AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-           AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-           AND bmc.ONTOLOGY_ENTRY_ID = 73 -- GeographicalLocation
-       ) geolocation
-WHERE var.parent_id = snp.na_feature_id
-  AND sa.na_feature_id = snp.na_feature_id
-  AND snp.external_database_release_id = 1948
-  --and snp.source_id = 'Pf_01_000130573_barcode'
-  AND strain.strain = var.strain
-  AND strain.external_database_release_id = var.external_database_release_id
-  AND geolocation.bio_material_id = strain.bio_material_id
-             ]]>
-        </sql>
-      </sqlQuery>
-
-    </querySet>
 </wdkModel>

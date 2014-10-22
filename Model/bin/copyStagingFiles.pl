@@ -8,9 +8,10 @@ use File::Find;
 use File::Basename;
 use Getopt::Long;
 
-my ($help, $configFile, $outputDir, $includeProjects, $buildNumber, $mode);
+my ($help, $configFile, $outputDir, $includeProjects, $buildNumber, $mode, $mercator);
 &GetOptions('help|h' => \$help,
 	    'mode=s' => \$mode,
+	    'mercator=s' => \$mercator,
             'configFile=s' => \$configFile,
 	    'includeProjects=s' => \$includeProjects,
 	    'buildNumber=s' => \$buildNumber,
@@ -85,7 +86,20 @@ foreach my $p (@projects) {
 
   } elsif ($mode eq 'link') {
       print "Making LINKS \n";
-      system("cp -ap -s $stagingDir{$p} $destDir");
+      if ($mercator eq "no") { # ignore mercator_pairwise directory while making links
+	  opendir my $dir, $stagingDir{$p} or die "Cannot open directory: $!";
+	  my @files = grep { $_ ne '.' && $_ ne '..' } readdir $dir;
+	  system ("mkdir $destDir");
+	  foreach my $f (@files) {
+	      if ( $f ne 'mercator_pairwise') {
+		  system("mkdir $destDir/$f");
+		  system("cp -ap -s $stagingDir{$p}/$f $destDir/");
+	      }
+	  }
+	  closedir $dir;
+      } else {
+	  system("cp -ap -s $stagingDir{$p} $destDir");
+      }
   }
 
   ## fix Blast file names
@@ -119,7 +133,7 @@ sub usage {
   if($e) {
     print STDERR $e . "\n";
   }
-  print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> -- buildNumber <NUM> (--outputDir <DIR> --mode <copy|link>)\n";
+  print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> --buildNumber <NUM> (--outputDir <DIR> --mode <copy|link> --mercator <no>)\n";
   exit;
 }
 

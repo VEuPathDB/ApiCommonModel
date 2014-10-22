@@ -18,10 +18,6 @@ import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.dbms.CacheFactory;
-import org.gusdb.wdk.model.dbms.QueryInfo;
-import org.gusdb.wdk.model.dbms.ResultFactory;
-import org.gusdb.wdk.model.query.QueryInstance;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
@@ -107,19 +103,19 @@ public class Gff3CachedReporter extends Reporter {
      * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
      */
     @Override
-    public void configure(Map<String, String> config) {
-        super.configure(config);
+    public void configure(Map<String, String> newConfig) {
+        super.configure(newConfig);
 
         // include transcript
-        if (config.containsKey(FIELD_HAS_TRANSCRIPT)) {
-            String value = config.get(FIELD_HAS_TRANSCRIPT);
+        if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
+            String value = newConfig.get(FIELD_HAS_TRANSCRIPT);
             hasTranscript = (value.equalsIgnoreCase("yes") || value
                     .equalsIgnoreCase("true")) ? true : false;
         }
 
         // include protein
-        if (config.containsKey(FIELD_HAS_PROTEIN)) {
-            String value = config.get(FIELD_HAS_PROTEIN);
+        if (newConfig.containsKey(FIELD_HAS_PROTEIN)) {
+            String value = newConfig.get(FIELD_HAS_PROTEIN);
             hasProtein = (value.equalsIgnoreCase("yes") || value
                     .equalsIgnoreCase("true")) ? true : false;
         }
@@ -188,10 +184,10 @@ public class Gff3CachedReporter extends Reporter {
             writeSequences(writer);
     }
 
-    private void writeHeader(PrintWriter writer) throws WdkModelException {
-        writer.println("##gff-version\t3");
-        writer.println("##feature-ontology\tso.obo");
-        writer.println("##attribute-ontology\tgff3_attributes.obo");
+    private void writeHeader(PrintWriter writer) throws WdkModelException, NumberFormatException, WdkUserException {
+        writer.println("##gff-version 3");
+        writer.println("# feature-ontology so.obo");
+        writer.println("# attribute-ontology gff3_attributes.obo");
         writer.flush();
 
         // get the sequence regions
@@ -223,13 +219,12 @@ public class Gff3CachedReporter extends Reporter {
         // put sequence id into the header
         for (String seqId : regions.keySet()) {
             int[] region = regions.get(seqId);
-            writer.println("##sequence-region\t" + seqId + "\t" + region[0]
-                    + "\t" + region[1]);
+            writer.println("##sequence-region " + seqId + " " + region[0] + " " + region[1]);
         }
         writer.flush();
     }
 
-    private void writeRecords(PrintWriter writer) throws WdkModelException {
+    private void writeRecords(PrintWriter writer) throws WdkModelException, WdkUserException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
@@ -265,19 +260,14 @@ public class Gff3CachedReporter extends Reporter {
         }
     }
 
-    private void writeSequences(PrintWriter writer) throws WdkModelException {
+    private void writeSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
         // get primary key columns
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField()
                 .getColumnRefs();
 
-        // get cache info
-        ResultFactory resultFactory = wdkModel.getResultFactory();
-        CacheFactory cacheFactory = resultFactory.getCacheFactory();
-        QueryInstance instance = baseAnswer.getIdsQueryInstance();
-        QueryInfo queryInfo = cacheFactory.getQueryInfo(instance.getQuery());
-        String cacheTable = queryInfo.getCacheTable();
-        int instanceId = instance.getInstanceId();
+        // get id sql
+        String idSql = baseAnswer.getSortedIdSql();
 
         // construct in clause
         StringBuffer sqlIn = new StringBuffer();
@@ -291,15 +281,12 @@ public class Gff3CachedReporter extends Reporter {
 
         StringBuffer sql = new StringBuffer("SELECT ");
         sql.append("tc.").append(COLUMN_CONTENT).append(" FROM ");
-        sql.append(tableCache).append(" tc, ").append(cacheTable).append(" ac");
+        sql.append(tableCache).append(" tc, (").append(idSql).append(") ac");
         sql.append(" WHERE tc.table_name IN (").append(sqlIn).append(")");
         for (String column : pkColumns) {
-            sql.append(" AND tc.").append(column).append(" = ac.")
-                    .append(column);
+            sql.append(" AND tc.").append(column).append(" = ac.").append(column);
         }
-        sql.append(" AND ac.").append(CacheFactory.COLUMN_INSTANCE_ID);
-        sql.append(" = ").append(instanceId);
-        sql.append(" ORDER BY tc.table_name ASC");
+        // sql.append(" ORDER BY tc.table_name ASC");
 
         DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
@@ -324,7 +311,7 @@ public class Gff3CachedReporter extends Reporter {
     }
 
     private String getValue(AttributeValue attrVal)
-            throws WdkModelException {
+            throws WdkModelException, WdkUserException {
         String value;
         if (attrVal == null) {
             return null;

@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.OutputStream;
@@ -23,7 +20,6 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
-import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
@@ -182,7 +178,6 @@ public class Gff3Reporter extends Reporter {
       for (String column : pkColumns) {
         sqlQuery.append(" AND ").append(column).append(" = ?");
       }
-      WdkModel wdkModel = baseAnswer.getQuestion().getWdkModel();
       DataSource dataSource = wdkModel.getAppDb().getDataSource();
       try {
         psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
@@ -208,12 +203,13 @@ public class Gff3Reporter extends Reporter {
    * The initialize() method has to be called before this method.
    * 
    * @param writer
+   * @throws WdkUserException 
    */
   void writeHeader(PrintWriter writer) throws WdkModelException,
-      NumberFormatException {
-    writer.println("##gff-version\t3");
-    writer.println("##feature-ontology\tso.obo");
-    writer.println("##attribute-ontology\tgff3_attributes.obo");
+      NumberFormatException, WdkUserException {
+    writer.println("##gff-version 3");
+    writer.println("# feature-ontology so.obo");
+    writer.println("# attribute-ontology gff3_attributes.obo");
     writer.flush();
 
     // get the sequence regions
@@ -243,8 +239,7 @@ public class Gff3Reporter extends Reporter {
     // put sequence id into the header
     for (String seqId : regions.keySet()) {
       int[] region = regions.get(seqId);
-      writer.println("##sequence-region\t" + seqId + "\t" + region[0] + "\t"
-          + region[1]);
+      writer.println("##sequence-region " + seqId + " " + region[0] + " " + region[1]);
     }
     writer.flush();
   }
@@ -258,7 +253,6 @@ public class Gff3Reporter extends Reporter {
       SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
-    WdkModel wdkModel = question.getWdkModel();
     DatabaseInstance appDb = wdkModel.getAppDb();
 
     RecordClass recordClass = question.getRecordClass();
@@ -487,7 +481,6 @@ public class Gff3Reporter extends Reporter {
       SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
-    WdkModel wdkModel = question.getWdkModel();
     DatabaseInstance appDb = wdkModel.getAppDb();
     RecordClass recordClass = question.getRecordClass();
     String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
@@ -648,7 +641,7 @@ public class Gff3Reporter extends Reporter {
     return getValue(attributeMap.getAttributeValue(field));
   }
 
-  private String getValue(AttributeValue attrVal) throws WdkModelException {
+  private String getValue(AttributeValue attrVal) throws WdkModelException, WdkUserException {
     String value;
     if (attrVal == null) {
       return null;

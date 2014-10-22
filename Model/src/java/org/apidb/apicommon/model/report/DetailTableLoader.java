@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.BufferedReader;
@@ -15,15 +12,19 @@ import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.platform.DBPlatform;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
+import org.gusdb.wdk.model.WdkRuntimeException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.FieldScope;
@@ -34,7 +35,6 @@ import org.gusdb.wdk.model.record.attribute.ColumnAttributeField;
 import org.gusdb.wdk.model.record.attribute.LinkAttributeField;
 import org.gusdb.wdk.model.record.attribute.PrimaryKeyAttributeField;
 import org.gusdb.wdk.model.record.attribute.TextAttributeField;
-import org.gusdb.wsf.util.BaseCLI;
 
 /**
  * @author xingao, steve fischer
@@ -43,8 +43,33 @@ import org.gusdb.wsf.util.BaseCLI;
  * 
  */
 public class DetailTableLoader extends BaseCLI {
+  
+  private static class DumpTableTask implements Runnable {
+    
+    private final DetailTableLoader loader;
+    private final String idSql;
+    private final TableField table;
+    
+    public DumpTableTask(DetailTableLoader loader, String idSql, TableField table) {
+      this.loader = loader;
+      this.idSql = idSql;
+      this.table = table;
+    }
 
-  private static final String ARG_PROJECT_ID = "model";
+    @Override
+    public void run() {
+      try {
+        loader.dumpTable(table, idSql);
+      }
+      catch (WdkModelException | WdkUserException | SQLException ex) {
+        throw new WdkRuntimeException(ex);
+      }
+    }
+  }
+
+  private static final int THREAD_POOL_SIZE = 10;
+  private static final int INSERT_BATCH_SIZE = 100;
+  
   private static final String ARG_SQL_FILE = "sqlFile";
   private static final String ARG_RECORD = "record";
   private static final String ARG_TABLE_FIELD = "field";
@@ -72,6 +97,7 @@ public class DetailTableLoader extends BaseCLI {
       creator.invoke(args);
     }
     finally {
+      // always exit normally(?)
       System.exit(0);
     }
   }
@@ -108,7 +134,7 @@ public class DetailTableLoader extends BaseCLI {
   /*
    * (non-Javadoc)
    * 
-   * @see org.gusdb.wsf.util.BaseCLI#invoke()
+   * @see org.gusdb.fgputil.BaseCLI#invoke()
    */
   @Override
   public void execute() throws Exception {
@@ -131,6 +157,9 @@ public class DetailTableLoader extends BaseCLI {
     logger.debug("getting tables...");
     RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
     Map<String, TableField> tables = recordClass.getTableFieldMap();
+    
+    // dump tables in parallel
+    ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
     if (fieldNames != null) { // dump individual table
       // all tables are available in this context
       String[] names = fieldNames.split(",");
@@ -139,7 +168,7 @@ public class DetailTableLoader extends BaseCLI {
         TableField table = tables.get(fieldName);
         if (table == null)
           throw new WdkModelException("The table field doesn't exist: " + fieldName);
-        dumpTable(table, idSql);
+        executor.execute(new DumpTableTask(this, idSql, table));
       }
     }
     else { // no table specified, only dump tables with a specific flag
@@ -147,9 +176,12 @@ public class DetailTableLoader extends BaseCLI {
         String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
         if (props.length > 0 && props[0].equalsIgnoreCase("true"))
           continue;
-        dumpTable(table, idSql);
+        executor.execute(new DumpTableTask(this, idSql, table));
       }
     }
+    executor.shutdown();
+    // no need of timeout here, just wait till the end of the world; or when you CTRL+C...
+    while (!executor.isTerminated()){}
 
     long end = System.currentTimeMillis();
     logger.info("Total time: " + ((end - start) / 1000.0) + " seconds");
@@ -188,12 +220,6 @@ public class DetailTableLoader extends BaseCLI {
       return;
     }
 
-    logger.debug("getting data source...");
-    DataSource updateDataSource = wdkModel.getAppDb().getDataSource();
-    logger.debug("getting connection...");
-    Connection updateConnection = updateDataSource.getConnection();
-    logger.debug("Connection obtained...");
-
     String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
     String pkNames;
     String pkBind;
@@ -216,16 +242,26 @@ public class DetailTableLoader extends BaseCLI {
     String insertSql = "insert into " + detailTable + " (" + pkNames +
         ", field_name, field_title, row_count, content, " + " modification_date) values(" + pkBind +
         ",?,?,?,?,?)";
+    Connection updateConnection = null;
+    PreparedStatement insertStmt = null;
     try {
+      logger.debug("getting data source...");
+      DataSource updateDataSource = wdkModel.getAppDb().getDataSource();
+      logger.debug("getting connection...");
+      updateConnection = updateDataSource.getConnection();
+      logger.debug("Connection obtained...");
+
       logger.debug("disabling auto commit...");
       updateConnection.setAutoCommit(false);
       logger.debug("deleting old result...");
       deleteRows(idSql, pkNames, table.getName(), updateConnection);
 
-      PreparedStatement insertStmt = updateConnection.prepareStatement(insertSql);
+      insertStmt = updateConnection.prepareStatement(insertSql);
       logger.info("Dumping table [" + table.getName() + "]");
+
       logger.debug("aggregating data...");
       int[] counts = aggregateLocally(table, idSql, insertStmt, insertSql, pkColumns);
+
       long startCommit = System.currentTimeMillis();
       updateConnection.commit();
       long end = System.currentTimeMillis();
@@ -242,8 +278,8 @@ public class DetailTableLoader extends BaseCLI {
     finally {
       if (updateConnection != null) {
         updateConnection.setAutoCommit(true);
-        updateConnection.close();
       }
+      SqlUtils.closeQuietly(insertStmt, updateConnection);
     }
   }
 
@@ -270,55 +306,65 @@ public class DetailTableLoader extends BaseCLI {
     String wrappedSql = getWrappedSql(table, idSql, pkColumns);
 
     logger.debug("wrapped sql:\n" + wrappedSql);
-    ResultSet resultSet = SqlUtils.executeQuery(queryDataSource, wrappedSql, table.getQuery().getFullName() +
-        "__api-report-detail-aggregate", 2000);
-    String pk0 = "";
-    String pk1 = "";
-    String prevPk0 = "";
-    String prevPk1 = "";
-    StringBuilder aggregatedContent = new StringBuilder();
-    int insertCount = 0;
-    int detailCount = 0;
-    int rowCount = 0;
-    boolean first = true;
-    long insertTime = 0;
-    while (resultSet.next()) {
-      pk0 = resultSet.getString(pkColumns[0]);
-      if (pkColumns.length > 1) {
-        pk1 = resultSet.getString(pkColumns[1]);
+    ResultSet resultSet = null;
+    try {
+      resultSet = SqlUtils.executeQuery(queryDataSource, wrappedSql, table.getQuery().getFullName() +
+          "__api-report-detail-aggregate", 2000);
+      String pk0 = "";
+      String pk1 = "";
+      String prevPk0 = "";
+      String prevPk1 = "";
+      StringBuilder aggregatedContent = new StringBuilder();
+      int insertCount = 0;
+      int detailCount = 0;
+      int rowCount = 0;
+      boolean first = true;
+      long insertTime = 0;
+      while (resultSet.next()) {
+        pk0 = resultSet.getString(pkColumns[0]);
+        if (pkColumns.length > 1) {
+          pk1 = resultSet.getString(pkColumns[1]);
+        }
+        if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
+          insertCount++;
+          insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
+              prevPk1, title, pkColumns.length, insertCount, false);
+          aggregatedContent = new StringBuilder();
+          rowCount = 0;
+        }
+        first = false;
+        prevPk0 = pk0;
+        prevPk1 = pk1;
+  
+        // aggregate the columns of one row
+        String formattedValues[] = formatAttributeValues(resultSet, table);
+        if (formattedValues[0] != null)
+          aggregatedContent.append(formattedValues[0]);
+        for (int i = 1; i < formattedValues.length; i++) {
+          if (formattedValues[i] != null)
+            aggregatedContent.append("\t").append(formattedValues[i]);
+          else
+            aggregatedContent.append("\t");
+        }
+        aggregatedContent.append("\n");
+        rowCount++;
+        detailCount++;
       }
-      if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
-        insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-            prevPk1, title, pkColumns.length);
+      if (aggregatedContent.length() != 0) {
         insertCount++;
-        aggregatedContent = new StringBuilder();
-        rowCount = 0;
+        insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
+            prevPk1, title, pkColumns.length, insertCount, true);
       }
-      first = false;
-      prevPk0 = pk0;
-      prevPk1 = pk1;
-
-      // aggregate the columns of one row
-      String formattedValues[] = formatAttributeValues(resultSet, table);
-      if (formattedValues[0] != null)
-        aggregatedContent.append(formattedValues[0]);
-      for (int i = 1; i < formattedValues.length; i++) {
-        if (formattedValues[i] != null)
-          aggregatedContent.append("\t").append(formattedValues[i]);
-        else
-          aggregatedContent.append("\t");
+      else {
+        // add any remaining rows to DB
+        executeRowBatch(insertStmt, insertSql, table);
       }
-      aggregatedContent.append("\n");
-      rowCount++;
-      detailCount++;
+      int[] counts = { insertCount, detailCount, (int) insertTime };
+      return counts;
     }
-    if (aggregatedContent.length() != 0) {
-      insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-          prevPk1, title, pkColumns.length);
-      insertCount++;
+    finally {
+      SqlUtils.closeResultSetAndStatement(resultSet);
     }
-    int[] counts = { insertCount, detailCount, (int) insertTime };
-    return counts;
   }
 
   private String getTableTitle(TableField table) {
@@ -427,7 +473,8 @@ public class DetailTableLoader extends BaseCLI {
    * @param idSql
    */
   private long insertDetailRow(PreparedStatement insertStmt, String insertSql, StringBuilder contentBuf,
-      int rowCount, TableField table, String pk0, String pk1, String title, int pkCount) throws SQLException {
+      int rowCount, TableField table, String pk0, String pk1, String title, int pkCount,
+      int insertCount, boolean forceBatchUpdate) throws SQLException {
 
     long start = System.currentTimeMillis();
 
@@ -450,9 +497,19 @@ public class DetailTableLoader extends BaseCLI {
       platform.setClobData(insertStmt, pkCount + 4, content, false);
 
     insertStmt.setTimestamp(pkCount + 5, new Timestamp(new Date().getTime()));
-    SqlUtils.executePreparedStatement(insertStmt, insertSql, table.getQuery().getFullName() +
-        "__api-report-detail-insert");
+
+    insertStmt.addBatch();
+    
+    if (forceBatchUpdate || insertCount % INSERT_BATCH_SIZE == 0) {
+      executeRowBatch(insertStmt, insertSql, table);
+    }
+
     return System.currentTimeMillis() - start;
+  }
+
+  private void executeRowBatch(PreparedStatement insertStmt, String insertSql, TableField table) throws SQLException {
+    SqlUtils.executePreparedStatementBatch(insertStmt, insertSql, table.getQuery().getFullName() +
+        "__api-report-detail-batch-insert");
   }
 
 }

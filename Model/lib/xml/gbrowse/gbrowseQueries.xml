@@ -318,6 +318,7 @@ WHERE  ens.na_sequence_id = $srcfeature_id
        'product=' || replace(ga.product,'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'taxon=' || ga.organism || '$dlm' ||
        'isDeprecated=' || ga.is_deprecated || '$dlm' ||
+       'orthomcl_name=' || ga.orthomcl_name || '$dlm' ||
        'isPseudo=' || ga.is_pseudo
          as atts
 FROM
@@ -367,7 +368,7 @@ ORDER BY
   <sqlQuery name="rum:intron">
      <sql>
      <![CDATA[
-SELECT feature_id, type, source, parent_id, startm, end,
+SELECT feature_id, type, source, 'Score=' || sum(total_unique)  as name, parent_id, startm, end,
 'Samples=' || listagg(samples, '|') within group (order by db_name) || '$dlm' ||
 'Exps=' || listagg(db_name, '|') within group (order by db_name) || '$dlm' ||
 'LOURS=' || listagg(lours, '|') within group (order by db_name) || '$dlm' ||
@@ -391,7 +392,8 @@ FROM (
          listagg(rif.short_overlap_unique_reads, ',') within group (order by rif.sample_name) as sours,
          listagg(rif.long_overlap_nu_reads, ',') within group (order by rif.sample_name) as lonrs,
          listagg(rif.signal_not_canonical, ',') within group (order by rif.sample_name) as notCanonicals,
-         listagg(rif.short_overlap_nu_reads, ',') within group (order by rif.sample_name) as sonrs
+         listagg(rif.short_overlap_nu_reads, ',') within group (order by rif.sample_name) as sonrs,
+         sum(rif.long_overlap_unique_reads) + sum(rif.short_overlap_unique_reads) as total_unique
   FROM   apidb.RUMIntronFeature rif, 
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr 
@@ -415,7 +417,7 @@ ORDER BY startm
   <sqlQuery name="rum:intronunified">
      <sql>
      <![CDATA[
-SELECT feature_id, type, source, parent_id, startm, end,
+SELECT feature_id, type, source, 'Score=' || sum(total_unique)  as name, parent_id, startm, end,
 'Samples=' || listagg(samples, '|') within group (order by db_name) || '$dlm' ||
 'Exps=' || listagg(db_name, '|') within group (order by db_name) || '$dlm' ||
 'LOURS=' || listagg(lours, '|') within group (order by db_name) || '$dlm' ||
@@ -439,7 +441,8 @@ FROM (
          listagg(rif.short_overlap_unique_reads, ',') within group (order by rif.sample_name) as sours,
          listagg(rif.long_overlap_nu_reads, ',') within group (order by rif.sample_name) as lonrs,
          listagg(rif.signal_not_canonical, ',') within group (order by rif.sample_name) as notCanonicals,
-         listagg(rif.short_overlap_nu_reads, ',') within group (order by rif.sample_name) as sonrs
+         listagg(rif.short_overlap_nu_reads, ',') within group (order by rif.sample_name) as sonrs,
+         sum(rif.long_overlap_unique_reads) + sum(rif.short_overlap_unique_reads) as total_unique
   FROM   apidb.RUMIntronFeature rif, 
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr 
@@ -698,6 +701,7 @@ select
        'SyntenyID=' || syn.synteny_id || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
        'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
+       'orthomcl_name=' || gattr.orthomcl_name || '$dlm' ||
        'isDeprecated=' || gattr.is_deprecated || '$dlm' ||
        'Start=' || gattr.start_min || '$dlm' ||
        'End=' || gattr.end_max || '$dlm' ||
@@ -770,13 +774,13 @@ SELECT
        b.source_id name, 
        '.' score, 
        syn.synteny_id parent_id, 
-       CASE WHEN (is_reversed = 1) 
-         THEN round(anch_left.ref_loc - ((syn.b_end - anch_left.syntenic_loc) * (anch_right.ref_loc - anch_left.ref_loc + 1) / (anch_left.syntenic_loc - anch_right.syntenic_loc + 1)))
-         ELSE round(anch_left.ref_loc - ((anch_left.syntenic_loc - syn.b_start) * (anch_right.ref_loc - anch_left.ref_loc + 1) / (anch_right.syntenic_loc - anch_left.syntenic_loc + 1)))
+       CASE WHEN (anch_left.prev_ref_loc = -9999999999) 
+         THEN anch_left.ref_loc
+         ELSE $base_start
        END startm,
-       CASE WHEN (is_reversed = 1) 
-         THEN round(anch_left.ref_loc + ((anch_left.syntenic_loc - syn.b_start) * (anch_right.ref_loc - anch_left.ref_loc + 1) / (anch_left.syntenic_loc - anch_right.syntenic_loc + 1)))
-         ELSE round(anch_left.ref_loc + ((syn.b_end - anch_left.syntenic_loc) * (anch_right.ref_loc - anch_left.ref_loc + 1) / (anch_right.syntenic_loc - anch_left.syntenic_loc + 1)))
+       CASE WHEN (anch_right.next_ref_loc = 9999999999) 
+         THEN anch_right.ref_loc
+         ELSE $rend
        END end, 
        decode(is_reversed, 0, +1, 1, -1, +1) strand,
        'RefStart=' || syn.a_start || '$dlm' ||
@@ -796,11 +800,15 @@ SELECT
        'ExtDBName=' || ed.name || '$dlm' ||
        'Taxon=' || b.organism || '$dlm' ||
        'SynType=' || 'contig' ||  '$dlm' ||
+       'LeftAnchSyntenicLoc=' || anch_left.syntenic_loc ||  '$dlm' ||
+       'RightAnchSyntenicLoc=' || anch_right.syntenic_loc ||  '$dlm' ||
+       'LeftAnchRefLoc=' || anch_left.ref_loc ||  '$dlm' ||
+       'RightAnchRefLoc=' || anch_right.ref_loc ||  '$dlm' ||
+       'LeftAnchPrevRefLoc=' || anch_left.prev_ref_loc ||  '$dlm' ||
+       'RightAnchNextRefLoc=' || anch_right.next_ref_loc ||  '$dlm' ||
        'Scale=' || 
-       CASE WHEN (is_reversed = 1) 
-         THEN (anch_right.ref_loc - anch_left.ref_loc + 1) / (anch_left.syntenic_loc - anch_right.syntenic_loc + 1)
-         ELSE (anch_right.ref_loc - anch_left.ref_loc + 1) / (anch_right.syntenic_loc - anch_left.syntenic_loc + 1) 
-         END atts
+          (anch_right.ref_loc - anch_left.ref_loc + 1) / abs(anch_right.syntenic_loc - anch_left.syntenic_loc + 1) 
+         atts
 FROM 
       apidb.synteny syn,
       apidb.syntenyAnchor anch_left,
@@ -844,6 +852,7 @@ SELECT
        'End=' || gattr.end_max || '$dlm' ||
        'isReversed=' || gattr.is_reversed || '$dlm' ||
        'SynType=' || 'genes' ||  '$dlm' || 
+       'orthomcl_name=' || gattr.orthomcl_name || '$dlm' ||
        'Taxon=' || gattr.organism atts
 FROM 
        ApidbTuning.GeneAttributes gattr
@@ -2036,7 +2045,7 @@ FROM DoTS.ChromosomeElementFeature cef, Dots.NaLocation nl, DoTS.ExternalNASeque
  
   
 <!-- NOTE: externalDatabase.name list specified in query, for Crypto AND Plasmo -->
-  <sqlQuery name="match:IsolatePopset" excludeProjects="TriTrypDB,GiardiaDB,TrichDB">
+  <sqlQuery name="match:IsolatePopset">
     <testParamValues project="ToxoDB">
        <param name="srcfeature_id" value="$$na_seq_id_scf_1107000999162$$"/>
        <param name="base_start" value="893548"/>
@@ -3058,13 +3067,13 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - Expression-NuclearNonCoding'
      <sql>
 <![CDATA[
  SELECT 
-       sa.na_feature_id          as feature_id,
+       sa.source_id              as feature_id,
        'SNP'                     as type, 
        '$source'                 as source, 
        sa.source_id              as name, 
        sa.seq_source_id          as parent_id, 
-       sa.start_min              as startm, 
-       sa.start_min              as end, 
+       sa.location               as startm, 
+       sa.location               as end, 
        decode(sa.gene_strand, 'forward', '+1', 'reverse', '-1', '.') as strand,
        'base_start='   || '$base_start' || '$dlm' ||
        'rend='   || '$rend' || '$dlm' ||
@@ -3079,10 +3088,9 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - Expression-NuclearNonCoding'
        'reference_na=' || sa.reference_na || '$dlm' ||
        'source_id=' || sa.source_id as atts
 FROM   ApidbTuning.SnpAttributes sa
-WHERE  sa.dataset = $$edname$$
-  AND  sa.na_sequence_id = $srcfeature_id
-  AND  sa.start_min <= $rend
-  AND  sa.start_min >= $base_start
+WHERE  sa.na_sequence_id = $srcfeature_id
+  AND  sa.location <= $rend
+  AND  sa.location >= $base_start
 ]]>
     </sql>
   </sqlQuery>
@@ -3093,25 +3101,24 @@ WHERE  sa.dataset = $$edname$$
 SELECT 
        sa.na_feature_id          as feature_id,
        'SNP'                     as type, 
-       '$source'                 as source, 
+       'Genotyping'              as source, 
        sa.source_id              as name, 
-       sa.seq_source_id          as parent_id, 
+       sa.na_sequence_id         as parent_id, 
        sa.start_min              as startm, 
        sa.start_min              as end, 
        decode(sa.gene_strand, 'forward', '+1', 'reverse', '-1', '.') as strand,
        'base_start='   || '$base_start' || '$dlm' ||
        'rend='   || '$rend' || '$dlm' ||
-       'IsoDbName=' || iso_ext_db_name || '$dlm' ||
-       'MinorAllele=' || swi.minor_allele || '$dlm' ||
-       'MajorAllele=' || swi.major_allele || '$dlm' ||
-       'MinorAlleleFreq=' || swi.minor_allele_frequency || '$dlm' ||
-       'NumIsolates=' || swi.number_isolates as atts
-FROM   ApidbTuning.SnpsWithIsolates swi, ApidbTuning.SnpAttributes sa
-WHERE  swi.snp_source_id = sa.source_id
-  AND  sa.na_sequence_id = $srcfeature_id
+       'SNPChipType='   || sa.type || '$dlm' ||
+       'SnpId='   || sa.source_id || '$dlm' ||
+       'MajorAllele=' || sa.major_allele || '$dlm' ||
+       'MajorAlleleFreq=' || sa.major_allele_frequency || '$dlm' ||
+       'MinorAlleleFreq=' || sa.minor_allele_frequency || '$dlm' ||
+       'MajorProduct=' || sa.major_product as atts
+FROM   ApidbTuning.SnpChipAttributes sa
+WHERE  sa.na_sequence_id = $srcfeature_id
   AND  sa.start_min <= $rend
   AND  sa.start_min >= $base_start
-  AND  sa.dataset = $$edname$$
 ]]>
     </sql>
   </sqlQuery> 
@@ -3206,47 +3213,6 @@ SELECT $srcfeature_id || '_1'  as feature_id,
   1 as strand,
   '' as atts
 from dual
-]]>
-    </sql>
-  </sqlQuery>
-
-  <sqlQuery name="SNP:Widmer"  includeProjects="CryptoDB">
-    <testParamValues project="CryptoDB">
-       <param name="srcfeature_id" value="$$na_seq_id_CM000431$$"/>
-       <param name="base_start" value="150000"/>
-       <param name="rend" value="152000"/>
-    </testParamValues>
-     <sql>
-<![CDATA[
- SELECT 
-       sa.na_feature_id         as feature_id,
-       'SNP'                    as type, 
-       'Widmer'                 as source, 
-       sa.source_id             as name, 
-       sa.seq_source_id         as parent_id, 
-       sa.start_min             as startm, 
-       sa.start_min             as end, 
-       decode(sa.gene_strand, 'forward', '+1', 'reverse', '-1', '.') as strand,
-       'RefNA='   || sa.reference_na || '$dlm' ||
-       'base_start='   || '$base_start' || '$dlm' ||
-       'rend='   || '$rend' || '$dlm' ||
-       'NonSyn='   || sa.has_nonsynonymous_allele || '$dlm'||
-       'IsCoding=' || sa.is_coding || '$dlm' ||
-       'Gene=' || sa.gene_source_id || '$dlm' ||
-       'params=' || sa.position_in_CDS || '&' ||
-       sa.position_in_protein || '&' ||
-       sa.reference_strain || '&' ||
-       sa.reference_aa || '&' ||
-       sa.gene_strand || '&' ||
-       sa.reference_na || '&' ||
-       sa.source_id
-       as atts
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SnpAttributes sa
-WHERE  fl.na_sequence_id = $srcfeature_id
-  AND  fl.start_min <= $rend
-  AND  fl.start_min >= $base_start
-  AND  fl.na_feature_id = sa.na_feature_id
 ]]>
     </sql>
   </sqlQuery>
@@ -4046,7 +4012,7 @@ AND ed.name = $$edName$$
   <sqlQuery name="gene:syntenyMC:bulksubfeatures" excludeProjects="TrichDB">
      <sql>
 <![CDATA[
-SELECT -- slow query for all other views
+SELECT
 * FROM (SELECT
        exfloc.na_feature_id feature_id,
        'CDS' type, 
@@ -4115,7 +4081,7 @@ WHERE ga.na_feature_id = exfloc.parent_id
   )
   AND exfloc.start_min <= syn.b_end
   AND exfloc.end_max >= syn.b_start
-UNION
+UNION ALL
 SELECT
        exfloc.na_feature_id feature_id,
        'UTR' type, 
@@ -4183,7 +4149,7 @@ WHERE ga.na_feature_id = exfloc.parent_id
   )
   AND exfloc.start_min <= syn.b_end
   AND exfloc.end_max >= syn.b_start
-UNION
+UNION ALL
 -- for: reference organism - gene
 SELECT
        exfloc.na_feature_id feature_id,
@@ -4206,7 +4172,7 @@ WHERE ga.na_sequence_id = $srcfeature_id
   AND ga.na_feature_id = exfloc.parent_id
   AND exfloc.na_sequence_id = ga.na_sequence_id  
   AND exfloc.feature_type = 'ExonFeature'
-UNION
+UNION ALL
 -- for: reference organism - gene
 SELECT
        na_feature_id feature_id,
@@ -5132,15 +5098,15 @@ WHERE  etn.na_sequence_id = $srcfeature_id
   <sqlQuery name="SNP:Population:bulkAttribute"  includeProjects="ToxoDB,AmoebaDB,TriTrypDB,CryptoDB,PlasmoDB,FungiDB">
      <sql>
 <![CDATA[
-SELECT sa.na_feature_id as feature_id, var.strain, var.allele,
-       var.phenotype, var.product
+SELECT sa.source_id as feature_id, var.strain, var.allele, var.product
 FROM ApidbTuning.SnpAttributes sa,
-     dots.SeqVariation var
+     apidb.SequenceVariation var
 WHERE sa.dataset = $$edname$$
   AND sa.na_sequence_id = $srcfeature_id
-  AND sa.start_min <= $rend
-  AND sa.start_min >= $base_start
-  AND var.parent_id = sa.na_feature_id
+  AND sa.location <= $rend
+  AND sa.location >= $base_start
+  AND var.location = sa.location
+  AND var.ref_na_sequence_id = sa.na_sequence_id
 ORDER BY var.strain
 ]]>
     </sql>

@@ -1,6 +1,7 @@
-﻿DROP TABLE userlogins5_archive.config;
+﻿
+DROP TABLE userlogins5_archive.config;
 DROP TABLE userlogins5_archive.categories;
-DROP TABLE userlogins5_archive.dataset_value;
+DROP TABLE userlogins5_archive.dataset_values;
 DROP TABLE userlogins5_archive.datasets;
 DROP TABLE userlogins5_archive.favorites;
 DROP TABLE userlogins5_archive.preferences;
@@ -9,6 +10,7 @@ DROP TABLE userlogins5_archive.steps;
 DROP TABLE userlogins5_archive.user_baskets;
 DROP TABLE userlogins5_archive.user_roles;
 DROP TABLE userlogins5_archive.users;
+
 
 /* =========================================================================
    tables in user schema
@@ -50,11 +52,11 @@ CREATE TABLE userlogins5_archive.users
   country VARCHAR(255),
   PREV_USER_ID NUMBER(12),
   migration_id NUMBER(12),
+  CONSTRAINT "users_pk" PRIMARY KEY (user_id)
 );
 
-CREATE INDEX userlogins5_archive.users_idx01 ON userlogins5_archive.users (user_id);
-CREATE INDEX userlogins5_archive.users_idx02 ON userlogins5_archive.users (is_guest, register_time);
-CREATE INDEX userlogins5_archive.users_idx03 ON userlogins5_archive.users (register_time);
+CREATE INDEX userlogins5_archive.users_idx01 ON userlogins5_archive.users (is_guest, register_time);
+CREATE INDEX userlogins5_archive.users_idx02 ON userlogins5_archive.users (email);
 
 GRANT SELECT ON userlogins5_archive.users TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.users TO GUS_W;
@@ -292,3 +294,24 @@ CREATE TABLE userlogins5_archive.categories
 
 GRANT SELECT ON userlogins5_archive.categories TO GUS_R;
 GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.categories TO GUS_W;
+
+
+CREATE TABLE userlogins5_archive.step_analysis
+(
+  analysis_id          NUMBER(12) NOT NULL,
+  step_id              NUMBER(12) NOT NULL,
+  display_name         VARCHAR(1024),
+  is_new               NUMBER(1),
+  has_params           NUMBER(1),
+  invalid_step_reason  VARCHAR(1024),
+  context_hash         VARCHAR(96),
+  context              CLOB,
+  CONSTRAINT "step_analysis_pk" PRIMARY KEY (analysis_id),
+  CONSTRAINT "step_analysis_fk01" FOREIGN KEY (step_id)
+      REFERENCES userlogins5_archive.steps (step_id)
+);
+
+CREATE INDEX userlogins5_archive.step_analysis_idx01 ON userlogins5_archive.step_analysis (step_id);
+
+GRANT SELECT ON userlogins5_archive.step_analysis TO GUS_R;
+GRANT INSERT, UPDATE, DELETE ON userlogins5_archive.step_analysis TO GUS_W;

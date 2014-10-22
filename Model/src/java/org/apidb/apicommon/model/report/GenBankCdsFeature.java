@@ -54,7 +54,7 @@ public class GenBankCdsFeature extends GenBankFeature {
         rv = rv + "\t\t\ttranslation\t" + translation + "\n";
 
         for(String ec : this.ecNumbers) {
-            rv = rv + "\t\t\tEc_number\t" + ec + "\n";
+            rv = rv + "\t\t\tEC_number\t" + ec + "\n";
         }
 
         for(String note : this.notes) {

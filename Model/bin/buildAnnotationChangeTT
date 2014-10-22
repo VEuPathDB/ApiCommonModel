@@ -14,6 +14,11 @@ use HTTP::Response;
 use XML::Simple;
 use ApiCommonShared::Model::tmUtils;
 
+# To check that no genome of interest has a null release_date in sres.ExternalDatabaseRelease,
+# we will use nvl() to set an impossibly early date in the case of a null. If this
+# value appears in the result set then nvl() must have done its work. So we'll die.
+my $sentinelDate = '1918-08-13';
+
 my $insertStatement;
 
 my ($propfile, $instance, $schema, $suffix, $debug);
@@ -36,6 +41,10 @@ my @genomeList = @$genomeListRef;
 my $totalChangedGenes;
 
 foreach my $genome (@genomeList) {
+  if ($genome->{SINCEDATE} eq $sentinelDate) {
+    die "sres.ExternalDatabaseRelease.release_date is null for $genome->{EUPATHDB_NAME}";
+  }
+
   $totalChangedGenes += processChangedGenes($dbh, $genome->{SANGER_ID}, $genome->{SINCEDATE}, $suffix, $genome->{EUPATHDB_NAME});
 }
 
@@ -43,8 +52,6 @@ populateGenesAndProducts($dbh, $suffix);
 renameOldChanges($dbh, $suffix);
 
 $dbh->commit() or print STDERR $dbh->errstr;
-
-checkReleaseDates($dbh);
 
 print STDERR "Saved $totalChangedGenes total changed genes from web service\n";
 
@@ -62,12 +69,12 @@ sub getGenomeList {
 with Sanger_names as -- organism name/ID pairs from Sanger web service
         ($taxa),
      local_taxa as -- name/GUS ID/genome date tuples from the current database instance
-        (select ga.organism, ga.taxon_id, to_char(min(edr.release_date), 'yyyy-mm-dd') as sinceDate
+        (select ga.organism, ga.taxon_id, 
+                to_char(min(nvl(edr.release_date, to_date('$sentinelDate', 'yyyy-mm-dd'))), 'yyyy-mm-dd') as sinceDate
          from ApidbTuning.GeneAttributes ga, dots.GeneFeature gf,
               sres.ExternalDatabaseRelease edr
          where ga.na_feature_id = gf.na_feature_id
            and gf.external_database_release_id = edr.external_database_release_id
-           and edr.release_date is not null
          group by ga.organism, ga.taxon_id),
      hardwired_mapping as -- you say "tater", I say "spud"
         (select 'Leishmania infantum JPCM5 ' as sanger_name,
@@ -300,17 +307,20 @@ create table AnnotationChange$suffix (
    change_date  date,
    change       varchar2(2000),
    feature_name varchar2(50),
-   product      varchar2(300)
+   product      varchar2(200),
+   name         varchar2(30)
 ) nologging
 SQL
 
   $dbh->{PrintError} = 0;
+  $dbh->{RaiseError} = 0;
   $dbh->do(<<SQL);
   insert into AnnotationChange$suffix
-              (gene, change_date, change, feature_name, product)
-  select gene, change_date, change, feature_name, product from AnnotationChange
+              (gene, change_date, change, feature_name, product, name)
+  select gene, change_date, change, feature_name, product, name from AnnotationChange
 SQL
   $dbh->{PrintError} = 1;
+  $dbh->{RaiseError} = 1;
 
 }
 
@@ -327,7 +337,7 @@ SQL
 
     my $updateStmt = $dbh->prepare(<<SQL) or die "preparing gene/product update statement";
       update AnnotationChange$suffix
-      set gene = ?, product = ?
+      set gene = ?, product = ?, name = ?
       where feature_name = ?
 SQL
 
@@ -336,13 +346,13 @@ SQL
   while (my ($feature) = $stmt->fetchrow_array()) {
     print STDERRR "getting gene and product for feature \"$feature\"\n" if $debug;
 
-    my ($gene, $product) = getFeatureGeneAndProduct($feature);
-    ($gene, $product) = getFeatureSynonymGeneAndProduct($feature)
+    my ($gene, $product, $name) = getFeatureGeneAndProduct($feature);
+    ($gene, $product, $name) = getFeatureSynonymGeneAndProduct($feature)
       if !$gene;
 
     if ($gene) {
-      print STDERR "set gene to \"$gene\" and product to \"$product\" for feature \"$feature\"\n" if $debug;
-      $updateStmt->execute($gene, $product, $feature) or print STDERR $dbh->errstr;
+      print STDERR "set gene to \"$gene\", product to \"$product\", and name to \"$name\" for feature \"$feature\"\n" if $debug;
+      $updateStmt->execute($gene, $product, $name, $feature) or print STDERR $dbh->errstr;
     } else {
       print STDERR "WARNING: no gene (gene \"$gene\" and product \"$product\") for feature \"$feature\"\n";
     }
@@ -375,6 +385,7 @@ sub getFeatureGeneAndProduct {
     # print STDERRR "info:\n" . Dumper($info). "\n";
 
     my $gene = $info->{results}->[0]->{result}->[0]->{uniqueName};
+    my $name = $info->{results}->[0]->{result}->[0]->{name};
 
     my $product;
 
@@ -402,7 +413,7 @@ sub getFeatureGeneAndProduct {
       print STDERR "web-service parse failure: response to URL \"$url\" contains \"genedb_products\", but a (non-null) product was not found in it.\n";
     }
 
-    return($gene, $product);
+    return($gene, $product, $name);
 }
 
 sub getFeatureSynonymGeneAndProduct {
@@ -476,29 +487,4 @@ sub removeBogusCharacters {
   }
 
   return $contentString;
-}
-
-sub checkReleaseDates {
-
-  my ($dbh) = @_;
-
-  my $stmt = $dbh->prepare(<<SQL) or die "preparing select undated genomes";
-      select ed.name, edr.version, edr.external_database_release_id
-      from sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
-      where ed.external_database_id = edr.external_database_id
-        and edr.external_database_release_id in (select external_database_release_id from dots.GeneFeature)
-        and edr.release_date is null
-SQL
-
-
-  $stmt->execute();
-
-  my $undatedGenomes;
-  while (my ($dbName, $dbVersion, $extDbRlsId) = $stmt->fetchrow_array()) {
-    $undatedGenomes = 1;
-    print STDERRR "ERROR: ExternalDatabase \"$dbName\", version \"$dbVersion\" (extDbRlsId $extDbRlsId) has a null release_date.\n";
-  }
-
-  die "\nFATAL ERROR: sres.ExternalDatabaseRelease.release_date must be populated\n"
-    if $undatedGenomes;
 }

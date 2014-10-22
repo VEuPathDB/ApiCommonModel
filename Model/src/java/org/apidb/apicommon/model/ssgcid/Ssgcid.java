@@ -5,13 +5,15 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Iterator;
 
-import oracle.jdbc.driver.OracleDriver;
+import org.gusdb.fgputil.db.platform.SupportedPlatform;
+import org.gusdb.fgputil.db.pool.ConnectionPoolConfig;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
+import org.gusdb.fgputil.db.pool.SimpleDbConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,8 +61,9 @@ public class Ssgcid {
 	    password = in.readLine();
 	} catch (IOException e) {
 	}
-	DriverManager.registerDriver (new OracleDriver());
-	Connection dbc = DriverManager.getConnection("jdbc:oracle:oci:@" + instance, schema, password);
+	ConnectionPoolConfig config = SimpleDbConfig.create(
+	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
+	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
 
 	createTuningTable(dbc, suffix);
 

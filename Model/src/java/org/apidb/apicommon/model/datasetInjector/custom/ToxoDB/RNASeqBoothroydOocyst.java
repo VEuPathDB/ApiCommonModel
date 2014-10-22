@@ -8,6 +8,7 @@ public class RNASeqBoothroydOocyst extends CusomGenePageExpressionGraphsAndCover
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystFC"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystPct"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Boothroyd::TgM4RnaSeqOocystTS" ); 
       //addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesByBoothroydRNASeqOocystPValue"); 
   }
 

@@ -27,6 +27,10 @@ die "required parameter missing" unless ($propfile && $instance && $suffix);
 my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
 my $yamlFile = "$ENV{PROJECT_HOME}/EuPathPresenters/Model/lib/yaml/eupathBuildDates.yaml";
+my $build_number;
+my $release_date;
+my $project;
+my $release_number;
 
 &run();
 
@@ -37,16 +41,22 @@ sub run{
 
   &usage() if ($help);
 
-  my $insertStatement = "INSERT INTO EupathBuildDates$suffix (build_number, release_date) VALUES (?,?)";
+  my $insertStatement = "INSERT INTO EupathBuildDates$suffix (build_number, release_date, project, release_number) VALUES (?,?,?,?)";
   my $insertRow = $dbh->prepare($insertStatement);
   &createEmptyTable($dbh,$suffix);
 
   open(my $fh, $yamlFile) || die "Can't open $yamlFile\n";
   my $stuff = LoadFile($fh);
-  foreach my $build (keys(%$stuff)) {
-    my $date = $stuff->{$build};
-    $insertRow->execute($build, $date);
-  }
+
+	foreach my $buildDate (@{$stuff->{buildDates}}) {
+		$build_number = $buildDate->{build};
+		$release_date = $buildDate->{relDate};
+		for (keys %{$buildDate->{projects}}) {
+			$project = $_;
+			$release_number = $buildDate->{projects}->{$_};
+      $insertRow->execute($build_number, $release_date, $project, $release_number);
+		}
+	}
 
   $dbh->commit();
   $dbh->disconnect();
@@ -57,8 +67,10 @@ sub createEmptyTable {
 
     $dbh->do(<<SQL) or die "creating table";
      create table EuPathBuildDates$suffix (
-	build_number     varchar2(3),
-        release_date         date
+	      build_number     varchar2(5),
+        release_date         date,
+        project    varchar2(20),
+        release_number    varchar2(10)
   ) nologging
 SQL
 $dbh->{PrintError} = 0;

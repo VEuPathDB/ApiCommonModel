@@ -7,6 +7,7 @@ public class RNASeqSibleyBrady extends CusomGenePageExpressionGraphsAndCoverage 
   @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.ToxoGenesBySibleyRNASeqBradyzoitePct"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Sibley::TgME49Bradyzoite" ); 
   }
 
 

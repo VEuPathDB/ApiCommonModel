@@ -12,6 +12,7 @@ public class NRDB extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProteinDbAccession"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTextSearch"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEcNumber");
   }
 
   // second column is for documentation

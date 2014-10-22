@@ -7,11 +7,9 @@ public class MicroarrayMatrajtBrady extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Matrajt::BzTimeSeries"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Matrajt::BzMutant"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByToxoFoldChangeMatrajt"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExpressionPercentileMatrajt"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByToxoFoldChangePageMatrajt"); 
   }
-
-
 }

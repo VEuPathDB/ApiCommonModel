@@ -28,6 +28,8 @@ import org.gusdb.wdk.model.user.User;
  * @author xingao
  */
 public class Gff3Dumper {
+  
+  private static final int PAGE_SIZE = 1000;
 
   private static final Logger logger = Logger.getLogger(Gff3Dumper.class);
 
@@ -106,6 +108,7 @@ public class Gff3Dumper {
     // load config
     Map<String, String> config = new LinkedHashMap<String, String>();
     config.put(Reporter.FIELD_FORMAT, "text");
+    config.put(Reporter.PROPERTY_PAGE_SIZE, Integer.toString(PAGE_SIZE));
     config.put(Gff3Reporter.FIELD_HAS_TRANSCRIPT, "true");
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "true");
 
@@ -122,16 +125,15 @@ public class Gff3Dumper {
 
     try {
       for (String organism : organisms) {
-        dumpOrganism(wdkModel, organism.trim(), config, baseDir);
+        dumpOrganism(organism.trim(), config);
       }
     } finally {
       SqlUtils.closeStatement(psOrganism);
     }
   }
 
-  private void dumpOrganism(WdkModel wdkModel, String organism,
-      Map<String, String> config, String baseDir) throws WdkUserException,
-      WdkModelException, IOException, SQLException {
+  private void dumpOrganism(String organism, Map<String, String> config)
+      throws WdkUserException, WdkModelException, IOException, SQLException {
     long start = System.currentTimeMillis();
 
     // decide the path-file name
@@ -174,7 +176,7 @@ public class Gff3Dumper {
     // remove rows from the cache table
     String cacheTable = geneReport.getCacheTable();
     String idSql = geneAnswer.getIdSql();
-    deleteRows(wdkModel, idSql, cacheTable);
+    deleteRows(idSql, cacheTable);
 
     try {
       // collect the header from sequence reporter
@@ -209,7 +211,7 @@ public class Gff3Dumper {
     logger.info("Time spent " + ((end - start) / 1000.0) + " seconds.");
   }
 
-  private void deleteRows(WdkModel wdkModel, String idSql, String cacheTable)
+  private void deleteRows(String idSql, String cacheTable)
       throws SQLException {
     String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN "
         + "(SELECT source_ID FROM (" + idSql + "))";

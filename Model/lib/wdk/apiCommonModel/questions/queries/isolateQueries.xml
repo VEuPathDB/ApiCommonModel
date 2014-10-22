@@ -133,6 +133,7 @@
 
     <sqlQuery name="IsolateByProduct" excludeProjects="EuPathDB" isCacheable="true">
         <paramRef ref="isolateParams.product" queryRef="productVQ.withIsolates" quote="true"/>
+	<paramRef ref="isolateParams.product_wildcard"/>
         <column name="source_id"/>
         <column name="project_id"/>
         <sql>
@@ -141,7 +142,8 @@
               FROM apidbtuning.GeneIsolateOverlap gio, apidbtuning.GeneAttributes ga
              WHERE gio.gene_source_id = ga.source_id
                AND min_pvalue_exp<-5
-               AND ga.product LIKE REPLACE($$product$$,'*','%') 
+               AND (ga.product LIKE REPLACE($$product$$,'*','%') 
+	          OR lower(ga.product) LIKE  REPLACE(REPLACE(REPLACE(REPLACE(lower($$product_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%') ) 
             ]]>
          </sql>
     </sqlQuery>
@@ -568,95 +570,6 @@
             ]]>
        </sql>
     </sqlQuery>
-
-
-     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-     <!-- SNPs by Isolate transform -->
-     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
- 
-     <sqlQuery name="SnpsByHTSIsolateId" includeProjects="PlasmoDB" isCacheable="true">
-
-       <paramRef ref="isolateParams.htsIsolateList"/>
-       <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withHtsSNPs">
-          <help>Select Organism you wish to query against.</help>
-       </paramRef>
-       <paramRef ref="sharedParams.htsSnp_strain_a"/>  
-       <paramRef ref="sharedParams.hts_snps_coverage"/>
-       <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="PlasmoDB"/>
-       <paramRef ref="sharedParams.hts_snps_pvalue"/>
-
-       <column name="source_id" />
-       <column name="project_id"/>
-       <column name="gene"/>
-       <column name="snp_location"/>
-       <column name="ref_strain"/>
-       <column name="comp_strains"/>
-       <column name="ref_allele"/>
-       <column name="comp_alleles"/>
-       <column name="phenotype"/>
-       <column name="prot_pos"/>
-       <column name="ref_product"/>
-       <column name="comp_products"/>
-       <column name="wdk_weight" />
-
-      <sql>
-         <![CDATA[
-SELECT snp.source_id, 
-       '@PROJECT_ID@' as project_id, 
-       snp.gene_source_id as gene, 
-       snp.start_min as snp_location,
-       snp.position_in_protein as prot_pos, 
-       variants.ref_allele, 
-       variants.ref_product, 
-       variants.comp_alleles,
-       variants.comp_products, 
-       variants.phenotype, 
-       variants.ref_strain, 
-       variants.comp_strains,
-       0 as wdk_weight
-FROM ApidbTuning.SnpAttributes snp,
-    ( SELECT parent_id,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_allele) AS apidb.varchartab)), ', ') as ref_allele,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_product) AS apidb.varchartab)), ', ') as ref_product,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_allele) AS apidb.varchartab)), ', ') as comp_alleles,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_product) AS apidb.varchartab)), ', ') as comp_products,
-             apidb.tab_to_string(set(cast(COLLECT(distinct phenotype) AS apidb.varchartab)), ', ') as phenotype,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_strain) AS apidb.varchartab)), ', ') as ref_strain,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_strain) AS apidb.varchartab)), ', ') as comp_strains
-      FROM  (SELECT ref.parent_id, 
-                    ref.allele as ref_allele, 
-                    ref.product as ref_product,
-                    comp.allele as comp_allele, 
-                    comp.product as comp_product,
-                    case when ref.product = comp.product then 'syn'
-                         when ref.product != comp.product then 'non-syn'
-                         else 'non-coding'
-                    end as phenotype,
-                    ref.strain as ref_strain, 
-                    comp.strain as comp_strain
-             FROM   dots.SeqVariation ref, dots.SeqVariation comp
-             WHERE  ref.parent_id = comp.parent_id
-                AND ref.allele != comp.allele
-                AND ref.organism = $$organism$$
-                AND comp.organism = $$organism$$
-                AND ref.strain = $$htsSnp_strain_a$$
-                AND (ref.coverage >= $$hts_snps_coverage$$ or ref.coverage is null)
-                AND (ref.allele_percent >= $$hts_snps_allele_freq$$ or ref.allele_percent is null)
-                AND (ref.pvalue <= $$hts_snps_pvalue$$ or ref.pvalue is null)
-                AND comp.strain in ( select a.strain  
-                       from ApidbTuning.IsolateAttributes a, $$htsIsolateList$$ b 
-                       where a.source_id=b.source_id and a.data_type='HTS') 
-                AND (comp.coverage >= $$hts_snps_coverage$$ or comp.coverage is null)
-                AND (comp.allele_percent >= $$hts_snps_allele_freq$$ or comp.allele_percent is null)
-                AND (comp.pvalue <= $$hts_snps_pvalue$$ or comp.pvalue is null))
-             GROUP BY parent_id) variants
-WHERE snp.na_feature_id = variants.parent_id
-  --AND snp.dataset = 'InsertSnps.pm NGS SNPs INTERNAL' 
-  AND type = 'HTS'
-
-            ]]>
-        </sql>
-     </sqlQuery>
 
     </querySet>
 

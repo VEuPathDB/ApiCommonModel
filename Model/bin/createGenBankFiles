@@ -66,12 +66,13 @@ while (my $tblFile = readdir(DIR)) {
   next unless $tblFile =~ /$tempFileName/;
 
 
-  open(TBL, $tblFile) or die "Cannot open file $tblFile for reading: $!";
+  open(TBL, "$baseDir/$tblFile") or die "Cannot open file $tblFile for reading: $!";
 
 
   my ($sequenceId, $newTblFile);
 
   my %distinctFiles;
+  my %distinctSeqIds;
 
   while(<TBL>) {
     chomp;
@@ -80,18 +81,34 @@ while (my $tblFile = readdir(DIR)) {
       $sequenceId = $a[1];
 
       $distinctFiles{$sequenceIdToGenbankFile->{$sequenceId}}++;
+      $distinctSeqIds{$sequenceId}++;
 
       $newTblFile = $sequenceId . ".tbl";
 
-
-      open(OUT, "> $newTblFile") or die "Cannot open $newTblFile for writing:$!";
+      open(OUT, ">$baseDir/$newTblFile") or die "Cannot open $newTblFile for writing:$!";
     }
     print OUT "$_\n";
+
   }
 
   close TBL;
 
+  foreach my $sid (keys %distinctSeqIds) {
 
+    my $seqSources =  &getSequenceSources($dbh, $sid);
+    open(FASTA, ">$baseDir/$sid.fsa");
+
+    my $seq = $seqSources->{sequence};
+    my $organism = $seqSources->{organism};
+    my $chromosome = $seqSources->{chromosome};
+    my $taxon = $seqSources->{ncbi_tax_id};
+    my $molType = "genomice DNA";
+
+    print FASTA ">$sid [organism=$organism] [chromosome=$chromosome] [moltype=$molType] [db_xref=taxon:$taxon]\n$seq\n";
+    close FASTA;
+  }
+
+=comment out
   foreach my $gbFile (keys %distinctFiles) {
     my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'embl');
 
@@ -116,18 +133,42 @@ while (my $tblFile = readdir(DIR)) {
       $seqioFsa->write_seq($seq);
     }
   }
+=cut
+
 }
 
 close DIR;
 
 
 # Run tbl2asn with validation flag
-$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt -V v -Z $baseDir/discrep";
+$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt  -V vb -Z $baseDir/discrep";
 system($cmd);
-
 
 $dbh->disconnect();
 
+sub getSequenceSources {
+  my ($dbh, $seqid) = @_;
+
+  my %rv;
+
+  my $sql = "select sa.organism, sa.chromosome, sa.ncbi_tax_id, etn.sequence
+from ApidbTuning.SequenceAttributes sa,  dots.externalnasequence etn
+where sa.na_sequence_id = etn.na_sequence_id and sa.source_id = '$seqid' ";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($organism, $chromosome, $ncbi_tax_id, $sequence) = $sh->fetchrow_array()) {
+    $rv{organism}    = $organism;
+    $rv{chromosome}  = $chromosome;
+    $rv{ncbi_tax_id} = $ncbi_tax_id;
+    $rv{sequence}    = $sequence;
+  }
+
+  $sh->finish();
+
+  return \%rv;
+}
 
 sub lookupOriginalGenbankFiles {
   my ($dbh) = @_;

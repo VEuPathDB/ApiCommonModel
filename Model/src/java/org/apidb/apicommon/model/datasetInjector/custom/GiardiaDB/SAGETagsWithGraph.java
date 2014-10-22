@@ -7,8 +7,9 @@ public class SAGETagsWithGraph extends SAGETags {
   @Override
   public void injectTemplates() {
       String description = getPropValue("datasetDescrip");
-      setPropValue("datasetDescrip", description.replace("'", ""));
 
+      String datasetName = getDatasetName();
+      setPropValue("datasetDescrip", description.replace("'", ""));
       
       String xAxis = getPropValue("graphXAxisSamplesDescription");
       setPropValue("graphXAxisSamplesDescription", xAxis.replace("'", ""));
@@ -16,10 +17,17 @@ public class SAGETagsWithGraph extends SAGETags {
       String yAxis = getPropValue("graphYAxisDescription");
       setPropValue("graphYAxisDescription", yAxis.replace("'", ""));
 
+      setPropValue("exprGraphAttr", datasetName + "_expr_graph");
 
       setPropValue("isGraphCustom", "true");
       injectTemplate("genePageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
+
+      injectTemplate("sageTagAttributesList");
+      injectTemplate("sageTagAttributesListR");
+      injectTemplate("sageTagAttributeCategory");
+      injectTemplate("sageTagExpressionGraphAttributes");
+      injectTemplate("pathwayGraphs");
   }
 
   @Override

@@ -12,13 +12,13 @@ import java.sql.SQLException;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.query.SqlQuery;
 import org.gusdb.wdk.model.record.RecordClass;
-import org.gusdb.wsf.util.BaseCLI;
 
 /**
  * @author ctreatma
@@ -30,7 +30,6 @@ public class GffCacheCreator extends BaseCLI {
     private static final String NEW_LINE = System.getProperty("line.separator");
 
     private static final String ARG_CACHE_TABLE = "cacheTable";
-    private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
 
     private static final String ARG_GFF_RECORD_NAME = "gff_record";
@@ -133,7 +132,7 @@ public class GffCacheCreator extends BaseCLI {
     /*
      * (non-Javadoc)
      * 
-     * @see org.gusdb.wsf.util.BaseCLI#invoke()
+     * @see org.gusdb.fgputil.BaseCLI#invoke()
      */
     @Override
     public void execute() throws Exception {

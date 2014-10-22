@@ -13,6 +13,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.Utilities;
@@ -27,7 +28,6 @@ import org.gusdb.wdk.model.record.attribute.ColumnAttributeField;
 import org.gusdb.wdk.model.record.attribute.LinkAttributeField;
 import org.gusdb.wdk.model.record.attribute.PrimaryKeyAttributeField;
 import org.gusdb.wdk.model.record.attribute.TextAttributeField;
-import org.gusdb.wsf.util.BaseCLI;
 
 /**
  * @author xingao
@@ -54,7 +54,6 @@ import org.gusdb.wsf.util.BaseCLI;
 @Deprecated
 public class FullRecordCacheCreator extends BaseCLI {
 
-    private static final String ARG_PROJECT_ID = "model";
     private static final String ARG_SQL_FILE = "sqlFile";
     private static final String ARG_RECORD = "record";
     private static final String ARG_TABLE_FIELD = "field";
@@ -120,7 +119,7 @@ public class FullRecordCacheCreator extends BaseCLI {
     /*
      * (non-Javadoc)
      * 
-     * @see org.gusdb.wsf.util.BaseCLI#invoke()
+     * @see org.gusdb.fgputil.BaseCLI#invoke()
      */
     @Override
     public void execute() throws Exception {

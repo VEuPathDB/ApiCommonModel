@@ -122,8 +122,12 @@ public class RNASeq extends  DatasetInjector {
          
       }
 
+      // remove ':' which is gbrowse category separator.
+      String organismAbbrevDisplay = getPropValue("organismAbbrevDisplay");
+      setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("rnaSeqCoverageTrack");
+      injectTemplate("rnaSeqCoverageTrackUnlogged");
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
       if(Boolean.parseBoolean(showIntronJunctions)) {
