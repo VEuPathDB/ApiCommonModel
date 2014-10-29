@@ -6037,4 +6037,48 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
   </tuningTable>
 
 
+  <tuningTable name="ProteomicsCitation">
+    <!-- Citation info for proteomics datasets, used by GBrowse -->
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="MSPeptideSummary"/>
+    <sql>
+      <![CDATA[
+      create table ProteomicsCitation&1 nologging as
+      with pubs
+           as (select name, id, contact_email,
+                      listagg(publication, ',') WITHIN GROUP (order by publication) as pmids
+               from (select ds.name as name, ds.dataset_presenter_id as id,
+                                    c.email as contact_email, p.pmid as publication
+                     from DatasetPresenter ds, DatasetContact c,
+                          DatasetPublication p
+                     where ds.dataset_presenter_id = c.dataset_presenter_id
+                       and ds.dataset_presenter_id = p.dataset_presenter_id
+                       and c.is_primary_contact = 1
+                       and ds.type = 'protein_expression'
+                       and ds.subtype is null)
+               group by name, id, contact_email),
+           samples
+           as (select name, id,
+                      listagg(sample_i, chr(10)) WITHIN GROUP (order by sample) as sample_table
+               from (select distinct ds.name as name,
+                                     ds.dataset_presenter_id as id, sample,
+                                     '<p style="color:' || html_color || '">' || sample || '</p>' as sample_i
+                     from MSPeptideSummary mps, DatasetPresenter ds
+                     where (ds.name = mps.external_database_name or mps.external_database_name like ds.dataset_name_pattern))
+               group by name, id)
+      select name,
+             dbms_lob.substr(description, 4000, 1) || ' Primary Contact Email: '|| nvl(email, 'unavailable')
+             || ' PMID: ' || publications || '<p style="color:black">Samples:</p>'
+             || sample_table || chr(10) ||
+             ' Please note that subtrack labels will disappear if the selected subtracks number is over 15!' as citation
+      from (select ds.name as name, ds.summary as description, pubs.contact_email as email,
+                   pubs.pmids as publications, samples.sample_table as sample_table
+            from DatasetPresenter ds, pubs, samples
+            where ds.dataset_presenter_id = pubs.id
+              and ds.dataset_presenter_id = samples.id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+
 </tuningConfig>
