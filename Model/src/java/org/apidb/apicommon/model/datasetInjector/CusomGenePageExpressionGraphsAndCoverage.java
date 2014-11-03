@@ -15,6 +15,7 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
         setOrganismAbbrevFromDatasetName();
 
         injectTemplate("rnaSeqCoverageTrack");
+        injectTemplate("rnaSeqCoverageTrackUnlogged");
 
         String showIntronJunctions = getPropValue("showIntronJunctions");
         if(Boolean.parseBoolean(showIntronJunctions)) {
