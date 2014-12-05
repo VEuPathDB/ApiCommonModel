@@ -1,6 +1,6 @@
 #! /usr/bin/perl
                                                                                              
-package pcbiPubmed;
+package ApiCommonShared::Model::pcbiPubmed;
 require Exporter;
 @ISA = qw (Exporter);
 @EXPORT = qw (
@@ -12,7 +12,7 @@ require Exporter;
 
 use strict;
 use LWP::Simple;
-use XMLUtils;
+use ApiCommonShared::Model::XMLUtils;
 use Encode;
 
 my $ncbiEutilsUrl = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"
@@ -40,14 +40,14 @@ sub fetchPubmedUrl {
                                                                                              
 sub fetchAuthorList {
 	my @authors;
-	my $aContent = XMLUtils::extractTagContent ($content, "AuthorList");
+	my $aContent = ApiCommonShared::Model::XMLUtils::extractTagContent ($content, "AuthorList");
 
-	foreach my $author (XMLUtils::extractAllTags ($aContent, "Author")) {
-		my $attrValue = XMLUtils::getAttrValue ($author, "Author", "ValidYN");
+	foreach my $author (ApiCommonShared::Model::XMLUtils::extractAllTags ($aContent, "Author")) {
+		my $attrValue = ApiCommonShared::Model::XMLUtils::getAttrValue ($author, "Author", "ValidYN");
 		#Some of them don't have this attribute.
 	    if (!$attrValue || $attrValue eq "Y") {
-			my $lastname = XMLUtils::extractTagContent ($author, "LastName");
-	        #my $initials = XMLUtils::extractTagContent ($author, "Initials");
+			my $lastname = ApiCommonShared::Model::XMLUtils::extractTagContent ($author, "LastName");
+	        #my $initials = ApiCommonShared::Model::XMLUtils::extractTagContent ($author, "Initials");
 	        #push @authors, "$lastname $initials";
 			return "$lastname et al.";
 	    }
@@ -58,14 +58,14 @@ sub fetchAuthorList {
 
 sub fetchAuthorListLong {
 	my @authors;
-	my $aContent = XMLUtils::extractTagContent ($content, "AuthorList");
+	my $aContent = ApiCommonShared::Model::XMLUtils::extractTagContent ($content, "AuthorList");
 
-	foreach my $author (XMLUtils::extractAllTags ($aContent, "Author")) {
-		my $attrValue = XMLUtils::getAttrValue ($author, "Author", "ValidYN");
+	foreach my $author (ApiCommonShared::Model::XMLUtils::extractAllTags ($aContent, "Author")) {
+		my $attrValue = ApiCommonShared::Model::XMLUtils::getAttrValue ($author, "Author", "ValidYN");
 		#Some of them don't have this attribute.
 	    if (!$attrValue || $attrValue eq "Y") {
-			my $lastname = XMLUtils::extractTagContent ($author, "LastName");
-	        my $initials = XMLUtils::extractTagContent ($author, "Initials");
+			my $lastname = ApiCommonShared::Model::XMLUtils::extractTagContent ($author, "LastName");
+	        my $initials = ApiCommonShared::Model::XMLUtils::extractTagContent ($author, "Initials");
 	        push @authors, "$lastname $initials";
 	    }
 	}
@@ -74,12 +74,12 @@ sub fetchAuthorListLong {
 }
                                                                                              
 sub fetchTitle {
-    my $title = XMLUtils::extractTagContent($content, "ArticleTitle");
+    my $title = ApiCommonShared::Model::XMLUtils::extractTagContent($content, "ArticleTitle");
 	return $title;
 }
                                                                                              
 sub fetchPublication {    
-	my $publication = XMLUtils::extractTag ($content, "Journal");
+	my $publication = ApiCommonShared::Model::XMLUtils::extractTag ($content, "Journal");
 	my ($pubName, $pubVolume, $pubIssue, $pubDate, $pubPages);
 	
 	# The name of the journal can come from one of the three sources
@@ -90,9 +90,9 @@ sub fetchPublication {
 	# Don't know what's the difference between Title and MedlineTA, but
 	# one of them didn't have Title, but had MedlineTA.
 	
-	if (!($pubName = XMLUtils::extractTagContent ($publication, "ISOAbbreviation"))) {
-		if (!($pubName = XMLUtils::extractTagContent ($publication, "Title"))) {
-			$pubName = XMLUtils::extractTagContent ($content, "MedlineTA");
+	if (!($pubName = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "ISOAbbreviation"))) {
+		if (!($pubName = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "Title"))) {
+			$pubName = ApiCommonShared::Model::XMLUtils::extractTagContent ($content, "MedlineTA");
 		}
 	}
 	                                                                               
@@ -102,32 +102,32 @@ sub fetchPublication {
 	#   3. MedlineDate
 	                                                                               
 	my ($pubYear, $pubSeason, $pubMonth, $pubDay, $pubMedlineDate);
-	if ($pubYear = XMLUtils::extractTagContent ($publication, "Year")) {
-	    if ($pubMonth = XMLUtils::extractTagContent ($publication, "Month")) {
-			if ($pubDay = XMLUtils::extractTagContent ($publication, "Day")) {
+	if ($pubYear = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "Year")) {
+	    if ($pubMonth = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "Month")) {
+			if ($pubDay = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "Day")) {
 		        $pubDate = "$pubYear $pubMonth $pubDay";
 			} else {
 				$pubDate = "$pubYear $pubMonth";
 			}
 	    } else {
 	        $pubDate = "$pubYear "
-	                    . XMLUtils::extractTagContent($publication, "Season");
+	                    . ApiCommonShared::Model::XMLUtils::extractTagContent($publication, "Season");
 	    }
 	} else {
-	    $pubDate = XMLUtils::extractTagContent ($publication, "MedlineDate");
+	    $pubDate = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "MedlineDate");
 	}
 	                                                                               
-	$pubVolume = XMLUtils::extractTagContent ($publication, "Volume");
-	$pubIssue = XMLUtils::extractTagContent ($publication, "Issue");
+	$pubVolume = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "Volume");
+	$pubIssue = ApiCommonShared::Model::XMLUtils::extractTagContent ($publication, "Issue");
 	                                                                               
 	# Pagination can have two forms:
 	#   1. MedlinePgn - indicates both start and end
 	#   2. StartPage, and optionally EndPage
-	my $pages = XMLUtils::extractTagContent ($content, "Pagination");
-	$pubPages = XMLUtils::extractTagContent ($pages, "MedlinePgn")
-	    or $pubPages = XMLUtils::extractTagContent ($pages, "StartPage")
+	my $pages = ApiCommonShared::Model::XMLUtils::extractTagContent ($content, "Pagination");
+	$pubPages = ApiCommonShared::Model::XMLUtils::extractTagContent ($pages, "MedlinePgn")
+	    or $pubPages = ApiCommonShared::Model::XMLUtils::extractTagContent ($pages, "StartPage")
 	                . "-"
-	                . XMLUtils::extractTagContent ($pages, "EndPage");
+	                . ApiCommonShared::Model::XMLUtils::extractTagContent ($pages, "EndPage");
 	                                                                               
 	return "$pubName $pubDate;$pubVolume($pubIssue):$pubPages";
 }
