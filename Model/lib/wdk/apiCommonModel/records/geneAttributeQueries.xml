@@ -221,7 +221,7 @@
             <column name="exon_count"/>
             <column name="strand"/>
             <column name="ec_numbers_string"/>
-            <column name="ec_numbers_inferred_string" excludeProjects="TrichDB"/>
+            <column name="ec_numbers_inferred_string"/>
             <column name="protein_source_id"/>
             <column name="orthomcl_name"/>
             <column name="orthomcl_link"/>
@@ -260,7 +260,7 @@
             <column name="spz_gam_max_pct" includeProjects="PlasmoDB"/>
             <column name="spz_gam_max_fold_ind" includeProjects="PlasmoDB"/>
             <column name="representative_gene" includeProjects="ToxoDB,EuPathDB"/>
-            <column name="gene_name" excludeProjects="EuPathDB,TrichDB"/>
+            <column name="gene_name" excludeProjects="EuPathDB"/>
             <column name="old_ids" excludeProjects="EuPathDB"/>
 
             <!-- DerisiExprStats -->
@@ -1662,11 +1662,25 @@ WHERE ga.source_id = expn.source_id(+)
             <column name="hasHostResponse"/>
             <sql>
             <![CDATA[  
-                     select distinct ga.source_id, ga.project_id, case when ds.type is null then 0 else 1 end as hasHostResponse
-                     from apidbtuning.geneattributes ga left join apidb.datasource ds
-                     on ga.taxon_id = ds.taxon_id
-                     and  ds.type = 'putative_function' 
-                     and  ds.subtype = 'immune_response'
+                     select ga.source_id, ga.project_id, nvl(hasHostResponse, 0) as hasHostResponse from
+                     (
+                     select distinct ga.source_id, ga.project_id, 1 as hasHostResponse
+                     from apidbtuning.geneattributes ga,
+                          apidb.datasource ds,
+                          sres.externalDatabase ed,
+                          sres.externalDatabaseRelease edr,
+                          apidb.profileset ps,
+                          apidb.profile p 
+                    where  ga.taxon_id = ds.taxon_id
+                      and  ga.source_id = p.source_id
+                      and  ps.profile_set_id = p.profile_set_id
+                      and  ed.name = ds.external_database_name
+                      and  edr.version = ds.version
+                      and  ed.external_database_id = edr.external_database_id
+                      and  ds.type = 'putative_function' 
+                      and  ds.subtype = 'immune_response'
+                      and  ps.external_database_release_id = edr.external_database_release_id
+                )has right join apidbtuning.Geneattributes ga on has.source_id = ga.source_id
             ]]>
            </sql>
 
@@ -1771,7 +1785,7 @@ WHERE ga.source_id = expn.source_id(+)
         </sqlQuery>
 
 
-        <sqlQuery name="IsAnnotated" excludeProjects="TrichDB,EuPathDB">
+        <sqlQuery name="IsAnnotated" excludeProjects="EuPathDB">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="is_annotated"/>
@@ -1794,7 +1808,7 @@ WHERE ga.source_id = expn.source_id(+)
         </sqlQuery>
 
 
-        <sqlQuery name="ReleasePolicy" excludeProjects="TrichDB,EuPathDB">
+        <sqlQuery name="ReleasePolicy" excludeProjects="EuPathDB">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="release_policy"/>
@@ -1823,7 +1837,6 @@ WHERE ga.source_id = expn.source_id(+)
             <column name="dna_gtracks" />
             <sql excludeProjects="TrichDB">
             <![CDATA[  
-
             with has_proteomic_data as (     
                     select source_id
                     from
@@ -1831,7 +1844,7 @@ WHERE ga.source_id = expn.source_id(+)
                          ga.source_id
                          from APIDB.massspecsummary mss, APIDBTUNING.geneattributes ga
                         where ga.aa_sequence_id =mss.aa_sequence_id
-                       ))
+                       )),
             select ga.source_id, ga.project_id, 
                    gto.gtracks||'%1EUnifiedMassSpecPeptides' as  dna_gtracks
             from apidbtuning.gbrowsetracksorganism gto, apidbtuning.geneattributes ga,has_proteomic_data
@@ -1851,20 +1864,33 @@ WHERE ga.source_id = expn.source_id(+)
             and ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto)
             ]]>
            </sql>
-            <sql includeProjects="TrichDB">
+           <sql includeProjects="TrichDB">
             <![CDATA[  
             with has_proteomic_data as (     
                     select source_id
                     from
                       (select
-                               ga.source_id
+                         ga.source_id
                          from APIDB.massspecsummary mss, APIDBTUNING.geneattributes ga
-                        where ga.aa_sequence_id = mss.aa_sequence_id
+                        where ga.aa_sequence_id =mss.aa_sequence_id
                        ))
             select ga.source_id, ga.project_id, 
-                   gto.gtracks||'%1EHayesMassSpecPeptides' as  dna_gtracks
+                   gto.gtracks||'%1EMassSpecPeptides_tvagG3_massSpec_Johnson_FullPeptideData_RSRC' as  dna_gtracks
+            from apidbtuning.gbrowsetracksorganism gto, apidbtuning.geneattributes ga,has_proteomic_data
+            where ga.organism = gto.organism
+              and ga.source_id = has_proteomic_data.source_id
+            union 
+            select ga.source_id, ga.project_id, 
+                   gto.gtracks as  dna_gtracks
             from apidbtuning.gbrowsetracksorganism gto, apidbtuning.geneattributes ga
             where ga.organism = gto.organism
+              and ga.source_id not in (select source_id from has_proteomic_data)
+            union 
+            select ga.source_id, ga.project_id,
+                   '' as dna_gtracks
+            from apidbtuning.gbrowsetracksorganism gto, apidbtuning.geneattributes ga
+            where ga.organism = gto.organism(+)
+            and ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto)
             ]]>
            </sql>
         </sqlQuery>
@@ -1873,7 +1899,7 @@ WHERE ga.source_id = expn.source_id(+)
             <column name="source_id" />
             <column name="project_id"/>
             <column name="protein_gtracks" />
-            <sql excludeProjects="TrichDB">
+            <sql>
             <![CDATA[  
                         select ga.source_id, ga.project_id,
                         (apidb.tab_to_string(set(cast(collect(track_names order by order_num,track_names) as apidb.varchartab)), '%1E')) as protein_gtracks
@@ -1910,31 +1936,6 @@ WHERE ga.source_id = expn.source_id(+)
                    group by ga.source_id, ga.project_id
                   
            ]]>
-           </sql>
-           <sql includeProjects="TrichDB">
-             <![CDATA[
-                        select ga.source_id, ga.project_id,
-                        (apidb.tab_to_string(set(cast(collect(track_names order by order_num,track_names) as apidb.varchartab)), '%1E')) as protein_gtracks
-                    from
-                      (select
-                                'HayesMassSpecPeptides' as track_names,
-                                ga.source_id,
-                                '1' as order_num
-                        from  APIDBTUNING.geneattributes ga
-                        union
-                        SELECT DISTINCT 'SecondaryStructure' as track_name,
-                                        ga.source_id,
-                                        '3' as order_num
-                        FROM dots.SecondaryStructure ss, ApidbTuning.GeneAttributes ga
-                        WHERE   ga.aa_sequence_id = ss.aa_sequence_id
-                        UNION
-                        SELECT 'InterproDomains%1ESignalP%1ETMHMM%1EExportPred%1EHydropathyPlot%1EBLASTP%1ELowComplexity' as track_names,
-                              source_id, 
-                              '2' as order_num from APIDBTUNING.geneattributes) tracks,          
-                      APIDBTUNING.geneattributes ga
-                   where tracks.source_id = ga.source_id(+)
-                   group by ga.source_id, ga.project_id
-             ]]>
            </sql>
         </sqlQuery>
 
@@ -2036,7 +2037,7 @@ FROM
             </sql>
         </sqlQuery> 
 
-        <sqlQuery name="Plasmogem">
+        <sqlQuery name="Plasmogem" includeProjects="PlasmoDB">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="has_plasmogem_info"/>
@@ -2069,7 +2070,8 @@ FROM
                 group by gi.gene
               ]]>
             </sql>
-            <sql excludeProjects="PlasmoDB">
+
+<!--            <sql excludeProjects="PlasmoDB">
               <![CDATA[
                 select ga.source_id, ga.project_id, '' as plasmogem_gene_id,
                        0 as has_plasmogem_info, '' as plasmogem_resources,
@@ -2081,7 +2083,7 @@ FROM
                 from ApidbTuning.GeneAttributes ga
               ]]>
             </sql>
-        </sqlQuery> 
+-->        </sqlQuery> 
 
     </querySet>
 
