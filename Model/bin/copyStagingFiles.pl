@@ -104,9 +104,8 @@ foreach my $p (@projects) {
 
   ## fix Blast file names
   print "fix Blast file names \n";
-  unless ($p eq 'TrichDB') {
-      finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
-  }
+  finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
+
 
   ## fix permissions
   print "Fixing file permissions \n";
