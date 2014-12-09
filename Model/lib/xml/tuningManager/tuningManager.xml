@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tuningConfig>
 
+<!--
+
+
   <tuningTable name="GenePathway">
-    <!-- pathway-gene associations. Used for pathways enrichment analysis -->
     <internalDependency name="GeneAttributes"/>
     <externalDependency name="apidb.Pathway"/>
     <externalDependency name="apidb.PathwayNode"/>
@@ -21,7 +23,7 @@
         select ga.source_id as gene_source_id, p.source_id as pathway_source_id, max(p.name) as pathway_name,
                cast (max(case
                            when ec.ec_number = pn.display_label
-                                and ec.ec_number not like '%\%%' escape '\' -- no (literal) percent sign in ec_number
+                                and ec.ec_number not like '%\%%' escape '\'  /* no (literal) percent sign in ec_number */
                              then 1
                            else 0
                          end) as number(1)) as exact_match
@@ -43,7 +45,6 @@
   </tuningTable>
 
   <tuningTable name="ProjectTaxon" prefixEnabled="true">
-    <!-- map taxon names to project_ids. to be used by the apidb.project_id function -->
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="core.ProjectInfo"/>
@@ -52,7 +53,7 @@
       <![CDATA[
         create table &prefixProjectTaxon&1 nologging as
         with
-          local_taxon -- a taxon found in this instance, either in dots.ExternalNaSequence or in apidb.Organism
+          local_taxon /* a taxon found in this instance, either in dots.ExternalNaSequence or in apidb.Organism */
           as (  select distinct tn.name as taxon,
                        substr((tn.name), 1, instr(tn.name||' ', ' ') - 1) as first_word,
                        pi.name as project_id
@@ -60,8 +61,8 @@
                 where ens.taxon_id = tn.taxon_id
                   and tn.name_class = 'scientific name' 
                   and ens.row_project_id = pi.project_id
-              -- get names from apidb.Organism.family_name_for_files
-              -- (may not be necessary)
+              /* get names from apidb.Organism.family_name_for_files */
+              /* (may not be necessary) */
               union
                 select family_name_for_files as taxon,
                        substr((family_name_for_files), 1, instr(family_name_for_files||' ', ' ') - 1) as first_word,
@@ -69,12 +70,12 @@
                 from apidb.Organism
                 where family_name_for_files in (select name from sres.TaxonName)
                 ),
-          mononym -- a taxon name that's the first word of a local taxon
+          mononym /* a taxon name that's the first word of a local taxon */
           as (select distinct lower(lt.first_word) as taxon, lt.project_id
               from local_taxon lt, sres.TaxonName tn
               where lt.first_word = tn.name
                 and tn.name_class = 'scientific name'),
-          full_name -- the full name of a local taxon whose first name is not a taxon
+          full_name /* the full name of a local taxon whose first name is not a taxon */
           as (select distinct lower(lt.taxon) as taxon, lt.project_id
               from local_taxon lt, sres.TaxonName tn
               where lt.taxon = tn.name
@@ -99,10 +100,10 @@
 
 
   <tuningTable name="GoTermSummary" prefixEnabled="true">
-    <!-- GoTermSummary: each row represents one GO term assignment to one gene.
+    <comment>GoTermSummary: each row represents one GO term assignment to one gene.
          (Typically, a gene has multiple such assignments.) This is used for
           finding gene-GO mappings, such as for the gene-page GO table.
-      -->
+    </comment>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.GoAssociation"/>
@@ -162,10 +163,10 @@ tablespace indx
 
 
   <tuningTable name="DatasetExampleSourceId">
-    <!-- Each row maps a dataset onto an ID for which the dataset contains data;
+    <comment> Each row maps a dataset onto an ID for which the dataset contains data;
          each dataset gets one such row.
          Used in dataset record queries.
-      -->
+      </comment>
     <externalDependency name="apidb.Profile"/>
     <externalDependency name="apidb.ProfileSet"/>
     <externalDependency name="apidb.ProfileElement"/>
@@ -198,22 +199,22 @@ where p.rn = 1
   </tuningTable>
 
   <tuningTable name="GeneWord">
-    <!-- Each row maps a gene source_id to all words found in the gene's product field
+    <comment> Each row maps a gene source_id to all words found in the gene's product field
          Used in the word enrichment analysis plugin
          The trick sql was cribbed and modified from: nuijten.blogspot.com/2011/08/splitting-comma-delimited-string-regexp.html
-      -->
+      </comment>
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
         create table GeneWord&1 nologging as
         select source_id, taxon_id,
-               -- for each rn (1 - max_words_in_any_product),
-               --    print the rn-th word.
-               --    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
+               /* for each rn (1 - max_words_in_any_product), */
+               /*    print the rn-th word. */
+               /*    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN */
                substr(regexp_replace(regexp_substr (product, '[^ ,]+', 1, rn), '[\)\(]', ''), 1, 200) word
         from GeneAttributes
         cross
-               -- create a table of integers 1 - n where n is the max number of words in any product
+               /* create a table of integers 1 - n where n is the max number of words in any product */
         join (select rownum rn
               from (select max (regexp_count (product, '[ ,]')) + 1 mx
                     from GeneAttributes)
@@ -232,9 +233,9 @@ where p.rn = 1
   </tuningTable>
 
   <tuningTable name="OrganismAttributes">
-    <!-- Stores per-organism information. Used by the organism record, as well
+    <comment> Stores per-organism information. Used by the organism record, as well
          as by project_id(), the function that maps an organism to a project.
-      -->
+      </comment>
     <internalDependency name="TaxonSpecies"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="GeneId"/>
@@ -482,7 +483,7 @@ SELECT o.project_name as project_id,
        o.family_name_for_files,
        tn.name as organism_name,
        o.genome_source,
-       --o.strain_abbrev,
+       /*o.strain_abbrev, */
        o.is_annotated_genome,
        o.is_reference_strain,
        o.is_family_representative,
@@ -548,10 +549,10 @@ tablespace indx
 
 
   <tuningTable name="PdbSimilarity">
-    <!-- Each record maps a gene to a PDB structure. Used by the model to find
+    <comment> Each record maps a gene to a PDB structure. Used by the model to find
          genes that have a PDB structure and to find the PDB structures for a
          given gene.
-      -->
+      </comment>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.ExternalAaSequence"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -612,11 +613,11 @@ tablespace indx
 
 
   <tuningTable name="SequencePieceClosure" prefixEnabled="true">
-    <!-- Extends dots.SequencePiece to handle multiple levels. Used in
+    <comment> Extends dots.SequencePiece to handle multiple levels. Used in
          sequence-record queries and in other tuning tables, including
          SequenceAttributes, FeatureLocation, BlatAlignmentLocation,
          and SimilaritySpanLocation
-      -->
+      </comment>
     <externalDependency name="dots.SequencePiece"/>
     <sql>
       <![CDATA[
@@ -639,7 +640,7 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
-        /* known issue: this should be run not just once, but iteratively
+        /* known issue: this should be run not just once, but iteratively */
            until it doesn't create new records.  Currently (7/2008),
            SequencePieces aren't nested even once. */
         insert into &prefixSequencePieceClosure&1
@@ -668,12 +669,12 @@ tablespace indx
 
 
   <tuningTable name="FeatureLocation" prefixEnabled="true">
-    <!-- Addresses a performance problem with feature location queries, namely
+    <comment> Addresses a performance problem with feature location queries, namely
          that the sequence and the location on that sequence are in different
          tables, so it's impossible to create an index on the whole shebang.
          Used by both model and GBrowse queries, as well as inputs to a
          dozen-odd other tuning tables.
-      -->
+      </comment>
     <internalDependency name="SequencePieceClosure"/>
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="core.ProjectInfo"/>
@@ -719,7 +720,7 @@ where nf.na_feature_id = nl.na_feature_id
   and tn.name_class = 'scientific name'
   and (ns.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
 union
-select -- virtual feature locations mapped through SequencePiece
+select /* virtual feature locations mapped through SequencePiece */
        case
          when nf.subclass_view = 'GeneFeature'
               and nf.is_predicted = 1
@@ -853,7 +854,7 @@ tablespace indx
 
 
   <tuningTable name="GeneId" prefixEnabled="true">
-  <!-- GeneId maps any valid ID for a gene onto its official ID. These two quantities
+  <comment> GeneId maps any valid ID for a gene onto its official ID. These two quantities
        are stored in the "id" and "gene" columns, respectively. The "unique_mapping"
        column is set to 1 for IDs which map to only one gene.
 
@@ -862,7 +863,7 @@ tablespace indx
        the "union_member" field with a different literal string, to make it easier to
        understand which part (or parts) of the SQL is responsible for each ID-to-gene
        mapping.
-    -->
+    </comment>
     <internalDependency name="FeatureLocation"/>
     <externalDependency name="apidb.GeneFeatureName"/>
     <externalDependency name="dots.DbRefNaFeature"/>
@@ -884,12 +885,12 @@ CREATE TABLE &prefixGeneId&1 NOLOGGING AS
 SELECT substr(mapping.id, 1, 100) as id, mapping.gene, cast (null as NUMBER) as unique_mapping,
        SUBSTR(apidb.tab_to_string(set(CAST(COLLECT(union_member order by union_member) AS apidb.varchartab)),'; '), 1, 100) as union_member, 
        SUBSTR(apidb.tab_to_string(set(CAST(COLLECT(database_name order by database_name) AS apidb.varchartab)),'; '), 1, 200) as database_name
---   we would use listagg() as follows, but it repeats duplicate values, and doesn't provide a way to aggregate DISTINCT values. (lame!)
---       substr(listagg(union_member, '; ') within group (order by union_member), 1, 100) as union_member,
---       substr(listagg(database_name, '; ') within group (order by database_name), 1, 200) as database_name
+/*   we would use listagg() as follows, but it repeats duplicate values, and doesn't provide a way to aggregate DISTINCT values. (lame!) */
+/*       substr(listagg(union_member, '; ') within group (order by union_member), 1, 100) as union_member, */
+/*       substr(listagg(database_name, '; ') within group (order by database_name), 1, 200) as database_name */
 FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
              gf.source_id AS gene,
-             'Transcript.protein_id before dot' as union_member, ed.name as database_name -- dots.Transcript.protein_id, trimmed at period
+             'Transcript.protein_id before dot' as union_member, ed.name as database_name /* dots.Transcript.protein_id, trimmed at period */
       FROM dots.Transcript t, dots.GeneFeature gf,
            sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
       WHERE t.parent_id = gf.na_feature_id
@@ -899,7 +900,7 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
      UNION
       SELECT t.protein_id AS id,
              gf.source_id AS gene,
-             'Transcript.protein_id' as union_member, ed.name as database_name -- dots.Transcript.protein_id
+             'Transcript.protein_id' as union_member, ed.name as database_name /* dots.Transcript.protein_id */
       FROM dots.Transcript t, dots.GeneFeature gf,
            sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
       WHERE t.parent_id = gf.na_feature_id
@@ -909,7 +910,7 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
      UNION
       SELECT dr.primary_identifier AS id, 
              gf.source_id AS gene,
-             'DbRef.primary_identifier' as union_member, ed.name as database_name -- sres.DbRef.primary_identifier
+             'DbRef.primary_identifier' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier */
       FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
            sres.DbRef dr, sres.ExternalDatabaseRelease edr,
            sres.ExternalDatabase ed
@@ -938,7 +939,7 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
      UNION
       SELECT dr.secondary_identifier AS id, 
              gf.source_id AS gene,
-             'DbRef.secondary_identifier' as union_member, ed.name as database_name -- sres.DbRef.secondary_identifier
+             'DbRef.secondary_identifier' as union_member, ed.name as database_name /* sres.DbRef.secondary_identifier */
       FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
            sres.DbRef dr, sres.ExternalDatabaseRelease edr,
            sres.ExternalDatabase ed
@@ -957,7 +958,7 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
      UNION
       SELECT dr.primary_identifier AS id, 
              gf.source_id AS gene,
-             'genbank DbRef.primary_identifier' as union_member, ed.name as database_name -- sres.DbRef.primary_identifier for Genbank records
+             'genbank DbRef.primary_identifier' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier for Genbank records */
       FROM dots.GeneFeature gf, dots.Transcript t, dots.DbRefNaSequence drns,
            sres.DbRef dr, sres.ExternalDatabaseRelease edr,
             sres.ExternalDatabase ed
@@ -970,7 +971,7 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
      UNION
       SELECT pred_loc.feature_source_id AS id,
              gene_loc.feature_source_id AS gene,
-             'overlapping predicted gene source_id' as union_member, ed.name as database_name -- dots.GeneFeature.source_id for predicted genes that overlap
+             'overlapping predicted gene source_id' as union_member, ed.name as database_name /* dots.GeneFeature.source_id for predicted genes that overlap */
       FROM &prefixFeatureLocation gene_loc, &prefixFeatureLocation pred_loc,
            sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
       WHERE pred_loc.feature_type = 'GenePrediction'
@@ -983,7 +984,7 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
         AND edr.external_database_id = ed.external_database_id
      UNION
       SELECT ng.name AS id, gf.source_id AS gene,
-             'NaGene' as union_member, ed.name as database_name -- dots.NaGene.name
+             'NaGene' as union_member, ed.name as database_name /* dots.NaGene.name */
       FROM dots.GeneFeature gf, dots.NaFeatureNaGene nfng, dots.NaGene ng,
            sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
       WHERE gf.na_feature_id = nfng.na_feature_id
@@ -992,14 +993,14 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
         AND edr.external_database_id = ed.external_database_id
      UNION
       SELECT source_id AS id, source_id AS gene,
-             'same ID' as union_member, ed.name as database_name -- same ID (reflexive mapping)
+             'same ID' as union_member, ed.name as database_name /* same ID (reflexive mapping) */
       FROM dots.GeneFeature gf,
            sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
       WHERE gf.external_database_release_id = edr.external_database_release_id
         AND edr.external_database_id = ed.external_database_id
      UNION
       SELECT n.name AS id, gf.source_id AS gene,
-             'gene name' as union_member, d.name as database_name -- apidb.GeneFeatureName.name
+             'gene name' as union_member, d.name as database_name /* apidb.GeneFeatureName.name */
       from apidb.GeneFeatureName n, dots.genefeature gf, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d
       where n.na_feature_id = gf.na_feature_id
         and gf.external_database_release_id =r.external_database_release_id
@@ -1093,19 +1094,19 @@ SELECT stable_id, comment_id, comment_stable_id
 FROM &prefixNewCsi
       ]]>
     </sql>
-    <!-- this program, which merely lists changes made by the SQL above,
-         is sometmes a source of errors and not really needed -->
-    <!-- program commandLine="showNewCommentLinks"/ -->
+    <comment> this program, which merely lists changes made by the SQL above,
+         is sometmes a source of errors and not really needed </comment>
+    <comment> program commandLine="showNewCommentLinks"/ </comment>
   </tuningTable>
 
 
   <tuningTable name="SequenceId">
-  <!-- This table maps IDs for a sequence onto the official ID of the sequence.
+  <comment> This table maps IDs for a sequence onto the official ID of the sequence.
        It is analogous to GeneId, which does the same thing for genes. Used by
        genomic-sequence record queries, by the sequence retrieval tool, and by
        the BasketFixer, which updates users' baskets at release time to replace
        old IDs with updated ones.
-    -->
+    </comment>
     <externalDependency name="dots.DbRefNaSequence"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="sres.DbRef"/>
@@ -1157,8 +1158,8 @@ tablespace indx
 
 
   <tuningTable name="EpitopeSummary">
-    <!-- Used by GeneTables.Epitopes to map a gene to its epitopes.
-     -->
+    <comment> Used by GeneTables.Epitopes to map a gene to its epitopes.
+     </comment>
     <externalDependency name="dots.AaLocation"/>
     <externalDependency name="dots.EpitopeFeature"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -1208,9 +1209,9 @@ tablespace indx
 
 
   <tuningTable name="GeneCentromereDistance">
-    <!-- Stores (gene, sequence, distance from centromere) 3-tuples for genes
+    <comment> Stores (gene, sequence, distance from centromere) 3-tuples for genes
          that lie on a sequence for which we have a centomere location.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <externalDependency name="sres.SequenceOntology"/>
     <sql>
@@ -1240,9 +1241,9 @@ tablespace indx
 
 
   <tuningTable name="SageTagLibraryTotal">
-    <!-- For each sage-tag library, store the total of the counts of all tags.
+    <comment> For each sage-tag library, store the total of the counts of all tags.
          Used by GeneTables.SageTags.
-     -->
+     </comment>
     <externalDependency name="rad.DataTransformationResult"/>
     <externalDependency name="rad.Analysis"/>
     <externalDependency name="rad.Protocol"/>
@@ -1261,10 +1262,10 @@ tablespace indx
 
 
   <tuningTable name="SageTagAnalysisAttributes">
-    <!-- Stores information specific to a given SAGE tag within a given library.
+    <comment> Stores information specific to a given SAGE tag within a given library.
          Used by gene and sage-tag queries in the model, by GBrowse queries, and
          in the creation of the tuning tables SageTagGene and SageTagAttributes.
-     -->
+     </comment>
     <internalDependency name="SageTagLibraryTotal"/>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.SageTagFeature"/>
@@ -1358,10 +1359,10 @@ tablespace indx
 
 
   <tuningTable name="SageTagGene">
-    <!-- Stores info about colocated gene-sage tag pairs. Used by the model for
+    <comment> Stores info about colocated gene-sage tag pairs. Used by the model for
          sage tag and gene queries, and in the creation of the tuning tables
          OrganismAttributes and SageTagAttributes.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="SageTagAnalysisAttributes"/>
     <externalDependency name="rad.DataTransformationResult"/>
@@ -1506,11 +1507,11 @@ tablespace indx
 
 
   <tuningTable name="GeneAttributes" prefixEnabled="true">
-    <!-- The BFMV for the gene record. Each gene gets a single record, which
+    <comment> The BFMV for the gene record. Each gene gets a single record, which
          stores all its attributes. Used widely, in the model and elsewhere, for
          queries involving genes, as well as in the creation of more than a
          dozen other tuning tables.
-     -->
+     </comment>
     <internalDependency name="GeneId"/>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GenomicSequence"/>
@@ -2016,7 +2017,7 @@ WHERE gf.source_id = gene.source_id
   AND gf.source_id = stunnenberg.source_id(+)
       ]]>
     </sql>
-<!-- 
+<comment> 
     <sql>
       <![CDATA[
 create table GeneAttributesDuplicates nologging as
@@ -2024,7 +2025,7 @@ select ga.source_id, count(*) as id_count from &prefixGeneAttributes&1 ga
 group by ga.source_id having count(*) > 1
       ]]>
     </sql>
--->
+</comment>
     <sql>
       <![CDATA[
 create unique index GeneAttr_sourceId&1
@@ -2145,7 +2146,7 @@ tablespace indx
    )
       ]]>
     </sql>
-<!--
+<comment>
     <sql>
       <![CDATA[
 update &prefixGeneAttributes&1 ga
@@ -2157,7 +2158,7 @@ where ga.organism like 'Toxo%'
 and ga.orthomcl_name is null
       ]]>
     </sql>
--->
+</comment>
     <sql>
       <![CDATA[
         update &prefixGeneAttributes&1
@@ -2208,11 +2209,11 @@ and ga.orthomcl_name is null
     <sql>
       <![CDATA[
         update &prefixGeneAttributes&1
-        set gene_id = na_feature_id -- gene_id is NUMBER(10) and source_id is VARCHAR(80) 
+        set gene_id = na_feature_id /* gene_id is NUMBER(10) and source_id is VARCHAR(80)  */
         where gene_id is null
       ]]>
     </sql>
-<!--
+<comment>
 This code will scale the context start and end so that ~ 10 genes appear in the genomic context;  it is breaking ... setting most to null;  This was added to help with the gbrwose popup/labels problems.... that is now a nonissue.   This code isn't as important
     <sql>
       <![CDATA[
@@ -2235,17 +2236,17 @@ This code will scale the context start and end so that ~ 10 genes appear in the 
                                                     )
       ]]>
     </sql>
--->
+</comment>
   </tuningTable>
 
 
   <tuningTable name="GenomicSequence" prefixEnabled="true">
-    <!-- Combines ExternalNaSequence with VirtualSequence, while excluding
+    <comment> Combines ExternalNaSequence with VirtualSequence, while excluding
          ExternalNaSequence records whose source_id also appears in
          VirtualSequence. Used by both model and GBrowse queries, as well as in
          the creation of several tuning tables, including SequenceAttributes and
          GeneAttributes. 
-     -->
+     </comment>
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="dots.VirtualSequence"/>
     <externalDependency name="sres.SequenceOntology"/>
@@ -2265,7 +2266,7 @@ CREATE TABLE &prefixGenomicSequence&1 NOLOGGING AS
     AND so.term_name != 'EST'
     AND so.term_name != 'oligo'
     AND (ens.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
-    AND -- see both? use the VirtualSequence.
+    AND /* see both? use the VirtualSequence. */
         ens.source_id IN (SELECT source_id FROM dots.ExternalNaSequence
                          MINUS
                           SELECT source_id FROM dots.VirtualSequence)
@@ -2302,11 +2303,11 @@ tablespace indx
 
 
   <tuningTable name="SequenceAttributes" prefixEnabled="true">
-    <!-- Each row represents one genomic sequence for which a WDK sequence
+    <comment> Each row represents one genomic sequence for which a WDK sequence
          record can be instantiated. Used widely in the workflow, the model,
          and GBrowse, as well as in the creation of a dozen or so other tuning
          tables.
-     -->
+     </comment>
     <internalDependency name="GenomicSequence"/>
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SequencePieceClosure"/>
@@ -2393,12 +2394,12 @@ create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequenc
     </sql>
   </tuningTable>
 
-  <!-- NGS SNP only -->
+  <comment> NGS SNP only </comment>
   <tuningTable name="SnpAttributes" prefixEnabled="true">
-    <!-- Each record represents one SNP. Widely used in the model, as well as in
+    <comment> Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, including SnpSummary and
          IsolateSnps.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -2423,7 +2424,7 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        decode(snp.position_in_cds, null, 0, 1) as is_coding,
        snp.position_in_CDS,
        snp.position_in_protein,
-       -- has_nonsynonymous should be false if any products are stops
+       /* has_nonsynonymous should be false if any products are stops */
        case when stopcodonsnps.total_stop_codon_snps is null then snp.has_nonsynonymous_allele else 0 end as has_nonsynonymous_allele,
        snp.major_allele, 
        snp.minor_allele,
@@ -2523,12 +2524,12 @@ tablespace indx
     </sql>
   </tuningTable>
 
-  <!-- SNP Chip only, such as Plasmo barcode, 3k_chp and hd_array -->
+  <comment> SNP Chip only, such as Plasmo barcode, 3k_chp and hd_array </comment>
   <tuningTable name="SnpChipAttributes">
-    <!-- Each record represents one SNP. Widely used in the model, as well as in
+    <comment> Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, including SnpSummary and
          IsolateSnps.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -2648,10 +2649,10 @@ tablespace indx
 
 
   <tuningTable name="HtsVariant">
-    <!-- This table is like SeqVariation, but only for HTS SNPs, and filtered
+    <comment> This table is like SeqVariation, but only for HTS SNPs, and filtered
          for allele_percent > 80. Used in SNP queries, and to make the
          GoodHtsSnp tuning table.
-     -->
+     </comment>
     <internalDependency name="SnpChipAttributes"/>
     <externalDependency name="dots.SeqVariation"/>
     <sql>
@@ -2667,8 +2668,8 @@ tablespace indx
           and snp.ncbi_tax_id = t.ncbi_tax_id
           and snp.type = 'HTS'
           and var.name = 'SNP'
-          and var.allele != 'undefined' -- this actually shows up in some crypto records
-              -- we can only use this allele_percent cutoff for haploid parasites, like plasmodium and toxoplasma
+          and var.allele != 'undefined' /* this actually shows up in some crypto records */
+              /* we can only use this allele_percent cutoff for haploid parasites, like plasmodium and toxoplasma */
           and (var.allele_percent > 80 or var.allele_percent is null)
         group by snp.na_feature_id, var.allele, var.strain
       ]]>
@@ -2687,8 +2688,8 @@ tablespace indx
     <sql>
       <![CDATA[
         create index htsvar_ix&1
-        on HtsVariant&1 (strain, species_taxon_id,   -- access predicates for strain comparison
-                         snp_source_id, allele, product) -- others
+        on HtsVariant&1 (strain, species_taxon_id,   /* access predicates for strain comparison */
+                         snp_source_id, allele, product) /* others */
         tablespace indx
       ]]>
     </sql>
@@ -2696,23 +2697,23 @@ tablespace indx
 
 
   <tuningTable name="GoodHtsSnp">
-    <!-- One record per HTS SNP location, rolled up from HtsVariant. Used for
+    <comment> One record per HTS SNP location, rolled up from HtsVariant. Used for
          SNP queries.
-     -->
+     </comment>
     <internalDependency name="HtsVariant"/>
     <sql>
       <![CDATA[
         create table GoodHtsSnp&1 nologging as
-        with snp_alleles -- one row per (SNP, allele) pair
+        with snp_alleles /* one row per (SNP, allele) pair */
              as (select snp_na_feature_id, max(snp_source_id) as snp_source_id, max(species_taxon_id) as taxon_id,
                         allele, max(product) as product, count(*) as strain_count
                  from HtsVariant
                  group by snp_na_feature_id, allele),
-             ranked_alleles -- add ranking within SNP: 1 for major allele, 2 for silver medalist, et c.
+             ranked_alleles /* add ranking within SNP: 1 for major allele, 2 for silver medalist, et c. */
              as (select snp_na_feature_id, allele, snp_source_id, taxon_id, product, strain_count,
                         row_number() over (partition by snp_na_feature_id order by strain_count desc) as ranking
                  from snp_alleles),
-             allele_majority -- break out attributes to major_X and minor_X
+             allele_majority /* break out attributes to major_X and minor_X */
              as (select snp_na_feature_id, snp_source_id, taxon_id, strain_count,
                         case when ranking = 1 then strain_count else 0 end as major_allele_count,
                         case when ranking = 1 then 0 else strain_count end as minor_allele_count,
@@ -2736,9 +2737,9 @@ tablespace indx
     <sql>
       <![CDATA[
         create index goodSnp_ix&1
-        on GoodHtsSnp&1 (taxon_id, strain_count, -- access predicates
-                         minor_allele_frequency, -- filter predicates
-                         source_id, major_allele, minor_allele, major_product, minor_product) -- selectables
+        on GoodHtsSnp&1 (taxon_id, strain_count, /* access predicates */
+                         minor_allele_frequency, /* filter predicates */
+                         source_id, major_allele, minor_allele, major_product, minor_product) /* selectables */
         tablespace indx
       ]]>
     </sql>
@@ -2746,9 +2747,9 @@ tablespace indx
 
 
   <tuningTable name="OrfAttributes">
-    <!-- Each record represents an ORF. Used by the model and the sequence
+    <comment> Each record represents an ORF. Used by the model and the sequence
          retrieval tool for ORF-related queries.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GenomicSequence"/>
     <internalDependency name="ProjectTaxon"/>
@@ -2784,7 +2785,7 @@ WHERE sequence.na_sequence_id = nl.na_sequence_id
   AND nl.is_top_level = 1
   AND so.term_name = 'ORF'
   AND tn.name_class='scientific name'
---  AND nl.feature_type = 'Miscellaneous'
+/*  AND nl.feature_type = 'Miscellaneous' */
       ]]>
     </sql>
     <sql>
@@ -2803,9 +2804,9 @@ tablespace indx
 
 
   <tuningTable name="EstAttributes">
-    <!-- Each row represents one EST. Used widely in the model, and to make the
+    <comment> Each row represents one EST. Used widely in the model, and to make the
          tuning tables BlastTypes, OrganismAbbreviationBlast, and OrganismAttributes.
-     -->
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.BlatAlignment"/>
     <externalDependency name="dots.Est"/>
@@ -2872,11 +2873,11 @@ tablespace indx
 
 
   <tuningTable name="BlatAlignmentLocation">
-    <!-- Locations of BLAT alignments, both on the sequences they're annotated
+    <comment> Locations of BLAT alignments, both on the sequences they're annotated
          onto and also transitively through SequencePiece. Used in model and
          GBrowse queries, as well as in the creation of the tuning tables
          EstAlignmentGeneSummary and AsmAlignmentGeneSummary.
-     -->
+     </comment>
     <internalDependency name="SequencePieceClosure"/>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.BlatAlignment"/>
@@ -3014,7 +3015,9 @@ sub getReversedTstarts {
   my @ts = split(',',$tstart);
   my @bs = split(',',$blocksizes);
   my @new;
-  for(my $a = scalar(@ts) - 1;$a >= 0;$a--){
+  
+  TODO NEED TO CHANGE THIS TO $a minusMinus
+  for(my $a = scalar(@ts) - 1;$a >= 0;$a- -){
     push(@new,($dfl + $len - $ts[$a] - $bs[$a] + 2));
   }
   return join(',',@new);
@@ -3025,8 +3028,8 @@ sub getReversedTstarts {
 
 
   <tuningTable name="BlatProtAlignLocation">
-    <!-- BLAT protein alignments. Used by GBrowse for the track proteinAlignment:BLAT
-     -->
+    <comment> BLAT protein alignments. Used by GBrowse for the track proteinAlignment:BLAT
+     </comment>
     <internalDependency name="SequencePieceClosure"/>
     <externalDependency name="apidb.BlatProteinAlignment"/>
     <externalDependency name="core.TableInfo"/>
@@ -3154,7 +3157,8 @@ sub getReversedTstarts {
   my @ts = split(',',$tstart);
   my @bs = split(',',$blocksizes);
   my @new;
-  for(my $a = scalar(@ts) - 1;$a >= 0;$a--){
+  TODO  NEED TO CHANGE THIS TO $a minusMinus
+  for(my $a = scalar(@ts) - 1;$a >= 0;$a- -){
     push(@new,($dfl + $len - $ts[$a] - $bs[$a] + 2));
   }
   return join(',',@new);
@@ -3165,10 +3169,10 @@ sub getReversedTstarts {
 
 
   <tuningTable name="EstAlignmentGeneSummary">
-    <!-- Each row represents a colocated EST alignment - gene pair. Used by the
+    <comment> Each row represents a colocated EST alignment - gene pair. Used by the
          model, by generateGeneMetrics, and in the creation of the
          OrganismAttributes tuning table
-     -->
+     </comment>
     <internalDependency name="GenomicSequence"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="BlatAlignmentLocation"/>
@@ -3210,7 +3214,7 @@ SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
     <sql>
       <![CDATA[
 CREATE TABLE EstAlignmentNoGene NOLOGGING AS
-SELECT * from EstAlignmentGene WHERE 1=0 UNION -- define datatype for null column
+SELECT * from EstAlignmentGene WHERE 1=0 UNION /* define datatype for null column */
 SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
        e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
        ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
@@ -3227,8 +3231,8 @@ WHERE e.na_sequence_id = ba.query_na_sequence_id
   AND aseq.na_sequence_id = ba.query_na_sequence_id
   AND ba.target_na_sequence_id = sequence.na_sequence_id
   AND ba.blat_alignment_id IN
-   ( -- set of blat_alignment_ids not in in first leg of UNION
-    -- (because they overlap no genes)
+   ( /* set of blat_alignment_ids not in in first leg of UNION */
+    /* (because they overlap no genes) */
     SELECT ba.blat_alignment_id
     FROM dots.BlatAlignment ba, dots.NaSequence query_sequence,
          sres.SequenceOntology so
@@ -3269,11 +3273,11 @@ tablespace indx
 
 
   <tuningTable name="SnpStrains">
-    <!-- Each record captures info for an (organism, strain,
+    <comment> Each record captures info for an (organism, strain,
          external_database_release_id) 3-tuple. Used in the model, including
          gene and SNP queries, as well as the gene record. Also used by the
          FindPolymorphismsPlugin in the workflow.
-     -->
+     </comment>
     <internalDependency name="OrganismAttributes"/>
     <externalDependency name="apidb.Snp"/>
     <externalDependency name="apidb.Datasource"/>
@@ -3309,7 +3313,7 @@ WHERE s.study_id = sb.study_id
   and oa.component_taxon_id = ds.taxon_id
   and ds.type = 'isolates' 
   and ds.subtype = 'HTS_SNP'
-UNION -- use union to get the reference strain
+UNION /* use union to get the reference strain */
 SELECT distinct s.name as study_name
      , oa.organism_name as organism
      , o.strain_abbrev as strain
@@ -3372,11 +3376,11 @@ tablespace indx
   </tuningTable>
 
   <tuningTable name="SnpChipStrains">
-    <!-- Each record captures info for an (organism, strain,
+    <comment> Each record captures info for an (organism, strain,
          external_database_release_id) 3-tuple. Used in the model, including
          gene and SNP queries, as well as the gene record. Also used by the
          FindPolymorphismsPlugin in the workflow.
-     -->
+     </comment>
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="dots.SnpFeature"/>
     <externalDependency name="sres.ExternalDatabase"/>
@@ -3402,7 +3406,7 @@ WHERE  s.study_id = sbm.study_id
    AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
    AND edr.external_database_id = ed.external_database_id
    AND s.external_database_release_id = edr.external_database_release_id
-   --AND bmc.ONTOLOGY_ENTRY_ID = 96 -- strain
+   /*AND bmc.ONTOLOGY_ENTRY_ID = 96  strain */
    AND oe.category = 'BioMaterialCharacteristics'
    AND oe.value = 'StrainOrLine'
    and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
@@ -3447,13 +3451,13 @@ tablespace indx
 
 
   <tuningTable name="IsolateAttributes">
-    <!-- The BFMV for the WDK isolate record. Widely used in the model for
+    <comment> The BFMV for the WDK isolate record. Widely used in the model for
          queries related to isolates (including gene and SNP queries as well as
          isolate queries). Used as input in the creation of half a dozen other
          tuning tables, including GeneIsolateOverlap, IsolateSequence,
          IsolateSNPs, OrganismAttributes, SnpsWithIsolates, and TajimasStats.
          Aggregated into portal instances for use in the portal site.
-     -->
+     </comment>
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="apidb.IsolateMapping"/>
     <externalDependency name="apidb.IsolateVocabulary"/>
@@ -3488,7 +3492,7 @@ select null as na_sequence_id,
        nvl(geographic_location.value, 'Unknown') as geographic_location,
       'N/A' as product,
        null as note,
-       --b.description,
+       /*b.description,  */
        null as description,
        null as is_reference,
        project.name as project_id,
@@ -3499,7 +3503,7 @@ select null as na_sequence_id,
        null as length, 
        null as pcr_primers, 
        null as collected_by
- From -- study.Biosource b, 
+ From /* study.Biosource b,  */
      study.biomaterial b,
      study.Study s, 
      rad.StudyBiomaterial sb, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
@@ -3570,7 +3574,7 @@ and b.bio_material_id = strain.bio_material_id (+)
 and b.bio_material_id = host.bio_material_id (+)
 and b.bio_material_id = isolation_source.bio_material_id (+)
 and b.bio_material_id = geographic_location.bio_material_id (+)
-UNION -- sequence typed isolate 
+UNION /* sequence typed isolate  */
 select i.na_sequence_id,
        i.na_feature_id,
        null as bio_material_id,
@@ -3673,7 +3677,7 @@ WHERE i.na_sequence_id = i_s.na_sequence_id
 and i.na_sequence_id = s_h.na_sequence_id
 and i.na_sequence_id = g_l.na_sequence_id
 and i.na_sequence_id = prod.na_sequence_id (+)
-UNION -- SNPChip: similar to HTS SNPs except metadata are loaded differently
+UNION /* SNPChip: similar to HTS SNPs except metadata are loaded differently */
 select distinct null as na_sequence_id,
        null as na_feature_id,
        0 as bio_material_id,
@@ -3772,8 +3776,8 @@ tablespace indx
 
 
   <tuningTable name="ChIPProtocolParams">
-    <!-- Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by GBrowse.
-     -->
+    <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by GBrowse.
+     </comment>
     <externalDependency name="rad.Analysis"/>
     <externalDependency name="rad.AnalysisParam"/>
     <externalDependency name="rad.ProtocolParam"/>
@@ -3822,7 +3826,7 @@ from   rad.analysis a,rad.protocol p,
 where a.protocol_id = p.protocol_id
 and p.name in ('ChIP chip Smoothed',
                'ChIP chip Peak Calls',
-                -- legacy ones too
+                /* legacy ones too */
                 'NimbleScan_ChIP_Hakimi_called_peaks',
                 'NimbleScan_ChIP_Hakimi',
                 'NimbleGen_ChIP_Myler_Lmajor',
@@ -3853,9 +3857,9 @@ tablespace indx
 
 
   <tuningTable name="ChIPchipGene">
-    <!-- Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by
+    <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by
          generateGeneMetrics. Also an input to OrganismAttributes.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="SequenceAttributes"/>
@@ -3873,7 +3877,7 @@ select distinct
         ELSE round(abs(ga.end_max - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)),0) 
       END as distance,
       CASE 
-        WHEN -- distance > 0
+        WHEN /* distance > 0 */
           CASE WHEN ga.is_reversed = 0 
             THEN ga.start_min - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)
             ELSE ga.end_max - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)
@@ -3915,9 +3919,9 @@ tablespace indx
 
 
   <tuningTable name="TFBSGene">
-    <!-- Used by gene queries, as well as by generateGeneMetrics. Also an input
+    <comment> Used by gene queries, as well as by generateGeneMetrics. Also an input
          to OrganismAttributes.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="SequenceAttributes"/>
@@ -3936,7 +3940,7 @@ select distinct
         ELSE round(abs(ga.end_max - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)),0) 
       END as distance,
       CASE 
-        WHEN -- distance > 0
+        WHEN /* distance > 0 */
           CASE WHEN ga.is_reversed = 0 
             THEN ga.start_min - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)
             ELSE ga.end_max - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)
@@ -3980,9 +3984,9 @@ tablespace indx
 
 
   <tuningTable name="SageTagAttributes">
-    <!-- The BFMV for the SAGE tag WDK record. Widely used in the model, as
+    <comment> The BFMV for the SAGE tag WDK record. Widely used in the model, as
          well as by GBrowse. Propagated to portal instances for use there.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="ProjectTaxon"/>
@@ -4061,9 +4065,9 @@ tablespace indx
 
 
   <tuningTable name="AsmAlignmentGeneSummary">
-    <!-- Each record represents a 2-tuple of a gene and a colocated assembly
+    <comment> Each record represents a 2-tuple of a gene and a colocated assembly
          alignment. Used in assembly ID queries and in the assembly record.
-     -->
+     </comment>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="GenomicSequence"/>
     <internalDependency name="BlatAlignmentLocation"/>
@@ -4100,7 +4104,7 @@ SELECT ba.blat_alignment_id, ba.query_na_sequence_id, a.source_id, a.number_of_c
     <sql>
       <![CDATA[
 CREATE TABLE AsmAlignmentNoGene NOLOGGING AS
-SELECT * from AsmAlignmentGene WHERE 1=0 UNION -- define datatype for null column
+SELECT * from AsmAlignmentGene WHERE 1=0 UNION /* define datatype for null column */
 SELECT ba.blat_alignment_id, ba.query_na_sequence_id, a.source_id, a.number_of_contained_sequences AS est_count, a.length,
          ba.query_taxon_id, ba.target_na_sequence_id,
          ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
@@ -4116,8 +4120,8 @@ SELECT ba.blat_alignment_id, ba.query_na_sequence_id, a.source_id, a.number_of_c
   WHERE a.na_sequence_id = ba.query_na_sequence_id
     AND sequence.na_sequence_id = ba.target_na_sequence_id
     AND ba.blat_alignment_id IN
-   ( -- set of blat_alignment_ids not in in first leg of UNION
-    -- (because they overlap no genes)
+   ( /* set of blat_alignment_ids not in in first leg of UNION */
+    /* (because they overlap no genes) */
     SELECT ba.blat_alignment_id
     FROM dots.BlatAlignment ba, dots.NaSequence query_sequence,
          sres.SequenceOntology so
@@ -4140,9 +4144,9 @@ SELECT * FROM AsmAlignmentGene
 
 
   <tuningTable name="Subcellular">
-    <!-- Each record maps a gene onto a subcellular location. Used by
+    <comment> Each record maps a gene onto a subcellular location. Used by
          GenesBySubcellularLocalization.
-     -->
+     </comment>
     <internalDependency name="GeneId"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
@@ -4183,9 +4187,9 @@ tablespace indx
 
 
   <tuningTable name="TajimasStats">
-    <!-- Each record stores values for the Tajima's D statistic associated with
+    <comment> Each record stores values for the Tajima's D statistic associated with
          a particular N value. Used by GenesByTajimasDHtsSnps.
-     -->
+     </comment>
     <internalDependency name="IsolateAttributes"/>
     <sql>
       <![CDATA[ 
@@ -4261,10 +4265,10 @@ SQL
 
 
   <tuningTable name="SimilaritySpanLocation">
-    <!-- Like dots.SimilaritySpan, except that for sequences that are mapped by
+    <comment> Like dots.SimilaritySpan, except that for sequences that are mapped by
          SequencePiece into parts of other sequences, both locations are stored.
          Used by GBrowse, and also in the creation of the Blastx tuning table.
-     -->
+     </comment>
     <externalDependency name="dots.Similarity"/>
     <externalDependency name="dots.SimilaritySpan"/>
     <externalDependency name="core.TableInfo"/>
@@ -4350,9 +4354,9 @@ tablespace indx
 
 
   <tuningTable name="IsolateSNPs">
-    <!-- Associates SNPs with isolates. Used for the SNP record and for SNP ID
+    <comment> Associates SNPs with isolates. Used for the SNP record and for SNP ID
          queries, as well as for the creation of the SnpsWithIsolates tuning table.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="IsolateAttributes"/>
     <internalDependency name="SnpChipAttributes"/>
@@ -4404,9 +4408,9 @@ tablespace indx
 
 
   <tuningTable name="SnpsWithIsolates">
-    <!-- Each record summarizes statistics for a single SNP location within a
+    <comment> Each record summarizes statistics for a single SNP location within a
          single isolate external database release. Used by GBrowse.
-     -->
+     </comment>
     <internalDependency name="IsolateAttributes"/>
     <internalDependency name="IsolateSNPs"/>
     <sql>
@@ -4461,9 +4465,9 @@ where swa.major_allele is null
 
 
   <tuningTable name="Blastp">
-    <!-- Each record stores a Blastp similarity of a gene. Used by the gene-page
+    <comment> Each record stores a Blastp similarity of a gene. Used by the gene-page
          Blastp table. 
-     -->
+     </comment>
     <externalDependency name="dots.Similarity"/>
     <externalDependency name="dots.ExternalAaSequence"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -4487,7 +4491,7 @@ select rownum as blastp_id, gf.source_id, ga.project_id, sim.similarity_id,
 from dots.Similarity sim, core.TableInfo qti, core.TableInfo sti, dots.ExternalAaSequence subject,
      dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf,
      sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
-     dots.NaSequence ns, -- TaxonSpecies st,
+     dots.NaSequence ns, /* TaxonSpecies st, */
      sres.TaxonName tn, GeneAttributes ga
 where qti.table_id = sim.query_table_id
   and qti.name = 'TranslatedAASequence'
@@ -4502,7 +4506,7 @@ where qti.table_id = sim.query_table_id
   and edr.external_database_id = ed.external_database_id
   and gf.na_sequence_id = ns.na_sequence_id
   and ns.taxon_id =
---    st.taxon_id and st.species_taxon_id = # TaxonSpecies mapping commented out
+/*    st.taxon_id and st.species_taxon_id = # TaxonSpecies mapping commented out */
                      tn.taxon_id
   and tn.name_class = 'scientific name'
       ]]>
@@ -4541,9 +4545,9 @@ create index Blastp_text_ix on Blastp&1(description) indextype is ctxsys.context
 
 
   <tuningTable name="GeneIsolateOverlap">
-    <!-- Each record stores a colocated (gene, isolate) 2-tuple. Used by the
+    <comment> Each record stores a colocated (gene, isolate) 2-tuple. Used by the
          gene page as well as the IsolateByOverlap query.
-     -->
+     </comment>
     <internalDependency name="IsolateAttributes"/>
     <internalDependency name="FeatureLocation"/>
     <externalDependency name="dots.Similarity"/>
@@ -4578,12 +4582,12 @@ tablespace indx
 
 
   <tuningTable name="TaxonSpecies" prefixEnabled="true">
-    <!-- Each record maps a taxon_id of interest onto the taxon_id that taxon's
+    <comment> Each record maps a taxon_id of interest onto the taxon_id that taxon's
          taxon-tree ancestor whose rank is "species". Used by
          buildAnnotationChangeTT and by gene queries, as well as an input in the
          creation of several tuning tables, including GeneAttributes and
          OrganismTree.
-     -->
+     </comment>
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="sres.Taxon"/>
     <sql>
@@ -4602,9 +4606,9 @@ where species.taxon_id in (select taxon_id from sres.Taxon
 
 
   <tuningTable name="Blastx">
-    <!-- Each record stores a Blastx similarity. Used by GBrowse for the
+    <comment> Each record stores a Blastx similarity. Used by GBrowse for the
          match:WU_BLASTX track.
-     -->
+     </comment>
     <externalDependency name="dots.ExternalAaSequence"/>
     <externalDependency name="dots.NaSequence"/>
     <internalDependency name="SimilaritySpanLocation"/>
@@ -4643,9 +4647,9 @@ where sim.query_id = extq.na_sequence_id
 
 
   <tuningTable name="TranscriptSequence">
-    <!-- Each record stores the transcript sequence of one gene. Used by the
+    <comment> Each record stores the transcript sequence of one gene. Used by the
          gene record and the sequence retrieval tool. Propagated to the portal.
-     -->
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.SplicedNaSequence"/>
@@ -4673,9 +4677,9 @@ tablespace indx
 
 
   <tuningTable name="CodingSequence">
-    <!-- Each record stores the coding sequence of one gene. Used by the
+    <comment> Each record stores the coding sequence of one gene. Used by the
          gene record and the sequence retrieval tool. Propagated to the portal.
-     -->
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.SplicedNaSequence"/>
@@ -4707,10 +4711,10 @@ tablespace indx
 
 
   <tuningTable name="ProteinSequence">
-    <!-- Each record stores the coding sequence of one gene. Used by the
+    <comment> Each record stores the coding sequence of one gene. Used by the
          gene record and the sequence retrieval tool, as well as by
          buildTrackOldAnnotationTT. Propagated to the portal.
-     -->
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
@@ -4741,11 +4745,11 @@ tablespace indx
 
 
   <tuningTable name="NaSequence">
-    <!-- Each record stores the nucleotide sequence for one genomic sequence
+    <comment> Each record stores the nucleotide sequence for one genomic sequence
          that is "official" (in the sense that it can be instantiated as a WDK
          sequence record. Used by generatePathoLogicFile and the sequence
          retrieval tool Propagated to portal instances.
-     -->
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="dots.NaSequence"/>
@@ -4771,10 +4775,10 @@ tablespace indx
 
 
   <tuningTable name="OrfSequence">
-    <!-- Each record stores the amino-acid sequence of an ORF. Used by the
+    <comment> Each record stores the amino-acid sequence of an ORF. Used by the
          relevant attribute query of the WDK ORF record, as well as by the
          sequence retrieval tool. Propagated to portal instances.
-     -->
+     </comment>
     <externalDependency name="dots.TranslatedAaSequence"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
     <internalDependency name="OrfAttributes"/>
@@ -4801,10 +4805,10 @@ tablespace indx
 
 
   <tuningTable name="EstSequence">
-    <!-- Each record stores the nucleotide sequence of an EST, for use by the
+    <comment> Each record stores the nucleotide sequence of an EST, for use by the
          relevant attribute query in the WDK EST record. Propagated to portal
          instances.
-     -->
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="sres.SequenceOntology"/>
@@ -4832,8 +4836,8 @@ tablespace indx
 
 
   <tuningTable name="AssemblySequence">
-    <!-- Holds the sequence of an assembly.
-     -->
+    <comment> Holds the sequence of an assembly.
+     </comment>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="dots.Assembly"/>
     <externalDependency name="sres.TaxonName"/>
@@ -4858,9 +4862,9 @@ tablespace indx
 
 
   <tuningTable name="UTR" prefixEnabled="true">
-    <!-- Each record represents an untranslated region (UTR) of a gene. Used by
+    <comment> Each record represents an untranslated region (UTR) of a gene. Used by
          GBrowse.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <externalDependency name="dots.ExonFeature"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -4955,10 +4959,10 @@ tablespace indx
 
 
   <tuningTable name="IsolateSequence">
-    <!-- Each record stores the nucleotide sequence of one isolate. Used in the
+    <comment> Each record stores the nucleotide sequence of one isolate. Used in the
          relevant attribute query of the WDK isolate record, as well as by
          IsolateClustalw. Propagated to portal instances.
-     -->
+     </comment>
     <internalDependency name="IsolateAttributes"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="sres.TaxonName"/>
@@ -4984,11 +4988,11 @@ tablespace indx
 
 
   <tuningTable name="TypeAheadCounts">
-    <!-- Stores strings that can be used in parameters with type-ahead, such as
+    <comment> Stores strings that can be used in parameters with type-ahead, such as
          GO terms, EC numbers, or InterPro domains. Each record stores such a
          string, along with the project ID and the number of genes with which it
          is associated. Used for gene queries.
-     -->
+     </comment>
     <internalDependency name="GeneAttributes"/>
     <externalDependency name="dots.DbRefAaFeature"/>
     <externalDependency name="sres.DbRef"/>
@@ -5071,10 +5075,10 @@ tablespace indx
 
 
   <tuningTable name="ExpressionElement">
-    <!-- Each record associates expression values for an NaFeature with that
+    <comment> Each record associates expression values for an NaFeature with that
          feature's ID and location. Used by GBrowse, as well as in the creation
          of the ChIPchipGene table.
-     -->
+     </comment>
     <internalDependency name="FeatureLocation"/>
     <externalDependency name="rad.DataTransformationResult"/>
     <sql>
@@ -5097,9 +5101,9 @@ tablespace indx
 
 
   <tuningTable name="OrthologousPair">
-    <!-- Each record contains a pair of genes that are orthologous to each other.
+    <comment> Each record contains a pair of genes that are orthologous to each other.
          Used in the creation of the tuning table OrthologGeneTable.
-     -->
+     </comment>
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
@@ -5131,10 +5135,10 @@ tablespace indx
 
 
   <tuningTable name="OrthologGeneTable">
-    <!-- Each record contains a record from OrthologousPair, augmented by the
+    <comment> Each record contains a record from OrthologousPair, augmented by the
          IS_SYNTENIC column. Used by the relevant table query of the WDK gene
          record.
-      -->
+      </comment>
     <internalDependency name="OrthologousPair"/>
     <externalDependency name="apidb.Synteny"/>
     <sql>
@@ -5172,10 +5176,10 @@ tablespace indx
 
 
   <tuningTable name="OrganismAbbreviation">
-    <!-- Each record maps an organism name onto an abbreviation, getting the
+    <comment> Each record maps an organism name onto an abbreviation, getting the
          pair either from apidb.Organism or (in the case of Tvag), hardwired
          into the below SQL. This table will eventually be replaced by workflow.
-      -->
+      </comment>
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.TaxonName"/>
     <sql>
@@ -5193,12 +5197,12 @@ tablespace indx
   </tuningTable>
 
   <tuningTable name="OrganismAbbreviationWS">
-    <!-- Stores special webservice abbreviations which are not standard organism
+    <comment> Stores special webservice abbreviations which are not standard organism
          names. Each record maps an organism name onto this abbreviation, as
          well as the species name and project ID. Used by the model and as an
          input in the creation of the OrganismAbbreviationBlast tuning table.
          Propagated to portal instances.
-      -->
+      </comment>
     <internalDependency name="OrganismAbbreviation"/>
     <internalDependency name="OrganismTree"/>
     <sql>
@@ -5209,7 +5213,7 @@ tablespace indx
        where ot.term = oa.organism
        union
        select special.organism, special.parent,special.abbreviation, ot.project_id from OrganismTree ot,(
-  -- TrichDB Repeat Genes
+  /* TrichDB Repeat Genes */
   select 'Trichomonas vaginalis G3 (Repeated Genes)' as organism, 'Trichomonas vaginalis' as parent, 'TvaginalisRG' as abbreviation from dual
 ) special
           where special.parent = ot.term
@@ -5218,9 +5222,9 @@ tablespace indx
   </tuningTable>
 
   <tuningTable name="ProjectIdTaxonLevel">
-    <!-- Groups projects by higher level taxonomy. Used in the creation of the
+    <comment> Groups projects by higher level taxonomy. Used in the creation of the
          OrganismTree tuning table.
-      -->
+      </comment>
     <internalDependency name="SequenceAttributes"/>
     <sql>
       <![CDATA[
@@ -5334,12 +5338,12 @@ tablespace indx
   </tuningTable>
 
   <tuningTable name="OrganismTree">
-    <!-- Group species by higher level taxonomy. Each row associates a taxon of
+    <comment> Group species by higher level taxonomy. Each row associates a taxon of
          interest with one of its ancestors in the taxon tree. Used in parameter
          queries that have to know about the taxon tree, as well as
          apidb.project_id(), the function that maps an organism name to a
          project. Propagated to portal instances.
-      -->
+      </comment>
     <internalDependency name="ProjectIdTaxonLevel"/>
     <internalDependency name="SequenceAttributes"/>
     <internalDependency name="TaxonSpecies"/>
@@ -5352,7 +5356,7 @@ CREATE TABLE StrainTree NOLOGGING AS
 SELECT *
 FROM (         SELECT organism,term,parentTerm, internal,project_id
          FROM (
-           -- all organisms from sequenceattributes as organism, organism as term, parentterm is species           
+           /* all organisms from sequenceattributes as organism, organism as term, parentterm is species            */
            SELECT DISTINCT sa.organism AS organism,
                            sa.organism AS term,
                            sn.name AS parentTerm,
@@ -5367,8 +5371,8 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
            AND sn.name_class = 'scientific name'
            AND t.rank != 'species'
            UNION
-           -- all organisms from sequenceattributes as organism, species as term, parentterm is genus  
-           -- we are getting a row for species level AND for children here
+           /* all organisms from sequenceattributes as organism, species as term, parentterm is genus   */
+           /* we are getting a row for species level AND for children here */
            SELECT DISTINCT sa.organism,  
                           sn.name AS term,
                           SUBSTR(sa.organism,0,(INSTR(sa.organism,' ') - 1)) AS parentTerm,
@@ -5397,7 +5401,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
            AND t.taxon_id = ts.taxon_id
            AND sn.name_class = 'scientific name'
            UNION
-           -- all organisms from sequenceattributes as organism, genus as term, parentterm from taxonlevel
+           /* all organisms from sequenceattributes as organism, genus as term, parentterm from taxonlevel */
            SELECT DISTINCT sa.organism,      
                            SUBSTR(sa.organism,0,(INSTR(sa.organism,' ') - 1)) AS term,
                            ptl.taxon_node AS parentTerm,
@@ -5407,7 +5411,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
            WHERE ptl.project_id = sa.project_id
             AND ptl.organism = sa.organism
            UNION
-           -- all organisms from sequenceattributes as organism, taxon_node as term, parentterm is null
+           /* all organisms from sequenceattributes as organism, taxon_node as term, parentterm is null */
            SELECT DISTINCT sa.organism,               
                            ptl.taxon_node AS term,
                            '' AS parentTerm,
@@ -5443,9 +5447,9 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   </tuningTable>
 
   <tuningTable name="OrganismAbbreviationBlast">
-    <!-- Each record maps an organism to its BLAST abbreviation. Used by
+    <comment> Each record maps an organism to its BLAST abbreviation. Used by
          BLAST-query parameters. Propagated to portal instances.
-      -->
+      </comment>
     <internalDependency name="OrganismAbbreviationWS"/>
     <internalDependency name="OrganismTree"/>
     <internalDependency name="EstAttributes"/>
@@ -5454,7 +5458,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
        create table OrganismAbbreviationBlast&1 nologging as
        select organism, parent, abbreviation, project_id from OrganismAbbreviationWS
          union
-      -- All familes for isolates
+      /* All familes for isolates */
       select distinct family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent, family_name_for_files as abbreviation, project_name as project_id
       from apidb.Organism 
        where family_name_for_files is not null
@@ -5462,7 +5466,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
        union
        select special.organism, special.parent, special.abbreviation, ot.project_id from OrganismTree ot,
        (
-  -- All species and speciesAbbreviations from apidb.Organism where we have ests
+  /* All species and speciesAbbreviations from apidb.Organism where we have ests */
   select distinct sp.name as organism,
                   ot.parentTerm as parent,
                   REGEXP_REPLACE(org.name_for_filenames, org.strain_abbrev,'', 1, 1) as abbreviation 
@@ -5478,9 +5482,9 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   and (ets.taxon_id = etn.taxon_id OR ets.species_taxon_id = etn.taxon_id)
   and etn.name = ea.organism
   union
-  -- TrichDB EST Legacy
---  select 'Trichomonas vaginalis' as organism, 'Trichomonas' as parent, 'Tvaginalis' as abbreviation from dual union  
-  --
+  /* TrichDB EST Legacy */
+/*  select 'Trichomonas vaginalis' as organism, 'Trichomonas' as parent, 'Tvaginalis' as abbreviation from dual union   */
+  /* */
   select 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism, 'Cryptosporidium' as parent, 'CryptosporidiidaeReference' as abbreviation from dual
 ) special
       where special.parent = ot.term
@@ -5490,9 +5494,9 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
 
 
   <tuningTable name="BlastTypes">
-    <!-- For each project, show which BLAST databases are available for which
+    <comment> For each project, show which BLAST databases are available for which
          species. Used in BLAST param queries. Propagated to portal instances.
-      -->
+      </comment>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="SequenceAttributes"/>
     <internalDependency name="EstAttributes"/>
@@ -5502,46 +5506,46 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
     <sql>
       <![CDATA[
        create table BlastTypes&1 nologging as
-  -- Standard GENES
+  /* Standard GENES */
   select distinct organism, project_id, type 
   from GeneAttributes,
        (select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where organism not in ('Toxoplasma gondii RH') and gene_type = 'protein coding' 
   UNION
-  -- TrichDB Repeat Genes
+  /* TrichDB Repeat Genes */
   select distinct organism || ' (Repeated Genes)', project_id, type 
   from GeneAttributes,
        (select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where project_id = 'TrichDB'
   UNION
-  -- GiardiaDB Deprecated Genes
+  /* GiardiaDB Deprecated Genes */
   select 'Giardia Assemblage A isolate WB (deprecated)' as organism, 'GiardiaDB' as project_id, type 
   from dual, (select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   UNION
-  -- GiardiaDB Scaffolds
+  /* GiardiaDB Scaffolds */
   select 'Giardia Assemblage A isolate WB (scaffolds)' as organism, 'GiardiaDB' as project_id, type 
   from dual, (select 'Genome' as type from dual)
   UNION  
-  -- Standard GENOME
+  /* Standard GENOME */
   select distinct organism, project_id, type 
   from SequenceAttributes,
        (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual)
   UNION
-  -- Mitochondrial GENES and GENOME
+  /* Mitochondrial GENES and GENOME */
   select distinct organism || ' mitochondrial', project_id, type 
   from SequenceAttributes,       
   (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where so_id = 'SO:0000819'
   and not project_id='PlasmoDB' 
   UNION
-  -- Plastid GENES and GENOME
+  /* Plastid GENES and GENOME */
   select distinct organism || ' plastid' as organism, project_id, type 
   from SequenceAttributes,       
   (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where so_id = 'SO:0001259'
   and not project_id='PlasmoDB' 
   UNION
-  -- Regular ESTs (all species from estattributes)
+  /* Regular ESTs (all species from estattributes) */
   select distinct sp.name as organism, ea.project_id, 'ESTs' as type
   from EstAttributes ea, sres.TaxonName tn, taxonspecies ts, sres.TaxonName sp
   where ea.organism = tn.name
@@ -5549,12 +5553,12 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   and ts.species_taxon_id = sp.taxon_id
   and sp.name_class = 'scientific name'
   UNION
-  -- regular Isolates
+  /* regular Isolates */
   select distinct family_name_for_files || ' Popset/Genbank Isolates' as organism, project_name as project_id, 'Isolates'
   from apidb.Organism 
   where family_name_for_files is not null
   UNION
-  -- isolates are hard coded
+  /* isolates are hard coded */
   select 'P. falciparum Barcode Isolates' as organism, 'PlasmoDB' as project_id, 'Isolates' as type from dual
   UNION
   select 'P. berghei Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'Isolates' as type from dual
@@ -5580,10 +5584,10 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
 
 
   <tuningTable name="CompoundAttributes">
-    <!-- The BFMV for the compound WDK record type. Used by the model for the
+    <comment> The BFMV for the compound WDK record type. Used by the model for the
          compound record and queries, as well as in the creation of the
          PathwayCompounds tuning table. Propagated to portal instances.
-      -->
+      </comment>
     <externalDependency name="apidb.PubChemSubstance"/>
     <externalDependency name="apidb.PubChemCompound"/>
     <sql>
@@ -5609,8 +5613,8 @@ SELECT comp.compound_id,  'CID:' || comp.compound_id AS source_id,
 	WHERE s1.property='CID' and s2.property = 'Synonym'
 	AND  s1.substance_id = s2.substance_id
 	AND  s1.value=c.compound_id
-	AND NOT  REGEXP_LIKE(s2.value, '^C(\d)+$')    -- exclude KEGG Copmpound IDs
-	AND NOT  REGEXP_LIKE(s2.value, '^(\d)+(\-)')  -- exclude entries like '24959-67-9' 
+	AND NOT  REGEXP_LIKE(s2.value, '^C(\d)+$')    /* exclude KEGG Copmpound IDs */
+	AND NOT  REGEXP_LIKE(s2.value, '^(\d)+(\-)')  /* exclude entries like '24959-67-9'  */
 	AND c. property = 'Synonym' AND c.value = s2.value
 	GROUP by c.compound_id
 	) WHERE name NOT LIKE '%_MULTIPLE_%') substSyns
@@ -5642,10 +5646,10 @@ where preferred_name is NULL
 
 
   <tuningTable name="PathwayCompounds">
-    <!-- Each record represents a 5-tuple of (reaction, compound, pathway,
+    <comment> Each record represents a 5-tuple of (reaction, compound, pathway,
          enzyme, type). Used extensively in the model for pathway-related
          queries, as well as by getImageMap.pl.
-      -->
+      </comment>
     <internalDependency name="CompoundAttributes"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
@@ -5664,14 +5668,14 @@ where preferred_name is NULL
 CREATE TABLE PathwayCompounds&1 NOLOGGING AS
 SELECT  '@PROJECT_ID@' AS project_id, ca.compound_id, ca.source_id AS compound_source_id, x.*
 FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes ca,
-    (  -- CASE  A :  NOT reversible
+    (  /* CASE  A :  NOT reversible */
       SELECT  CASE WHEN nn1.node_type_id = 2 THEN nn1.display_label
                  WHEN nn2.node_type_id = 2 THEN nn2.display_label
                  ELSE 'None' END AS compound,
             CASE WHEN nn1.node_type_id = 1 THEN REPLACE(nn1.display_label, '_X:_Y:','')
                  WHEN nn2.node_type_id = 1 THEN REPLACE(nn2.display_label, '_X:_Y:','')
                  ELSE 'None' END AS enzyme,
-             CASE  WHEN (nrc.source_node = 0 and nn1.node_type_id = 1) THEN  'product' -- reaction from enzyme to compound
+             CASE  WHEN (nrc.source_node = 0 and nn1.node_type_id = 1) THEN  'product' /* reaction from enzyme to compound */
                       ELSE 'substrate' END AS type,
               nrt.display_name AS reaction,
               nc.description ||' ('||nc.name||')' AS pathway, nc.name AS name, nc.network_context_id
@@ -5679,7 +5683,7 @@ FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes 
               apidb.NetworkRelContextLink nrl, apidb.NetworkContext nc,
               apidb.NetworkNode nn1, apidb.NetworkNode nn2
      WHERE nrc.network_relationship_type_id = nrt.network_relationship_type_id
-           -- source_node = 1 means irreversible (this is an adjustment as network schema cant store reversibility)
+           /* source_node = 1 means irreversible (this is an adjustment as network schema cant store reversibility) */
             AND nrc.source_node = 1 
      	    AND nrc.network_relationship_id = nr.network_relationship_id
 	    AND nr.node_id = nn1.network_node_id
@@ -5687,7 +5691,7 @@ FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes 
       	    AND  nrl.network_rel_context_id = nrc.network_rel_context_id
       	    AND  nc.network_context_id = nrc.network_context_id
      UNION
-      -- CASE  B :   reversible
+      /* CASE  B :   reversible */
      SELECT  nn2.display_label as compound, REPLACE(nn1.display_label, '_X:_Y:','') AS enzyme, 
                   'substrate/product' AS type,
                   nrt.display_name AS reaction, 
@@ -5696,7 +5700,7 @@ FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes 
               apidb.NetworkRelContextLink nrl, apidb.NetworkContext nc,
               apidb.NetworkNode nn1, apidb.NetworkNode nn2
      WHERE nrc.network_relationship_type_id = nrt.network_relationship_type_id
-           -- source_node = 0 means reversible (this is an adjustment as network schema cant store reversibility)
+           /* source_node = 0 means reversible (this is an adjustment as network schema cant store reversibility) */
       	   AND nrc.source_node = 0 
       	   AND nrc.network_relationship_id = nr.network_relationship_id
       	   AND nr.node_id = nn1.network_node_id
@@ -5714,7 +5718,7 @@ WHERE s1.property = 'CID'
   </tuningTable>
 
   <tuningTable name="CompoundTypeAheads">
-    <!-- for use in GenesByReactionCompounds question -->
+    <comment> for use in GenesByReactionCompounds question </comment>
     <internalDependency name="CompoundAttributes"/>
     <internalDependency name="PathwayCompounds"/>
     <sql>
@@ -5735,11 +5739,11 @@ WHERE s1.property = 'CID'
 
 
   <tuningTable name="MSPeptideSummary">
-    <!-- Each row stores mass-spec. based expression evidence for one sample of
+    <comment> Each row stores mass-spec. based expression evidence for one sample of
          one experiment for one gene. Used for mass spec queries in the model,
          GBrowse, and PBrowse, and also in the creation of the MSGeneSummary
          tuning table.
-      -->
+      </comment>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="MassSpecTerms"/>
     <internalDependency name="DatasetPresenter"/>
@@ -5797,9 +5801,9 @@ where pep.aa_sequence_id = seq.aa_sequence_id
 
 
   <tuningTable name="MSGeneSummary">
-    <!-- Mass-spec experiment results for a gene. Used in the model for queries
+    <comment> Mass-spec experiment results for a gene. Used in the model for queries
          related to genes.
-      -->
+      </comment>
     <internalDependency name="MSPeptideSummary"/>
     <sql>
     <![CDATA[
@@ -5814,9 +5818,9 @@ group by msps.source_id, msps.external_database_name, msps.experiment, msps.samp
 
 
   <tuningTable name="MSModifiedPeptideSummary">
-    <!-- Mass-spec experiment results for a peptide. Used by the model, GBrowse,
+    <comment> Mass-spec experiment results for a peptide. Used by the model, GBrowse,
          and PBrowse.
-      -->
+      </comment>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="MassSpecTerms"/>
     <internalDependency name="DatasetPresenter"/>
@@ -5883,32 +5887,32 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
 
 
   <tuningTable name="Ssgcid" alwaysUpdate="true">
-    <!-- Data from the Seattle Structural Genomics Center for Infectious Disease,
+    <comment> Data from the Seattle Structural Genomics Center for Infectious Disease,
          populated from their web service. Used in the gene record.
-      -->
+      </comment>
     <program commandLine="buildSsgcidTT"/>
   </tuningTable>
 
 
   <tuningTable name="MassSpecTerms" alwaysUpdate="true">
-    <!-- Used by the model and GBrowse, as well as an input in the creation of
+    <comment> Used by the model and GBrowse, as well as an input in the creation of
          the tuning tables MSModifiedPeptideSummary and MSPeptideSummary.
-      -->
+      </comment>
     <program commandLine="buildMassSpecTermsTT_trunk"/>
   </tuningTable>
 
 
   <tuningTable name="GbrowseTracksOrganism" alwaysUpdate="true">
-    <!-- Associates an organism with the GBrowse and PBrowse tracks available
+    <comment> Associates an organism with the GBrowse and PBrowse tracks available
          for it. Used by the gene record.
-      -->
+      </comment>
     <program commandLine="buildGbrowseImageUrlTT"/>
   </tuningTable>
 
 
   <tuningTable name="DatasetPresenter" alwaysUpdate="true">
-    <!-- Data for a dataset. Used widely in the model, and by GBrowse.
-      -->
+    <comment> Data for a dataset. Used widely in the model, and by GBrowse.
+      </comment>
     <ancillaryTable name="DatasetContact"/>
     <ancillaryTable name="DatasetHyperLink"/>
     <ancillaryTable name="DatasetPublication"/>
@@ -5924,8 +5928,8 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
   </tuningTable>
 
   <tuningTable name="DatasetDetail" alwaysUpdate="true">
-    <!-- Stores text associated with each dataset. Used by dataset queries.
-      -->
+    <comment> Stores text associated with each dataset. Used by dataset queries.
+      </comment>
     <internalDependency name="DatasetPresenter"/>
     <sql>
       <![CDATA[
@@ -5991,16 +5995,16 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
 
 
   <tuningTable name="TrackOldAnnotation" alwaysUpdate="true">
-    <!-- Stores changes in gene annotation. Used by the model for gene ID and
+    <comment> Stores changes in gene annotation. Used by the model for gene ID and
          table queries.
-      -->
+      </comment>
     <program commandLine="buildTrackOldAnnotationTT"/>
   </tuningTable>
 
 
   <tuningTable name="GeneTextSearch">
-    <!-- For GenesByTextSearch
-      -->
+    <comment> For GenesByTextSearch
+      </comment>
     <externalDependency name="apidb.GeneDetail"/>
     <internalDependency name="GeneAttributes"/>
     <sql>
@@ -6034,7 +6038,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
 
 
   <tuningTable name="ProteomicsCitation">
-    <!-- Citation info for proteomics datasets, used by GBrowse -->
+    <comment> Citation info for proteomics datasets, used by GBrowse </comment>
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="MSPeptideSummary"/>
     <sql>
@@ -6075,6 +6079,6 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
       ]]>
     </sql>
   </tuningTable>
-
+-->
 
 </tuningConfig>
