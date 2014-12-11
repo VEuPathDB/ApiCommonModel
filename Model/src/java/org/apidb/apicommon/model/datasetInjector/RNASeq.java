@@ -1,6 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RNASeq extends  DatasetInjector {
   
@@ -131,6 +133,31 @@ public class RNASeq extends  DatasetInjector {
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
       if(Boolean.parseBoolean(showIntronJunctions)) {
+        
+          String experimentName = datasetName.replace("_rnaSeq_RSRC", "");
+          
+
+          //String experimentName = experimentRsrc.replaceFirst("RSRC", "");
+          setPropValue("experimentName", experimentName);
+
+          // String organismAbbrev = getPropValue("organismAbbrev");
+          String sampleNamePrefix = ":" + experimentName + "_";
+          String sampleNameSuffix = "_rnaSeqSample_RSRC";
+          
+
+
+          List<String> sampleNames = getSampleList(sampleNamePrefix, sampleNameSuffix);
+          String subtracks = "";
+          for (int i=0; i<sampleNames.size(); i++) {
+              String subtrack = sampleNames.get(i);
+              if (i == sampleNames.size() -1) {
+                  subtracks = subtracks + "'" + subtrack + "';";
+              }
+              else {
+                  subtracks = subtracks + "'" + subtrack + "';\n                  ";
+              }
+          }
+          setPropValue("subtracks", subtracks);
 
           if(projectName.equals("HostDB")) {
               setPropValue("intronSizeLimit", "50000");
@@ -138,6 +165,7 @@ public class RNASeq extends  DatasetInjector {
           else {
               setPropValue("intronSizeLimit", "5000");
           }
+          setPropValue("subtracks", subtracks);
 
           injectTemplate("rnaSeqJunctionsTrack");
       }
