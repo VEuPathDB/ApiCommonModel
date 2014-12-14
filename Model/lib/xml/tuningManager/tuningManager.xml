@@ -232,8 +232,7 @@ where p.rn = 1
   </tuningTable>
 
   <tuningTable name="OrganismAttributes">
-    <!-- Stores per-organism information. Used by the organism record, as well
-         as by project_id(), the function that maps an organism to a project.
+    <!-- Stores per-organism information. Used by the organism record.
       -->
     <internalDependency name="TaxonSpecies"/>
     <internalDependency name="GeneAttributes"/>
@@ -268,7 +267,7 @@ where p.rn = 1
 
     <sql>
       <![CDATA[
-CREATE TABLE DataSourceCount&1 nologging as ( 
+CREATE TABLE DataSourceCount nologging as ( 
         SELECT ds.taxon_id,
                max(case when ds.type = 'organellar_genome' 
                      then 1 
@@ -295,21 +294,33 @@ CREATE TABLE DataSourceCount&1 nologging as (
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE CommunityCount&1 nologging as (
-             select ga.taxon_id, count (distinct (case when ga.is_deprecated = 0
-                  then gi.gene
-                  else NULL 
-                  end)) communityCount 
-          from geneAttributes ga
-              left outer join GeneId gi  on ga.source_id = gi.gene
-               left outer join userlogins5.comments@prodn.login_comment lgc on gi.id = lgc.stable_id
-          group by ga.taxon_id
-        )
+        create table CommunityCount nologging as
+        with geneComment -- gene/comment-id pair from comments table
+             as (select stable_id, project_name, comment_id
+                 from userlogins5.comments@prodn.login_comment
+                 where is_visible = 1
+                   and comment_target_id = 'gene'),
+             csiMappedGeneComment -- distinct gene/comment-id pair from comments or commentStableId
+             as ( select stable_id, project_name, comment_id
+                  from geneComment
+                 union
+                  select csi.stable_id, gc.project_name, csi.comment_id
+                  from userlogins5.commentStableId@prodn.login_comment csi, geneComment gc
+                  where gc.comment_id = csi.comment_id),
+             validGeneComment -- distinct na_feature_id-comment-id pairs (with taxon_id)
+             as (select distinct ga.na_feature_id, ga.taxon_id, cmgc.comment_id
+                 from apidbTuning.GeneId gi, apidbTuning.geneAttributes ga, csiMappedGeneComment cmgc
+                 where ga.is_deprecated = 0
+                   and ga.source_id = cmgc.stable_id
+                   and ga.project_id = cmgc.project_name)
+        select taxon_id, count(*) as communityCount
+        from validGeneComment
+        group by taxon_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE ProfileCount&1 nologging as (
+CREATE TABLE ProfileCount nologging as (
         select ga.taxon_id,         
               count(distinct(case when lower(ps.name) like '%rt_pcr%' 
                                    and ga.is_deprecated = 0 
@@ -340,7 +351,7 @@ CREATE TABLE ProfileCount&1 nologging as (
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE IsolateCount&1 nologging as (    
+CREATE TABLE IsolateCount nologging as (    
         SELECT count(distinct gene.source_id) as isolateCount, sim.taxon_id
         FROM (
           (SELECT i.source_id, tn.taxon_id, nas.source_id as sequence_source_id
@@ -378,7 +389,7 @@ CREATE TABLE IsolateCount&1 nologging as (
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE GeneCount&1 nologging as (    
+CREATE TABLE GeneCount nologging as (    
 select genomestat.taxon_id,
        genomestat.project_id,
        genomestat.database_version,
@@ -516,11 +527,11 @@ SELECT o.project_name as project_id,
        nvl(pc.rtPCRCount, 0) as rtPCRCount
 FROM   apidb.Organism o,
        sres.TaxonName tn,
-       DataSourceCount&1 dsc,
-       CommunityCount&1 cc,
-       GeneCount&1 gc,
-       isolateCount&1 ic,
-       profileCount&1 pc
+       DataSourceCount dsc,
+       CommunityCount cc,
+       GeneCount gc,
+       isolateCount ic,
+       profileCount pc
 WHERE tn.taxon_id = o.taxon_id
   AND tn.name_class = 'scientific name' 
   AND o.taxon_id = dsc.taxon_id (+)
@@ -5738,7 +5749,7 @@ WHERE s1.property = 'CID'
     <intermediateTable name="MSExptTrustedSpectrum"/>
     <sql>
 <![CDATA[
-create table MSExptTrustedSpectrum&1 nologging as        
+create table MSExptTrustedSpectrum nologging as        
 select distinct mss.external_database_release_id, mss.sample_file
 from apidb.massspecsummary mss, dots.massspecfeature msf
 where mss.mass_spec_summary_id = msf.source_id
@@ -5762,7 +5773,7 @@ select ga.source_id,
        l.end_max as aa_end_max,
        mst.html_color, mst.internal_id, mst.organism, mst.project_id, mst.sample, mst.sort_order
 from apidb.massspecsummary mss, dots.massspecfeature msf, dots.aalocation l, 
-     geneattributes ga, Msexpttrustedspectrum&1 good, sres.externaldatabase d,
+     geneattributes ga, Msexpttrustedspectrum good, sres.externaldatabase d,
      sres.externaldatabaserelease r, massspecterms mst, datasetnametaxon dsnt, datasetpresenter dsp
 where mss.mass_spec_summary_id = msf.source_id
 and msf.aa_feature_id = l.aa_feature_id
