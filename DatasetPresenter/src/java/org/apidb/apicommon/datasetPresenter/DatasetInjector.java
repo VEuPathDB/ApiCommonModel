@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Iterator;
+import org.apidb.apicommon.datasetPresenter.comparator.NaturalOrderComparator;
 
 /**
  * An abstract superclass of DatasetInjectors. Contains the information needed
@@ -399,8 +400,9 @@ public abstract class DatasetInjector {
         }
     }
     if (sampleNames.isEmpty()){
-        throw new UserException ("No sample names found for dataset" + datasetName);
+        throw new UserException ("No sample names found for dataset" + datasetName + sampleDatasetNamePattern);
     }
+    Collections.sort(sampleNames,new NaturalOrderComparator());
     return sampleNames;
   }
 
