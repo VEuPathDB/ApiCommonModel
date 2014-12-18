@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Iterator;
-import org.apidb.apicommon.datasetPresenter.comparator.NaturalOrderComparator;
+import org.apidb.apicommon.comparator.NaturalOrderComparator;
 
 /**
  * An abstract superclass of DatasetInjectors. Contains the information needed

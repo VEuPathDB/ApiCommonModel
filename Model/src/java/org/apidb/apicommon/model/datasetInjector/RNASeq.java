@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-import java.util.ArrayList;
 import java.util.List;
+
+import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class RNASeq extends  DatasetInjector {
   

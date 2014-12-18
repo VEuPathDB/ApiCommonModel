@@ -1,4 +1,4 @@
-package org.apidb.apicommon.datasetPresenter.comparator;
+package org.apidb.apicommon.comparator;
 /*
 This is an altered version of the NaturalOrderComparator.java. it prioritizes strings 
 which are do not contain numeric charactersxs.
@@ -26,9 +26,9 @@ which are do not contain numeric charactersxs.
  3. This notice may not be removed or altered from any source distribution.
 */
 
-import java.util.*;
+import java.util.Comparator;
 
-public class NaturalOrderComparator implements Comparator
+public class NaturalOrderComparator implements Comparator<String>
 {
     int compareRight(String a, String b)
     {
@@ -88,10 +88,9 @@ public class NaturalOrderComparator implements Comparator
     }
 	}
 
-    public int compare(Object o1, Object o2)
+    @Override
+    public int compare(String a, String b)
     {
-        String a = o1.toString();
-        String b = o2.toString();
 
         int ia = 0, ib = 0;
         int nza = 0, nzb = 0;
