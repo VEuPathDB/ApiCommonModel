@@ -1,5 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector;
 
+import java.util.List;
 
 public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGenePageExpressionGraphs {
 
@@ -17,16 +18,44 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
         injectTemplate("rnaSeqCoverageTrack");
         injectTemplate("rnaSeqCoverageTrackUnlogged");
 
-        String showIntronJunctions = getPropValue("showIntronJunctions");
-        if(Boolean.parseBoolean(showIntronJunctions)) {
+      String showIntronJunctions = getPropValue("showIntronJunctions");
+      if(Boolean.parseBoolean(showIntronJunctions)) {
 
-            if(projectName.equals("HostDB")) {
+          String datasetName = getDatasetName();        
+          String experimentName = datasetName.replace("_rnaSeq_RSRC", "");
+          
+
+          //String experimentName = experimentRsrc.replaceFirst("RSRC", "");
+          setPropValue("experimentName", experimentName);
+
+          // String organismAbbrev = getPropValue("organismAbbrev");
+          String sampleNamePrefix = ":" + experimentName + "_";
+          String sampleNameSuffix = "_rnaSeqSample_RSRC";
+          
+
+
+          List<String> sampleNames = getSampleList(sampleNamePrefix, sampleNameSuffix);
+          String subtracks = "";
+          for (int i=0; i<sampleNames.size(); i++) {
+              String subtrack = sampleNames.get(i);
+              if (i == sampleNames.size() -1) {
+                  subtracks = subtracks + "'" + subtrack + "';";
+              }
+              else {
+                  subtracks = subtracks + "'" + subtrack + "';\n                  ";
+              }
+          }
+          setPropValue("subtracks", subtracks);
+
+          if(projectName.equals("HostDB")) {
               setPropValue("intronSizeLimit", "50000");
-            } else {
+          }
+          else {
               setPropValue("intronSizeLimit", "5000");
-            }
+          }
+          setPropValue("subtracks", subtracks);
 
-            injectTemplate("rnaSeqJunctionsTrack");
+          injectTemplate("rnaSeqJunctionsTrack");
         }
     }
 
