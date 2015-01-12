@@ -40,10 +40,11 @@
     <sql>
       <![CDATA[
         create index GenePath_ix&1 on GenePathway&1(gene_source_id, exact_match, pathway_source_id, pathway_name)
+        tablespace indx
       ]]>
     </sql>
   </tuningTable>
-
+-->
   <tuningTable name="ProjectTaxon" prefixEnabled="true">
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="sres.TaxonName"/>
@@ -97,7 +98,7 @@
       ]]>
     </sql>
   </tuningTable>
-
+<!--
 
   <tuningTable name="GoTermSummary" prefixEnabled="true">
     <comment>GoTermSummary: each row represents one GO term assignment to one gene.
@@ -269,7 +270,7 @@ where p.rn = 1
 
     <sql>
       <![CDATA[
-CREATE TABLE DataSourceCount&1 nologging as ( 
+CREATE TABLE DataSourceCount nologging as ( 
         SELECT ds.taxon_id,
                max(case when ds.type = 'organellar_genome' 
                      then 1 
@@ -296,21 +297,33 @@ CREATE TABLE DataSourceCount&1 nologging as (
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE CommunityCount&1 nologging as (
-             select ga.taxon_id, count (distinct (case when ga.is_deprecated = 0
-                  then gi.gene
-                  else NULL 
-                  end)) communityCount 
-          from geneAttributes ga
-              left outer join GeneId gi  on ga.source_id = gi.gene
-               left outer join userlogins5.comments@prodn.login_comment lgc on gi.id = lgc.stable_id
-          group by ga.taxon_id
-        )
+        create table CommunityCount nologging as
+        with geneComment  /*gene/comment-id pair from comments table */
+             as (select stable_id, project_name, comment_id
+                 from userlogins5.comments@prodn.login_comment
+                 where is_visible = 1
+                   and comment_target_id = 'gene'),
+             csiMappedGeneComment  /*distinct gene/comment-id pair from comments or commentStableId */
+             as ( select stable_id, project_name, comment_id
+                  from geneComment
+                 union
+                  select csi.stable_id, gc.project_name, csi.comment_id
+                  from userlogins5.commentStableId@prodn.login_comment csi, geneComment gc
+                  where gc.comment_id = csi.comment_id),
+             validGeneComment  /*distinct na_feature_id-comment-id pairs (with taxon_id) */
+             as (select distinct ga.na_feature_id, ga.taxon_id, cmgc.comment_id
+                 from apidbTuning.GeneId gi, apidbTuning.geneAttributes ga, csiMappedGeneComment cmgc
+                 where ga.is_deprecated = 0
+                   and ga.source_id = cmgc.stable_id
+                   and ga.project_id = cmgc.project_name)
+        select taxon_id, count(*) as communityCount
+        from validGeneComment
+        group by taxon_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE ProfileCount&1 nologging as (
+CREATE TABLE ProfileCount nologging as (
         select ga.taxon_id,         
               count(distinct(case when lower(ps.name) like '%rt_pcr%' 
                                    and ga.is_deprecated = 0 
@@ -341,7 +354,7 @@ CREATE TABLE ProfileCount&1 nologging as (
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE IsolateCount&1 nologging as (    
+CREATE TABLE IsolateCount nologging as (    
         SELECT count(distinct gene.source_id) as isolateCount, sim.taxon_id
         FROM (
           (SELECT i.source_id, tn.taxon_id, nas.source_id as sequence_source_id
@@ -379,7 +392,7 @@ CREATE TABLE IsolateCount&1 nologging as (
     </sql>
     <sql>
       <![CDATA[
-CREATE TABLE GeneCount&1 nologging as (    
+CREATE TABLE GeneCount nologging as (    
 select genomestat.taxon_id,
        genomestat.project_id,
        genomestat.database_version,
@@ -415,8 +428,8 @@ select genomestat.taxon_id,
                   then est.source_id
                   else NULL 
                   end)),0) estCount,
-      nvl(count (distinct (case when ga.is_deprecated = 0
-                  then ga.ec_numbers
+      nvl(count (distinct (case when (ga.is_deprecated = 0 and ec_numbers is not null)
+                  then ga.source_id 
                   else NULL 
                   end)),0) ecNumberCount
         FROM   GeneAttributes ga
@@ -517,11 +530,11 @@ SELECT o.project_name as project_id,
        nvl(pc.rtPCRCount, 0) as rtPCRCount
 FROM   apidb.Organism o,
        sres.TaxonName tn,
-       DataSourceCount&1 dsc,
-       CommunityCount&1 cc,
-       GeneCount&1 gc,
-       isolateCount&1 ic,
-       profileCount&1 pc
+       DataSourceCount dsc,
+       CommunityCount cc,
+       GeneCount gc,
+       isolateCount ic,
+       profileCount pc
 WHERE tn.taxon_id = o.taxon_id
   AND tn.name_class = 'scientific name' 
   AND o.taxon_id = dsc.taxon_id (+)
@@ -610,14 +623,16 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
-
+-->
 
   <tuningTable name="SequencePieceClosure" prefixEnabled="true">
+<!--
     <comment> Extends dots.SequencePiece to handle multiple levels. Used in
          sequence-record queries and in other tuning tables, including
          SequenceAttributes, FeatureLocation, BlatAlignmentLocation,
          and SimilaritySpanLocation
       </comment>
+-->
     <externalDependency name="dots.SequencePiece"/>
     <sql>
       <![CDATA[
@@ -640,7 +655,7 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
-        /* known issue: this should be run not just once, but iteratively */
+        /* known issue: this should be run not just once, but iteratively 
            until it doesn't create new records.  Currently (7/2008),
            SequencePieces aren't nested even once. */
         insert into &prefixSequencePieceClosure&1
@@ -666,6 +681,8 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
+
+
 
 
   <tuningTable name="FeatureLocation" prefixEnabled="true">
@@ -852,6 +869,8 @@ tablespace indx
     </sql>
   </tuningTable>
 
+
+<!--
 
   <tuningTable name="GeneId" prefixEnabled="true">
   <comment> GeneId maps any valid ID for a gene onto its official ID. These two quantities
@@ -1675,7 +1694,7 @@ FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
              GROUP BY tms.aa_sequence_id) transmembrane,
             (SELECT aa_sequence_id,
                     SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
-                                               as apidb.varchartab)), '; '),
+                                               as apidb.varchartab)), ';; '),
                            1, 300)
                       AS ec_numbers
              FROM (SELECT DISTINCT asec.aa_sequence_id,
@@ -1687,7 +1706,7 @@ FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
 
             (SELECT aa_sequence_id,
                     SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
-                                               as apidb.varchartab)), '; '),
+                                               as apidb.varchartab)), ';; '),
                            1, 300)
                       AS ec_numbers_derived
              FROM (SELECT DISTINCT asec.aa_sequence_id,
@@ -2239,17 +2258,21 @@ This code will scale the context start and end so that ~ 10 genes appear in the 
 </comment>
   </tuningTable>
 
+-->
+
 
   <tuningTable name="GenomicSequence" prefixEnabled="true">
+<!--
     <comment> Combines ExternalNaSequence with VirtualSequence, while excluding
          ExternalNaSequence records whose source_id also appears in
          VirtualSequence. Used by both model and GBrowse queries, as well as in
          the creation of several tuning tables, including SequenceAttributes and
          GeneAttributes. 
      </comment>
+-->
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="dots.VirtualSequence"/>
-    <externalDependency name="sres.SequenceOntology"/>
+    <externalDependency name="sres.OntologyTerm"/>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixGenomicSequence&1 NOLOGGING AS
@@ -2261,10 +2284,10 @@ CREATE TABLE &prefixGenomicSequence&1 NOLOGGING AS
          ens.external_database_release_id,
          SUBSTR(ens.chromosome, 1, 40) AS chromosome,
          ens.chromosome_order_num, ens.sequence_ontology_id
-  FROM dots.ExternalNaSequence ens, sres.SequenceOntology so
-  WHERE ens.sequence_ontology_id = so.sequence_ontology_id
-    AND so.term_name != 'EST'
-    AND so.term_name != 'oligo'
+  FROM dots.ExternalNaSequence ens, sres.OntologyTerm so
+  WHERE ens.sequence_ontology_id = so.ontology_term_id
+    AND so.name != 'EST'
+    AND so.name != 'oligo'
     AND (ens.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
     AND /* see both? use the VirtualSequence. */
         ens.source_id IN (SELECT source_id FROM dots.ExternalNaSequence
@@ -2302,12 +2325,16 @@ tablespace indx
   </tuningTable>
 
 
+
+
   <tuningTable name="SequenceAttributes" prefixEnabled="true">
+<!--
     <comment> Each row represents one genomic sequence for which a WDK sequence
          record can be instantiated. Used widely in the workflow, the model,
          and GBrowse, as well as in the creation of a dozen or so other tuning
          tables.
      </comment>
+-->
     <internalDependency name="GenomicSequence"/>
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SequencePieceClosure"/>
@@ -2316,7 +2343,7 @@ tablespace indx
     <externalDependency name="sres.DbRef"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="sres.SequenceOntology"/>
+    <externalDependency name="sres.OntologyTerm"/>
     <externalDependency name="sres.Taxon"/>
     <externalDependency name="sres.TaxonName"/>
     <sql>
@@ -2340,11 +2367,11 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        SUBSTR(genbank.genbank_accession, 1, 20) AS genbank_accession,
        SUBSTR(db.database_version, 1, 30) AS database_version, db.database_name,
        SUBSTR(sequence.chromosome, 1, 20) AS chromosome,
-       sequence.chromosome_order_num, so.so_id, so.term_name as sequence_type,
+       sequence.chromosome_order_num, so.source_id as so_id, so.name as sequence_type,
        nvl(virtualization.is_top_level, 1) as is_top_level,
        sequence.na_sequence_id, organism.genome_source,
        organism.name_for_filenames, nvl(msa.has_msa, 0) as has_msa
-FROM sres.TaxonName tn, sres.Taxon, sres.SequenceOntology so, apidb.Organism,
+FROM sres.TaxonName tn, sres.Taxon, sres.ontologyterm so, apidb.Organism,
      &prefixGenomicSequence sequence,
      (SELECT drns.na_sequence_id, max(dr.primary_identifier) AS genbank_accession
       FROM dots.dbrefNaSequence drns, sres.DbRef dr,
@@ -2368,8 +2395,8 @@ WHERE sequence.taxon_id = tn.taxon_id(+)
   AND (sequence.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
   AND tn.name_class = 'scientific name'
   AND sequence.taxon_id = taxon.taxon_id
-  AND sequence.sequence_ontology_id = so.sequence_ontology_id
-  AND so.term_name IN ('random_sequence', 'chromosome', 'contig', 'supercontig','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome')
+  AND sequence.sequence_ontology_id = so.ontology_term_id
+  AND so.name IN ('random_sequence', 'chromosome', 'contig', 'supercontig','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome')
   AND sequence.na_sequence_id = genbank.na_sequence_id(+)
   AND sequence.external_database_release_id = db.external_database_release_id(+)
   AND sequence.na_sequence_id = virtualization.piece_na_sequence_id(+)
@@ -2393,6 +2420,8 @@ create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequenc
       ]]>
     </sql>
   </tuningTable>
+
+<!--
 
   <comment> NGS SNP only </comment>
   <tuningTable name="SnpAttributes" prefixEnabled="true">
@@ -3462,6 +3491,7 @@ tablespace indx
     <externalDependency name="apidb.IsolateMapping"/>
     <externalDependency name="apidb.IsolateVocabulary"/>
     <externalDependency name="apidb.VocabularyBiomaterial"/>
+    <externalDependency name="apidb.IsolateGPS"/>
     <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.ExternalNaSequence"/>
     <externalDependency name="dots.isolatefeature"/>
@@ -3500,6 +3530,9 @@ select null as na_sequence_id,
        host.annotated_value as annotated_specific_host,
        isolation_source.annotated_value as annotated_isolation_source,
        geographic_location.annotated_value as annotated_geographic_location,
+       0 as lat,
+       0 as lng,
+       nvl(geographic_location.value, 'Unknown') as country,
        null as length, 
        null as pcr_primers, 
        null as collected_by
@@ -3596,6 +3629,9 @@ select i.na_sequence_id,
        s_h.annotated_specific_host,
        i_s.annotated_isolation_source,
        g_l.annotated_geographic_location,
+       0 as lat,
+       0 as lng,
+       nvl(g_l.annotated_geographic_location, 'Unknown') as country,
        i.length, 
        i.pcr_primers, 
        i.collected_by
@@ -3708,6 +3744,9 @@ select distinct null as na_sequence_id,
        'Unknown' as annotated_specific_host,
        'Unknown' as annotated_isolation_source,
        geographic_location.annotated_value as annotated_geographic_location,
+       0 as lat,
+       0 as lng,
+       nvl(geographic_location.value, 'Unknown') as country,
        null as length, 
        null as pcr_primers, 
        null as collected_by
@@ -3772,8 +3811,19 @@ create unique index IsolateAttr_sourceId_idx&1 ON IsolateAttributes&1 (source_id
 tablespace indx
       ]]>
     </sql>
-  </tuningTable>
 
+     <sql>
+       <![CDATA[
+update IsolateAttributes&1 a
+set (a.lat, a.lng, a.country) = (select g.lat, g.lng, g.country
+                                 from apidb.IsolateGPS g 
+                                 where regexp_like ( a.annotated_geographic_location, g.country, 'i' ) 
+                                   and rownum = 1
+                                  )
+       ]]>
+     </sql>
+
+  </tuningTable>
 
   <tuningTable name="ChIPProtocolParams">
     <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by GBrowse.
@@ -4580,14 +4630,16 @@ tablespace indx
     </sql>
   </tuningTable>
 
-
+-->
   <tuningTable name="TaxonSpecies" prefixEnabled="true">
+<!--
     <comment> Each record maps a taxon_id of interest onto the taxon_id that taxon's
          taxon-tree ancestor whose rank is "species". Used by
          buildAnnotationChangeTT and by gene queries, as well as an input in the
          creation of several tuning tables, including GeneAttributes and
          OrganismTree.
      </comment>
+-->
     <internalDependency name="SequenceAttributes"/>
     <externalDependency name="sres.Taxon"/>
     <sql>
@@ -4605,6 +4657,7 @@ where species.taxon_id in (select taxon_id from sres.Taxon
   </tuningTable>
 
 
+<!--
   <tuningTable name="Blastx">
     <comment> Each record stores a Blastx similarity. Used by GBrowse for the
          match:WU_BLASTX track.
@@ -5754,7 +5807,7 @@ WHERE s1.property = 'CID'
     <intermediateTable name="MSExptTrustedSpectrum"/>
     <sql>
 <![CDATA[
-create table MSExptTrustedSpectrum&1 nologging as        
+create table MSExptTrustedSpectrum nologging as        
 select distinct mss.external_database_release_id, mss.sample_file
 from apidb.massspecsummary mss, dots.massspecfeature msf
 where mss.mass_spec_summary_id = msf.source_id
@@ -5778,7 +5831,7 @@ select ga.source_id,
        l.end_max as aa_end_max,
        mst.html_color, mst.internal_id, mst.organism, mst.project_id, mst.sample, mst.sort_order
 from apidb.massspecsummary mss, dots.massspecfeature msf, dots.aalocation l, 
-     geneattributes ga, Msexpttrustedspectrum&1 good, sres.externaldatabase d,
+     geneattributes ga, Msexpttrustedspectrum good, sres.externaldatabase d,
      sres.externaldatabaserelease r, massspecterms mst, datasetnametaxon dsnt, datasetpresenter dsp
 where mss.mass_spec_summary_id = msf.source_id
 and msf.aa_feature_id = l.aa_feature_id
@@ -5812,6 +5865,12 @@ select msps.source_id, msps.external_database_name, msps.experiment, msps.sample
 from mspeptidesummary msps
 where source_id is not null
 group by msps.source_id, msps.external_database_name, msps.experiment, msps.sample, msps.sample_file, msps.internal_id, msps.organism, msps.project_id
+      ]]>
+    </sql>
+    <sql>
+    <![CDATA[
+      create index msgs_ix&1 on MSGeneSummary&1 (source_id, project_id)
+      tablespace indx
       ]]>
     </sql>
   </tuningTable>
@@ -6080,5 +6139,42 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     </sql>
   </tuningTable>
 -->
+
+  <tuningTable name="EqtlSpan">
+    <!-- for GeneTables.Plasmo_eQTL_Span_List
+      -->
+    <externalDependency name="dots.ChromosomeElementFeature"/>
+    <externalDependency name="apidb.GeneFeatureLodScore"/>
+    <externalDependency name="dots.ExternalNaSequence"/>
+    <externalDependency name="dots.NaLocation"/>
+    <internalDependency name="GeneAttributes"/>
+    <sql>
+      <![CDATA[
+        create table eqtlSpan&1 nologging as
+        select source_id, project_id, haplotype_block_name as hapblock_id, sequence_id,
+               start_min, end_max, start_max, end_min,
+               max(score) as lod_score, organism
+        from (select ga.source_id, ga.project_id, gls.haplotype_block_name,
+                     ens.source_id as sequence_id, nl.start_min, nl.end_max, nl.start_max, nl.end_min,
+                     to_binary_double(gls.lod_score_mant|| 'e' || gls.lod_score_exp) as score,
+                     replace (ga.organism, ' ', '+') as organism
+              from dots.ChromosomeElementFeature cef, apidb.GeneFeatureLodScore gls,
+                   dots.ExternalNaSequence ens, dots.NaLocation nl, GeneAttributes ga 
+              where gls.na_feature_id = ga.na_feature_id
+                and cef.name = gls.haplotype_block_name
+                and nl.na_feature_id = cef.na_feature_id
+                and cef.na_sequence_id = ens.na_sequence_id
+                and to_binary_double(gls.lod_score_mant || 'e' || gls.lod_score_exp) >= 1.5)
+        group by source_id, project_id, sequence_id, haplotype_block_name,
+                 start_min, end_max, start_max, end_min, organism
+       ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index eqtlSpan_ix&1 on eqtlSpan&1 (source_id, project_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
 
 </tuningConfig>
