@@ -23,13 +23,16 @@ public class AnnotatedGenome extends DatasetInjector {
     String[] orgs = organismFullName.split(" ");
 
     String speciesWithSpaces, species, familySpecies;
-    // String species is used in distinct filter: displayName, description and SQL parameter value; 
+		// the names "species" and "familySpecies" should be: "speciesDisplayName" and "speciesFilterName" respectively
+		//
+    // String species is used in distinct filter displayName, description and SQL parameter value; 
     //      it MAY contain spaces (eg: "sp. 1")
-    // String familySpecies is used in the filter's name: both distinct filters and instance filters; 
+    // String familySpecies is used in the filter's name (both distinct filters and instance filters; 
     //      it CANNOT contain spaces (eg: "sp.=1")
     // This convention will allow the layout (WDK/.../AnswerFilterLayout.java) 
     //      to extract the organism filter table headers (family, species and strain) to prepare maps that will be used by the jsp
 
+		// if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces; otherwise empty
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
 			speciesWithSpaces = getPropValue("optionalSpecies");
 			species = orgs[0] + " " + speciesWithSpaces;
