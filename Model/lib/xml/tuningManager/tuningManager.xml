@@ -107,19 +107,17 @@
           finding gene-GO mappings, such as for the gene-page GO table.
      </comment>
     <externalDependency name="core.TableInfo"/>
-    <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.GoAssociation"/>
     <externalDependency name="dots.GoAssociationInstance"/>
     <externalDependency name="dots.GoAssociationInstanceLoe"/>
     <externalDependency name="dots.GoAssocInstEvidCode"/>
-    <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="sres.OntologyRelationship"/>
     <externalDependency name="sres.OntologyTerm"/>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixGoTermSummary&1 NOLOGGING AS
-SELECT DISTINCT gf.source_id,
+SELECT DISTINCT taf.aa_sequence_id,
        decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as is_not,
               gt.source_id as go_id, gt.ontology_term_id as go_term_id, o.ontology, gt.name AS go_term_name,
                   gail.name AS source, gec.name as evidence_code,
@@ -138,8 +136,7 @@ FROM dots.GeneFeature gf, dots.Transcript t,
       FROM sres.OntologyRelationship gr, sres.OntologyTerm gp
       WHERE gr.object_term_id = gp.ontology_term_id
         AND gp.source_id in ('GO:0008150','GO:0003674','GO:0005575')) o
-WHERE gf.na_feature_id = t.parent_id
-  AND t.na_feature_id = taf.na_feature_id
+WHERE t.na_feature_id = taf.na_feature_id
   AND taf.aa_sequence_id = ga.row_id
   AND ga.table_id = (SELECT table_id
                      FROM core.TableInfo
@@ -155,7 +152,7 @@ WHERE gf.na_feature_id = t.parent_id
     </sql>
     <sql>
       <![CDATA[
-create index GoTermSum_sourceId_idx&1 ON &prefixGoTermSummary&1 (source_id)
+create index GoTermSum_aaSequenceId_idx&1 ON &prefixGoTermSummary&1 (aa_sequence_id)
 tablespace indx
       ]]>
     </sql>
@@ -1523,6 +1520,7 @@ tablespace indx
     </comment>
     <internalDependency name="TranscriptLocation"/>
     <internalDependency name="ProjectTaxon"/>
+    <internalDependency name="GoTermSummary"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
     <externalDependency name="dots.AaLocation"/>
     <externalDependency name="dots.AaSequence"/>
@@ -1533,6 +1531,84 @@ tablespace indx
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
     <externalDependency name="dots.TransmembraneAaFeature"/>
+    <intermediateTable name="GoTermList"/>
+    <intermediateTable name="ProteinGoAttributes"/>
+    <sql>
+      <![CDATA[
+CREATE TABLE &prefixGoTermList NOLOGGING AS
+SELECT aa_sequence_id, ontology, source,
+             apidb.tab_to_string(set(cast(COLLECT(go_term_name order by go_term_name) as apidb.varchartab)), ', ') AS go_terms,
+             apidb.tab_to_string(set(cast(COLLECT(go_id order by go_term_name) as apidb.varchartab)), ', ') AS go_ids
+      FROM (SELECT aa_sequence_id, ontology, 
+                        DECODE(source, 'Interpro', 'predicted', 'annotated') AS source, go_term_name, go_id
+                 FROM  &prefixGoTermSummary
+                 )
+      GROUP BY aa_sequence_id, ontology, source
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE TABLE &prefixProteinGoAttributes NOLOGGING AS
+SELECT DISTINCT gts.aa_sequence_id,
+       substr(annotated_go_component.go_terms, 1, 300) AS annotated_go_component,
+       substr(annotated_go_function.go_terms, 1, 300) AS annotated_go_function,
+       substr(annotated_go_process.go_terms, 1, 300) AS annotated_go_process,
+       substr(predicted_go_component.go_terms, 1, 300) AS predicted_go_component,
+       substr(predicted_go_function.go_terms, 1, 300) AS predicted_go_function,
+       substr(predicted_go_process.go_terms, 1, 300) AS predicted_go_process,
+
+       substr(annotated_go_component.go_ids, 1, 300) AS annotated_go_id_component,
+       substr(annotated_go_function.go_ids, 1, 300) AS annotated_go_id_function,
+       substr(annotated_go_process.go_ids, 1, 300) AS annotated_go_id_process,
+       substr(predicted_go_component.go_ids, 1, 300) AS predicted_go_id_component,
+       substr(predicted_go_function.go_ids, 1, 300) AS predicted_go_id_function,
+       substr(predicted_go_process.go_ids, 1, 300) AS predicted_go_id_process
+FROM (SELECT DISTINCT aa_sequence_id FROM &prefixGoTermSummary) gts,
+     (SELECT * FROM &prefixGoTermList
+      WHERE source = 'annotated' AND ontology = 'Cellular Component')
+       annotated_go_component,
+     (SELECT * FROM &prefixGoTermList
+      WHERE source = 'annotated' AND ontology = 'Molecular Function')
+       annotated_go_function,
+     (SELECT * FROM &prefixGoTermList
+      WHERE source = 'annotated' AND ontology = 'Biological Process')
+       annotated_go_process,
+     (SELECT * FROM &prefixGoTermList
+      WHERE source = 'predicted' AND ontology = 'Cellular Component')
+       predicted_go_component,
+     (SELECT * FROM &prefixGoTermList
+      WHERE source = 'predicted' AND ontology = 'Molecular Function')
+       predicted_go_function,
+     (SELECT * FROM &prefixGoTermList
+      WHERE source = 'predicted' AND ontology = 'Biological Process')
+       predicted_go_process
+WHERE gts.aa_sequence_id = annotated_go_component.aa_sequence_id(+)
+  AND 'annotated' = annotated_go_component.source(+)
+  AND 'Cellular Component' = annotated_go_component.ontology(+)
+  AND gts.aa_sequence_id = annotated_go_function.aa_sequence_id(+)
+  AND 'annotated' = annotated_go_function.source(+)
+  AND 'Molecular Function' = annotated_go_function.ontology(+)
+  AND gts.aa_sequence_id = annotated_go_process.aa_sequence_id(+)
+  AND 'annotated' = annotated_go_process.source(+)
+  AND 'Biological Process' = annotated_go_process.ontology(+)
+  AND gts.aa_sequence_id = predicted_go_component.aa_sequence_id(+)
+  AND 'predicted' = predicted_go_component.source(+)
+  AND 'Cellular Component' = predicted_go_component.ontology(+)
+  AND gts.aa_sequence_id = predicted_go_function.aa_sequence_id(+)
+  AND 'predicted' = predicted_go_function.source(+)
+  AND 'Molecular Function' = predicted_go_function.ontology(+)
+  AND gts.aa_sequence_id = predicted_go_process.aa_sequence_id(+)
+  AND 'predicted' = predicted_go_process.source(+)
+  AND 'Biological Process' = predicted_go_process.ontology(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create index ProteinGoAttr_aaSequenceId&1 ON &prefixProteinGoAttributes (aa_sequence_id)
+tablespace indx
+      ]]>
+    </sql>
+
     <sql>
       <![CDATA[
 CREATE TABLE &prefixProteinAttributes&1 NOLOGGING AS
@@ -1550,12 +1626,26 @@ SELECT tas.source_id, tas.aa_sequence_id,
              asa.aromaticity_score,             
              sigp.scores as signalp_scores,
              SUBSTR(sigp.pep, 1, 200) as signalp_peptide,
+             ec_numbers,
+             ec_numbers_derived,
+       go.annotated_go_component,
+       go.annotated_go_function,
+       go.annotated_go_process,
+       go.predicted_go_component,
+       go.predicted_go_function,
+       go.predicted_go_process,
+       go.annotated_go_id_component,
+       go.annotated_go_id_function,
+       go.annotated_go_id_process,
+       go.predicted_go_id_component,
+       go.predicted_go_id_function,
+       go.predicted_go_id_process,
              SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon
       FROM  dots.GeneFeature gf, dots.Transcript t,
             dots.TranslatedAaFeature taf,
             dots.TranslatedAaSequence tas,
             apidb.AaSequenceAttribute asa,
-            &prefixCdsLocation cdsl,
+            &prefixCdsLocation cdsl, &prefixProteinGoAttributes go,
             dots.RnaType rt1, dots.RnaType rt2,
             (SELECT aa_sequence_id, max(tm_domains) AS tm_domains
              FROM (SELECT tmaf.aa_sequence_id, COUNT(*) AS tm_domains
@@ -1573,7 +1663,30 @@ SELECT tas.source_id, tas.aa_sequence_id,
               or ((spf.means_score + spf.maxy_score) / 2) >= .5
               or ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) >= 3)
               group by spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
-              ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2)) sigp
+              ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2)) sigp,
+            (SELECT aa_sequence_id,
+                    SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
+                                               as apidb.varchartab)), '; '),
+                           1, 300)
+                      AS ec_numbers
+             FROM (SELECT DISTINCT asec.aa_sequence_id,
+                          ec.ec_number || ' (' || ec.description || ')' AS ec_number
+                   FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
+                   WHERE ec.enzyme_class_id = asec.enzyme_class_id
+		   AND NOT asec.evidence_code = 'OrthoMCLDerived')
+             GROUP BY aa_sequence_id) ec,
+
+            (SELECT aa_sequence_id,
+                    SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
+                                               as apidb.varchartab)), '; '),
+                           1, 300)
+                      AS ec_numbers_derived
+             FROM (SELECT DISTINCT asec.aa_sequence_id,
+                          ec.ec_number || ' (' || ec.description || ')' AS ec_number
+                   FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
+                   WHERE ec.enzyme_class_id = asec.enzyme_class_id
+		   AND asec.evidence_code = 'OrthoMCLDerived')
+             GROUP BY aa_sequence_id) ecDerived
       WHERE gf.na_feature_id = t.parent_id
         AND t.na_feature_id = taf.na_feature_id
         AND taf.aa_sequence_id = tas.aa_sequence_id
@@ -1584,7 +1697,9 @@ SELECT tas.source_id, tas.aa_sequence_id,
           AND t.na_feature_id = rt1.parent_id(+)
   AND gf.na_feature_id = rt2.parent_id(+)
         AND tas.aa_sequence_id = transmembrane.aa_sequence_id(+)
-
+        AND tas.aa_sequence_id = ec.aa_sequence_id(+)
+        AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)
+        AND tas.aa_sequence_id = go.aa_sequence_id(+)
       ]]>
     </sql>
   </tuningTable>
