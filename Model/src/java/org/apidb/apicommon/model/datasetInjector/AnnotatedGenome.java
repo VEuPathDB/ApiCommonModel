@@ -23,6 +23,7 @@ public class AnnotatedGenome extends DatasetInjector {
 
 		  Map<String,String> phylum = new LinkedHashMap<String, String>();
 			{
+				// fungi
 				phylum.put("Ajellomyces","Eurotiomycetes");
 				phylum.put("Albugo","Oomycetes");
 				phylum.put("Allomyces","Blastocladiomycetes");
@@ -61,6 +62,41 @@ public class AnnotatedGenome extends DatasetInjector {
 				phylum.put("Trichoderma","Sordariomycetes");
 				phylum.put("Ustilago","Ustilaginomycetes");
 				phylum.put("Yarrowia","Saccharomycetes");
+				// eupathdb
+				phylum.put("Acanthamoeba","Amoebozoa");
+				phylum.put("Anncaliia","Microsporidia");
+				phylum.put("Babesia","Apicomplexa");
+       	phylum.put("Chromera","Apicomplexa");
+				phylum.put("Crithidia","Kinetoplastida");
+				phylum.put("Cryptosporidium","Apicomplexa");
+				phylum.put("Edhazardia","Microsporidia");
+				phylum.put("Eimeria","Apicomplexa");
+				phylum.put("Encephalitozoon","Microsporidia");
+				phylum.put("Endotrypanum","Kinetoplastida");
+				phylum.put("Entamoeba","Amoebozoa");
+				phylum.put("Enterocytozoon","Microsporidia");
+				phylum.put("Giardia","Diplomonadida");
+				phylum.put("Gregarina","Apicomplexa");
+				phylum.put("Hamiltosporidium","Microsporidia");
+				phylum.put("Hammondia","Apicomplexa");
+				phylum.put("Leishmania","Kinetoplastida");
+				phylum.put("Naegleria","Amoebozoa");
+				phylum.put("Nematocida","Microsporidia");
+				phylum.put("Neospora","Apicomplexa");
+				phylum.put("Nosema","Microsporidia");
+				phylum.put("Plasmodium","Apicomplexa");
+				phylum.put("Sarcocystis","Apicomplexa");
+				phylum.put("Spironucleus","Diplomonadida");
+				phylum.put("Spraguea","Microsporidia");
+				phylum.put("Theileria","Apicomplexa");
+				phylum.put("Toxoplasma","Apicomplexa");
+				phylum.put("Trachipleistophora","Microsporidia");
+				phylum.put("Trichomonas","Trichomonadida");
+				phylum.put("Trypanosoma","Kinetoplastida");
+				phylum.put("Vavraia","Microsporidia");
+      	phylum.put("Vitrella","Apicomplexa");
+				phylum.put("Vittaforma","Microsporidia");
+
 			}
 
 			// getting properties defined in .prop file
@@ -77,11 +113,12 @@ public class AnnotatedGenome extends DatasetInjector {
 
     String speciesWithSpaces, species, familySpecies;
 		// Strings "species" and "familySpecies" should be called: "genusSpeciesDisplayName" and "genusSpeciesFilterName" respectively
-    // String "species" MAY contain spaces (eg: "sp. 1")
-    // String "familySpecies" CANNOT contain spaces (eg: "sp.=1")
-    // The filter names will be used by WDK (AnswerFilterLayout.java) 
+    //    "species" MAY contain spaces (eg: "sp. 1")
+    //    "familySpecies" CANNOT contain spaces (eg: "sp.=1")
+    // The templates below will generate filter names in the model based on these Strings.
+		//   These will be used by WDK (AnswerFilterLayout.java) 
     //   to prepare maps with organism counts per Phylum, Genus and Species
-    //     which will be used by the jsp to generate the table with correct headers/colspans
+    //   which will be used by the jsp to generate the table with correct headers/colspans
 
 		// if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces; otherwise empty
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
@@ -99,14 +136,12 @@ public class AnnotatedGenome extends DatasetInjector {
     // setting properties to be used in template
     setPropValue("familySpecies", familySpecies);
     setPropValue("organismFullName", organismFullName);
-    if(getPropValueAsBoolean("isEuPathDBSite")) {
-      setPropValue("includeProjects", projectName + ",EuPathDB");
-    } else {
-      setPropValue("includeProjects", projectName);
-    }   
+    if(getPropValueAsBoolean("isEuPathDBSite")) setPropValue("includeProjects", projectName + ",EuPathDB");
+    else setPropValue("includeProjects", projectName);
+
+		// inject templates
     injectTemplate("geneFilter");
     injectTemplate("geneFilterLayout");
-
     // Only if reference strain - set distinct gene instance
     if(orgProps.get("isReferenceStrain").equals("true")) {
       setPropValue("species", species);
