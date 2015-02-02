@@ -59,6 +59,7 @@
             <column name="comment_id"/>
             <column name="pmids"/>
             <column name="genecount"/>
+            <column name="reviewedcount"/>
             <column name="filecount"/>
             <column name="stable_id"/>
             <column name="headline"/>
@@ -80,7 +81,7 @@
   
                   SELECT c.comment_target_id, c.project_name as project_id, gene_comment.comment_id, 
                            gene_comment.source_id,gene_comment.stable_id, c.comment_date, c.headline,
-                           files.filecount, references.pmids, gene_counts.geneCount,
+                           files.filecount, references.pmids, gene_counts.geneCount, reviewed_comments.reviewedcount,
                            u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org
  
                    FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
@@ -96,8 +97,20 @@
                           ) references,
                          (SELECT comment_id, count(source_id) as geneCount
                           FROM gene_comment
-                          GROUP BY comment_id) gene_counts
-
+                          GROUP BY comment_id) gene_counts,
+                         (SELECT dr.primary_identifier as comment_id, count(gf.source_id) as reviewedcount
+                          FROM   sres.dbref dr, 
+                                 dots.DbRefNaFeature drnf,
+                                 dots.GeneFeature gf, 
+                                 sres.externaldatabase ed, 
+                                 sres.externaldatabaserelease edr 
+                          WHERE drnf.db_ref_id = dr.db_ref_id
+                            AND gf.na_feature_id = drnf.na_feature_id
+                            AND ed.external_database_id = edr.external_database_id
+                            AND edr.external_database_release_id = dr.external_database_release_id
+                            AND ed.name like '%_dbxref_EuPathDB_comment_RSRC'
+                          GROUP By dr.primary_identifier
+                         ) reviewed_comments
                     WHERE c.project_name = '@PROJECT_ID@'
                       AND c.comment_target_id = 'gene'
                       AND c.review_status_id != 'rejected'
@@ -109,6 +122,7 @@
                       AND c.comment_id = files.comment_id(+)
                       AND c.comment_id = references.comment_id(+)
                       AND c.comment_id = gene_counts.comment_id(+)
+                      AND to_char(c.comment_id) = reviewed_comments.comment_id(+)
                     ORDER BY gene_comment.comment_id desc
             ]]>
             </sql>
@@ -124,6 +138,7 @@
             <column name="comment_id"/>
             <column name="pmids"/>
             <column name="genecount"/>
+            <column name="reviewedcount"/>
             <column name="filecount"/>
             <column name="stable_id"/>
             <column name="headline"/>
@@ -134,7 +149,7 @@
             <![CDATA[
                     SELECT c.comment_target_id, c.project_name as project_id, csi.comment_id, 
                            csi.stable_id, csi.stable_id as source_id, c.comment_date, c.headline,
-                           files.filecount, references.pmids, gene_counts.geneCount,
+                           files.filecount, references.pmids, gene_counts.geneCount, null as reviewedcount,
                            u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org
                     FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
                          ( SELECT comment_id, stable_id from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
