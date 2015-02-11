@@ -1522,6 +1522,7 @@ tablespace indx
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="GoTermSummary"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
+    <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.AaLocation"/>
     <externalDependency name="dots.AaSequence"/>
     <externalDependency name="dots.GeneFeature"/>
@@ -1612,7 +1613,8 @@ tablespace indx
     <sql>
       <![CDATA[
 CREATE TABLE &prefixProteinAttributes&1 NOLOGGING AS
-SELECT tas.source_id, tas.aa_sequence_id,
+SELECT pi.name as project_id,
+             tas.source_id, tas.aa_sequence_id,
              cdsl.na_sequene_id as na_sequence_id,
              cdsl.is_reversed, 
              cdsl.start_min as cds_start,
@@ -1641,7 +1643,7 @@ SELECT tas.source_id, tas.aa_sequence_id,
        go.predicted_go_id_function,
        go.predicted_go_id_process,
              SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon
-      FROM  dots.GeneFeature gf, dots.Transcript t,
+      FROM  dots.GeneFeature gf, dots.Transcript t, core.ProjectInfo pi,
             dots.TranslatedAaFeature taf,
             dots.TranslatedAaSequence tas,
             apidb.AaSequenceAttribute asa,
@@ -1688,18 +1690,31 @@ SELECT tas.source_id, tas.aa_sequence_id,
 		   AND asec.evidence_code = 'OrthoMCLDerived')
              GROUP BY aa_sequence_id) ecDerived
       WHERE gf.na_feature_id = t.parent_id
+        AND t.row_project_id = pi.project_id
         AND t.na_feature_id = taf.na_feature_id
         AND taf.aa_sequence_id = tas.aa_sequence_id
         AND taf.aa_sequence_id = asa.aa_sequence_id
-        and tas.aa_sequence_id = sigp.aa_sequence_id(+)
-        and cdsl.feature_source_id =  tas.source_id
-        and cdsl. is_top_level=1
-          AND t.na_feature_id = rt1.parent_id(+)
-  AND gf.na_feature_id = rt2.parent_id(+)
+        AND tas.aa_sequence_id = sigp.aa_sequence_id(+)
+        AND cdsl.feature_source_id =  tas.source_id
+        AND cdsl. is_top_level=1
+        AND t.na_feature_id = rt1.parent_id(+)
+        AND gf.na_feature_id = rt2.parent_id(+)
         AND tas.aa_sequence_id = transmembrane.aa_sequence_id(+)
         AND tas.aa_sequence_id = ec.aa_sequence_id(+)
         AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)
         AND tas.aa_sequence_id = go.aa_sequence_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE INDEX PA_sourceId&1 ON &prefixProteinAttributes (source_id)
+tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE INDEX PA_aaSequenceId&1 ON &prefixProteinAttributes (aa_sequence_id)
+tablespace indx
       ]]>
     </sql>
   </tuningTable>
@@ -1717,7 +1732,6 @@ SELECT tas.source_id, tas.aa_sequence_id,
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="TaxonSpecies"/>
     <internalDependency name="SnpAttributes"/>
-    <internalDependency name="GoTermSummary"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
     <externalDependency name="apidb.GeneFeatureName"/>
     <externalDependency name="apidb.GeneFeatureProduct"/>
@@ -1725,288 +1739,100 @@ SELECT tas.source_id, tas.aa_sequence_id,
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.AaLocation"/>
     <externalDependency name="dots.AaSequence"/>
-    <externalDependency name="dots.AaSequenceEnzymeClass"/>
     <externalDependency name="dots.DbRefNaFeature"/>
     <externalDependency name="dots.ExonFeature"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.GeneInstance"/>
-    <externalDependency name="dots.GoAssociation"/>
-    <externalDependency name="dots.GoAssociationInstance"/>
-    <externalDependency name="dots.GoAssociationInstanceLoe"/>
-    <externalDependency name="dots.GoAssocInstEvidCode"/>
     <externalDependency name="dots.NaFeatureComment"/>
     <externalDependency name="dots.RnaType"/>
     <externalDependency name="dots.SequenceGroup"/>
     <externalDependency name="dots.SequenceSequencegroup"/>
-    <externalDependency name="dots.SignalPeptideFeature"/>
     <externalDependency name="dots.SnpFeature"/>
     <externalDependency name="dots.SplicedNaSequence"/>
     <externalDependency name="dots.Transcript"/>
-    <externalDependency name="dots.TranslatedAaFeature"/>
-    <externalDependency name="dots.TranslatedAaSequence"/>
     <externalDependency name="dots.TransmembraneAaFeature"/>
     <externalDependency name="sres.DbRef"/>
-    <externalDependency name="sres.EnzymeClass"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="sres.OntologyTerm"/>
     <externalDependency name="sres.Taxon"/>
     <externalDependency name="sres.TaxonName"/>
-    <intermediateTable name="GoTermList"/>
-    <intermediateTable name="GeneGoAttributes"/>
-    <intermediateTable name="GeneProteinAttributes"/>
-    <sql>
-      <![CDATA[
-CREATE TABLE &prefixGoTermList NOLOGGING AS
-SELECT source_id, ontology, source,
-             apidb.tab_to_string(set(cast(COLLECT(go_term_name order by go_term_name) as apidb.varchartab)), ', ') AS go_terms,
-             apidb.tab_to_string(set(cast(COLLECT(go_id order by go_term_name) as apidb.varchartab)), ', ') AS go_ids
-      FROM (SELECT source_id, ontology, 
-                        DECODE(source, 'Interpro', 'predicted', 'annotated') AS source, go_term_name, go_id
-                 FROM  &prefixGoTermSummary
-                 )
-      GROUP BY source_id, ontology, source
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-CREATE TABLE &prefixGeneGoAttributes NOLOGGING AS
-SELECT DISTINCT gene.source_id,
-       substr(annotated_go_component.go_terms, 1, 300) AS annotated_go_component,
-       substr(annotated_go_function.go_terms, 1, 300) AS annotated_go_function,
-       substr(annotated_go_process.go_terms, 1, 300) AS annotated_go_process,
-       substr(predicted_go_component.go_terms, 1, 300) AS predicted_go_component,
-       substr(predicted_go_function.go_terms, 1, 300) AS predicted_go_function,
-       substr(predicted_go_process.go_terms, 1, 300) AS predicted_go_process,
-
-       substr(annotated_go_component.go_ids, 1, 300) AS annotated_go_id_component,
-       substr(annotated_go_function.go_ids, 1, 300) AS annotated_go_id_function,
-       substr(annotated_go_process.go_ids, 1, 300) AS annotated_go_id_process,
-       substr(predicted_go_component.go_ids, 1, 300) AS predicted_go_id_component,
-       substr(predicted_go_function.go_ids, 1, 300) AS predicted_go_id_function,
-       substr(predicted_go_process.go_ids, 1, 300) AS predicted_go_id_process
-FROM (SELECT DISTINCT gene AS source_id FROM &prefixGeneId) gene,
-     (SELECT * FROM &prefixGoTermList
-      WHERE source = 'annotated' AND ontology = 'Cellular Component')
-       annotated_go_component,
-     (SELECT * FROM &prefixGoTermList
-      WHERE source = 'annotated' AND ontology = 'Molecular Function')
-       annotated_go_function,
-     (SELECT * FROM &prefixGoTermList
-      WHERE source = 'annotated' AND ontology = 'Biological Process')
-       annotated_go_process,
-     (SELECT * FROM &prefixGoTermList
-      WHERE source = 'predicted' AND ontology = 'Cellular Component')
-       predicted_go_component,
-     (SELECT * FROM &prefixGoTermList
-      WHERE source = 'predicted' AND ontology = 'Molecular Function')
-       predicted_go_function,
-     (SELECT * FROM &prefixGoTermList
-      WHERE source = 'predicted' AND ontology = 'Biological Process')
-       predicted_go_process
-WHERE gene.source_id = annotated_go_component.source_id(+)
-  AND 'annotated' = annotated_go_component.source(+)
-  AND 'Cellular Component' = annotated_go_component.ontology(+)
-  AND gene.source_id = annotated_go_function.source_id(+)
-  AND 'annotated' = annotated_go_function.source(+)
-  AND 'Molecular Function' = annotated_go_function.ontology(+)
-  AND gene.source_id = annotated_go_process.source_id(+)
-  AND 'annotated' = annotated_go_process.source(+)
-  AND 'Biological Process' = annotated_go_process.ontology(+)
-  AND gene.source_id = predicted_go_component.source_id(+)
-  AND 'predicted' = predicted_go_component.source(+)
-  AND 'Cellular Component' = predicted_go_component.ontology(+)
-  AND gene.source_id = predicted_go_function.source_id(+)
-  AND 'predicted' = predicted_go_function.source(+)
-  AND 'Molecular Function' = predicted_go_function.ontology(+)
-  AND gene.source_id = predicted_go_process.source_id(+)
-  AND 'predicted' = predicted_go_process.source(+)
-  AND 'Biological Process' = predicted_go_process.ontology(+)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index GeneGoAttr_sourceId&1 ON &prefixGeneGoAttributes (source_id)
-tablespace indx
-      ]]>
-    </sql>
-
-
-
-    <sql>
-      <![CDATA[
-CREATE TABLE &prefixGeneProteinAttributes NOLOGGING AS
-SELECT gene.source_id,
-       protein.tm_count, protein.molecular_weight,
-       protein.isoelectric_point, protein.min_molecular_weight,
-       protein.max_molecular_weight, protein.hydropathicity_gravy_score,
-       protein.aromaticity_score, protein.cds_length, protein.protein_length,
-       protein.ec_numbers,
-       protein.ec_numbers_derived,
-       protein.signalp_scores, protein.signalp_peptide, protein.aa_sequence_id, protein.protein_source_id
-FROM (SELECT DISTINCT gene AS source_id from &prefixGeneId) gene,
-     (SELECT gf.source_id, taf.na_feature_id, tas.aa_sequence_id,tas.molecular_weight,tas.source_id as protein_source_id,
-             tas.length AS protein_length,
-             greatest(taf.translation_start, taf.translation_stop)
-             - least(taf.translation_start, taf.translation_stop) + 1 AS cds_length,
-             asa.isoelectric_point,
-             asa.min_molecular_weight, asa.max_molecular_weight,
-             asa.hydropathicity_gravy_score,
-             asa.aromaticity_score,
-             NVL(transmembrane.tm_domains, 0) AS tm_count,
-             ec.ec_numbers,
-             ecDerived.ec_numbers_derived,
-             sigp.scores as signalp_scores,
-             substr(sigp.pep, 1, 200) as signalp_peptide
-      FROM  dots.GeneFeature gf, dots.Transcript t,
-            dots.TranslatedAaFeature taf,
-            dots.TranslatedAaSequence tas,
-            apidb.AaSequenceAttribute asa,
-            (SELECT aa_sequence_id, max(tm_domains) AS tm_domains
-             FROM (SELECT tmaf.aa_sequence_id, COUNT(*) AS tm_domains
-                   FROM dots.TransmembraneAaFeature tmaf, dots.AaLocation al
-                   WHERE tmaf.aa_feature_id = al.aa_feature_id
-                   GROUP BY tmaf.aa_sequence_id) tms
-             GROUP BY tms.aa_sequence_id) transmembrane,
-            (SELECT aa_sequence_id,
-                    SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
-                                               as apidb.varchartab)), '; '),
-                           1, 300)
-                      AS ec_numbers
-             FROM (SELECT DISTINCT asec.aa_sequence_id,
-                          ec.ec_number || ' (' || ec.description || ')' AS ec_number
-                   FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
-                   WHERE ec.enzyme_class_id = asec.enzyme_class_id
-		   AND NOT asec.evidence_code = 'OrthoMCLDerived')
-             GROUP BY aa_sequence_id) ec,
-
-            (SELECT aa_sequence_id,
-                    SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
-                                               as apidb.varchartab)), '; '),
-                           1, 300)
-                      AS ec_numbers_derived
-             FROM (SELECT DISTINCT asec.aa_sequence_id,
-                          ec.ec_number || ' (' || ec.description || ')' AS ec_number
-                   FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
-                   WHERE ec.enzyme_class_id = asec.enzyme_class_id
-		   AND asec.evidence_code = 'OrthoMCLDerived')
-             GROUP BY aa_sequence_id) ecDerived,
-
-             (SELECT spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
-              ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2) as scores,
-               apidb.tab_to_string(set(cast(COLLECT(decode(spf.algorithm_name,'SignalPhmm','HMM: ','NN: ') || dbms_lob.substr(s.sequence,aal.end_max,1) order by spf.algorithm_name, dbms_lob.substr(s.sequence, aal.end_max, 1)) as apidb.varchartab)), ', ') as pep
-              FROM dots.SignalPeptideFeature spf, dots.AaLocation aal, dots.AaSequence s
-              WHERE spf.aa_sequence_id = s.aa_sequence_id 
-              and  aal.aa_feature_id = spf.aa_feature_id
-              and (spf.signal_probability >= .5
-              or ((spf.means_score + spf.maxy_score) / 2) >= .5
-              or ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) >= 3)
-              group by spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
-              ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2)) sigp
-      WHERE gf.na_feature_id = t.parent_id
-        AND t.na_feature_id = taf.na_feature_id
-        AND taf.aa_sequence_id = tas.aa_sequence_id
-        AND taf.aa_sequence_id = asa.aa_sequence_id
-        and tas.aa_sequence_id = sigp.aa_sequence_id(+)
-        AND tas.aa_sequence_id = transmembrane.aa_sequence_id(+)
-        AND tas.aa_sequence_id = ec.aa_sequence_id(+)
-        AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)) protein
-WHERE gene.source_id = protein.source_id(+)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index GPA_sourceId&1 ON &prefixGeneProteinAttributes (source_id)
-tablespace indx
-      ]]>
-    </sql>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixTranscriptAttributes&1 NOLOGGING AS
 SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as project_id,
-       gf.source_id, gf.na_feature_id,
-       REPLACE(so.name, '_', ' ') AS gene_type,
+       --first the gene attributes:
+       gf.source_id AS gene_source_id, 
+       gf.na_feature_id AS gene_na_feature_id,
+       LEAST(nl.start_min, nl.end_max) AS gene_start_min,
+       GREATEST(nl.start_min, nl.end_max) AS gene_end_max,
        CASE  WHEN (COALESCE(preferred_name.name, any_name.name) is NOT NULL) THEN
             SUBSTR(COALESCE(preferred_product.product, any_product.product, gf.product, 'unspecified product'), 1, 300)
             || ' (' || COALESCE(preferred_name.name, any_name.name) || ')' 
            ELSE SUBSTR(COALESCE(preferred_product.product, any_product.product, gf.product, 'unspecified product'), 1, 300)
-           END AS product,
-       COALESCE(preferred_name.name, any_name.name) AS name,
+           END AS gene_product,
+       COALESCE(preferred_name.name, any_name.name) AS gene_name,
+       REPLACE(so.name, '_', ' ') AS gene_type,
+       gi.gene_id,
+       exons.gene_exon_count,
+       cast(null as varchar2(80)) as representative_gene,
+       olds.old_ids AS gene_previous_ids,
+       nvl(deprecated.is_deprecated, 0) as is_deprecated, 
+       0 as gene_paralog_number, 0 as gene_ortholog_number,
+
+       GREATEST(1, least(nl.start_min, nl.end_max) - 15000) AS gene_context_start,
+       LEAST(sequence.length, greatest(nl.start_min, nl.end_max) + 15000) AS gene_context_end,
+       substr(orthologs.name, 1, 60) AS orthomcl_name,
+       nvl(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps, 
+       nvl(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
+       nvl(tothtssnps.hts_stop_codon_snps,0) AS gene_hts_stop_codon_snps,
+       nvl(tothtssnps.hts_noncoding_snps,0) AS gene_hts_noncoding_snps, 
+       nvl(tothtssnps.hts_synonymous_snps,0) AS gene_hts_synonymous_snps,
+       nvl(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio, 
+       SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
+       uniprot.gene_uniprot_id, uniprot.gene_uniprot_id_internal,
+       entrez_table.entrez_id AS gene_entrez_id, 
        gf.is_pseudo,
-       LEAST(nl.start_min, nl.end_max) AS start_min,
-       GREATEST(nl.start_min, nl.end_max) AS end_max,
+
+       --next the transcript attributes: 
+       t.source_id,
+       t.na_feature_id,
        CASE
          WHEN nl.is_reversed = 1
            THEN coding_range.max_coding_start
          ELSE coding_range.min_coding_start
-       END as coding_start,
+       END as coding_start, --BB
        CASE
          WHEN nl.is_reversed = 1
            THEN coding_range.min_coding_end
          ELSE coding_range.max_coding_end
-       END as coding_end,
+       END as coding_end, --BB
        nl.is_reversed,
-       sns.length AS transcript_length,
-       GREATEST(1, least(nl.start_min, nl.end_max) - 15000)
-           AS context_start,
-       LEAST(sequence.length, greatest(nl.start_min, nl.end_max) + 15000)
-           AS context_end,
        DECODE(nvl(nl.is_reversed, 0), 0, 'forward', 1, 'reverse',
               nl.is_reversed) AS strand,
+       sns.length AS length,
+
        SUBSTR(sequence.source_id, 1, 50) AS sequence_id,
        SUBSTR(tn.name, 1, 100) AS organism,
        SUBSTR(species_name.name, 1, 100) AS species,
-       taxon.ncbi_tax_id,
+       taxon.ncbi_tax_id,  tn.taxon_id, 
        so.source_id as so_id, SUBSTR(so.name, 1, 150) AS so_term_name,
        SUBSTR(so.definition, 1, 150) AS so_term_definition,
        SUBSTR(soRls.version, 1, 7) AS so_version,
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
-       protein.tm_count, protein.molecular_weight,
-       protein.isoelectric_point, protein.min_molecular_weight,
-       protein.max_molecular_weight, protein.hydropathicity_gravy_score,
-       protein.aromaticity_score, protein.cds_length, protein.protein_length,
-       protein.ec_numbers,
-       protein.ec_numbers_derived,
        ed.name AS external_db_name,
        SUBSTR(edr.version, 1, 10) AS external_db_version,
-       exons.exon_count, SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
        SUBSTR(sequence.chromosome, 1, 20) AS chromosome,
-       sequence.chromosome_order_num, sequence.na_sequence_id,
-       go.annotated_go_component,
-       go.annotated_go_function,
-       go.annotated_go_process,
-       go.predicted_go_component,
-       go.predicted_go_function,
-       go.predicted_go_process,
-       go.annotated_go_id_component,
-       go.annotated_go_id_function,
-       go.annotated_go_id_process,
-       go.predicted_go_id_component,
-       go.predicted_go_id_function,
-       go.predicted_go_id_process,
-       nvl(deprecated.is_deprecated, 0) as is_deprecated, gi.gene_id,
-       substr(orthologs.name, 1, 60) as orthomcl_name,
-       nvl(tothtssnps.total_hts_snps,0) as total_hts_snps, 
-       nvl(tothtssnps.hts_nonsynonymous_snps,0) as hts_nonsynonymous_snps,
-       nvl(tothtssnps.hts_stop_codon_snps,0) as hts_stop_codon_snps,
-       nvl(tothtssnps.hts_noncoding_snps,0) as hts_noncoding_snps, 
-       nvl(tothtssnps.hts_synonymous_snps,0) as hts_synonymous_snps,
-       nvl(tothtssnps.hts_nonsyn_syn_ratio,0) as hts_nonsyn_syn_ratio, 
-       protein.signalp_scores,protein.signalp_peptide, sequence.taxon_id,
-       protein.aa_sequence_id, protein.protein_source_id,
-       uniprot.uniprot_id, uniprot.uniprot_id_internal,
-       entrez_table.entrez_id, cast(null as varchar2(80)) as representative_gene,
-       0 as paralog_number, 0 as ortholog_number, olds.old_ids
+       sequence.chromosome_order_num, sequence.na_sequence_id
 FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
      sres.externalDatabaseRelease soRls,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
-     &prefixGeneProteinAttributes protein, &prefixGeneGoAttributes go,
      &prefixGenomicSequence sequence,
      dots.geneinstance gi, &prefixTaxonSpecies ts, sres.TaxonName species_name,
      (SELECT DISTINCT gene AS source_id FROM &prefixGeneId) gene,
-     (SELECT parent_id, count(*) AS exon_count
+     (SELECT parent_id, count(*) AS gene_exon_count
       FROM dots.ExonFeature
       GROUP BY parent_id) exons,
      (SELECT parent_id, max(coding_start) as max_coding_start, min(coding_start) as min_coding_start,
@@ -2069,8 +1895,8 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
       group by na_feature_id
      ) any_name,
      (select gene as source_id,
-             substr(listagg (id, ',') within group (order by id), 1, 240) as uniprot_id,
-             substr(listagg (id, '+or+') within group (order by id), 1, 240) as uniprot_id_internal
+             substr(listagg (id, ',') within group (order by id), 1, 240) as gene_uniprot_id,
+             substr(listagg (id, '+or+') within group (order by id), 1, 240) as gene_uniprot_id_internal
       from &prefixGeneId
       where database_name like '%uniprot_dbxref_RSRC'
          or database_name like '%dbxref_gene2Uniprot_RSRC'
@@ -2109,8 +1935,6 @@ WHERE gf.source_id = gene.source_id
   AND tn.name_class = 'scientific name'
   AND tn.taxon_id NOT IN
 	 (SELECT o.taxon_id FROM apidb.Organism o WHERE  o.is_annotated_genome=0)
-  AND gf.source_id = protein.source_id(+)
-  AND gf.source_id = go.source_id(+)
   AND t.na_sequence_id = sns.na_sequence_id(+)
   AND gf.na_feature_id = t.parent_id(+)
   AND t.na_feature_id = rt1.parent_id(+)
@@ -2158,14 +1982,14 @@ tablespace indx
     <sql>
       <![CDATA[
 create index TranscriptAttr_exon_ix&1
-       ON &prefixTranscriptAttributes&1 (exon_count, source_id)
+       ON &prefixTranscriptAttributes&1 (gene_exon_count, source_id)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index TranscriptAttr_loc_ix&1
-       ON &prefixTranscriptAttributes&1 (na_sequence_id, start_min, end_max, is_reversed, na_feature_id, is_deprecated)
+       ON &prefixTranscriptAttributes&1 (na_sequence_id, gene_start_min, gene_end_max, is_reversed, na_feature_id, is_deprecated)
 tablespace indx
       ]]>
     </sql>
@@ -2193,22 +2017,22 @@ tablespace indx
     <sql>
       <![CDATA[
 create index TransAttr_ortholog_ix&1
-       ON &prefixTranscriptAttributes&1 (source_id, na_sequence_id, start_min, end_max, orthomcl_name)
+       ON &prefixTranscriptAttributes&1 (source_id, na_sequence_id, gene_start_min, gene_end_max, orthomcl_name)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index TransAttr_orgsrc_ix&1
-       ON &prefixTranscriptAttributes&1 (organism, source_id, sequence_id, start_min, end_max)
+       ON &prefixTranscriptAttributes&1 (organism, source_id, sequence_id, gene_start_min, gene_end_max)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
   update &prefixTranscriptAttributes&1
-  set exon_count = 1
-  where exon_count > 1
+  set gene_exon_count = 1
+  where gene_exon_count > 1
    and project_id = 'TriTrypDB' 
    and source_id in (
                 select source_id from &prefixTranscriptAttributes&1
@@ -2266,12 +2090,12 @@ and ga.orthomcl_name is null
     <sql>
       <![CDATA[
        update &prefixTranscriptAttributes&1 gaup
-       set paralog_number = (select count(*)
+       set gene_paralog_number = (select count(*)
                                from &prefixTranscriptAttributes&1 g1
                                where g1.orthomcl_name = gaup.orthomcl_name
                                and g1.organism = gaup.organism
                                and gaup.source_id != g1.source_id),
-           ortholog_number = (select count(*)
+           gene_ortholog_number = (select count(*)
                                from &prefixTranscriptAttributes&1 g1
                                where g1.orthomcl_name = gaup.orthomcl_name
                                and g1.organism != gaup.organism)
