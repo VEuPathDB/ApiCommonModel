@@ -1797,19 +1797,11 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        --next the transcript attributes: 
        t.source_id,
        t.na_feature_id,
-       CASE
-         WHEN nl.is_reversed = 1
-           THEN coding_range.max_coding_start
-         ELSE coding_range.min_coding_start
-       END as coding_start, --BB
-       CASE
-         WHEN nl.is_reversed = 1
-           THEN coding_range.min_coding_end
-         ELSE coding_range.max_coding_end
-       END as coding_end, --BB
-       nl.is_reversed,
-       DECODE(nvl(nl.is_reversed, 0), 0, 'forward', 1, 'reverse',
-              nl.is_reversed) AS strand,
+       tl.start_min as coding_start,
+       tl.end_max as coding_end,
+       tl.is_reversed,
+       DECODE(nvl(tl.is_reversed, 0), 0, 'forward', 1, 'reverse',
+       tl.is_reversed) AS strand,
        sns.length AS length,
 
        SUBSTR(sequence.source_id, 1, 50) AS sequence_id,
@@ -1830,17 +1822,12 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
      dots.Transcript t, sres.ExternalDatabase ed,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
      &prefixGenomicSequence sequence,
+     &prefixTranscriptLocation tl,
      dots.geneinstance gi, &prefixTaxonSpecies ts, sres.TaxonName species_name,
      (SELECT DISTINCT gene AS source_id FROM &prefixGeneId) gene,
      (SELECT parent_id, count(*) AS gene_exon_count
       FROM dots.ExonFeature
       GROUP BY parent_id) exons,
-     (SELECT parent_id, max(coding_start) as max_coding_start, min(coding_start) as min_coding_start,
-             max(coding_end) as max_coding_end, min(coding_end) as min_coding_end
-      FROM &prefixFeatureLocation
-      WHERE feature_type = 'ExonFeature'
-        AND is_top_level = 1
-      GROUP BY parent_id) coding_range,
      (SELECT nfc.na_feature_id,
              MAX(DBMS_LOB.SUBSTR(nfc.comment_string, 300, 1))
                AS comment_string
@@ -1937,6 +1924,8 @@ WHERE gf.source_id = gene.source_id
 	 (SELECT o.taxon_id FROM apidb.Organism o WHERE  o.is_annotated_genome=0)
   AND t.na_sequence_id = sns.na_sequence_id(+)
   AND gf.na_feature_id = t.parent_id(+)
+  AND tl.feature_source_id =  t.source_id
+  AND tl. is_top_level=1
   AND t.na_feature_id = rt1.parent_id(+)
   AND gf.na_feature_id = rt2.parent_id(+)
   AND gf.external_database_release_id
@@ -1944,7 +1933,6 @@ WHERE gf.source_id = gene.source_id
   AND edr.external_database_id = ed.external_database_id
   AND gf.na_feature_id = exons.parent_id(+)
   AND gf.na_feature_id = orthologs.na_feature_id(+)
-  AND gf.na_feature_id = coding_range.parent_id(+)
   AND gf.na_feature_id = cmnt.na_feature_id(+)
   AND gf.source_id = deprecated.source_id(+)
   AND gf.na_feature_id = gi.na_feature_id(+)
