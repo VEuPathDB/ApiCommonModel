@@ -1799,9 +1799,8 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        t.na_feature_id,
        tl.start_min as coding_start,
        tl.end_max as coding_end,
-       tl.is_reversed,
-       DECODE(nvl(tl.is_reversed, 0), 0, 'forward', 1, 'reverse',
-       tl.is_reversed) AS strand,
+       tl.is_reversed,   --CHECK if needed
+       DECODE(nvl(tl.is_reversed, 0), 0, 'forward', 1, 'reverse', tl.is_reversed) AS strand,
        sns.length AS length,
 
        SUBSTR(sequence.source_id, 1, 50) AS sequence_id,
@@ -4547,27 +4546,20 @@ where sim.query_id = extq.na_sequence_id
       ]]>
     </sql>
   </tuningTable>
-
+-->
 
   <tuningTable name="TranscriptSequence">
     <comment> Each record stores the transcript sequence of one gene. Used by the
          gene record and the sequence retrieval tool. Propagated to the portal.
      </comment>
-    <internalDependency name="ProjectTaxon"/>
-    <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.SplicedNaSequence"/>
-    <externalDependency name="sres.TaxonName"/>
-    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
     <sql>
       <![CDATA[
-create table TranscriptSequence&1 nologging as
-select gf.source_id, cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
-       sns.sequence
-from GeneAttributes gf, dots.Transcript t, dots.SplicedNaSequence sns, sres.TaxonName tn
-where t.parent_id = gf.na_feature_id
-  and sns.na_sequence_id = t.na_sequence_id
-  and sns.taxon_id = tn.taxon_id
-  and tn.name_class = 'scientific name'
+CREATE TABLE TranscriptSequence&1 NOLOGGING AS
+SELECT ta.source_id, ta.project_id, sns.sequence
+FROM TranscriptAttributes ta, dots.SplicedNaSequence sns
+WHERE ta.source_id = sns.source_id
       ]]>
     </sql>
     <sql>
@@ -4583,25 +4575,18 @@ tablespace indx
     <comment> Each record stores the coding sequence of one gene. Used by the
          gene record and the sequence retrieval tool. Propagated to the portal.
      </comment>
-    <internalDependency name="ProjectTaxon"/>
-    <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.SplicedNaSequence"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
-    <externalDependency name="sres.TaxonName"/>
-    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
     <sql>
       <![CDATA[
 CREATE TABLE CodingSequence&1 NOLOGGING AS
-SELECT gf.source_id, cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
+SELECT ta.source_id, ta.project_id,
        SUBSTR(sns.sequence, tf.translation_start,                            
               tf.translation_stop - tf.translation_start + 1) as sequence
-FROM GeneAttributes gf, dots.Transcript t, dots.SplicedNaSequence sns,
-     dots.TranslatedAaFeature tf, sres.TaxonName tn
-WHERE t.parent_id = gf.na_feature_id
-  AND sns.na_sequence_id = t.na_sequence_id
-  AND t.na_feature_id = tf.na_feature_id
-  AND sns.taxon_id = tn.taxon_id
-  AND tn.name_class = 'scientific name'
+FROM TranscriptAttributes ta, dots.SplicedNaSequence sns, dots.TranslatedAaFeature tf
+WHERE ta.source_id = sns.source_id
+ AND ta.na_feature_id = tf.na_feature_id
       ]]>
     </sql>
     <sql>
@@ -4618,24 +4603,19 @@ tablespace indx
          gene record and the sequence retrieval tool, as well as by
          buildTrackOldAnnotationTT. Propagated to the portal.
      </comment>
-    <internalDependency name="ProjectTaxon"/>
-    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
-    <externalDependency name="dots.TranslatedAaFeature"/>
-    <externalDependency name="sres.TaxonName"/>
-    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ProteinAttributes"/>
     <sql>
       <![CDATA[
 CREATE TABLE ProteinSequence&1 NOLOGGING AS
-SELECT ga.source_id, cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
-       tas.sequence
-FROM GeneAttributes ga, dots.Transcript t, dots.TranslatedAaFeature taf,
-     dots.TranslatedAaSequence tas, sres.TaxonName tn
-WHERE t.parent_id = ga.na_feature_id
-  AND t.na_feature_id = taf.na_feature_id
-  AND taf.aa_sequence_id = tas.aa_sequence_id
-  AND tas.taxon_id = tn.taxon_id
-  AND tn.name_class = 'scientific name'
+WITH pAttr AS (
+   SELECT distinct source_id, aa_sequence_id
+   FROM ProteinAttributes)
+SELECT pa.source_id, pi.name AS project_id, tas.sequence
+FROM pAttr pa, dots.TranslatedAaSequence tas, core.Projectinfo pi
+WHERE pa.aa_sequence_id = tas.aa_sequence_id
+  AND pi.project_id = tas.row_project_id
       ]]>
     </sql>
     <sql>
@@ -4646,7 +4626,7 @@ tablespace indx
     </sql>
   </tuningTable>
 
-
+<!--
   <tuningTable name="NaSequence">
     <comment> Each record stores the nucleotide sequence for one genomic sequence
          that is "official" (in the sense that it can be instantiated as a WDK
