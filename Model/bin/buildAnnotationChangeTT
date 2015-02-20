@@ -329,7 +329,8 @@ create table AnnotationChange$suffix (
    change       varchar2(2000),
    feature_name varchar2(50),
    product      varchar2(200),
-   name         varchar2(30)
+   name         varchar2(30),
+   searchable   varchar2(230)
 ) nologging
 SQL
 
@@ -345,8 +346,8 @@ SQL
   $dbh->{RaiseError} = 0;
   $dbh->do(<<SQL);
   insert into AnnotationChange$suffix
-              (gene, change_date, change, feature_name, product, name)
-  select gene, change_date, change, feature_name, product, name from AnnotationChange
+              (gene, change_date, change, feature_name, product, name, searchable)
+  select gene, change_date, change, feature_name, product, name, searchable from AnnotationChange
 SQL
 
   $dbh->do(<<SQL);
@@ -380,7 +381,7 @@ SQL
 
     my $updateStmt = $dbh->prepare(<<SQL) or die "preparing gene/product update statement";
       update AnnotationChange$suffix
-      set gene = ?, product = ?, name = ?
+      set gene = ?, product = ?, name = ?, searchable = ?
       where feature_name = ?
 SQL
 
@@ -395,7 +396,7 @@ SQL
 
     if ($gene) {
       print STDERR "set gene to \"$gene\", product to \"$product\", and name to \"$name\" for feature \"$feature\"\n" if $debug;
-      $updateStmt->execute($gene, $product, $name, $feature) or print STDERR $dbh->errstr;
+      $updateStmt->execute($gene, $product, $name, $product . " " . $name, $feature) or print STDERR $dbh->errstr;
     } else {
       print STDERR "WARNING: no gene (gene \"$gene\" and product \"$product\") for feature \"$feature\"\n";
     }
@@ -554,7 +555,7 @@ sub renameOldChanges {
     my ($dbh, $suffix) = @_;
     $dbh->do(<<SQL) or die "renaming genes to suppress old-news annotations";
 update AnnotationChange$suffix
-set gene = 'old change: ' || gene
+set gene = 'old change: ' || gene, searchable = ''
 where change_date < (select edr.release_date
                        from GeneAttributes ga, dots.NaFeature nf, sres.ExternalDatabaseRelease edr
                        where ga.source_id = AnnotationChange$suffix.gene
@@ -569,9 +570,16 @@ sub indexChanges {
 
 # index AnnotationChange table
     my ($dbh, $suffix) = @_;
-    $dbh->do(<<SQL) or die "creating index";
+    $dbh->do(<<SQL) or die "creating main index";
       create index AnotCh_ix$suffix
       on AnnotationChange$suffix (gene, change_date) tablespace INDX
+SQL
+
+    $dbh->do(<<SQL) or die "creating Oracle Text index";
+      create index AnotChText_ix$suffix
+      on AnnotationChange$suffix (searchable)
+      indextype is ctxsys.context
+      parameters('DATASTORE CTXSYS.DEFAULT_DATASTORE SYNC (ON COMMIT)')
 SQL
 
 }
