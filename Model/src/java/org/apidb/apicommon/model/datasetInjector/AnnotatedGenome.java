@@ -1,16 +1,105 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 import java.util.Map;
-
+import java.util.LinkedHashMap;
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenome extends DatasetInjector {
-
+	
   @Override
 		public void injectTemplates() {
 
-    // getting properties defined in .prop file
+		// dataset presenters/dataset classes xml files do not have PHYLUM information
+		// hack until we have filters reading from datatabase (instead of relying on dataset xml files)
+		// key value pairs obtained from database:
+		//     select term,parentterm
+		//     from ApidbTuning.OrganismTree
+		//     where term in (
+		//      select distinct substr(organism,1,instr(organism,' ') - 1)
+		//      from ApidbTuning.OrganismTree)
+		//     group by term,parentterm
+		//     order by term,parentterm
+
+		  Map<String,String> phylum = new LinkedHashMap<String, String>();
+			{
+				// fungi
+				phylum.put("Ajellomyces","Eurotiomycetes");
+				phylum.put("Albugo","Oomycetes");
+				phylum.put("Allomyces","Blastocladiomycetes");
+				phylum.put("Aphanomyces","Oomycetes");
+				phylum.put("Aspergillus","Eurotiomycetes");
+				phylum.put("Batrachochytrium","Chytridiomycetes");
+				phylum.put("Botryotinia","Leotiomycetes");
+				phylum.put("Candida","Saccharomycetes");
+				phylum.put("Coccidioides","Eurotiomycetes");
+				phylum.put("Coprinopsis","Agaricomycetes");
+				phylum.put("Cryptococcus","Tremellomycetes");
+				phylum.put("Fusarium","Sordariomycetes");
+				phylum.put("Hyaloperonospora","Oomycetes");
+				phylum.put("Magnaporthe","Sordariomycetes");
+				phylum.put("Malassezia","Ustilaginomycetes");
+				phylum.put("Melampsora","Pucciniomycetes");
+				phylum.put("Mucor","Zygomycetes");
+				phylum.put("Neosartorya","Eurotiomycetes");
+				phylum.put("Neurospora","Sordariomycetes");
+				phylum.put("Phanerochaete","Agaricomycetes");
+				phylum.put("Phycomyces","Zygomycetes");
+				phylum.put("Phytophthora","Oomycetes");
+				phylum.put("Pneumocystis","Pneumocystidomycetes");
+				phylum.put("Puccinia","Pucciniomycetes");
+				phylum.put("Pythium","Oomycetes");
+				phylum.put("Rhizopus","Zygomycetes");
+				phylum.put("Saccharomyces","Saccharomycetes");
+				phylum.put("Saprolegnia","Oomycetes");
+				phylum.put("Schizosaccharomyces","Schizosaccharomycetes");
+				phylum.put("Sclerotinia","Leotiomycetes");
+				phylum.put("Sordaria","Sordariomycetes");
+				phylum.put("Spizellomyces","Chytridiomycetes");
+				phylum.put("Sporisorium","Ustilaginomycetes");
+				phylum.put("Talaromyces","Eurotiomycetes");
+				phylum.put("Tremella","Tremellomycetes");
+				phylum.put("Trichoderma","Sordariomycetes");
+				phylum.put("Ustilago","Ustilaginomycetes");
+				phylum.put("Yarrowia","Saccharomycetes");
+				// eupathdb
+				phylum.put("Acanthamoeba","Amoebozoa");
+				phylum.put("Anncaliia","Microsporidia");
+				phylum.put("Babesia","Apicomplexa");
+       	phylum.put("Chromera","Apicomplexa");
+				phylum.put("Crithidia","Kinetoplastida");
+				phylum.put("Cryptosporidium","Apicomplexa");
+				phylum.put("Edhazardia","Microsporidia");
+				phylum.put("Eimeria","Apicomplexa");
+				phylum.put("Encephalitozoon","Microsporidia");
+				phylum.put("Endotrypanum","Kinetoplastida");
+				phylum.put("Entamoeba","Amoebozoa");
+				phylum.put("Enterocytozoon","Microsporidia");
+				phylum.put("Giardia","Diplomonadida");
+				phylum.put("Gregarina","Apicomplexa");
+				phylum.put("Hamiltosporidium","Microsporidia");
+				phylum.put("Hammondia","Apicomplexa");
+				phylum.put("Leishmania","Kinetoplastida");
+				phylum.put("Naegleria","Amoebozoa");
+				phylum.put("Nematocida","Microsporidia");
+				phylum.put("Neospora","Apicomplexa");
+				phylum.put("Nosema","Microsporidia");
+				phylum.put("Plasmodium","Apicomplexa");
+				phylum.put("Sarcocystis","Apicomplexa");
+				phylum.put("Spironucleus","Diplomonadida");
+				phylum.put("Spraguea","Microsporidia");
+				phylum.put("Theileria","Apicomplexa");
+				phylum.put("Toxoplasma","Apicomplexa");
+				phylum.put("Trachipleistophora","Microsporidia");
+				phylum.put("Trichomonas","Trichomonadida");
+				phylum.put("Trypanosoma","Kinetoplastida");
+				phylum.put("Vavraia","Microsporidia");
+      	phylum.put("Vitrella","Apicomplexa");
+				phylum.put("Vittaforma","Microsporidia");
+
+			}
+
+			// getting properties defined in .prop file
     String projectName = getPropValue("projectName");
     String organismAbbrev = getPropValue("organismAbbrev");
 
@@ -23,13 +112,15 @@ public class AnnotatedGenome extends DatasetInjector {
     String[] orgs = organismFullName.split(" ");
 
     String speciesWithSpaces, species, familySpecies;
-    // String species is used in distinct filter: displayName, description and SQL parameter value; 
-    //      it MAY contain spaces (eg: "sp. 1")
-    // String familySpecies is used in the filter's name: both distinct filters and instance filters; 
-    //      it CANNOT contain spaces (eg: "sp.=1")
-    // This convention will allow the layout (WDK/.../AnswerFilterLayout.java) 
-    //      to extract the organism filter table headers (family, species and strain) to prepare maps that will be used by the jsp
+		// Strings "species" and "familySpecies" should be called: "genusSpeciesDisplayName" and "genusSpeciesFilterName" respectively
+    //    "species" MAY contain spaces (eg: "sp. 1")
+    //    "familySpecies" CANNOT contain spaces (eg: "sp.=1")
+    // The templates below will generate filter names in the model based on these Strings.
+		//   These will be used by WDK (AnswerFilterLayout.java) 
+    //   to prepare maps with organism counts per Phylum, Genus and Species
+    //   which will be used by the jsp to generate the table with correct headers/colspans
 
+		// if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces; otherwise empty
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
 			speciesWithSpaces = getPropValue("optionalSpecies");
 			species = orgs[0] + " " + speciesWithSpaces;
@@ -39,17 +130,18 @@ public class AnnotatedGenome extends DatasetInjector {
 			familySpecies = orgs[0] + "-" + orgs[1]; 
     }
 
+		// adding phylum to families (genus) included in the Map above
+		if (phylum.containsKey(orgs[0])) familySpecies = phylum.get(orgs[0]) + "-" + familySpecies;
+
     // setting properties to be used in template
     setPropValue("familySpecies", familySpecies);
     setPropValue("organismFullName", organismFullName);
-    if(getPropValueAsBoolean("isEuPathDBSite")) {
-      setPropValue("includeProjects", projectName + ",EuPathDB");
-    } else {
-      setPropValue("includeProjects", projectName);
-    }   
+    if(getPropValueAsBoolean("isEuPathDBSite")) setPropValue("includeProjects", projectName + ",EuPathDB");
+    else setPropValue("includeProjects", projectName);
+
+		// inject templates
     injectTemplate("geneFilter");
     injectTemplate("geneFilterLayout");
-
     // Only if reference strain - set distinct gene instance
     if(orgProps.get("isReferenceStrain").equals("true")) {
       setPropValue("species", species);

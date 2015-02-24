@@ -84,6 +84,7 @@ public class BasketFixer extends BaseCLI {
             fixBasket(wdkModel, "GeneRecordClasses.GeneRecordClass", "ApidbTuning.GeneId",  "gene");
             fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.SequenceId",  "sequence");
             logger.info("=========================== done ============================");
+            wdkModel.releaseResources();
         }
     }
 
