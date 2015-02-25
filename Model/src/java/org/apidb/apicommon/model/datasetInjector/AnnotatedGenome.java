@@ -81,12 +81,12 @@ public class AnnotatedGenome extends DatasetInjector {
 				phylum.put("Hamiltosporidium","Microsporidia");
 				phylum.put("Hammondia","Apicomplexa");
 				phylum.put("Leishmania","Kinetoplastida");
-				phylum.put("Mitosporidium","Microsporidia");
+				phylum.put("Mitosporidium","Microsporidia"); //b24
 				phylum.put("Naegleria","Amoebozoa");
 				phylum.put("Nematocida","Microsporidia");
 				phylum.put("Neospora","Apicomplexa");
 				phylum.put("Nosema","Microsporidia");
-				phylum.put("Ordospora","Microsporidia");
+				phylum.put("Ordospora","Microsporidia"); //b24
 				phylum.put("Plasmodium","Apicomplexa");
 				phylum.put("Sarcocystis","Apicomplexa");
 				phylum.put("Spironucleus","Diplomonadida");
