@@ -19,7 +19,8 @@ use ApiCommonShared::Model::tmUtils;
 # value appears in the result set then nvl() must have done its work. So we'll die.
 my $sentinelDate = '1918-08-13';
 
-my $insertStatement;
+my $annotationInsert;
+my $commentInsert;
 
 my ($propfile, $instance, $schema, $suffix, $debug);
 GetOptions("propfile=s" => \$propfile,
@@ -32,7 +33,7 @@ die "required parameter missing" unless ($propfile && $instance && $suffix);
 
 my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
-createEmptyTable($dbh, $suffix);
+createTables($dbh, $suffix);
 indexChanges($dbh, $suffix);
 
 print STDERRR "about to get genome list\n" if $debug;
@@ -156,18 +157,19 @@ SQL
     my $stmt = $dbh->prepare($sql)
       or print STDERR $dbh->errstr;
 
-print STDERRR "getting list of taxa\n" if $debug;
-  $stmt->execute();
-print STDERRR "done execute()ing taxa query \n" if $debug;
-  my @genomeList;
-  while (my $ref = $stmt->fetchrow_hashref()) {
-    # print STDERR "adding " . Dumper($ref) . " to the list\n" if $debug;
-    if ($ref->{MATCH_METHOD} eq 'match: genus-only') {
-      print STDERR "WARNING: GeneDB taxon \"" . $ref->{SANGER_NAME} . "\" does not match any taxon in the local instance.\n";
-    } else {
-      push(@genomeList, $ref);
+    print STDERRR "getting list of taxa\n" if $debug;
+    $stmt->execute();
+    print STDERRR "done execute()ing taxa query \n" if $debug;
+    my @genomeList;
+    while (my $ref = $stmt->fetchrow_hashref()) {
+      # print STDERR "adding " . Dumper($ref) . " to the list\n" if $debug;
+      if ($ref->{MATCH_METHOD} eq 'match: genus-only') {
+	print STDERR "WARNING: GeneDB taxon \"" . $ref->{SANGER_NAME}
+                     . "\" does not match any taxon in the local instance.\n";
+      } else {
+	push(@genomeList, $ref);
+      }
     }
-  }
 
     print STDERRR "got list of taxa\n" if $debug;
     return \@genomeList;
@@ -250,7 +252,7 @@ sub processChangedGenes {
   #       <products/>
   #     </result>
 
-  #     <result . . .
+  #     <result> . . . </result>
 
   #   </results>
   # </response>
@@ -260,13 +262,14 @@ sub processChangedGenes {
   my $results = $bigList->{results};
   my $resultList = $results->[0]->{result};
 
-  my $insertStatement = getInsertStatement($dbh, $suffix);
+  my $annotationInsert = getAnnotationInsert($dbh, $suffix);
+  my $commentInsert = getCommentInsert($dbh, $suffix);
   my $changeCount = 0;
   foreach my $result (@$resultList) {
       my $changeList = $result->{changes}->[0]->{change};
       foreach my $change (@$changeList) {
 	  $changeCount++;
-	  $insertStatement->execute($result->{uniqueName}, $change->{date}, $change->{detail},
+	  $annotationInsert->execute($result->{uniqueName}, $change->{date}, $change->{detail},
                                     $result->{uniqueName}, $change->{date}, $change->{detail})
 	      or die "Can't insert AnnotationChange record (uniqueName \"" . $result->{uniqueName}
                      . "\" date \"" . $change->{date} . "\" change \"" . $change->{detail} . "\"\n";
@@ -280,11 +283,11 @@ sub processChangedGenes {
 
 }
 
-sub getInsertStatement {
+sub getAnnotationInsert {
 
     my ($dbh, $suffix) = @_;
-    if (!$insertStatement) {
-    $insertStatement = $dbh->prepare(<<SQL);
+    if (!$annotationInsert) {
+    $annotationInsert = $dbh->prepare(<<SQL);
       insert into AnnotationChange$suffix (feature_name, change_date, change)
       select ?, to_date(?, 'yyyy-mm-dd'), ?
       from dual
@@ -295,29 +298,62 @@ sub getInsertStatement {
 SQL
   }
 
-  return $insertStatement;
+  return $annotationInsert;
 }
 
-sub createEmptyTable {
+sub getCommentInsert {
+
+    my ($dbh, $suffix) = @_;
+    if (!$commentInsert) {
+    $commentInsert = $dbh->prepare(<<SQL);
+      insert into ReviewedComment$suffix (gene, comment_id)
+      select ?, ?
+      from dual
+      where (select count(*)
+             from ReviewedComment$suffix
+             where gene = ? and comment_id = ?)
+            = 0
+SQL
+  }
+
+  return $commentInsert;
+}
+
+sub createTables {
     my ($dbh, $suffix) = @_;
 
-    $dbh->do(<<SQL) or die "creating table";
+    $dbh->do(<<SQL) or die "creating AnnotationChange table";
 create table AnnotationChange$suffix (
    gene         varchar2(50),
    change_date  date,
    change       varchar2(2000),
    feature_name varchar2(50),
    product      varchar2(200),
-   name         varchar2(30)
+   name         varchar2(30),
+   searchable   varchar2(230)
 ) nologging
 SQL
 
+    $dbh->do(<<SQL) or die "creating ReviewedComment table";
+create table ReviewedComment$suffix (
+   gene       varchar2(50),
+   comment_id varchar2(10)
+) nologging
+SQL
+
+  # copy records from existing tables (if any)
   $dbh->{PrintError} = 0;
   $dbh->{RaiseError} = 0;
   $dbh->do(<<SQL);
   insert into AnnotationChange$suffix
-              (gene, change_date, change, feature_name, product, name)
-  select gene, change_date, change, feature_name, product, name from AnnotationChange
+              (gene, change_date, change, feature_name, product, name, searchable)
+  select gene, change_date, change, feature_name, product, name, searchable from AnnotationChange
+SQL
+
+  $dbh->do(<<SQL);
+  insert into ReviewedComment$suffix
+              (gene, comment_id)
+  select gene, comment_id from ReviewedComment
 SQL
   $dbh->{PrintError} = 1;
   $dbh->{RaiseError} = 1;
@@ -333,11 +369,19 @@ sub populateGenesAndProducts {
       select distinct feature_name
       from AnnotationChange$suffix
       where gene is null
+    -- this union would also check genes that have comments, regardless of whether we got an annotation change
+    -- GeneDB assures us that that is not needed, and it slows things down a lot
+    -- union
+    --   select stable_id
+    --   from userlogins5.mappedComment\@prodn.login_comment
+    --   where project_name in (select name from core.projectInfo)
+    --     and is_visible = 1
+    --     and comment_target_id = 'gene'
 SQL
 
     my $updateStmt = $dbh->prepare(<<SQL) or die "preparing gene/product update statement";
       update AnnotationChange$suffix
-      set gene = ?, product = ?, name = ?
+      set gene = ?, product = ?, name = ?, searchable = ?
       where feature_name = ?
 SQL
 
@@ -352,7 +396,7 @@ SQL
 
     if ($gene) {
       print STDERR "set gene to \"$gene\", product to \"$product\", and name to \"$name\" for feature \"$feature\"\n" if $debug;
-      $updateStmt->execute($gene, $product, $name, $feature) or print STDERR $dbh->errstr;
+      $updateStmt->execute($gene, $product, $name, $product . " " . $name, $feature) or print STDERR $dbh->errstr;
     } else {
       print STDERR "WARNING: no gene (gene \"$gene\" and product \"$product\") for feature \"$feature\"\n";
     }
@@ -373,7 +417,7 @@ sub getFeatureGeneAndProduct {
     $response = $ua->request($request);
 
     if (!$response->is_success || $response->content =~ /<error /) {
-      print STDERR "error getting feature hierarchy for feature \"$feature\" with URL \"$url\"\n";
+      print STDERR "WARNING: failure getting feature hierarchy for feature \"$feature\" with URL \"$url\"\n";
 	return('', '')
     }
 
@@ -382,22 +426,55 @@ sub getFeatureGeneAndProduct {
     $contentString = removeBogusCharacters($contentString);
 
     my $info = $simple->XMLin($contentString, forcearray => 1, KeyAttr => [] );
-    # print STDERRR "info:\n" . Dumper($info). "\n";
+    # print STDERR "info:\n" . Dumper($info). "\n";
 
     my $gene = $info->{results}->[0]->{result}->[0]->{uniqueName};
     my $name = $info->{results}->[0]->{result}->[0]->{name};
 
     my $product;
+    my @commentList;
 
     # some features have terms. . .
     foreach my $term (@{$info->{results}->[0]->{result}->[0]->{terms}->[0]->{term}}) {
       $product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+
+	my $props = $term->{props};
+	if ($props) {
+	  my $prop = $props->[0]->{prop};
+	  if ($prop) {
+	    foreach my $item (@{$prop}) {
+	      my $value = $item->{value};
+	      while ($value =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=\D*(\d*)(.*)$/i) {
+		my $commentId = $2;
+		$value = $3;
+		print STDERR "type 1 reviewed-comment flag for comment id \"$commentId\", gene \"$gene\"\n" if $debug;
+		push (@commentList, $commentId);
+	      }
+	    }
+	  }
+	}
     }
 
     # . . . and some features have chidren that have terms
     foreach my $child (@{$info->{results}->[0]->{result}->[0]->{children}}) {
       foreach my $term (@{$child->{terms}->[0]->{term}}) {
 	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+
+	my $props = $term->{props};
+	if ($props) {
+	  my $prop = $props->[0]->{prop};
+	  if ($prop) {
+	    foreach my $item (@{$prop}) {
+	      my $value = $item->{value};
+	      while ($value =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=\D*(\d*)(.*)$/i) {
+		my $commentId = $2;
+		$value = $3;
+		print STDERR "type 2 reviewed-comment flag for comment id \"$commentId\", gene \"$gene\"\n" if $debug;
+		push (@commentList, $commentId);
+	      }
+	    }
+	  }
+	}
       }
     }
 
@@ -406,11 +483,40 @@ sub getFeatureGeneAndProduct {
       foreach my $term (@{$child->{terms}->[0]->{term}}) {
 
 	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+
+	my $props = $term->{props};
+	if ($props) {
+	  my $prop = $props->[0]->{prop};
+	  if ($prop) {
+	    foreach my $item (@{$prop}) {
+	      my $value = $item->{value};
+	      while ($value =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=\D*(\d*)(.*)$/i) {
+		my $commentId = $2;
+		$value = $3;
+		print STDERR "type 3 reviewed-comment flag for comment id \"$commentId\", gene \"$gene\"\n" if $debug;
+		push (@commentList, $commentId);
+	      }
+	    }
+	  }
+	}
       }
     }
 
+    # sanity check: if a product is in there, we must find it
     if (!$product && $contentString =~ /genedb_products/) {
       print STDERR "web-service parse failure: response to URL \"$url\" contains \"genedb_products\", but a (non-null) product was not found in it.\n";
+    }
+
+    # sanity check 2: if a comment is in there, we must find that
+    if (!@commentList && $contentString =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=(.*)$/) {
+      print STDERR "web-service parse failure: response to URL \"$url\" contains a reviewed-comment tag, but no comment IDs were found in it.\n";
+    }
+
+    # store reviewed-comment IDs
+    if ($gene) {
+      foreach my $commentId (@commentList) {
+	$commentInsert->execute($gene, $commentId, $gene, $commentId);
+      }
     }
 
     return($gene, $product, $name);
@@ -449,7 +555,7 @@ sub renameOldChanges {
     my ($dbh, $suffix) = @_;
     $dbh->do(<<SQL) or die "renaming genes to suppress old-news annotations";
 update AnnotationChange$suffix
-set gene = 'old change: ' || gene
+set gene = 'old change: ' || gene, searchable = ''
 where change_date < (select edr.release_date
                        from GeneAttributes ga, dots.NaFeature nf, sres.ExternalDatabaseRelease edr
                        where ga.source_id = AnnotationChange$suffix.gene
@@ -464,9 +570,16 @@ sub indexChanges {
 
 # index AnnotationChange table
     my ($dbh, $suffix) = @_;
-    $dbh->do(<<SQL) or die "creating index";
+    $dbh->do(<<SQL) or die "creating main index";
       create index AnotCh_ix$suffix
       on AnnotationChange$suffix (gene, change_date) tablespace INDX
+SQL
+
+    $dbh->do(<<SQL) or die "creating Oracle Text index";
+      create index AnotChText_ix$suffix
+      on AnnotationChange$suffix (searchable)
+      indextype is ctxsys.context
+      parameters('DATASTORE CTXSYS.DEFAULT_DATASTORE SYNC (ON COMMIT)')
 SQL
 
 }

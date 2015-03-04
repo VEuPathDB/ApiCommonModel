@@ -69,6 +69,7 @@ public class AnnotatedGenome extends DatasetInjector {
        	phylum.put("Chromera","Apicomplexa");
 				phylum.put("Crithidia","Kinetoplastida");
 				phylum.put("Cryptosporidium","Apicomplexa");
+				phylum.put("Cytauxzoon","Apicomplexa"); //b24
 				phylum.put("Edhazardia","Microsporidia");
 				phylum.put("Eimeria","Apicomplexa");
 				phylum.put("Encephalitozoon","Microsporidia");
@@ -80,10 +81,12 @@ public class AnnotatedGenome extends DatasetInjector {
 				phylum.put("Hamiltosporidium","Microsporidia");
 				phylum.put("Hammondia","Apicomplexa");
 				phylum.put("Leishmania","Kinetoplastida");
+				phylum.put("Mitosporidium","Microsporidia"); //b24
 				phylum.put("Naegleria","Amoebozoa");
 				phylum.put("Nematocida","Microsporidia");
 				phylum.put("Neospora","Apicomplexa");
 				phylum.put("Nosema","Microsporidia");
+				phylum.put("Ordospora","Microsporidia"); //b24
 				phylum.put("Plasmodium","Apicomplexa");
 				phylum.put("Sarcocystis","Apicomplexa");
 				phylum.put("Spironucleus","Diplomonadida");

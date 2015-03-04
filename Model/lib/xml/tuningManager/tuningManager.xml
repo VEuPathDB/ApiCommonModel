@@ -293,28 +293,15 @@ CREATE TABLE DataSourceCount nologging as (
     </sql>
     <sql>
       <![CDATA[
-        create table CommunityCount nologging as
-        with geneComment  /*gene/comment-id pair from comments table */
-             as (select stable_id, project_name, comment_id
-                 from userlogins5.comments@prodn.login_comment
-                 where is_visible = 1
-                   and comment_target_id = 'gene'),
-             csiMappedGeneComment  /*distinct gene/comment-id pair from comments or commentStableId */
-             as ( select stable_id, project_name, comment_id
-                  from geneComment
-                 union
-                  select csi.stable_id, gc.project_name, csi.comment_id
-                  from userlogins5.commentStableId@prodn.login_comment csi, geneComment gc
-                  where gc.comment_id = csi.comment_id),
-             validGeneComment  /*distinct na_feature_id-comment-id pairs (with taxon_id) */
-             as (select distinct ga.na_feature_id, ga.taxon_id, cmgc.comment_id
-                 from apidbTuning.GeneId gi, apidbTuning.geneAttributes ga, csiMappedGeneComment cmgc
-                 where ga.is_deprecated = 0
-                   and ga.source_id = cmgc.stable_id
-                   and ga.project_id = cmgc.project_name)
-        select taxon_id, count(*) as communityCount
-        from validGeneComment
-        group by taxon_id
+       create table CommunityCount nologging as
+       select taxon_id, count(*) as communityCount
+       from apidbTuning.GeneAttributes
+       where (source_id, project_id)
+              in (select distinct stable_id, project_name
+                  from userlogins5.mappedComment@prodn.login_comment
+                  where is_visible = 1
+                    and comment_target_id = 'gene')
+       group by taxon_id
       ]]>
     </sql>
     <sql>
@@ -2191,6 +2178,7 @@ tablespace indx
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SequencePieceClosure"/>
     <externalDependency name="apidb.Synteny"/>
+    <externalDependency name="apidb.Organism"/>
     <externalDependency name="dots.DbRefNaSequence"/>
     <externalDependency name="sres.DbRef"/>
     <externalDependency name="sres.ExternalDatabase"/>
@@ -2277,6 +2265,9 @@ create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequenc
 
   <comment> NGS SNP only </comment>
 -->
+
+<!--
+
   <tuningTable name="SnpAttributes" prefixEnabled="true">
     <comment>Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, including SnpSummary and
@@ -2405,7 +2396,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
-<!-- 
+
   <comment> SNP Chip only, such as Plasmo barcode, 3k_chp and hd_array </comment>
   <tuningTable name="SnpChipAttributes">
     <comment> Each record represents one SNP. Widely used in the model, as well as in
@@ -5925,7 +5916,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
       </comment>
     <program commandLine="buildGbrowseImageUrlTT"/>
   </tuningTable>
-
+-->
 
   <tuningTable name="DatasetPresenter" alwaysUpdate="true">
     <comment> Data for a dataset. Used widely in the model, and by GBrowse.
@@ -5940,7 +5931,10 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
   </tuningTable>
 
 
+<!--
+
   <tuningTable name="EupathBuildDates" alwaysUpdate="true">
+
     <program commandLine="buildEupathBuildDatesTT"/>
   </tuningTable>
 
@@ -6099,10 +6093,8 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
 
 
   <tuningTable name="EqtlSpan">
--->
-    <!-- for GeneTables.Plasmo_eQTL_Span_List
-      -->
-<!-- 
+
+
     <externalDependency name="dots.ChromosomeElementFeature"/>
     <externalDependency name="apidb.NAFeatureHaploblock"/>
     <externalDependency name="dots.ExternalNaSequence"/>

@@ -1,5 +1,5 @@
 <wdkModel>
-    <querySet name="SnpTables" queryType="table" isCacheable="false" includeProjects="ToxoDB,PlasmoDB,CryptoDB,EuPathDB,AmoebaDB,TriTrypDB">
+    <querySet name="SnpTables" queryType="table" isCacheable="false" includeProjects="ToxoDB,PlasmoDB,CryptoDB,EuPathDB,AmoebaDB,TriTrypDB,FungiDB">
 
       <defaultTestParamValues includeProjects="PlasmoDB">
          <paramValue name="source_id">NGS_SNP.Pf3D7_11_v3.1293957</paramValue>
@@ -21,12 +21,17 @@
          <paramValue name="project_id">TriTrypDB</paramValue>
       </defaultTestParamValues>
 
+      <defaultTestParamValues includeProjects="FungiDB">
+         <paramValue name="source_id">NGS_SNP.AfumAf293_Chr1.120</paramValue>
+         <paramValue name="project_id">FungiDB</paramValue>
+      </defaultTestParamValues>
+
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Strains for HTS SNPs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-        <sqlQuery name="HTSStrainsTable" includeProjects="PiroplasmaDB,GiardiaDB,PlasmoDB,CryptoDB,AmoebaDB,ToxoDB,TriTrypDB" 
-              isCacheable="false" doNotTest="1">
+       <sqlQuery name="HTSStrainsTable" excludeProjects="TrichDB,GiardiaDB,EuPathDB"
+                 isCacheable="false" doNotTest="1">
 
            <testParamValues includeProjects="CryptoDB">
                <paramValue name="source_id">NGS_SNP.AAEE01000002.1096761</paramValue>
@@ -36,6 +41,9 @@
             </testParamValues>
            <testParamValues includeProjects="ToxoDB">
                <paramValue name="source_id">NGS_SNP.TGME49_chrIb.1890502</paramValue>
+            </testParamValues>
+           <testParamValues includeProjects="FungiDB">
+               <paramValue name="source_id">NGS_SNP.AfumAf293_Chr1.120</paramValue>
             </testParamValues>
 
             <column name="source_id" />
@@ -50,7 +58,7 @@
             <column name="has_align"/>
             <column name="isolate_source_id"/>
             <column name="haplogroup" includeProjects="ToxoDB"/>
-            <sql includeProjects="PiroplasmaDB,GiardiaDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB">
+            <sql includeProjects="PiroplasmaDB,GiardiaDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB">
             <![CDATA[
 SELECT distinct snp.source_id, '@PROJECT_ID@' AS project_id,
        b.source_id as isolate_source_id,
@@ -74,7 +82,7 @@ SELECT distinct snp.source_id, '@PROJECT_ID@' AS project_id,
        d.name 
 FROM   apidbtuning.SnpAttributes snp, 
       apidb.SequenceVariation var, 
-      study.study s, 
+      -- study.study s, 
       rad.studybiomaterial sb, 
       study.biomaterial b, 
       dots.nasequence nas,
@@ -85,7 +93,7 @@ WHERE snp.na_sequence_id = var.ref_na_sequence_id
   AND nas.na_sequence_id = snp.na_sequence_id
   AND var.external_database_release_id = b.external_database_release_id(+)
   AND b.bio_material_id = sb.bio_material_id(+)
-  AND sb.study_id = s.study_id(+)
+  --AND sb.study_id = s.study_id(+)
   --and s.external_database_release_id = r.external_database_release_id
   AND r.external_database_id = d.external_database_id
   AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
@@ -93,9 +101,7 @@ ORDER BY strain_order, var.strain
              ]]>
            </sql>
            <sql includeProjects="ToxoDB">
-SELECT distinct * FROM 
-(
-SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+SELECT distinct snp.source_id, '@PROJECT_ID@' AS project_id,
        b.source_id as isolate_source_id,
        var.strain as strain,
        var.allele,
@@ -103,16 +109,12 @@ SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
             WHEN snp.gene_source_id is null THEN ''
             ELSE var.allele 
        END as allele_gene_strand,
+       decode(var.strain, snp.reference_strain, 1, 2) as strain_order,
        var.product,
        var.coverage, 
-       bmc.value as haplogroup, 
-       CASE WHEN bmc.value = '6a' THEN 6
-            WHEN bmc.value = '6b' THEN 6
-            WHEN bmc.value = 'unknown' THEN 0
-            ELSE to_number(bmc.value)
-       END as order_num, 
+       nvl(h.haplogroup,'unknown') as haplogroup,
+       nvl(h.order_num, 0) as order_num,
        var.read_percent as read_frequency,
-       var.p_value as pvalue,
        CASE WHEN b.source_id is null THEN ''
             ELSE lower(snp.project_id) || 
               '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
@@ -122,84 +124,43 @@ SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
        CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
        d.name 
 FROM   apidbtuning.SnpAttributes snp, 
-       apidb.SequenceVariation var, 
-       study.study s, 
-       rad.studybiomaterial sb, 
-       Study.Ontologyentry oe,
-       Study.Biomaterialcharacteristic Bmc,
-       study.biomaterial b, 
-       dots.nasequence nas,
-       SRES.externaldatabase d,
-       sres.externaldatabaserelease r
+      apidb.SequenceVariation var,
+      (  SELECT distinct b.name as strain,
+                     bmc.value as haplogroup,
+                     CASE WHEN bmc.value = '6a' THEN 6
+                              WHEN bmc.value = '6b' THEN 6
+                              WHEN bmc.value = 'unknown' THEN 0
+                              ELSE to_number(bmc.value)
+                     END as order_num
+             FROM    Study.Ontologyentry oe,
+                         Study.Biomaterialcharacteristic Bmc,
+                         study.biosample b,
+                         SRES.externaldatabase d,
+                         sres.externaldatabaserelease r
+          WHERE  b.external_database_release_id = r.external_database_release_id
+               AND r.external_database_id = d.external_database_id
+               AND d.name like '%SNPSample%'
+               AND b.Bio_Material_Id = Bmc.Bio_Material_Id
+               AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+               AND oe.category ='BioMaterialCharacteristics'
+               AND oe.value ='Haplogroup'
+           UNION
+            select  'ME49' as strain, '2' as haplogroup, 2 as order_num from dual   
+      ) h,
+      rad.studybiomaterial sb, 
+      study.biomaterial b, 
+      dots.nasequence nas,
+      SRES.externaldatabase d,
+      sres.externaldatabaserelease r
 WHERE snp.na_sequence_id = var.ref_na_sequence_id
   AND snp.location = var.location
+  AND var.strain = h.strain(+)
   AND nas.na_sequence_id = snp.na_sequence_id
   AND var.external_database_release_id = b.external_database_release_id(+)
-  and Bmc.Bio_Material_Id = b.Bio_Material_Id
-  AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
   AND b.bio_material_id = sb.bio_material_id(+)
-  AND sb.study_id = s.study_id(+)
-  --AND s.external_database_release_id = r.external_database_release_id
   AND r.external_database_id = d.external_database_id
   AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-  AND oe.category ='BioMaterialCharacteristics' 
-  AND oe.value ='Haplogroup'
---ORDER BY order_num, var.strain
-UNION
-SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
-       b.source_id as isolate_source_id,
-       var.strain as strain,
-       var.allele,
-       CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN snp.gene_source_id is null THEN ''
-            ELSE var.allele 
-       END as allele_gene_strand,
-       var.product,
-       var.coverage, 
-       decode (var.strain, 'ME49', '2', 'unknown') as haplogroup, 
-       CASE WHEN bmc.value is null THEN 0
-            ELSE to_number(bmc.value)
-       END as order_num, 
-       var.read_percent as read_frequency,
-       var.p_value as pvalue,
-       CASE WHEN b.source_id is null THEN ''
-            ELSE lower(snp.project_id) || 
-              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
-              ';l=' || d.name  || '_' || var.strain || 
-              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
-       END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
-       d.name 
-FROM   apidbtuning.SnpAttributes snp, 
-       apidb.SequenceVariation var, 
-       study.study s, 
-       rad.studybiomaterial sb, 
-       Study.Ontologyentry oe,
-       Study.Biomaterialcharacteristic Bmc,
-       study.biomaterial b, 
-       dots.nasequence nas,
-       SRES.externaldatabase d,
-       sres.externaldatabaserelease r
-WHERE snp.na_sequence_id = var.ref_na_sequence_id
-  AND snp.location = var.location
-  AND nas.na_sequence_id = snp.na_sequence_id
-  AND var.external_database_release_id = b.external_database_release_id(+)
-  AND b.bio_material_id = sb.bio_material_id(+)
-  AND sb.study_id = s.study_id(+)
-
-  and Bmc.Bio_Material_Id(+) = b.Bio_Material_Id
-  AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id(+)
-
-  --AND s.external_database_release_id = r.external_database_release_id
-  AND r.external_database_id = d.external_database_id
-	 AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-  AND oe.category is null
-  AND oe.value is null
-	and snp.REFERENCE_STRAIN = var.strain
-)
-order by order_num, strain 
-
-
+ORDER BY strain_order,order_num, strain
            </sql>
         </sqlQuery>
 
@@ -207,7 +168,7 @@ order by order_num, strain
        <!-- Allele count -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="AlleleCount" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB" isCacheable="false">
+       <sqlQuery name="AlleleCount" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB" isCacheable="false">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="allele_count"/>
@@ -230,7 +191,7 @@ order by order_num, strain
        <!-- Product count -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="ProductCount" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB" isCacheable="false">
+       <sqlQuery name="ProductCount" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB" isCacheable="false">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="product_count"/>
