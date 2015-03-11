@@ -542,7 +542,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
-
+-->
 
   <tuningTable name="PdbSimilarity">
     <comment> Each record maps a gene to a PDB structure. Used by the model to find
@@ -606,7 +606,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
--->
+
 
   <tuningTable name="SequencePieceClosure" prefixEnabled="true">
     <comment>Extends dots.SequencePiece to handle multiple levels. Used in
@@ -1198,40 +1198,40 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
+-->
 
-
-  <tuningTable name="GeneCentromereDistance">
-    <comment> Stores (gene, sequence, distance from centromere) 3-tuples for genes
+  <tuningTable name="TranscriptCenDistance">
+    <comment> Stores (transcript, sequence, distance from centromere) 3-tuples for transcripts
          that lie on a sequence for which we have a centomere location.
      </comment>
     <internalDependency name="FeatureLocation"/>
-    <externalDependency name="sres.SequenceOntology"/>
+    <internalDependency name="TranscriptLocation"/>
+    <externalDependency name="sres.OntologyTerm"/>
     <sql>
       <![CDATA[
-CREATE TABLE GeneCentromereDistance&1 NOLOGGING AS
-SELECT gfl.feature_source_id AS gene,
-       LEAST(ABS(mfl.start_min - gfl.end_max),
-             ABS(mfl.end_max - gfl.start_min)) AS centromere_distance,
-       gfl.sequence_source_id AS genomic_sequence
-FROM FeatureLocation gfl, FeatureLocation mfl,
-     sres.SequenceOntology so
-WHERE gfl.na_sequence_id = mfl.na_sequence_id
-  AND mfl.feature_type = 'Miscellaneous'
-  AND gfl.feature_type = 'GeneFeature'
-  AND mfl.sequence_ontology_id = so.sequence_ontology_id
-  AND so.term_name = 'centromere'
+        CREATE TABLE TranscriptCenDistance&1 NOLOGGING AS
+        SELECT tl.feature_source_id AS transcript,
+               LEAST(ABS(mfl.start_min - tl.end_max),
+                     ABS(mfl.end_max - tl.start_min)) AS centromere_distance,
+               tl.sequence_source_id AS genomic_sequence
+        FROM TranscriptLocation tl, FeatureLocation mfl,
+             sres.OntologyTerm so
+        WHERE tl.na_sequence_id = mfl.na_sequence_id
+          AND mfl.feature_type = 'Miscellaneous'
+          AND mfl.sequence_ontology_id = so.ontology_term_id
+          AND so.name = 'centromere'
       ]]>
     </sql>
     <sql>
       <![CDATA[
 create index GCent_loc_ix&1
-       ON GeneCentromereDistance&1 (genomic_sequence, centromere_distance)
+       on TranscriptCenDistance&1 (genomic_sequence, centromere_distance)
 tablespace indx
       ]]>
     </sql>
   </tuningTable>
 
-
+<!--
   <tuningTable name="SageTagLibraryTotal">
     <comment> For each sage-tag library, store the total of the counts of all tags.
          Used by GeneTables.SageTags.
@@ -1498,7 +1498,7 @@ tablespace indx
   </tuningTable>
 -->
 
-<tuningTable name="ProteinAttributes" prefixEnabled="true">
+  <tuningTable name="ProteinAttributes" prefixEnabled="true">
     <comment>The BFMV for the gene record. Each gene gets a single record, which
          stores all its attributes. Used widely, in the model and elsewhere, for
          queries involving genes, as well as in the creation of more than a
@@ -1602,7 +1602,7 @@ SELECT pi.name as project_id,
              tas.source_id, tas.aa_sequence_id,
              t.source_id as transcript_source_id,
              gf.source_id as gene_source_id,
-             cdsl.na_sequene_id as na_sequence_id,
+             cdsl.na_sequence_id as na_sequence_id,
              cdsl.is_reversed, 
              cdsl.start_min as cds_start,
              cdsl.end_max as cds_end,
@@ -1634,10 +1634,10 @@ SELECT pi.name as project_id,
             dots.TranslatedAaFeature taf,
             dots.TranslatedAaSequence tas,
             apidb.AaSequenceAttribute asa,
-            (SELECT feature_source_id, na_sequene_id, is_reversed,
+            (SELECT feature_source_id, na_sequence_id, is_reversed,
                  MIN(start_min) AS start_min, MAX(end_max) AS end_max  
              FROM &prefixCdsLocation WHERE is_top_level=1
-             GROUP BY feature_source_id, na_sequene_id, is_reversed)  cdsl, 
+             GROUP BY feature_source_id, na_sequence_id, is_reversed)  cdsl, 
             &prefixProteinGoAttributes go,
             dots.RnaType rt1, dots.RnaType rt2,
             (SELECT aa_sequence_id, max(tm_domains) AS tm_domains
@@ -4853,7 +4853,7 @@ tablespace indx
         create table  &prefixTranscriptLocation&1 (
           feature_source_id varchar2(80),
           sequence_source_id   varchar2(50),
-          na_sequene_id        number(10),
+          na_sequence_id       number(10),
           na_feature_id        number(10),
           start_min            number,
           end_max              number,
@@ -4869,7 +4869,7 @@ tablespace indx
         create table  &prefixCdsLocation&1 (
           feature_source_id varchar2(80),
           sequence_source_id   varchar2(50),
-          na_sequene_id        number(10),
+          na_sequence_id       number(10),
           na_feature_id        number(10),
           start_min            number,
           end_max              number,
@@ -4892,14 +4892,14 @@ tablespace indx
 
       my $transcriptInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
         insert into &prefixTranscriptLocation&1
-            (feature_source_id, sequence_source_id, na_sequene_id, na_feature_id,
+            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id,
              start_min, end_max, is_reversed, gene_na_feature_id, is_top_level)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
 
       my $cdsInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
         insert into &prefixCdsLocation&1
-            (feature_source_id, sequence_source_id, na_sequene_id, na_feature_id,
+            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id,
              start_min, end_max, is_reversed, gene_na_feature_id, is_top_level)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
@@ -4923,7 +4923,7 @@ SQL
                 $transcriptInsert->execute(
                                            $_->{_gsf_tag_hash}->{ID}[0], # feature_source_id
                                            $_->{_gsf_seq_id}, # sequence_source_id
-                                           $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequene_id
+                                           $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
                                            $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0], # na_feature_id
                                            $_->{_location}->{_start}, # start_min
                                            $_->{_location}->{_end}, # end_max
@@ -4936,7 +4936,7 @@ SQL
                 $cdsInsert->execute(
                                            $_->{_gsf_tag_hash}->{ID}[0], # feature_source_id
                                            $_->{_gsf_seq_id}, # sequence_source_id
-                                           $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequene_id
+                                           $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
                                            $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0], # na_feature_id
                                            $_->{_location}->{_start}, # start_min
                                            $_->{_location}->{_end}, # end_max
