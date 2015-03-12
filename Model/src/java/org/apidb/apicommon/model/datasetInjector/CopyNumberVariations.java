@@ -17,8 +17,8 @@ public class CopyNumberVariations extends  DatasetInjector {
   @Override
   public void injectTemplates() {
 
-//Props from .prop for experiment
-      String projectName = getPropValue("projectName");
+      //Props from .prop for experiment
+      //String projectName = getPropValue("projectName");
       String organismAbbrev = getPropValue("organismAbbrev");
       String experimentName = getPropValue("experimentName");
 
