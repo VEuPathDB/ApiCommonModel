@@ -40,6 +40,9 @@ public class CopyNumberVariations extends  DatasetInjector {
 
   @Override
   public void addModelReferences() {
+    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
   }
   
   // declare properties required beyond those inherited from the datasetPresenter
