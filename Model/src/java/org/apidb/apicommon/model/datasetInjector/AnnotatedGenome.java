@@ -170,7 +170,7 @@ public class AnnotatedGenome extends DatasetInjector {
     if (kingdom.containsKey(phylum.get(orgs[0]))) 
 			familySpecies = "Fungi-" + familySpecies;
 		else if (phylum.containsKey(orgs[0])) 
-			familySpecies = "Alter-" + familySpecies;
+			familySpecies = "Non-Fungi-" + familySpecies;
 
     // setting properties to be used in template
     setPropValue("familySpecies", familySpecies);
