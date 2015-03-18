@@ -145,13 +145,20 @@ public class AnnotatedGenome extends DatasetInjector {
     String[] orgs = organismFullName.split(" ");
 
     String speciesWithSpaces, species, familySpecies;
-    // Strings "species" and "familySpecies" should be called: "genusSpeciesDisplayName" and "genusSpeciesFilterName" respectively
+    // Strings "species" and "familySpecies" should be called: "genusSpeciesDisplayName" and "orgFilterName" respectively
     //    "species" MAY contain spaces (eg: "sp. 1")
     //    "familySpecies" CANNOT contain spaces (eg: "sp.=1")
+		//
     // The templates below will generate filter names in the model based on these Strings.
     //   These will be used by WDK (AnswerFilterLayout.java) 
     //   to prepare maps with organism counts per Phylum, Genus and Species
     //   which will be used by the jsp to generate the table with correct headers/colspans
+
+		// None of the names used in a full species name (eg: Apicomplexa Plasmodium falciparum) 
+		//   should contain spaces or any of the folowing characters: 
+		//     dash - 
+		//     underscore _ 
+		//     equal sign = 
 
     // if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces; otherwise empty
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
@@ -163,10 +170,10 @@ public class AnnotatedGenome extends DatasetInjector {
       familySpecies = orgs[0] + "-" + orgs[1]; 
     }
 
-    // adding phylum to families (genus) included in the Map above
+    // adding phylum to familySpecies, for genera included in the Map above (eg: Plasmodium)
     if (phylum.containsKey(orgs[0])) 
 			familySpecies = phylum.get(orgs[0]) + "-" + familySpecies;
-    // adding kingdom to phila included in the Map above
+    // adding kingdom to familySpecies, for phila included in either Map above (eg: Agaricomycetes,Plasmodium)
     if (kingdom.containsKey(phylum.get(orgs[0]))) 
 			familySpecies = "Fungi-" + familySpecies;
 		else if (phylum.containsKey(orgs[0])) 
