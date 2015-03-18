@@ -176,8 +176,8 @@ public class AnnotatedGenome extends DatasetInjector {
     // adding kingdom to familySpecies, for phila included in either Map above (eg: Agaricomycetes,Plasmodium)
     if (kingdom.containsKey(phylum.get(orgs[0]))) 
 			familySpecies = "Fungi-" + familySpecies;
-		else if (phylum.containsKey(orgs[0])) 
-			familySpecies = "nonFungi-" + familySpecies;
+		//		else if (phylum.containsKey(orgs[0])) 
+		//		familySpecies = "nonFungi-" + familySpecies;
 
     // setting properties to be used in template
     setPropValue("familySpecies", familySpecies);
