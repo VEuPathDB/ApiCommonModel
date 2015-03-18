@@ -160,14 +160,18 @@ public class AnnotatedGenome extends DatasetInjector {
 		//     underscore _ 
 		//     equal sign = 
 
-    // if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces; otherwise empty
+    // if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces or any of the above chars; otherwise empty
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
       speciesWithSpaces = getPropValue("optionalSpecies");
       species = orgs[0] + " " + speciesWithSpaces;
+			speciesWithSpaces = speciesWithSpaces.replaceAll("-", " ");
+			speciesWithSpaces = speciesWithSpaces.replaceAll("_", " ");
       familySpecies = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
     } else {
-      species = orgs[0] + " " + orgs[1]; 
-      familySpecies = orgs[0] + "-" + orgs[1]; 
+      species = orgs[0] + " " + orgs[1];  // for popup on distinct filter
+      orgs[1] = orgs[1].replaceAll("-", "=");
+			orgs[1] = orgs[1].replaceAll("_", "=");
+      familySpecies = orgs[0] + "-" + orgs[1];  // for filter name
     }
 
     // adding phylum to familySpecies, for genera included in the Map above (eg: Plasmodium)
