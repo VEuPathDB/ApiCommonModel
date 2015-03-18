@@ -14,7 +14,7 @@ public class AnnotatedGenome extends DatasetInjector {
     // hack until we have filters reading from datatabase (instead of relying on dataset xml files)
     // key value pairs obtained by running SQLs below in a EUPA database (ee.g.: eupabn)
     
-		//copy/paste from his SQL:
+		//copy/paste from this SQL:
 		//
 		//select 'kingdom.put("' || term || '","Fungi");'
 		//from (select distinct term from (
@@ -42,7 +42,7 @@ public class AnnotatedGenome extends DatasetInjector {
       kingdom.put("Zygomycetes","Fungi");
     }
 
-		//copy/paste from his SQL:
+		//copy/paste from this SQL:
 		//    
 		//    select 'phylum.put("' || term || '","' || parentterm || '");'
     //    from ApidbTuning.OrganismTree
@@ -170,7 +170,7 @@ public class AnnotatedGenome extends DatasetInjector {
     if (kingdom.containsKey(phylum.get(orgs[0]))) 
 			familySpecies = "Fungi-" + familySpecies;
 		else if (phylum.containsKey(orgs[0])) 
-			familySpecies = "Non-Fungi-" + familySpecies;
+			familySpecies = "nonFungi-" + familySpecies;
 
     // setting properties to be used in template
     setPropValue("familySpecies", familySpecies);
