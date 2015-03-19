@@ -164,13 +164,13 @@ public class AnnotatedGenome extends DatasetInjector {
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
       speciesWithSpaces = getPropValue("optionalSpecies");
       species = orgs[0] + " " + speciesWithSpaces;
-			speciesWithSpaces = speciesWithSpaces.replaceAll("-", " ");
-			speciesWithSpaces = speciesWithSpaces.replaceAll("_", " ");
+			speciesWithSpaces = speciesWithSpaces.replaceAll("-", "=-");
+			speciesWithSpaces = speciesWithSpaces.replaceAll("_", "=_");
       familySpecies = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
     } else {
       species = orgs[0] + " " + orgs[1];  // for popup on distinct filter
-      orgs[1] = orgs[1].replaceAll("-", "=");
-			orgs[1] = orgs[1].replaceAll("_", "=");
+      orgs[1] = orgs[1].replaceAll("-", "=-");
+			orgs[1] = orgs[1].replaceAll("_", "=_");
       familySpecies = orgs[0] + "-" + orgs[1];  // for filter name
     }
 
