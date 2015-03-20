@@ -31,7 +31,7 @@ public class AnnotatedGenome extends DatasetInjector {
       kingdom.put("Eurotiomycetes","Fungi");
       kingdom.put("Leotiomycetes","Fungi");
       kingdom.put("Microsporidia","Fungi");
-      kingdom.put("Oomycetes","Fungi");
+			//  kingdom.put("Oomycetes","Fungi");
       kingdom.put("Pneumocystidomycetes","Fungi");
       kingdom.put("Pucciniomycetes","Fungi");
       kingdom.put("Saccharomycetes","Fungi");
