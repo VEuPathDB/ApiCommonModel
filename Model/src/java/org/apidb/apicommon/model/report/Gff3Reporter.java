@@ -33,6 +33,9 @@ import org.gusdb.wdk.model.report.Reporter;
 import org.json.JSONException;
 
 /**
+ * It takes data from WDK records, and format it into GFF3 format, and it write the GFF content into
+ * apidb.GeneDetail table for later use.
+ * 
  * @author xingao
  * 
  */
@@ -67,8 +70,7 @@ public class Gff3Reporter extends Reporter {
     }
 
     @Override
-    public AttributeValue getAttributeValue(String key)
-        throws WdkModelException, WdkUserException {
+    public AttributeValue getAttributeValue(String key) throws WdkModelException, WdkUserException {
       return _map.get(key);
     }
 
@@ -102,7 +104,8 @@ public class Gff3Reporter extends Reporter {
   public String getHttpContentType() {
     if (format.equalsIgnoreCase("text")) {
       return "text/plain";
-    } else { // use the default content type defined in the parent class
+    }
+    else { // use the default content type defined in the parent class
       return super.getHttpContentType();
     }
   }
@@ -118,7 +121,8 @@ public class Gff3Reporter extends Reporter {
     String name = getQuestion().getName();
     if (format.equalsIgnoreCase("text")) {
       return name + ".gff";
-    } else { // use the default file name defined in the parent
+    }
+    else { // use the default file name defined in the parent
       return super.getDownloadFileName();
     }
   }
@@ -126,13 +130,11 @@ public class Gff3Reporter extends Reporter {
   /*
    * (non-Javadoc)
    * 
-   * @see
-   * org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
+   * @see org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
    */
   @Override
-  protected void write(OutputStream out) throws WdkModelException,
-      NumberFormatException, NoSuchAlgorithmException, SQLException,
-      JSONException, WdkUserException {
+  protected void write(OutputStream out) throws WdkModelException, NumberFormatException,
+      NoSuchAlgorithmException, SQLException, JSONException, WdkUserException {
     PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
 
     // write header
@@ -157,15 +159,13 @@ public class Gff3Reporter extends Reporter {
     // include transcript
     if (config.containsKey(FIELD_HAS_TRANSCRIPT)) {
       String value = config.get(FIELD_HAS_TRANSCRIPT);
-      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true"))
-          ? true : false;
+      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
     }
 
     // include protein
     if (config.containsKey(FIELD_HAS_PROTEIN)) {
       String value = config.get(FIELD_HAS_PROTEIN);
-      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true"))
-          ? true : false;
+      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
     }
 
     if (psQuery == null) {
@@ -181,7 +181,8 @@ public class Gff3Reporter extends Reporter {
       DataSource dataSource = wdkModel.getAppDb().getDataSource();
       try {
         psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
-      } catch (SQLException e) {
+      }
+      catch (SQLException e) {
         throw new WdkModelException("Unable to initialize reporter.", e);
       }
     }
@@ -203,10 +204,9 @@ public class Gff3Reporter extends Reporter {
    * The initialize() method has to be called before this method.
    * 
    * @param writer
-   * @throws WdkUserException 
+   * @throws WdkUserException
    */
-  void writeHeader(PrintWriter writer) throws WdkModelException,
-      NumberFormatException, WdkUserException {
+  void writeHeader(PrintWriter writer) throws WdkModelException, NumberFormatException, WdkUserException {
     writer.println("##gff-version 3");
     writer.println("# feature-ontology so.obo");
     writer.println("# attribute-ontology gff3_attributes.obo");
@@ -229,7 +229,8 @@ public class Gff3Reporter extends Reporter {
           if (region[1] < stop)
             region[1] = stop;
           regions.put(seqId, region);
-        } else {
+        }
+        else {
           int[] region = { start, stop };
           regions.put(seqId, region);
         }
@@ -249,8 +250,7 @@ public class Gff3Reporter extends Reporter {
    * 
    * @param writer
    */
-  void writeRecords(PrintWriter writer) throws WdkModelException,
-      SQLException, WdkUserException {
+  void writeRecords(PrintWriter writer) throws WdkModelException, SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
     DatabaseInstance appDb = wdkModel.getAppDb();
@@ -270,8 +270,7 @@ public class Gff3Reporter extends Reporter {
       sqlInsert.append(", ").append(column);
     }
     sqlInsert.append(") VALUES (");
-    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema,
-        table));
+    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
     sqlInsert.append(", ");
     sqlInsert.append("?, ?, ?");
     for (int i = 0; i < pkColumns.length; i++) {
@@ -296,9 +295,11 @@ public class Gff3Reporter extends Reporter {
           // read and format record content
           if (rcName.equals("SequenceRecordClasses.SequenceRecordClass")) {
             formatSequenceRecord(record, recordBuffer);
-          } else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
+          }
+          else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
             formatGeneRecord(record, recordBuffer);
-          } else {
+          }
+          else {
             SqlUtils.closeStatement(psInsert);
             throw new WdkModelException("Unsupported record type: " + rcName);
           }
@@ -325,13 +326,14 @@ public class Gff3Reporter extends Reporter {
           writer.flush();
         }
       }
-    } finally {
+    }
+    finally {
       SqlUtils.closeStatement(psInsert);
     }
   }
 
-  private void formatGeneRecord(RecordInstance record, StringBuffer recordBuffer)
-      throws WdkModelException, WdkUserException {
+  private void formatGeneRecord(RecordInstance record, StringBuffer recordBuffer) throws WdkModelException,
+      WdkUserException {
     // get common fields from the record
     readCommonFields(record, recordBuffer);
 
@@ -438,8 +440,8 @@ public class Gff3Reporter extends Reporter {
     }
   }
 
-  private void formatSequenceRecord(RecordInstance record,
-      StringBuffer recordBuffer) throws WdkModelException, WdkUserException {
+  private void formatSequenceRecord(RecordInstance record, StringBuffer recordBuffer)
+      throws WdkModelException, WdkUserException {
     // get common fields from the record
     readCommonFields(record, recordBuffer);
 
@@ -447,15 +449,11 @@ public class Gff3Reporter extends Reporter {
     String webId = readField(record, "gff_attr_web_id");
     if (webId != null)
       recordBuffer.append(";web_id=" + webId);
-    recordBuffer.append(";molecule_type="
-        + readField(record, "gff_attr_molecule_type"));
-    recordBuffer.append(";organism_name="
-        + readField(record, "gff_attr_organism_name"));
-    recordBuffer.append(";translation_table="
-        + readField(record, "gff_attr_translation_table"));
+    recordBuffer.append(";molecule_type=" + readField(record, "gff_attr_molecule_type"));
+    recordBuffer.append(";organism_name=" + readField(record, "gff_attr_organism_name"));
+    recordBuffer.append(";translation_table=" + readField(record, "gff_attr_translation_table"));
     recordBuffer.append(";topology=" + readField(record, "gff_attr_topology"));
-    recordBuffer.append(";localization="
-        + readField(record, "gff_attr_localization"));
+    recordBuffer.append(";localization=" + readField(record, "gff_attr_localization"));
 
     // get dbxref terms
     TableValue dbxrefs = record.getTableValue("SequenceGffDbxrefs");
@@ -477,8 +475,7 @@ public class Gff3Reporter extends Reporter {
    * 
    * @param writer
    */
-  void writeSequences(PrintWriter writer) throws WdkModelException,
-      SQLException, WdkUserException {
+  void writeSequences(PrintWriter writer) throws WdkModelException, SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
     DatabaseInstance appDb = wdkModel.getAppDb();
@@ -497,8 +494,7 @@ public class Gff3Reporter extends Reporter {
       sqlInsert.append(", ").append(column);
     }
     sqlInsert.append(") VALUES (");
-    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema,
-        table));
+    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
     sqlInsert.append(", ");
     sqlInsert.append("?, ?, ?");
     for (int i = 0; i < pkColumns.length; i++) {
@@ -531,7 +527,8 @@ public class Gff3Reporter extends Reporter {
               writer.print(sequence);
               writer.flush();
             }
-          } else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
+          }
+          else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
             // get transcript, if needed
             if (hasTranscript) {
               String sequence = getValue(record.getAttributeValue("gff_transcript_sequence"));
@@ -591,19 +588,21 @@ public class Gff3Reporter extends Reporter {
                 }
               }
             }
-          } else {
+          }
+          else {
             SqlUtils.closeStatement(psInsert);
             throw new WdkModelException("Unsupported record type: " + rcName);
           }
         }
       }
-    } finally {
+    }
+    finally {
       SqlUtils.closeStatement(psInsert);
     }
   }
 
-  private void readCommonFields(AttributeValueMap object, StringBuffer buffer)
-      throws WdkModelException, WdkUserException {
+  private void readCommonFields(AttributeValueMap object, StringBuffer buffer) throws WdkModelException,
+      WdkUserException {
     buffer.append(readField(object, "gff_seqid") + "\t");
     buffer.append(readField(object, "gff_source") + "\t");
     buffer.append(readField(object, "gff_type") + "\t");
@@ -620,7 +619,8 @@ public class Gff3Reporter extends Reporter {
       name = id;
     try {
       buffer.append(";Name=" + URLEncoder.encode(name, "utf-8"));
-    } catch (UnsupportedEncodingException ex) {
+    }
+    catch (UnsupportedEncodingException ex) {
       ex.printStackTrace();
     }
 
@@ -629,15 +629,16 @@ public class Gff3Reporter extends Reporter {
       description = name;
     try {
       buffer.append(";description=" + URLEncoder.encode(description, "utf-8"));
-    } catch (UnsupportedEncodingException ex) {
+    }
+    catch (UnsupportedEncodingException ex) {
       ex.printStackTrace();
     }
 
     buffer.append(";size=" + readField(object, "gff_attr_size"));
   }
 
-  private String readField(AttributeValueMap attributeMap, String field)
-      throws WdkModelException, WdkUserException {
+  private String readField(AttributeValueMap attributeMap, String field) throws WdkModelException,
+      WdkUserException {
     return getValue(attributeMap.getAttributeValue(field));
   }
 
@@ -645,7 +646,8 @@ public class Gff3Reporter extends Reporter {
     String value;
     if (attrVal == null) {
       return null;
-    } else {
+    }
+    else {
       Object objValue = attrVal.getValue();
       if (objValue == null)
         return null;
@@ -657,8 +659,7 @@ public class Gff3Reporter extends Reporter {
     return value;
   }
 
-  private String formatSequence(String id, String sequence)
-      throws PatternSyntaxException {
+  private String formatSequence(String id, String sequence) throws PatternSyntaxException {
     if (sequence == null)
       return null;
 
@@ -673,8 +674,7 @@ public class Gff3Reporter extends Reporter {
     return buffer.toString();
   }
 
-  private boolean checkCache(RecordInstance record, String tableName)
-      throws SQLException {
+  private boolean checkCache(RecordInstance record, String tableName) throws SQLException {
     String[] pkColumns = record.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
     Map<String, String> pkValues = record.getPrimaryKey().getValues();
     psQuery.setString(1, tableName);
@@ -687,7 +687,8 @@ public class Gff3Reporter extends Reporter {
       rs.next();
       int count = rs.getInt("cache_count");
       return (count > 0);
-    } finally {
+    }
+    finally {
       rs.close();
     }
   }
