@@ -31,13 +31,8 @@ public class SpliceSites extends  DatasetInjector {
 
       setGraphModule();
 
-      if(getPropValueAsBoolean("hasPairedEnds")) {
-        setPropValue("exprMetric", "fpkm");
-        setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
-      } else {
-        setPropValue("exprMetric", "rpkm");
-        setPropValue("graphYAxisDescription", "log 2 (normalized tag count)");
-      }
+      setPropValue("exprMetric", "rpm");
+      setPropValue("graphYAxisDescription", "count per million");
 
       String exprMetric = getPropValue("exprMetric");
       setPropValue("graphVisibleParts", exprMetric + ",percentile");
