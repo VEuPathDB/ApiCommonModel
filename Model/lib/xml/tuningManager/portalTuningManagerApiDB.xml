@@ -380,42 +380,32 @@ use DBI;
 use strict;
 use lib "$ENV{GUS_HOME}/lib/perl";
 
-my $sqlQueries;
-$sqlQueries->{getDbLinksSql} = <<EOSQL;
-        SELECT  db_link  
-	FROM     all_db_links
-        WHERE    db_link like '%.TUNING'
-EOSQL
-
-my $hash_ref;
+# my $hash_ref;
+my @nameQ;
+my $someDblink;
 my $queryHandle;
-my $sql;
-$sql = $sqlQueries->{getDbLinksSql};
-$queryHandle = $dbh->prepare($sql) or die $dbh->errstr;
+$queryHandle = $dbh->prepare(<<SQL) or die $dbh->errstr;
+    select db_link
+    from all_db_links
+    where db_link like '%.TUNING'
+SQL
 $queryHandle->execute();
 
 #looping on available component sites
-my $select;
-my $maxRowCount = 0;
-my $rowCount = 0;
-my $dbLink;
-my $maxDbLink;
-while ( $hash_ref = $queryHandle->fetchrow_hashref ) {
-    $dbLink =  $hash_ref->{DB_LINK};
-    $select = "SELECT COUNT(*) FROM apidb.orthomcltaxon@" . $dbLink;
-    $rowCount = $dbh->selectrow_array($select);
-
-    if ($rowCount > $maxRowCount) {
-	$maxRowCount = $rowCount;
-	$maxDbLink = $dbLink;
-    }
+while (my ($dblink) = $queryHandle->fetchrow_array() ) {
+    $someDblink = $dblink;
+    push(@nameQ, "select name from apidb.OrthomclTaxon\@" . $dblink);
 }
-# requires dblink with most updated table
-# (we'll assume that's the most populous one, since orthoMCL tends to grow monotonically)
 
-$dbh->do(<<EOSQL) or die $dbh->errstr;
-    create table OrthomclTaxon&1 AS SELECT * FROM apidb.orthomcltaxon\@$maxDbLink
-EOSQL
+# did we find at least one dblink?
+die "didn't find any dblinks named something.TUNING"
+  unless $someDblink;
+
+my $sql = "create table OrthomclTaxon&1 "
+          . "as select * from apidb.orthomclTaxon\@$someDblink "
+          . "where name in ("
+          . join(" intersect ", @nameQ) . ")";
+$dbh->do($sql) or die $dbh->errstr;
 
       ]]> 
     </perl>
