@@ -2245,6 +2245,14 @@ select * from (
       ss.strain as value,
       'StrainOrLine' as property
  from Apidbtuning.SnpChipStrains ss
+ union 
+ select ss.strain as term,
+        dp.display_name as value,
+        'Experiment' as property
+  from apidbtuning.SnpChipStrains ss, apidbTuning.DatasetPresenter dp
+  where dp.name =  ss.extdb_name
+   and  ss.organism = $$organism$$
+   and  ss.name in ($$snp_assay_type$$)
 )
 where value is not null
   and lower(value) != 'unknown'
@@ -2270,8 +2278,7 @@ where value is not null
             <column name="spec_value" />
             <sql>
            <![CDATA[
-
-With FullSpec as  (
+  With FullSpec as  (
 SELECT 'BioSampleID' as property, 'type' as spec_property, 'string' as spec_value FROM dual
 UNION
 SELECT 'BioSampleID' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
@@ -2345,7 +2352,7 @@ UNION
  SELECT 'Year' as property, 'display' as spec_property, 'Year' as spec_value FROM dual
 UNION
 SELECT 'country' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
+UNION 
 SELECT 'country' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
 UNION
  SELECT 'country' as property, 'display' as spec_property, 'Country' as spec_value FROM dual
@@ -2361,9 +2368,17 @@ UNION
 SELECT 'ATCC#' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
 UNION
  SELECT 'ATCC#' as property, 'display' as spec_property, 'ATCC#' as spec_value FROM dual
+UNION
+SELECT 'Experiment' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+UNION
+SELECT 'Experiment' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+UNION
+ SELECT 'Experiment' as property, 'display' as spec_property, 'Experiment' as spec_value FROM dual
+UNION
+ SELECT 'Experiment' as property, 'parent' as spec_property, 'BioMaterialCharacteristics' as spec_value FROM dual
 ) 
 , main as (
-select fs.*
+select distinct fs.*
             from fullspec fs,
                  (
 select * from ( 
@@ -2395,6 +2410,12 @@ select * from (
       ss.strain as value,
       'StrainOrLine' as property
  from Apidbtuning.SnpChipStrains ss
+ union 
+ select ss.strain as term,
+        dp.display_name as value,
+        'Experiment' as property
+  from apidbtuning.SnpChipStrains ss, apidbTuning.DatasetPresenter dp
+  where dp.name =  ss.extdb_name
 )
 where value is not null
   and lower(value) != 'unknown'
@@ -2410,15 +2431,25 @@ intersect
 (SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
            START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category != 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != main.property
 minus
 SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
            START WITH oe.value = 'BioMaterialCharacteristics'
                  CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != 'BioMaterialCharacteristics')
+
 ),
+FilterTree as  ( 
+select * from tree
+                 minus
+                 (select * from tree where property in (select distinct property from tree where spec_value != 'BioMaterialCharacteristics'  )
+                                       and property in (select distinct property from tree where spec_value = 'BioMaterialCharacteristics' )
+                                       and spec_value != 'BioMaterialCharacteristics' 
+                                                      
+  )                                                  
+),               
 TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
-           FROM Tree
+           FROM FilterTree
            Union
            select 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
            minus
@@ -2427,8 +2458,7 @@ TreeDisplay as ( SELECT property as property, 'display' as spec_property, initca
 )
 Select * from main
 union
-select tree.* from tree
-
+select ft.* from filterTree ft
 union
 select treeDisplay.* from treeDisplay
 union
@@ -2439,8 +2469,7 @@ union
 SELECT oe.value as property, 'leaf' as spec_property, 'true' as spec_value FROM STUDY.ontologyentry oe, main
 where oe.value = main.property
 order by property
-
-            ]]> 
+           ]]> 
 
             </sql>
         </sqlQuery>

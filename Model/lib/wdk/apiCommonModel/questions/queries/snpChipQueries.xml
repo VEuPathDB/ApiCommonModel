@@ -14,7 +14,7 @@
 
         SELECT distinct sf.source_id AS source_id, '@PROJECT_ID@' as project_id
         FROM dots.SnpFeature sf, ($$snp_id$$) ds, sres.externalDatabase ed, sres.externalDatabaseRelease edr
-        WHERE sf.source_id = ds.source_id
+        WHERE sf.source_id  like (ds.source_id || '%')
           AND sf.external_database_release_id = edr.external_database_release_id
           AND edr.external_database_id = ed.external_database_id
           AND lower(ed.name) like '%snpchip%'
@@ -400,13 +400,14 @@ WHERE snp.na_feature_id = variants.parent_id
         <column name="project_id"/>
         <column name="set_a_allele"/>
         <column name="set_b_allele"/>
-        <column name="set_a_count"/>
-        <column name="set_b_count"/>
+        <column name="set_a_major_percent"/>
+        <column name="set_b_major_percent"/>
         <sql>
             <![CDATA[
 select distinct seta.source_id,'@PROJECT_ID@' as project_id,
        seta.allele as set_a_allele,setb.allele as set_b_allele,
-       seta.total as set_a_count, setb.total as set_b_count
+       round(seta.total/(select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * 100) as set_a_major_percent,
+       round(setb.total/(select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_b$$))) * 100) as set_b_major_percent
 FROM
 (
 SELECT snp.source_id, var.allele, count(*) as total
@@ -416,9 +417,9 @@ WHERE snp.na_feature_id = var.parent_id
   and var.allele is not null
   and snp.type in ($$snp_assay_type$$)
   and var.strain in ($$snpchip_strain_meta_a$$)
-	and snp.major_allele_frequency >= $$set_a_percent$$ /100
+--	and snp.major_allele_frequency >= $$set_a_percent$$ /100
   group by snp.source_id, var.allele
-  --having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * $$set_a_percent$$ / 100
+  having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * $$set_a_percent$$ / 100
 ) seta,
 (
 SELECT snp.source_id, var.allele, count(*) as total
@@ -428,9 +429,9 @@ WHERE snp.na_feature_id = var.parent_id
   and var.allele is not null
   and snp.type in ($$snp_assay_type$$)
   and var.strain in ($$snpchip_strain_meta_b$$)
-	and snp.major_allele_frequency >=  $$set_b_percent$$ /100
+--	and snp.major_allele_frequency >=  $$set_b_percent$$ /100
   group by snp.source_id, var.allele
-  --having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * $$set_b_percent$$ / 100
+  having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_b$$))) * $$set_b_percent$$ / 100
 ) setb
 where seta.source_id = setb.source_id
  and seta.allele != setb.allele 
