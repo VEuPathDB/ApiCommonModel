@@ -53,76 +53,133 @@
         </paramRef>
         <paramRef ref="snpChipParams.snp_assay_type"/>
         <paramRef ref="sharedParams.snpchip_strain_meta"/>
-        <column name="source_id"/>
-        <column name="project_id"/>
-        <column name="snp_location"/>
-        <column name="ref_strain"/>
-        <column name="comp_strains"/>
-        <column name="ref_allele"/>
-        <column name="comp_alleles"/>
-        <column name="phenotype"/>
-        <column name="prot_pos"/>
-        <column name="ref_product"/>
-        <column name="comp_products"/>
+          <paramRef ref="snpChipParams.set_percent"/>
+          <column name="source_id"/>
+          <column name="project_id"/>
+          <column name="gene"/>
+         <column name="snp_location"/>
+          <column name="prot_pos"/>
+          <column name="major_strains_chosen"/>
+          <column name="minor_strains_chosen"/>
+          <column name="major_allele_chosen"/>
+          <column name="major_allele_freq_chosen"/>
+          <column name="minor_alleles_chosen"/>
+          <column name="minor_allele_freq_chosen"/>
+          <column name="major_product_chosen"/>
+          <column name="minor_products_chosen"/>
 
         <sql>
             <![CDATA[
-select * from (
-SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product,                              
-  apidb.tab_to_string(set(cast(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_all END) AS apidb.varchartab)), ', ') as comp_alleles,                
-  apidb.tab_to_string(set(cast(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_product END) AS apidb.varchartab)), ', ') as comp_products,                
-  apidb.tab_to_string(set(cast(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.phenotype END) AS apidb.varchartab)), ', ') as phenotype,                  
-  apidb.tab_to_string(set(cast(COLLECT(CASE WHEN snpq.allele_a = snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab)), ', ') as ref_strain,              
-  apidb.tab_to_string(set(cast(COLLECT(CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab)), ', ') as comp_strains 
-FROM                 
-  (SELECT /*+ ordered */ 
-    hits.source_id as source_id,nas.source_id || ':' || trim(to_char(l.start_min,'999,999,999')) as snp_location,                               
-    sva.strain as ref_strain, svb.strain as comp_strain,                               
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(sva.allele)                                  
-    ELSE sva.allele END as ref_allele,                 
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(svb.allele)                                 
-    ELSE svb.allele END as comp_all,                 
-    CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product then 'non-syn' ELSE 'non-coding' END as phenotype,                               
-    sva.product as ref_product, svb.product as comp_product,                           
-    hits.position_in_protein as prot_pos,
-    sva.allele as allele_a, svb.allele as allele_b, svb.strain as strain_b
-  FROM 
-    ( SELECT /*+ ordered */ 
-          distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
-          sf.position_in_protein,sf.source_id
-      FROM ($$ds_gene_ids$$) ds,
-           ApidbTuning.GeneId gi, 
-           dots.GeneFeature gf, 
-           dots.SnpFeature sf,
-           dots.SeqVariation isva, 
-           dots.SeqVariation isvb,
-           ( select distinct organism,extdb_name as name,external_database_release_id
-              from apidbtuning.snpchipstrains ) ss
-      WHERE lower(gi.id) = lower(ds.source_id)
-        AND gf.source_id = gi.gene
-        AND gf.na_feature_id = sf.parent_id
-        AND ss.organism = $$organism$$
-        AND sf.external_database_release_id = ss.external_database_release_id
-        AND sf.na_feature_id = isva.parent_id
-        AND sf.na_feature_id = isvb.parent_id                      
-        AND isvb.strain in ($$snpchip_strain_meta$$)
-        AND isva.allele != isvb.allele 
-        AND sf.name in ($$snp_assay_type$$)
-    ) hits,
-    dots.NaSequence nas, 
-    dots.NALocation gene_loc, 
-    dots.NALocation l,
-    dots.SeqVariation sva, 
-    dots.SeqVariation svb
-  WHERE hits.na_sequence_id = nas.na_sequence_id
-    AND hits.gene_na_feature_id = gene_loc.na_feature_id
-    AND hits.snp_na_feature_id = l.na_feature_id
-    AND hits.snp_na_feature_id = sva.parent_id 
-    AND hits.snp_na_feature_id = svb.parent_id        
-    AND svb.strain in ($$snpchip_strain_meta$$)                             
-   ) snpq                              
-GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product
+with variants as (
+                 SELECT var.parent_id,
+                    count(var.na_feature_id) as allele_count,
+                    var.allele,
+                    var.product,
+                    apidb.tab_to_string(set(cast(COLLECT(distinct var.strain) AS apidb.varchartab)), ', ') as strains,
+                    count(var.strain) as strain_count
+             FROM   dots.SeqVariation var
+             WHERE  var.organism = $$organism$$
+                AND var.strain in ($$snpchip_strain_meta$$)
+                and name in ($$snp_assay_type$$)
+             GROUP BY parent_id,allele,product
+            
+             order by parent_id,allele
+      ),
+alleles as (
+select           one.parent_id,
+                 one.allele allele_one,
+                 one.allele_count,
+                 two.allele as allele_two,
+                 1 as allele_count_equal
+          from variants one,variants two
+               where one.parent_id = two.parent_id
+                 and one.allele_count = two.allele_count
+                 and one.allele != two.allele
+          Union
+          select one.parent_id,
+                 one.allele allele_one,
+                 one.allele_count,
+                 two.allele as allele_two,
+                 0 as allele_count_equal
+          from variants one,variants two
+               where one.parent_id = two.parent_id
+                 and one.allele_count > two.allele_count
+          order by parent_id
+          ),
+ranked_alleles as (
+      select parent_id,
+             allele_one as major_allele,
+             allele_two as minor_allele 
+        from alleles
+       where  parent_id in (select parent_id 
+                              from alleles
+                            group by parent_id
+                            having count(parent_id) =1)
+         and allele_count_equal  = 0
+      union
+      select major.parent_id,
+             major.allele_one as major_allele,
+             minor.allele_one as minor_allele 
+             
+        from alleles major, alleles minor
+       where  major.parent_id = minor.parent_id
+         and major.allele_count > minor.allele_count
+         and major.allele_count_equal  = 0
+      union
+      select major.parent_id,
+             major.allele_one as major_allele,
+             minor.allele_one as minor_allele 
+             
+        from alleles major, alleles minor, APIDBTUNING.SNPCHIPATTRIBUTES snp
+       where  major.parent_id = minor.parent_id
+         and major.allele_count_equal  = 1
+         and major.allele_one = minor.allele_two
+         and major.allele_two = minor.allele_one
+         and snp.na_feature_id = major.parent_id
+         and major.allele_one = snp.major_allele
 )
+select strains.* from (
+  select  snp.source_id, 
+       '@PROJECT_ID@' as project_id, 
+       snp.gene_source_id as gene, 
+       snp.start_min as snp_location,
+       snp.position_in_protein as prot_pos, 
+         ra.major_allele as major_allele_chosen,
+         minor.alleles as minor_alleles_chosen,
+         round(100*(major.allele_count/total.allele_count),2) as major_allele_freq_chosen,
+         round(100*(minor.allele_count/total.allele_count),2) as minor_allele_freq_chosen,
+         major.product as major_product_chosen,
+         minor.products as minor_products_chosen,
+         major.strains as major_strains_chosen,
+         minor.strains as minor_strains_chosen,
+         gene_source_id
+         from ranked_alleles ra, apidbtuning.SnpChipAttributes snp,
+              (select distinct var.* 
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                  and var.allele = ra.major_allele) major,
+              (select var.parent_id, sum (allele_count) as allele_count,
+                      listagg(var.strains,',') within group (order by var.strains) as strains, 
+                      listagg( ra.minor_allele,',') within group (order by strain_count) as alleles,
+                      listagg( var.product,',') within group (order by strain_count) as products 
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                  and var.allele != ra.major_allele
+                  group by var.parent_id) minor,
+              (select var.parent_id, sum(allele_count) as allele_count
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                group by var.parent_id) total
+           where ra.parent_id = major.parent_id
+           and   ra.parent_id = minor.parent_id
+           and   ra.parent_id = total.parent_id
+           and snp.na_feature_id = ra.parent_id
+          AND snp.type in ($$snp_assay_type$$)
+) strains, ($$ds_gene_ids$$) ds
+where major_allele_freq_chosen > $$set_percent$$
+  AND (gene_source_id in ( ds.source_id )) 
+
+
            ]]>
         </sql>
 
@@ -191,62 +248,134 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref
           <paramRef ref="sharedParams.end_point"/>
           <paramRef ref="snpChipParams.snp_assay_type"/>
           <paramRef ref="sharedParams.snpchip_strain_meta"/>
+          <paramRef ref="snpChipParams.set_percent"/>
           <column name="source_id"/>
           <column name="project_id"/>
           <column name="gene"/>
-          <column name="snp_location"/>
-          <column name="ref_strain"/>
-          <column name="comp_strains"/>
-          <column name="ref_allele"/>
-          <column name="comp_alleles"/>
-          <column name="phenotype"/>
+         <column name="snp_location"/>
           <column name="prot_pos"/>
-          <column name="ref_product"/>
-          <column name="comp_products"/>
+          <column name="major_strains_chosen"/>
+          <column name="minor_strains_chosen"/>
+          <column name="major_allele_chosen"/>
+          <column name="major_allele_freq_chosen"/>
+          <column name="minor_alleles_chosen"/>
+          <column name="minor_allele_freq_chosen"/>
+          <column name="major_product_chosen"/>
+          <column name="minor_products_chosen"/>
+
+ 
 
         <sql>
             <![CDATA[
-SELECT snp.source_id, 
+with variants as (
+                 SELECT var.parent_id,
+                    count(var.na_feature_id) as allele_count,
+                    var.allele,
+                    var.product,
+                    apidb.tab_to_string(set(cast(COLLECT(distinct var.strain) AS apidb.varchartab)), ', ') as strains,
+                    count(var.strain) as strain_count
+             FROM   dots.SeqVariation var
+             WHERE  var.organism = $$organism$$
+                AND var.strain in ($$snpchip_strain_meta$$)
+                and name in ($$snp_assay_type$$)
+             GROUP BY parent_id,allele,product
+            
+             order by parent_id,allele
+      ),
+alleles as (
+select           one.parent_id,
+                 one.allele allele_one,
+                 one.allele_count,
+                 two.allele as allele_two,
+                 1 as allele_count_equal
+          from variants one,variants two
+               where one.parent_id = two.parent_id
+                 and one.allele_count = two.allele_count
+                 and one.allele != two.allele
+          Union
+          select one.parent_id,
+                 one.allele allele_one,
+                 one.allele_count,
+                 two.allele as allele_two,
+                 0 as allele_count_equal
+          from variants one,variants two
+               where one.parent_id = two.parent_id
+                 and one.allele_count > two.allele_count
+          order by parent_id
+          ),
+ranked_alleles as (
+      select parent_id,
+             allele_one as major_allele,
+             allele_two as minor_allele 
+        from alleles
+       where  parent_id in (select parent_id 
+                              from alleles
+                            group by parent_id
+                            having count(parent_id) =1)
+         and allele_count_equal  = 0
+      union
+      select major.parent_id,
+             major.allele_one as major_allele,
+             minor.allele_one as minor_allele 
+             
+        from alleles major, alleles minor
+       where  major.parent_id = minor.parent_id
+         and major.allele_count > minor.allele_count
+         and major.allele_count_equal  = 0
+      union
+      select major.parent_id,
+             major.allele_one as major_allele,
+             minor.allele_one as minor_allele 
+             
+        from alleles major, alleles minor, APIDBTUNING.SNPCHIPATTRIBUTES snp
+       where  major.parent_id = minor.parent_id
+         and major.allele_count_equal  = 1
+         and major.allele_one = minor.allele_two
+         and major.allele_two = minor.allele_one
+         and snp.na_feature_id = major.parent_id
+         and major.allele_one = snp.major_allele
+)
+select * from (
+  select  snp.source_id, 
        '@PROJECT_ID@' as project_id, 
        snp.gene_source_id as gene, 
        snp.start_min as snp_location,
        snp.position_in_protein as prot_pos, 
-       variants.ref_allele, 
-       variants.ref_product, 
-       variants.comp_alleles,
-       variants.comp_products, 
-       variants.phenotype, 
-       variants.ref_strain, 
-       variants.comp_strains
-FROM ApidbTuning.SnpChipAttributes snp,
-    ( SELECT parent_id,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_allele) AS apidb.varchartab)), ', ') as ref_allele,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_product) AS apidb.varchartab)), ', ') as ref_product,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_allele) AS apidb.varchartab)), ', ') as comp_alleles,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_product) AS apidb.varchartab)), ', ') as comp_products,
-             apidb.tab_to_string(set(cast(COLLECT(distinct phenotype) AS apidb.varchartab)), ', ') as phenotype,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_strain) AS apidb.varchartab)), ', ') as ref_strain,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_strain) AS apidb.varchartab)), ', ') as comp_strains 
-      FROM  (SELECT ref.parent_id, 
-                    ref.allele as ref_allele, 
-                    ref.product as ref_product,
-                    comp.allele as comp_allele, 
-                    comp.product as comp_product,
-                    case when ref.product = comp.product then 'syn'
-                         when ref.product != comp.product then 'non-syn'
-                         else 'non-coding'
-                    end as phenotype,
-                    ref.strain as ref_strain, 
-                    comp.strain as comp_strain
-             FROM   dots.SeqVariation ref, dots.SeqVariation comp
-             WHERE  ref.parent_id = comp.parent_id
-                AND ref.allele != comp.allele
-                AND ref.organism = $$organism$$
-                AND comp.strain in ($$snpchip_strain_meta$$))
-             GROUP BY parent_id) variants
-WHERE snp.na_feature_id = variants.parent_id
-  AND snp.type in ( $$snp_assay_type$$ )
-  AND (chromosome in ( $$chromosomeOptional$$ ) OR lower(source_id) = lower($$sequenceId$$) ) 
+         ra.major_allele as major_allele_chosen,
+         minor.alleles as minor_alleles_chosen,
+         round(100*(major.allele_count/total.allele_count),2) as major_allele_freq_chosen,
+         round(100*(minor.allele_count/total.allele_count),2) as minor_allele_freq_chosen,
+         major.product as major_product_chosen,
+         minor.products as minor_products_chosen,
+         major.strains as major_strains_chosen,
+         minor.strains as minor_strains_chosen,
+         chromosome,
+         seq_source_id
+         from ranked_alleles ra, apidbtuning.SnpChipAttributes snp,
+              (select distinct var.* 
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                  and var.allele = ra.major_allele) major,
+              (select var.parent_id, sum (allele_count) as allele_count,
+                      listagg(var.strains,',') within group (order by var.strains) as strains, 
+                      listagg( ra.minor_allele,',') within group (order by strain_count) as alleles,
+                      listagg( var.product,',') within group (order by strain_count) as products 
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                  and var.allele != ra.major_allele
+                  group by var.parent_id) minor,
+              (select var.parent_id, sum(allele_count) as allele_count
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                group by var.parent_id) total
+           where ra.parent_id = major.parent_id
+           and   ra.parent_id = minor.parent_id
+           and   ra.parent_id = total.parent_id
+           and snp.na_feature_id = ra.parent_id
+          AND snp.type in ($$snp_assay_type$$)
+)
+where major_allele_freq_chosen > $$set_percent$$
+  AND (chromosome in ( $$chromosomeOptional$$ ) OR lower(seq_source_id) = lower($$sequenceId$$) ) 
            ]]>
         </sql>
     </sqlQuery>
@@ -297,61 +426,129 @@ WHERE snp.na_feature_id = variants.parent_id
         </paramRef>
           <paramRef ref="snpChipParams.snp_assay_type"/>
           <paramRef ref="sharedParams.snpchip_strain_meta"/>
+          <paramRef ref="snpChipParams.set_percent"/>
           <column name="source_id"/>
           <column name="project_id"/>
           <column name="gene"/>
-          <column name="snp_location"/>
-          <column name="ref_strain"/>
-          <column name="comp_strains"/>
-          <column name="ref_allele"/>
-          <column name="comp_alleles"/>
-          <column name="phenotype"/>
           <column name="prot_pos"/>
-          <column name="ref_product"/>
-          <column name="comp_products"/>
+          <column name="snp_location"/>
+          <column name="major_strains_chosen"/>
+          <column name="minor_strains_chosen"/>
+          <column name="major_allele_chosen"/>
+          <column name="major_allele_freq_chosen"/>
+          <column name="minor_alleles_chosen"/>
+          <column name="minor_allele_freq_chosen"/>
+          <column name="major_product_chosen"/>
+          <column name="minor_products_chosen"/>
 
         <sql>
             <![CDATA[
-SELECT snp.source_id, 
+with variants as (
+                 SELECT var.parent_id,
+                    count(var.na_feature_id) as allele_count,
+                    var.allele,
+                    var.product,
+                    apidb.tab_to_string(set(cast(COLLECT(distinct var.strain) AS apidb.varchartab)), ', ') as strains,
+                    count(var.strain) as strain_count
+             FROM   dots.SeqVariation var
+             WHERE  var.organism = $$organism$$
+                AND var.strain in ($$snpchip_strain_meta$$)
+                and name in ($$snp_assay_type$$)
+             GROUP BY parent_id,allele,product
+            
+             order by parent_id,allele
+      ),
+alleles as (
+select           one.parent_id,
+                 one.allele allele_one,
+                 one.allele_count,
+                 two.allele as allele_two,
+                 1 as allele_count_equal
+          from variants one,variants two
+               where one.parent_id = two.parent_id
+                 and one.allele_count = two.allele_count
+                 and one.allele != two.allele
+          Union
+          select one.parent_id,
+                 one.allele allele_one,
+                 one.allele_count,
+                 two.allele as allele_two,
+                 0 as allele_count_equal
+          from variants one,variants two
+               where one.parent_id = two.parent_id
+                 and one.allele_count > two.allele_count
+          order by parent_id
+          ),
+ranked_alleles as (
+      select parent_id,
+             allele_one as major_allele,
+             allele_two as minor_allele 
+        from alleles
+       where  parent_id in (select parent_id 
+                              from alleles
+                            group by parent_id
+                            having count(parent_id) =1)
+         and allele_count_equal  = 0
+      union
+      select major.parent_id,
+             major.allele_one as major_allele,
+             minor.allele_one as minor_allele 
+             
+        from alleles major, alleles minor
+       where  major.parent_id = minor.parent_id
+         and major.allele_count > minor.allele_count
+         and major.allele_count_equal  = 0
+      union
+      select major.parent_id,
+             major.allele_one as major_allele,
+             minor.allele_one as minor_allele 
+             
+        from alleles major, alleles minor, APIDBTUNING.SNPCHIPATTRIBUTES snp
+       where  major.parent_id = minor.parent_id
+         and major.allele_count_equal  = 1
+         and major.allele_one = minor.allele_two
+         and major.allele_two = minor.allele_one
+         and snp.na_feature_id = major.parent_id
+         and major.allele_one = snp.major_allele
+)
+select * from (
+  select  snp.source_id, 
        '@PROJECT_ID@' as project_id, 
        snp.gene_source_id as gene, 
        snp.start_min as snp_location,
        snp.position_in_protein as prot_pos, 
-       variants.ref_allele, 
-       variants.ref_product, 
-       variants.comp_alleles,
-       variants.comp_products, 
-       variants.phenotype, 
-       variants.ref_strain, 
-       variants.comp_strains
-FROM ApidbTuning.SnpChipAttributes snp,
-    (SELECT parent_id,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_allele) AS apidb.varchartab)), ', ') as ref_allele,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_product) AS apidb.varchartab)), ', ') as ref_product,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_allele) AS apidb.varchartab)), ', ') as comp_alleles,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_product) AS apidb.varchartab)), ', ') as comp_products,
-             apidb.tab_to_string(set(cast(COLLECT(distinct phenotype) AS apidb.varchartab)), ', ') as phenotype,
-             apidb.tab_to_string(set(cast(COLLECT(distinct ref_strain) AS apidb.varchartab)), ', ') as ref_strain,
-             apidb.tab_to_string(set(cast(COLLECT(distinct comp_strain) AS apidb.varchartab)), ', ') as comp_strains 
-      FROM  (SELECT ref.parent_id, 
-                    ref.allele as ref_allele, 
-                    ref.product as ref_product,
-                    comp.allele as comp_allele, 
-                    comp.product as comp_product,
-                    case when ref.product = comp.product then 'syn'
-                         when ref.product != comp.product then 'non-syn'
-                         else 'non-coding'
-                    end as phenotype,
-                    ref.strain as ref_strain, 
-                    comp.strain as comp_strain
-             FROM   dots.SeqVariation ref, dots.SeqVariation comp
-             WHERE  ref.parent_id = comp.parent_id
-                AND ref.allele != comp.allele
-                AND ref.organism = $$organism$$
-                AND comp.strain in ($$snpchip_strain_meta$$))
-             GROUP BY parent_id) variants
-WHERE snp.na_feature_id = variants.parent_id
-  AND snp.type in ($$snp_assay_type$$)
+         ra.major_allele as major_allele_chosen,
+         minor.alleles as minor_alleles_chosen,
+         round(100*(major.allele_count/total.allele_count),2) as major_allele_freq_chosen,
+         round(100*(minor.allele_count/total.allele_count),2) as minor_allele_freq_chosen,
+         major.product as major_product_chosen,
+         minor.products as minor_products_chosen,
+         major.strains as major_strains_chosen,
+         minor.strains as minor_strains_chosen
+         from ranked_alleles ra, apidbtuning.SnpChipAttributes snp,
+              (select distinct var.* 
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                  and var.allele = ra.major_allele) major,
+              (select var.parent_id, sum (allele_count) as allele_count,
+                      listagg(var.strains,',') within group (order by var.strains) as strains, 
+                      listagg( ra.minor_allele,',') within group (order by strain_count) as alleles,
+                      listagg( var.product,',') within group (order by strain_count) as products 
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                  and var.allele != ra.major_allele
+                  group by var.parent_id) minor,
+              (select var.parent_id, sum(allele_count) as allele_count
+                 from variants var,ranked_alleles ra 
+                where var.parent_id = ra.parent_id
+                group by var.parent_id) total
+           where ra.parent_id = major.parent_id
+           and   ra.parent_id = minor.parent_id
+           and   ra.parent_id = total.parent_id
+           and snp.na_feature_id = ra.parent_id
+          AND snp.type in ($$snp_assay_type$$)
+)
+where major_allele_freq_chosen > $$set_percent$$
            ]]>
        </sql>
     </sqlQuery>
