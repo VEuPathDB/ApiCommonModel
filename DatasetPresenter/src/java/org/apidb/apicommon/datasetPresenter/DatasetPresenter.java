@@ -320,7 +320,7 @@ public class DatasetPresenter {
 
     // first history element
     if (histories.size() == 0 ) {
-      propValues.put("buildNumberIntroduced", history.getBuildNumber().toString());
+       setBuildNumberIntroduced(history.getBuildNumber());
     } 
     // other history elements
     else {
