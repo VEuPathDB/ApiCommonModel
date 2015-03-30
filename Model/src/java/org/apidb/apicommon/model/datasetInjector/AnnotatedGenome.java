@@ -65,7 +65,7 @@ public class AnnotatedGenome extends DatasetInjector {
       phylum.put("Batrachochytrium","Chytridiomycetes");
       phylum.put("Botryotinia","Leotiomycetes");
       phylum.put("Candida","Saccharomycetes");
-      phylum.put("Chromera","Apicomplexa");
+      phylum.put("Chromera","Chromerida");
       phylum.put("Coccidioides","Eurotiomycetes");
       phylum.put("Coprinopsis","Agaricomycetes");
       phylum.put("Crithidia","Kinetoplastida");
@@ -125,7 +125,7 @@ public class AnnotatedGenome extends DatasetInjector {
       phylum.put("Trypanosoma","Kinetoplastida");
       phylum.put("Ustilago","Ustilaginomycetes");
       phylum.put("Vavraia","Microsporidia");
-      phylum.put("Vitrella","Apicomplexa");
+      phylum.put("Vitrella","Chromerida");
       phylum.put("Vittaforma","Microsporidia");
       phylum.put("Yarrowia","Saccharomycetes");
         
