@@ -25,19 +25,21 @@ import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.user.User;
 
 /**
+ * Used to generate GFF download files that we put on our download sites. It calls Gff3Reporter to generate
+ * GFF3 format, and then put the output into files for download site.
+ * 
  * @author xingao
  */
 public class Gff3Dumper {
-  
-  private static final int PAGE_SIZE = 1000;
+  static final int PAGE_SIZE = 1000;
 
   private static final Logger logger = Logger.getLogger(Gff3Dumper.class);
 
   /**
    * @param args
    */
-  public static void main(String[] args) throws WdkModelException,
-      WdkUserException, IOException, SQLException {
+  public static void main(String[] args) throws WdkModelException, WdkUserException, IOException,
+      SQLException {
     if (args.length != 4 && args.length != 6) {
       System.err.println("Invalid parameters.");
       printUsage();
@@ -57,15 +59,12 @@ public class Gff3Dumper {
 
   public static void printUsage() {
     System.out.println();
-    System.out.println("Usage: gffDump -model <model_name> -organism "
-        + "<organism_list> [-dir <base_dir>]");
+    System.out.println("Usage: gffDump -model <model_name> -organism " + "<organism_list> [-dir <base_dir>]");
     System.out.println();
     System.out.println("\t\t<model_name>:\tThe name of WDK supported model;");
-    System.out.println("\t\t<organism_list>: a list of organism names, "
-        + "delimited by a comma;");
+    System.out.println("\t\t<organism_list>: a list of organism names, " + "delimited by a comma;");
     System.out.println("\t\t<base_dir>: Optional, the base directory for "
-        + "the output files. If not specified, the current directory "
-        + "will be used.");
+        + "the output files. If not specified, the current directory " + "will be used.");
     System.out.println();
   }
 
@@ -99,7 +98,7 @@ public class Gff3Dumper {
   public void close() {
     wdkModel.releaseResources();
   }
-  
+
   public void dump() throws WdkUserException, WdkModelException, IOException, SQLException {
 
     // TEST
@@ -115,10 +114,8 @@ public class Gff3Dumper {
     // prepare the organism ps
     String sql = "SELECT DISTINCT o.name_for_filenames "
         + " FROM apidb.organism o, dots.NaSequence ns, dots.GeneFeature gf,"
-        + "      ApidbTuning.geneattributes ga "
-        + " WHERE gf.na_sequence_id = ns.na_sequence_id"
-        + "   AND ga.source_id = gf.source_id "
-        + "   AND ns.taxon_id = o.taxon_id "
+        + "      ApidbTuning.geneattributes ga " + " WHERE gf.na_sequence_id = ns.na_sequence_id"
+        + "   AND ga.source_id = gf.source_id " + "   AND ns.taxon_id = o.taxon_id "
         + "   AND ga.project_id = ? AND ga.organism = ?";
     DataSource dataSource = wdkModel.getAppDb().getDataSource();
     psOrganism = SqlUtils.getPreparedStatement(dataSource, sql);
@@ -127,13 +124,14 @@ public class Gff3Dumper {
       for (String organism : organisms) {
         dumpOrganism(organism.trim(), config);
       }
-    } finally {
+    }
+    finally {
       SqlUtils.closeStatement(psOrganism);
     }
   }
 
-  private void dumpOrganism(String organism, Map<String, String> config)
-      throws WdkUserException, WdkModelException, IOException, SQLException {
+  private void dumpOrganism(String organism, Map<String, String> config) throws WdkUserException,
+      WdkModelException, IOException, SQLException {
     long start = System.currentTimeMillis();
 
     // decide the path-file name
@@ -160,15 +158,13 @@ public class Gff3Dumper {
     User user = wdkModel.getSystemUser();
     Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
     AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, true, 0);
-    Gff3Reporter seqReport = (Gff3Reporter) sqlAnswer.createReport("gff3",
-        config);
+    Gff3Reporter seqReport = (Gff3Reporter) sqlAnswer.createReport("gff3", config);
 
     Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
     AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, true, 0);
 
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
-    Gff3Reporter geneReport = (Gff3Reporter) geneAnswer.createReport(
-        "gff3Dump", config);
+    Gff3Reporter geneReport = (Gff3Reporter) geneAnswer.createReport("gff3Dump", config);
 
     seqReport.initialize();
     geneReport.initialize();
@@ -199,7 +195,8 @@ public class Gff3Dumper {
       // collect the genomic sequences
       logger.info("Collecting genomic sequences....");
       seqReport.writeSequences(writer);
-    } finally {
+    }
+    finally {
       seqReport.complete();
       geneReport.complete();
       writer.flush();
@@ -211,22 +208,19 @@ public class Gff3Dumper {
     logger.info("Time spent " + ((end - start) / 1000.0) + " seconds.");
   }
 
-  private void deleteRows(String idSql, String cacheTable)
-      throws SQLException {
-    String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN "
-        + "(SELECT source_ID FROM (" + idSql + "))";
+  private void deleteRows(String idSql, String cacheTable) throws SQLException {
+    String sql = "DELETE FROM " + cacheTable + " WHERE source_id IN " + "(SELECT source_ID FROM (" + idSql +
+        "))";
     DataSource dataSource = wdkModel.getAppDb().getDataSource();
     SqlUtils.executeUpdate(dataSource, sql, "gff-dump-delete-rows");
   }
 
-  private String getOrganismFileName(String organism) throws WdkModelException,
-      SQLException {
+  private String getOrganismFileName(String organism) throws WdkModelException, SQLException {
     psOrganism.setString(1, wdkModel.getProjectId());
     psOrganism.setString(2, organism);
     ResultSet resultSet = psOrganism.executeQuery();
     if (!resultSet.next()) {
-      throw new WdkModelException("The organism '" + organism
-          + "' cannot be recognized.");
+      throw new WdkModelException("The organism '" + organism + "' cannot be recognized.");
     }
     String fileName = resultSet.getString(1);
     resultSet.close();

@@ -702,8 +702,8 @@ select case
        end as feature_type,
        nf.source_id as feature_source_id, ns.source_id as sequence_source_id,
        nf.na_sequence_id, nf.na_feature_id,
-       least(nl.start_min, nl.start_max, nl.end_min, nl.end_max) as start_min,
-       greatest(nl.start_min, nl.start_max, nl.end_min, nl.end_max) as end_max,
+       least(nl.start_min, nl.end_max) as start_min,
+       greatest(nl.start_min, nl.end_max) as end_max,
        nl.is_reversed, nf.parent_id, nf.sequence_ontology_id,
        cast (null as number) as is_top_level, ef.coding_start, ef.coding_end,
        nf.external_database_release_id,
@@ -2440,6 +2440,8 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        SUBSTR(snp.major_product, 1, 40) AS major_product,
        snp.major_allele_count, 
        round(snp.major_allele_count / (snp.major_allele_count + snp.minor_allele_count),2) as major_allele_frequency,
+       SUBSTR(snp.minor_allele, 1, 40) AS minor_allele,
+       SUBSTR(snp.minor_product, 1, 40) AS minor_product,
        snp.minor_allele_count,
        round(snp.minor_allele_count / (snp.major_allele_count + snp.minor_allele_count),2) as minor_allele_frequency,
        gene_info.source_id AS gene_source_id,
@@ -3362,6 +3364,8 @@ select null as na_sequence_id,
        o.taxon_id,
        edr.version as external_db_version,
        ed.name as external_db_name,
+       expt_edr.version AS experiment_external_db_version,
+       expt_ed.name AS experiment_external_db_name,
        b.source_id,
        nvl(o.name, 'Unknown') as organism,
        nvl(strain.strain, 'Unknown') as strain,
@@ -3374,7 +3378,7 @@ select null as na_sequence_id,
        null as description,
        null as is_reference,
        project.name as project_id,
-       'HTS' as data_type,
+       'SNP' as data_type,
        host.annotated_value as annotated_specific_host,
        isolation_source.annotated_value as annotated_isolation_source,
        geographic_location.annotated_value as annotated_geographic_location,
@@ -3386,7 +3390,7 @@ select null as na_sequence_id,
        null as collected_by
  From /* study.Biosource b,  */
      study.biomaterial b,
-     study.Study s, 
+     study.Study s, sres.ExternalDatabase expt_ed, sres.ExternalDatabaseRelease expt_edr,
      rad.StudyBiomaterial sb, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
      (
 
@@ -3447,6 +3451,8 @@ where oe.category = 'Sample Collection Location'
 where lower(s.name) like '%_hts%'
 and b.row_project_id = project.project_id
 and s.study_id = sb.study_id
+and s.external_database_release_id = expt_edr.external_database_release_id
+and expt_edr.external_database_id = expt_ed.external_database_id
 and sb.bio_material_id = b.bio_material_id
 and b.external_database_release_id = edr.external_database_release_id
 and edr.external_database_id = ed.external_database_id
@@ -3462,6 +3468,8 @@ select i.na_sequence_id,
        i.taxon_id,
        i.external_db_version,
        i.external_db_name,
+       '' AS experiment_external_db_version,
+       '' AS experiment_external_db_name,
        i.source_id,
        decode(i.organism, null, 'Unknown', substr(i.organism, 1, 100)) as organism,
        decode(i.strain, null, 'Unknown', substr(i.strain, 1, 100)) as strain,
@@ -3490,13 +3498,14 @@ FROM (
                edr.version as external_db_version, 
                src.na_feature_id,
                edb.name as external_db_name,
+               '' AS experiment_external_db_version,
+               '' AS experiment_external_db_name,
                CASE 
                  WHEN etn.source_id is null 
-                   THEN decode(edb.name, 'Broad 75K genotyping chip', 'CPHD.'||strain, 
-                                         'pfal3D7_SNP_Broad75KGenotyping_RSRC', 'CPHD.'||strain,
-                                         'Broad 3K genotyping chip', 'CP3.'||strain,
-                                         'pfal3D7_SNP_Broad3KGenotyping_RSRC', 'CP3.'||strain,
-                                         'pfal3D7_SNP_BroadIsolateBarcode_RSRC','BC.'||strain,
+                   THEN decode(edb.name,
+                                         'pfal3D7_SNPChip_Broad75KGenotyping_RSRC', 'CPHD.'||strain,
+                                         'pfal3D7_SNPChip_Broad3KGenotyping_RSRC', 'CP3.'||strain,
+                                         'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC','BC.'||strain,
                                          'Isolate barcode data from Broad','BC.'||strain)
                 ELSE etn.source_id 
               END as source_id,
@@ -3516,14 +3525,13 @@ FROM (
               src.pcr_primers,
               src.collected_by,
               src.is_reference,
-              decode(edb.name, 'Broad 75K genotyping chip', 'HD_Array', 
-                               'pfal3D7_SNP_Broad75KGenotyping_RSRC', 'HD_Array',
-                               'Broad 3K genotyping chip', '3kChip',
-                               'pfal3D7_SNP_Broad3KGenotyping_RSRC', '3kChip',
+              decode(edb.name,
+                               'pfal3D7_SNPChip_Broad75KGenotyping_RSRC', 'HD_Array',
+                               'pfal3D7_SNPChip_Broad3KGenotyping_RSRC', 'SNP (3kChip)',
+                               'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC','SNP (Barcode)',
                                'tgonME49_isolates_ChunleiSu_RFLP_RSRC', 'RFLP Typed',
                                'tgonME49_isolates_Menezes_chicken_RFLP_RSRC', 'RFLP Typed',
-                               'pfal3D7_SNP_BroadIsolateBarcode_RSRC','Barcode',
-                               'Isolate barcode data from Broad','Barcode','Sequencing Typed') as data_type,
+                               'Sequencing Typed') as data_type,
                 pinfo.name as project_id
       FROM dots.ExternalNaSequence etn, dots.IsolateSource src,
            sres.ExternalDatabaseRelease edr, sres.ExternalDatabase edb, core.ProjectInfo pinfo, 
@@ -3568,6 +3576,8 @@ select distinct null as na_sequence_id,
        o.taxon_id,
        '' as external_db_version,
        '' as external_db_name,
+       '' AS experiment_external_db_version,
+       '' AS experiment_external_db_name,
        bs.name || '_' || 
        case when ed.name = 'pfal3D7_SNPChip_Broad75KGenotyping_RSRC' then 'HD_Array'  
             when ed.name = 'pfal3D7_SNPChip_Broad3KGenotyping_RSRC' then '3kChip'  
@@ -4430,12 +4440,7 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
-drop index Blastp_text_ix
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index Blastp_text_ix on Blastp&1(description) indextype is ctxsys.context
+create index Blastp_text_ix&1 on Blastp&1(description) indextype is ctxsys.context
              parameters('DATASTORE CTXSYS.DEFAULT_DATASTORE')
       ]]>
     </sql>
@@ -5416,7 +5421,9 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            sa.project_id AS project_id
            FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
-            AND ptl.organism = sa.organism
+           AND ptl.organism = sa.organism
+           and ptl.organism not like 'Chromera%'
+           and ptl.organism not like 'Vitrella%' 
            UNION
            /* all organisms from sequenceattributes as organism, taxon_node as term, parentterm is null */
            SELECT DISTINCT sa.organism,               
@@ -5426,7 +5433,74 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            sa.project_id AS project_id
            FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
-            AND ptl.organism = sa.organism))
+            AND ptl.organism = sa.organism
+            and ptl.project_id not in ('FungiDB','MicrosporidiaDB')
+            and ptl.organism not like 'Chromera%'
+            and ptl.organism not like 'Vitrella%' 
+            UNION
+            -- add the kingdom for Fungi organism (this includes MicrosporidiaDB organisms)
+            SELECT DISTINCT sa.organism,               
+                           ptl.taxon_node AS term,
+                           'Fungi' AS parentTerm,
+                           -1 AS internal,
+                           sa.project_id AS project_id
+           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           WHERE ptl.project_id = sa.project_id
+            AND ptl.organism = sa.organism
+            and ptl.project_id in ('FungiDB','MicrosporidiaDB')
+            and ptl.taxon_node != 'Oomycetes'
+            UNION
+            SELECT DISTINCT sa.organism,               
+                           'Fungi' AS term,
+                           '' AS parentTerm,
+                           -1 AS internal,
+                           sa.project_id AS project_id
+           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           WHERE ptl.project_id = sa.project_id
+            AND ptl.organism = sa.organism
+            and ptl.project_id in ('FungiDB','MicrosporidiaDB')
+            and ptl.taxon_node != 'Oomycetes'
+            UNION
+            -- add the kingdom for Oomycetes in FungiDB
+            SELECT DISTINCT sa.organism,               
+                           ptl.taxon_node AS term,
+                           'Oomycetes' AS parentTerm,
+                           -1 AS internal,
+                           sa.project_id AS project_id
+           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           WHERE ptl.project_id = sa.project_id
+            AND ptl.organism = sa.organism
+            and ptl.taxon_node = 'Oomycetes'
+            UNION
+            SELECT DISTINCT sa.organism,               
+                           'Oomycetes' AS term,
+                           '' AS parentTerm,
+                           -1 AS internal,
+                           sa.project_id AS project_id
+           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           WHERE ptl.project_id = sa.project_id
+            AND ptl.organism = sa.organism
+            and ptl.taxon_node = 'Oomycetes'
+                        UNION
+            -- add the phylum for chomera and vitrella
+          SELECT DISTINCT sa.organism,               
+                            SUBSTR(sa.organism,0,(INSTR(sa.organism,' ') - 1)) AS term,
+                           'Chromerida' AS parentTerm,
+                           -1 AS internal,
+                           sa.project_id AS project_id
+           FROM SequenceAttributes sa
+           WHERE sa.organism like 'Chromera%'
+            or sa.organism like 'Vitrella%'
+            UNION
+            SELECT DISTINCT sa.organism,               
+                           'Chromerida' AS term,
+                           '' AS parentTerm,
+                           -1 AS internal,
+                           sa.project_id AS project_id
+           FROM SequenceAttributes sa
+           WHERE sa.organism like 'Chromera%'
+            or sa.organism like 'Vitrella%'           
+))
       ]]>
     </sql>
     <sql>

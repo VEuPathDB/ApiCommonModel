@@ -1,20 +1,9 @@
 package org.apidb.apicommon.model.datasetInjector.custom.MicrosporidiaDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAndCoverage;
 
-public class RNASeqTroemelElegansInfection extends CusomGenePageExpressionGraphs {
+public class RNASeqTroemelElegansInfection extends CusomGenePageExpressionGraphsAndCoverage {
 
-  @Override
-  public void injectTemplates() {
-
-    //String projectName = getPropValue("projectName");
-    //String datasetName = getDatasetName();
-
-    setOrganismAbbrevFromDatasetName();
-
-    injectTemplate("rnaSeqCoverageTrack");
-    injectTemplate("rnaSeqJunctionsTrack");
-  }
 
   @Override
   public void addModelReferences() {
