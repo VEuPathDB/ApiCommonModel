@@ -160,10 +160,10 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("subtracks", subtracks);
 
           if(projectName.equals("HostDB")) {
-              setPropValue("intronSizeLimit", "50000");
+              setPropValue("intronSizeLimit", "100000");
           }
           else {
-              setPropValue("intronSizeLimit", "5000");
+              setPropValue("intronSizeLimit", "9000");
           }
           setPropValue("subtracks", subtracks);
 
