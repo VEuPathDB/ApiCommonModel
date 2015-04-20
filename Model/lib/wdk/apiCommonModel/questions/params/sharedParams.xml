@@ -285,7 +285,7 @@
            <term>ORF</term>
            <internal>ORFs_AA</internal>
          </enumValue>
-         <enumValue excludeProjects="HostDB,FungiDB">
+         <enumValue excludeProjects="HostDB">
            <term>Isolates</term>
            <internal>Isolates</internal>
           </enumValue> 
@@ -1162,7 +1162,7 @@
            Isolates are categorized based on
            metadata.  Define your group of Set A Isolates by first choosing a metadata 
            category on the left and then a characteristic on the right. For example, to 
-           choose the Set A Isolates group from a single country, first 
+           choose Set A Isolates from a single country, first 
            choose the Country category on the left and then
            a choose particular country on the right. For more see 
            Description below the Get Answer button.
@@ -1183,9 +1183,9 @@
          <help>
            
            Isolates are categorized based on
-           metadata.  Define your group of Set B Isolates by first choosing a metadata 
+           metadata.  Define your Set B Isolates by first choosing a metadata 
            category on the left and then a characteristic on the right. For example, to 
-           choose the Set B Isolates group from a single country, first 
+           choose the Set B Isolates from a single country, first 
            choose the Country category on the left and then
            a choose particular country on the right. For more see 
            Description below the Get Answer button.
@@ -2152,6 +2152,14 @@ UNION
 SELECT 'ATCC#' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
 UNION
  SELECT 'ATCC#' as property, 'display' as spec_property, 'ATCC#' as spec_value FROM dual
+UNION
+SELECT 'Experiment' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+UNION
+SELECT 'Experiment' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+UNION
+ SELECT 'Experiment' as property, 'display' as spec_property, 'Experiment' as spec_value FROM dual
+UNION
+ SELECT 'Experiment' as property, 'parent' as spec_property, 'BioMaterialCharacteristics' as spec_value FROM dual
 ),
 main as ( select fs.* 
             from fullspec fs, 
@@ -2172,29 +2180,32 @@ main as ( select fs.*
                      and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
                      and lower(bmc.value) != 'unknown' 
                    Union 
-                   Select'StrainOrLine' as property
+                   Select 'StrainOrLine' as property
+                     from dual
+                   Union 
+                   Select 'Experiment' as property
                      from dual
                   ) categories
             where fs.property = categories.property
 ),
 Tree as (
-SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
            START WITH oe.value = main.property
                  CONNECT BY (PRIOR oe.category = oe.value)
+                 
 intersect
-(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
-           FROM STUDY.ontologyentry oe, main
-           START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category != main.property
-minus
 SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
-           START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != main.property)
+           START WITH oe.category = 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category not in (select property from main) 
+)
+union 
+select 'BioMaterialCharacteristics', 'parent' as spec_property, '' as spec_value from dual
 ),
 TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
            FROM Tree
+           where property != 'BioMaterialCharacteristics'
            Union 
            select 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
            minus
@@ -2442,21 +2453,19 @@ where value is not null
             where fs.property = categories.property
 ),
 Tree as (
-SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
            START WITH oe.value = main.property
                  CONNECT BY (PRIOR oe.category = oe.value)
+                 
 intersect
-(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
-           FROM STUDY.ontologyentry oe, main
-           START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != main.property
-minus
 SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
-           START WITH oe.value = 'BioMaterialCharacteristics'
-                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.value != 'BioMaterialCharacteristics')
-
+           START WITH oe.category = 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category not in (select property from main) 
+)
+union 
+select 'BioMaterialCharacteristics', 'parent' as spec_property, '' as spec_value from dual
 ),
 FilterTree as  ( 
 select * from tree
@@ -2469,6 +2478,7 @@ select * from tree
 ),               
 TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
            FROM FilterTree
+           where property != 'BioMaterialCharacteristics'
            Union
            select 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
            minus

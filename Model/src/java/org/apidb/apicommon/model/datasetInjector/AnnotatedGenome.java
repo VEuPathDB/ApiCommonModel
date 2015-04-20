@@ -7,7 +7,6 @@ import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenome extends DatasetInjector {
   
-  @Override
     public void injectTemplates() {
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
@@ -139,6 +138,7 @@ public class AnnotatedGenome extends DatasetInjector {
     Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
     String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
     Map<String, String> orgProps = globalProps.get(orgPropsKey);
+
     if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
     String organismFullName = orgProps.get("organismFullName");
     
