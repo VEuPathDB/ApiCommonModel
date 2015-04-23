@@ -5005,6 +5005,61 @@ group by ga.source_id
   <querySet name="GeneTransforms" queryType="transform" doNotTest="true" isCacheable="false">
 
 
+    <sqlQuery name="GenesByMissingTranscripts" 
+              isCacheable="true">
+        <paramRef ref="geneParams.gene_result"/>  <!-- actually transcripts -->
+        <paramRef ref="geneParams.genesWithTranscripts"/>
+        <paramRef ref="geneParams.missingOrFoundTranscripts"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="gene_source_id"/>
+        <column name="wdk_weight"/>
+        <sql>
+            <![CDATA[
+               -- for the genes in this result, their transcripts that were not in the result (missing)
+               WITH missing_transcripts as (
+                 select ta.gene_source_id, ta.source_id, ta.project_id, 10 as wdk_weight
+                 from (select distinct gene_source_id from $$gene_result$$) found_genes, apidbtuning.transcriptattributes ta
+                 where found_genes.gene_source_id = ta.gene_source_id
+                 minus
+                 select gene_source_id, source_id, project_id, 10 as wdk_weight
+                 from ($$gene_result$$)
+                 )
+
+              -- for the genes in this result that had missing transcripts, their missing transcripts
+              select * from missing_transcripts
+              where $$genesWithTranscripts$$ = 'genes_missing_transcripts'
+              and   $$missingOrFoundTranscripts$$ = 'missing_transcripts'
+
+              UNION
+
+              -- for the genes in this result that had missing transcripts, all their transcripts
+              select ta.gene_source_id, ta.source_id, ta.project_id, 10 as wdk_weight
+              from missing_transcripts mt, apidbtuning.transcriptattributes ta
+              where mt.gene_source_id = ta.gene_source_id
+              and  $$genesWithTranscripts$$ = 'genes_missing_transcripts'
+              and  $$missingOrFoundTranscripts$$ = 'all_transcripts'
+
+              UNION
+
+              -- for the genes in this result that had missing transcripts, all found transcripts
+              select result.gene_source_id, result.source_id, result.project_id, 10 as wdk_weight
+              from (select distinct gene_source_id from $$gene_result$$) found_genes, $$gene_result$$ result
+              where found_genes.gene_source_id = result.gene_source_id
+              and  $$genesWithTranscripts$$ = 'genes_missing_transcripts'
+              and  $$missingOrFoundTranscripts$$ = 'found_transcripts'
+
+              UNION
+
+              -- the genes in this result that did not have missing transcripts, and their transcripts (all)
+              select gene_source_id, source_id, result.project_id, 10 as wdk_weight
+              from $$gene_result$$ result
+              where result.gene_source_id not in (select distinct gene_source_id from missing_transcripts)
+              and $$genesWithTranscripts$$ = 'genes_not_missing_transcripts'
+            ]]>
+       </sql>
+    </sqlQuery> 
+
     <sqlQuery name="GenesByExpandResult" includeProjects="ToxoDB"
               isCacheable="true">
         <paramRef ref="geneParams.gene_result"/>
