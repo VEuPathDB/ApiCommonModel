@@ -833,30 +833,27 @@ where chip_total_reps > $$chip_replicates_plasmo$$
         </testParamValues>
 
         <paramRef ref="organismParams.organism"/>
+        <paramRef ref="geneParams.go_term_source"/>
         <paramRef ref="geneParams.go_typeahead"/>
         <paramRef ref="geneParams.go_term"/>
         <column name="project_id"/>
         <column name="source_id" />
+        <column name="gene_source_id"/>
+        <column name="evidence_code"/>
         <sql>
             <![CDATA[
-            SELECT DISTINCT gf.source_id, '@PROJECT_ID@' as project_id
-            FROM ApidbTuning.GeneAttributes gf,
-                 dots.GoAssociation ga, sres.GoTerm gp,
-                 sres.GoRelationship gr, core.TableInfo ti,
-                 sres.GoRelationshipType grt
-            WHERE gf.taxon_id IN ($$organism$$)
-              AND gf.aa_sequence_id = ga.row_id
-              AND ga.table_id = ti.table_id
-              AND ti.name = 'TranslatedAASequence'
-              AND ga.go_term_id = gr.child_term_id
-              AND gr.parent_term_id = gp.go_term_id
-              AND (gp.go_id IN ($$go_typeahead$$)
-                   OR (gp.name like REPLACE($$go_term$$, '*', '%')
-                   OR gp.go_id like REPLACE($$go_term$$, '*', '%')
-                   OR gp.go_id || ' : ' || gp.name like REPLACE($$go_term$$, '*', '%')))
-              AND gr.go_relationship_type_id = grt.go_relationship_type_id
-              AND grt.name = 'closure'
-            ORDER BY gf.source_id
+                     SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
+                     apidb.tab_to_string(set(cast(COLLECT(distinct gs.evidence_code) AS apidb.varchartab)), ', ') as evidence_code
+                     FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.ProteinAttributes pa, ApidbTuning.GoTermSummary gs
+                     WHERE ta.taxon_id IN ($$organism$$)
+                     AND ta.aa_sequence_id = pa.aa_sequence_id
+                     AND gs.aa_sequence_id = pa.aa_sequence_id
+                     AND (gs.go_id IN ($$go_typeahead$$)
+                       OR (gs.go_term_name like REPLACE($$go_term$$, '*', '%')
+                       OR gs.go_id like REPLACE($$go_term$$, '*', '%')
+                       OR gs.go_id || ' : ' || gs.go_term_name like REPLACE($$go_term$$, '*', '%')))
+                     GROUP BY ta.source_id, ta.gene_source_id
+                     ORDER BY ta.source_id
            ]]>
        </sql>
     </sqlQuery>
@@ -1023,6 +1020,7 @@ where chip_total_reps > $$chip_replicates_plasmo$$
        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
 
        <paramRef ref="organismParams.organism"/>
+       <paramRef ref="geneParams.scope"/>
        <paramRef ref="geneParams.num_exons_gte"/>
        <paramRef ref="geneParams.num_exons_lte"/>
 

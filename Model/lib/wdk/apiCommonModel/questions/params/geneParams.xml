@@ -622,18 +622,18 @@
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
     <enumParam name="scope" quote="false"
-               prompt="Run the query in the scope of a Gene, or a Transcript" >
+               prompt="Count exons in: " >
       <noTranslation value="true" includeProjects="EuPathDB" />
       <help>
-        Select scope of the query: Gene or Transcript
+        Choose whether to search against the total number of exons per gene or the number of exons in each specific transcript.
       </help>
       <enumList>   
         <enumValue default="true">
-          <term>Gene</term>
+          <term>Genes</term>
           <internal>gene_exon_count</internal>
         </enumValue>
         <enumValue>
-          <term>Transcript</term>
+          <term>Transcripts</term>
           <internal>exon_count</internal>
         </enumValue>
       </enumList>   
@@ -1691,6 +1691,20 @@ products of your selected type (or types).<br><br>
             </help>
         </stringParam>
 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- other Go search Parameter -->  
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <flatVocabParam name="go_term_source" 
+                     queryRef="GeneVQ.GoTermSource"
+                     prompt="Source of GO annotation"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true">
+            <help>Choose the source of the GO annotation.  Note that "annotation center" is annotation that EuPathDB has received from an annotation center with the genome annotation and may be computationally predicted and not reviewed.</help>
+          <suggest selectMode="all" />
+        </flatVocabParam>
+    
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!--  -->  
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -8411,26 +8425,20 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
             <column name="internal" />
             <column name="term" />
             <column name="display"/>
-
             <sql>
-                 SELECT DISTINCT gt.go_id AS internal,
-                                 gt.go_id AS term,
-                                 gt.go_id || ' : ' || gt.name AS display,
-                                 gt.minimum_level as min_level, length(gt.name) as len
-                 FROM   sres.GoTerm gt, sres.gorelationship gr, 
-                        dots.goassociation ga, ApidbTuning.TypeAheadCounts tac
-                 WHERE  gt.go_term_id = gr.parent_term_id
-                 AND    ga.go_term_id = gr.child_term_id
-                 AND    tac.option_id = gt.go_id
-                 AND    tac.project_id = '@PROJECT_ID@'
-                 UNION
-                 SELECT 'N/A' as internal,
-                        'N/A' as term,
-                        'N/A' as display,
-                        9999 as min_level,
-                        9999 as len
-                 FROM dual
-                 ORDER BY min_level, len
+              SELECT gt.go_id AS internal,
+                gt.go_id AS term,
+                gt.go_id || ' : ' || gt.go_term_name AS display,
+                count(*) as ct
+              FROM   ApidbTuning.GoTermSummary gt
+              GROUP BY gt.go_id,gt.go_id || ' : ' || gt.go_term_name
+              UNION
+              SELECT 'N/A' as internal,
+                'N/A' as term,
+                'N/A' as display,
+                0.5 as ct
+              FROM dual
+              ORDER BY ct desc
             </sql>
         </sqlQuery>
 
@@ -8439,6 +8447,19 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
+
+        <sqlQuery name="GoTermSource" excludeProjects="EuPathDB">
+            <column name="internal" />
+            <column name="term" />
+            <column name="display"/>
+            <sql>
+              SELECT DISTINCT gt.displayable_source AS internal,
+                                 gt.displayable_source AS term,
+                                 gt.displayable_source AS display
+                                 FROM   ApidbTuning.GoTermSummary gt
+            </sql>
+        </sqlQuery>
+
 
  <sqlQuery name="MassAssay" excludeProjects="SchistoDB,MicrosporidiaDB,EuPathDB">
             <column name="internal" />
