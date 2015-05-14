@@ -799,9 +799,11 @@ WHERE o.taxon_id = ta.taxon_id
             <column name="project_id"/>
             <sql>
             <![CDATA[
-            SELECT distinct upper(replace(gi.id, ';current=false','')) as alias, database_name, gi.gene as source_id, '@PROJECT_ID@' as project_id
-            FROM ApidbTuning.GeneId gi
+            SELECT distinct upper(replace(gi.id, ';current=false','')) as alias, database_name, 
+             source_id, gene_source_id, '@PROJECT_ID@' as project_id
+            FROM ApidbTuning.GeneId gi, ApidbTuning.TranscriptAttributes ta
             WHERE  (REGEXP_LIKE (gi.id, '(\D)') OR database_name LIKE '%Entrez%' )
+            AND ta.gene_source_id = gi.gene
             ORDER BY database_name
              ]]>
             </sql>
@@ -1052,8 +1054,8 @@ WHERE o.taxon_id = ta.taxon_id
             <column name="comment_string"/>
             <sql>
               <![CDATA[
-                select nfc.comment_string, nf.source_id, '@PROJECT_ID@' as project_id
-                from dots.NaFeatureComment nfc, ApidbTuning.GeneAttributes nf
+                select nfc.comment_string, nf.source_id, nf.gene_source_id, '@PROJECT_ID@' as project_id
+                from dots.NaFeatureComment nfc, ApidbTuning.TranscriptAttributes nf
                 where nf.na_feature_id = nfc.na_feature_id
                   and to_char(dbms_lob.substr(nfc.comment_string, 30, 1)) != 'introns and exons likely'
                   and to_char(dbms_lob.substr(nfc.comment_string, 30, 1)) != 'NULL;'
@@ -1304,11 +1306,11 @@ WHERE o.taxon_id = ta.taxon_id
             <sql includeProjects="EuPathDB">
             <![CDATA[
             SELECT DISTINCT gf2.source_id AS ortho_source_id, tn.name as species, gf2.product, 
-                   gf1.source_id, '@PROJECT_ID@' as project_id
+                   ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id
             FROM dots.GeneFeature gf1, dots.SequenceSequenceGroup ssg1,
                  dots.SequenceSequenceGroup ssg2, dots.GeneFeature gf2,
                  dots.NaSequence ens, core.TableInfo ti,
-                 sres.TaxonName tn
+                 sres.TaxonName tn,  ApiDBTuning.TranscriptAttributes ta
             WHERE gf1.na_feature_id = ssg1.sequence_id
               AND ssg1.source_table_id = ti.table_id
               AND ssg1.sequence_group_id = ssg2.sequence_group_id
@@ -1319,6 +1321,7 @@ WHERE o.taxon_id = ta.taxon_id
               AND tn.name_class = 'scientific name'
               AND ti.name = 'GeneFeature'
               AND gf2.source_id != gf1.source_id
+              AND gf1.source_id = ta.gene_source_id
             ORDER BY tn.name, gf2.source_id
             ]]>
             </sql>
@@ -1743,9 +1746,9 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
             <column name="project_id"/>
             <sql>
             <![CDATA[
-               SELECT source_id, product,
+               SELECT source_id, gene_source_id, product,
                       '@PROJECT_ID@' as project_id
-               FROM ApidbTuning.GeneAttributes
+               FROM ApidbTuning.TranscriptAttributes
             ]]>
             </sql>
         </sqlQuery>
@@ -1757,9 +1760,10 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
             <column name="project_id"/>
             <sql>
             <![CDATA[
-               SELECT source_id, source_id as gene_id,
+               SELECT ta.source_id, ta.gene_source_id, ta.gene_source_id as gene_id,
                       '@PROJECT_ID@' as project_id
-               FROM dots.GeneFeature
+               FROM dots.GeneFeature gf, ApidbTuning.TranscriptAttributes ta
+               WHERE ta.gene_na_feature_id = gf.na_feature_id
             ]]>
             </sql>
         </sqlQuery>
@@ -1790,8 +1794,9 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
             <column name="gff_alias"/>
                 <sql>
                 <![CDATA[
-                SELECT DISTINCT gene AS source_id, '@PROJECT_ID@' AS project_id, id AS gff_alias
-                FROM ApidbTuning.GeneId
+                SELECT DISTINCT ta.gene_source_id, source_id, '@PROJECT_ID@' AS project_id, id AS gff_alias
+                FROM ApidbTuning.GeneId gi, ApidbTuning.TranscriptAttributes ta 
+                WHERE ta.gene_source_id = gi.gene
                 ]]>
                 </sql>
        </sqlQuery>
@@ -1831,26 +1836,26 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
         <sqlParamValue name="brcName" includeProjects="GiardiaDB,TrichDB,EuPathDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,HostDB,SchistoDB,InitDB,PiroplasmaDB">ApiDB</sqlParamValue>
         <sql>
           <![CDATA[
-            SELECT source_id, '@PROJECT_ID@' as project_id,
+            SELECT source_id, gene_source_id, '@PROJECT_ID@' as project_id,
                    'taxon:' || ncbi_tax_id AS gff_dbxref
-            FROM ApidbTuning.GeneAttributes
+            FROM ApidbTuning.TranscriptAttributes
            UNION
-            SELECT gf.source_id, '@PROJECT_ID@' as project_id,
+            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
                    'EC:' || ec.ec_number AS gff_dbxref
-            FROM ApiDBTuning.GeneAttributes gf,
+            FROM ApiDBTuning.TranscriptAttributes ta,
                  dots.translatedAaFeature taf, dots.Transcript t,
                  dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec
-            WHERE t.parent_id = gf.na_feature_id
+            WHERE t.parent_id = ta.na_feature_id
               AND taf.na_feature_id = t.na_feature_id
               AND asec.aa_sequence_id = taf.aa_sequence_id
               AND ec.enzyme_class_id = asec.enzyme_class_id
            UNION
-            SELECT gf.source_id, '@PROJECT_ID@' as project_id,
+            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
                    'NCBI_gi:' || dr.secondary_identifier AS gff_dbxref
-            FROM ApiDBTuning.GeneAttributes gf, dots.DbRefNaFeature drnf,
+            FROM ApiDBTuning.TranscriptAttributes ta, dots.DbRefNaFeature drnf,
                  sres.DbRef dr, sres.ExternalDatabaseRelease edr,
                  sres.ExternalDatabase ed
-            WHERE gf.na_feature_id = drnf.na_feature_id
+            WHERE ta.na_feature_id = drnf.na_feature_id
               AND drnf.db_ref_id = dr.db_ref_id
               AND dr.external_database_release_id
                     = edr.external_database_release_id
@@ -1859,12 +1864,12 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
                               'NRDB_ref_dbXRefBySeqIdentity',
                               'NRDB_sp_dbXRefBySeqIdentity')
            UNION
-            SELECT gf.source_id, '@PROJECT_ID@' as project_id,
+            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
                    'PDB:' || dr.primary_identifier AS gff_dbxref
-            FROM dots.aafeature aaf, ApiDBTuning.GeneAttributes gf, dots.transcript t,
+            FROM dots.aafeature aaf, ApiDBTuning.TranscriptAttributes ta, dots.transcript t,
                  dots.DbRefaaFeature drnf,  sres.DbRef dr,
                  sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
-            WHERE gf.na_feature_id = t.parent_id
+            WHERE ta.na_feature_id = t.parent_id
               AND t.na_feature_id = aaf.na_feature_id
               AND aaf.aa_feature_id = drnf.aa_feature_id
               AND drnf.db_ref_id = dr.db_ref_id
@@ -1872,29 +1877,29 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
               AND edr.external_database_id = ed.external_database_id
               AND ed.name in ('Predicted protein structures', 'Pf_predictedProteinStructures_RSRC')
            UNION
-            SELECT DISTINCT gf.source_id, '@PROJECT_ID@' as project_id,
-                   'Sanger:' || gf.source_id AS gff_dbxref
-            FROM ApiDBTuning.GeneAttributes gf, dots.DbRefNaFeature drnf,
+            SELECT DISTINCT ta.gene_source_id, ta.source_id, '@PROJECT_ID@' as project_id,
+                   'Sanger:' || ta.source_id AS gff_dbxref
+            FROM ApiDBTuning.TranscriptAttributes ta, dots.DbRefNaFeature drnf,
                  sres.DbRef dr, sres.ExternalDatabaseRelease edr,
                  sres.ExternalDatabase ed
-            WHERE gf.na_feature_id = drnf.na_feature_id
+            WHERE ta.na_feature_id = drnf.na_feature_id
               AND drnf.db_ref_id = dr.db_ref_id
               AND dr.external_database_release_id
                     = edr.external_database_release_id
               AND edr.external_database_id = ed.external_database_id
               AND ed.name like 'Sanger%'
            UNION
-            SELECT gf.source_id, '@PROJECT_ID@' as project_id,
-                   '&&brcName&&:' || gf.source_id AS gff_dbxref
-            FROM ApiDBTuning.GeneAttributes gf
+            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
+                   '&&brcName&&:' || ta.source_id AS gff_dbxref
+            FROM ApiDBTuning.TranscriptAttributes ta
           ]]>
         </sql>
     </sqlQuery>
 
     <sqlQuery name="GeneGffRnas" isCacheable="false">
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="gene_source_id"/>
+        <column name="project_id"/>
         <column name="gff_seqid"/>
         <column name="gff_source"/>
         <column name="gff_type"/>
@@ -1910,7 +1915,7 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
         <column name="gff_attr_parent"/>
         <column name="gff_protein_sequence"/>
         <sql>
-            select gf.source_id, '@PROJECT_ID@' as project_id, 
+            select ta.source_id, ta.gen_source_id, '@PROJECT_ID@' as project_id, 
                    ns.source_id as gff_seqid,
                    '@PROJECT_ID@' as gff_source,
                    decode(so.term_name,
@@ -1933,7 +1938,7 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
                    rna.product as gff_attr_description,
                    (nl.end_max - nl.start_min + 1) as gff_attr_size,
                    protein.sequence as gff_protein_sequence
-            from ApiDBTuning.GeneAttributes ga,
+            from ApiDBTuning.TranscriptAttributes ta,
                  DoTS.GeneFeature gf,
                  DoTS.Transcript rna,
                  ApidbTuning.FeatureLocation nl,
@@ -1941,13 +1946,13 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
                  sres.externaldatabase ed,
                  sres.externaldatabaserelease edr,
                  sres.SequenceOntology so,
-                 (select gf2.source_id, tas.sequence
-                  from ApiDBTuning.GeneAttributes gf2, dots.Transcript t,
+                 (select ta.gene_source_id, tas.sequence
+                  from ApiDBTuning.TranscriptAttributes ta, dots.Transcript t,
                        dots.TranslatedAaFeature taf, dots.TranslatedAaSequence tas
-                  where gf2.na_feature_id = t.parent_id
+                  where ta.na_feature_id = t.parent_id
                     and t.na_feature_id = taf.na_feature_id
                     and taf.aa_sequence_id = tas.aa_sequence_id) protein
-            where ga.na_feature_id = gf.na_feature_id
+            where ta.na_feature_id = gf.na_feature_id
                 and gf.na_feature_id = rna.parent_id
                 and gf.na_feature_id = nl.na_feature_id
                 and nl.is_top_level = 1
@@ -1975,14 +1980,14 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
         from ApidbTuning.FeatureLocation 
         where feature_type = 'GeneFeature'
         UNION
-        select fl.project_id, ga.source_id, fl.start_min, fl.end_max, fl.is_reversed, 'exon' as type, fl.sequence_source_id 
-        from ApidbTuning.FeatureLocation fl, ApidbTuning.GeneAttributes ga
-        where ga.na_feature_id = fl.parent_id
+        select fl.project_id, ta.source_id, fl.start_min, fl.end_max, fl.is_reversed, 'exon' as type, fl.sequence_source_id 
+        from ApidbTuning.FeatureLocation fl, ApidbTuning.TranscriptAttributes ta
+        where ta.na_feature_id = fl.parent_id
         and fl.feature_type = 'ExonFeature'
         UNION
-        select fl.project_id, ga.source_id, least(fl.coding_start, fl.coding_end) as start_min, greatest(fl.coding_start, fl.coding_end) as end_max, fl.is_reversed, 'cds' as type, fl.sequence_source_id 
-        from ApidbTuning.FeatureLocation fl, ApidbTuning.GeneAttributes ga
-        where ga.na_feature_id = fl.parent_id
+        select fl.project_id, ta.source_id, least(fl.coding_start, fl.coding_end) as start_min, greatest(fl.coding_start, fl.coding_end) as end_max, fl.is_reversed, 'cds' as type, fl.sequence_source_id 
+        from ApidbTuning.FeatureLocation fl, ApidbTuning.TranscriptAttributes ta
+        where ta.na_feature_id = fl.parent_id
         and fl.feature_type = 'ExonFeature'
         )
         order by sequence_source_id, type, start_min
@@ -2205,23 +2210,25 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
         <column name="bait_or_prey"/>
         <sql>
             <![CDATA[
-               SELECT bf.source_id, bait_start, bait_end, prey_start, prey_end,
+               SELECT ta.source_id, ta.gene_source_id, bait_start, bait_end, prey_start, prey_end,
                        times_observed, number_of_searches, NULL AS prey_number_of_baits,
                        bait_number_of_preys, 'bait' as bait_or_prey, '@PROJECT_ID@' as project_id, pf.source_id as other_source_id
                 FROM dots.GeneFeature bf, dots.GeneFeature pf,
-                     dots.NaSequence ens, apidb.GeneInteraction gi
+                     dots.NaSequence ens, apidb.GeneInteraction gi, ApidbTuning.TranscriptAttributes ta
                 WHERE bf.na_feature_id = gi.bait_gene_feature_id
                   AND gi.prey_gene_feature_id = pf.na_feature_id
                   AND pf.na_sequence_id = ens.na_sequence_id
+                  AND bf.source_id = ta.gene_source_id
                 UNION
-                SELECT pf.source_id, bait_start, bait_end, prey_start, prey_end,
+                SELECT ta.source_id, ta.gene_source_id, bait_start, bait_end, prey_start, prey_end,
                        times_observed, number_of_searches, prey_number_of_baits,
                        NULL AS bait_number_of_preys, 'prey' as bait_or_prey, '@PROJECT_ID@' as project_id, bf.source_id as other_source_id
                 FROM dots.GeneFeature bf, dots.GeneFeature pf,
-                     dots.NaSequence ens,  apidb.GeneInteraction gi
+                     dots.NaSequence ens,  apidb.GeneInteraction gi, ApidbTuning.TranscriptAttributes ta
                 WHERE bf.na_feature_id = gi.bait_gene_feature_id
                   AND gi.prey_gene_feature_id = pf.na_feature_id
                   AND bf.na_sequence_id = ens.na_sequence_id
+                  AND pf.source_id = ta.gene_source_id
            ]]>
         </sql>
       </sqlQuery>
@@ -2512,10 +2519,10 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
                                          'http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?db=protein&val='
                                          || dr.secondary_identifier,
                                        ed.name) AS gi_url, 
-                       gf.source_id, '@PROJECT_ID@' as project_id
+                       ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id
                 FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
                      sres.DbRef dr, sres.ExternalDatabaseRelease edr,
-                     sres.ExternalDatabase ed
+                     sres.ExternalDatabase ed, ApidbTuning.TranscriptAttributes ta
                 WHERE gf.na_feature_id = drnf.na_feature_id
                   AND drnf.db_ref_id = dr.db_ref_id
                   AND dr.external_database_release_id
@@ -2525,6 +2532,7 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
       /* gets its own section     'NRDB_pdb_dbXRefBySeqIdentity', */
                                   'NRDB_ref_dbXRefBySeqIdentity',
                                   'NRDB_sp_dbXRefBySeqIdentity')
+                  AND gf.source_id = ta.gene_source_id
             ]]>
             </sql>
         </sqlQuery>
@@ -2622,8 +2630,9 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
                 SELECT ps.pdb_chain, ps.pdb_title, ps.pdb_id, ps.pvalue_mant,
                        ps.pvalue_exp, ps.taxon, ps.percent_identity,
                        ps.percent_plasmo_coverage, 
-                       ps.source_id, '@PROJECT_ID@' as project_id
-                FROM ApidbTuning.PdbSimilarity ps
+                       ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id
+                FROM ApidbTuning.PdbSimilarity ps, ApidbTuning.TranscriptAttributes ta
+                WHERE ps.source_id = ta.gene_source_id
                 ORDER BY ps.score DESC
             ]]>
             </sql>
@@ -3074,7 +3083,7 @@ ORDER BY subtrs.pathway
 
             <sql>
             <![CDATA[
-            SELECT ta.source_id as source_id, '@PROJECT_ID@' as project_id,
+            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
                     target_name as table_name, nvl(listagg(ta.name, ', ') within group (order by ta.name), '0') as organisms
             FROM (
                   select distinct dmr.target_name, tn.name
@@ -3085,7 +3094,7 @@ ORDER BY subtrs.pathway
   	                 and dt.taxon_id = tn.taxon_id(+)
  	                   and (tn.name_class is null or tn.name_class = 'scientific name')
                  ) ta, apidbtuning.TranscriptAttributes ta
-            GROUP by ta.source_id,target_name
+            GROUP by ta.source_id, ta.gene_source_id, target_name
             ORDER by ta.source_id,target_name
              ]]>
             </sql>
