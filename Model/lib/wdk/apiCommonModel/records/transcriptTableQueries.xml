@@ -207,10 +207,10 @@
             <column name="protein_length"/>
             <column name=""/>
             <sql>
-            SELECT transcript_source_id AS source_id, gene_source_id, '@PROJECT_ID@' AS project_id,
-              pa.protein_length, ps.sequence AS protein_sequence
-            FROM apidbtuning.ProteinAttributes pa, apidbtuning.ProteinSequence ps
-            WHERE pa.source_id = ps.source_id
+            SELECT ta.source_id, gene_source_id, '@PROJECT_ID@' AS project_id,
+              ta.protein_length, ps.sequence AS protein_sequence
+            FROM apidbtuning.TranscriptAttributes ta, apidbtuning.ProteinSequence ps
+            WHERE ta.protein_source_id = ps.source_id
             </sql>
         </sqlQuery>
 
@@ -756,19 +756,19 @@ ORDER BY ss.strain
             <column name="organism"/>
             <sql>
             <![CDATA[
-SELECT ga.source_id,'@PROJECT_ID@' as project_id, a.organism, a.abbrev
+SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, a.organism, a.abbrev
 FROM
 (
-SELECT distinct ga.organism, o.abbrev
-FROM APIDBTUNING.geneattributes ga, 
-     APIDBTUNING.sequenceattributes sa, 
+SELECT distinct ta.organism, o.abbrev
+FROM APIDBTUNING.transcriptAttributes ta, 
+     APIDBTUNING.sequenceAttributes sa, 
      APIDB.organism o, 
-     SRES.sequenceontology so
-WHERE o.taxon_id = ga.taxon_id 
-  AND ga.na_sequence_id = sa.na_sequence_id
-  AND sa.so_id = so.so_id --order by ga.organism
-  AND so.term_name not in ('mitochondrial_chromosome','apicoplast_chromosome')
-) a, apidbtuning.geneattributes ga 
+     SRES.ontologyTerm so
+WHERE o.taxon_id = ta.taxon_id 
+  AND ta.na_sequence_id = sa.na_sequence_id
+  AND sa.so_id = so.source_id
+  AND so.name not in ('mitochondrial_chromosome','apicoplast_chromosome')
+) a, apidbtuning.transcriptAttributes ta
             ]]>
             </sql>
         </sqlQuery>
@@ -3072,29 +3072,30 @@ order by quant_type asc, fold_change desc
             <column name="description"/>
             <sql>
             <![CDATA[
-select nvl(specific.source_id, generic.source_id) as source_id,
+SELECT nvl(specific.source_id, generic.source_id) as source_id,
+       nvl(specific.gene_source_id, generic.gene_source_id) as gene_source_id,
        nvl(specific.project_id, generic.project_id) as project_id,
        nvl(specific.description, generic.description) as description
-from (SELECT ga.source_id, ga.project_id, dp.name, dp.description
-FROM apidbtuning.geneattributes ga,
-  apidbtuning.datasetnametaxon dnt,
-  apidbtuning.datasetpresenter dp
-WHERE ga.external_db_name    = dnt.name
-AND dnt.dataset_presenter_id = dp.dataset_presenter_id
+FROM (SELECT ta.source_id, ta.gene_source_id, ta.project_id, dp.name, dp.description
+  FROM apidbtuning.transcriptAttributes ta,
+    apidbtuning.datasetnameTaxon dnt,
+    apidbtuning.datasetPresenter dp
+  WHERE ta.external_db_name    = dnt.name
+  AND dnt.dataset_presenter_id = dp.dataset_presenter_id
 ) specific,
-(SELECT ga.source_id,
-       ga.project_id,
+  (SELECT ta.source_id, ta.gene_source_id, 
+       ta.project_id,
        p.description AS description
-FROM APIDBTUNING.datasetnametaxon dt,
-     apidbtuning.geneattributes ga,
-     apidb.datasource ds,
-     apidbtuning.datasetpresenter p
-WHERE ga.taxon_id           = dt.taxon_id
- AND dt.name                 = ds.name
- AND ds.type                 = 'genome'
- AND dt.dataset_presenter_id = p.dataset_presenter_id
-) generic
-where generic.source_id = specific.source_id (+)
+  FROM apidbtuning.datasetnameTaxon dt,
+     apidbtuning.transcriptAttributes ta,
+     apidb.dataSource ds,
+     apidbtuning.datasetPresenter p
+  WHERE ta.taxon_id           = dt.taxon_id
+   AND dt.name                 = ds.name
+   AND ds.type                 = 'genome'
+   AND dt.dataset_presenter_id = p.dataset_presenter_id
+ ) generic
+WHERE generic.source_id = specific.source_id (+)
           ]]>
            </sql>
         </sqlQuery>
