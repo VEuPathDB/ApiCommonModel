@@ -80,10 +80,11 @@
             <column name="is_reversed"/>
             <sql>
             <![CDATA[
-         select gf.source_id, '@PROJECT_ID@' AS project_id,
+         select ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id,
                 gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
          from dots.GeneFeature gf, ApidbTuning.FeatureLocation gl, dots.NaSequence s,
+              apidbtuning.TranscriptAttributes ta,
               (select  'exon' as type, el.parent_id as na_feature_id,
                        el.start_min as start_min , el.end_max as end_max
                from ApidbTuning.FeatureLocation el
@@ -107,6 +108,7 @@
          and s.na_sequence_id = gl.na_sequence_id
          and gf.na_feature_id = gl.na_feature_id
          and gl.is_top_level = 1
+         and  gf.source_id = ta.gene_source_id
          order by case when gl.is_reversed = 1 then -1 * gm.start_min else gm.start_min end
             ]]>
             </sql>
@@ -338,10 +340,6 @@ order by graph_descrip.order_num
 
 
 
-
-
-
-
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Phenotype Graphs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -435,8 +433,6 @@ order by graph_descrip.order_num
              ]]>
             </sql>
         </sqlQuery>
-
-
 
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -707,18 +703,18 @@ WHERE o.taxon_id = ta.taxon_id
             <column name="interpro_e_value"/>
             <sql>
             <![CDATA[
-            select ga.source_id, '@PROJECT_ID@' AS project_id, xd1.name AS interpro_name,
+            select ta.source_id, ta.gene_source_id, '@PROJECT_ID@' AS project_id, xd1.name AS interpro_name,
                    dr.primary_identifier AS interpro_primary_id,
                    dr.secondary_identifier AS interpro_secondary_id, dr.remark as interpro_desc,
                    al.start_min AS interpro_start_min, al.end_min AS interpro_end_min,
                    case when df.e_value = 0 then '0' else to_char(df.e_value,'9.9EEEE') end AS interpro_e_value,
                    df2.source_id as interpro_family_id
-            from ApidbTuning.GeneAttributes ga, dots.AaLocation al, sres.ExternalDatabaseRelease xdr1,
+            from ApidbTuning.TranscriptAttributes ta, dots.AaLocation al, sres.ExternalDatabaseRelease xdr1,
                  sres.ExternalDatabase xd1, sres.ExternalDatabaseRelease xdr3,
                  sres.ExternalDatabase xd3, sres.DbRef dr,
                  dots.DbRefAaFeature draf, dots.DomainFeature df, dots.DomainFeature df2
             where xd3.name in ('InterproscanData_RSRC','INTERPRO')
-              and ga.aa_sequence_id = df.aa_sequence_id
+              and ta.aa_sequence_id = df.aa_sequence_id
               and df.aa_feature_id = draf.aa_feature_id
               and df.aa_feature_id = al.aa_feature_id
               and draf.db_ref_id = dr.db_ref_id
@@ -769,7 +765,7 @@ WHERE o.taxon_id = ta.taxon_id
             <sql>
            <![CDATA[
              /* hint added November 2010 to work around puzzling Oracle 11g bug */
-             select /*+ no_star_transformation */ gf.source_id, '@PROJECT_ID@' AS project_id,
+             select /*+ no_star_transformation */ t.source_id, gf.source_id as gene_source_id, '@PROJECT_ID@' AS project_id,
              tmf.aa_feature_id AS tmf_name,
              tmf.parent_id AS tmf_parent_id, tmf.topology AS tmf_topology,
              aal.start_min AS tmf_start_min, aal.end_max AS tmf_end_max,
@@ -840,7 +836,7 @@ WHERE o.taxon_id = ta.taxon_id
                       gb.tm_count, toa.old_source_id,
                       case when ms.aa_sequence_id is null then 'No' else 'Yes' end as proteomics,
                       case when c.stable_id is null then 'No' else 'Yes' end as user_comment
-               from apidbTuning.GeneAttributes ga, apidbTuning.GeneAttributes gb,
+               from apidbTuning.TranscriptAttributes ga, apidbTuning.GeneAttributes gb,
                     apidbTuning.TrackOldAnnotation toa,
                     (select distinct aa_sequence_id from apidb.MassSpecSummary) ms,
                     (select distinct stable_id
@@ -894,7 +890,7 @@ WHERE o.taxon_id = ta.taxon_id
 
             <sql>
             <![CDATA[
-             select gf.source_id, '@PROJECT_ID@' AS project_id, 
+             select t.source_id, gf.source_id as gene_source_id, '@PROJECT_ID@' AS project_id,
              spf.aa_feature_id AS spf_name,
              spf.parent_id AS spf_parent_id,
              (spf.maxy_conclusion +
@@ -1002,7 +998,7 @@ WHERE o.taxon_id = ta.taxon_id
 
             <sql>
             <![CDATA[
-             select gf.source_id, '@PROJECT_ID@' AS project_id, 
+             select t.source_id, gf.source_id as gene_source_id, '@PROJECT_ID@' AS project_id,
              lc.aa_feature_id AS lc_name,
              lc.aa_sequence_id AS lc_parent_id,
              aal.start_min AS lc_start_min, aal.end_max AS lc_end_max
@@ -1386,8 +1382,9 @@ WHERE o.taxon_id = ta.taxon_id
                        TO_CHAR(es.sequence) AS sequence, 
                        es.name,
                        es.confidence, 
-                       es.source_id, '@PROJECT_ID@' as project_id
-                FROM ApidbTuning.EpitopeSummary es
+                       ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id
+                FROM ApidbTuning.EpitopeSummary es, ApidbTuning.TranscriptAttributes ta
+                WHERE es.source_id = ta.gene_source_id
                 ORDER BY DECODE(es.confidence, 'Low', 1,
                               'Medium', 2,
                               'High', 3,
@@ -1655,25 +1652,22 @@ ORDER BY mss.residue_location, mss.experiment, mss.sample
             <column name="feature_source_id"/>
             <sql>
             <![CDATA[
-              SELECT fl.feature_source_id AS source_id, ga.project_id,
-                     fl.feature_source_id,
-                     fl.sequence_source_id,
-                     so.term_name as sequence_so_term,
-                     is_top_level as is_top_level,
-                     fl.start_min,
-                     fl.end_max,
-                     Decode(fl.is_reversed, 0, '+', 1, '-') is_reversed,
-                    (fl.start_min-5000)as start_context,
-                    (fl.end_max+5000)as end_context,
-                    lower(ga.project_id) as lc_project_id
-              FROM ApidbTuning.FeatureLocation fl,ApidbTuning.GeneAttributes ga,
-                   Dots.NaSequence s, Sres.SequenceOntology so
-              WHERE ga.project_id = '@PROJECT_ID@'
-              AND ga.na_feature_id = fl.na_feature_id
-              AND fl.feature_type = 'GeneFeature'
-              AND fl.na_sequence_id = s.na_sequence_id
-              AND s.sequence_ontology_id = so.sequence_ontology_id
-              ORDER BY fl.is_top_level desc
+              SELECT ta.source_id, ta.gene_source_id, sa.project_id,
+                     ta.gene_source_id AS feature_source_id,
+                     ta.sequence_id,
+                     so.name as sequence_so_term,
+                     1 AS is_top_level,
+                     gene_start_min,
+                     gene_end_max,
+                     Decode(is_reversed, 0, '+', 1, '-') is_reversed,
+                    (gene_start_min-5000)as start_context,
+                    (gene_end_max+5000)as end_context,
+                    lower(ta.project_id) as lc_project_id
+              FROM ApidbTuning.TranscriptAttributes ta ,ApidbTuning.SequenceAttributes sa,
+                   SRes.OntologyTerm so
+              WHERE ta.project_id = '@PROJECT_ID@'
+              AND ta.na_sequence_id = sa.na_sequence_id
+              AND sa.so_id = so.source_id
             ]]>
             </sql>
         </sqlQuery>
@@ -2995,10 +2989,8 @@ WHERE generic.source_id = specific.source_id (+)
         </sqlQuery>
 
   <!--===========================================================================-->
-
-    
-  <!--======================Metabolic Pathways - Enzymes Compounds Table=====================================================-->
-
+  <!--======================Metabolic Pathways - Enzymes Compounds Table=================-->
+  <!--===========================================================================-->
 
       <sqlQuery name="CompoundsFromMetabolicPathways" includeProjects="PlasmoDB">
             <testParamValues includeProjects="PlasmoDB">
@@ -3070,9 +3062,9 @@ ORDER BY subtrs.pathway
            </sql>
         </sqlQuery>
 
-          <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+          <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
           <!-- MetaTable: given a table above, the metatable tells us to which organisms apply (if 0, it applies to all)-->  
-          <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+          <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
           <sqlQuery name="MetaTable" isCacheable="false" excludeProjects="FungiDB,EuPathDB">
             <column name="source_id"/>
             <column name="gene_source_id"/>
