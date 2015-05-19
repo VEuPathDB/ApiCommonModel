@@ -265,7 +265,7 @@ where p.rn = 1
     <internalDependency name="TFBSGene"/>
     <internalDependency name="EstAlignmentGeneSummary"/>
     <internalDependency name="EstAttributes"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="apidb.dataSource"/>
     <externalDependency name="sres.externalDatabase"/>
     <externalDependency name="sres.externalDatabaseRelease"/>
@@ -317,7 +317,7 @@ CREATE TABLE DataSourceCount nologging as (
       <![CDATA[
        create table CommunityCount nologging as
        select taxon_id, count(*) as communityCount
-       from apidbTuning.GeneAttributes
+       from GeneAttributes
        where (source_id, project_id)
               in (select distinct stable_id, project_name
                   from userlogins5.mappedComment@prodn.login_comment
@@ -458,7 +458,7 @@ select genomestat.taxon_id,
                      ELSE ncbi_tax_id
                 END ncbi_tax_id, 
                 to_char(sum(length)/1000000,'9999.99') as megabps 
-         FROM   SequenceAttributes 
+         FROM   GenomicSequenceAttributes 
          WHERE  is_top_level = 1
          GROUP BY project_ID, taxon_id, ncbi_tax_id
        ) genomestat on genomestat.taxon_id = ga.taxon_id
@@ -622,7 +622,7 @@ tablespace indx
   <tuningTable name="SequencePieceClosure" prefixEnabled="true">
     <comment>Extends dots.SequencePiece to handle multiple levels. Used in
          sequence-record queries and in other tuning tables, including
-         SequenceAttributes, FeatureLocation, BlatAlignmentLocation,
+         GenomicSequenceAttributes, FeatureLocation, BlatAlignmentLocation,
          and SimilaritySpanLocation
      </comment>
     <externalDependency name="dots.SequencePiece"/>
@@ -684,7 +684,7 @@ tablespace indx
          dozen-odd other tuning tables.
      </comment>
     <internalDependency name="SequencePieceClosure"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.ExonFeature"/>
     <externalDependency name="dots.NaFeature"/>
@@ -719,7 +719,7 @@ select case
        cast (null as number) as is_top_level, ef.coding_start, ef.coding_end,
        nf.external_database_release_id,
        (select project from project_mapping where organism = tn.name) as project_id
-from dots.NaFeature nf, dots.NaLocation nl, &prefixSequenceAttributes ns,
+from dots.NaFeature nf, dots.NaLocation nl, &prefixGenomicSequenceAttributes ns,
      dots.ExonFeature ef, sres.TaxonName tn
 where nf.na_feature_id = nl.na_feature_id
   and nf.na_sequence_id = ns.na_sequence_id
@@ -766,8 +766,8 @@ select /* virtual feature locations mapped through SequencePiece */
          else sp.distance_from_left + coding_end - sp.start_position + 1
        end as coding_end, nf.external_database_release_id,
        (select project from project_mapping where organism = tn.name) as project_id
-from dots.NaFeature nf, dots.NaLocation nl, &prefixSequenceAttributes contig,
-     &prefixSequencePieceClosure sp, &prefixSequenceAttributes scaffold, dots.ExonFeature ef,
+from dots.NaFeature nf, dots.NaLocation nl, &prefixGenomicSequenceAttributes contig,
+     &prefixSequencePieceClosure sp, &prefixGenomicSequenceAttributes scaffold, dots.ExonFeature ef,
      sres.TaxonName tn
 where nf.na_feature_id = nl.na_feature_id
   and nf.na_sequence_id = contig.na_sequence_id
@@ -1103,7 +1103,7 @@ FROM &prefixNewCsi
   </tuningTable>
 
 
-  <tuningTable name="SequenceId">
+  <tuningTable name="GenomicSequenceId">
   <comment> This table maps IDs for a sequence onto the official ID of the sequence.
        It is analogous to GeneId, which does the same thing for genes. Used by
        genomic-sequence record queries, by the sequence retrieval tool, and by
@@ -1118,7 +1118,7 @@ FROM &prefixNewCsi
     <externalDependency name="sres.OntologyTerm"/>
     <sql>
       <![CDATA[
-CREATE TABLE SequenceId&1 NOLOGGING AS
+CREATE TABLE GenomicSequenceId&1 NOLOGGING AS
 SELECT DISTINCT substr(id, 1, 60) as id, substr(sequence, 1, 60) AS sequence
 FROM (
   SELECT ns.source_id as id, ns.source_id as sequence
@@ -1141,19 +1141,19 @@ UNION
     </sql>
     <sql>
       <![CDATA[
-CREATE INDEX SequenceId_sequence_idx&1 ON SequenceId&1 (sequence, id)
+CREATE INDEX GenSeqId_sequence_idx&1 ON GenomicSequenceId&1 (sequence, id)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-CREATE INDEX SequenceId_id_idx&1 ON SequenceId&1 (id, sequence)
+CREATE INDEX GenSeqId_id_idx&1 ON GenomicSequenceId&1 (id, sequence)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-CREATE INDEX SequenceId_lowid_idx&1 ON SequenceId&1 (lower(id), sequence)
+CREATE INDEX GenSeqId_lowid_idx&1 ON GenomicSequenceId&1 (lower(id), sequence)
 tablespace indx
       ]]>
     </sql>
@@ -1465,7 +1465,6 @@ tablespace indx
     </comment>
     <internalDependency name="GeneId"/>
     <internalDependency name="FeatureLocation"/>
-    <internalDependency name="GenomicSequence"/>
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="ProteinAttributes"/>
     <internalDependency name="TaxonSpecies"/>
@@ -1590,7 +1589,11 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
       GROUP BY rna_feature_id) transcript_exons,
-     &prefixGenomicSequence sequence,
+     ( select na_sequence_id, source_id, chromosome, chromosome_order_num, length, taxon_id
+       from dots.ExternalNaSequence
+      union
+       select na_sequence_id, source_id, chromosome, chromosome_order_num, length, taxon_id
+       from dots.VirtualSequence) sequence,
      &prefixTranscriptLocation tl, &prefixProteinAttributes pa,
      dots.geneinstance gi, &prefixTaxonSpecies ts, sres.TaxonName species_name,
      (SELECT DISTINCT gene AS source_id FROM &prefixGeneId) gene,
@@ -1891,74 +1894,13 @@ and ga.orthomcl_name is null
     </sql>
   </tuningTable>
 
-  <tuningTable name="GenomicSequence" prefixEnabled="true">
-    <comment>Combines ExternalNaSequence with VirtualSequence, while excluding
-         ExternalNaSequence records whose source_id also appears in
-         VirtualSequence. Used by both model and GBrowse queries, as well as in
-         the creation of several tuning tables, including SequenceAttributes and
-         GeneAttributes. 
-    </comment>
-    <externalDependency name="dots.ExternalNaSequence"/>
-    <externalDependency name="dots.VirtualSequence"/>
-    <externalDependency name="sres.OntologyTerm"/>
-    <sql>
-      <![CDATA[
-CREATE TABLE &prefixGenomicSequence&1 NOLOGGING AS
-  SELECT ens.na_sequence_id, ens.taxon_id,
-         SUBSTR(ens.source_id, 1, 50) AS source_id,
-         LOWER(SUBSTR(ens.source_id, 1, 50)) AS lowercase_source_id,
-         ens.a_count, ens.c_count, ens.g_count, ens.t_count, ens.length,
-         SUBSTR(ens.description, 1, 400) AS description,
-         ens.external_database_release_id,
-         SUBSTR(ens.chromosome, 1, 40) AS chromosome,
-         ens.chromosome_order_num, ens.sequence_ontology_id
-  FROM dots.ExternalNaSequence ens, sres.OntologyTerm so
-  WHERE ens.sequence_ontology_id = so.ontology_term_id
-    AND so.name != 'EST'
-    AND so.name != 'oligo'
-    AND (ens.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
-    AND /* see both? use the VirtualSequence. */
-        ens.source_id IN (SELECT source_id FROM dots.ExternalNaSequence
-                         MINUS
-                          SELECT source_id FROM dots.VirtualSequence)
-UNION
-  SELECT na_sequence_id, taxon_id, SUBSTR(source_id, 1, 50) AS source_id,
-         LOWER(SUBSTR(source_id, 1, 50)) AS lowercase_source_id,
-         a_count, c_count, g_count, t_count, length,
-         SUBSTR(description, 1, 400) AS description,
-         external_database_release_id, SUBSTR(chromosome, 1, 40) AS chromosome,
-         chromosome_order_num, sequence_ontology_id
-  FROM dots.VirtualSequence
-  WHERE (taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index GS_sourceId&1 ON &prefixGenomicSequence&1 (source_id, na_sequence_id)
-tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index GS_lcSourceId&1 ON &prefixGenomicSequence&1 (lowercase_source_id)
-tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index GS_naSeqId&1 ON &prefixGenomicSequence&1 (na_sequence_id)
-tablespace indx
-      ]]>
-    </sql>
-  </tuningTable>
 
-  <tuningTable name="SequenceAttributes" prefixEnabled="true">
+  <tuningTable name="GenomicSequenceAttributes" prefixEnabled="true">
     <comment>Each row represents one genomic sequence for which a WDK sequence
          record can be instantiated. Used widely in the workflow, the model,
          and GBrowse, as well as in the creation of a dozen or so other tuning
          tables.
     </comment>
-    <internalDependency name="GenomicSequence"/>
     <internalDependency name="ProjectTaxon"/>
     <internalDependency name="SequencePieceClosure"/>
     <externalDependency name="apidb.Synteny"/>
@@ -1972,7 +1914,7 @@ tablespace indx
     <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
-CREATE TABLE &prefixSequenceAttributes&1 NOLOGGING AS
+CREATE TABLE &prefixGenomicSequenceAttributes&1 NOLOGGING AS
 SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as project_id,
        SUBSTR(sequence.source_id, 1, 60) AS source_id, sequence.a_count,
        sequence.c_count, sequence.g_count, sequence.t_count,
@@ -1996,7 +1938,13 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        sequence.na_sequence_id, organism.genome_source,
        organism.name_for_filenames, nvl(msa.has_msa, 0) as has_msa
 FROM sres.TaxonName tn, sres.Taxon, sres.OntologyTerm so, apidb.Organism,
-     &prefixGenomicSequence sequence,
+     ( select na_sequence_id, source_id, length, chromosome, chromosome_order_num, taxon_id, description,
+              a_count, c_count, g_count, t_count, external_database_release_id, sequence_ontology_id
+       from dots.ExternalNaSequence
+      union
+       select na_sequence_id, source_id, length, chromosome, chromosome_order_num, taxon_id, description,
+              a_count, c_count, g_count, t_count, external_database_release_id, sequence_ontology_id
+       from dots.VirtualSequence) sequence,
      (SELECT drns.na_sequence_id, max(dr.primary_identifier) AS genbank_accession
       FROM dots.dbrefNaSequence drns, sres.DbRef dr,
            sres.ExternalDatabaseRelease gb_edr, sres.ExternalDatabase gb_ed
@@ -2030,17 +1978,17 @@ WHERE sequence.taxon_id = tn.taxon_id(+)
     </sql>
     <sql>
       <![CDATA[
-create unique index pk_SeqAttr_&1 ON &prefixSequenceAttributes&1 (lower(source_id), project_id)
+create unique index pk_SeqAttr_&1 ON &prefixGenomicSequenceAttributes&1 (lower(source_id), project_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create unique index SeqAttr_source_id&1 ON &prefixSequenceAttributes&1 (source_id)
+create unique index SeqAttr_source_id&1 ON &prefixGenomicSequenceAttributes&1 (source_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create unique index SeqAttr_naseqid&1 ON &prefixSequenceAttributes&1 (na_sequence_id)
+create unique index SeqAttr_naseqid&1 ON &prefixGenomicSequenceAttributes&1 (na_sequence_id)
       ]]>
     </sql>
   </tuningTable>
@@ -2410,7 +2358,6 @@ tablespace indx
          retrieval tool for ORF-related queries.
      </comment>
     <internalDependency name="FeatureLocation"/>
-    <internalDependency name="GenomicSequence"/>
     <internalDependency name="ProjectTaxon"/>
     <externalDependency name="sres.OntologyTerm"/>
     <externalDependency name="sres.Taxon"/>
@@ -2432,7 +2379,11 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        nl.na_feature_id
 FROM sres.taxon, sres.TaxonName tn,
      sres.OntologyTerm oterm, FeatureLocation nl,
-                                  genomicsequence sequence
+     ( select source_id, chromosome, chromosome_order_num, na_sequence_id, taxon_id
+       from dots.ExternalNaSequence
+      union
+       select source_id, chromosome, chromosome_order_num, na_sequence_id, taxon_id
+       from dots.VirtualSequence) sequence
 WHERE sequence.na_sequence_id = nl.na_sequence_id
   AND sequence.taxon_id = tn.taxon_id
   AND sequence.taxon_id = taxon.taxon_id
@@ -2811,7 +2762,6 @@ sub getReversedTstarts {
          model, by generateGeneMetrics, and in the creation of the
          OrganismAttributes tuning table
      </comment>
-    <internalDependency name="GenomicSequence"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="BlatAlignmentLocation"/>
     <externalDependency name="dots.AssemblySequence"/>
@@ -2987,7 +2937,7 @@ SELECT distinct var.strain,
        d.name as extdb_name, vd.name as var_extdb_name, sa.taxon_id
 FROM   apidb.snp snp, 
        apidb.sequencevariation var,     
-       apidbtuning.SequenceAttributes sa,
+       GenomicSequenceAttributes sa,
        sres.ExternalDatabase d, 
        sres.ExternalDatabaseRelease rel,
        sres.ExternalDatabase vd, 
@@ -3019,7 +2969,7 @@ tablespace indx
          gene and SNP queries, as well as the gene record. Also used by the
          FindPolymorphismsPlugin in the workflow.
      </comment>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="dots.SnpFeature"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
@@ -3035,7 +2985,7 @@ FROM   study.study s,
        study.biosample bs,
        STUDY.BIOMATERIALCHARACTERISTIC bmc,
        Study.Ontologyentry oe,
-       apidbtuning.SequenceAttributes sa,
+       GenomicSequenceAttributes sa,
        dots.snpfeature snp,
        sres.externaldatabase ed, 
        sres.externaldatabaserelease edr
@@ -3062,7 +3012,7 @@ WHERE  s.study_id = sbm.study_id
          (select strain, external_database_release_id, max(parent_id) as parent_id
           from dots.SeqVariation
           group by strain, external_database_release_id) sv, 
-         SequenceAttributes sa,
+         GenomicSequenceAttributes sa,
          sres.ExternalDatabase d, 
          sres.ExternalDatabaseRelease rel,
          sres.ExternalDatabase vd, 
@@ -3096,7 +3046,7 @@ tablespace indx
          IsolateSNPs, OrganismAttributes, SnpsWithIsolates, and TajimasStats.
          Aggregated into portal instances for use in the portal site.
      </comment>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="apidb.IsolateMapping"/>
     <externalDependency name="apidb.IsolateVocabulary"/>
     <externalDependency name="apidb.VocabularyBiomaterial"/>
@@ -3529,7 +3479,7 @@ tablespace indx
      </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GeneAttributes"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <internalDependency name="ExpressionElement"/>
     <sql>
       <![CDATA[
@@ -3591,7 +3541,7 @@ tablespace indx
      </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="GeneAttributes"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <sql>
       <![CDATA[
         create table TFBSGene&1 NOLOGGING AS
@@ -4095,14 +4045,14 @@ tablespace indx
          creation of several tuning tables, including GeneAttributes and
          OrganismTree.
     </comment>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="sres.Taxon"/>
     <sql>
       <![CDATA[
 create table &prefixTaxonSpecies&1 nologging as
 select t.taxon_id, species.taxon_id as species_taxon_id
 from sres.Taxon species, (select distinct sa.taxon_id
-      from &prefixSequenceAttributes sa) t
+      from &prefixGenomicSequenceAttributes sa) t
 where species.taxon_id in (select taxon_id from sres.Taxon
                            connect by taxon_id = prior parent_id and prior rank != 'species'
                            start with taxon_id = t.taxon_id)
@@ -4233,22 +4183,22 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="NaSequence">
+  <tuningTable name="GenomicSequenceSequence">
     <comment> Each record stores the nucleotide sequence for one genomic sequence
          that is "official" (in the sense that it can be instantiated as a WDK
          sequence record. Used by generatePathoLogicFile and the sequence
          retrieval tool Propagated to portal instances.
      </comment>
     <internalDependency name="ProjectTaxon"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
-CREATE TABLE NaSequence&1 NOLOGGING AS
+CREATE TABLE GenomicSequenceSequence&1 NOLOGGING AS
 SELECT sa.source_id, cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        ns.sequence
-FROM SequenceAttributes sa, dots.NaSequence ns, sres.TaxonName tn
+FROM GenomicSequenceAttributes sa, dots.NaSequence ns, sres.TaxonName tn
 WHERE sa.na_sequence_id = ns.na_sequence_id
   AND ns.taxon_id = tn.taxon_id
   AND tn.name_class = 'scientific name'
@@ -4256,7 +4206,7 @@ WHERE sa.na_sequence_id = ns.na_sequence_id
     </sql>
     <sql>
       <![CDATA[
-create index GenomicSeq_ix&1 on NaSequence&1 (source_id, project_id)
+create index GenomicSeq_ix&1 on GenomicSequenceSequence&1 (source_id, project_id)
 tablespace indx
       ]]>
     </sql>
@@ -4812,7 +4762,7 @@ tablespace indx
     <comment> Groups projects by higher level taxonomy. Used in the creation of the
          OrganismTree tuning table.
       </comment>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <sql>
       <![CDATA[
        CREATE TABLE ProjectIdTaxonLevel&1 NOLOGGING AS
@@ -4853,7 +4803,7 @@ tablespace indx
 		           'Trichomonadida' AS taxon_node
 		FROM dual
         ) p,
-        (select distinct project_id, organism from sequenceattributes) s
+        (select distinct project_id, organism from GenomicSequenceAttributes) s
         where p.project_id = s.project_id
         union 
         SELECT distinct s.project_id as project_id, 
@@ -4918,7 +4868,7 @@ tablespace indx
             else 'Missing ProjectIdTaxonLevel'
           end as taxon_node,
           s.organism as organism
-        from sequenceattributes s
+        from GenomicSequenceAttributes s
         where s.project_id = 'FungiDB'
 	]]>
     </sql>
@@ -4932,7 +4882,7 @@ tablespace indx
          project. Propagated to portal instances.
       </comment>
     <internalDependency name="ProjectIdTaxonLevel"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <internalDependency name="TaxonSpecies"/>
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="sres.Taxon"/>
@@ -4943,13 +4893,13 @@ CREATE TABLE StrainTree NOLOGGING AS
 SELECT *
 FROM (         SELECT organism,term,parentTerm, internal,project_id
          FROM (
-           /* all organisms from sequenceattributes as organism, organism as term, parentterm is species            */
+           /* all organisms from GenomicSequenceAttributes as organism, organism as term, parentterm is species            */
            SELECT DISTINCT sa.organism AS organism,
                            sa.organism AS term,
                            sn.name AS parentTerm,
                            t.taxon_id AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, sres.TaxonName tn,
+           FROM GenomicSequenceAttributes sa, sres.TaxonName tn,
                 sres.Taxon t, sres.TaxonName sn, TaxonSpecies ts
            WHERE tn.name = sa.organism
            AND  ts.taxon_id = tn.taxon_id
@@ -4958,14 +4908,14 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
            AND sn.name_class = 'scientific name'
            AND t.rank != 'species'
            UNION
-           /* all organisms from sequenceattributes as organism, species as term, parentterm is genus   */
+           /* all organisms from GenomicSequenceAttributes as organism, species as term, parentterm is genus   */
            /* we are getting a row for species level AND for children here */
            SELECT DISTINCT sa.organism,  
                           sn.name AS term,
                           SUBSTR(sa.organism,0,(INSTR(sa.organism,' ') - 1)) AS parentTerm,
                           tn.taxon_id AS internal,
                           sa.project_id AS project_id
-           FROM SequenceAttributes sa, sres.Taxon t, 
+           FROM GenomicSequenceAttributes sa, sres.Taxon t, 
                 sres.TaxonName tn, sres.TaxonName sn,
                 TaxonSpecies ts
            WHERE tn.name = sa.organism
@@ -4979,7 +4929,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                           SUBSTR(sa.organism,0,(INSTR(sa.organism,' ') - 1)) AS parentTerm,
                           sn.taxon_id AS internal,
                           sa.project_id AS project_id
-           FROM SequenceAttributes sa, sres.Taxon t, 
+           FROM GenomicSequenceAttributes sa, sres.Taxon t, 
                 sres.TaxonName tn, sres.TaxonName sn,
                 TaxonSpecies ts
            WHERE tn.name = sa.organism
@@ -4988,25 +4938,25 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
            AND t.taxon_id = ts.taxon_id
            AND sn.name_class = 'scientific name'
            UNION
-           /* all organisms from sequenceattributes as organism, genus as term, parentterm from taxonlevel */
+           /* all organisms from GenomicSequenceAttributes as organism, genus as term, parentterm from taxonlevel */
            SELECT DISTINCT sa.organism,      
                            SUBSTR(sa.organism,0,(INSTR(sa.organism,' ') - 1)) AS term,
                            ptl.taxon_node AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           FROM GenomicSequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
            AND ptl.organism = sa.organism
            and ptl.organism not like 'Chromera%'
            and ptl.organism not like 'Vitrella%' 
            UNION
-           /* all organisms from sequenceattributes as organism, taxon_node as term, parentterm is null */
+           /* all organisms from GenomicSequenceAttributes as organism, taxon_node as term, parentterm is null */
            SELECT DISTINCT sa.organism,               
                            ptl.taxon_node AS term,
                            '' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           FROM GenomicSequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
             AND ptl.organism = sa.organism
             and ptl.project_id not in ('FungiDB','MicrosporidiaDB')
@@ -5019,7 +4969,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            'Fungi' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           FROM GenomicSequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
             AND ptl.organism = sa.organism
             and ptl.project_id in ('FungiDB','MicrosporidiaDB')
@@ -5030,7 +4980,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            '' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           FROM GenomicSequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
             AND ptl.organism = sa.organism
             and ptl.project_id in ('FungiDB','MicrosporidiaDB')
@@ -5042,7 +4992,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            'Oomycetes' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           FROM GenomicSequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
             AND ptl.organism = sa.organism
             and ptl.taxon_node = 'Oomycetes'
@@ -5052,7 +5002,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            '' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa, ProjectIdTaxonLevel ptl
+           FROM GenomicSequenceAttributes sa, ProjectIdTaxonLevel ptl
            WHERE ptl.project_id = sa.project_id
             AND ptl.organism = sa.organism
             and ptl.taxon_node = 'Oomycetes'
@@ -5063,7 +5013,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            'Chromerida' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa
+           FROM GenomicSequenceAttributes sa
            WHERE sa.organism like 'Chromera%'
             or sa.organism like 'Vitrella%'
             UNION
@@ -5072,7 +5022,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                            '' AS parentTerm,
                            -1 AS internal,
                            sa.project_id AS project_id
-           FROM SequenceAttributes sa
+           FROM GenomicSequenceAttributes sa
            WHERE sa.organism like 'Chromera%'
             or sa.organism like 'Vitrella%'           
 ))
@@ -5155,7 +5105,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
          species. Used in BLAST param queries. Propagated to portal instances.
       </comment>
     <internalDependency name="GeneAttributes"/>
-    <internalDependency name="SequenceAttributes"/>
+    <internalDependency name="GenomicSequenceAttributes"/>
     <internalDependency name="EstAttributes"/>
     <internalDependency name="TaxonSpecies"/>
     <externalDependency name="apidb.Organism"/>
@@ -5185,19 +5135,19 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   UNION  
   /* Standard GENOME */
   select distinct organism, project_id, type 
-  from SequenceAttributes,
+  from GenomicSequenceAttributes,
        (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual)
   UNION
   /* Mitochondrial GENES and GENOME */
   select distinct organism || ' mitochondrial', project_id, type 
-  from SequenceAttributes,       
+  from GenomicSequenceAttributes,       
   (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where so_id = 'SO:0000819'
   and not project_id='PlasmoDB' 
   UNION
   /* Plastid GENES and GENOME */
   select distinct organism || ' plastid' as organism, project_id, type 
-  from SequenceAttributes,       
+  from GenomicSequenceAttributes,       
   (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where so_id = 'SO:0001259'
   and not project_id='PlasmoDB' 
