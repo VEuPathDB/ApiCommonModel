@@ -41,7 +41,7 @@
        <!-- --> 
        <!-- This might need to be done also in other comment tables (for Toxo and for other record types) if we allow aliases  --> 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <sqlQuery name="GeneComments" excludeProjects="ToxoDB" isCacheable="false">
+       <sqlQuery name="GeneComments" isCacheable="false">
             <testParamValues minRows="0" includeProjects="MicrosporidiaDB,PiroplasmaDB"/>
             <testParamValues includeProjects="CryptoDB">
                <paramValue name="source_id">cgd5_780</paramValue>
@@ -53,85 +53,6 @@
             <testParamValues includeProjects="TriTrypDB">
                <paramValue name="source_id">Tb927.8.4640</paramValue>
             </testParamValues>
-
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <column name="comment_id"/>
-            <column name="pmids"/>
-            <column name="genecount"/>
-            <column name="comment_status"/>
-            <column name="filecount"/>
-            <column name="stable_id"/>
-            <column name="headline"/>
-            <column name="user_name_org"/>
-            <column name="comment_date"/>
-            <column name="comment_target_id"/>
-            <sql>
-            <![CDATA[
-                     WITH gene_comment as
-                       ( 
-                         SELECT  csi.comment_id,gi.gene as source_id, MAX(csi.stable_id) as stable_id
-                          FROM  apidbtuning.geneid gi,
-                         ( SELECT comment_id, stable_id from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
-                          UNION
-                           SELECT comment_id, stable_id from @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@) csi
-                         WHERE gi.id = csi.stable_id
-                         GROUP by csi.comment_id,gi.gene
-                       )
-  
-                  SELECT c.comment_target_id, c.project_name as project_id, gene_comment.comment_id, 
-                           gene_comment.source_id,gene_comment.stable_id, c.comment_date, c.headline,
-                           files.filecount, references.pmids, gene_counts.geneCount, 
-                           case when reviewed_comments.reviewedcount > 0 then 'Yes'
-                                else 'No'
-                           end as comment_status, 
-                           u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org 
-                   FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
-                          gene_comment,
-                         (SELECT comment_id, count(*) as filecount
-                          FROM @COMMENT_SCHEMA@CommentFile@COMMENT_DBLINK@
-                          GROUP BY comment_id) files,
-                         (SELECT comment_id,
-                                  apidb.tab_to_string(set(cast(collect(source_id) as apidb.varchartab)),',') as pmids
-                          FROM @COMMENT_SCHEMA@CommentReference@COMMENT_DBLINK@
-                          WHERE database_name='pubmed'
-                          GROUP BY comment_id
-                          ) references,
-                         (SELECT comment_id, count(source_id) as geneCount
-                          FROM gene_comment
-                          GROUP BY comment_id) gene_counts,
-                         (SELECT dr.primary_identifier as comment_id, count(gf.source_id) as reviewedcount
-                          FROM   sres.dbref dr, 
-                                 dots.DbRefNaFeature drnf,
-                                 dots.GeneFeature gf, 
-                                 sres.externaldatabase ed, 
-                                 sres.externaldatabaserelease edr 
-                          WHERE drnf.db_ref_id = dr.db_ref_id
-                            AND gf.na_feature_id = drnf.na_feature_id
-                            AND ed.external_database_id = edr.external_database_id
-                            AND edr.external_database_release_id = dr.external_database_release_id
-                            AND ed.name like '%_dbxref_EuPathDB_comment_RSRC'
-                          GROUP By dr.primary_identifier
-                         ) reviewed_comments
-                    WHERE c.project_name = '@PROJECT_ID@'
-                      AND c.comment_target_id = 'gene'
-                      AND c.review_status_id != 'rejected'
-                      AND c.review_status_id != 'task'
-                      AND c.review_status_id != 'community'
-                      AND c.is_visible = 1
-                      AND c.comment_id = gene_comment.comment_id
-                      AND c.user_id = u.user_id
-                      AND c.comment_id = files.comment_id(+)
-                      AND c.comment_id = references.comment_id(+)
-                      AND c.comment_id = gene_counts.comment_id(+)
-                      AND to_char(c.comment_id) = reviewed_comments.comment_id(+)
-                    ORDER BY gene_comment.comment_id desc
-            ]]>
-            </sql>
-        </sqlQuery>
-
-       <sqlQuery name="GeneComments" includeProjects="ToxoDB" isCacheable="false">
             <testParamValues includeProjects="ToxoDB">
                <paramValue name="source_id">TGME49_102050</paramValue>
             </testParamValues>
@@ -142,49 +63,101 @@
             <column name="comment_id"/>
             <column name="pmids"/>
             <column name="genecount"/>
-            <column name="reviewedcount"/>
+            <column name="comment_status" includeProjects="TriTrypDB,PlasmoDB"/>
             <column name="filecount"/>
             <column name="stable_id"/>
             <column name="headline"/>
             <column name="user_name_org"/>
             <column name="comment_date"/>
             <column name="comment_target_id"/>
+
+        <sqlParamValue name="selectReviewed" includeProjects="PlasmoDB,TriTrypDB">
+                <![CDATA[
+                          case when reviewed_comments.gene_source_id is not null then 'Yes'
+                               when reviewed_comments.gene_source_id is null and rc.gene is not null then 'In Progress'
+                               else 'Pending'
+                            end as comment_status,
+                ]]>
+        </sqlParamValue>
+        <sqlParamValue name="selectReviewed" excludeProjects="PlasmoDB,TriTrypDB"></sqlParamValue>
+
+        <!-- This tuning table only exists for plasmo and tritrypdb -->
+        <sqlParamValue name="fromReviewed" includeProjects="PlasmoDB,TriTrypDB">
+                <![CDATA[
+                       ,  apidbtuning.reviewedcomment rc
+                ]]>
+        </sqlParamValue>
+        <sqlParamValue name="fromReviewed" excludeProjects="PlasmoDB,TriTrypDB"></sqlParamValue>
+        <sqlParamValue name="whereReviewed" includeProjects="PlasmoDB,TriTrypDB">
+                <![CDATA[
+                    and gene_comment.comment_id = rc.comment_id (+)
+                    and gene_comment.source_id = rc.gene (+)
+                ]]>
+        </sqlParamValue>
+        <sqlParamValue name="whereReviewed" excludeProjects="PlasmoDB,TriTrypDB"></sqlParamValue>
+
             <sql>
             <![CDATA[
-                    SELECT c.comment_target_id, c.project_name as project_id, csi.comment_id, 
-                           csi.stable_id, csi.stable_id as source_id, c.comment_date, c.headline,
-                           files.filecount, references.pmids, gene_counts.geneCount, null as comment_status,
-                           u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org
-                    FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
-                         ( SELECT comment_id, stable_id from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
-                          UNION
-                           SELECT comment_id, stable_id from @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@) csi,
-                         (SELECT comment_id, count(*) as filecount
-                          FROM @COMMENT_SCHEMA@CommentFile@COMMENT_DBLINK@
-                          GROUP BY comment_id) files,
-                         (SELECT comment_id,
-                                  apidb.tab_to_string(set(cast(collect(source_id) as apidb.varchartab)),',') as pmids
-                          FROM @COMMENT_SCHEMA@CommentReference@COMMENT_DBLINK@
-                          WHERE database_name='pubmed'
-                          GROUP BY comment_id
-                          ) references,
-                         (SELECT comment_id, count(stable_id) as geneCount
-                          FROM @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@
-                          GROUP BY comment_id) gene_counts
-                    WHERE c.project_name = '@PROJECT_ID@'
-                      AND c.comment_target_id = 'gene'
-                      AND c.review_status_id != 'rejected'
-                      AND c.review_status_id != 'task'
-                      AND c.is_visible = 1
-                      AND c.comment_id = csi.comment_id
-                      AND c.user_id = u.user_id
-                      AND c.comment_id = files.comment_id(+)
-                      AND c.comment_id = references.comment_id(+)
-                      AND c.comment_id = gene_counts.comment_id(+)
-                    ORDER BY csi.comment_id desc
+WITH gene_comment as (
+                        SELECT  csi.comment_id,gi.gene as source_id, MAX(csi.stable_id) as stable_id
+                        FROM  apidbtuning.geneid gi,
+                       ( SELECT comment_id, stable_id from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
+                        UNION
+                         SELECT comment_id, stable_id from @COMMENT_SCHEMA@commentStableId@COMMENT_DBLINK@) csi
+                       WHERE gi.id = csi.stable_id
+                       GROUP by csi.comment_id,gi.gene
+                     )
+                  SELECT c.comment_target_id, c.project_name as project_id, gene_comment.comment_id,
+                          gene_comment.source_id,gene_comment.stable_id, c.comment_date, c.headline,
+                         files.filecount, references.pmids, gene_counts.geneCount,
+                         &&selectReviewed&&
+                          u.first_name || ' ' || u.last_name || ', ' || u.organization as user_name_org
+                  FROM @COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c, @USER_SCHEMA@users@USER_DBLINK@ u,
+                        gene_comment,
+                       (SELECT comment_id, count(*) as filecount
+                        FROM @COMMENT_SCHEMA@CommentFile@COMMENT_DBLINK@
+                        GROUP BY comment_id) files,
+                       (SELECT comment_id,
+                                apidb.tab_to_string(set(cast(collect(source_id) as apidb.varchartab)),',') as pmids
+                        FROM @COMMENT_SCHEMA@CommentReference@COMMENT_DBLINK@
+                        WHERE database_name='pubmed'
+                        GROUP BY comment_id
+                        ) references,
+                       (SELECT comment_id, count(source_id) as geneCount
+                        FROM gene_comment
+                        GROUP BY comment_id) gene_counts,
+                        (select dr.primary_identifier as comment_id, gf.source_id as gene_source_id
+                        FROM sres.dbref dr,
+                                dots.DbRefNaFeature drnf,
+                               dots.GeneFeature gf,
+                                sres.externaldatabase ed,
+                                sres.externaldatabaserelease edr
+                         WHERE drnf.db_ref_id = dr.db_ref_id
+                          AND gf.na_feature_id = drnf.na_feature_id
+                          AND ed.external_database_id = edr.external_database_id
+                          AND edr.external_database_release_id = dr.external_database_release_id
+                          AND ed.name like '%_dbxref_EuPathDB_comment_RSRC'
+                       ) reviewed_comments
+                  &&fromReviewed&&
+                  WHERE c.project_name = '@PROJECT_ID@'
+                    AND c.comment_target_id = 'gene'
+                    AND c.review_status_id not in ('rejected', 'task')
+                    -- no need for separate sql for toxo .. just want to exclude expert/community comments here
+                    AND ((c.project_name = 'GiardiaDB' and c.review_status_id != 'community') OR c.project_name != 'GiardiaB')
+                    AND c.is_visible = 1
+                    AND c.comment_id = gene_comment.comment_id
+                    AND c.user_id = u.user_id
+                    AND c.comment_id = files.comment_id(+)
+                    AND c.comment_id = references.comment_id(+)
+                    and c.comment_id = gene_counts.comment_id(+)
+                    AND to_char(gene_comment.comment_id) = reviewed_comments.comment_id(+)
+                    and gene_comment.source_id = reviewed_comments.gene_source_id(+)
+                    &&whereReviewed&&
+                  order by gene_comment.comment_id desc
             ]]>
             </sql>
         </sqlQuery>
+
 
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
