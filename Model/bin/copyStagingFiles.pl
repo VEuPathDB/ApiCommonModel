@@ -103,8 +103,8 @@ foreach my $p (@projects) {
   }
 
   ## fix Blast file names
-  print "fix Blast file names \n";
-  finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
+  #  print "fix Blast file names \n";
+  #  finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
 
 
   ## fix permissions
