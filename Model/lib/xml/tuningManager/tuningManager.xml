@@ -1472,7 +1472,7 @@ tablespace indx
     <internalDependency name="TranscriptLocation"/>
     <internalDependency name="SnpAttributes"/>
     <externalDependency name="apidb.GeneFeatureName"/>
-    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.AaLocation"/>
@@ -1509,12 +1509,8 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        gf.na_feature_id AS gene_na_feature_id,
        LEAST(nl.start_min, nl.end_max) AS gene_start_min,
        GREATEST(nl.start_min, nl.end_max) AS gene_end_max,
-       CASE  WHEN (COALESCE(preferred_name.name, any_name.name) is NOT NULL) THEN
-            SUBSTR(COALESCE(preferred_product.product, any_product.product, gf.product, 'unspecified product'), 1, 300)
-            || ' (' || COALESCE(preferred_name.name, any_name.name) || ')' 
-           ELSE SUBSTR(COALESCE(preferred_product.product, any_product.product, gf.product, 'unspecified product'), 1, 300)
-           END AS gene_product,
        COALESCE(preferred_name.name, any_name.name) AS gene_name,
+       '' AS gene_product,
        REPLACE(so.name, '_', ' ') AS gene_type,
        gi.gene_id,
        transcripts.gene_transcript_count,
@@ -1540,6 +1536,8 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        --next the transcript attributes: 
        t.source_id AS transcript_source_id,
        t.na_feature_id,
+       SUBSTR(COALESCE(preferred_product.product, any_product.product, 'unspecified product'), 1, 300) 
+            AS transcript_product,
        tl.start_min as coding_start,
        tl.end_max as coding_end,
        tl.is_reversed,   --CHECK if needed
@@ -1640,12 +1638,12 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
           and ti.name = 'GeneFeature'
        ) orthologs,
      (select na_feature_id, max(product) as product
-      from apidb.GeneFeatureProduct
+      from apidb.TranscriptProduct
       where is_preferred = 1
       group by na_feature_id
      ) preferred_product,
      (select na_feature_id, max(product) as product
-      from apidb.GeneFeatureProduct
+      from apidb.TranscriptProduct
       group by na_feature_id
      ) any_product,
      (select na_feature_id, max(name) as name
@@ -1728,6 +1726,16 @@ WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = entrez_table.na_feature_id(+)
   AND gf.na_feature_id = olds.na_feature_id(+)
   AND t.source_id = pa.transcript_source_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+update prefixTranscriptAttributes&1 ga
+set ga.gene_product = 
+ (select apidb.tab_to_string(set(cast(COLLECT(transcript_product order by transcript_product) as apidb.varchartab)), ', ') 
+ from &prefixTranscriptAttributes&1 gb
+                     where gb.gene_source_id = ga.gene_source_id
+                     group by ga.gene_source_id)
       ]]>
     </sql>
     <sql>
