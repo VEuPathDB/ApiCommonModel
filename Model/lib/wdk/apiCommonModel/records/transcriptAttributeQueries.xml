@@ -127,17 +127,25 @@
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
-            <column name="transcripts_per_gene"/>
+            <column name="transcripts_found_per_gene"/>
+            <column name="transcript_index_per_gene"/>
+            <column name="has_missing_transcripts"/>
             <sql>
               <![CDATA[
-              select idsql_1.source_id,idsql_1.gene_source_id, '@PROJECT_ID@' AS project_id, cnt.transcripts_per_gene
+              select idsql_1.source_id,idsql_1.gene_source_id, '@PROJECT_ID@' AS project_id, cnt.transcripts_found_per_gene, index1.row_number as transcript_index_per_gene, case when ta.gene_transcript_count = cnt.transcripts_found_per_gene then 'no' else 'yes' end as has_missing_transcripts
               from 
                 (##WDK_ID_SQL##) idsql_1,
-                (select idsql_2.gene_source_id, count (idsql_2.source_id) as transcripts_per_gene
+                (select idsql_2.gene_source_id, count (idsql_2.source_id) as transcripts_found_per_gene
                    from (##WDK_ID_SQL##) idsql_2
                    group by (idsql_2.gene_source_id)
-                 ) cnt
+                 ) cnt,
+                (SELECT gene_source_id, source_id, ROW_NUMBER() OVER (partition BY gene_source_id order by source_id ) AS row_number
+                 FROM (##WDK_ID_SQL##)
+                ) index1,
+                apidbtuning.transcriptattributes ta
               where idsql_1.gene_source_id = cnt.gene_source_id
+              AND idsql_1.source_id        = index1.source_id
+              AND idsql_1.source_id      = ta.source_id
               ]]>
             </sql>
         </sqlQuery>
@@ -242,6 +250,7 @@
             <column name="gene_orthomcl_name"/>
             <column name="gene_ortholog_number"/>
             <column name="gene_paralog_number"/>
+            <column name="gene_transcript_count"/>
             <column name="orthomcl_link"/>
             <column name="cyc_gene_id" sortingColumn="gene_source_id"/>
             <column name="cyc_db" sortingColumn="organism_full"
@@ -371,6 +380,7 @@
                    trim(to_char(bfmv.gene_end_max,'999,999,999')) as gene_end_max_text,
                    bfmv.gene_product, bfmv.gene_name, gene_type, 
                    bfmv.gene_exon_count, 
+                   bfmv.gene_transcript_count, 
                    representative_gene,
                    DECODE(bfmv.is_deprecated, 0, 'No', 1, 'Yes') AS is_deprecated,
                    bfmv.gene_context_start, bfmv.gene_context_end,
