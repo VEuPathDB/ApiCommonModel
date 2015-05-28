@@ -101,11 +101,47 @@
     </sql>
   </tuningTable>
 
+  <tuningTable name="OntologyLevels" prefixEnabled="true">
+    <comment>the max and min depth of each ontology term in OntologyRelationship. Used by the GoTermSummary tuning table</comment>
+    <externalDependency name="sres.OntologyRelationship"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <sql>
+      <![CDATA[
+        create table &prefixOntologyLevels&1 nologging as
+        with is_a_links -- not closure, just real links
+             as (select subject_term_id, object_term_id
+                 from sres.OntologyRelationship rel, sres.OntologyTerm pred
+                 where rel.predicate_term_id = pred.ontology_term_id
+                   and pred.name = 'is_a'),
+             roots -- terms with no parents
+             as ( select object_term_id from is_a_links
+                 minus
+                  select subject_term_id from is_a_links),
+             levels -- terms and all their depths, unaggregated
+             as ( select object_term_id as ontology_term_id, 0 as depth from roots
+                 union
+                  select subject_term_id as ontology_term_id, level + 1 as depth
+                  from is_a_links
+                  start with object_term_id in (select object_term_id from roots)
+                  connect by object_term_id = prior subject_term_id)
+        select ontology_term_id, min(depth) as min_depth, max(depth) as max_depth
+        from levels
+        group by ontology_term_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index olev_termix&1 on OntologyLevels&1 (ontology_term_id, min_depth, max_depth)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="GoTermSummary" prefixEnabled="true">
     <comment>GoTermSummary: each row represents one GO term assignment to one gene.
          (Typically, a gene has multiple such assignments.) This is used for
           finding gene-GO mappings, such as for the gene-page GO table.
      </comment>
+    <internalDependency name="OntologyLevels"/>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.GoAssociation"/>
     <externalDependency name="dots.GoAssociationInstance"/>
@@ -148,18 +184,20 @@
                    and gai.go_association_instance_id = gaiec.go_association_instance_id
                    and gaiec.go_evidence_code_id = gec.ontology_term_id
                    and gt.ancestor_term_id = rt.ontology_term_id(+))
-        select gene_source_id, transcript_source_id, aa_sequence_id, is_not, go_id,
-               go_term_id, ontology, go_term_name, source, evidence_code, displayable_source,
-               cast (1 as number(1)) as is_leaf
-        from explicit_mapping
+        select em.gene_source_id, em.transcript_source_id, em.aa_sequence_id, em.is_not, em.go_id,
+               em.go_term_id, em.ontology, em.go_term_name, em.source, em.evidence_code, em.displayable_source,
+               cast (1 as number(1)) as is_leaf, ol.min_depth as depth
+        from explicit_mapping em, OntologyLevels ol
+             where em.go_term_id = ol.ontology_term_id(+)
         union
         select em.gene_source_id, em.transcript_source_id, em.aa_sequence_id, em.is_not,
                substr(ot.source_id, 1, 25) as go_id, ot.ontology_term_id as go_term_id, em.ontology,
                substr(ot.name, 1,250) as go_term_name, em.source, em.evidence_code, em.displayable_source,
-               cast (1 as number(1)) as is_leaf
-        from explicit_mapping em, sres.OntologyRelationship orel, sres.OntologyTerm ot
+               cast (1 as number(1)) as is_leaf, ol.min_depth as depth
+        from explicit_mapping em, sres.OntologyRelationship orel, sres.OntologyTerm ot, OntologyLevels ol
         where em.go_term_id = orel.subject_term_id
           and orel.object_term_id = ot.ontology_term_id
+          and em.go_term_id = ol.ontology_term_id(+)
       ]]>
     </sql>
     <sql>
