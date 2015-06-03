@@ -43,6 +43,8 @@
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Gene ID -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+
       <sqlQuery name="SnpsByGeneId" doNotTest="true" includeProjects="PlasmoDB"
              isCacheable="true">
 
@@ -418,7 +420,26 @@ where major_allele_freq_chosen > $$MinPercentMinorAlleles$$
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- by strain                                      -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="SnpsByStrain" includeProjects="PlasmoDB" isCacheable="true">
+    <processQuery name="SnpsByStrain" includeProjects="PlasmoDB,ToxoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,CryptoDB,AmoebaDB,EuPathDB,FungiDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindChipPolymorphismsPlugin">
+        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
+                  quote="true" queryRef="organismVQ.withChromosomesSNPs">
+              <help>Select Organism you wish to query against.</help>
+        </paramRef>
+          <paramRef ref="snpChipParams.snp_assay_type"/>
+          <paramRef ref="sharedParams.snpchip_strain_meta"/>
+          <paramRef ref="snpChipParams.WebServicesPath"/>
+          <paramRef ref="snpChipParams.ReadFrequencyPercent" />
+          <paramRef ref="snpChipParams.MinPercentMinorAlleles"/>
+          <paramRef ref="snpParams.MinPercentIsolateCalls" />
+          <wsColumn name="source_id" width="60" wsName="SourceId"/>
+          <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+          <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/> <!-- need width 8 for oracle to give us xx.x precision in the display -->
+          <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+          <wsColumn name="Phenotype" width="15"/>
+    </processQuery>
+
+    <sqlQuery name="SnpsByStrain_old" includeProjects="PlasmoDB" isCacheable="true">
  
         <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
                   quote="true" queryRef="organismVQ.withChromosomesSNPs">
@@ -443,110 +464,63 @@ where major_allele_freq_chosen > $$MinPercentMinorAlleles$$
 
         <sql>
             <![CDATA[
-with variants as (
-                 SELECT var.parent_id,
-                    count(var.na_feature_id) as allele_count,
-                    var.allele,
-                    var.product,
-                    apidb.tab_to_string(set(cast(COLLECT(distinct var.strain) AS apidb.varchartab)), ', ') as strains,
-                    count(var.strain) as strain_count
-             FROM   dots.SeqVariation var
-             WHERE  var.organism = $$organism$$
-                AND var.strain in ($$snpchip_strain_meta$$)
-                and name in ($$snp_assay_type$$)
-             GROUP BY parent_id,allele,product
-            
-             order by parent_id,allele
+with alleles as ( 
+                       select var.parent_id,
+                        var.allele,
+                        var.product,
+                        var.strain
+                         from DOTS.SEQVARIATION VAR 
+                        where organism = $$organism$$
+                          AND strain in ($$snpchip_strain_meta$$)
+                          and name in ($$snp_assay_type$$)
+                     ),
+major as ( 
+              select main.*, alleles.product 
+                from (
+                        SELECT var.parent_id,
+                               stats_mode(var.allele) as allele,
+                               apidb.tab_to_string(set(cast(COLLECT(distinct var.strain) AS apidb.varchartab)), ', ') as strains,
+                               count(var.strain) as strain_count
+                          FROM dots.SeqVariation var, alleles ma
+                         WHERE ma.allele = var.allele
+                           and ma.parent_id = var.parent_id
+                           AND ma.strain = var.strain
+                      GROUP BY var.parent_id) main,
+                      alleles
+                      where main.parent_id =alleles.parent_id
+                        and main.allele = alleles.allele
+                       
+             order by main.parent_id
       ),
-alleles as (
-select           one.parent_id,
-                 one.allele allele_one,
-                 one.allele_count,
-                 two.allele as allele_two,
-                 1 as allele_count_equal
-          from variants one,variants two
-               where one.parent_id = two.parent_id
-                 and one.allele_count = two.allele_count
-                 and one.allele != two.allele
-          Union
-          select one.parent_id,
-                 one.allele allele_one,
-                 one.allele_count,
-                 two.allele as allele_two,
-                 0 as allele_count_equal
-          from variants one,variants two
-               where one.parent_id = two.parent_id
-                 and one.allele_count > two.allele_count
-          order by parent_id
-          ),
-ranked_alleles as (
-      select parent_id,
-             allele_one as major_allele,
-             allele_two as minor_allele 
-        from alleles
-       where  parent_id in (select parent_id 
-                              from alleles
-                            group by parent_id
-                            having count(parent_id) =1)
-         and allele_count_equal  = 0
-      union
-      select major.parent_id,
-             major.allele_one as major_allele,
-             minor.allele_one as minor_allele 
-             
-        from alleles major, alleles minor
-       where  major.parent_id = minor.parent_id
-         and major.allele_count > minor.allele_count
-         and major.allele_count_equal  = 0
-      union
-      select major.parent_id,
-             major.allele_one as major_allele,
-             minor.allele_one as minor_allele 
-             
-        from alleles major, alleles minor, APIDBTUNING.SNPCHIPATTRIBUTES snp
-       where  major.parent_id = minor.parent_id
-         and major.allele_count_equal  = 1
-         and major.allele_one = minor.allele_two
-         and major.allele_two = minor.allele_one
-         and snp.na_feature_id = major.parent_id
-         and major.allele_one = snp.major_allele
-)
-select * from (
-  select  snp.source_id, 
-       '@PROJECT_ID@' as project_id, 
-       snp.gene_source_id as gene, 
-       snp.start_min as snp_location,
-       snp.position_in_protein as prot_pos, 
-         ra.major_allele as major_allele_chosen,
+minor as  (
+                 SELECT var.parent_id,
+                        apidb.tab_to_string(set(cast(COLLECT(distinct var.allele) AS apidb.varchartab)), ', ') as alleles,
+                        apidb.tab_to_string(set(cast(COLLECT(distinct var.product) AS apidb.varchartab)), ', ') as products,
+                        apidb.tab_to_string(set(cast(COLLECT(distinct var.strain) AS apidb.varchartab)), ', ') as strains,
+                        count(var.strain) as strain_count
+                                      from dots.SeqVariation var, major ma
+                    WHERE ma.allele != var.allele
+                      and ma.parent_id = var.parent_id
+                 GROUP BY var.parent_id
+                order by var.parent_id
+ )
+select distinct * from ( 
+  select  snp.source_id,
+          'PlasmoDB' as project_id,
+          snp.gene_source_id as gene,
+          snp.start_min as snp_location,
+          snp.position_in_protein as prot_pos,
+         major.allele as major_allele_chosen,
          minor.alleles as minor_alleles_chosen,
-         round(100*(major.allele_count/total.allele_count),2) as major_allele_freq_chosen,
-         round(100*(minor.allele_count/total.allele_count),2) as minor_allele_freq_chosen,
+         round(100*(major.strain_count/(major.strain_count + minor.strain_count)),2) as major_allele_freq_chosen,
+         round(100*(minor.strain_count/(major.strain_count + minor.strain_count)),2) as minor_allele_freq_chosen,
          major.product as major_product_chosen,
          minor.products as minor_products_chosen,
          major.strains as major_strains_chosen,
          minor.strains as minor_strains_chosen
-         from ranked_alleles ra, apidbtuning.SnpChipAttributes snp,
-              (select distinct var.* 
-                 from variants var,ranked_alleles ra 
-                where var.parent_id = ra.parent_id
-                  and var.allele = ra.major_allele) major,
-              (select var.parent_id, sum (allele_count) as allele_count,
-                      listagg(var.strains,',') within group (order by var.strains) as strains, 
-                      listagg( ra.minor_allele,',') within group (order by strain_count) as alleles,
-                      listagg( var.product,',') within group (order by strain_count) as products 
-                 from variants var,ranked_alleles ra 
-                where var.parent_id = ra.parent_id
-                  and var.allele != ra.major_allele
-                  group by var.parent_id) minor,
-              (select var.parent_id, sum(allele_count) as allele_count
-                 from variants var,ranked_alleles ra 
-                where var.parent_id = ra.parent_id
-                group by var.parent_id) total
-           where ra.parent_id = major.parent_id
-           and   ra.parent_id = minor.parent_id
-           and   ra.parent_id = total.parent_id
-           and snp.na_feature_id = ra.parent_id
-          AND snp.type in ($$snp_assay_type$$)
+         from apidbtuning.SnpChipAttributes snp, major, minor
+           where snp.na_feature_id = major.parent_id
+           and   snp.na_feature_id = minor.parent_id
 )
 where major_allele_freq_chosen > $$MinPercentMinorAlleles$$
            ]]>
