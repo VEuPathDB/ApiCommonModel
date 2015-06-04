@@ -5254,37 +5254,29 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
       <![CDATA[
 CREATE TABLE &prefixCompoundAttributes&1 NOLOGGING AS
 SELECT comp.compound_id,  'CID:' || comp.compound_id AS source_id, 
-              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 400) AS preferred_name,
-              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 400) AS compound_name,
-	      substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substSyns.name)) AS apidb.varchartab)), ', '), 1, 400) AS substance_name,
-	      substr(apidb.tab_to_string(set(cast(COLLECT(to_char(iupacTable.iupac_name)) AS apidb.varchartab)), ', '), 1, 400) AS iupac_name,
-              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substTable.substance_id)) AS apidb.varchartab)), ', '), 1, 80) AS substance_id,
-              substr(wtTable.mol_wt, 1, 20) as mol_wt,
-              substr(REGEXP_REPLACE(formTable.formula,'(\d)','<sub>\1</sub>'), 1, 300) AS formula
+              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 1000) AS preferred_name,
+              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 1000) AS compound_name,
+              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substSyns.name)) AS apidb.varchartab)), ', '), 1, 1000) AS substance_name,
+               substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substTable.substance_id)) AS apidb.varchartab)), ', '), 1, 80) AS substance_id,
+              molecularWeight as mol_wt,
+              substr(REGEXP_REPLACE(molecularFormula,'(\d)','<sub>\1</sub>'), 1, 300) AS formula,
+              iupacName AS iupac_name, inchikey
         FROM apidb.PubChemCompound comp,
-                  (SELECT compound_id , value as name FROM apidb.PubChemCompound where property='Name') nameTable,
-                  (SELECT compound_id , value as mol_wt FROM apidb.PubChemCompound where property='MolecularWeight') wtTable,
-                  (SELECT compound_id , value as formula FROM apidb.PubChemCompound where property='MolecularFormula') formTable,
-                  (SELECT compound_id , value as iupac_name FROM apidb.PubChemCompound where property='IUPACName') iupacTable,
-                  (SELECT substance_id, value as cid FROM apidb.PubChemSubstance where property='CID' )  substTable,
+                  (SELECT pubchem_compound_id , value as name FROM apidb.PubChemCompoundProperty where property='Name') nameTable,    
+                  (SELECT substance_id, compound_id  FROM apidb.PubChemSubstance )  substTable,
                   (SELECT compound_id, name FROM (
-        SELECT  c.compound_id,  apidb.tab_to_string(set(cast(COLLECT(s2.value) as apidb.varchartab)),'_MULTIPLE_') as name
-	FROM apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, apidb.PubChemCompound c
-	WHERE s1.property='CID' and s2.property = 'Synonym'
-	AND  s1.substance_id = s2.substance_id
-	AND  s1.value=c.compound_id
-	AND NOT  REGEXP_LIKE(s2.value, '^C(\d)+$')    /* exclude KEGG Copmpound IDs */
-	AND NOT  REGEXP_LIKE(s2.value, '^(\d)+(\-)')  /* exclude entries like '24959-67-9'  */
-	AND c. property = 'Synonym' AND c.value = s2.value
+        SELECT  c.compound_id, apidb.tab_to_string(set(cast(COLLECT(sp.value) as apidb.varchartab)),'_MULTIPLE_') as name
+	FROM apidb.PubChemSubstance s, apidb.PubChemSubstanceProperty sp, apidb.PubChemCompound c
+	WHERE sp.pubchem_substance_id = s.pubchem_substance_id
+  AND s.compound_id = c.compound_id
+	AND NOT  REGEXP_LIKE(sp.value, '^C(\d)+$')    /* exclude KEGG Copmpound IDs */
+	AND NOT  REGEXP_LIKE(sp.value, '^(\d)+(\-)')  /* exclude entries like '24959-67-9'  */
 	GROUP by c.compound_id
-	) WHERE name NOT LIKE '%_MULTIPLE_%') substSyns
-       WHERE comp.compound_id = nameTable.compound_id (+)
-       AND comp.compound_id = wtTable.compound_id
-       AND comp.compound_id = formTable.compound_id
-       AND comp.compound_id = iupacTable.compound_id (+)
-       AND comp.compound_id = substTable.cid (+)
+	) WHERE name NOT LIKE '%_MULTIPLE_%' ) substSyns
+       WHERE comp.pubchem_compound_id = nameTable.pubchem_compound_id (+)
+       AND comp.compound_id = substTable.compound_id (+)
        AND comp.compound_id = substSyns.compound_id (+)
-       GROUP BY comp.compound_id,wtTable.mol_wt,formTable.formula
+       GROUP BY comp.compound_id, molecularWeight, molecularFormula, iupacName, inchikey
       ]]>
     </sql>
     <sql>
