@@ -141,75 +141,35 @@
     <!-- Isolate Pattern -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="SnpsByIsolatePattern" doNotTest="true" includeProjects="PlasmoDB" 
-          isCacheable="true">
-        <!-- <paramRef ref="snpChipParams.isolate_set_a"/> -->
-        <paramRef ref="organismParams.organism" prompt="Organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withSNPs">
-          <help>Select the organism you wish to search.  Note: this is the genome to which the isolate resequencing reads were aligned.</help>
-        </paramRef>
-        <paramRef ref="snpChipParams.snp_assay_type"/>
-        <paramRef ref="sharedParams.snpchip_strain_meta_a" prompt="Set A Isolates" quote="true" />
-        <paramRef ref="snpChipParams.set_a_percent"/>
-        <!-- <paramRef ref="snpChipParams.isolate_set_b"/> -->
-        <paramRef ref="sharedParams.snpchip_strain_meta_b" prompt="Set B Isolates" quote="true" />
-        <paramRef ref="snpChipParams.set_b_percent"/>
-        <column name="source_id"/> 
-        <column name="project_id"/>
-        <column name="set_a_allele"/>
-        <column name="set_b_allele"/>
-        <column name="set_a_major_percent"/>
-        <column name="set_b_major_percent"/>
-        <sql>
-            <![CDATA[
-select distinct seta.source_id,'@PROJECT_ID@' as project_id,
-       seta.allele as set_a_allele,setb.allele as set_b_allele,
-       round(seta.total/(select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * 100) as set_a_major_percent,
-       round(setb.total/(select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_b$$))) * 100) as set_b_major_percent
-FROM
-(
-SELECT snp.source_id, var.allele, count(*) as total
-FROM   apidbtuning.snpchipattributes snp,
-       dots.seqvariation var
-WHERE snp.na_feature_id = var.parent_id
-  and var.allele is not null
-  and snp.type in ($$snp_assay_type$$)
-  and var.strain in ($$snpchip_strain_meta_a$$)
---	and snp.major_allele_frequency >= $$set_a_percent$$ /100
-  group by snp.source_id, var.allele
-  having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_a$$))) * $$set_a_percent$$ / 100
-) seta,
-(
-SELECT snp.source_id, var.allele, count(*) as total
-FROM   apidbtuning.snpchipattributes snp,
-       dots.seqvariation var
-WHERE snp.na_feature_id = var.parent_id
-  and var.allele is not null
-  and snp.type in ($$snp_assay_type$$)
-  and var.strain in ($$snpchip_strain_meta_b$$)
---	and snp.major_allele_frequency >=  $$set_b_percent$$ /100
-  group by snp.source_id, var.allele
-  having count(*) >= (select count(*) FROM table(SYS.DBMS_DEBUG_VC2COLL($$snpchip_strain_meta_b$$))) * $$set_b_percent$$ / 100
-) setb
-where seta.source_id = setb.source_id
- and seta.allele != setb.allele 
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="SnpsByIsolatePattern" includeProjects="EuPathDB" doNotTest="true"
-             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
-        <paramRef ref="snpChipParams.isolate_set_a"/>
-        <paramRef ref="snpChipParams.set_a_percent"/>
-        <paramRef ref="snpChipParams.isolate_set_b"/>
-        <paramRef ref="snpChipParams.set_b_percent"/>
-   
-        <wsColumn name="source_id" width="32" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="set_a_allele"/>
-        <wsColumn name="set_b_allele"/>
-        <wsColumn name="set_a_count"/>
-        <wsColumn name="set_b_count"/>
+    <processQuery name="SnpsByIsolatePattern" includeProjects="PlasmoDB" 
+            processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindChipSnpMajorAllelesPlugin">
+      <!-- need to have quote=true so that dependent param query works.  the wsf plugin removes them for its use -->
+      <paramRef ref="organismParams.organism" prompt="Organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withChromosomesSNPs">
+        <help>The Organism defines the species identity of the Isolates and the genome against which each isolate's SNPs were called.  
+        After choosing an Organism, the set of isolates available for forming groups is limited to isolates aligned to your chosen Organism's genome.</help>
+      </paramRef>
+      <paramRef ref="snpChipParams.snp_assay_type"/>
+      <paramRef ref="sharedParams.snpchip_strain_meta_a" prompt="Set A Isolates" quote="false" />
+      <paramRef ref="snpParams.ReadFrequencyPercent"  prompt="Set A read frequency threshold &gt;= "/>
+      <paramRef ref="snpParams.MinPercentMajorAlleles" prompt="Set A major allele frequency &gt;= "/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" prompt="Set A percent isolates with base call &gt;= "/>
+      <paramRef ref="snpChipParams.WebServicesPath"/>
+      <paramRef ref="sharedParams.snpchip_strain_meta_b" prompt="Set B Isolates" quote="false" />
+      <paramRef ref="snpParams.ReadFrequencyPercentTwo"  prompt="Set B read frequency threshold &gt;= "/>
+      <paramRef ref="snpParams.MinPercentMajorAllelesTwo" prompt="Set B major allele frequency &gt;= "/>
+      <paramRef ref="snpParams.MinPercentIsolateCallsTwo" prompt="Set B percent isolates with base call &gt;= "/>
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="MajorAlleleA" width="3"/>
+      <wsColumn name="MajorAllelePctA" width="8" columnType="float"/>
+      <wsColumn name="IsTriallelicA" width="3"/>
+      <wsColumn name="MajorProductA" width="3"/>
+      <wsColumn name="MajorProductIsVariableA" width="3"/>
+      <wsColumn name="MajorAlleleB" width="3"/>
+      <wsColumn name="MajorAllelePctB" width="8" columnType="float"/>
+      <wsColumn name="IsTriallelicB" width="3"/>
+      <wsColumn name="MajorProductB" width="3"/>
+      <wsColumn name="MajorProductIsVariableB" width="3"/>
     </processQuery>
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
