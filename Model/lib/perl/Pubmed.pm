@@ -50,7 +50,6 @@ sub getFullRecord {
 sub getDoi {
   my ($self, $pmid) = @_;
 
-  my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item";
   my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item[\@Name='DOI']";
   my $nodeset = $self->{xp}->find($searchString);
 
@@ -66,7 +65,6 @@ sub getDoi {
 sub getTitle {
   my ($self, $pmid) = @_;
 
-  my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item";
   my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item[\@Name='Title']";
   my $nodeset = $self->{xp}->find($searchString);
 
@@ -78,13 +76,37 @@ sub getTitle {
 sub getLastAuthor {
   my ($self, $pmid) = @_;
 
-  my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item";
   my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item[\@Name='LastAuthor']";
   my $nodeset = $self->{xp}->find($searchString);
 
   my $node = $nodeset->get_node(1);
   return $node ? $node->string_value : '';
 
+}
+
+sub getAuthors {
+  my ($self, $pmid) = @_;
+
+  my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item[\@Name='AuthorList']/Item";
+  my $nodeset = $self->{xp}->find($searchString);
+
+  my @authors;
+  foreach my $node ($nodeset->get_nodelist) {
+    push(@authors, $node->string_value);
+  }
+
+  return join(', ', @authors);
+
+}
+
+sub getFirstAuthor {
+  my ($self, $pmid) = @_;
+
+  my $searchString = "/eSummaryResult/DocSum[Id='$pmid']/Item[\@Name='AuthorList']/Item";
+  my $nodeset = $self->{xp}->find($searchString);
+
+  my $node = $nodeset->get_node(1);
+  return $node ? $node->string_value : '';
 }
 
 1;
