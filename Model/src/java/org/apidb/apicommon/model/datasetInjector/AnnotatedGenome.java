@@ -218,6 +218,7 @@ phylum.put("Yarrowia","Saccharomycetes");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
 
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
