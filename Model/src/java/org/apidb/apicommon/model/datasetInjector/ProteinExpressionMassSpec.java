@@ -20,6 +20,19 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       String datasetDisplayName = getPropValue("datasetDisplayName");
       String cleanDatasetDisplayName = cleanString(datasetDisplayName);
       setPropValue("cleanDatasetDisplayName",cleanDatasetDisplayName);
+
+       String datasetNamePattern = getPropValue("datasetNamePattern");
+
+      if (datasetNamePattern == null || datasetNamePattern.equals("")) {
+          setPropValue("edNameParamValue", getDatasetName());
+      }
+      else {
+          setPropValue("edNameParamValue",datasetNamePattern);
+      }
+
+
+
+
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
 
       if(getPropValueAsBoolean("isPhosphoProteomics")) {
