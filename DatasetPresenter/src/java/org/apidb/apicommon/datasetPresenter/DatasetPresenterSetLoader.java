@@ -13,6 +13,7 @@ import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.gusdb.fgputil.CliUtil;
 import org.gusdb.fgputil.db.platform.SupportedPlatform;
 
@@ -354,8 +355,8 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetPresenter" + suffix;
     String sql = "INSERT INTO "
         + table
-        + " (dataset_presenter_id, name, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope, build_number_introduced)"
-        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        + " (dataset_presenter_id, name, stable_id, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope, build_number_introduced)"
+        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -366,6 +367,7 @@ public class DatasetPresenterSetLoader {
     stmt.setInt(i++, datasetPresenterId);
 
     stmt.setString(i++, datasetPresenter.getDatasetName());
+    stmt.setString(i++, DigestUtils.sha1Hex("DS_" + datasetPresenter.getDatasetName()).substring(0,10));
     stmt.setString(i++, datasetPresenter.getDatasetNamePattern());
     stmt.setString(i++, datasetPresenter.getDatasetDisplayName());
     stmt.setString(i++, datasetPresenter.getDatasetShortDisplayName());
