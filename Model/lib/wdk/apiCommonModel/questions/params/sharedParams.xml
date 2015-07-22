@@ -689,7 +689,7 @@
              allowEmpty="true"
              emptyValue="No Match"/>
          <suggest includeProjects="CryptoDB,EuPathDB"
-             default="(Example: AAEE01000009)"
+             default="(Example: CM000436)"
              allowEmpty="true"
              emptyValue="No Match"/>
          <suggest includeProjects="ToxoDB"
@@ -941,7 +941,7 @@
                       prompt="Isolates"
                       multiPick="true"
                       dependedParamRef="organismParams.organism,snpChipParams.snp_assay_type"
-                      quote="true"
+                      quote="false"
                       suppressNode="false">
          <help>
               Select isolates to compare using associated meta data.
@@ -957,7 +957,7 @@
                       prompt="Isolates"
                       multiPick="true"
                       dependedParamRef="organismParams.organism,snpChipParams.snp_assay_type"
-                      quote="true"
+                      quote="false"
                       suppressNode="false">
          <help>
            Select characteristics to filter the isolates you want to include for set A .... for example, choose Country in the left panel and select the country or countries from which you want to choose isolates for SNP detection.
@@ -1619,13 +1619,13 @@ order by term
             <column name="term"/>
             <sql>
 	      SELECT * FROM (
-		SELECT distinct chromosome AS term , chromosome AS internal, chromosome_order_num AS chromosome_order_num
+		SELECT distinct chromosome AS term , source_id AS internal, chromosome_order_num AS chromosome_order_num
 		FROM ApidbTuning.GenomicSequenceAttributes
 		WHERE organism  = $$organism$$
 		AND chromosome is not null
                UNION
                SELECT 'Choose chromosome' as term,
-                    'Choose chromosome' as internal,
+                    'choose' as internal,
                     -1 as chromosome_order_num
              FROM dual
 	     )
@@ -1754,11 +1754,11 @@ order by term
           <column name="internal"/>
           <column name="term"/>
           <sql>
-SELECT distinct st.strain as term, st.strain as internal
-FROM ApiDBTuning.SnpChipStrains st
-WHERE st.organism in ( $$organism$$ )
-AND      st.name in ($$snp_assay_type$$)
-ORDER BY st.strain
+            SELECT distinct strain as term, strain || '_' || replace(name,'Broad_%') as internal
+               FROM apidbTuning.SnpChipStrains
+            WHERE organism in ( $$organism$$ )
+                 AND      name in ($$snp_assay_type$$)
+             ORDER BY strain
           </sql>
         </sqlQuery>
 
@@ -1774,10 +1774,10 @@ ORDER BY st.strain
           <column name="internal"/>
           <column name="term"/>
           <sql>
-SELECT distinct st.strain as term, st.strain as internal
-FROM ApiDBTuning.SnpChipStrains st
-WHERE st.organism in ( $$organism$$ )
-ORDER BY st.strain
+            SELECT distinct strain as term, strain || '_' || replace(name,'Broad_%') as internal
+               FROM apidbTuning.SnpChipStrains
+            WHERE organism in ( $$organism$$ )
+             ORDER BY strain
           </sql>
         </sqlQuery>
 
@@ -1835,7 +1835,7 @@ Select distinct ss.strain as term,
              and ss.biosample_db_name = ed.name
              and bs.external_database_release_id = edr.external_database_release_id
              and ss.organism = $$organism$$
-             and oe.value != 'StrainOrLine'
+             and oe.value not in ( 'StrainOrLine', 'Organism')
 Union 
 Select distinct ss.strain as term,
        ss.strain as value,
@@ -1846,6 +1846,13 @@ Select distinct 'ME49' as term,
        '2' as value,
         'Haplogroup' as property 
 from dual
+ union 
+select ss.strain as term,
+        REGEXP_REPLACE(dp.display_name,'<[^>]*>','') as value,
+        'Experiment' as property
+  from apidbtuning.SnpStrains ss, apidbTuning.DatasetPresenter dp
+  where dp.name =  ss.study_db_name 
+      and  ss.organism = $$organism$$
 ) where value is not null 
     and lower(value) != 'unknown'
     and regexp_like(value, '.*[[:alnum:]]+.*')
@@ -1984,7 +1991,7 @@ main as ( select fs.*
                      and ss.biosample_db_name = ed.name
                      and bs.external_database_release_id = edr.external_database_release_id
                      and ss.organism = $$organism$$
-                     and oe.value != 'StrainOrLine'
+                     and oe.value not in ( 'StrainOrLine', 'Organism')
                      and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
                      and lower(bmc.value) != 'unknown' 
                    Union 
@@ -2054,8 +2061,8 @@ where oe.value = main.property
             <column name="value" />
             <sql>
            <![CDATA[
-select * from ( 
- Select distinct ss.strain as term,
+select * from (    
+    Select distinct ss.strain as term,
       initcap (
       case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
            then (regexp_replace(bmc.value,'\s[^0-9]+',''))
@@ -2072,27 +2079,27 @@ select * from (
  Where  s.study_id = sb.study_id
    and  sb.bio_material_id = bs.bio_material_id
    and  bmc.bio_material_Id = bs.bio_material_Id
-   and  ss.ISOLATE_ID = bs.NAME
+   and  ss.strain = bs.NAME
    and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
    and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
    and  ss.organism = $$organism$$
    and  ss.name in ($$snp_assay_type$$)
-   and  oe.value != 'StrainOrLine'
- Union 
- Select distinct ss.strain as term,
+   and oe.value not in ( 'StrainOrLine', 'Organism')
+   Union 
+ Select distinct ss.isolate_id as term,
       ss.strain as value,
       'StrainOrLine' as property
  from Apidbtuning.SnpChipStrains ss
- union 
- select ss.strain as term,
+  union 
+ select ss.isolate_id as term,
         dp.display_name as value,
         'Experiment' as property
   from apidbtuning.SnpChipStrains ss, apidbTuning.DatasetPresenter dp
-  where dp.name =  ss.extdb_name
-   and  ss.organism = $$organism$$
-   and  ss.name in ($$snp_assay_type$$)
-)
-where value is not null
+  where dp.name =  ss.extdb_name 
+      and  ss.organism = $$organism$$
+      and  ss.name in ($$snp_assay_type$$)
+ )
+ where value is not null
   and lower(value) != 'unknown'
             ]]>
             </sql>
@@ -2116,105 +2123,62 @@ where value is not null
             <column name="spec_value" />
             <sql>
            <![CDATA[
-  With FullSpec as  (
-SELECT 'BioSampleID' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'BioSampleID' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'BioSampleID' as property, 'display' as spec_property, 'BioSampleID' as spec_value FROM dual
-UNION
-SELECT 'BioSourceType' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'BioSourceType' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'BioSourceType' as property, 'display' as spec_property, 'BioSourceType' as spec_value FROM dual
-UNION
-SELECT 'ClinicalPhenotype' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'ClinicalPhenotype' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'ClinicalPhenotype' as property, 'display' as spec_property, 'ClinicalPhenotype' as spec_value FROM dual
-UNION
-SELECT 'DateCollected' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'DateCollected' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'DateCollected' as property, 'display' as spec_property, 'DateCollected' as spec_value FROM dual
-UNION
-SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'GeographicLocation' as property, 'display' as spec_property, 'GeographicLocation' as spec_value FROM dual
-UNION
-SELECT 'Host' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'Host' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'Host' as property, 'display' as spec_property, 'Host' as spec_value FROM dual
-UNION
-SELECT 'HostAge' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'HostAge' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'HostAge' as property, 'display' as spec_property, 'HostAge' as spec_value FROM dual
-UNION
-SELECT 'HostSex' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'HostSex' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'HostSex' as property, 'display' as spec_property, 'HostSex' as spec_value FROM dual
-UNION
-SELECT 'Organism' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'Organism' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'Organism' as property, 'display' as spec_property, 'Organism' as spec_value FROM dual
-UNION
-SELECT 'SquidProject' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'SquidProject' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'SquidProject' as property, 'display' as spec_property, 'SquidProject' as spec_value FROM dual
-UNION
-SELECT 'StrainOrLine' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'StrainOrLine' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'StrainOrLine' as property, 'display' as spec_property, 'StrainOrLine' as spec_value FROM dual
-UNION
-SELECT 'Year' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'Year' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'Year' as property, 'display' as spec_property, 'Year' as spec_value FROM dual
-UNION
-SELECT 'country' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION 
-SELECT 'country' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'country' as property, 'display' as spec_property, 'Country' as spec_value FROM dual
-UNION
- SELECT 'Haplogroup' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'Haplogroup' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'Haplogroup' as property, 'display' as spec_property, 'Haplogroup' as spec_value FROM dual
-UNION
-SELECT 'ATCC#' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'ATCC#' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'ATCC#' as property, 'display' as spec_property, 'ATCC#' as spec_value FROM dual
-UNION
-SELECT 'Experiment' as property, 'type' as spec_property, 'string' as spec_value FROM dual
-UNION
-SELECT 'Experiment' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
-UNION
- SELECT 'Experiment' as property, 'display' as spec_property, 'Experiment' as spec_value FROM dual
-UNION
- SELECT 'Experiment' as property, 'parent' as spec_property, 'BioMaterialCharacteristics' as spec_value FROM dual
-) 
+  With property_set as (
+select distinct property
+from (    
+     select oe.value as property
+ from              
+      Apidbtuning.SnpChipStrains ss,
+        study.study s,
+        rad.studybiomaterial sb,
+        study.biosample bs,
+        study.biomaterialcharacteristic bmc,
+        study.Ontologyentry oe
+ Where  s.study_id = sb.study_id
+   and  sb.bio_material_id = bs.bio_material_id
+   and  bmc.bio_material_Id = bs.bio_material_Id
+   and  ss.strain = bs.NAME
+   and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+   and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
+   and  ss.organism = $$organism$$
+   and  ss.name in ($$snp_assay_type$$)
+   and oe.value not in ( 'StrainOrLine', 'Organism')
+   Union 
+ Select 'StrainOrLine' as property
+ from dual
+  union 
+ select 'Experiment' as property
+  from dual)
+ )
+, FullSpec as (
+ select ps.property as property,
+        'type' as spec_property, 
+        'string' as spec_value 
+  from property_set ps
+ where ps.property not in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+ select ps.property as property,
+        'type' as spec_property, 
+        'number' as spec_value 
+  from property_set ps
+ where ps.property in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+select ps.property as property,
+        'filter' as spec_property, 
+        'membership' as spec_value
+   from property_set ps
+  where ps.property not in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+ select ps.property as property,
+        'filter' as spec_property, 
+        'range' as spec_value 
+  from property_set ps
+ where ps.property in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+select ps.property as property,
+        'display' as spec_property, 
+        ps.property as spec_value 
+        from property_set ps)
 , main as (
 select distinct fs.*
             from fullspec fs,
@@ -2237,14 +2201,14 @@ select * from (
  Where  s.study_id = sb.study_id
    and  sb.bio_material_id = bs.bio_material_id
    and  bmc.bio_material_Id = bs.bio_material_Id
-   and  ss.ISOLATE_ID = bs.NAME
+   and  ss.strain = bs.NAME
    and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
    and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
    and  ss.organism = $$organism$$
    and  ss.name in ($$snp_assay_type$$)
    and  oe.value != 'StrainOrLine'
  Union 
- Select distinct ss.strain as term,
+ Select distinct ss.isolate_id as term,
       ss.strain as value,
       'StrainOrLine' as property
  from Apidbtuning.SnpChipStrains ss
@@ -2259,8 +2223,8 @@ where value is not null
   and lower(value) != 'unknown'
                   ) categories
             where fs.property = categories.property
-),
-Tree as (
+)
+, Tree as (
 (SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe, main
            START WITH oe.value = main.property
@@ -2274,8 +2238,10 @@ SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as 
 )
 union 
 select 'BioMaterialCharacteristics', 'parent' as spec_property, '' as spec_value from dual
-),
-FilterTree as  ( 
+union
+select 'Experiment', 'parent' as spec_property, 'BioMaterialCharacteristics' as spec_value from dual
+)
+, FilterTree as  ( 
 select * from tree
                  minus
                  (select * from tree where property in (select distinct property from tree where spec_value != 'BioMaterialCharacteristics'  )
@@ -2283,14 +2249,15 @@ select * from tree
                                        and spec_value != 'BioMaterialCharacteristics' 
                                                       
   )                                                  
-),               
-TreeDisplay as ( SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
+)               
+, TreeDisplay as ( 
+         SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
            FROM FilterTree
-           where property != 'BioMaterialCharacteristics'
-           Union
-           select 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
-           minus
-           SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
+          WHERE property != 'BioMaterialCharacteristics'
+          UNION
+         SELECT 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
+          MINUS 
+         SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
            FROM main
 )
 Select * from main

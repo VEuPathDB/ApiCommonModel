@@ -26,13 +26,9 @@
             <column name="product"/>
             <sql>
             <![CDATA[
-SELECT snp.source_id, 
+SELECT sf.source_id, 
        '@PROJECT_ID@' AS project_id,
-       CASE WHEN var.strain = 'iowa_II' THEN 'IOWA II'
-            WHEN var.strain = 'md' THEN 'MD'
-            WHEN var.strain = 'tu114' THEN 'TU114'
-       ELSE var.strain
-       END as strain,
+       var.strain,
        CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
             WHEN snp.gene_source_id is null THEN ''
        ELSE var.allele 
@@ -40,17 +36,13 @@ SELECT snp.source_id,
        var.allele,
        var.phenotype, 
        var.product
-FROM   ApiDBTuning.SnpAttributes snp, 
+FROM  
        DoTS.SeqVariation var, 
-       DoTS.SnpFeature sf, 
-       DoTS.NALocation l, 
-       DoTS.NASequence s
-WHERE  var.parent_id = snp.na_feature_id
-   AND sf.na_feature_id = snp.na_feature_id
-   AND l.na_feature_id = sf.na_feature_id
-   AND s.na_sequence_id = sf.na_sequence_id
-   AND snp.type != 'HTS'
-ORDER BY var.strain
+       DoTS.SnpFeature sf,
+       APIDBTUNING.SnpChipAttributes snp
+WHERE var.parent_id = sf.na_feature_id
+     AND snp.source_id = sf.source_id    
+     AND sf.name like 'Broad_%'
              ]]>
            </sql>
         </sqlQuery>
@@ -69,58 +61,32 @@ ORDER BY var.strain
             <column name="product"/>
             <sql>
             <![CDATA[
-SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
-       strain.isolate_id, 
+ SELECT snp.source_id, 
+       '@PROJECT_ID@' AS project_id,
+       ia.source_id isolate_id, 
        var.strain,
-       geolocation.value as country,
+       var.name as data_type,
+       ia.country as country,
        CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
             WHEN sa.gene_source_id is null THEN ''
        ELSE var.allele 
        END as allele_gene_strand,
-       CASE WHEN sa.type = 'Broad_3k_chip' THEN '3kChip'
-            WHEN sa.type = 'Broad_hd_array' THEN 'HD_Array'
-            WHEN sa.type = 'Broad_barcode' THEN 'Barcode'
-       END as data_type,
        var.allele,
        var.phenotype, 
        var.product
 FROM  dots.snpfeature snp, 
       dots.seqvariation var,
       apidbtuning.SnpChipAttributes sa,
-      ( SELECT bmc.value as strain, bs.name as isolate_id, sbm.BIO_MATERIAL_ID, 
-              s.study_id, s.EXTERNAL_DATABASE_RELEASE_ID
-        FROM  study.study s,
-              RAD.STUDYBIOMATERIAL sbm,
-              study.biosample bs,
-              STUDY.BIOMATERIALCHARACTERISTIC bmc,
-              study.ontologyentry oe
-        WHERE s.study_id = sbm.study_id
-          AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-          AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-           AND oe.ontology_entry_id = bmc.ONTOLOGY_ENTRY_ID
-           AND oe.category = 'BioMaterialCharacteristics' 
-           AND oe.value = 'StrainOrLine'
-      ) strain,
-      ( SELECT bmc.value, bs.name as isolate_id, sbm.BIO_MATERIAL_ID, s.study_id, s.external_database_release_id
-        FROM  study.study s,
-              RAD.STUDYBIOMATERIAL sbm,
-              study.biosample bs,
-              STUDY.BIOMATERIALCHARACTERISTIC bmc,
-              study.ontologyentry oe
-         WHERE s.study_id = sbm.study_id
-           AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-           AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-           AND oe.ontology_entry_id = bmc.ONTOLOGY_ENTRY_ID
-           AND oe.category = 'Sample Collection Location' --and oe.category = 'BioMaterialCharacteristics' 
-           AND oe.value = 'GeographicLocation'
-       ) geolocation
+      apidbtuning.isolateAttributes ia,
+      SRES.EXTERNALDATABASE ed,
+      SRES.EXTERNALDATABASERELEASE edr
 WHERE var.parent_id = snp.na_feature_id
   AND sa.na_feature_id = snp.na_feature_id
-  --AND snp.external_database_release_id = 1948
-  --and snp.source_id = 'Pf_01_000130573_barcode'
-  AND strain.strain = var.strain
-  AND strain.external_database_release_id = var.external_database_release_id
-  AND geolocation.bio_material_id = strain.bio_material_id
+  AND ia.source_id like var.strain||'%' 
+  AND ia.EXTERNAL_DB_NAME = ed.name
+  and ia.EXTERNAL_DB_VERSION = edr.version
+  and ed.external_database_id = edr.external_database_id
+  and edr.external_database_release_id = var.external_database_release_id
              ]]>
         </sql>
       </sqlQuery>
@@ -133,19 +99,32 @@ WHERE var.parent_id = snp.na_feature_id
                isCacheable="false">
             <column name="source_id" />
             <column name="project_id" />
-            <column name="ngs_snp_id"/>
+            <column name="other_snp_id"/>
+            <column name="link"/>
             <column name="name"/>
 
             <sql>
             <![CDATA[
-SELECT sa.source_id, '@PROJECT_ID@' AS project_id,
-       sb.source_id ngs_snp_id, sb.dataset as name
+SELECT sa.source_id,  '@PROJECT_ID@' AS project_id,
+       sb.source_id other_snp_id,
+       'showRecord.do?name=SnpRecordClasses.SnpRecordClass'|| chr(38) || 'project_id=@PROJECT_ID@' || chr(38) || 'source_id=' || sb.source_id as link,
+       sb.dataset as name
 FROM  apidbtuning.SnpChipAttributes sa, 
       apidbtuning.snpAttributes sb
 WHERE sa.na_sequence_id = sb.na_sequence_id
   and sa.start_min = sb.location
   and sb.source_id != sa.source_id
-  and sa.type in ('Broad_barcode','Broad_3k_chip','Broad_hd_array') 
+Union
+SELECT sa.source_id,  '@PROJECT_ID@' AS project_id,
+       sb.source_id other_snp_id, 
+       'showRecord.do?name=SnpChipRecordClasses.SnpChipRecordClass' || chr(38) || 'project_id=@PROJECT_ID@' || chr(38) || 'source_id=' || sb.source_id as link,
+       sb.dataset as name
+FROM  apidbtuning.SnpChipAttributes sa, 
+      apidbtuning.snpChipAttributes sb
+WHERE sa.na_sequence_id = sb.na_sequence_id
+  and sa.start_min = sb.start_min
+  and sb.source_id != sa.source_id
+
              ]]>
            </sql>
 

@@ -275,7 +275,7 @@ from (select ga.source_id,  ga.project_id, ga.organism as gene_organism, ga.spec
                      '(derisi,winzeler) Expression Values - log(ratio);<br> (percentile) Ranking percentile of intensity, relative to all other genes' as y_axis,
                      'derisi,winzeler,percentile' as visible_parts,
                      'true' as is_graph_custom,
-                     1 as order_num
+                     0 as order_num
               from dual
       -- TEMPLATE_ANCHOR genePageGraphDescriptions
       -- TEMPLATE_ANCHOR microarrayGraphDescriptions
@@ -647,7 +647,7 @@ order by graph_descrip.order_num
        <!-- Phenotype -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="PhenotypeTable" isCacheable="false" includeProjects="TriTrypDB,EuPathDB">
+       <sqlQuery name="PhenotypeTable" isCacheable="false" includeProjects="TriTrypDB,EuPathDB,FungiDB">
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
@@ -1118,13 +1118,15 @@ WHERE o.taxon_id = ta.taxon_id
             <column name="gene_source_id"/>
             <column name="project_id"/>
             <column name="comment_string"/>
+            <column name="comment_date"/>
             <sql>
               <![CDATA[
-                select nfc.comment_string, nf.source_id, nf.gene_source_id, '@PROJECT_ID@' as project_id
+                select nfc.comment_string, nf.source_id, nf.gene_source_id, '@PROJECT_ID@' as project_id, to_char(nfc.comment_date, 'yyyy-mm-dd') as comment_date
                 from dots.NaFeatureComment nfc, ApidbTuning.TranscriptAttributes nf
                 where nf.na_feature_id = nfc.na_feature_id
                   and to_char(dbms_lob.substr(nfc.comment_string, 30, 1)) != 'introns and exons likely'
                   and to_char(dbms_lob.substr(nfc.comment_string, 30, 1)) != 'NULL;'
+                  order by comment_date
                -- and nfc.na_feature_comment_id not in (
                --       select c.na_feature_comment_id
                --       from dots.NaFeatureComment c, apidb.Sirna s
@@ -2870,68 +2872,6 @@ order by quant_type asc, fold_change desc
        </sql>
     </sqlQuery>
 
-  <!--===========================================================================-->
-  <!--===========================================================================-->
-  <!-- ToxoDB exclusives  -->
-  <!--===========================================================================-->
-  <!--===========================================================================-->
-
- 
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Task comments -->  
-       <!-- NOTE: NEED TO CHANGE THE TOXOCOMM BACK .. COMMENTED OUT NOW .. -->  
-       <!-- WHEN TASK COMMENTS ARE FIXED .. SHOULD CONSIDER USING SOMETHING BESIDES TOXOCOMM -->  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-       <sqlQuery name="TaskComments" 
-                  isCacheable="false" includeProjects="ToxoDB,EuPathDB">
-
-            <testParamValues includeProjects="ToxoDB">
-               <paramValue name="source_id">TGME49_033190</paramValue>
-            </testParamValues>
-
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <column name="comment_string"/>
-            <sql>
-      <![CDATA[
-      with tasks as (select nvl(c.content, '<i>none</i>') as comment_string, c.stable_id
-               --    from toxocomm.comments@COMMENT_DBLINK@ c 
-                     from @TOXO_COMMENT_SCHEMA@comments@COMMENT_DBLINK@ c
-                     where c.review_status_id = 'task')
-      select distinct tasks.comment_string, gi.gene as source_id, '@PROJECT_ID@' as project_id
-      from tasks, ApidbTuning.GeneId gi
-      where gi.id = tasks.stable_id
-      ]]>
-            </sql>
-        </sqlQuery>
-
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Toxo E.tenella "suspect" genes -->  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-        <sqlQuery name="ToxoETennellaSuspects" isCacheable="false" includeProjects="ToxoDB">
-            <testParamValues>
-               <paramValue name="source_id">ETH_00038195</paramValue>
-            </testParamValues>
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <sql>
-            <![CDATA[
-              select gf.source_id, 'ToxoDB' as project_id
-              from sres.dbref r, sres.externaldatabaserelease rel, dots.dbrefnafeature rf,
-                dots.genefeature gf, sres.externaldatabase ed
-              where gf.na_feature_id = rf.na_feature_id
-              and rf.db_ref_id = r.db_ref_id
-              and r.external_database_release_id = rel.external_database_release_id
-              and rel.external_database_id = ed.external_database_id
-              and ed.name = 'etenHoughton_dbxref_suspectGenes_RSRC'
-            ]]>
-            </sql>
-        </sqlQuery>
-
 
 
   <!--===========================================================================-->
@@ -2996,6 +2936,24 @@ order by quant_type asc, fold_change desc
             <column name="description"/>
             <sql>
             <![CDATA[
+              select ga.source_id, ga.project_id,
+                     nvl(specific.description, generic.description) as description
+              from apidbTuning.GeneAttributes ga, 
+                   (select dnt.name, dp.description
+                    from apidbTuning.DatasetNameTaxon dnt, apidbTuning.DatasetPresenter dp
+                    where dnt.dataset_presenter_id = dp.dataset_presenter_id
+                   ) specific,
+                   (select dnt.taxon_id, p.description AS description
+                    from apidbTuning.DatasetNameTaxon dnt,
+                         apidb.Datasource ds, apidbTuning.DatasetPresenter p
+                    where dnt.name = ds.name
+                      and ds.type = 'genome'
+                      and dnt.dataset_presenter_id = p.dataset_presenter_id
+                   ) generic
+              where ga.taxon_id = generic.taxon_id
+                and ga.external_db_name = specific.name (+)
+
+ /*  this is gus4 code which is no longer valid because of changes made on trunk above
 SELECT nvl(specific.source_id, generic.source_id) as source_id,
        nvl(specific.gene_source_id, generic.gene_source_id) as gene_source_id,
        nvl(specific.project_id, generic.project_id) as project_id,
@@ -3020,9 +2978,36 @@ FROM (SELECT ta.source_id, ta.gene_source_id, ta.project_id, dp.name, dp.descrip
    AND dt.dataset_presenter_id = p.dataset_presenter_id
  ) generic
 WHERE generic.source_id = specific.source_id (+)
+ */
           ]]>
            </sql>
         </sqlQuery>
+
+
+
+
+
+       <sqlQuery name="PubMed">
+         <testParamValues includeProjects="PlasmoDB">
+           <paramValue name="source_id">PF3D7_0523000</paramValue>
+         </testParamValues>
+         <testParamValues includeProjects="ToxoDB">
+           <paramValue name="source_id">TGME49_220400</paramValue>
+         </testParamValues>
+
+         <column name="source_id"/>
+         <column name="project_id"/>
+         <column name="pubmed_id"/>
+         <column name="doi"/>
+         <column name="title"/>
+         <column name="authors"/>
+         <sql>
+           <![CDATA[
+                    select source_id, project_id, pubmed_id, doi, title, authors
+                    from ApidbTuning.GenePubmed
+           ]]>
+         </sql>
+       </sqlQuery>
 
   <!--===========================================================================-->
   <!--======================Metabolic Pathways - Enzymes Compounds Table=================-->

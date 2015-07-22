@@ -2177,7 +2177,7 @@ tablespace indx
 
 <!--
   <comment> SNP Chip only, such as Plasmo barcode, 3k_chp and hd_array </comment>
-  <tuningTable name="SnpChipAttributes">
+  <tuningTable name="SnpAttributesDoTS">
     <comment> Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, including SnpSummary and
          IsolateSnps.
@@ -2194,7 +2194,7 @@ tablespace indx
     <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
-CREATE TABLE SnpChipAttributes&1 NOLOGGING AS
+CREATE TABLE SnpAttributesDoTS&1 NOLOGGING AS
 SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        snp.source_id,
        snp.na_feature_id,
@@ -2230,7 +2230,7 @@ SELECT cast(apidb.project_id(tn.name) as varchar2(20)) as project_id,
        taxon.ncbi_tax_id,
        SUBSTR(chromosome_info.chromosome, 1, 20) AS chromosome,
        chromosome_info.chromosome_order_num
-FROM dots.SnpFeature snp, FeatureLocation snp_loc,
+FROM dots.SnpFeature snp, sres.sequenceontology so, FeatureLocation snp_loc,
      sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr, sres.Taxon,
      sres.TaxonName tn, dots.NaSequence sequence,
      (SELECT gene.source_id, gene_loc.is_reversed, gene.na_feature_id,
@@ -2258,47 +2258,62 @@ WHERE edr.external_database_release_id = snp.external_database_release_id
   AND sequence.na_sequence_id = snp_loc.na_sequence_id
   AND chromosome_info.na_sequence_id = snp_loc.na_sequence_id
   AND gene_info.na_feature_id(+) = snp.parent_id
-  AND snp.name in ('Broad_barcode', 'Broad_3k_chip', 'Broad_hd_array')
+  AND snp.sequence_ontology_id = so.sequence_ontology_id
+  AND so.term_name != 'indel'
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create unique index SnpChipAttr_source_id&1 ON SnpChipAttributes&1 (source_id)
+create unique index SnpAttrDots_source_id&1 ON SnpAttributesDoTS&1 (source_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpChip_nafeat_dataset_ix&1
-       ON SnpChipAttributes&1 (na_feature_id, dataset)
+create index SnpDots_nafeat_dataset_ix&1
+       ON SnpAttributesDoTS&1 (na_feature_id, dataset)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpChip_Seq_ix&1
-       ON SnpChipAttributes&1 (na_sequence_id, dataset, start_min, na_feature_id)
+create index SnpDoTS_Seq_ix&1
+       ON SnpAttributesDoTS&1 (na_sequence_id, dataset, start_min, na_feature_id)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpChip_Freq_ix&1
-       ON SnpChipAttributes&1 (dataset,major_allele_frequency,minor_allele_frequency)
+create index SnpDoTS_Freq_ix&1
+       ON SnpAttributesDoTS&1 (dataset,major_allele_frequency,minor_allele_frequency)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpChipAttr_ds_org_ix&1 on snpchipattributes&1 (dataset,organism,na_feature_id)
+create index SnpAttrdots_ds_org_ix&1 on snpattributesdots&1 (dataset,organism,na_feature_id)
 tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index SnpChipVariantIx&1 on SnpChipAttributes&1 (type, dataset, na_feature_id, source_id, gene_source_id, start_min, position_in_protein)
+create index SnpDotsVariantIx&1 on SnpAttributesDoTS&1 (type, dataset, na_feature_id, source_id, gene_source_id, start_min, position_in_protein)
 tablespace indx
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+ create or replace view apidbtuning.snpchipattributes as
+  select * from apidbtuning.snpattributesdots&1
+  where type in ('Broad_barcode', 'Broad_3k_chip', 'Broad_hd_array','Broad_ar_array')
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+   GRANT SELECT ON apidbtuning.snpchipattributes TO gus_r
+      ]]>
+    </sql>
+
+
   </tuningTable>
 
 
@@ -2307,7 +2322,7 @@ tablespace indx
          for allele_percent > 80. Used in SNP queries, and to make the
          GoodHtsSnp tuning table.
      </comment>
-    <internalDependency name="SnpChipAttributes"/>
+    <internalDependency name="SnpAttributesDoTS"/>
     <externalDependency name="dots.SeqVariation"/>
     <sql>
       <![CDATA[
@@ -3019,37 +3034,36 @@ tablespace indx
      </comment>
     <internalDependency name="GenomicSequenceAttributes"/>
     <externalDependency name="dots.SnpFeature"/>
+    <externalDependency name="dots.SeqVariation"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="sres.TaxonName"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <sql>
       <![CDATA[
 CREATE TABLE SnpChipStrains&1 NOLOGGING AS
-SELECT distinct bmc.value as strain, sa.organism, 
-       snp.name, snp.external_database_release_id, 
-       bs.name as isolate_id, 
-       ed.name as extdb_name, sa.taxon_id
-FROM   study.study s,
-       RAD.STUDYBIOMATERIAL sbm,
-       study.biosample bs,
-       STUDY.BIOMATERIALCHARACTERISTIC bmc,
-       Study.Ontologyentry oe,
-       GenomicSequenceAttributes sa,
-       dots.snpfeature snp,
+   select distinct var.strain as strain, 
+                   var.organism, 
+                   var.name,
+                   var.external_database_release_id,
+                   bs.name as isolate_id,
+                   ed.name as extdb_name,
+                   tn.taxon_id
+     from dots.seqVariation var,
        sres.externaldatabase ed, 
-       sres.externaldatabaserelease edr
-WHERE  s.study_id = sbm.study_id
-   AND bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-   AND bmc.BIO_MATERIAL_ID = bs.BIO_MATERIAL_ID
-   AND edr.external_database_id = ed.external_database_id
-   AND s.external_database_release_id = edr.external_database_release_id
-   /*AND bmc.ONTOLOGY_ENTRY_ID = 96  strain */
-   AND oe.category = 'BioMaterialCharacteristics'
-   AND oe.value = 'StrainOrLine'
-   and Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
-   AND snp.NA_SEQUENCE_ID = sa.na_sequence_id
-   AND snp.EXTERNAL_DATABASE_RELEASE_ID = edr.external_database_release_id
-   AND snp.name in ('Broad_barcode','Broad_3k_chip','Broad_hd_array')
-
+       sres.externaldatabaserelease edr,
+       SRES.TAXONNAME tn,
+       study.study s,
+       RAD.STUDYBIOMATERIAL sbm,
+       study.biosample bs
+    where edr.external_database_id = ed.external_database_id
+   and var.external_database_release_id = edr.external_database_release_id
+   and Var.organism = tn.name
+   and lower(ed.name) like '%snpchip%'
+   and s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
+   and s.study_id = sbm.study_id
+   and bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
+   and bs.name = var.strain 
 /**
   SELECT distinct sv.strain,
                   sa.organism,
@@ -3150,7 +3164,6 @@ select null as na_sequence_id,
      study.Study s, sres.ExternalDatabase expt_ed, sres.ExternalDatabaseRelease expt_edr,
      rad.StudyBiomaterial sb, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
      (
-
 select distinct bs.bio_material_id, tn.name, tn.taxon_id
 from study.OntologyEntry oe,
      study.BiomaterialCharacteristic bmc,
@@ -3205,7 +3218,7 @@ where oe.category = 'Sample Collection Location'
   and Bmc.Bio_Material_Id = bs.Bio_Material_Id 
       ) geographic_location,
      (select name, project_id from core.projectInfo) project
-where lower(s.name) like '%_hts%'
+where lower(expt_ed.name) like '%_hts_%'
 and b.row_project_id = project.project_id
 and s.study_id = sb.study_id
 and s.external_database_release_id = expt_edr.external_database_release_id
@@ -3286,6 +3299,7 @@ FROM (
                                'pfal3D7_SNPChip_Broad75KGenotyping_RSRC', 'HD_Array',
                                'pfal3D7_SNPChip_Broad3KGenotyping_RSRC', 'SNP (3kChip)',
                                'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC','SNP (Barcode)',
+                               'pfal3D7_SNPChip_SNP_Chip_Artesunate_Resistance_RSRC','SNP (NIH-10k)', 
                                'tgonME49_isolates_ChunleiSu_RFLP_RSRC', 'RFLP Typed',
                                'tgonME49_isolates_Menezes_chicken_RFLP_RSRC', 'RFLP Typed',
                                'Sequencing Typed') as data_type,
@@ -3329,16 +3343,17 @@ and i.na_sequence_id = prod.na_sequence_id (+)
 UNION /* SNPChip: similar to HTS SNPs except metadata are loaded differently */
 select distinct null as na_sequence_id,
        null as na_feature_id,
-       0 as bio_material_id,
+       bs.bio_material_id as bio_material_id,
        o.taxon_id,
-       '' as external_db_version,
-       '' as external_db_name,
+       edr.version as external_db_version,
+       ed.name as external_db_name,
        '' AS experiment_external_db_version,
        '' AS experiment_external_db_name,
        bs.name || '_' || 
        case when ed.name = 'pfal3D7_SNPChip_Broad75KGenotyping_RSRC' then 'HD_Array'  
             when ed.name = 'pfal3D7_SNPChip_Broad3KGenotyping_RSRC' then '3kChip'  
-            when ed.name = 'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC' then 'Barcode'  
+            when ed.name = 'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC' then 'Barcode' 
+            when ed.name = 'pfal3D7_SNPChip_SNP_Chip_Artesunate_Resistance_RSRC' then 'NIH_10K'  
             else ''
        end as source_id,
        nvl(o.name, 'Unknown') as organism,
@@ -3353,7 +3368,8 @@ select distinct null as na_sequence_id,
        'PlasmoDB' as project_id,
        case when ed.name = 'pfal3D7_SNPChip_Broad75KGenotyping_RSRC' then 'HD_Array'  
             when ed.name = 'pfal3D7_SNPChip_Broad3KGenotyping_RSRC' then '3kChip'  
-            when ed.name = 'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC' then 'Barcode'  
+            when ed.name = 'pfal3D7_SNPChip_BroadIsolateBarcode_RSRC' then 'Barcode' 
+            when ed.name = 'pfal3D7_SNPChip_SNP_Chip_Artesunate_Resistance_RSRC' then 'NIH_10K'  
             else 'SNPChip'
        end as data_type,
        'Unknown' as annotated_specific_host,
@@ -3422,6 +3438,16 @@ WHERE s.study_id = sb.study_id
     </sql>
     <sql>
       <![CDATA[
+update IsolateAttributes&1
+set source_id = (source_id || '_' || bio_material_id)
+where  source_id in (select source_id from
+  (select count(*), source_id from IsolateAttributes&1 group by source_id having count(*)>1)
+)
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
 create unique index IsolateAttr_sourceId_idx&1 ON IsolateAttributes&1 (source_id)
 tablespace indx
       ]]>
@@ -3432,7 +3458,7 @@ tablespace indx
 update IsolateAttributes&1 a
 set (a.lat, a.lng, a.country) = (select g.lat, g.lng, g.country
                                  from apidb.IsolateGPS g 
-                                 where regexp_like ( a.annotated_geographic_location, g.country, 'i' ) 
+                                 where a.annotated_geographic_location = g.country
                                    and rownum = 1
                                   )
        ]]>
@@ -3866,7 +3892,7 @@ tablespace indx
      </comment>
     <internalDependency name="FeatureLocation"/>
     <internalDependency name="IsolateAttributes"/>
-    <internalDependency name="SnpChipAttributes"/>
+    <internalDependency name="SnpAttributesDoTS"/>
     <externalDependency name="dots.IsolateFeature"/>
     <sql>
       <![CDATA[
@@ -5122,7 +5148,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
       select distinct family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent, family_name_for_files as abbreviation, project_name as project_id
       from apidb.Organism 
        where family_name_for_files is not null
-       and family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Pleistophoridae')
+       and family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
        union
        select special.organism, special.parent, special.abbreviation, ot.project_id from OrganismTree ot,
        (
@@ -5342,6 +5368,7 @@ FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes 
       	    AND nr.associated_node_id = nn2.network_node_id
       	    AND  nrl.network_rel_context_id = nrc.network_rel_context_id
       	    AND  nc.network_context_id = nrc.network_context_id
+      	    AND nc.name NOT IN ('ec01100','ec01110','ec01120')
      UNION
       /* CASE  B :   reversible */
      SELECT  nn2.display_label as compound, REPLACE(nn1.display_label, '_X:_Y:','') AS enzyme, 
@@ -5359,6 +5386,7 @@ FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes 
       	   AND nr.associated_node_id = nn2.network_node_id
       	   AND  nrl.network_rel_context_id = nrc.network_rel_context_id
       	   AND  nc.network_context_id = nrc.network_context_id
+      	   AND nc.name NOT IN ('ec01100','ec01110','ec01120')
       	   AND nn1.node_type_id = 1
      	   ) x
 WHERE s1.property = 'CID'
@@ -5399,6 +5427,7 @@ WHERE s1.property = 'CID'
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="MassSpecTerms"/>
     <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="apidb.MassSpecSummary"/>
     <externalDependency name="dots.AAFeature"/>
     <externalDependency name="dots.AALocation"/>
     <externalDependency name="Sres.ExternalDatabase"/>
@@ -5682,7 +5711,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                         where field_name in ('Alias', 'CellularLocalization', 'CommunityAnnotation', 
                                              'EcNumber', 'GeneId', 'Notes', 'PreviousReleaseGenes', 
                                              'Product', 'GoTerms', 'MetabolicPathways', 'Phenotype', 
-                                             'InterPro', 'RodMalPhenotype')
+                                             'InterPro', 'RodMalPhenotype', 'PubMed')
                         group by source_id, project_id, field_name)) gd
         where ga.source_id = gd.source_id
           and ga.project_id = gd.project_id
@@ -5779,5 +5808,52 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     </sql>
   </tuningTable>
 -->
+
+  <tuningTable name="Pubmed" alwaysUpdate="true">
+    <!-- PubMed info
+      -->
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <program commandLine="buildPubmedTT"/>
+  </tuningTable>
+
+
+  <tuningTable name="GenePubmed">
+    <!-- PubMed records mapped to genes
+      -->
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="Pubmed"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        create table GenePubmed&1 nologging as
+        select distinct gf.source_id, gf.project_id, pm.pubmed_id, pm.doi, pm.title, pm.authors
+        from sres.ExternalDatabaseRelease edr, sres.DbRef db, GeneAttributes gf,
+             dots.DbRefNaFeature dbna, sres.ExternalDatabase ed,
+             DatasetPresenter dsa, Pubmed pm
+        where edr.external_database_release_id = db.external_database_release_id
+          and ed.external_database_id = edr.external_database_id
+          and (ed.name = dsa.name or ed.name like (dsa.dataset_name_pattern))
+          and dbna.db_ref_id = db.db_ref_id
+          and gf.na_feature_id= dbna.na_feature_id
+          and lower(dsa.display_name) like '%pubmed%'
+          and db.primary_identifier = to_char(pm.pubmed_id)
+       ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index gpm_ix&1
+          on GenePubmed&1 (source_id, project_id, pubmed_id, doi, title, authors)
+      ]]>
+    </sql>
+  </tuningTable>
+
 
 </tuningConfig>

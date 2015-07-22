@@ -1072,7 +1072,12 @@
                   nvl(hasExpression, 0) as hasPhenotype
             from (select distinct tn.name as species, 1 as hasExpression
                   from apidb.datasource ds, APIDBTUNING.taxonspecies ts, sres.taxonname tn
-                  where ds.name in ('tbruTREU927_RNAi_Horn_rnaSeq_RSRC'
+                  where ds.name in ('tbruTREU927_RNAi_Horn_rnaSeq_RSRC',
+                                    'CneoH99_SiRNASqlLdr_QIAGEN_RSRC',
+                                    'CneoJEC21_SiRNASqlLdr_QIAGEN_RSRC',
+                                    'CneoB-3501A_SiRNASqlLdr_QIAGEN_RSRC',
+                                    'CgatR265_SiRNASqlLdr_QIAGEN_RSRC',
+                                    'CgatWM276_SiRNASqlLdr_QIAGEN_RSRC'
                   -- TODO:  INJECT TEMPLTE HERE FOR other PHenotype data which has graphs
                   )
                   and ds.taxon_id = ts.taxon_id
@@ -1417,24 +1422,36 @@ FROM
             <column name="transfection_rsrc_count_tag"/>
             <sql includeProjects="PlasmoDB">
               <![CDATA[
-                select gi.gene as source_id, '@PROJECT_ID@' as project_id, max(plasmogem.gene_id) as plasmogem_gene_id,
-                       nvl(max(plasmogem.has_info), 0) as has_plasmogem_info,
-                       regexp_replace(case when sum(library_clone_count) > 0 then 'library clone' else '' end
-                                      || case when sum(transfection_design_count_ko) > 0 then ', knockout' else '' end
-                                      || case when sum(transfection_design_count_tag) > 0 then ', tag' else '' end, '^, ', '') as plasmogem_resources,
-                       sum(transfection_rsrc_count_ko) as transfection_rsrc_count_ko,
-                       sum(library_clone_count) as library_clone_count,
-                       sum(transfection_design_count_tag) as transfection_design_count_tag,
-                       sum(transfection_design_count_ko) as transfection_design_count_ko,
-                       sum(transfection_rsrc_count_tag) as transfection_rsrc_count_tag
-                from ApidbTuning.GeneId gi,
-                     ( select gene_id, 1 as has_info, transfection_design_count_ko,
-                              transfection_rsrc_count_ko, library_clone_count,
-                              transfection_design_count_tag, transfection_rsrc_count_tag
-                       from ApidbTuning.Plasmogem p
-                     ) plasmogem
-                where gi.id = plasmogem.gene_id(+)
-                group by gi.gene
+                select source_id, '@PROJECT_ID@' as project_id, plasmogem_gene_id, has_plasmogem_info,
+                       nvl(regexp_replace(case when library_clone_count > 0 then 'library clone' end
+                                          || case when transfection_rsrc_count_tag > 0 then ', tag' end
+                                          || case when transfection_rsrc_count_ko > 0 then ', knockout' end,
+                                          '^, ', ''), 'none')
+                       as pg_resource_list,
+                       regexp_replace(case when transfection_rsrc_count_tag = 0 and transfection_design_count_tag > 0
+                                             then 'tag' end
+                                      || case when transfection_rsrc_count_ko = 0 and transfection_design_count_ko > 0
+                                           then ', knockout' end,
+                                      '^, ', '')
+                       as pg_design_list
+                from (
+                       select gi.gene as source_id,
+                              max(plasmogem.gene_id) as plasmogem_gene_id,
+                              nvl(max(plasmogem.has_info), 0) as has_plasmogem_info,
+                              nvl(sum(library_clone_count), 0) as library_clone_count,
+                              nvl(sum(transfection_design_count_ko), 0) as transfection_design_count_ko,
+                              nvl(sum(transfection_rsrc_count_ko), 0) as transfection_rsrc_count_ko,
+                              nvl(sum(transfection_design_count_tag), 0) as transfection_design_count_tag,
+                              nvl(sum(transfection_rsrc_count_tag), 0) as transfection_rsrc_count_tag
+                       from ApidbTuning.GeneId gi,
+                            ( select gene_id, 1 as has_info, transfection_design_count_ko,
+                                     transfection_rsrc_count_ko, library_clone_count,
+                                     transfection_design_count_tag, transfection_rsrc_count_tag
+                              from ApidbTuning.Plasmogem p
+                            ) plasmogem
+                       where gi.id = plasmogem.gene_id(+)
+                       group by gi.gene
+                     )
               ]]>
             </sql>
 
