@@ -5279,43 +5279,35 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
     <sql>
       <![CDATA[
 CREATE TABLE &prefixCompoundAttributes&1 NOLOGGING AS
-SELECT comp.compound_id,  'CID:' || comp.compound_id AS source_id, 
-              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 1000) AS preferred_name,
-              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(nameTable.name)) AS apidb.varchartab)), ', '), 1, 1000) AS compound_name,
-              substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substSyns.name)) AS apidb.varchartab)), ', '), 1, 1000) AS substance_name,
-               substr(apidb.tab_to_string(set(cast(COLLECT(to_char(substTable.substance_id)) AS apidb.varchartab)), ', '), 1, 80) AS substance_id,
-              molecularWeight as mol_wt,
-              substr(REGEXP_REPLACE(molecularFormula,'(\d)','<sub>\1</sub>'), 1, 300) AS formula,
-              iupacName AS iupac_name, inchikey
-        FROM apidb.PubChemCompound comp,
-                  (SELECT pubchem_compound_id , value as name FROM apidb.PubChemCompoundProperty where property='Name') nameTable,    
-                  (SELECT substance_id, compound_id  FROM apidb.PubChemSubstance )  substTable,
-                  (SELECT compound_id, name FROM (
-        SELECT  c.compound_id, apidb.tab_to_string(set(cast(COLLECT(sp.value) as apidb.varchartab)),'_MULTIPLE_') as name
-	FROM apidb.PubChemSubstance s, apidb.PubChemSubstanceProperty sp, apidb.PubChemCompound c
-	WHERE sp.pubchem_substance_id = s.pubchem_substance_id
-  AND s.compound_id = c.compound_id
-	AND NOT  REGEXP_LIKE(sp.value, '^C(\d)+$')    /* exclude KEGG Copmpound IDs */
-	AND NOT  REGEXP_LIKE(sp.value, '^(\d)+(\-)')  /* exclude entries like '24959-67-9'  */
-	GROUP by c.compound_id
-	) WHERE name NOT LIKE '%_MULTIPLE_%' ) substSyns
-       WHERE comp.pubchem_compound_id = nameTable.pubchem_compound_id (+)
-       AND comp.compound_id = substTable.compound_id (+)
-       AND comp.compound_id = substSyns.compound_id (+)
-       GROUP BY comp.compound_id, molecularWeight, molecularFormula, iupacName, inchikey
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-update &prefixCompoundAttributes&1
-set preferred_name = substance_name
-where preferred_name is NULL
+SELECT c.ID, c.chebi_accession AS compound_id, c.parent_id,
+    substr(apidb.tab_to_string(set(cast(COLLECT(to_char(cn.name)) AS apidb.varchartab)), ', '), 1, 1000) AS preferred_name,
+    substr(apidb.tab_to_string(set(cast(COLLECT(to_char(cn.name)) AS apidb.varchartab)), ', '), 1, 1000) AS compound_name,
+    substr(apidb.tab_to_string(set(cast(COLLECT(to_char(ciup.iupac_name)) AS apidb.varchartab)), ', '), 1, 1000) AS iupac_name,
+    substr(apidb.tab_to_string(set(cast(COLLECT(to_char(csyn.syn)) AS apidb.varchartab)), ', '), 1, 1000) AS syn,
+    formu.formula
+FROM  chebi.compounds c, 
+  ( SELECT compound_id,  NAME FROM chebi.names WHERE TYPE='NAME') cn,
+  ( SELECT compound_id,  MIN(NAME) AS iupac_name FROM chebi.names WHERE TYPE='IUPAC NAME' GROUP BY compound_id) ciup,
+  ( SELECT compound_id,  MIN(NAME) AS syn FROM chebi.names WHERE TYPE='SYNONYM' GROUP BY compound_id) csyn,
+  ( SELECT compound_id, chemical_data AS formula FROM CHEBI.CHEMICAL_DATA WHERE TYPE='FORMULA') formu
+WHERE c.ID = cn.compound_id (+)
+AND c.ID = ciup.compound_id (+)
+AND c.ID = csyn.compound_id (+)
+AND c.ID = formu.compound_id (+)
+GROUP BY c.ID, c.chebi_accession, c.parent_id, formu.formula
       ]]>
     </sql>
     <sql>
       <![CDATA[
 update &prefixCompoundAttributes&1
 set preferred_name = iupac_name
+where preferred_name is NULL
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+update &prefixCompoundAttributes&1
+set preferred_name = syn
 where preferred_name is NULL
       ]]>
     </sql>
