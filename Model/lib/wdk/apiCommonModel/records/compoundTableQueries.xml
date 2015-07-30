@@ -9,18 +9,24 @@
     <sqlQuery name="Properties">
             <column name="project_id"/>
             <column name="source_id"  />
-            <column name="property"  />
+            <column name="type"  />
             <column name="value"  />
            <sql>
             <![CDATA[
-	       SELECT '@PROJECT_ID@' AS project_id, ca.source_id, property, 
-		      CASE WHEN property ='MolecularFormula'
-		           THEN REGEXP_REPLACE(value,'(\d)','<sub>\1</sub>')
-			   ELSE value END AS value
-	       FROM apidb.PubChemCompound c, ApidbTuning.CompoundAttributes ca
-               WHERE c.compound_id = ca.compound_id
-               AND NOT property = 'Synonym'
-	       ORDER BY property
+	       SELECT * FROM (
+  	         SELECT '@PROJECT_ID@' AS project_id, ca.source_id, struct.type,
+	            to_char(struct.structure) AS value 
+	         FROM ApidbTuning.CompoundAttributes ca, chebi.structures struct
+	         WHERE ca.id = struct.compound_id
+	         AND struct.dimension = '1D'
+	         UNION
+	         SELECT '@PROJECT_ID@' AS project_id, ca.source_id, cd.type,
+	           CASE WHEN cd.type='FORMULA' 
+	           THEN REGEXP_REPLACE(cd.chemical_data,'(\d)','<sub>\1</sub>')
+		   ELSE chemical_data END AS value
+	         FROM ApidbTuning.CompoundAttributes ca, chebi.chemical_data cd
+	         WHERE ca.id = cd.compound_id
+	       ) ORDER BY type
             ]]>
             </sql>
     </sqlQuery>
@@ -28,48 +34,19 @@
     <sqlQuery name="Synonyms">
             <column name="project_id"/>
             <column name="source_id"  />
-            <column name="property"  />
+            <column name="source"  />
             <column name="value"  />
            <sql>
             <![CDATA[
-	       SELECT '@PROJECT_ID@' AS project_id, ca.source_id, prop.property, prop.value
-	       FROM ApidbTuning.CompoundAttributes ca, apidb.PubChemCompound comp, apidb.PubChemCompoundProperty prop
-               WHERE comp.compound_id = ca.compound_id
-	       AND comp.pubchem_compound_id = prop.pubchem_compound_id
-               AND property = 'Synonym'
+              SELECT ca.source_id, '@PROJECT_ID@' AS project_id, n.source AS source, n.name AS value
+              FROM ApidbTuning.CompoundAttributes ca, chebi.names n
+              WHERE ca.ID = n.compound_id
+              AND n.type='SYNONYM'
+              ORDER by lower(n.name)
             ]]>
             </sql>
     </sqlQuery>
 
-
-    <sqlQuery name="SubstanceProps">
-            <column name="project_id"/>
-            <column name="source_id"  />
-            <column name="substance_id"  />
-            <column name="property"  />
-            <column name="value"  />
-           <sql>
-            <![CDATA[
-	      SELECT '@PROJECT_ID@' as project_id, ca.source_id, s2.property, to_char(s1.substance_id) as substance_id,
-		      CASE WHEN REGEXP_LIKE(s2.value, '^C(\d)+$') 
-		      THEN '<a href="http://www.genome.jp/dbget-bin/www_bget?cpd:' || s2.value || '">' || s2.value || '</a>'
-		      ELSE  s2.value END AS value
-	      FROM APIDB.pubchemsubstance s1, APIDB.pubchemsubstance s2, ApidbTuning.CompoundAttributes ca
-	      WHERE s1.property = 'CID'
-             AND s1.value = ca.compound_id
-	      AND s1.substance_id = s2.substance_id
-	      AND NOT s2.property = 'CID'
-	      UNION
-	      SELECT '@PROJECT_ID@' as project_id, ca.source_id, s.property, ca.substance_id,
-                      CASE WHEN (s.property='KEGG') 
-                      THEN '<a href="http://www.genome.jp/dbget-bin/www_bget?cpd:' || s.value || '">' || s.value || '</a>'
-                      ELSE  s.value END AS value
-              FROM APIDB.pubchemsubstance s, ApidbTuning.CompoundAttributes ca
-              WHERE ca.source_id = 'SID:' || s.substance_id
-              AND NOT s.property = 'CID'
-        ]]>
-           </sql>
-    </sqlQuery>
 
 
 
