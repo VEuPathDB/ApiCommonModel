@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.gusdb.fgputil.xml.NamedValue;
 import org.gusdb.fgputil.xml.Text;
+import org.apache.commons.codec.digest.DigestUtils;
 
 /**
  * A specification for adding a dataset to the presentation layer. A simple data
@@ -65,6 +66,10 @@ public class DatasetPresenter {
   public String getDatasetName() {
     return propValues.get("datasetName");
   }
+
+    public String getId() {
+	return "DS_" + DigestUtils.sha1Hex(getDatasetName()).substring(0,10);
+    }
 
   String getPropValue(String propName) {
     return propValues.get(propName);
