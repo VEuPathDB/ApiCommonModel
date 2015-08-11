@@ -351,10 +351,12 @@ public class DatasetPresenterSetLoader {
 
   PreparedStatement getPresenterStmt() throws SQLException {
     String table = config.getUsername() + ".DatasetPresenter" + suffix;
-    String sql = "INSERT INTO "
-        + table
-        + " (dataset_presenter_id, name, stable_id, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope, build_number_introduced)"
-        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    String sql = "INSERT INTO " + table +
+        " (dataset_presenter_id, name, dataset_name_pattern, " +
+        "display_name, short_display_name, short_attribution, summary, " +
+        "protocol, usage, description, caveat, acknowledgement, release_policy, " +
+        "display_category, type, subtype, is_species_scope, build_number_introduced)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
