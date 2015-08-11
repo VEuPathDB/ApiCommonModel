@@ -356,7 +356,7 @@ public class DatasetPresenterSetLoader {
         "display_name, short_display_name, short_attribution, summary, " +
         "protocol, usage, description, caveat, acknowledgement, release_policy, " +
         "display_category, type, subtype, is_species_scope, build_number_introduced)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
