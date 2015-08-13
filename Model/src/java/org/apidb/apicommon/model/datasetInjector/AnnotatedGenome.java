@@ -7,6 +7,7 @@ import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenome extends DatasetInjector {
   
+    @Override
     public void injectTemplates() {
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
