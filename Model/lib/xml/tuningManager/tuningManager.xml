@@ -764,6 +764,7 @@ where nf.na_feature_id = nl.na_feature_id
   and nl.na_feature_id = ef.na_feature_id(+)
   and ns.taxon_id = tn.taxon_id
   and tn.name_class = 'scientific name'
+  and nf.subclass_view not in ('GeneFeature', 'ExonFeature', 'Transcript')
   and (ns.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
 union
 select /* virtual feature locations mapped through SequencePiece */
@@ -816,6 +817,7 @@ where nf.na_feature_id = nl.na_feature_id
   and nl.na_feature_id = ef.na_feature_id(+)
   and contig.taxon_id = tn.taxon_id
   and tn.name_class = 'scientific name'
+  and nf.subclass_view not in ('GeneFeature', 'ExonFeature', 'Transcript')
   and (contig.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
       ]]>
     </sql>
@@ -837,7 +839,62 @@ where na_sequence_id in (select distinct piece_na_sequence_id
     </sql>
     <sql>
       <![CDATA[
-commit
+        insert into &prefixFeatureLocation&1
+                    (feature_type, feature_source_id, sequence_source_id,
+                     na_sequence_id, na_feature_id, start_min, end_max,
+                    is_reversed)
+        select 'GeneFeature', feature_source_id, sequence_source_id,
+               na_sequence_id, na_feature_id, start_min, end_max,
+               is_reversed
+        from &prefixGeneLocation
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        insert into &prefixFeatureLocation&1
+                    (feature_type, feature_source_id, sequence_source_id,
+                     na_sequence_id, na_feature_id, start_min, end_max,
+                    is_reversed, parent_id)
+        select 'Transcript', feature_source_id, sequence_source_id,
+               na_sequence_id, na_feature_id, start_min, end_max,
+               is_reversed, parent_id
+        from &prefixTranscriptLocation
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        insert into &prefixFeatureLocation&1
+                    (feature_type, sequence_source_id,
+                     na_sequence_id, start_min, end_max,
+                     is_reversed, parent_id)
+        select 'ExonFeature', sequence_source_id,
+               na_sequence_id, start_min, end_max,
+               is_reversed, na_feature_id
+        from &prefixExonLocation
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        insert into &prefixFeatureLocation&1
+                    (feature_type, sequence_source_id,
+                     na_sequence_id, start_min, end_max,
+                     is_reversed, parent_id)
+        select 'CDS', sequence_source_id,
+               na_sequence_id, start_min, end_max,
+               is_reversed, na_feature_id
+        from &prefixCdsLocation
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        insert into &prefixFeatureLocation&1
+                    (feature_type, sequence_source_id,
+                     na_sequence_id, start_min, end_max,
+                     is_reversed, parent_id)
+        select 'UTR', sequence_source_id,
+               na_sequence_id, start_min, end_max,
+               is_reversed, na_feature_id
+        from &prefixUtrLocation
       ]]>
     </sql>
     <sql>
@@ -2302,14 +2359,14 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
- create or replace view apidbtuning.snpchipattributes as
-  select * from apidbtuning.snpattributesdots&1
+ create or replace view snpchipattributes as
+  select * from snpattributesdots&1
   where type in ('Broad_barcode', 'Broad_3k_chip', 'Broad_hd_array','Broad_ar_array')
       ]]>
     </sql>
     <sql>
       <![CDATA[
-   GRANT SELECT ON apidbtuning.snpchipattributes TO gus_r
+   GRANT SELECT ON snpchipattributes TO gus_r
       ]]>
     </sql>
 
@@ -4458,35 +4515,92 @@ tablespace indx
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
     <ancillaryTable name="CdsLocation"/>
+    <ancillaryTable name="GeneLocation"/>
+    <ancillaryTable name="ExonLocation"/>
+    <ancillaryTable name="UtrLocation"/>
     <sql>
       <![CDATA[
-        create table  &prefixTranscriptLocation&1 (
-          feature_source_id    varchar2(80),
-          sequence_source_id   varchar2(50),
-          na_sequence_id       number(10),
-          na_feature_id        number(10),
-          start_min            number,
-          end_max              number,
-          is_reversed          number,
-          gene_na_feature_id   number(10),
-          is_top_level         number
+        create table &prefixGeneLocation&1 (
+          feature_source_id            varchar2(80),
+          sequence_source_id           varchar2(50),
+          na_sequence_id               number(10),
+          na_feature_id                number(10),
+          start_min                    number,
+          end_max                      number,
+          is_reversed                  number(1),
+          sequence_ontology_id         number(10),
+          external_database_release_id number(10),
+          is_top_level                 number
         )
       ]]> 
     </sql>
 
     <sql>
       <![CDATA[
-        create table  &prefixCdsLocation&1 (
-          protein_source_id    varchar2(80),
-          transcript_source_id varchar2(80),
-          sequence_source_id   varchar2(50),
-          na_sequence_id       number(10),
-          na_feature_id        number(10),
-          start_min            number,
-          end_max              number,
-          is_reversed          number,
-          gene_na_feature_id   number(10),
-          is_top_level         number
+        create table &prefixTranscriptLocation&1 (
+          feature_source_id            varchar2(80),
+          sequence_source_id           varchar2(50),
+          na_sequence_id               number(10),
+          na_feature_id                number(10),
+          start_min                    number,
+          end_max                      number,
+          is_reversed                  number(1),
+          parent_id                    number(10),
+          external_database_release_id number(10),
+          is_top_level                 number
+        )
+      ]]> 
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create table &prefixExonLocation&1 (
+          feature_source_id            varchar2(80),
+          sequence_source_id           varchar2(50),
+          na_sequence_id               number(10),
+          na_feature_id                number(10),
+          start_min                    number,
+          end_max                      number,
+          is_reversed                  number(1),
+          parent_id                    number(10),
+          external_database_release_id number(10),
+          is_top_level                 number
+        )
+      ]]> 
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create table &prefixCdsLocation&1 (
+          protein_source_id            varchar2(80),
+          transcript_source_id         varchar2(80),
+          sequence_source_id           varchar2(50),
+          na_sequence_id               number(10),
+          na_feature_id                number(10),
+          start_min                    number,
+          end_max                      number,
+          is_reversed                  number(1),
+          parent_id                    number(10),
+          external_database_release_id number(10),
+          is_top_level                 number
+        )
+      ]]> 
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create table &prefixUtrLocation&1 (
+          feature_source_id            varchar2(80),
+          sequence_source_id           varchar2(50),
+          na_sequence_id               number(10),
+          na_feature_id                number(10),
+          start_min                    number,
+          end_max                      number,
+          is_reversed                  number(1),
+          direction                    number(1),
+          parent_id                    number(10),
+          external_database_release_id number(10),
+          is_top_level                 number
         )
       ]]> 
     </sql>
@@ -4501,18 +4615,47 @@ tablespace indx
 
       use Data::Dumper;
 
+      my $geneInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
+        insert into &prefixGeneLocation&1
+            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id,
+             start_min, end_max, is_reversed, is_top_level,
+             sequence_ontology_id, external_database_release_id)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+
       my $transcriptInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
         insert into &prefixTranscriptLocation&1
             (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id,
-             start_min, end_max, is_reversed, gene_na_feature_id, is_top_level)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             start_min, end_max, is_reversed, parent_id, is_top_level, external_database_release_id)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+
+      my $exonInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
+        insert into &prefixExonLocation&1
+            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id, 
+             start_min, end_max, is_reversed, parent_id,
+             external_database_release_id, is_top_level)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
 
       my $cdsInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
         insert into &prefixCdsLocation&1
             (transcript_source_id, protein_source_id, sequence_source_id, na_sequence_id, na_feature_id,
-             start_min, end_max, is_reversed, gene_na_feature_id, is_top_level)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             start_min, end_max, is_reversed, parent_id, is_top_level, external_database_release_id)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+
+      my $utrInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
+        insert into &prefixUtrLocation&1
+            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id, 
+             start_min, end_max, is_reversed, direction, parent_id,
+             external_database_release_id, is_top_level)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+
+      my $soQuery = $dbh->prepare(<<SQL) or die $dbh->errstr;
+      select sequence_ontology_id from dots.NaFeature
+      where na_feature_id = ?
 SQL
 
       my $edrQuery = $dbh->prepare(<<SQL) or die $dbh->errstr;
@@ -4528,40 +4671,110 @@ SQL
           foreach my $geneId (@$geneList) {
             my $gmh = $geneModelLocations->getGeneModelHashFromGeneSourceId($geneId);
             my $locations = $geneModelLocations->bioperlFeaturesFromGeneSourceId($geneId);
+            my $transcriptNaFeatureId;
+            my ($exonStart, $exonEnd);
 
             foreach (@{$locations}) {
-              if ($_->{_primary_tag} eq "mRNA") {
+              if ($_->{_primary_tag} eq "gene") {
+                # printf STDERR "gene:\n" . Dumper($_) . "\n";
+                my $naFeatureId = $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0];
+                my $seqOntId = getSeqOntId($naFeatureId);
+                $geneInsert->execute(
+                                           $_->{_gsf_tag_hash}->{ID}[0], # feature_source_id
+                                           $_->{_gsf_seq_id}, # sequence_source_id
+                                           $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
+                                           $naFeatureId, # na_feature_id
+                                           $_->{_location}->{_start}, # start_min
+                                           $_->{_location}->{_end}, # end_max
+                                           $_->{_location}->{_strand} == -1 ? 1 : 0, # is_reversed
+                                           $isTopLevel, # is_top_level
+                                           $seqOntId, # sequence_ontology_id
+                                           $genomeExtDbRlsId # external_database_release_id
+                                          )
+                 or die $dbh->errstr;
+              } elsif ($_->{_primary_tag} eq "mRNA") {
+                $transcriptNaFeatureId = $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0];
                 $transcriptInsert->execute(
                                            $_->{_gsf_tag_hash}->{ID}[0], # feature_source_id
                                            $_->{_gsf_seq_id}, # sequence_source_id
                                            $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
-                                           $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0], # na_feature_id
+                                           $transcriptNaFeatureId, # na_feature_id
                                            $_->{_location}->{_start}, # start_min
                                            $_->{_location}->{_end}, # end_max
                                            $_->{_location}->{_strand} == -1 ? 1 : 0, # is_reversed
-                                           $_->{_gsf_tag_hash}->{PARENT_NA_FEATURE_ID}[0], # gene_na_feature_id
-                                           $isTopLevel # is_top_level
+                                           $_->{_gsf_tag_hash}->{PARENT_NA_FEATURE_ID}[0], # parent_id
+                                           $isTopLevel, # is_top_level
+                                           $genomeExtDbRlsId, # external_database_release_id
+                                          )
+                 or die $dbh->errstr;
+              } elsif ($_->{_primary_tag} eq "exon") {
+                # printf STDERR "exon:\n" . Dumper($_) . "\n";
+                $exonStart = $_->{_location}->{_start};
+                $exonEnd = $_->{_location}->{_end};
+                $exonInsert->execute(
+                                     $_->{_gsf_tag_hash}->{ID}[0], # feature_source_id
+                                     $_->{_gsf_seq_id}, # sequence_source_id
+                                     $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
+                                     $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0], # na_feature_id
+                                     $exonStart, # start_min
+                                     $exonEnd, # end_max
+                                     $_->{_location}->{_strand} == -1 ? 1 : 0, # is_reversed
+                                     $transcriptNaFeatureId, # parent_id
+                                     $genomeExtDbRlsId, # external_database_release_id
+                                     $isTopLevel, # is_top_level
                                           )
                  or die $dbh->errstr;
               } elsif ($_->{_primary_tag} eq "CDS") {
+                my $cdsStart = $_->{_location}->{_start};
+                my $cdsEnd = $_->{_location}->{_end};
                 $cdsInsert->execute(
                                            $_->{_gsf_tag_hash}->{PARENT}[0], # transcript_source_id
                                            $_->{_gsf_tag_hash}->{ID}[0], # protein_source_id
                                            $_->{_gsf_seq_id}, # sequence_source_id
                                            $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
                                            $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0], # na_feature_id
-                                           $_->{_location}->{_start}, # start_min
-                                           $_->{_location}->{_end}, # end_max
+                                           $cdsStart, # start_min
+                                           $cdsEnd, # end_max
                                            $_->{_location}->{_strand} == -1 ? 1 : 0, # is_reversed
-                                           $_->{_gsf_tag_hash}->{PARENT_NA_FEATURE_ID}[0], # gene_na_feature_id
-                                           $isTopLevel, # is_top_level,
+                                           $transcriptNaFeatureId, # parent_id
+                                           $isTopLevel, # is_top_level
+                                           $genomeExtDbRlsId, # external_database_release_id
                                           )
                  or die $dbh->errstr;
+
+                 if ($cdsStart != $exonStart) {
+                   $utrInsert->execute(
+                                     $_->{_gsf_tag_hash}->{ID}[0], # feature_source_id
+                                     $_->{_gsf_seq_id}, # sequence_source_id
+                                     $_->{_gsf_tag_hash}->{NA_SEQUENCE_ID}[0], # na_sequence_id
+                                     $_->{_gsf_tag_hash}->{NA_FEATURE_ID}[0], # na_feature_id
+                                     ($cdsStart < $exonStart) ? $cdsStart : $exonStart, # start_min
+                                     ($cdsStart > $exonStart) ? $cdsStart : $exonStart, # end_max
+                                     $_->{_location}->{_strand} == -1 ? 1 : 0, # is_reversed
+                                     $_->{_location}->{_strand} == -1 ? 5 : 3, # direction
+                                     $transcriptNaFeatureId, # parent_id
+                                     $genomeExtDbRlsId, # external_database_release_id
+                                     $isTopLevel, # is_top_level
+                                      )
+                      or die $dbh->errstr;
+                 }
               }
             }
           }
         }
 
+      }
+
+      sub getSeqOntId {
+        my ($naFeatureId) = @_;
+
+        $soQuery->execute($naFeatureId)
+           or die $dbh->errstr;
+
+        my ($id) = $soQuery->fetchrow_array();
+        $soQuery->finish();
+
+        return $id;
       }
       ]]>
     </perl>
