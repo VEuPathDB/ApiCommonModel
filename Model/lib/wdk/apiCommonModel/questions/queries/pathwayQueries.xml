@@ -30,6 +30,62 @@
         <wsColumn name="project_id" width="32" wsName="project_id"/>
     </processQuery>   
 
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- By Identifiers -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="PathwaysByIdentifierList" doNotTest="true"  excludeProjects="EuPathDB"
+              displayName="ID" isCacheable="true">
+        <paramRef ref="pathwayParams.single_identifier_id"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="identifiers"/>
+        <sql>
+            <![CDATA[
+SELECT  '@PROJECT_ID@' as project_id, source_id, 
+          apidb.tab_to_string(set(cast(COLLECT(identifier) AS apidb.varchartab))) as identifiers --, external_database_release_id
+from (
+-- Pathways from direct pathwayNodes
+SELECT p.source_id, pn.display_label AS identifier, p.external_database_release_id 
+FROM SRES.pathway p, SRES.pathwayNode pn
+WHERE pn.pathway_id = p.pathway_id 
+AND pn.display_label = $$single_identifier_id$$
+UNION
+-- Pathways from KEGG ID
+SELECT p.source_id, da.accession_number as identifier, p.external_database_release_id
+FROM SRES.pathway p, SRES.pathwayNode pn, CHEBI.compounds c, CHEBI.DATABASE_ACCESSION da  
+WHERE pn.pathway_id = p.pathway_id AND pn.display_label  LIKE 'CHEBI:%'
+AND pn.display_label = c.chebi_accession
+AND c.ID = da.compound_id
+AND da.accession_number = $$single_identifier_id$$
+ AND da.TYPE='KEGG COMPOUND accession' 
+ UNION
+-- Pathways from GENE_ID
+SELECT p.source_id,ta.gene_source_id as identifier, p.external_database_release_id
+FROM SRES.pathway p, SRES.pathwayNode pn, dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec,  ApidbTuning.transcriptattributes ta
+WHERE pn.pathway_id = p.pathway_id 
+AND pn.display_label = ec.ec_number
+AND  ta.aa_sequence_id = asec.aa_sequence_id
+AND  asec.enzyme_class_id = ec.enzyme_class_id
+AND ta.gene_source_id = $$single_identifier_id$$
+)
+--where external_database_release_id in (
+GROUP BY source_id,external_database_release_id
+order by source_id
+	    ]]>
+        </sql>
+    </sqlQuery>
+
+    <processQuery name="PathwaysByIdentifierList" includeProjects="EuPathDB"
+          doNotTest="true"
+          processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="project_id" width="32" wsName="project_id"/>
+        <wsColumn name="identifiers" width="100" wsName="genes"/>
+    </processQuery>   
+
+
     <!-- ************************************************************ -->
     <!-- Gene List -->  
     <!-- ************************************************************ -->
