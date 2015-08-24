@@ -53,7 +53,7 @@ sub doInsert {
   $dbh->do(<<SQL) or die "doing initial inserts in TrackOldAnnotation table";
     INSERT INTO TrackOldAnnotation$suffix (old_source_id, new_source_id)  
       ( SELECT DISTINCT oa.source_id, gi.gene
-        FROM apidb.oldannotation oa, apidbtuning.geneId gi
+        FROM apidb.oldannotation oa, geneId gi
 	WHERE oa.source_id = gi.id )
 SQL
 }
@@ -67,10 +67,10 @@ sub updateForEc {
 UPDATE TrackOldAnnotation$suffix trackerT 
 SET altered_ec =
 (SELECT  case when (count(DISTINCT oa.value)  = ecCounts.ct) then 0 else 1 end as altered_ec
- FROM apidb.oldannotation oa, apidbtuning.geneId gi,
+ FROM apidb.oldannotation oa, geneId gi,
   ( SELECT  count(DISTINCT ec2.ec_number) as ct, oa2.source_id as oldid, ga2.source_id as newId
-    FROM dots.aaSequenceEnzymeClass asec2, sres.enzymeClass ec2, apidbtuning.geneattributes ga2, 
-          apidb.oldannotation oa2, apidbtuning.geneId gi2
+    FROM dots.aaSequenceEnzymeClass asec2, sres.enzymeClass ec2, geneattributes ga2, 
+          apidb.oldannotation oa2, geneId gi2
    WHERE oa2.type = 'EC'
    AND ec2.enzyme_class_id = asec2.enzyme_class_id
    AND asec2.aa_sequence_id = ga2.aa_sequence_id
@@ -93,7 +93,7 @@ SQL
   UPDATE TrackOldAnnotation$suffix SET altered_ec =-1
     WHERE new_source_id in 
       ( SELECT ga.source_id
-	FROM apidbtuning.geneattributes ga, apidbtuning.geneId gi, APIDB.oldcodingsequence ocs
+	FROM geneattributes ga, geneId gi, APIDB.oldcodingsequence ocs
 	WHERE ga.ec_numbers is not  null
 	AND ga.source_id = gi.gene
 	AND gi.id =ocs.source_id
@@ -107,7 +107,7 @@ SQL
   UPDATE TrackOldAnnotation$suffix SET altered_ec = 2
     WHERE old_source_id in
       ( SELECT DISTINCT oa.source_id
-	FROM apidbtuning.geneattributes ga, apidb.oldannotation oa, apidbtuning.geneId gi
+	FROM geneattributes ga, apidb.oldannotation oa, geneId gi
 	WHERE ga.ec_numbers is  null
 	AND ga.source_id = gi.gene
 	AND gi.id = oa.source_id
@@ -124,9 +124,9 @@ sub updateForGo {
 UPDATE TrackOldAnnotation$suffix trackerT 
 SET altered_go = 
 (SELECT  case when (count(DISTINCT oa.value) = goCounts.ct) then 0 else 1 end as altered_go 
- FROM apidb.oldannotation oa, apidbtuning.geneId gi,
+ FROM apidb.oldannotation oa, geneId gi,
    (SELECT count(DISTINCT oa2.value) as ct, oa2.source_id as oldid, gts2.source_id as newId
-  FROM apidbtuning.gotermsummary gts2,  apidb.oldannotation oa2, apidbtuning.geneId gi2
+  FROM gotermsummary gts2,  apidb.oldannotation oa2, geneId gi2
   WHERE oa2.type='GO' 
   AND oa2.value = gts2.go_id
   AND gts2.source_id = gi2.gene 
@@ -146,7 +146,7 @@ SQL
   $updateStmt = $dbh->prepare(<<SQL);
 UPDATE TrackOldAnnotation$suffix SET altered_go =-1
 WHERE new_source_id in 
-( SELECT  DISTINCT gts.source_id FROM  APIDB.oldcodingsequence ocs, apidbtuning.gotermsummary gts, apidbtuning.geneId gi
+( SELECT  DISTINCT gts.source_id FROM  APIDB.oldcodingsequence ocs, gotermsummary gts, geneId gi
 WHERE ocs.source_id = gi.id  AND gi.gene = gts.source_id
 AND ocs.source_id not in (SELECT DISTINCT source_id FROM APIDB.oldannotation WHERE type='GO')  )
 AND altered_go is null
@@ -157,10 +157,10 @@ SQL
   $updateStmt = $dbh->prepare(<<SQL);
 UPDATE TrackOldAnnotation$suffix SET altered_go = 2
 WHERE old_source_id in
- (SELECT DISTINCT  oa.source_id FROM  apidb.oldannotation oa, apidbtuning.geneattributes ga, apidbtuning.geneId gi
+ (SELECT DISTINCT  oa.source_id FROM  apidb.oldannotation oa, geneattributes ga, geneId gi
   WHERE oa.source_id = gi.id  AND gi.gene = ga.source_id
   AND oa.type='GO'
-  AND ga.source_id not in  (SELECT source_id FROM  APIDBTUNING.gotermsummary)  )
+  AND ga.source_id not in  (SELECT source_id FROM  gotermsummary)  )
 AND altered_go is null
 SQL
   $updateStmt->execute() or die "FAILED updating altered_go when GO ids exist for exist for OLD but not for NEW genes.";
@@ -176,7 +176,7 @@ SET altered_product =
 (SELECT CASE WHEN (
     ( SUBSTR(COALESCE(preferred_product.product, any_product.product, gf.product, 'unspecified product'), 1, 300) )  = oa.value )
    THEN 0 ELSE 1 END AS altered_product
-  FROM apidb.oldannotation oa, apidbtuning.geneId gi, apidbtuning.geneattributes ga, dots.genefeature gf,
+  FROM apidb.oldannotation oa, geneId gi, geneattributes ga, dots.genefeature gf,
    (SELECT na_feature_id, max(product) as product
       FROM apidb.GeneFeatureProduct
       WHERE is_preferred = 1
@@ -204,7 +204,7 @@ SQL
 UPDATE TrackOldAnnotation$suffix SET altered_product = 2
 WHERE old_source_id in
 ( SELECT oa.source_id 
- FROM APIDBTUNING.geneattributes ga, TrackOldAnnotation$suffix t, APIDB.oldannotation oa
+ FROM geneattributes ga, TrackOldAnnotation$suffix t, APIDB.oldannotation oa
  WHERE ga.source_id = t.new_source_id 
  AND t.altered_product is null
  AND oa.source_id = t.old_source_id AND oa.type='product' )
@@ -221,7 +221,7 @@ sub updateForCds {
 UPDATE TrackOldAnnotation$suffix trackerT 
 SET altered_cds =
 (SELECT  case when dbms_lob.compare(ocs.coding_sequence,cs.sequence) = 0 then 0 else 1 end as altered_sequence 
- FROM APIDB.oldcodingsequence ocs, apidbtuning.geneId gi, APIDBTUNING.proteinsequence cs
+ FROM APIDB.oldcodingsequence ocs, geneId gi, proteinsequence cs
  WHERE ocs.source_id = gi.id
  AND gi.gene = cs.source_id
  AND trackerT.old_source_id = ocs.source_id
