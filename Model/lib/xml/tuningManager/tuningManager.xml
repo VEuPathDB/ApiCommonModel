@@ -5530,8 +5530,9 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
          compound record and queries, as well as in the creation of the
          PathwayCompounds tuning table. Propagated to portal instances.
       </comment>
-    <externalDependency name="apidb.PubChemSubstance"/>
-    <externalDependency name="apidb.PubChemCompound"/>
+    <externalDependency name="chebi.compounds"/>
+    <externalDependency name="chebi.names"/>
+    <externalDependency name="chebi.chemical_data"/>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixCompoundAttributes&1 NOLOGGING AS
@@ -5581,12 +5582,12 @@ SET ca.kegg_id =
 (SELECT apidb.tab_to_string(SET(CAST(COLLECT('''' || accession_number || '''') AS apidb.varchartab)), ', ') 
 FROM (
       SELECT  distinct da.accession_number,  p.chebi_accession
-      FROM CHEBI.DATABASE_ACCESSION da, chebi.compounds c, chebi.compounds p
+      FROM chebi.database_accession da, chebi.compounds c, chebi.compounds p
       WHERE p.status='C' AND da.TYPE='KEGG COMPOUND accession' 
       AND da.compound_id = c.ID AND c.parent_id=p.ID
  UNION 
      SELECT  da.accession_number,  p.chebi_accession
-      FROM CHEBI.DATABASE_ACCESSION da, chebi.compounds p
+      FROM chebi.database_accession da, chebi.compounds p
       WHERE p.status='C' AND da.TYPE='KEGG COMPOUND accession' 
       AND  da.compound_id = p.ID AND p.parent_id IS NULL
   )
@@ -5609,14 +5610,15 @@ FROM (
     <externalDependency name="sres.ontologyTerm"/>
     <externalDependency name="apidb.pathwayReactionRel"/>
     <externalDependency name="apidb.pathwayReaction"/>
+    <externalDependency name="chebi.compounds"/>
     <sql>
       <![CDATA[
 CREATE TABLE PathwayCompounds&1 NOLOGGING AS
 SELECT p.pathway_id, p.source_id AS pathway, pr.source_id AS reaction, p.external_database_release_id AS extDbRlsId,
-pn.display_label AS compound, pn2.display_label AS enzyme,   prel.is_reversible,
+pn.display_label AS compound, c.chebi_accession, pn2.display_label AS enzyme,
 CASE WHEN (prel.is_reversible =1) THEN 'substrate/product' ELSE 'substrate' END as type
 FROM sres.pathway p,  apidb.pathwayReactionRel prr, apidb.pathwayReaction pr,  sres.pathwayRelationship prel, 
-sres.pathwayNode pn,sres.ontologyTerm ot,
+sres.pathwayNode pn,sres.ontologyTerm ot, chebi.Compounds c,
 sres.pathwayNode pn2,sres.ontologyTerm ot2
 WHERE p.pathway_id = prr.pathway_id
 AND pr.pathway_reaction_id = prr.pathway_reaction_id
@@ -5627,12 +5629,14 @@ AND ot.ontology_term_id = pn.pathway_node_type_id
 AND prel.associated_node_id = pn2.pathway_node_id
 AND ot2.NAME = 'enzyme'
 AND ot2.ontology_term_id = pn2.pathway_node_type_id
+AND c.id = pn.row_id
+AND pn.table_id in (select table_id FROM core.TableInfo where name = 'Compounds')
 UNION
 SELECT p.pathway_id, p.source_id AS pathway, pr.source_id AS reaction, p.external_database_release_id AS extDbRlsId,
-pn.display_label AS compound, pn2.display_label AS enzyme,   prel.is_reversible,
+pn.display_label AS compound, c.chebi_accession, pn2.display_label AS enzyme,
 CASE WHEN (prel.is_reversible =1) THEN 'substrate/product' ELSE 'product' END as type
 FROM sres.pathway p,  apidb.pathwayReactionRel prr, apidb.pathwayReaction pr,  sres.pathwayRelationship prel, 
-sres.pathwayNode pn,sres.ontologyTerm ot,
+sres.pathwayNode pn,sres.ontologyTerm ot, chebi.Compounds c,
 sres.pathwayNode pn2,sres.ontologyTerm ot2
 WHERE p.pathway_id = prr.pathway_id
 AND pr.pathway_reaction_id = prr.pathway_reaction_id
@@ -5643,6 +5647,8 @@ AND ot.ontology_term_id = pn.pathway_node_type_id
 AND prel.node_id = pn2.pathway_node_id
 AND ot2.NAME = 'enzyme'
 AND ot2.ontology_term_id = pn2.pathway_node_type_id
+AND c.id = pn.row_id
+AND pn.table_id in (select table_id FROM core.TableInfo where name = 'Compounds')
       ]]>
     </sql>
   </tuningTable>
