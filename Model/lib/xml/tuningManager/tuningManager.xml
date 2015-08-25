@@ -5598,81 +5598,56 @@ FROM (
 
   </tuningTable>
 
-<!--
   <tuningTable name="PathwayCompounds">
     <comment> Each record represents a 5-tuple of (reaction, compound, pathway,
          enzyme, type). Used extensively in the model for pathway-related
          queries, as well as by getImageMap.pl.
       </comment>
-    <internalDependency name="CompoundAttributes"/>
-    <externalDependency name="dots.Transcript"/>
-    <externalDependency name="dots.TranslatedAaFeature"/>
-    <externalDependency name="dots.AaSequenceEnzymeClass"/>
-    <externalDependency name="sres.EnzymeClass"/>
-    <externalDependency name="apidb.Network"/>
-    <externalDependency name="apidb.NetworkNode"/>
-    <externalDependency name="apidb.NetworkRelationship"/>
-    <externalDependency name="apidb.NetworkRelationshipType"/>
-    <externalDependency name="apidb.NetworkContext"/>
-    <externalDependency name="apidb.NetworkRelContext"/>
-    <externalDependency name="apidb.NetworkRelContextLink"/>
-    <externalDependency name="apidb.PubChemSubstance"/>
+    <externalDependency name="sres.pathway"/>
+    <externalDependency name="sres.pathwayNode"/>
+    <externalDependency name="sres.pathwayRelationship"/>
+    <externalDependency name="sres.ontologyTerm"/>
+    <externalDependency name="apidb.pathwayReactionRel "/>
+    <externalDependency name="apidb.pathwayReaction"/>
     <sql>
       <![CDATA[
 CREATE TABLE PathwayCompounds&1 NOLOGGING AS
-SELECT  '@PROJECT_ID@' AS project_id, ca.compound_id, ca.source_id AS compound_source_id, x.*
-FROM   apidb.PubChemSubstance s1, apidb.PubChemSubstance s2, CompoundAttributes ca,
-    (  /* CASE  A :  NOT reversible */
-      SELECT  CASE WHEN nn1.node_type_id = 2 THEN nn1.display_label
-                 WHEN nn2.node_type_id = 2 THEN nn2.display_label
-                 ELSE 'None' END AS compound,
-            CASE WHEN nn1.node_type_id = 1 THEN REPLACE(nn1.display_label, '_X:_Y:','')
-                 WHEN nn2.node_type_id = 1 THEN REPLACE(nn2.display_label, '_X:_Y:','')
-                 ELSE 'None' END AS enzyme,
-             CASE  WHEN (nrc.source_node = 0 and nn1.node_type_id = 1) THEN  'product' /* reaction from enzyme to compound */
-                      ELSE 'substrate' END AS type,
-              nrt.display_name AS reaction,
-              nc.description ||' ('||nc.name||')' AS pathway, nc.name AS name, nc.network_context_id
-     FROM apidb.NetworkRelationshipType nrt, apidb.NetworkRelContext nrc, apidb.NetworkRelationship nr,
-              apidb.NetworkRelContextLink nrl, apidb.NetworkContext nc,
-              apidb.NetworkNode nn1, apidb.NetworkNode nn2
-     WHERE nrc.network_relationship_type_id = nrt.network_relationship_type_id
-           /* source_node = 1 means irreversible (this is an adjustment as network schema cant store reversibility) */
-            AND nrc.source_node = 1 
-     	    AND nrc.network_relationship_id = nr.network_relationship_id
-	    AND nr.node_id = nn1.network_node_id
-      	    AND nr.associated_node_id = nn2.network_node_id
-      	    AND  nrl.network_rel_context_id = nrc.network_rel_context_id
-      	    AND  nc.network_context_id = nrc.network_context_id
-      	    AND nc.name NOT IN ('ec01100','ec01110','ec01120')
-     UNION
-      /* CASE  B :   reversible */
-     SELECT  nn2.display_label as compound, REPLACE(nn1.display_label, '_X:_Y:','') AS enzyme, 
-                  'substrate/product' AS type,
-                  nrt.display_name AS reaction, 
-                  nc.description ||' ('||nc.name||')' as pathway, nc.name AS name, nc.network_context_id
-       FROM apidb.NetworkRelationshipType nrt, apidb.NetworkRelContext nrc, apidb.NetworkRelationship nr,
-              apidb.NetworkRelContextLink nrl, apidb.NetworkContext nc,
-              apidb.NetworkNode nn1, apidb.NetworkNode nn2
-     WHERE nrc.network_relationship_type_id = nrt.network_relationship_type_id
-           /* source_node = 0 means reversible (this is an adjustment as network schema cant store reversibility) */
-      	   AND nrc.source_node = 0 
-      	   AND nrc.network_relationship_id = nr.network_relationship_id
-      	   AND nr.node_id = nn1.network_node_id
-      	   AND nr.associated_node_id = nn2.network_node_id
-      	   AND  nrl.network_rel_context_id = nrc.network_rel_context_id
-      	   AND  nc.network_context_id = nrc.network_context_id
-      	   AND nc.name NOT IN ('ec01100','ec01110','ec01120')
-      	   AND nn1.node_type_id = 1
-     	   ) x
-WHERE s1.property = 'CID'
-      AND  s1.value = ca.compound_id 
-      AND  s1.substance_id = s2.substance_id
-      AND  (s2.value = x.compound)
+SELECT p.pathway_id, p.source_id AS pathway, pr.source_id AS reaction, p.external_database_release_id AS extDbRlsId,
+pn.display_label AS compound, pn2.display_label AS enzyme,   prel.is_reversible,
+CASE WHEN (prel.is_reversible =1) THEN 'substrate/product' ELSE 'substrate' END as type
+FROM sres.pathway p,  apidb.pathwayReactionRel prr, apidb.pathwayReaction pr,  sres.pathwayRelationship prel, 
+sres.pathwayNode pn,sres.ontologyTerm ot,
+sres.pathwayNode pn2,sres.ontologyTerm ot2
+WHERE p.pathway_id = prr.pathway_id
+AND pr.pathway_reaction_id = prr.pathway_reaction_id
+AND prr.pathway_relationship_id = prel.pathway_relationship_id
+AND prel.node_id = pn.pathway_node_id
+AND ot.NAME = 'molecular entity'
+AND ot.ontology_term_id = pn.pathway_node_type_id
+AND prel.associated_node_id = pn2.pathway_node_id
+AND ot2.NAME = 'enzyme'
+AND ot2.ontology_term_id = pn2.pathway_node_type_id
+UNION
+SELECT p.pathway_id, p.source_id AS pathway, pr.source_id AS reaction, p.external_database_release_id AS extDbRlsId,
+pn.display_label AS compound, pn2.display_label AS enzyme,   prel.is_reversible,
+CASE WHEN (prel.is_reversible =1) THEN 'substrate/product' ELSE 'product' END as type
+FROM sres.pathway p,  apidb.pathwayReactionRel prr, apidb.pathwayReaction pr,  sres.pathwayRelationship prel, 
+sres.pathwayNode pn,sres.ontologyTerm ot,
+sres.pathwayNode pn2,sres.ontologyTerm ot2
+WHERE p.pathway_id = prr.pathway_id
+AND pr.pathway_reaction_id = prr.pathway_reaction_id
+AND prr.pathway_relationship_id = prel.pathway_relationship_id
+AND prel.associated_node_id = pn.pathway_node_id
+AND ot.NAME = 'molecular entity'
+AND ot.ontology_term_id = pn.pathway_node_type_id
+AND prel.node_id = pn2.pathway_node_id
+AND ot2.NAME = 'enzyme'
+AND ot2.ontology_term_id = pn2.pathway_node_type_id
       ]]>
     </sql>
   </tuningTable>
 
+<!--
   <tuningTable name="CompoundTypeAheads">
     <comment> for use in GenesByReactionCompounds question </comment>
     <internalDependency name="CompoundAttributes"/>
