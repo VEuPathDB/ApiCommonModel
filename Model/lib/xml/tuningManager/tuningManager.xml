@@ -5536,14 +5536,14 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
     <sql>
       <![CDATA[
 CREATE TABLE &prefixCompoundAttributes&1 NOLOGGING AS
-SELECT c.ID, c.chebi_accession AS source_id, c.parent_id,
+SELECT c.ID, c.chebi_accession AS source_id,
     substr(apidb.tab_to_string(set(cast(COLLECT(to_char(cn.name)) AS apidb.varchartab)), ', '), 1, 1000) AS preferred_name,
     substr(apidb.tab_to_string(set(cast(COLLECT(to_char(cn.name)) AS apidb.varchartab)), ', '), 1, 1000) AS compound_name,
     substr(apidb.tab_to_string(set(cast(COLLECT(to_char(ciup.iupac_name)) AS apidb.varchartab)), ', '), 1, 1000) AS iupac_name,
     substr(apidb.tab_to_string(set(cast(COLLECT(to_char(csyn.syn)) AS apidb.varchartab)), ', '), 1, 1000) AS syn,
-    c.definition, formu.formula, m.mass,
-    apidb.tab_to_string(set(cast(COLLECT(sec.chebi_accession order by sec.chebi_accession) as apidb.varchartab)), ', ') AS secondary_ids,
-    cast(null as varchar2(50)) as kegg_id
+    c.definition, m.mass,
+    apidb.tab_to_string(set(cast(COLLECT(formu.formula order by formu.formula) as apidb.varchartab)), ', ') AS formula,
+    apidb.tab_to_string(set(cast(COLLECT(sec.chebi_accession order by sec.chebi_accession) as apidb.varchartab)), ', ') AS secondary_ids
 FROM  chebi.compounds c, 
   ( SELECT compound_id,  NAME FROM chebi.names WHERE TYPE='NAME') cn,
   ( SELECT compound_id,  MIN(NAME) AS iupac_name FROM chebi.names WHERE TYPE='IUPAC NAME' GROUP BY compound_id) ciup,
@@ -5557,8 +5557,8 @@ AND c.ID = ciup.compound_id (+)
 AND c.ID = csyn.compound_id (+)
 AND c.ID = formu.compound_id (+)
 AND c.ID = m.compound_id (+)
-AND c.ID = sec.parent_id
-GROUP BY c.ID, c.chebi_accession, c.parent_id,c.definition, formu.formula, m.mass
+AND c.ID = sec.parent_id (+)
+GROUP BY c.ID, c.chebi_accession, c.parent_id,c.definition, m.mass
       ]]>
     </sql>
     <sql>
@@ -5575,28 +5575,6 @@ set preferred_name = syn
 where preferred_name is NULL
       ]]>
     </sql>
-    <sql>
-      <![CDATA[
-UPDATE &prefixCompoundAttributes&1 ca
-SET ca.kegg_id =  
-(SELECT apidb.tab_to_string(SET(CAST(COLLECT('''' || accession_number || '''') AS apidb.varchartab)), ', ') 
-FROM (
-      SELECT  distinct da.accession_number,  p.chebi_accession
-      FROM chebi.database_accession da, chebi.compounds c, chebi.compounds p
-      WHERE p.status='C' AND da.TYPE='KEGG COMPOUND accession' 
-      AND da.compound_id = c.ID AND c.parent_id=p.ID
- UNION 
-     SELECT  da.accession_number,  p.chebi_accession
-      FROM chebi.database_accession da, chebi.compounds p
-      WHERE p.status='C' AND da.TYPE='KEGG COMPOUND accession' 
-      AND  da.compound_id = p.ID AND p.parent_id IS NULL
-  )
-  WHERE chebi_accession =ca.source_id
-  GROUP BY chebi_accession
-)
-      ]]>
-    </sql>
-
   </tuningTable>
 
   <tuningTable name="PathwayCompounds">
