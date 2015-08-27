@@ -13,7 +13,6 @@ import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.gusdb.fgputil.CliUtil;
 import org.gusdb.fgputil.db.platform.SupportedPlatform;
 
@@ -290,10 +289,9 @@ public class DatasetPresenterSetLoader {
 
         datasetPresenter.setDefaultDatasetInjector(defaultDatasetInjectorClasses);
 
-        int datasetPresenterId = getNextDatasetPresenterId();
+	String datasetPresenterId = datasetPresenter.getId();
 
-        loadDatasetPresenter(datasetPresenterId, datasetPresenter,
-            presenterStmt);
+        loadDatasetPresenter(datasetPresenterId, datasetPresenter, presenterStmt);
 
         String type = datasetPresenter.getType();
         String subtype = datasetPresenter.getSubtype();
@@ -353,21 +351,20 @@ public class DatasetPresenterSetLoader {
 
   PreparedStatement getPresenterStmt() throws SQLException {
     String table = config.getUsername() + ".DatasetPresenter" + suffix;
-    String sql = "INSERT INTO "
-        + table
-        + " (dataset_presenter_id, name, stable_id, dataset_name_pattern, display_name, short_display_name, short_attribution, summary, protocol, usage, description, caveat, acknowledgement, release_policy, display_category, type, subtype, is_species_scope, build_number_introduced)"
-        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    String sql = "INSERT INTO " + table +
+        " (dataset_presenter_id, name, dataset_name_pattern, " +
+        "display_name, short_display_name, short_attribution, summary, " +
+        "protocol, usage, description, caveat, acknowledgement, release_policy, " +
+        "display_category, type, subtype, is_species_scope, build_number_introduced)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadDatasetPresenter(int datasetPresenterId,
-      DatasetPresenter datasetPresenter, PreparedStatement stmt)
+  private void loadDatasetPresenter(String datasetPresenterId, DatasetPresenter datasetPresenter, PreparedStatement stmt)
       throws SQLException {
-      int i = 1;
-    stmt.setInt(i++, datasetPresenterId);
-
+    int i = 1;
+    stmt.setString(i++, datasetPresenterId); 
     stmt.setString(i++, datasetPresenter.getDatasetName());
-    stmt.setString(i++, DigestUtils.sha1Hex("DS_" + datasetPresenter.getDatasetName()).substring(0,10));
     stmt.setString(i++, datasetPresenter.getDatasetNamePattern());
     stmt.setString(i++, datasetPresenter.getDatasetDisplayName());
     stmt.setString(i++, datasetPresenter.getDatasetShortDisplayName());
@@ -407,9 +404,9 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadContact(int datasetPresenterId, Contact contact,
+  private void loadContact(String datasetPresenterId, Contact contact,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(1, datasetPresenterId);
     stmt.setBoolean(2, contact.getIsPrimary());
     stmt.setString(3, contact.getName());
     stmt.setString(4, contact.getEmail());
@@ -430,9 +427,9 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadPublication(int datasetPresenterId, Publication publication,
+  private void loadPublication(String datasetPresenterId, Publication publication,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(1, datasetPresenterId);
     stmt.setString(2, publication.getPubmedId());
     stmt.setString(3, publication.getCitation());
 
@@ -454,9 +451,9 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadNameTaxonPair(int datasetPresenterId, NameTaxonPair pair,
+  private void loadNameTaxonPair(String datasetPresenterId, NameTaxonPair pair,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(1, datasetPresenterId);
     stmt.setString(2, pair.getName());
     stmt.setInt(3, pair.getTaxonId());
     stmt.execute();
@@ -471,9 +468,9 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadHistory(int datasetPresenterId, History history,
+  private void loadHistory(String datasetPresenterId, History history,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(1, datasetPresenterId);
     stmt.setInt(2, history.getBuildNumber());
     stmt.setString(3, history.getGenomeSource());
     stmt.setString(4, history.getGenomeVersion());
@@ -492,9 +489,9 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadModelReference(int datasetPresenterId, ModelReference ref,
+  private void loadModelReference(String datasetPresenterId, ModelReference ref,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(1, datasetPresenterId);
     stmt.setString(2, ref.getRecordClassName());
     stmt.setString(3, ref.getTargetType());
     stmt.setString(4, ref.getTargetName().replace(":", ""));
@@ -509,34 +506,15 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadLink(int datasetPresenterId, HyperLink link,
+  private void loadLink(String datasetPresenterId, HyperLink link,
       PreparedStatement stmt) throws SQLException {
-    stmt.setInt(1, datasetPresenterId);
+    stmt.setString(1, datasetPresenterId);
     stmt.setString(2, link.getText());
     stmt.setString(3, link.getDescription());
     stmt.setString(4, link.getUrl());
     stmt.execute();
   }
 
-  int getNextDatasetPresenterId() throws SQLException {
-    String table = config.getUsername() + ".DatasetPresenter" + suffix;
-    String sql = "select " + table + "_sq.nextval from dual";
-    Statement stmt = null;
-    ResultSet rs = null;
-    int id;
-    try {
-      stmt = dbConnection.createStatement();
-      rs = stmt.executeQuery(sql);
-      rs.next();
-      id = rs.getInt(1);
-    } finally {
-      if (rs != null)
-        rs.close();
-      if (stmt != null)
-        stmt.close();
-    }
-    return id;
-  }
 
   // ///////////// Static methods //////////////////////////////
 
