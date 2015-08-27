@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.io.File;
+import java.lang.Runtime;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -42,7 +44,7 @@ public class Ssgcid {
 	createStmt.executeUpdate(createSql.toString());
     }
 
-    public static void main(String[] args) throws SQLException {
+    public static void main(String[] args) throws SQLException, IOException, JsonProcessingException, IOException {
  
 	if (args.length != 1) {
 	    System.err.println("usage: java Ssgcid <suffix>");
@@ -54,13 +56,11 @@ public class Ssgcid {
 	String schema = "";
 	String password = "";
 
-	try {
-	    BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-	    instance = in.readLine();
-	    schema = in.readLine();
-	    password = in.readLine();
-	} catch (IOException e) {
-	}
+	BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+	instance = in.readLine();
+	schema = in.readLine();
+	password = in.readLine();
+
 	ConnectionPoolConfig config = SimpleDbConfig.create(
 	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
 	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
@@ -72,33 +72,31 @@ public class Ssgcid {
              + "values (?, ?, ?, ?, ?, ?)");
 	PreparedStatement insertStatement = dbc.prepareStatement(insertSql.toString());
 
-	try {
- 
-	    URL url = new URL("http://www.ssgcid.org/eupath/list_all?format=json");
-	    ObjectMapper mapper = new ObjectMapper();
-	    ArrayNode root = (ArrayNode) mapper.readTree(url);
-	    Iterator<JsonNode> jsonNodeIterator = root.elements();
-	    while (jsonNodeIterator.hasNext()) {
-		JsonNode jsonNode = jsonNodeIterator.next();
-		//int identifier = jsonNode.get("pk").intValue();
-		JsonNode fieldsNode = jsonNode.get("fields");
 
-		insertStatement.setString(1, jsonNode.get("pk").textValue());
-		insertStatement.setString(2, fieldsNode.get("eupathdb").textValue());
-		insertStatement.setString(3, fieldsNode.get("status").textValue());
-		insertStatement.setString(4, fieldsNode.get("selection_criteria").textValue());
-		insertStatement.setString(5, fieldsNode.get("has_clone").booleanValue() ? "true" : "false");
-		insertStatement.setString(6, fieldsNode.get("has_protein").booleanValue() ? "true" : "false");
-		insertStatement.executeUpdate();
-	    }		
-		
-	} catch (JsonProcessingException e) {
-	    e.printStackTrace();
-		  
-	} catch (IOException e) {
-	    e.printStackTrace(); 
-	}
- 
+	// URL url = new URL("http://www.ssgcid.org/eupath/list_all?format=json");
+	// ObjectMapper mapper = new ObjectMapper();
+	// ArrayNode root = (ArrayNode) mapper.readTree(url);
+
+	String filename = new String("/tmp/ssgcid" + suffix + ".json");
+	// Runtime.getRuntime().exec("wget http://www.ssgcid.org/eupath/list_all?format=json --output-document " + filename);
+	File file = new File(filename);
+	ObjectMapper mapper = new ObjectMapper();
+	ArrayNode root = (ArrayNode) mapper.readTree(file);
+
+	Iterator<JsonNode> jsonNodeIterator = root.elements();
+	while (jsonNodeIterator.hasNext()) {
+	    JsonNode jsonNode = jsonNodeIterator.next();
+	    //int identifier = jsonNode.get("pk").intValue();
+	    JsonNode fieldsNode = jsonNode.get("fields");
+
+	    insertStatement.setString(1, jsonNode.get("pk").textValue());
+	    insertStatement.setString(2, fieldsNode.get("eupathdb").textValue());
+	    insertStatement.setString(3, fieldsNode.get("status").textValue());
+	    insertStatement.setString(4, fieldsNode.get("selection_criteria").textValue());
+	    insertStatement.setString(5, fieldsNode.get("has_clone").booleanValue() ? "true" : "false");
+	    insertStatement.setString(6, fieldsNode.get("has_protein").booleanValue() ? "true" : "false");
+	    insertStatement.executeUpdate();
+	}		
     }
- 
+
 }
