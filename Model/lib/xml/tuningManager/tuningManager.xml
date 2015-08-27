@@ -5574,6 +5574,50 @@ where preferred_name is NULL
     </sql>
   </tuningTable>
 
+
+  <tuningTable name="CompoundId"  prefixEnabled="true">
+    <comment> Alias table for Compounds.
+    Compound column is the source_id from CompoundAttributes (chEBI_ID).
+    ID can have this same ID, or mapping KEGG ID, or Name, or Synonym.
+    </comment>
+    <internalDependency name="CompoundAttributes"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE CompoundId&1 NOLOGGING AS
+      SELECT source_id AS id, source_id AS compound, 'same ID' AS type 
+      FROM compoundAttributes
+      UNION
+      SELECT da.accession_number AS id,  p.source_id AS compound, 'KEGG'  AS type 
+      FROM chebi.database_accession da, compoundAttributes p
+      WHERE da.type='KEGG COMPOUND accession' 
+      AND  da.compound_id = p.id
+      UNION
+      SELECT  distinct da.accession_number AS id,  p.chebi_accession AS compound, 'KEGG'  as type 
+      FROM chebi.database_accession da, chebi.compounds c, chebi.compounds p
+      WHERE p.status='C' AND da.type='KEGG COMPOUND accession' 
+      AND da.compound_id = c.id AND c.parent_id=p.id
+      UNION
+      SELECT n.name as id, ca.source_id as compound, 'name' as type
+      FROM compoundAttributes ca, chebi.names n
+      WHERE ca.id = n.compound_id
+      AND n.type = 'NAME' 
+      UNION
+      SELECT n.name as id, ca.source_id as compound, 'synonym' as type
+      FROM compoundAttributes ca, chebi.names n
+      WHERE ca.id = n.compound_id
+      AND n.type = 'SYNONYM'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+      CREATE INDEX CompoundId_idx&1 ON CompoundId&1 (id, compound)
+      TABLESPACE indx
+      ]]>
+    </sql>
+
+  </tuningTable>
+
+
   <tuningTable name="PathwayCompounds">
     <comment> Each record represents a 5-tuple of (reaction, compound, pathway,
          enzyme, type). Used extensively in the model for pathway-related
