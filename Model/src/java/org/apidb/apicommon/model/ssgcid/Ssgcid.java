@@ -1,11 +1,9 @@
 package org.apidb.apicommon.model.ssgcid;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URL;
-import java.io.File;
-import java.lang.Runtime;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
