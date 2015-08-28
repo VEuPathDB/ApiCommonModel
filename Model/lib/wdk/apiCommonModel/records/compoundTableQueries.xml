@@ -70,31 +70,33 @@
     <sqlQuery name="CompoundsFromMetabolicPathways">
       <column name="source_id"  />
       <column name="project_id"/>
-      <column name="compound"/>
+      <column name="type"/>
+      <column name="pathway_source"/>
+      <column name="pathway_name"/>
+      <column name="pathway_source_id"/>
       <column name="enzyme"/>
       <column name="enzyme_link"/>
       <column name="reaction"/>
       <column name="reaction_link"/>
-      <column name="name"/>
-      <column name="pathway"/>
-      <column name="type"/>
       <sql>
 	<![CDATA[
-      WITH enzy AS    
-           (SELECT distinct ec.ec_number 
+       WITH enzy AS (SELECT DISTINCT ec.ec_number 
             FROM apidbtuning.transcriptAttributes gf,
-                       dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec
+                 dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec
             WHERE asec.aa_sequence_id = gf.aa_sequence_id
-              AND   ec.enzyme_class_id = asec.enzyme_class_id)
-      SELECT distinct  compound_source_id AS source_id, compound, pathway, type, enzyme, 
-               reaction, '<a href="http://www.genome.jp/dbget-bin/www_bget?' || REPLACE (reaction, ' ', '+') || ' ">' || reaction || '</a>' as reaction_link,
-              CASE when enzyme in (select ec_number from enzy)
-              THEN '<a href="processQuestion.do?questionFullName=GeneQuestions.InternalGenesByEcNumber&' || 'array%28organism%29=all&' || 'array%28ec_number_pattern%29=' || enzyme || '&' || 'questionSubmit=Get+Answer'  || '">' || enzyme || '</a>'
-              ELSE  enzyme  END AS enzyme_link, 
-              pc.name, '@PROJECT_ID@' AS project_id
-       FROM apidbtuning.PathwayCompounds pc
-       WHERE pc.name NOT IN ('ec01100','ec01110','ec01120')
-       ORDER BY pathway
+              AND ec.enzyme_class_id = asec.enzyme_class_id)
+       SELECT  '@PROJECT_ID@' AS project_id, pc.chebi_accession AS source_id, 
+          pc.pathway_source, p.name AS pathway_name, pc.pathway AS pathway_source_id, pc.reaction, 
+          CASE WHEN pathway_source = 'KEGG' THEN '<a href="http://www.genome.jp/dbget-bin/www_bget?' || REPLACE (reaction, ' ', '+') || ' ">' || pc.reaction || '</a>' 
+          WHEN pathway_source ='TrypanoCyc' THEN 'http://vm-trypanocyc.toulouse.inra.fr/TRYPANO/NEW-IMAGE?type=REACTION-IN-PATHWAY&object=' || pc.reaction
+          ELSE pc.reaction END as reaction_link,
+          pc.type, pc.enzyme,
+          CASE WHEN pc.enzyme IN (SELECT ec_number FROM enzy) 
+          THEN '<a href="processQuestion.do?questionFullName=GeneQuestions.InternalGenesByEcNumber&organism=all&'  || 'array%28ec_source%29=all&' || 'array%28ec_number_pattern%29=N/A&ec_wildcard=' || pc.enzyme || '&' || 'questionSubmit=Get+Answer'  || '">' || pc.enzyme || '</a>'
+          ELSE  pc.enzyme   END AS enzyme_link
+       FROM apidbtuning.pathwayCompounds pc, SRES.pathway p
+       WHERE pc.pathway = p.source_id
+       ORDER BY pc.pathway_source, p.name
 	]]>
 	    </sql>
         </sqlQuery>

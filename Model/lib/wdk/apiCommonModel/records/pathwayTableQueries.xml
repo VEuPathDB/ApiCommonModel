@@ -18,73 +18,24 @@
             <column name="direction"/>
             <sql>
             <![CDATA[
-WITH enzy  AS (SELECT distinct ec.ec_number 
-            FROM apidbtuning.geneAttributes gf,
+WITH enzy AS (SELECT DISTINCT ec.ec_number 
+            FROM apidbtuning.transcriptAttributes gf,
                  dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec
             WHERE asec.aa_sequence_id = gf.aa_sequence_id
               AND ec.enzyme_class_id = asec.enzyme_class_id)
-SELECT distinct Subtrs.source_id as source_id,
-               Prds.products, Subtrs.substrates, Subtrs.Enzyme, 
- CASE when Subtrs.Enzyme  in (select ec_number from enzy)
-              THEN '<a href="processQuestion.do?questionFullName=GeneQuestions.InternalGenesByEcNumber&organism=all&'  || 'array%28ec_source%29=all&' || 'array%28ec_number_pattern%29=N/A&ec_wildcard=' || Subtrs.enzyme || '&' || 'questionSubmit=Get+Answer'  || '">' || Subtrs.enzyme || '</a>'
-              ELSE  Subtrs.Enzyme  END AS enzyme_link, 
-       '<a href="http://www.genome.jp/dbget-bin/www_bget?' || REPLACE(Subtrs.reaction, ' ', '+') || '">' || Subtrs.reaction || '</a>' as reaction,
-        '@PROJECT_ID@' as project_id,
-       case when Subtrs.dir = 0 then 'Reversible'
-            else 'Irreversible' end as direction 
-From (--Prods        
-SELECT x.enzyme, x.dir, x.source_id, x.reaction , apidb.tab_to_string(set(cast(COLLECT( prod ) AS apidb.varchartab))) AS products
-FROM (
-select CASE WHEN (pubchem.compound = nn2.display_label) THEN
-'<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pubchem.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pubchem.compound || '</a>'
-ELSE nn2.display_label END AS prod,
-             nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id
-      from   ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr, 
-             ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc,
-             ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl,
-             (select pc.compound_source_id, pc.compound  
-               from ApiDBTuning.PathwayCompounds pc
-              ) pubchem
-      where nn1.node_type_id = 1
-      and nn1.display_label not like '%X:_Y:'
-      and nr.node_id = nn1.network_node_id
-      and nr.associated_node_id = nn2.network_node_id
-      and nrc.network_relationship_id = nr.network_relationship_id
-      and nrt.network_relationship_type_id = nrc.network_relationship_type_id
-      and nrl.network_rel_context_id = nrc.network_rel_context_id
-      and nrc.network_context_id = n.network_context_id
-      and  nn2.display_label = pubchem.compound (+)
-      group by n.name, nrt.display_name, nn1.display_label, nrc.source_node    ,pubchem.compound ,nn2.display_label,pubchem.compound_source_id
-      ) x
-    group by  x.enzyme, x.dir, x.source_id, x.reaction) Prds,
-    ( --Substrs
-    SELECT x.enzyme, x.dir, x.source_id, x.reaction , apidb.tab_to_string(set(cast(COLLECT( substr) AS apidb.varchartab))) AS substrates
-    FROM (
-    select CASE WHEN (pubchem.compound = nn2.display_label) THEN
-'<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pubchem.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pubchem.compound || '</a>'
-ELSE nn2.display_label END AS substr,
-        nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id
-      from ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr, 
-           ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc,
-           ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl,
-             (select pc.compound_source_id, pc.compound  
-               from ApiDBTuning.PathwayCompounds pc
-              ) pubchem 
-      where nn1.node_type_id = 1
-      and nn1.display_label not like '%X:_Y:'
-      and nr.associated_node_id = nn1.network_node_id
-      and nr.node_id = nn2.network_node_id
-      and nrc.network_relationship_id = nr.network_relationship_id
-      and nrt.network_relationship_type_id = nrc.network_relationship_type_id
-      and nrl.network_rel_context_id = nrc.network_rel_context_id
-      and nrc.network_context_id = n.network_context_id
-      and  nn2.display_label = pubchem.compound (+)
-      group by n.name, nrt.display_name, nn1.display_label, nrc.source_node   ,pubchem.compound ,nn2.display_label,pubchem.compound_source_id) x
-    group by  x.enzyme, x.dir, x.source_id, x.reaction)   Subtrs
-Where Subtrs.dir = Prds.dir
-And   Prds.reaction = Subtrs.reaction
-And   Subtrs.enzyme = Prds.enzyme
-And   Subtrs.source_id = Prds.source_id
+SELECT  '@PROJECT_ID@' as project_id, pc1.pathway AS source_id, pc1.reaction, pc1.enzyme,
+CASE WHEN pc1.enzyme IN (SELECT ec_number FROM enzy) 
+ THEN '<a href="processQuestion.do?questionFullName=GeneQuestions.InternalGenesByEcNumber&organism=all&'  || 'array%28ec_source%29=all&' || 'array%28ec_number_pattern%29=N/A&ec_wildcard=' || pc1.enzyme || '&' || 'questionSubmit=Get+Answer'  || '">' || pc1.enzyme || '</a>'
+              ELSE  pc1.enzyme   END AS enzyme_link, 
+apidb.tab_to_string(SET(CAST(COLLECT( pc1.chebi_accession ) AS apidb.varchartab))) AS substrates,
+apidb.tab_to_string(set(cast(COLLECT( pc2.chebi_accession ) AS apidb.varchartab))) AS products,
+CASE WHEN pc1.TYPE = 'substrate/product' THEN  'reversible' ELSE 'irreversible' END as direction
+FROM apidbtuning.pathwayCompounds pc1,  apidbtuning.pathwayCompounds pc2
+WHERE pc1.pathway_id = pc2.pathway_id 
+AND pc1.reaction = pc2.reaction
+AND pc1.TYPE = 'substrate' AND pc2.TYPE = 'product'
+GROUP BY pc1.pathway, pc1.enzyme, pc1.reaction, pc1.TYPE
+ORDER BY pc1.enzyme
             ]]>
            </sql>
         </sqlQuery>
