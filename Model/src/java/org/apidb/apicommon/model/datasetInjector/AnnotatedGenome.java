@@ -6,7 +6,9 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenome extends DatasetInjector {
-  
+
+    protected boolean hasFilters = true;
+
   @Override
     public void injectTemplates() {
 
@@ -194,11 +196,20 @@ phylum.put("Yarrowia","Saccharomycetes");
     injectTemplate("geneFilter");
     injectTemplate("geneFilterLayout");
     // Only if reference strain - set distinct gene instance
-    if(orgProps.get("isReferenceStrain").equals("true")) {
+    if (hasFilters && orgProps.get("isReferenceStrain").equals("true")) {
       setPropValue("species", species);
       injectTemplate("distinctGeneFilterLayout");
       injectTemplate("distinctGeneFilter"); 
     }
+
+    // special gene linkout
+    String specialLinkDisplayText = getPropValue("specialLinkDisplayText");
+    String specialLinkExternalDbName = getPropValue("specialLinkExternalDbName");
+    if (specialLinkDisplayText != null && !specialLinkDisplayText.isEmpty() 
+        && specialLinkExternalDbName != null && !specialLinkExternalDbName.isEmpty() ) {
+      injectTemplate("geneSpecialLinkouts");
+    }
+    
   }
 
   @Override
@@ -238,6 +249,8 @@ phylum.put("Yarrowia","Saccharomycetes");
     public String[][] getPropertiesDeclaration() {
     String [][] propertiesDeclaration = { {"isEuPathDBSite", "if true, genome will be available on EuPathdB"},
                                           {"optionalSpecies", "if species name contains two words, e.g. sp. 1"},
+                                          {"specialLinkDisplayText", "gene-page text for genome annotation status"},
+                                          {"specialLinkExternalDbName", "external DB name for annotation link"},
     };
 
     return propertiesDeclaration;
