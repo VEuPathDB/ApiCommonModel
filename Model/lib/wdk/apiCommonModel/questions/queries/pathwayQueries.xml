@@ -114,28 +114,24 @@ order by source_id
         <column name="gene_count"/>
         <sql>
             <![CDATA[
-SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id, count(distinct ga.source_id) as gene_count,
-       apidb.tab_to_string(set(cast(COLLECT(ga.source_id) AS apidb.varchartab))) as genes
-from   ($$ds_gene_ids$$) ds, sres.enzymeClass ec,
-       dots.aaSequenceEnzymeClass asec,ApidbTuning.GeneId gi, ApidbTuning.GeneAttributes ga,
-       apidb.networkrelationship nr, apidb.networkrelationshiptype nrt,
-       ApiDB.NetworkRelContext nrc,  apidb.NetworkContext n, ApiDB.NetworkRelContextLink nrl, apidb.networknode nn
-where  ga.aa_sequence_id = asec.aa_sequence_id
-AND    lower(gi.id) = lower(ds.source_id)
-AND    ga.source_id = gi.gene
+SELECT DISTINCT pc.pathway AS source_id,ta.aa_sequence_id ,'@PROJECT_ID@' AS project_id,
+       count(DISTINCT ta.gene_source_id) AS gene_count,
+       apidb.tab_to_string(SET(CAST(COLLECT(ta.gene_source_id) AS apidb.varchartab))) AS genes
+FROM   sres.enzymeClass ec,  ($$ds_gene_ids$$) ds,
+       dots.aaSequenceEnzymeClass asec,ApidbTuning.GeneId gi, ApidbTuning.TranscriptAttributes ta,
+ApidbTuning.pathwayCompounds pc
+WHERE ta.aa_sequence_id = asec.aa_sequence_id
+AND    lower(gi.id) = lower(ds.gene_source_id)
+AND    ta.gene_source_id = gi.gene
 AND    asec.enzyme_class_id = ec.enzyme_class_id
-and    nn.display_label = ec.ec_number
-and    nr.associated_node_id = nn.network_node_id
-and    nrc.network_relationship_id = nr.network_relationship_id
-and    nrt.network_relationship_type_id = nrc.network_relationship_type_id
-and    nrl.network_rel_context_id = nrc.network_rel_context_id
-and    nrc.network_context_id = n.network_context_id
-group by n.name
-having (('$$any_or_all_pathway$$' = 'any') 
+AND    pc.enzyme = ec.ec_number
+GROUP BY pc.pathway,ta.aa_sequence_id,asec.aa_sequence_id
+HAVING (('$$any_or_all_pathway$$' = 'any') 
         OR (count(*) = (select count(*) 
-                        from apidbtuning.geneattributes ga,($$ds_gene_ids$$) ds
-                        where lower (ds.source_id) = lower (ga.source_id)
-                       ))) ]]>
+                        from ApidbTuning.TranscriptAttributes ta,($$ds_gene_ids$$) ds
+                        where lower (ds.gene_source_id) = lower (ta.gene_source_id) ga
+                       )))
+	    ]]>
         </sql>
     </sqlQuery>
 
@@ -163,11 +159,11 @@ having (('$$any_or_all_pathway$$' = 'any')
         <column name="source_id"/>
         <sql>
             <![CDATA[
-            SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id
-            FROM   apidbtuning.PathwayCompounds p, ($$ds_pubchem_compound_id$$) ds, apidb.networkContext n
-            WHERE  p.compound = ds.source_id
-            AND    p.network_context_id = n.network_context_id
-           GROUP BY n.name
+            SELECT DISTINCT p.pathway as source_id, '@PROJECT_ID@' as project_id
+            FROM   apidbtuning.PathwayCompounds p, apidbtuning.compoundId cid, ($$ds_pubchem_compound_id$$) ds
+            WHERE  p.chebi_accession = cid.compound
+            AND   cid.id = ds.source_id
+           GROUP BY p.pathway
            HAVING (('$$any_or_all_pathway$$' = 'any') 
                    OR (count(*) = (select count(*) 
                         FROM ($$ds_pubchem_compound_id$$) ds
@@ -222,27 +218,20 @@ having (('$$any_or_all_pathway$$' = 'any')
 
         <sql>
             <![CDATA[
-SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id, count(distinct ec.ec_number) as enzyme_count,
+SELECT DISTINCT pc.pathway AS source_id , '@PROJECT_ID@' as project_id, 
+       count(distinct ec.ec_number) as enzyme_count,
        apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as genes, 
-       apidb.tab_to_string(set(cast(COLLECT(nn.display_label) AS apidb.varchartab))) as ecNums, 
+       apidb.tab_to_string(set(cast(COLLECT(pc.enzyme) AS apidb.varchartab))) as ecNums, 
        max(ds.wdk_weight) as wdk_weight
-from   ($$gene_result$$) ds, sres.enzymeClass ec,
-       dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga,
-       apidb.networkrelationship nr, apidb.networkrelationshiptype nrt,
-       ApiDB.NetworkRelContext nrc,  apidb.NetworkContext n, ApiDB.NetworkRelContextLink nrl, apidb.networknode nn
-where  ds.source_id =  ga.source_id
-AND ga.aa_sequence_id = asec.aa_sequence_id
+FROM ($$gene_result$$) ds, ApiDBTuning.PathwayCompounds pc
+       sres.enzymeClass ec, dots.aaSequenceEnzymeClass asec, ApidbTuning.CompoundAttributes ca
+WHERE  ds.source_id =  ga.source_id
+AND   ga.aa_sequence_id = asec.aa_sequence_id
 AND    asec.enzyme_class_id = ec.enzyme_class_id
-AND  (   ( ec.ec_number LIKE REPLACE(nn.display_label,'-', '%')  OR nn.display_label LIKE REPLACE(ec.ec_number,'-', '%')  )
-         $$use_ec_wildcard$$  ec.ec_number = nn.display_label    )
-and    nr.associated_node_id = nn.network_node_id
-and    nrc.network_relationship_id = nr.network_relationship_id
-and    nrt.network_relationship_type_id = nrc.network_relationship_type_id
-and    nrl.network_rel_context_id = nrc.network_rel_context_id
-and    nrc.network_context_id = n.network_context_id
-and n.name not in ('ec01100','ec01110','ec01120') /* temporary - these are to be removed later */
-group by n.name
-having '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.geneattributes ga,($$gene_result$$) ds  where lower(ga.source_id) = lower(ds.source_id)) 
+AND    (  ( ec.ec_number LIKE REPLACE(pc.enzyme,'-', '%')  OR pc.enzyme LIKE REPLACE(ec.ec_number,'-', '%')  )
+         $$use_ec_wildcard$$  ec.ec_number = pc.enzyme    )
+GROUP BY pc.pathway
+HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.transcriptAttributes ta,($$gene_result$$) ds  where lower(ga.source_id) = lower(ds.source_id)) 
                ]]>
         </sql>
     </sqlQuery>
@@ -264,19 +253,12 @@ having '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apid
 
         <sql>
             <![CDATA[
-SELECT DISTINCT p.source_id , '@PROJECT_ID@' as project_id, count(distinct ds.source_id) as compound_count,
-       apidb.tab_to_string(set(cast(COLLECT(pc.compound) AS apidb.varchartab))) as compounds, max(ds.wdk_weight) as wdk_weight
-FROM ($$compound_result$$) ds, ApiDB.Pathway p, ApiDB.PathwayNode pn, ApiDBTuning.PathwayCompounds pc,
-       ApiDB.NetworkContext nc, ApiDB.NetworkRelContext nrc
-WHERE  pc.compound_source_id = ds.source_id
-AND    p.pathway_id = pn.parent_id
-AND    pn.pathway_node_type_id = 2
-AND    pn.display_label = pc.compound
-AND    p.source_id not in ('ec01100','ec01110','ec01120') /* temporary - these are to be removed later */
-AND    nc.name = p.source_id
-AND    nc.network_context_id  = nrc.network_context_id  
-GROUP BY p.source_id
-HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.PathwayCompounds pc,($$compound_result$$) ds  where lower(pc.compound_source_id) = lower(ds.source_id)) 
+SELECT DISTINCT pc.pathway AS source_id , '@PROJECT_ID@' as project_id, count(distinct ds.source_id) as compound_count,
+       apidb.tab_to_string(set(cast(COLLECT(pc.chebi_accession) AS apidb.varchartab))) as compounds, max(ds.wdk_weight) as wdk_weight
+FROM ($$compound_result$$) ds, ApiDBTuning.PathwayCompounds pc
+WHERE  pc.chebi_accession = ds.source_id
+GROUP BY pc.pathway
+HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.PathwayCompounds pc,($$compound_result$$) ds  where lower(pc.chebi_accession) = lower(ds.source_id)) 
                ]]>
         </sql>
     </sqlQuery>

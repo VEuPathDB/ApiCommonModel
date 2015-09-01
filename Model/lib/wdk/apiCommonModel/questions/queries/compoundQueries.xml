@@ -13,14 +13,10 @@
         <column name="source_id"/>
         <sql>
             <![CDATA[
-          SELECT DISTINCT compound_source_id  as source_id, '@PROJECT_ID@' as project_id
-            FROM   apidbtuning.PathwayCompounds p, ($$ds_pubchem_compound_id$$) ds
-            WHERE  p.compound = ds.source_id
-          UNION
-          SELECT c.source_id  as source_id, '@PROJECT_ID@' as project_id
-            FROM   apidbtuning.CompoundAttributes c, ($$ds_pubchem_compound_id$$) ds
-            WHERE  c.source_id = ds.source_id
-               OR  to_char(c.compound_id) = ds.source_id
+            SELECT c.source_id, '@PROJECT_ID@' as project_id
+            FROM  apidbtuning.CompoundId cid,  apidbtuning.CompoundAttributes c, ($$ds_pubchem_compound_id$$) ds
+            WHERE  cid.id = ds.source_id
+            AND cid.compound = c.source_id
                ]]>
         </sql>
     </sqlQuery>
@@ -103,20 +99,11 @@
       <column name="source_id"/>
       <sql>
 	<![CDATA[
-            SELECT distinct ca.source_id, '@PROJECT_ID@' AS project_id
-            FROM apidbtuning.compoundAttributes ca, sres.pathway p, sres.pathwaynode pn, sres.pathwayRelationship pr, 
-                apidb.pathwayReactionRel prr, sres.ontologyTerm ot
-            WHERE ( p.pathway_id IN ($$metabolic_pathway_id_with_compounds$$)  
-              OR lower(p.NAME) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
-              OR lower(p.source_id) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
+            SELECT distinct chebi_accession as source_id, '@PROJECT_ID@' AS project_id
+            FROM apidbtuning.pathwayCompounds
+            WHERE ( pathway_id IN ($$metabolic_pathway_id_with_compounds$$)  
+              OR lower(pathway) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
               )
-            AND p.pathway_id = prr.pathway_id
-            AND prr.pathway_relationship_id= pr.pathway_relationship_id
-            AND (pr.node_id = pn.pathway_node_id  OR pr.associated_node_id = pn.pathway_node_id)
-            AND ot.ontology_term_id = pn.pathway_node_type_id
-            AND ot.name = 'molecular entity'
-            AND (pn.display_label = ca.source_id
-              OR  ca.kegg_id  like '''%' || pn.display_label || '%''')  ;
 	    ]]>
         </sql>
     </sqlQuery>
@@ -238,17 +225,17 @@
       <paramRef ref="compoundParams.compound_type" />
       <column name="project_id"/>
       <column name="source_id"/>
+      <column name="pathways"/>
       <column name="wdk_weight" />
 
       <sql>
 	<![CDATA[
-       SELECT DISTINCT pc.compound_source_id as source_id, '@PROJECT_ID@' as project_id,
-              apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as genes, max(ds.wdk_weight) as wdk_weight
-         FROM ($$pathway_result$$)ds, apidbtuning.PathwayCompounds pc, ApiDB.NetworkContext n
-        WHERE pc.network_context_id = n.network_context_id
-          AND n.name = ds.source_id
+       SELECT DISTINCT pc.chebi_accession as source_id, '@PROJECT_ID@' as project_id,
+              apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as pathways, max(ds.wdk_weight) as wdk_weight
+         FROM ($$pathway_result$$)ds, apidbtuning.PathwayCompounds pc
+        WHERE pc.pathway = ds.source_id
 	  AND (pc.type = $$compound_type$$ OR 'either' = $$compound_type$$)
-      GROUP BY pc.compound_source_id
+      GROUP BY pc.chebi_accession
 	]]>
         </sql>
     </sqlQuery>
