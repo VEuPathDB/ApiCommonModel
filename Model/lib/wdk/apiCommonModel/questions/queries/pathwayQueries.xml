@@ -37,56 +37,51 @@
 
     <sqlQuery name="PathwaysByIdentifierList" doNotTest="true"  excludeProjects="EuPathDB"
               displayName="ID" isCacheable="true">
-        <paramRef ref="pathwayParams.single_identifier_id"/>
+        <paramRef ref="pathwayParams.ds_pathway_id"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="identifiers"/>
+        <column name="type"/>
         <sql>
             <![CDATA[
 SELECT  '@PROJECT_ID@' as project_id, source_id, 
-          apidb.tab_to_string(set(cast(COLLECT(identifier) AS apidb.varchartab))) as identifiers --, external_database_release_id
-from (
+          apidb.tab_to_string(set(cast(COLLECT(identifier) AS apidb.varchartab))) as identifiers,
+          apidb.tab_to_string(set(cast(COLLECT(type) AS apidb.varchartab))) as type
+FROM (
+-- Compounds
+SELECT pc.pathway as source_id, ds.source_id AS identifier, 'compound' as type
+FROM apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
+WHERE ds.source_id = pc.compound
+  OR   ds.source_id = pc.chebi_accession
+UNION
+-- Enzyme
+SELECT pc.pathway as source_id, ds.source_id AS identifier, 'enzyme' as type
+FROM apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
+WHERE ds.source_id = pc.enzyme
+UNION
+-- Gene
+SELECT pc.pathway as source_id, ds.source_id AS identifier, 'gene' as type
+FROM sres.enzymeClass ec,dots.aaSequenceEnzymeClass asec,ApidbTuning.GeneId gi, 
+     ApidbTuning.TranscriptAttributes ta, apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
+WHERE lower(gi.id) = lower(ds.source_id)
+AND    ta.gene_source_id = gi.gene
+AND    ta.aa_sequence_id = asec.aa_sequence_id
+AND    asec.enzyme_class_id = ec.enzyme_class_id
+AND    pc.enzyme = ec.ec_number
+UNION
+-- Reaction
+SELECT pc.pathway as source_id, ds.source_id AS identifier, 'reaction' as type
+FROM apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
+WHERE ds.source_id = pc.reaction
+UNION
 -- Pathways from direct pathwayNodes
-SELECT p.source_id, pn.display_label AS identifier, p.external_database_release_id 
-FROM SRES.pathway p, SRES.pathwayNode pn
-WHERE pn.pathway_id = p.pathway_id 
-AND pn.display_label = $$single_identifier_id$$
-UNION
--- Pathways from KEGG ID
-SELECT p.source_id, da.accession_number as identifier, p.external_database_release_id
-FROM SRES.pathway p, SRES.pathwayNode pn, CHEBI.compounds c, CHEBI.DATABASE_ACCESSION da  
-WHERE pn.pathway_id = p.pathway_id AND pn.display_label  LIKE 'CHEBI:%'
-AND pn.display_label = c.chebi_accession
-AND c.ID = da.compound_id
-AND da.accession_number = $$single_identifier_id$$
- AND da.TYPE='KEGG COMPOUND accession' 
- UNION
--- Pathways from GENE_ID
-SELECT p.source_id,ta.gene_source_id as identifier, p.external_database_release_id
-FROM SRES.pathway p, SRES.pathwayNode pn, dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec,  ApidbTuning.transcriptattributes ta
-WHERE pn.pathway_id = p.pathway_id 
-AND pn.display_label = ec.ec_number
-AND  ta.aa_sequence_id = asec.aa_sequence_id
-AND  asec.enzyme_class_id = ec.enzyme_class_id
-AND ta.gene_source_id = $$single_identifier_id$$
-UNION
--- Pathways from Pathway_ID
-SELECT p.source_id,p.source_id AS identifier, p.external_database_release_id
-FROM SRES.pathway p
-WHERE NAME = $$single_identifier_id$$
-OR source_id = $$single_identifier_id$$
-UNION
--- Pathways from Reaction ID
-SELECT distinct p.source_id, pr.source_id AS identifier, p.external_database_release_id
-FROM SRES.pathway p,  APIDB.pathwayreactionrel prr, apidb.pathwayreaction pr
-WHERE p.pathway_id = prr.pathway_id
-AND pr.pathway_reaction_id = prr.pathway_reaction_id
-AND ( pr.source_id = $$single_identifier_id$$
-   OR pr.description = $$single_identifier_id$$ )
+SELECT p.source_id, ds.source_id AS identifier, 'pathway' as type
+FROM sres.pathway p, ($$ds_pathway_id$$) ds
+WHERE ds.source_id = p.source_id 
+--OR ds.source_id = p.name
 )
---where external_database_release_id in (
-GROUP BY source_id,external_database_release_id
-order by source_id
+GROUP BY source_id
+ORDER BY source_id
 	    ]]>
         </sql>
     </sqlQuery>
@@ -96,7 +91,8 @@ order by source_id
           processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="identifiers" width="100" wsName="genes"/>
+        <wsColumn name="identifiers" width="100" wsName="identifier"/>
+        <wsColumn name="type" width="100" wsName="type"/>
     </processQuery>   
 
 
