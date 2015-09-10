@@ -203,11 +203,15 @@ phylum.put("Yarrowia","Saccharomycetes");
     }
 
     // special gene linkout
-    String specialLinkDisplayText = getPropValue("specialLinkDisplayText");
     String specialLinkExternalDbName = getPropValue("specialLinkExternalDbName");
-    if (specialLinkDisplayText != null && !specialLinkDisplayText.isEmpty() 
-        && specialLinkExternalDbName != null && !specialLinkExternalDbName.isEmpty() ) {
+    if (specialLinkExternalDbName != null && !specialLinkExternalDbName.isEmpty() ) {
       injectTemplate("geneSpecialLinkouts");
+    }
+    
+    // special gene text
+    String specialLinkDisplayText = getPropValue("specialLinkDisplayText");
+    if (specialLinkDisplayText != null && !specialLinkDisplayText.isEmpty()) {
+      injectTemplate("geneSpecialText");
     }
     
   }
