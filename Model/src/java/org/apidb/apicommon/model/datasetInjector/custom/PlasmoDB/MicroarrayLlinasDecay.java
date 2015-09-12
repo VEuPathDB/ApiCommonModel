@@ -28,7 +28,7 @@ public class MicroarrayLlinasDecay extends ExpressionOneChannelAndReferenceDesig
 
     @Override
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "Normalized Transcript Abudnace Values";
+        String yAxisDescription = "Normalized Transcript Abundance Values";
 
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
