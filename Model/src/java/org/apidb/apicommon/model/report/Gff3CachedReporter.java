@@ -105,7 +105,7 @@ public class Gff3CachedReporter extends Reporter {
   public void configure(Map<String, String> newConfig) {
     super.configure(newConfig);
 
-    if (newConfig.containsKey(StandardReporter.Configuration.FILE_TYPE)) fileType = newConfig.get(StandardReporter.Configuration.FILE_TYPE);
+    if (newConfig.containsKey(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardReporter.Configuration.ATTACHMENT_TYPE);
 
     // include transcript
     if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
@@ -124,7 +124,7 @@ public class Gff3CachedReporter extends Reporter {
   public void configure(JSONObject newConfig) {
     super.configure(newConfig);
 
-    if (newConfig.has(StandardReporter.Configuration.FILE_TYPE)) fileType = newConfig.getString(StandardReporter.Configuration.FILE_TYPE);
+    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE);
 
     // include transcript
     if (newConfig.has(FIELD_HAS_TRANSCRIPT)) {

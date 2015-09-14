@@ -209,7 +209,7 @@ public class FullRecordFileCreator extends BaseCLI {
                 cacheTable);
 
         Map<String, String> config = new LinkedHashMap<String, String>();
-        config.put(StandardReporter.Configuration.FILE_TYPE, "text");
+        config.put(StandardReporter.Configuration.ATTACHMENT_TYPE, "text");
         config.put(StandardReporter.Configuration.SELECTED_FIELDS,
                 sbFields.toString());
         config.put(StandardReporter.Configuration.INCLUDE_EMPTY_TABLES, "yes");

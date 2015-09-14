@@ -77,7 +77,7 @@ public class FullRecordCachedReporter extends StandardReporter {
      */
     @Override
     public String getHttpContentType() {
-        if (reporterConfig.getFileType().equalsIgnoreCase("text")) {
+        if (reporterConfig.getAttachmentType().equalsIgnoreCase("text")) {
             return "text/plain";
         } else { // use the default content type defined in the parent class
             return super.getHttpContentType();
@@ -91,9 +91,9 @@ public class FullRecordCachedReporter extends StandardReporter {
      */
     @Override
     public String getDownloadFileName() {
-        logger.info("Internal format: " + reporterConfig.getFileType());
+        logger.info("Internal format: " + reporterConfig.getAttachmentType());
         String name = getQuestion().getName();
-        if (reporterConfig.getFileType().equalsIgnoreCase("text")) {
+        if (reporterConfig.getAttachmentType().equalsIgnoreCase("text")) {
             return name + "_detail.txt";
         } else { // use the defaul file name defined in the parent
             return super.getDownloadFileName();

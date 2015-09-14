@@ -107,7 +107,7 @@ public class Gff3Dumper {
 
     // load config
     Map<String, String> config = new LinkedHashMap<String, String>();
-    config.put(StandardReporter.Configuration.FILE_TYPE, "text");
+    config.put(StandardReporter.Configuration.ATTACHMENT_TYPE, "text");
     config.put(Reporter.PROPERTY_PAGE_SIZE, Integer.toString(PAGE_SIZE));
     config.put(Gff3Reporter.FIELD_HAS_TRANSCRIPT, "true");
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "true");

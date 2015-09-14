@@ -124,7 +124,7 @@ public class RecordDumper {
 
         // make the configuration for the reporter
         Map<String, String> config = new LinkedHashMap<String, String>();
-        config.put(StandardReporter.Configuration.FILE_TYPE, "text");
+        config.put(StandardReporter.Configuration.ATTACHMENT_TYPE, "text");
         config.put(StandardReporter.Configuration.SELECTED_ATTRS,
                 sbFields.toString());
         config.put(StandardReporter.Configuration.INCLUDE_EMPTY_TABLES, "yes");
