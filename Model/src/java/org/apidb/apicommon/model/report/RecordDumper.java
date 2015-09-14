@@ -22,8 +22,8 @@ import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
-import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
+import org.gusdb.wdk.model.report.StandardReporter;
 import org.gusdb.wdk.model.user.User;
 import org.json.JSONException;
 
@@ -124,10 +124,10 @@ public class RecordDumper {
 
         // make the configuration for the reporter
         Map<String, String> config = new LinkedHashMap<String, String>();
-        config.put(Reporter.FIELD_FORMAT, "text");
-        config.put(FullRecordReporter.FIELD_SELECTED_COLUMNS,
+        config.put(StandardReporter.Configuration.FILE_TYPE, "text");
+        config.put(StandardReporter.Configuration.SELECTED_ATTRS,
                 sbFields.toString());
-        config.put(FullRecordReporter.FIELD_HAS_EMPTY_TABLE, "yes");
+        config.put(StandardReporter.Configuration.INCLUDE_EMPTY_TABLES, "yes");
 
         // ask the question
         User user = wdkModel.getSystemUser();

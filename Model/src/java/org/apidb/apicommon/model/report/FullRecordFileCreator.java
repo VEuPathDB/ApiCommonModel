@@ -28,8 +28,8 @@ import org.gusdb.wdk.model.question.QuestionSet;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.record.RecordClass;
-import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
+import org.gusdb.wdk.model.report.StandardReporter;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -209,10 +209,10 @@ public class FullRecordFileCreator extends BaseCLI {
                 cacheTable);
 
         Map<String, String> config = new LinkedHashMap<String, String>();
-        config.put(Reporter.FIELD_FORMAT, "text");
-        config.put(FullRecordReporter.FIELD_SELECTED_COLUMNS,
+        config.put(StandardReporter.Configuration.FILE_TYPE, "text");
+        config.put(StandardReporter.Configuration.SELECTED_FIELDS,
                 sbFields.toString());
-        config.put(FullRecordReporter.FIELD_HAS_EMPTY_TABLE, "yes");
+        config.put(StandardReporter.Configuration.INCLUDE_EMPTY_TABLES, "yes");
 
         int resultSize = answerValue.getResultSize();
         FullRecordCachedReporter reporter = new FullRecordCachedReporter(

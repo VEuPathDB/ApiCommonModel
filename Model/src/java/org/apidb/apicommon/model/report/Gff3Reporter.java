@@ -30,7 +30,9 @@ import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValueMap;
 import org.gusdb.wdk.model.report.Reporter;
+import org.gusdb.wdk.model.report.StandardReporter;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * It takes data from WDK records, and format it into GFF3 format, and it write the GFF content into
@@ -83,6 +85,7 @@ public class Gff3Reporter extends Reporter {
 
   private boolean hasTranscript = false;
   private boolean hasProtein = false;
+  private String fileType = null;
 
   private PreparedStatement psQuery;
 
@@ -102,7 +105,7 @@ public class Gff3Reporter extends Reporter {
    */
   @Override
   public String getHttpContentType() {
-    if (format.equalsIgnoreCase("text")) {
+    if (fileType.equalsIgnoreCase("text")) {
       return "text/plain";
     }
     else { // use the default content type defined in the parent class
@@ -117,9 +120,9 @@ public class Gff3Reporter extends Reporter {
    */
   @Override
   public String getDownloadFileName() {
-    logger.info("Internal format: " + format);
+    logger.info("Internal format: " + fileType);
     String name = getQuestion().getName();
-    if (format.equalsIgnoreCase("text")) {
+    if (fileType.equalsIgnoreCase("text")) {
       return name + ".gff";
     }
     else { // use the default file name defined in the parent
@@ -133,7 +136,7 @@ public class Gff3Reporter extends Reporter {
    * @see org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
    */
   @Override
-  protected void write(OutputStream out) throws WdkModelException, NumberFormatException,
+  public void write(OutputStream out) throws WdkModelException, NumberFormatException,
       NoSuchAlgorithmException, SQLException, JSONException, WdkUserException {
     PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
 
@@ -156,18 +159,6 @@ public class Gff3Reporter extends Reporter {
     proteinName = properties.get(PROPERTY_GFF_PROTEIN_NAME);
     transcriptName = properties.get(PROPERTY_GFF_TRANSCRIPT_NAME);
 
-    // include transcript
-    if (config.containsKey(FIELD_HAS_TRANSCRIPT)) {
-      String value = config.get(FIELD_HAS_TRANSCRIPT);
-      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
-    }
-
-    // include protein
-    if (config.containsKey(FIELD_HAS_PROTEIN)) {
-      String value = config.get(FIELD_HAS_PROTEIN);
-      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
-    }
-
     if (psQuery == null) {
       // prepare the table query
       RecordClass recordClass = this.baseAnswer.getQuestion().getRecordClass();
@@ -185,6 +176,49 @@ public class Gff3Reporter extends Reporter {
       catch (SQLException e) {
         throw new WdkModelException("Unable to initialize reporter.", e);
       }
+    }
+  }
+
+  /*
+   * (non-Javadoc)
+   * 
+   * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
+   */
+  @Override
+  public void configure(Map<String, String> newConfig) {
+    super.configure(newConfig);
+
+    if (newConfig.containsKey(StandardReporter.Configuration.FILE_TYPE)) fileType = newConfig.get(StandardReporter.Configuration.FILE_TYPE);
+
+    // include transcript
+    if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
+      String value = newConfig.get(FIELD_HAS_TRANSCRIPT);
+      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
+    }
+
+    // include protein
+    if (newConfig.containsKey(FIELD_HAS_PROTEIN)) {
+      String value = newConfig.get(FIELD_HAS_PROTEIN);
+      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
+    }
+  }
+
+  @Override
+  public void configure(JSONObject newConfig) {
+    super.configure(newConfig);
+
+    if (newConfig.has(StandardReporter.Configuration.FILE_TYPE)) fileType = newConfig.getString(StandardReporter.Configuration.FILE_TYPE);
+
+    // include transcript
+    if (newConfig.has(FIELD_HAS_TRANSCRIPT)) {
+      String value = newConfig.getString(FIELD_HAS_TRANSCRIPT);
+      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
+    }
+
+    // include protein
+    if (newConfig.has(FIELD_HAS_PROTEIN)) {
+      String value = newConfig.getString(FIELD_HAS_PROTEIN);
+      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
     }
   }
 
