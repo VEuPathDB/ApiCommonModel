@@ -22,7 +22,9 @@ import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.Reporter;
+import org.gusdb.wdk.model.report.StandardReporter;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * Used exclusively on the website that provides result download in GFF format. It will use the data from
@@ -55,6 +57,7 @@ public class Gff3CachedReporter extends Reporter {
 
   private boolean hasTranscript = false;
   private boolean hasProtein = false;
+  private String fileType = null;
 
   public Gff3CachedReporter(AnswerValue answerValue, int startIndex, int endIndex) {
     super(answerValue, startIndex, endIndex);
@@ -102,6 +105,8 @@ public class Gff3CachedReporter extends Reporter {
   public void configure(Map<String, String> newConfig) {
     super.configure(newConfig);
 
+    if (newConfig.containsKey(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardReporter.Configuration.ATTACHMENT_TYPE);
+
     // include transcript
     if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
       String value = newConfig.get(FIELD_HAS_TRANSCRIPT);
@@ -111,6 +116,25 @@ public class Gff3CachedReporter extends Reporter {
     // include protein
     if (newConfig.containsKey(FIELD_HAS_PROTEIN)) {
       String value = newConfig.get(FIELD_HAS_PROTEIN);
+      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
+    }
+  }
+
+  @Override
+  public void configure(JSONObject newConfig) {
+    super.configure(newConfig);
+
+    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE);
+
+    // include transcript
+    if (newConfig.has(FIELD_HAS_TRANSCRIPT)) {
+      String value = newConfig.getString(FIELD_HAS_TRANSCRIPT);
+      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
+    }
+
+    // include protein
+    if (newConfig.has(FIELD_HAS_PROTEIN)) {
+      String value = newConfig.getString(FIELD_HAS_PROTEIN);
       hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
     }
   }
@@ -127,7 +151,7 @@ public class Gff3CachedReporter extends Reporter {
    */
   @Override
   public String getHttpContentType() {
-    if (format.equalsIgnoreCase("text")) {
+    if (fileType.equalsIgnoreCase("text")) {
       return "text/plain";
     }
     else { // use the default content type defined in the parent class
@@ -142,9 +166,9 @@ public class Gff3CachedReporter extends Reporter {
    */
   @Override
   public String getDownloadFileName() {
-    logger.info("Internal format: " + format);
+    logger.info("Internal format: " + fileType);
     String name = getQuestion().getName();
-    if (format.equalsIgnoreCase("text")) {
+    if (fileType.equalsIgnoreCase("text")) {
       return name + ".gff";
     }
     else { // use the default file name defined in the parent
@@ -158,7 +182,7 @@ public class Gff3CachedReporter extends Reporter {
    * @see org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
    */
   @Override
-  protected void write(OutputStream out) throws WdkModelException, NoSuchAlgorithmException, SQLException,
+  public void write(OutputStream out) throws WdkModelException, NoSuchAlgorithmException, SQLException,
       JSONException, WdkUserException {
     PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
 

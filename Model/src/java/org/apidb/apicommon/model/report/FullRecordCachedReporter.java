@@ -28,7 +28,7 @@ import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableField;
 import org.gusdb.wdk.model.record.attribute.AttributeField;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.Reporter;
+import org.gusdb.wdk.model.report.StandardReporter;
 import org.json.JSONException;
 
 /**
@@ -37,18 +37,14 @@ import org.json.JSONException;
  *         This reporter is used by the WDK "text - Detail" to generate the
  *         report from detail table.
  */
-public class FullRecordCachedReporter extends Reporter {
+public class FullRecordCachedReporter extends StandardReporter {
 
     private static Logger logger = Logger.getLogger(FullRecordCachedReporter.class);
 
     public static final String PROPERTY_TABLE_CACHE = "table_cache";
 
-    public static final String FIELD_SELECTED_COLUMNS = "selectedFields";
-    public static final String FIELD_HAS_EMPTY_TABLE = "hasEmptyTable";
-
     private String tableCache;
 
-    private boolean hasEmptyTable = false;
 
     public FullRecordCachedReporter(AnswerValue answerValue, int startIndex,
             int endIndex) {
@@ -75,33 +71,13 @@ public class FullRecordCachedReporter extends Reporter {
     }
 
     /*
-     * 
-     */
-    @Override
-    public void configure(Map<String, String> newConfig) {
-        super.configure(newConfig);
-
-        // get basic configurations
-        if (newConfig.containsKey(FIELD_HAS_EMPTY_TABLE)) {
-            String value = newConfig.get(FIELD_HAS_EMPTY_TABLE);
-            hasEmptyTable = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true
-                    : false;
-        }
-    }
-
-    @Override
-    public String getConfigInfo() {
-        return "This reporter does not have config info yet.";
-    }
-
-    /*
      * (non-Javadoc)
      * 
      * @see org.gusdb.wdk.model.report.Reporter#getHttpContentType()
      */
     @Override
     public String getHttpContentType() {
-        if (format.equalsIgnoreCase("text")) {
+        if (reporterConfig.getAttachmentType().equalsIgnoreCase("text")) {
             return "text/plain";
         } else { // use the default content type defined in the parent class
             return super.getHttpContentType();
@@ -115,9 +91,9 @@ public class FullRecordCachedReporter extends Reporter {
      */
     @Override
     public String getDownloadFileName() {
-        logger.info("Internal format: " + format);
+        logger.info("Internal format: " + reporterConfig.getAttachmentType());
         String name = getQuestion().getName();
-        if (format.equalsIgnoreCase("text")) {
+        if (reporterConfig.getAttachmentType().equalsIgnoreCase("text")) {
             return name + "_detail.txt";
         } else { // use the defaul file name defined in the parent
             return super.getDownloadFileName();
@@ -131,7 +107,7 @@ public class FullRecordCachedReporter extends Reporter {
      * org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
      */
     @Override
-    protected void write(OutputStream out) throws WdkModelException,
+    public void write(OutputStream out) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
         // get the columns that will be in the report
@@ -152,33 +128,10 @@ public class FullRecordCachedReporter extends Reporter {
         writer.flush();
     }
 
-    private Set<Field> validateColumns() {
-        // get a map of report maker fields
-        Map<String, Field> fieldMap = getQuestion().getFields(
-                FieldScope.REPORT_MAKER);
-
-        // the config map contains a list of column names;
-        Set<Field> columns = new LinkedHashSet<Field>();
-
-        String fieldsList = config.get(FIELD_SELECTED_COLUMNS);
-        if (fieldsList == null) {
-            columns.addAll(fieldMap.values());
-        } else {
-            String[] fields = fieldsList.split(",");
-            for (String column : fields) {
-                column = column.trim();
-                if (fieldMap.containsKey(column)) {
-                	columns.add(fieldMap.get(column));
-                }
-            }
-        }
-        return columns;
-    }
-
     private void formatRecord2Text(Set<AttributeField> attributes,
             Set<TableField> tables, PrintWriter writer)
             throws WdkModelException, SQLException, WdkUserException {
-        logger.debug("Include empty table: " + hasEmptyTable);
+        logger.debug("Include empty table: " + reporterConfig.getIncludeEmptyTables());
 
         RecordClass recordClass = getQuestion().getRecordClass();
         String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
@@ -226,7 +179,7 @@ public class FullRecordCachedReporter extends Reporter {
                     while (resultSet.next()) {
                         // check if display empty tables
                         int size = resultSet.getInt("row_count");
-                        if (!hasEmptyTable && size == 0) continue;
+                        if (!reporterConfig.getIncludeEmptyTables() && size == 0) continue;
 
                         String fieldName = resultSet.getString("field_name").trim();
                         String fieldTitle = resultSet.getString("field_title").trim();
@@ -246,7 +199,7 @@ public class FullRecordCachedReporter extends Reporter {
                             String[] parts = tableValues.get(fieldName);
                             writer.println(parts[0]);
                             writer.println(parts[1]);
-                        } else if (hasEmptyTable) {
+                        } else if (reporterConfig.getIncludeEmptyTables()) {
                             // the table doesn't have rows, output title only
                             writer.println(getTableTitle(table));
                         }
@@ -286,4 +239,6 @@ public class FullRecordCachedReporter extends Reporter {
     protected void initialize() throws WdkModelException {
     // do nothing
     }
+    
+ 
 }

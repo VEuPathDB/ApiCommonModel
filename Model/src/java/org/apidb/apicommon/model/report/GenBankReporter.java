@@ -57,7 +57,7 @@ public class GenBankReporter extends Reporter {
     }
 
     @Override
-    protected void write(OutputStream out) throws WdkModelException,
+    public void write(OutputStream out) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
         String rcName = getQuestion().getRecordClass().getFullName();

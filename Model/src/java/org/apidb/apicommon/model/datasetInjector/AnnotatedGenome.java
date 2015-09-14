@@ -6,7 +6,9 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import org.gusdb.wdk.model.WdkRuntimeException;
 
 public class AnnotatedGenome extends DatasetInjector {
-  
+
+    protected boolean hasFilters = true;
+
     @Override
     public void injectTemplates() {
 
@@ -195,11 +197,24 @@ phylum.put("Yarrowia","Saccharomycetes");
     injectTemplate("geneFilter");
     injectTemplate("geneFilterLayout");
     // Only if reference strain - set distinct gene instance
-    if(orgProps.get("isReferenceStrain").equals("true")) {
+    if (hasFilters && orgProps.get("isReferenceStrain").equals("true")) {
       setPropValue("species", species);
       injectTemplate("distinctGeneFilterLayout");
       injectTemplate("distinctGeneFilter"); 
     }
+
+    // special gene linkout
+    String specialLinkExternalDbName = getPropValue("specialLinkExternalDbName");
+    if (specialLinkExternalDbName != null && !specialLinkExternalDbName.isEmpty() ) {
+      injectTemplate("geneSpecialLinkouts");
+    }
+    
+    // special gene text
+    String specialLinkDisplayText = getPropValue("specialLinkDisplayText");
+    if (specialLinkDisplayText != null && !specialLinkDisplayText.isEmpty()) {
+      injectTemplate("geneSpecialText");
+    }
+    
   }
 
   @Override
@@ -217,6 +232,7 @@ phylum.put("Yarrowia","Saccharomycetes");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "overview");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AlternateProducts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
@@ -239,6 +255,8 @@ phylum.put("Yarrowia","Saccharomycetes");
     public String[][] getPropertiesDeclaration() {
     String [][] propertiesDeclaration = { {"isEuPathDBSite", "if true, genome will be available on EuPathdB"},
                                           {"optionalSpecies", "if species name contains two words, e.g. sp. 1"},
+                                          {"specialLinkDisplayText", "gene-page text for genome annotation status"},
+                                          {"specialLinkExternalDbName", "external DB name for annotation link"},
     };
 
     return propertiesDeclaration;
