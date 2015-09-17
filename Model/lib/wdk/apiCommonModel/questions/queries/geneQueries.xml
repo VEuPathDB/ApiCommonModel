@@ -3083,7 +3083,6 @@ WHERE  non_synonymous / CASE synonymous
       <wsColumn name="time_of_max_expr"/>
     </processQuery>
 
-
    <sqlQuery name="GenesByFoldChangeWithMetaData" includeProjects="PlasmoDB" isCacheable="true" >
 
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"/>
@@ -3095,7 +3094,6 @@ WHERE  non_synonymous / CASE synonymous
 
       <column name="project_id"/>
       <column name="source_id"/>
-      <column name="difference"/>
       <column name="p_value" sortingColumn="sorting_p_value"/>
       <column name="sorting_p_value"/>
       <column name="avg_group_one"/>
@@ -3104,14 +3102,42 @@ WHERE  non_synonymous / CASE synonymous
 
       <sqlParamValue includeProjects="PlasmoDB" name="isLogged">0</sqlParamValue>
       <sqlParamValue includeProjects="PlasmoDB" name="lowerBound">0.0001</sqlParamValue>
-  
+        <sqlParamValue includeProjects="PlasmoDB" name="function">'log2'</sqlParamValue>
       <sql>
       <![CDATA[
 select one.source_id,
        '@PROJECT_ID@' as project_id,
-       round(( Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1)) ) - (Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1))),6) as difference,
-       round(   Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1))  ,6 ) as Avg_Group_One,
-       round(   Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1)),6  ) As Avg_Group_Two,
+       round ((
+             case 
+                    when lower(&&function&&) = 'arcsinh'
+                    then(( Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1)) ) - (Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1))))
+                    when lower(&&function&&) = 'log2' and &&isLogged&& = 0
+                    then   (CASE 
+                                         WHEN (avg_comp / avg_ref) >= 1
+                                          THEN (avg_comp / avg_ref)
+                                          ELSE (-1 / (avg_comp / avg_ref))
+                                   END
+            )
+                   when lower(&&function&&) = 'log2' and &&isLogged&& = 1
+                   then (CASE WHEN power(2, avg_comp) / power(2,avg_ref) >= 1
+                                      THEN power(2, avg_comp) / power(2,avg_ref)
+                                      ELSE (-1 / (power(2,avg_comp) / power(2,avg_ref)))
+                              END
+                              )
+           else (avg_comp - avg_ref)
+           end),6)  as difference,
+       round((
+       case 
+           when lower(&&function&&) = 'arcsinh'
+           then Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1))
+           else avg_comp 
+           end),6) as Avg_Group_One,
+       round((
+       case 
+           when lower(&&function&&) = 'arcsinh'
+           then round(   Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1)),6  )
+           else avg_ref 
+           end),6)  As Avg_Group_Two,
        to_char( p_value,'9.99EEEE' ) p_value,
        p_value sorting_p_value,
        '$$metadata_for_graph$$' as meta_data_category
@@ -3122,40 +3148,31 @@ select source_id,
        stats_t_test_indepu(source_set,reported_value) p_value
 From (
   
-      select source_id,
-             pe.value as reported_value,
+      select p.source_id,
+             avg (pe.value) as reported_value,
              'ref' as source_set
-      from apidb.profileset ps,
-           apidb.profile p,
-           apidb.profileelementname pen,
+      from apidb.profile p,
            apidb.profileelement pe
-      where ps.profile_set_id = p.profile_set_id
-      and   ps.profile_set_id = pen.profile_set_id
-      and   p.profile_id = pe.profile_id
-      and   pen.profile_element_name_id = pe.profile_element_name_id
-      and   ps.profile_set_id = $$profileset_generic$$
-      and   pen.profile_element_name_id in ( $$ref_samples_filter_metadata$$ )
+      where p.profile_id = pe.profile_id
+      and   pe.profile_element_name_id in ( $$ref_samples_filter_metadata$$ 
+)
+      group by source_id, 'ref', pe.PROFILE_ELEMENT_NAME_ID
 union
-       select source_id,
-             pe.value as reported_value,
+ select p.source_id,
+            avg( pe.value) as reported_value,
              'comp' as source_set
-      from apidb.profileset ps,
-           apidb.profile p,
-           apidb.profileelementname pen,
+      from apidb.profile p,
            apidb.profileelement pe
-      where ps.profile_set_id = p.profile_set_id
-      and   ps.profile_set_id = pen.profile_set_id
-      and   p.profile_id = pe.profile_id
-      and   pen.profile_element_name_id = pe.profile_element_name_id
-      and   ps.profile_set_id = $$profileset_generic$$
-      and   pen.profile_element_name_id in ( $$comp_samples_filter_metadata$$ )
+      where p.profile_id = pe.profile_id
+      and   pe.profile_element_name_id in ( $$comp_samples_filter_metadata$$ 
+)
+      group by source_id, 'comp', pe.PROFILE_ELEMENT_NAME_ID
       )
       group by source_id) one
       where p_value <= $$p_value$$
         and  ('$$regulated_dir_immune_response$$' = 'increased' and avg_comp > avg_ref 
               or 
               '$$regulated_dir_immune_response$$' = 'decreased' and avg_ref > avg_comp)
-
       ]]>
       </sql>
 
@@ -3188,7 +3205,6 @@ union
         <wsColumn name="meta_data_category" wsName="meta_data_category"/>
 		
    </processQuery>
-
 
     <sqlQuery name="GenesByTimeSeriesFoldChangeBradyBoothroyd" includeProjects="ToxoDB" 
               isCacheable="true">
