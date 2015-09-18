@@ -19,8 +19,7 @@ public class AntibodyArray extends DatasetInjector {
     protected void setFunctionProperties() {
         if(getPropValue("function").equals("")) {
             setPropValue("function", "log2");
-        }
-        if(getPropValue("function").equals("arcsinh")) {
+        } else if(getPropValue("function").equals("arcsinh")) {
             setPropValue("function_display", "(arcsinh(1+50x))");
             setPropValue("function_help","The arcsinh(1+50x) transform of the average intensity values for the");
         } else {
@@ -95,6 +94,14 @@ public class AntibodyArray extends DatasetInjector {
         }
 
         setPropValue("excludedProfileSetsList", excludedProfileSetsList);
+        setFunctionProperties() ;
+
+        String help = getPropValue("function_help");
+        System.out.println(help);
+
+        String fn_display = getPropValue("function_display");
+        System.out.println(fn_display);
+
         injectTemplate("antibodyArrayProfileSetParamQuery");
 
         injectTemplate("antibodyArrayQuestion");
