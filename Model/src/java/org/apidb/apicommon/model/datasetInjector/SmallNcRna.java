@@ -17,17 +17,9 @@ public class SmallNcRna extends  DatasetInjector {
   @Override
   public void injectTemplates() {
 
-//Props from .prop for experiment
-      String projectName = getPropValue("projectName");
-      String organismAbbrev = getPropValue("organismAbbrev");
-      String experimentName = getPropValue("experimentName");
-
       setPropValue ("organismAbbrevDisplay", getOrganismAbbrevDisplayFromDatasetName().replace(":", " "));
 
-      
-      String sampleNamePrefix = projectName + ":" + organismAbbrev + "_" + experimentName + "_";
-      String sampleNameSuffix = "_smallNcRnaSample_RSRC";
-      List<String> sampleNames = getSampleList(sampleNamePrefix, sampleNameSuffix);
+      List<String> sampleNames = getSampleList();
       
       for (int i=0; i<sampleNames.size(); i++){
           setPropValue("sampleName", sampleNames.get(i));
