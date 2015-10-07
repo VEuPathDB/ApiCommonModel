@@ -14,13 +14,46 @@
        </stringParam>
 
 -->
+      <enumParam name="reference_strains_only"
+                 prompt="Reference strains only"
+                 multiPick="false"
+                 quote="false">
+        <noTranslation value="true" includeProjects="EuPathDB" />
+        <help>
+           Choose whether to include only organisms that are reference organisms for each species.  
+        </help>
+        <enumList>
+          <enumValue default="true">
+            <term>Yes</term>
+            <internal>1</internal>
+          </enumValue>
+          <enumValue>
+            <term>No</term>
+            <internal>1,0</internal>
+          </enumValue>
+        </enumList>
+      </enumParam>
 
-      <flatVocabParam name="organism"
+      <flatVocabParam name="no_ref_organism"
+                     queryRef="organismVQ.no_ref_withGenes"
+                     prompt="Organism"
+                     displayType="treeBox"
+                     multiPick="true"
+                     suppressNode="true"
+                     quote="false">
+          <help>
+               Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
+          </help>
+          <suggest selectMode="all"/>
+      </flatVocabParam>
+
+            <flatVocabParam name="organism"
                      queryRef="organismVQ.withGenes"
                      prompt="Organism"
                      displayType="treeBox"
                      multiPick="true"
                      suppressNode="true"
+                     dependedParamRef="organismParams.reference_strains_only"
                      quote="false">
           <help>
                Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
@@ -70,6 +103,7 @@
                      displayType="treeBox"
                      multiPick="true"
                      quote="false"
+                     dependedParamRef="organismParams.reference_strains_only"
                      includeProjects="CryptoDB,ToxoDB,PlasmoDB,GiardiaDB,TriTrypDB">
          <help>
              Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
@@ -95,6 +129,7 @@
                      displayType="treeBox"
                      multiPick="true"
                      quote="false"
+                     dependedParamRef="organismParams.reference_strains_only"
                      suppressNode ="true">
           <help>
              Select the organism(s) you wish to query against. Click the [+] to expand taxon groupings.
@@ -280,11 +315,16 @@
     <!--===================================================================-->
 
     <sqlQuery name="withChromosomes" excludeProjects="SchistoDB,EuPathDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
            <sql>
-            SELECT DISTINCT organism AS term, organism AS internal
-            FROM ApidbTuning.transcriptAttributes WHERE chromosome IS NOT NULL
+            SELECT DISTINCT ta.organism AS term, ta.organism AS internal
+            FROM ApidbTuning.transcriptAttributes ta, apidb.organism o
+            WHERE ta.chromosome IS NOT NULL
+            and ta.project_id = '@PROJECT_ID@'
+            and ta.taxon_id = o.taxon_id
+            and o.is_reference_strain in ($$reference_strains_only$$)
             ORDER BY term
             </sql>
         </sqlQuery>
@@ -300,15 +340,19 @@
     <!--===================================================================-->
 
     <sqlQuery name="withChromosomesESTsAssems" includeProjects="CryptoDB,ToxoDB,PlasmoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB,FungiDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
 
       <sql>
-      select distinct tns.name as term, 
-                      tns.name as internal
-      from ApidbTuning.blatalignmentlocation b, dots.est e, dots.nasequence s, ApidbTuning.GenomicSeqAttributes sa, APIDBTUNING.taxonspecies ts, sres.taxonname tn, sres.taxonname tns
+      select distinct tns.name as term, tns.name as internal
+      from ApidbTuning.blatalignmentlocation b, dots.est e, dots.nasequence s, ApidbTuning.GenomicSeqAttributes sa,
+      APIDBTUNING.taxonspecies ts, sres.taxonname tn, sres.taxonname tns, apidb.organism o
       where sa.chromosome is not null
        and sa.na_sequence_id = s.na_sequence_id
+       and sa.project_id = '@PROJECT_ID@'
+       and sa.taxon_id = o.taxon_id
+       and o.is_reference_strain in ($$reference_strains_only$$)
        and b.query_na_sequence_id = e.na_sequence_id
        and sa.na_sequence_id = b.target_na_sequence_id
        and s.taxon_id = ts.taxon_id
@@ -321,6 +365,7 @@
     </sqlQuery>
 
     <processQuery name="withChromosomesESTsAssems" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="term ASC" includeProjects="EuPathDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <wsColumn name="internal" width="255" wsName="internal"/>
       <wsColumn name="term" width="255" wsName="term"/>
     </processQuery>
@@ -353,14 +398,18 @@
     <!-- with chromosomes and ORFs, added for orfs by location -->  
     <!--===================================================================-->
 <sqlQuery name="withChromosomesORFs" includeProjects="CryptoDB,ToxoDB,PlasmoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,FungiDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
 
             <sql>
             select distinct  sa.organism as term, sa.organism as internal
-            from ApidbTuning.orfattributes o, ApidbTuning.GenomicSeqAttributes sa, dots.nasequence s, ApidbTuning.taxonspecies ts, sres.taxonname tn
+            from ApidbTuning.orfattributes o, ApidbTuning.GenomicSeqAttributes sa, dots.nasequence s, ApidbTuning.taxonspecies ts, sres.taxonname tn, apidb.organism org
             where sa.na_sequence_id = o.na_sequence_id
             and sa.chromosome is not null
+            and sa.project_id = '@PROJECT_ID@'
+            and sa.taxon_id = org.taxon_id
+            and org.is_reference_strain in ($$reference_strains_only$$)
             and sa.na_sequence_id = s.na_sequence_id
             and s.taxon_id = ts.taxon_id
             and ts.species_taxon_id = tn.taxon_id
@@ -446,13 +495,22 @@ UNION
     <!--===================================================================-->
 
     <sqlQuery name="withNgsSNPs" includeProjects="PiroplasmaDB,GiardiaDB,AmoebaDB,CryptoDB,FungiDB,PlasmoDB,ToxoDB,TriTrypDB,TrichDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
         <sql>
+              WITH FilterQuery as (
+              select distinct ta.organism
+              from apidbtuning.TranscriptAttributes ta, apidb.organism o
+              where ta.project_id = '@PROJECT_ID@'
+              and ta.taxon_id = o.taxon_id
+              and o.is_reference_strain in ($$reference_strains_only$$)
+              )
           select CASE WHEN s.organism like '%strain CL Brener%' THEN 'Trypanosoma cruzi strain CL Brener - Unassigned' ELSE s.organism END as term,
                  s.organism as internal,
                  count(s.strain) as strain_count
-          from apidbtuning.snpstrains s
+                 from apidbtuning.snpstrains s, FilterQuery fq
+                 where s.organism = fq.organism
           group by s.organism
           order by strain_count desc
         </sql>
@@ -468,16 +526,19 @@ UNION
 	<!-- ======================================================== -->
 	<!-- ======================================================== -->
 
-
     <sqlQuery name="withChromosomesSNPs" includeProjects="PlasmoDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
 
       <sql>
          select sa.organism as term, sa.organism as internal,count(s.strain) as strain_count
-         from apidbtuning.snpchipstrains s, ApidbTuning.GenomicSeqAttributes sa
+         from apidbtuning.snpchipstrains s, ApidbTuning.GenomicSeqAttributes sa, apidb.organism o
          where sa.organism = s.organism
          and sa.chromosome is not null
+         and sa.project_id = '@PROJECT_ID@'
+         and sa.taxon_id = o.taxon_id
+         and o.is_reference_strain in ($$reference_strains_only$$)
          group by sa.organism
          order by strain_count desc
       </sql>
@@ -485,6 +546,7 @@ UNION
     </sqlQuery>
 
     <sqlQuery name="withChromosomesHtsSNPs" excludeProjects="EuPathDB,MicrosporidiaDB,AmoebaDB,HostDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
  
@@ -500,6 +562,7 @@ UNION
     </sqlQuery>
 
     <sqlQuery name="withSNPs" includeProjects="PlasmoDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
         <sql>
@@ -509,6 +572,7 @@ UNION
           group by s.organism
         </sql>
     </sqlQuery>
+<!--
 
     <sqlQuery name="withHtsSNPs5Strains" excludeProjects="MicrosporidiaDB,HostDB,EuPathDB"  doNotTest="true">
       <column name="internal"/>
@@ -527,7 +591,8 @@ UNION
         </sql>
         </sqlQuery>
 
-<!--    <sqlQuery name="withHtsSNPsOntology" includeProjects="TriTrypDB,EuPathDB">
+
+    <sqlQuery name="withHtsSNPsOntology" includeProjects="TriTrypDB,EuPathDB">
       <column name="internal"/>
       <column name="term"/>
         <sql>
@@ -556,9 +621,8 @@ UNION
                 and ss.var_extdb_name = ia.external_db_name
         </sql>
         </sqlQuery>
+
 -->
-
-
     <processQuery name="withChromosomesSNPs" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="term ASC" includeProjects="EuPathDB">
       <wsColumn name="internal" width="255" wsName="internal"/>
       <wsColumn name="term" width="255" wsName="term"/>
@@ -573,18 +637,20 @@ UNION
       <wsColumn name="internal" width="255" wsName="internal"/>
       <wsColumn name="term" width="255" wsName="term"/>
     </processQuery>
+<!--
 
     <processQuery name="withHtsSNPs5Strains" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="term ASC" includeProjects="EuPathDB">
       <wsColumn name="internal" width="255" wsName="internal"/>
       <wsColumn name="term" width="255" wsName="term"/>
     </processQuery>
 
-<!--
+
     <processQuery name="withHtsSNPsOntology" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="255" wsName="internal"/>
       <wsColumn name="term" width="255" wsName="term"/>
     </processQuery>
-	-->
+
+-->
 
     <!--===================================================================-->
     <!-- with genomic seq
@@ -671,7 +737,7 @@ UNION
          them.
                                                                            -->
     <!--===================================================================-->
-    <sqlQuery name="withGenes" isCacheable="true" excludeProjects="EuPathDB">
+    <sqlQuery name="no_ref_withGenes" isCacheable="true" excludeProjects="EuPathDB">
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
@@ -682,6 +748,34 @@ UNION
               select distinct tn.name as organism
               from sres.taxonName tn, apidb.organism o
               where o.is_annotated_genome = 1
+                and o.project_name = '@PROJECT_ID@'
+                and o.taxon_id = tn.taxon_id
+                and tn.name_class = 'scientific name')
+         /* end filter query */
+         SELECT DISTINCT term, parentTerm, apidb.tab_to_string(set
+              (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ') 
+              AS internal
+         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+         WHERE ot.organism = fq.organism
+         GROUP BY term, parentTerm
+         ORDER BY parentTerm,term
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <sqlQuery name="withGenes" isCacheable="true" excludeProjects="EuPathDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
+      <column name="internal"/>
+      <column name="term"/>
+      <column name="parentTerm"/>
+      <sql>
+        <![CDATA[
+         /* WithGenes filter query*/
+         WITH FilterQuery as (
+              select distinct tn.name as organism
+              from sres.taxonName tn, apidb.organism o
+              where o.is_annotated_genome = 1
+                and o.is_reference_strain in ($$reference_strains_only$$)
                 and o.project_name = '@PROJECT_ID@'
                 and o.taxon_id = tn.taxon_id
                 and tn.name_class = 'scientific name')
@@ -712,6 +806,7 @@ UNION
 
 
  <sqlQuery name="withPdbSimilarity" excludeProjects="EuPathDB,TrichDB" isCacheable="true">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
@@ -721,9 +816,11 @@ UNION
          /* withPdbSimilarity filter query */
          WITH FilterQuery AS (  
 	    SELECT DISTINCT ta.organism
-            FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.pdbsimilarity s 
+            FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.pdbsimilarity s, ApidbTuning.organism
             WHERE s.source_id = ta.gene_source_id
 	    AND ta.project_id='@PROJECT_ID@')
+            and ta.taxon_id = o.taxon_id
+            and o.is_reference_strain in ($$reference_strains_only$$)
          /* end filter query */
          SELECT DISTINCT term, parentTerm, apidb.tab_to_string(set
               (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ') 
@@ -748,6 +845,7 @@ UNION
     <!--===================================================================-->
 
     <sqlQuery name="withEpitopes"  includeProjects="CryptoDB,ToxoDB,PlasmoDB,GiardiaDB,TriTrypDB,PiroplasmaDB,FungiDB" isCacheable="true">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
@@ -758,9 +856,11 @@ UNION
 	 /* withEpitopes filter query */
          WITH FilterQuery AS ( 
 	    SELECT DISTINCT ta.organism
-            FROM ApidbTuning.TranscriptAttributes ta, dots.epitopeFeature ef
+            FROM ApidbTuning.TranscriptAttributes ta, dots.epitopeFeature ef, apidb.organism o
 			WHERE ta.aa_sequence_id = ef.aa_sequence_id
-			AND ta.project_id = '@PROJECT_ID@')
+			AND ta.project_id = '@PROJECT_ID@'
+                        and ta.taxon_id = o.taxon_id
+                        and o.is_reference_strain in ($$reference_strains_only$$))
 		 /* end filter query */
          SELECT DISTINCT term, parentTerm, apidb.tab_to_string(set
               (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ') 
@@ -788,6 +888,7 @@ UNION
 
 
     <sqlQuery name="withSequenceStrains" excludeProjects="EuPathDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
@@ -796,9 +897,11 @@ UNION
          /* withSequenceStrains filter query */
          WITH FilterQuery AS (
 			SELECT DISTINCT sa.organism
-            FROM dots.NaSequence ns, ApidbTuning.GenomicSeqAttributes sa 
+            FROM dots.NaSequence ns, ApidbTuning.GenomicSeqAttributes sa, apidb.organism o
             WHERE ns.na_sequence_id = sa.na_sequence_id
-			AND sa.project_id = '@PROJECT_ID@')
+              and sa.taxon_id = o.taxon_id
+              and o.is_reference_strain in ($$reference_strains_only$$)
+		AND sa.project_id = '@PROJECT_ID@')
 	     /* end filter query */
 		 SELECT DISTINCT term, parentTerm, apidb.tab_to_string(set
               (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ') 
@@ -826,14 +929,17 @@ UNION
 
     <sqlQuery name="withStrainsChromosome" 
               includeProjects="TriTrypDB,ToxoDB,PlasmoDB,MicrosporidiaDB,CryptoDB,PiroplasmaDB,FungiDB,GiardiaDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <sql>
         <![CDATA[
            SELECT distinct sa.organism as term, sa.organism as internal
-           FROM ApidbTuning.GenomicSeqAttributes sa
+           FROM ApidbTuning.GenomicSeqAttributes sa, apidb.organism o
            WHERE sa.chromosome IS NOT NULL
            AND sa.project_id = '@PROJECT_ID@'
+           and sa.taxon_id = o.taxon_id
+           and o.is_reference_strain in ($$reference_strains_only$$)
            ORDER BY sa.organism asc
         ]]>
       </sql>
@@ -875,6 +981,7 @@ UNION
     <!--===================================================================-->
 
     <sqlQuery name="withPhenotype" includeProjects="TriTrypDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/> 
@@ -1035,6 +1142,7 @@ UNION
 
 
  <sqlQuery name="withEC" excludeProjects="MicrospordiaDB,EuPathDB" isCacheable="true">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
@@ -1042,9 +1150,11 @@ UNION
         <![CDATA[
 	 WITH FilterQuery AS (
 	      SELECT DISTINCT ta.organism
-	      FROM ApidbTuning.TranscriptAttributes ta
+	      FROM ApidbTuning.TranscriptAttributes ta, apidb.organism o
               WHERE (ta.ec_numbers IS NOT NULL OR ta.ec_numbers_derived IS NOT NULL)
               AND ta.project_id = '@PROJECT_ID@'
+              and ta.taxon_id = o.taxon_id
+              and o.is_reference_strain in ($$reference_strains_only$$)
               )
 	 /* end filter query */
 	 SELECT DISTINCT term, parentTerm, apidb.tab_to_string(set
@@ -1072,15 +1182,18 @@ UNION
 
 
   <sqlQuery name="allWithEC" excludeProjects="EuPathDB" isCacheable="true">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <sql>
         <![CDATA[
 	 WITH FilterQuery AS (
-              SELECT DISTINCT ga.organism
-              FROM ApidbTuning.TranscriptAttributes ga
-              WHERE (ga.ec_numbers IS NOT NULL OR ga.ec_numbers_derived IS NOT NULL)
-              AND ga.project_id = '@PROJECT_ID@'
+              SELECT DISTINCT ta.organism
+              FROM ApidbTuning.TranscriptAttributes ta,apidb.organism o
+              WHERE (ta.ec_numbers IS NOT NULL OR ta.ec_numbers_derived IS NOT NULL)
+              AND ta.project_id = '@PROJECT_ID@'
+              and ta.taxon_id = o.taxon_id
+              and o.is_reference_strain in ($$reference_strains_only$$)
               )
          SELECT 'all' as term,
   	        apidb.tab_to_string(set (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ')   AS internal
@@ -1091,6 +1204,7 @@ UNION
     </sqlQuery>
 
     <processQuery name="allWithEC" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="term ASC" includeProjects="EuPathDB">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <wsColumn name="internal" width="255" wsName="internal"/>
       <wsColumn name="term" width="255" wsName="term"/>
     </processQuery>
@@ -1101,6 +1215,7 @@ UNION
     <!--===================================================================-->
 
     <sqlQuery name="tfBindingSite" includeProjects="PlasmoDB" isCacheable="true">
+      <paramRef ref="organismParams.reference_strains_only" quote="false"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
