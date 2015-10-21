@@ -476,7 +476,9 @@ public class DatasetPresenterSetLoader {
     stmt.setString(4, history.getGenomeVersion());
     stmt.setString(5, history.getAnnotationSource());
     stmt.setString(6, history.getAnnotationVersion());
-    stmt.setString(7, history.getComment());
+    stmt.setString(7, history.getFunctionalAnnotationSource());
+    stmt.setString(8, history.getFunctionalAnnotationVersion());
+    stmt.setString(9, history.getComment());
     stmt.execute();
   }
 
@@ -484,8 +486,8 @@ public class DatasetPresenterSetLoader {
     String table = config.getUsername() + ".DatasetHistory" + suffix;
     String sql = "INSERT INTO "
         + table
-        + " (dataset_history_id, dataset_presenter_id, build_number, genome_source, genome_version, annotation_source, annotation_version, note)"
-        + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?, ?, ?, ?)";
+        + " (dataset_history_id, dataset_presenter_id, build_number, genome_source, genome_version, annotation_source, annotation_version, functional_annotation_source, functional_annotation_version, note)"
+        + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 

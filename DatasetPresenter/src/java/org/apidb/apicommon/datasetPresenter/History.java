@@ -28,6 +28,14 @@ public class History {
     this.annotationVersion = annotationVersion;
   }
   
+  public void setFunctionalAnnotationSource(String functionalAnnotationSource) {
+    this.functionalAnnotationSource = functionalAnnotationSource;
+  }
+   
+  public void setFunctionalAnnotationVersion(String functionalAnnotationVersion) {
+    this.functionalAnnotationVersion = functionalAnnotationVersion;
+  }
+  
   public void setComment(String comment) {
     this.comment = comment;
   }
@@ -50,6 +58,14 @@ public class History {
   
   public String getAnnotationVersion() {
     return annotationVersion;
+  }  
+  
+  public String getFunctionalAnnotationSource() {
+    return functionalAnnotationSource;
+  }
+  
+  public String getFunctionalAnnotationVersion() {
+    return functionalAnnotationVersion;
   }  
   
   public String getComment() {
