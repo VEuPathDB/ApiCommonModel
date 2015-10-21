@@ -106,7 +106,6 @@ prop=organismAbbrevDisplay
          queryRef="GeneId.GenesByGenericFoldChange"
          recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
         <paramRef ref="geneParams.profileset_generic" groupRef="paramGroups.dynamicParams" queryRef="GeneVQ.${datasetName}RnaSeqProfiles"/>
-        <paramRef ref="geneParams.global_min_max" />
 	<sqlParamValue name="isLogged">0</sqlParamValue>
 	<sqlParamValue name="shift">1</sqlParamValue>
 	<attributesList includeProjects="${projectName}"
@@ -143,8 +142,6 @@ ${optionalQuestionDescription}
            <columnAttribute name="max_group_two" displayName="Max Ref (log2)" align="center"/>
            <columnAttribute name="chose_group_one" displayName="Chosen Comp (log2)" align="center"/>
            <columnAttribute name="chose_group_two" displayName="Chosen Ref (log2)" align="center"/>
-           <columnAttribute name="time_of_min_expr" displayName="Time of Min Expression" align="center"/>
-           <columnAttribute name="time_of_max_expr" displayName="Time of Max Expression" align="center"/>
         </dynamicAttributes>
 
 
@@ -366,18 +363,33 @@ prop=projectName
              <column name="term"/>
           <sql>
            <![CDATA[
-          select ps.profile_set_id as internal, 
-                 ps.name || d.name as term, 
-                 CASE WHEN ps.name like '% - %' THEN 
-                  '${datasetDisplayName}' || SUBSTR(ps.name, INSTR(ps.name,'- ', -1, 1) +1) 
-                 ELSE  '${datasetDisplayName}'  END AS display
-          from apidb.profileset ps, SRES.externaldatabase d, SRES.externaldatabaserelease r
-          where ps.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and d.name = '${datasetName}'
-            and ps.name like '%sense strand'
-            and ps.name not like 'percentile%'
-          order by ps.name desc
+SELECT study_id AS internal, ps_name ||  anal || sense AS display, ps_name || '- ' ||  anal || sense AS term
+FROM (
+SELECT ps.study_id , REGEXP_REPLACE (ps.name, '\[(.)+\]', '')  AS ps_name
+,  REPLACE (REPLACE ( REPLACE ( REPLACE (  REGEXP_SUBSTR (ps.name, ' \[\S+ ') , 'htseq', 'HTSeq')  , 'cuff' , 'Cufflinks' ), '[', '') , '-', ' ' )  AS anal 
+, CASE  WHEN REGEXP_LIKE  (ps.name, 'cuff')  THEN  '' 
+      WHEN REGEXP_LIKE  (ps.name, ' firststrand')  THEN  '- Sense' 
+      WHEN REGEXP_LIKE  (ps.name, ' secondstrand')  THEN  '- Antisense' 
+       ELSE '' END AS sense
+from apidb.datasource ds
+  , sres.ExternalDatabase d
+  , sres.ExternalDatabaseRelease r
+  , study.study i
+  , study.study ps
+WHERE ds.TYPE = 'transcript_expression'
+AND ds.subtype = 'rnaseq'
+and ds.name = d.name
+and ds.version = r.version
+and d.external_database_id = r.external_database_id
+and r.external_database_release_id = i.external_database_release_id
+and i.investigation_id is null 
+AND ps.investigation_id = i.study_id
+AND ds.name = '${datasetName}'
+  -- USE 'first' or 'second' strand for Cufflinks below, as needed:
+AND ( REGEXP_LIKE  (ps.name, 'cuff') AND REGEXP_LIKE  (ps.name, 'second')  
+  OR NOT REGEXP_LIKE  (ps.name, 'cuff') )
+ORDER BY ps.name 
+)
             ]]>
           </sql>
         </sqlQuery>

@@ -2743,9 +2743,9 @@ SELECT * FROM
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_comp"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
-      <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.global_min_max"/>
       <column name="project_id"/>
       <column name="source_id"/>
+      <column name="gene_source_id"/>
       <column name="fold_change_avg"/>
       <column name="fold_change_chosen"/>
       <column name="avg_group_one"/>
@@ -2758,8 +2758,6 @@ SELECT * FROM
       <column name="median_group_two"/>
       <column name="chose_group_one"/>
       <column name="chose_group_two"/>
-      <column name="time_of_min_expr"/>
-      <column name="time_of_max_expr"/>
 
       <sqlParamValue includeProjects="CryptoDB" name="isLogged">0</sqlParamValue>
       <sqlParamValue includeProjects="CryptoDB" name="shift">0.01</sqlParamValue>
@@ -2768,7 +2766,7 @@ SELECT * FROM
    
       <sql>
       <![CDATA[
-      select one.source_id, 
+      select one.source_id, one.gene_source_id, 
              '@PROJECT_ID@' as project_id,
              round((CASE WHEN one.average / (two.average + &&shift&&) >= 1
                          THEN one.average / (two.average + &&shift&&)
@@ -2787,93 +2785,68 @@ SELECT * FROM
              round(decode(one.median, 0, 0, log(2, one.median)), 2) as median_group_one,
              round(decode(two.median, 0, 0, log(2, two.median)), 2) as median_group_two,
              round(decode(one.chosen, 0, 0, log(2, one.chosen)), 2) as chose_group_one,
-             round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) as chose_group_two,
-             two.time_of_min_expr,
-             two.time_of_max_expr
-      from ( select p.source_id, 
+             round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) as chose_group_two
+      from ( select ta.gene_source_id, ta.source_id,
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'minimum'
-                         THEN power(2, min(pe.value))
+                         THEN power(2, min(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'maximum'
-                         THEN power(2, max(pe.value))
+                         THEN power(2, max(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'average'
-                         THEN power(2, avg(pe.value))
+                         THEN power(2, avg(res.value))
                          WHEN &&isLogged&& = 0 AND $$min_max_avg_comp$$ = 'minimum'
-                         THEN min(pe.value) + &&shift&&
+                         THEN min(res.value) + &&shift&&
                          WHEN &&isLogged&& = 0 AND $$min_max_avg_comp$$ = 'maximum'
-                         THEN max(pe.value) + &&shift&&
+                         THEN max(res.value) + &&shift&&
                          WHEN &&isLogged&& = 0 AND $$min_max_avg_comp$$ = 'average'
-                         THEN avg(pe.value) + &&shift&&
+                         THEN avg(res.value) + &&shift&&
                          WHEN &&isLogged&& = 0 AND $$min_max_avg_comp$$ = 'median'
-                         THEN median(pe.value) + &&shift&&
+                         THEN median(res.value) + &&shift&&
                     END  as chosen,
-                    decode(&&isLogged&&, 1, power(2, avg(pe.value)), avg(pe.value)) as average,
-                    decode(&&isLogged&&, 1, power(2, max(pe.value)), max(pe.value)) as maximum,
-                    decode(&&isLogged&&, 1, power(2, min(pe.value)), min(pe.value)) as minimum,
-                    decode(&&isLogged&&, 1, power(2, median(pe.value)), median(pe.value)) as median,
-                   CASE WHEN p.min_expression = min(pe.value)
-                        THEN 1 else 0 
-                   END as has_min_expression,
-                   CASE WHEN p.max_expression = max(pe.value)
-                        THEN 1 else 0 
-                   END as has_max_expression
-             from  apidb.profile p, apidb.profileelement pe
-             where pe.profile_element_name_id in ($$samples_fc_comp_generic$$)
-               and p.profile_set_id = $$profileset_generic$$
-               and pe.profile_id = p.profile_id
-             group by p.source_id, p.min_expression, p.max_expression ) one,
-           ( select p.source_id, 
+                    decode(&&isLogged&&, 1, power(2, avg(res.value)), avg(res.value)) as average,
+                    decode(&&isLogged&&, 1, power(2, max(res.value)), max(res.value)) as maximum,
+                    decode(&&isLogged&&, 1, power(2, min(res.value)), min(res.value)) as minimum,
+                    decode(&&isLogged&&, 1, power(2, median(res.value)), median(res.value)) as median
+             from study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res, apidbtuning.transcriptattributes ta
+             where sl.protocol_app_node_id = pan.protocol_app_node_id
+	     AND sl.study_id = $$profileset_generic$$
+	     AND pan.protocol_app_node_id in ($$samples_fc_comp_generic$$)
+	     AND pan.protocol_app_node_id = res.protocol_app_node_id
+	     AND res.na_feature_id = ta.gene_na_feature_id
+             group by ta.gene_source_id, ta.source_id ) one,
+           ( select ta.gene_source_id, ta.source_id,
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_ref$$ = 'minimum'
-                         THEN power(2, min(pe.value))
+                         THEN power(2, min(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_ref$$ = 'maximum'
-                         THEN power(2, max(pe.value))
+                         THEN power(2, max(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_ref$$ = 'average'
-                         THEN power(2, avg(pe.value))
+                         THEN power(2, avg(res.value))
                          WHEN &&isLogged&& != 1 AND $$min_max_avg_ref$$ = 'minimum'
-                         THEN min(pe.value) + &&shift&&
+                         THEN min(res.value) + &&shift&&
                          WHEN &&isLogged&& != 1 AND $$min_max_avg_ref$$ = 'maximum'
-                         THEN max(pe.value) + &&shift&&
+                         THEN max(res.value) + &&shift&&
                          WHEN &&isLogged&& != 1 AND $$min_max_avg_ref$$ = 'average'
-                         THEN avg(pe.value) + &&shift&&
+                         THEN avg(res.value) + &&shift&&
                          WHEN &&isLogged&& != 1 AND $$min_max_avg_ref$$ = 'median'
-                         THEN median(pe.value) + &&shift&&
+                         THEN median(res.value) + &&shift&&
                     END  as chosen,
-                    decode(&&isLogged&&, 1, power(2, avg(pe.value)), avg(pe.value)) as average,
-                    decode(&&isLogged&&, 1, power(2, max(pe.value)), max(pe.value)) as maximum,
-                    decode(&&isLogged&&, 1, power(2, min(pe.value)), min(pe.value)) as minimum,
-                    decode(&&isLogged&&, 1, power(2, median(pe.value)), median(pe.value)) as median,
-                    CASE WHEN p.min_expression = min(pe.value)
-                         THEN 1 else 0 
-                    END as has_min_expression,
-                    CASE WHEN p.max_expression = max(pe.value)
-                        THEN 1 else 0 
-                    END as has_max_expression,
-                    p.time_of_min_expr,
-                    p.time_of_max_expr
-             from apidb.profile p, apidb.profileelement pe,
-                  apidb.profileset ps
-             where pe.profile_element_name_id in ($$samples_fc_ref_generic$$)
-               and p.profile_set_id = $$profileset_generic$$
-               and pe.profile_id = p.profile_id
-               and ps.profile_set_id = p.profile_set_id
-             group by p.source_id, p.min_expression, p.max_expression, p.time_of_min_expr, p.time_of_max_expr ) two,  
-           ApidbTuning.GeneAttributes ga
-      where one.source_id = two.source_id
-        and ga.source_id = two.source_id
-        and ga.source_id = one.source_id
+                    decode(&&isLogged&&, 1, power(2, avg(res.value)), avg(res.value)) as average,
+                    decode(&&isLogged&&, 1, power(2, max(res.value)), max(res.value)) as maximum,
+                    decode(&&isLogged&&, 1, power(2, min(res.value)), min(res.value)) as minimum,
+                    decode(&&isLogged&&, 1, power(2, median(res.value)), median(res.value)) as median
+             from study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res, apidbtuning.transcriptattributes ta
+             where sl.protocol_app_node_id = pan.protocol_app_node_id
+	     AND sl.study_id = $$profileset_generic$$
+	     AND pan.protocol_app_node_id in  ($$samples_fc_comp_generic$$)
+	     AND pan.protocol_app_node_id = res.protocol_app_node_id
+	     AND res.na_feature_id = ta.gene_na_feature_id
+             group by ta.gene_source_id, ta.source_id) two,  
+           ApidbTuning.TranscriptAttributes ga
+      where one.gene_source_id = two.gene_source_id
+        and ga.gene_source_id = two.gene_source_id
+        --and ga.gene_source_id = one.gene_source_id
         and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
         and ($$regulated_dir$$ ( one.chosen / two.chosen)  >= $$fold_change$$
           OR $$regulated_dir$$ (-(two.chosen / one.chosen)) >= $$fold_change$$)
-        and (('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'both' and two.has_min_expression = 1 and one.has_max_expression = 1)
-          OR ('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'min'  and two.has_min_expression = 1)
-          OR ('$$regulated_dir$$' = '+' and $$global_min_max$$ = 'max'  and one.has_max_expression = 1)
-          OR ('$$regulated_dir$$' = '-' and $$global_min_max$$ = 'both' and one.has_min_expression = 1 and two.has_max_expression = 1)
-          OR ('$$regulated_dir$$' = '-' and $$global_min_max$$ = 'min'  and one.has_min_expression = 1)
-          OR ('$$regulated_dir$$' = '-' and $$global_min_max$$ = 'max'  and two.has_max_expression = 1)
-          OR ('$$regulated_dir$$' = 'abs' and $$global_min_max$$ = 'both' and one.has_min_expression + one.has_max_expression + two.has_min_expression + two.has_max_expression = 2)
-          OR ('$$regulated_dir$$' = 'abs' and $$global_min_max$$ = 'min'  and one.has_min_expression + two.has_min_expression = 1)
-          OR ('$$regulated_dir$$' = 'abs' and $$global_min_max$$ = 'max'  and one.has_max_expression + two.has_max_expression = 1)
-          OR $$global_min_max$$ = 'dont_care' 
-          )
       ]]>
       </sql>
 
@@ -2889,7 +2862,6 @@ SELECT * FROM
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_comp"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"  quote="false"/>
-      <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.global_min_max" quote="false"/>
         <wsColumn name="project_id" width="20" wsName="project_id"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="fold_change_avg" wsName="fold_change_avg"/>
@@ -2902,8 +2874,6 @@ SELECT * FROM
         <wsColumn name="min_group_two" wsName="min_group_two"/>
         <wsColumn name="chose_group_one" wsName="chose_group_one"/>
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
-      <wsColumn name="time_of_min_expr"/>
-      <wsColumn name="time_of_max_expr"/>
     </processQuery>
 
 
