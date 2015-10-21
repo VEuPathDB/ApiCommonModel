@@ -6,6 +6,8 @@ public class History {
   private String genomeVersion;
   private String annotationSource;
   private String annotationVersion;
+  private String functionalAnnotationSource;
+  private String functionalAnnotationVersion;
   private String comment;
   
   public void setBuildNumber(Integer buildNumber) {
