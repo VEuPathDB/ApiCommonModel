@@ -64,18 +64,18 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
 
         if(getPropValueAsBoolean("hasPageData") && myDataType.equals("Proteomics")) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithFDR" + getDatasetName());
         } else if(getPropValueAsBoolean("hasPageData") && !(myDataType.equals("Proteomics"))) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithConfidence" + getDatasetName());
         } else {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName());
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName() + "Percentile");
         }
     }

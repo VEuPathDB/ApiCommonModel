@@ -81,21 +81,21 @@ public class SpliceSites extends  DatasetInjector {
   @Override
   public void addModelReferences() {
       setGraphModule();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SpliceSites"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PolyASites"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "SpliceSites"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "PolyASites"); 
 
       if(getPropValueAsBoolean("hasMultipleSamples")) {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
         "GeneQuestions.GenesBySpliceSites" + getDatasetName() );
 
 
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
         "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
       }
 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
           "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
 
   }

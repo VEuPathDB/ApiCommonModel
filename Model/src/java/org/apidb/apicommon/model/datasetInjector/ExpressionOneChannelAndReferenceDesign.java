@@ -58,16 +58,16 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
 
             if(getPropValueAsBoolean("hasPageData")) {
-                addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                                 "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Confidence");
             }
 
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + getDatasetName());
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
         }
 

@@ -10,8 +10,8 @@ public class GeneAliases extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GeneByLocusTag");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GeneByLocusTag");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Alias");
   }
 
   // second column is for documentation

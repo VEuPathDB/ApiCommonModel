@@ -10,10 +10,10 @@ public class NcbiTaxonomy extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTaxon"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTaxon"); 
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon"); 
       addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByTaxon"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "overview"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview"); 
   }
 
   // second column is for documentation

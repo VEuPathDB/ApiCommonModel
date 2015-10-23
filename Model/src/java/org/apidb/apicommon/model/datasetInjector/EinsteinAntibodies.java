@@ -10,7 +10,7 @@ public class EinsteinAntibodies extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Antibody"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Antibody"); 
 
   }
 

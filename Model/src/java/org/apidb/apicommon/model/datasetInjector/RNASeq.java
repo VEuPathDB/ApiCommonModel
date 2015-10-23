@@ -182,20 +182,20 @@ public class RNASeq extends  DatasetInjector {
           } else {
               setPropValue("graphModule", "RNASeq::StrandNonSpecific");
           }
-              addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+              addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
 
               if(getPropValueAsBoolean("hasFishersExactTestData")) {
-                  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                                   "GeneQuestions.GenesByRNASeq" + getDatasetName() + "PValue");
               }
 
-              addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+              addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
 
           }
-          addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+          addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
       }
   }

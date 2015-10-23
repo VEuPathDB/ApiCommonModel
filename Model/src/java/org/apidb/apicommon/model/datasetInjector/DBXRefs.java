@@ -10,7 +10,7 @@ public class DBXRefs extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "GeneLinkouts");
   }
 
   // second column is for documentation

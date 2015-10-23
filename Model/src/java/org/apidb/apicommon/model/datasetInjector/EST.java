@@ -10,7 +10,7 @@ public class EST extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByESTOverlap");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByESTOverlap");
     addWdkReference("EstRecordClasses.EstRecordClass", "attribute", "overview");
     addWdkReference("EstRecordClasses.EstRecordClass", "question", "EstQuestions.EstsBySimilarity");
     addWdkReference("EstRecordClasses.EstRecordClass", "question", "EstQuestions.EstBySourceId");

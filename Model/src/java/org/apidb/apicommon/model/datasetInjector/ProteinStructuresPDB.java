@@ -10,8 +10,8 @@ public class ProteinStructuresPDB extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesWithStructurePrediction");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "3dPreds");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithStructurePrediction");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "3dPreds");
   }
 
   // second column is for documentation

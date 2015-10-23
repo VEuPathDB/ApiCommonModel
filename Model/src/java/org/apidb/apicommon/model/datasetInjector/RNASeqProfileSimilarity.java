@@ -17,7 +17,7 @@ public class RNASeqProfileSimilarity extends RNASeq {
     public void addModelReferences() {
 	super.addModelReferences();
 
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+        addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                         "GeneQuestions.GenesByRNASeq" + getDatasetName() + "ProfileSimilarity");
 
     }

@@ -10,14 +10,14 @@ public class GOAssociations extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByGoTerm");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GoTerms");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "ann_go_function");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "ann_go_process");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "ann_go_component");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "pred_go_function");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "pred_go_process");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "pred_go_component");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGoTerm");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "GoTerms");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ann_go_function");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ann_go_process");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ann_go_component");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "pred_go_function");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "pred_go_process");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "pred_go_component");
   }
 
   // second column is for documentation

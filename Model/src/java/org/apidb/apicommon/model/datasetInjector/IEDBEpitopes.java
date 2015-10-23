@@ -10,8 +10,8 @@ public class IEDBEpitopes extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesWithEpitopes");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Epitopes");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithEpitopes");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Epitopes");
   }
 
   // second column is for documentation

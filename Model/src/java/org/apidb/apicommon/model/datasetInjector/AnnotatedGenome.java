@@ -219,23 +219,23 @@ phylum.put("Yarrowia","Saccharomycetes");
 
   @Override
     public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "InternalQuestions.GenesByOrthologs");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByLocation");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySimilarity");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GeneByLocusTag");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTaxon");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByGeneType");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExonCount");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesWithUserComments");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesWithSignalPeptide");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTransmembraneDomains");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "overview");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AlternateProducts");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "InternalQuestions.GenesByOrthologs");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLocation");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySimilarity");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GeneByLocusTag");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTaxon");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGeneType");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByExonCount");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithUserComments");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithSignalPeptide");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTransmembraneDomains");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Notes");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Alias");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "AlternateProducts");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "ProteinDatabase");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "GeneLocation");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "PubMed");
 
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");

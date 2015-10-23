@@ -10,7 +10,8 @@ public class PubMed extends DatasetInjector {
 
     @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
+    addWdkReference("TranscriptRecordClasses.TranscriptRk
+ecordClass", "table", "PubMed");
   }
 
   // second column is for documentation

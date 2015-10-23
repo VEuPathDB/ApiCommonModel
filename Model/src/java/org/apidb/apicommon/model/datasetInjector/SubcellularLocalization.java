@@ -10,7 +10,7 @@ public class SubcellularLocalization extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySubcellularLocalization");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySubcellularLocalization");
   }
 
   // second column is for documentation
