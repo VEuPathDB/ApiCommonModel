@@ -321,7 +321,6 @@ AND ( REGEXP_LIKE  (ps.name, 'cuff') AND REGEXP_LIKE  (ps.name, 'second')
   --- for HTSeq, allow ONLY 'HTSeq union'
 AND ( REGEXP_LIKE  (ps.name, 'htseq') AND REGEXP_LIKE  (ps.name, 'union')  
   OR NOT REGEXP_LIKE  (ps.name, 'htseq') )
-  and ps.name not like 'percentile%'
  and ps.name not like '%diff'
 ORDER BY ps.name 
 )
@@ -349,17 +348,37 @@ prop=projectName
              <column name="term"/>
           <sql>
            <![CDATA[
-          select ps.profile_set_id as internal, 
-                 ps.name || d.name as term, 
-                 CASE WHEN ps.name like '% - %' THEN 
-                  '${datasetDisplayName}' || SUBSTR(ps.name, INSTR(ps.name,'- ', -1, 1) +1) 
-                 ELSE  '${datasetDisplayName}'  END AS display
-          from apidb.profileset ps, SRES.externaldatabase d, SRES.externaldatabaserelease r
-          where ps.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and d.name = '${datasetName}'
-            and ps.name like 'percentile%'
-          order by ps.name desc
+SELECT study_id AS internal, ps_name ||  anal || sense AS display, ps_name || '- ' ||  anal || sense AS term
+FROM (
+SELECT ps.study_id , REGEXP_REPLACE (ps.name, '\[(.)+\]', '')  AS ps_name
+,  REPLACE (REPLACE ( REPLACE ( REPLACE (  REGEXP_SUBSTR (ps.name, ' \[\S+ ') , 'htseq', 'HTSeq')  , 'cuff' , 'Cufflinks' ), '[', '') , '-', ' ' )  AS anal 
+, CASE  WHEN REGEXP_LIKE  (ps.name, 'cuff')  THEN  '' 
+      WHEN REGEXP_LIKE  (ps.name, ' firststrand')  THEN  '- Sense' 
+      WHEN REGEXP_LIKE  (ps.name, ' secondstrand')  THEN  '- Antisense' 
+       ELSE '' END AS sense
+from apidb.datasource ds
+  , sres.ExternalDatabase d
+  , sres.ExternalDatabaseRelease r
+  , study.study i
+  , study.study ps
+WHERE ds.TYPE = 'transcript_expression'
+AND ds.subtype = 'rnaseq'
+and ds.name = d.name
+and ds.version = r.version
+and d.external_database_id = r.external_database_id
+and r.external_database_release_id = i.external_database_release_id
+and i.investigation_id is null 
+AND ps.investigation_id = i.study_id
+AND ds.name = '${datasetName}'
+  -- USE 'first' or 'second' strand for Cufflinks below, as needed:
+AND ( REGEXP_LIKE  (ps.name, 'cuff') AND REGEXP_LIKE  (ps.name, 'second')  
+  OR NOT REGEXP_LIKE  (ps.name, 'cuff') )
+  --- for HTSeq, allow ONLY 'HTSeq union'
+AND ( REGEXP_LIKE  (ps.name, 'htseq') AND REGEXP_LIKE  (ps.name, 'union')  
+  OR NOT REGEXP_LIKE  (ps.name, 'htseq') )
+ and ps.name not like '%diff'
+ORDER BY ps.name 
+)
             ]]>
           </sql>
         </sqlQuery>

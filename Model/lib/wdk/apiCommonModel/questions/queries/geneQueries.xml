@@ -2177,30 +2177,35 @@ SELECT * FROM
        <column name="min_percentile_chosen" />
        <sql>
             <![CDATA[
-           select ga.source_id, 
-                   '@PROJECT_ID@' as project_id,
+	    SELECT ta.gene_source_id, ta.source_id,
+                   'PlasmoDB' as project_id,
                    max(round(profile_min_max.max_value, 1)) as max_percentile_chosen,
                    min(round(profile_min_max.min_value, 1)) as min_percentile_chosen
-           from ( select p.source_id, pe.profile_element_name_id
-                  from apidb.profileset ps, apidb.profileelement pe, apidb.profile p
-                  where ps.profile_set_id = p.profile_set_id
-                   and pe.profile_id = p.profile_id
-                   and pe.profile_element_name_id in ( $$samples_percentile_generic$$ )
-                   and pe.value BETWEEN $$min_expression_percentile$$ and $$max_expression_percentile$$
-                  group by p.source_id, pe.profile_element_name_id
-                ) profile, ApidbTuning.GeneAttributes ga,
-                ( select p.source_id, min(pe.value) as min_value, max(pe.value) as max_value
-                  from apidb.profileset ps, apidb.profileelement pe, apidb.profile p
-                  where ps.profile_set_id = p.profile_set_id 
-                   and pe.profile_id = p.profile_id
-                   and pe.profile_element_name_id in ( $$samples_percentile_generic$$ )
-                  group by p.source_id
-                ) profile_min_max
-           where ga.source_id = profile.source_id
-             and ga.source_id = profile_min_max.source_id
-             and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-           group by ga.source_id
-           having '$$any_or_all$$' = 'any' OR count(*) = (select count(*) as total from apidb.profileelementname where profile_element_name_id in ( $$samples_percentile_generic$$ ))
+            FROM ( SELECT res.na_feature_id, res.protocol_app_node_id  
+	        FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
+		WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
+		AND sl.study_id = $$profileset_generic$$
+		AND pan.protocol_app_node_id in ($$samples_percentile_generic$$)
+		AND pan.protocol_app_node_id = res.protocol_app_node_id
+		AND res.percentile_channel1 BETWEEN 80 AND 100
+		GROUP BY res.na_feature_id, res.protocol_app_node_id
+            ) profile, 
+	    ApidbTuning.TranscriptAttributes ta,
+	    ( SELECT res.na_feature_id, min(res.percentile_channel1) as  min_value, 
+	            max(res.percentile_channel1) as max_value
+		FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
+		WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
+		AND sl.study_id = $$profileset_generic$$
+		AND pan.protocol_app_node_id in ($$samples_percentile_generic$$)
+		AND pan.protocol_app_node_id = res.protocol_app_node_id
+		AND res.percentile_channel1 BETWEEN 80 AND 100
+		GROUP BY res.na_feature_id
+            ) profile_min_max
+	    WHERE ta.gene_na_feature_id = PROFILE.na_feature_id
+	    AND ta.gene_na_feature_id = profile_min_max.na_feature_id
+	    AND ( 'protein coding' = 'no' OR ta.gene_type = 'protein coding' )
+	    GROUP BY ta.gene_source_id,ta.source_id
+	    HAVING 'any' = 'any' OR count(*) = (SELECT count(*) AS total FROM study.protocolappnode WHERE protocol_app_node_id IN ( $$samples_percentile_generic$$ ))
             ]]>
           </sql>
     </sqlQuery>  
@@ -2786,7 +2791,7 @@ SELECT * FROM
              round(decode(two.median, 0, 0, log(2, two.median)), 2) as median_group_two,
              round(decode(one.chosen, 0, 0, log(2, one.chosen)), 2) as chose_group_one,
              round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) as chose_group_two
-      from ( select res.na_feature_id,
+      from ( SELECT res.na_feature_id,
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'minimum'
                          THEN power(2, min(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'maximum'
@@ -2806,13 +2811,13 @@ SELECT * FROM
                     decode(&&isLogged&&, 1, power(2, max(res.value)), max(res.value)) as maximum,
                     decode(&&isLogged&&, 1, power(2, min(res.value)), min(res.value)) as minimum,
                     decode(&&isLogged&&, 1, power(2, median(res.value)), median(res.value)) as median
-             from study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
-             where sl.protocol_app_node_id = pan.protocol_app_node_id
+             FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
+             WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
 	     AND sl.study_id = $$profileset_generic$$
 	     AND pan.protocol_app_node_id in ($$samples_fc_comp_generic$$)
 	     AND pan.protocol_app_node_id = res.protocol_app_node_id
-             group by res.na_feature_id ) one,
-           ( select res.na_feature_id,
+             GROUP BY res.na_feature_id ) one,
+           ( SELECT res.na_feature_id,
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_ref$$ = 'minimum'
                          THEN power(2, min(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_ref$$ = 'maximum'
@@ -2832,12 +2837,12 @@ SELECT * FROM
                     decode(&&isLogged&&, 1, power(2, max(res.value)), max(res.value)) as maximum,
                     decode(&&isLogged&&, 1, power(2, min(res.value)), min(res.value)) as minimum,
                     decode(&&isLogged&&, 1, power(2, median(res.value)), median(res.value)) as median
-             from study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
-             where sl.protocol_app_node_id = pan.protocol_app_node_id
+             FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
+             WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
 	     AND sl.study_id = $$profileset_generic$$
 	     AND pan.protocol_app_node_id in  ($$samples_fc_ref_generic$$)
 	     AND pan.protocol_app_node_id = res.protocol_app_node_id
-             group by res.na_feature_id) two,  
+             GROUP BY res.na_feature_id) two,  
            ApidbTuning.TranscriptAttributes ga
       where one.na_feature_id = two.na_feature_id
         and ga.gene_na_feature_id = one.na_feature_id 
