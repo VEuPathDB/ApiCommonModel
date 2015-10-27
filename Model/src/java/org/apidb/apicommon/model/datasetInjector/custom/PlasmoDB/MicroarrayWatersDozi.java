@@ -6,9 +6,9 @@ public class MicroarrayWatersDozi extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Waters::Dozi");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByWatersDifferentialExpression");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByWatersPercentile");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Waters::Dozi");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByWatersDifferentialExpression");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByWatersPercentile");
   }
 
 

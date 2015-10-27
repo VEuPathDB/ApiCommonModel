@@ -6,9 +6,9 @@ public class MicroarrayRingqvistInteraction extends CusomGenePageExpressionGraph
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRingqvistFoldChange"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRingqvistPercentile"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Ringqvist::WbClone"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRingqvistFoldChange"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRingqvistPercentile"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Ringqvist::WbClone"); 
   }
 
 

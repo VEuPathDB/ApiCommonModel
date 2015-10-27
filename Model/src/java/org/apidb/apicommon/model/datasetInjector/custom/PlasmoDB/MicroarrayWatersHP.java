@@ -6,9 +6,9 @@ public class MicroarrayWatersHP extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Waters::Ver2");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.BergheiGenesByExpressionPercentile");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.BergheiGenesByExpressionFoldChange");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Waters::Ver2");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.BergheiGenesByExpressionPercentile");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.BergheiGenesByExpressionFoldChange");
   }
 
 }

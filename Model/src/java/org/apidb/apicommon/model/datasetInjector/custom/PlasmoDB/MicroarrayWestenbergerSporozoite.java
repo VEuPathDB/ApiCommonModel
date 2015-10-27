@@ -6,7 +6,7 @@ public class MicroarrayWestenbergerSporozoite extends CusomGenePageExpressionGra
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "WestenbergerVivax::Ver2"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "WestenbergerVivax::Ver2"); 
   }
 
 

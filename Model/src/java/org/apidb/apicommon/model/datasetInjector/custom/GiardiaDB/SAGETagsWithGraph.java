@@ -34,7 +34,7 @@ public class SAGETagsWithGraph extends SAGETags {
   public void addModelReferences() {
       // add all references from SAGETags first
       super.addModelReferences();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Sage::McArthur");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Sage::McArthur");
   }
 
   // second column is for documentation

@@ -6,9 +6,9 @@ public class MicroarrayTroellCellCycle  extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByPercentileTroellCC"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesbyFoldChangeTroellCC"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Troell::CellCycle"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPercentileTroellCC"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesbyFoldChangeTroellCC"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Troell::CellCycle"); 
   }
 
 

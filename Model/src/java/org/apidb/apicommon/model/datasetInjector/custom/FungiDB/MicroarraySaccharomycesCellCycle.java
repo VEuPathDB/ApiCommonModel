@@ -6,8 +6,8 @@ public class MicroarraySaccharomycesCellCycle extends CusomGenePageExpressionGra
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "SaccharomycesCerevisiae::MicroArrCellCycleTS"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMicroarrayTimeSeriesSc"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "SaccharomycesCerevisiae::MicroArrCellCycleTS"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarrayTimeSeriesSc"); 
   }
 
 

@@ -7,8 +7,8 @@ public class RNASeqTroemelElegansInfection extends CusomGenePageExpressionGraphs
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Troemel::CelegansInfectionTimeSeries");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqTroemelCeInfectionFC");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqTroemelCeInfectionPercentile");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Troemel::CelegansInfectionTimeSeries");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqTroemelCeInfectionFC");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqTroemelCeInfectionPercentile");
   }
 }

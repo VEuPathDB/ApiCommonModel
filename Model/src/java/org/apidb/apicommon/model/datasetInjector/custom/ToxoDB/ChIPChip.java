@@ -10,7 +10,7 @@ public class ChIPChip extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByChIPchipToxo"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchipToxo"); 
   }
 
   // second column is for documentation

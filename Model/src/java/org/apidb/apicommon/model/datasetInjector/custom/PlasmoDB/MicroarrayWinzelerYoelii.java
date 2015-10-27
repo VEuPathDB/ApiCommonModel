@@ -6,7 +6,7 @@ public class MicroarrayWinzelerYoelii extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "WinzelerYoelii::Ver2"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "WinzelerYoelii::Ver2"); 
   }
 
 }

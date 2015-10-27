@@ -6,11 +6,11 @@ public class MicroarrayDeRisiTimeSeries extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "OverlayIRBC::Ver2"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "DeRisi::Combined"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExpressionTiming"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProfileSimilarity"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMicroarrayPercentileDerisi"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "OverlayIRBC::Ver2"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "DeRisi::Combined"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByExpressionTiming"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProfileSimilarity"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarrayPercentileDerisi"); 
   }
 
 

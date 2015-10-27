@@ -19,8 +19,8 @@ public class AntibodyArray extends DatasetInjector {
     @Override
     public void addModelReferences() {
         //  setGraphModule();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByAntibodyArray"  + getDatasetName() );
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByAntibodyArray"  + getDatasetName() );
     }
 
     @Override

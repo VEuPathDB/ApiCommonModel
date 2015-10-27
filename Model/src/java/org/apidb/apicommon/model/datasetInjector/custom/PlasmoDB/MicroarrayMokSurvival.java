@@ -6,7 +6,7 @@ public class MicroarrayMokSurvival extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "MEXP128::Ver2"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "MEXP128::Ver2"); 
   }
 
 
