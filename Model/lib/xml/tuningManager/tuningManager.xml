@@ -5916,4 +5916,54 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
   </tuningTable>
 -->
 
+  <tuningTable name="ExpressionProfile">
+    <!-- One profile for one gene. Used for graphs
+      -->
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.DataSource"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <sql>
+      <![CDATA[
+        create table ExpressionProfile&1 nologging as
+        select ds.name as dataset_name, ds.type as dataset_type, ds.subtype as dataset_subtype,
+               profile.source_id, profile.profile_set_name,
+               profile.max_expression, profile.max_percentile, profile.expression_as_string, profile.percentile_as_string
+        from apidb.DataSource ds, sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
+             study.Study i,
+             (select ps.name as profile_set_name, min(ps.name) as min_ps_name,
+                     ps.investigation_id, ta.gene_source_id as source_id,
+                     listagg (res.value, chr(9)) within group (order by pan.node_order_num) as expression_as_string,
+                     listagg (res.percentile_channel1, chr(9)) within group (order by pan.node_order_num) as percentile_as_string,
+                     max(value) as max_expression, max(res.percentile_channel1) as max_percentile
+              from study.Study ps, study.StudyLink sl, study.ProtocolAppNode pan,
+                   results.NaFeatureExpression res, TranscriptAttributes ta
+              where ps.study_id = sl.study_id
+                        and sl.protocol_app_node_id = pan.protocol_app_node_id
+                and pan.protocol_app_node_id = res.protocol_app_node_id
+                and res.na_feature_id = ta.gene_na_feature_id
+              group by ps.investigation_id, ps.name, ta.gene_source_id
+             ) profile
+        where ds.name = d.name
+        and ds.version = r.version
+        and d.external_database_id = r.external_database_id
+        and r.external_database_release_id = i.external_database_release_id
+        and i.investigation_id is null
+           /* preceding predicate is true for the top level row in study. Isn't it implied by the next one? */
+        and profile.investigation_id = i.study_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index exprof_idix&1
+          on ExpressionProfile&1 (source_id, profile_set_name)
+      ]]>
+    </sql>
+  </tuningTable>
+
+
 </tuningConfig>
