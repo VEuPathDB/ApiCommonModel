@@ -619,7 +619,7 @@ public class DatasetPresenterSetLoader {
     return buf.toString();
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     CommandLine cmdLine = getCmdLine(args);
 
     try {

@@ -54,7 +54,7 @@ public class MigrateUsers5 extends BaseCLI {
 
   private static final Logger LOG = Logger.getLogger(MigrateUsers5.class);
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     String cmdName = System.getProperty("cmdName");
     MigrateUsers5 migrator = new MigrateUsers5(cmdName);
     try {

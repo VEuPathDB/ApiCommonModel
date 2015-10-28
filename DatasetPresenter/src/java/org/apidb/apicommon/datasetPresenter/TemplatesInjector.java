@@ -220,7 +220,7 @@ public class TemplatesInjector {
 
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     CommandLine cmdLine = getCmdLine(args);
     String templatesDir = cmdLine.getOptionValue("templatesDir");
     String presentersDir = cmdLine.getOptionValue("presentersDir");
