@@ -15,18 +15,37 @@ prop=dataType
              <column name="term"/>
           <sql>
            <![CDATA[
-          select ps.profile_set_id as internal, ps.name as term, 
-                 decode(ps.name, '', '', ${decodeProfileSet}
-                 case when ps.name like '% - %' then
-                 '${datasetDisplayName}' || SUBSTR(ps.name, INSTR(ps.name,'- ', -1, 1)+1)
-                 else '${datasetDisplayName}' end) as display
-          from apidb.profileset ps, SRES.externaldatabase d, SRES.externaldatabaserelease r
-          where ps.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and (d.name = '${datasetName}' or d.name like '${datasetNamePattern}')
-            and lower(ps.name) not like '%percentile%'
-            and ps.name not like 'standard error%'
-            and ps.name not in ( ${excludedProfileSetsList})
+SELECT study_id AS internal, ps_name ||  anal || sense AS display, ps_name || '- ' ||  anal || sense AS term
+FROM (
+SELECT ps.study_id , REGEXP_REPLACE (ps.name, '\[(.)+\]', '')  AS ps_name
+,  REPLACE (REPLACE ( REPLACE ( REPLACE (  REGEXP_SUBSTR (ps.name, ' \[\S+ ') , 'htseq', 'HTSeq')  , 'cuff' , 'Cufflinks' ), '[', '') , '-', ' ' )  AS anal 
+, CASE  WHEN REGEXP_LIKE  (ps.name, 'cuff')  THEN  '' 
+      WHEN REGEXP_LIKE  (ps.name, ' firststrand')  THEN  '- Sense' 
+      WHEN REGEXP_LIKE  (ps.name, ' secondstrand')  THEN  '- Antisense' 
+       ELSE '' END AS sense
+from apidb.datasource ds
+  , sres.ExternalDatabase d
+  , sres.ExternalDatabaseRelease r
+  , study.study i
+  , study.study ps
+WHERE ( (ds.TYPE = 'protein_expression' AND ds.subtype = 'quantitative') 
+ OR (ds.TYPE = 'transcript_expression' AND ds.subtype = 'array') )
+and ds.name = d.name
+and ds.version = r.version
+and d.external_database_id = r.external_database_id
+and r.external_database_release_id = i.external_database_release_id
+and i.investigation_id is null 
+AND ps.investigation_id = i.study_id
+AND (ds.name = '${datasetName}' OR ds.name like '${datasetNamePattern}')
+  -- USE 'first' or 'second' strand for Cufflinks below, as needed:
+AND ( REGEXP_LIKE  (ps.name, 'cuff') AND REGEXP_LIKE  (ps.name, 'second')  
+  OR NOT REGEXP_LIKE  (ps.name, 'cuff') )
+  --- for HTSeq, allow ONLY 'HTSeq union'
+AND ( REGEXP_LIKE  (ps.name, 'htseq') AND REGEXP_LIKE  (ps.name, 'union')  
+  OR NOT REGEXP_LIKE  (ps.name, 'htseq') )
+and ps.name not in ( ${excludedProfileSetsList})
+ORDER BY ps.name 
+)
             ]]>
           </sql>
         </sqlQuery>
@@ -107,19 +126,19 @@ prop=defaultFoldDifference
          shortDisplayName="${datasetShortDisplayName} (fc)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericFoldChange"
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
         <paramRef ref="geneParams.profileset_generic" groupRef="paramGroups.dynamicParams" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
-        <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.global_min_max" visible="${hasTimeSeries}"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change" default="${defaultFoldDifference}"/>
 
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 	<attributesList includeProjects="${projectName}"
-	   summary="organism,product,fold_change_chosen,chose_group_two,chose_group_one,exprGraphAttr${datasetName}_expr_graph"
+	   summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one"
 	   sorting="fold_change_avg desc" /> 
+        <!-- gus4_missing from summary: ,exprGraphAttr${datasetName}_expr_graph  -->
         
         <attributesList includeProjects="EuPathDB"
-         summary="organism,product,fold_change_chosen,chose_group_two,chose_group_one"
+         summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one"
          sorting="fold_change_avg desc"  /> 
 
          <summary>
@@ -152,8 +171,6 @@ ${optionalQuestionDescription}
            <columnAttribute name="max_group_two" displayName="Max Ref (log2)" align="center"/>
            <columnAttribute name="chose_group_one" displayName="Chosen Comp (log2)" align="center"/>
            <columnAttribute name="chose_group_two" displayName="Chosen Ref (log2)" align="center"/>
-           <columnAttribute name="time_of_min_expr" displayName="Time of Min Expression" align="center"/>
-           <columnAttribute name="time_of_max_expr" displayName="Time of Max Expression" align="center"/>
         </dynamicAttributes>
 
 
@@ -187,17 +204,18 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (%ile)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericPercentile" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
         <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}PctProfiles"/>
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
 
         <attributesList includeProjects="${projectName}"
-              summary="product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
               sorting="percentile desc"
         /> 
+        <!-- gus4_missing from summary: ,pctGraphAttr${datasetName}_pct_graph  -->
         <attributesList includeProjects="EuPathDB"
-              summary="product,min_percentile_chosen,max_percentile_chosen"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
               sorting="percentile desc"
         /> 
 
@@ -255,7 +273,7 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (fc w/ conf)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericFoldChangeWithConfidence"
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
         <!-- params we are overriding -->
 
 
@@ -266,11 +284,13 @@ prop=proteinCodingParamVisible
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 
         <attributesList includeProjects="${projectName}"
-         summary="organism,product,fold_change,confidence,exprGraphAttr${datasetName}_expr_graph"
+         summary="organism,gene_product,fold_change,confidence"
          sorting="fold_change_avg asc"         
          /> 
+        <!-- gus4_missing from summary:  ,exprGraphAttr${datasetName}_expr_graph-->
+
          <attributesList includeProjects="EuPathDB"
-          summary="organism,product,fold_change,confidence"
+          summary="organism,gene_product,fold_change,confidence"
           sorting="fold_change_avg asc"         
          /> 
 
@@ -327,7 +347,7 @@ prop=dataType
 			  includeProjects="${projectName}">
               <text>
                 <![CDATA[
-				<a href="showRecord.do?name=GeneRecordClasses.GeneRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${cleanGraphModule}${datasetName}ShowHide">
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${cleanGraphModule}${datasetName}ShowHide">
                 <img src="/cgi-bin/dataPlotter.pl?type=${graphModule}&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=${exprGraphVisiblePart}&thumb=1"/>
 				</a>
                 ]]>
@@ -352,7 +372,7 @@ prop=dataType
 			  includeProjects="${projectName}">
               <text>
                 <![CDATA[
-				<a href="showRecord.do?name=GeneRecordClasses.GeneRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${cleanGraphModule}${datasetName}ShowHide">
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${cleanGraphModule}${datasetName}ShowHide">
                 <img src="/cgi-bin/dataPlotter.pl?type=${graphModule}&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=percentile&thumb=1"/>
                 </a>
 				]]>
@@ -520,17 +540,17 @@ prop=defaultFoldDifference
          shortDisplayName="${datasetShortDisplayName} (dc)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGeneric" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
         <paramRef ref="geneParams.samples_direct_comp_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef ref="geneParams.fold_difference" default="${defaultFoldDifference}"/>
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 
 	<attributesList includeProjects="${projectName}"
-            summary="organism,product,fold_difference,exprGraphAttr${datasetName}_expr_graph"
+            summary="organism,gene_product,fold_difference,exprGraphAttr${datasetName}_expr_graph"
             sorting="fold_difference desc"/>
         <attributesList includeProjects="EuPathDB"
-           summary="organism,product,fold_difference"
+           summary="organism,gene_product,fold_difference"
            sorting="fold_difference desc"  /> 
 
 
@@ -585,15 +605,15 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (dc)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGenericPage" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
         <paramRef ref="geneParams.samples_direct_comp_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
 	<attributesList includeProjects="${projectName}"
-            summary="organism,product,fold_change,exprGraphAttr${datasetName}_expr_graph"
+            summary="organism,gene_product,fold_change,exprGraphAttr${datasetName}_expr_graph"
             sorting="fold_change desc"/>
         <attributesList includeProjects="EuPathDB"
-           summary="organism,product,fold_change"
+           summary="organism,gene_product,fold_change"
            sorting="fold_change desc"  /> 
 
 
@@ -649,17 +669,17 @@ prop=defaultFoldDifference
          shortDisplayName="${datasetShortDisplayName} (dc w/ fdr)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGenericFDR" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
          
         <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
         <paramRef ref="geneParams.samples_direct_comp_fdr_generic" queryRef="GeneVQ.${datasetName}${dataType}DirectFDRSamples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef ref="geneParams.fold_difference" default="${defaultFoldDifference}"/>
 	<attributesList includeProjects="${projectName}"
-            summary="organism,product,fold_change,false_discovery_rate,exprGraphAttr${datasetName}_expr_graph"
+            summary="organism,gene_product,fold_change,false_discovery_rate,exprGraphAttr${datasetName}_expr_graph"
             sorting="fold_change desc"/>
         <attributesList includeProjects="EuPathDB"
-           summary="organism,product,fold_change"
+           summary="organism,gene_product,fold_change"
            sorting="fold_change desc"  /> 
 
 
@@ -717,17 +737,17 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (%ile)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericPercentile" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
         <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}PctProfiles" visible="false"/>
         <paramRef ref="geneParams.samples_percentile_generic" queryRef="GeneVQ.${datasetName}${dataType}PctSamples"/>
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <attributesList includeProjects="${projectName}"
-              summary="product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
               sorting="percentile desc"
         /> 
         <attributesList includeProjects="EuPathDB"
-              summary="product,min_percentile_chosen,max_percentile_chosen"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
               sorting="percentile desc"
         /> 
 
