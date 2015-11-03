@@ -99,10 +99,6 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqFoldChangeQuestion");
               injectTemplate("rnaSeqFoldChangeCategories");
 
-              if(getPropValueAsBoolean("hasFishersExactTestData")) {
-                  injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
-                  injectTemplate("rnaSeqFoldChangeWithPValueCategories");
-              }
           }
 
           injectTemplate("rnaSeqPercentileQuestion");
@@ -186,11 +182,6 @@ public class RNASeq extends  DatasetInjector {
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
 
-              if(getPropValueAsBoolean("hasFishersExactTestData")) {
-                  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                                  "GeneQuestions.GenesByRNASeq" + getDatasetName() + "PValue");
-              }
-
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
 
@@ -205,7 +196,6 @@ public class RNASeq extends  DatasetInjector {
   @Override
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
-                                 {"hasFishersExactTestData", ""},
                                  {"isEuPathDBSite", ""},
                                  {"graphColor", ""},
                                  {"graphSampleLabels", ""},
