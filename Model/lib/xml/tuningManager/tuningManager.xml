@@ -5917,7 +5917,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
 -->
 
 
-  <tuningTable name="ExpressionProfile">
+  <tuningTable name="Profile">
     <!-- One profile for one gene. Used for graphs
       -->
     <internalDependency name="TranscriptAttributes"/>
@@ -5930,46 +5930,54 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     <externalDependency name="study.StudyLink"/>
     <sql>
       <![CDATA[
-        create table ExpressionProfile&1 nologging as
+        create table Profile&1 nologging as
         select ds.name as dataset_name, ds.type as dataset_type, ds.subtype as dataset_subtype,
-               profile.source_id, profile.profile_set_name,
-               profile.expression_as_string, profile.percentile_as_string,
-               profile.max_expression, profile.min_expression, profile.max_percentile, profile.min_percentile,
-               profile.max_expression_timespoint, profile.min_expression_timespoint,
-               profile.max_percentile_timespoint, profile.min_percentile_timespoint
+               profile.profile_type, profile.gene_source_id, ps.name as profile_set_name,
+               profile.profile_as_string,
+               profile.max_value, profile.min_value,
+               profile.max_timepoint, profile.min_timepoint
         from apidb.DataSource ds, sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
-             study.Study i,
-             (select ps.name as profile_set_name, min(ps.name) as min_ps_name,
-                     ps.investigation_id, ta.gene_source_id as source_id,
-                     listagg (res.value, chr(9)) within group (order by pan.node_order_num) as expression_as_string,
-                     listagg (res.percentile_channel1, chr(9)) within group (order by pan.node_order_num) as percentile_as_string,
-                     max(value) as max_expression, max(res.percentile_channel1) as max_percentile,
-                     min(value) as min_expression, min(res.percentile_channel1) as min_percentile,
-                     max(pan.name) keep (dense_rank last order by value) as max_expression_timespoint,
-                     max(pan.name) keep (dense_rank first order by value) as min_expression_timespoint,
-                     max(pan.name) keep (dense_rank last order by percentile_channel1) as max_percentile_timespoint,
-                     max(pan.name) keep (dense_rank first order by percentile_channel1) as min_percentile_timespoint
-              from study.Study ps, study.StudyLink sl, study.ProtocolAppNode pan,
-                   results.NaFeatureExpression res, TranscriptAttributes ta
-              where ps.study_id = sl.study_id
-                        and sl.protocol_app_node_id = pan.protocol_app_node_id
+             study.Study i, study.Study ps,
+             (select res.profile_type, sl.study_id, ta.gene_source_id,
+                     listagg (res.value, chr(9)) within group (order by pan.node_order_num) as profile_as_string,
+                     max(res.value) as max_value, min(value) as min_value,
+                     max(pan.name) keep (dense_rank last order by value) as max_timepoint,
+                     max(pan.name) keep (dense_rank first order by value) as min_timepoint
+              from study.StudyLink sl, study.ProtocolAppNode pan,
+                   TranscriptAttributes ta,
+                   (  select 'values' as profile_type, value, na_feature_id, protocol_app_node_id
+                      from results.NaFeatureExpression
+                      where value is not null
+                    union
+                      select 'channel1_percentiles' as profile_type,
+                              percentile_channel1 as value, na_feature_id, protocol_app_node_id
+                      from results.NaFeatureExpression
+                      where percentile_channel1 is not null
+                    union
+                      select 'channel2_percentiles' as profile_type,
+                              percentile_channel2 as value, na_feature_id, protocol_app_node_id
+                      from results.NaFeatureExpression
+                      where percentile_channel2 is not null
+                   ) res
+              where sl.protocol_app_node_id = pan.protocol_app_node_id
                 and pan.protocol_app_node_id = res.protocol_app_node_id
                 and res.na_feature_id = ta.gene_na_feature_id
-              group by ps.investigation_id, ps.name, ta.gene_source_id
+              group by res.profile_type, sl.study_id, ta.gene_source_id
              ) profile
         where ds.name = d.name
-        and ds.version = r.version
-        and d.external_database_id = r.external_database_id
-        and r.external_database_release_id = i.external_database_release_id
-        and i.investigation_id is null
+          and ps.investigation_id = i.study_id
+          and ds.version = r.version
+          and d.external_database_id = r.external_database_id
+          and r.external_database_release_id = i.external_database_release_id
+          and i.investigation_id is null
            /* preceding predicate is true for the top level row in study. Isn't it implied by the next one? */
-        and profile.investigation_id = i.study_id
+          and profile.study_id = ps.study_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create index exprof_idix&1
-          on ExpressionProfile&1 (source_id, profile_set_name)
+          on Profile&1 (gene_source_id, profile_type, profile_set_name)
       ]]>
     </sql>
   </tuningTable>
