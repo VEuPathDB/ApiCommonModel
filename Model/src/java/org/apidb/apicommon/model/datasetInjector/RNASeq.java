@@ -72,8 +72,7 @@ public class RNASeq extends  DatasetInjector {
                            "_sense_pct_graph," + datasetName + "_antisense_pct_graph");
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
-              injectTemplate("rnaSeqSsProfileSetParamQuery");
-              injectTemplate("rnaSeqSsPctProfileSetParamQuery");
+              injectTemplate("rnaSeqProfileSetParamQuery");
               injectTemplate("rnaSeqStrandSpecificGraph");
       
           } else {
@@ -90,7 +89,7 @@ public class RNASeq extends  DatasetInjector {
 
               injectTemplate("rnaSeqExpressionGraphAttributes");
               injectTemplate("rnaSeqProfileSetParamQuery");
-              injectTemplate("rnaSeqPctProfileSetParamQuery");
+
               injectTemplate("rnaSeqStrandNonSpecificGraph");
           }
 
