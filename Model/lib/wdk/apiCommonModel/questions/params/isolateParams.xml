@@ -55,10 +55,11 @@
 
         <flatVocabParam name="specific_host"
              queryRef="hostVQ.withIsolates"
-             default="Mammals - Human"
+             default="9606"
              prompt="Host"
              multiPick="true"
              quote="true"
+             suppressNode="true"  
              displayType="treeBox">
         </flatVocabParam>
 
@@ -204,17 +205,6 @@
             <suggest selectMode="first" />
        </flatVocabParam>
 
-       <flatVocabParam name="type" 
-            queryRef="typeVQ.withIsolates"
-            prompt="Isolate assay type"
-            multiPick="true"
-            quote="true"> 
-        <help>
-          Choose the isolate type you want to query
-            </help>
-        <suggest selectMode="all" />
-       </flatVocabParam>
-
        <enumParam name="text_fields"
                   prompt="Fields"
                   multiPick="true">
@@ -289,14 +279,32 @@
     <column name="internal"/>
     <column name="term"/>
     <column name="parentTerm"/>
+    <column name="display"/>
     <sql>
-    <![CDATA[
-    select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
-    from apidb.isolatevocabulary
-    where type = 'specific_host'
-    start with term in (select distinct annotated_specific_host from apidbtuning.isolateattributes)
-    connect by prior parent = term
-    order by parentTerm, term
+      <![CDATA[
+        with relationship -- parent-child pairings for host taxa and all ancestors
+             as (select distinct taxon_id, ncbi_tax_id, parent_id
+                 from sres.taxon
+                 start with ncbi_tax_id in (select host_ncbi_tax_id from apidbTuning.IsolateAttributes)
+                 connect by prior parent_id = taxon_id)
+        select r.ncbi_tax_id as term, r.ncbi_tax_id as internal,
+               pt.ncbi_tax_id as parentterm,
+               sci.name || case
+                             when commons.name is null then ''
+                             else ' (' || commons.name || ')'
+                           end
+                 as display
+        from relationship r, sres.taxon pt, sres.taxonName sci,
+             (select taxon_id, 
+                     listagg (name, ' / ') within group (order by name) as name
+              from sres.taxonName
+              where name_class = 'common name'
+              group by taxon_id) commons
+        where r.parent_id = pt.taxon_id(+)
+          and r.taxon_id = sci.taxon_id
+          and sci.name_class = 'scientific name'
+          and r.taxon_id = commons.taxon_id(+)
+        order by r.ncbi_tax_id, pt.ncbi_tax_id
     ]]>
     </sql>
     </sqlQuery>
@@ -318,7 +326,7 @@
     select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
     from apidb.isolatevocabulary
     where type = 'isolation_source'
-    start with term in (select distinct annotated_isolation_source from apidbtuning.isolateattributes)
+    start with term in (select distinct isolation_source from apidbtuning.isolateattributes)
     connect by prior parent = term
     order by parentTerm, term
     ]]>
@@ -573,7 +581,7 @@ and v.product = 'SAG1'
     select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
     from apidb.isolatevocabulary
     where type = 'geographic_location'
-    start with term in (select distinct annotated_geographic_location from apidbtuning.isolateattributes)
+    start with term in (select distinct geographic_location from apidbtuning.isolateattributes)
     connect by prior parent = term
     order by parentTerm, term
       ]]>
@@ -614,27 +622,6 @@ and v.product = 'SAG1'
   </processQuery> 
   </querySet>
 
-
-  <querySet name="typeVQ" queryType="vocab" isCacheable="true">
-    <sqlQuery name="withIsolates" excludeProjects="EuPathDB">
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-      <![CDATA[
-      SELECT distinct src.data_type AS term,
-             src.data_type AS internal
-      FROM   ApidbTuning.IsolateAttributes src
-      ORDER BY src.data_type
-      ]]>
-      </sql>
-    </sqlQuery>
-
- <processQuery name="withIsolates" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" sorting="term ASC">
-      <wsColumn name="internal" width="200" wsName="internal"/>
-      <wsColumn name="term" width="200" wsName="term"/>
-    </processQuery>
-
-  </querySet>
 
   <querySet name="strainVQ" queryType="vocab" isCacheable="true">
 
