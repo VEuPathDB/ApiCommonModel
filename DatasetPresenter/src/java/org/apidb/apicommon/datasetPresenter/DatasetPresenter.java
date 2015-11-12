@@ -411,6 +411,16 @@ public class DatasetPresenter {
   public Map<String, String> getPropValues() {
     return propValues;
   }
+
+
+    void addIdentityProperty() {
+        NamedValue presenterId = new NamedValue("presenterId", getId());
+        addProp(presenterId);
+        if (datasetInjectorConstructor != null) {
+            datasetInjectorConstructor.addProp(presenterId);
+        }
+    }
+
   
   /**
    * Add properties parsed from datasetProperties files, passed in as a map, keyed on dataset name
