@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.net.URL;
 
 import org.apache.commons.digester.Digester;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
+import org.gusdb.fgputil.xml.XmlValidator;
 import org.xml.sax.SAXException;
 
 /**
@@ -15,13 +17,13 @@ import org.xml.sax.SAXException;
  */
 public class ContactsFileParser extends XmlParser {
 
+  private final Digester _digester;
+  
   public ContactsFileParser() {
-    // use the wrong .rng file. it is not worth it for now to make a right one
-    super(System.getenv("GUS_HOME") + "/lib/rng/contacts.rng", false);
+    _digester = configureDigester();
   }
 
-  @Override
-  protected Digester configureDigester() {
+  private static Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);
 
@@ -64,31 +66,28 @@ public class ContactsFileParser extends XmlParser {
   }
 
   Contacts parseFile(String xmlFileName) {
-
     Contacts contacts = null;
     try {
-      configure();
       validateXmlFile(xmlFileName);
-      contacts = (Contacts) digester.parse(new File(xmlFileName));
+      contacts = (Contacts) _digester.parse(new File(xmlFileName));
       contacts.setContactsFileName(xmlFileName);
     } catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
     return contacts;
   }
-  
+
   void validateXmlFile(String xmlFileName) {
     try {
-      configure();
+      XmlValidator validator = new XmlValidator(GusHome.getGusHome() + "/lib/rng/contacts.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
-      if (!validate(url)) {
+      if (!validator.validate(url)) {
         throw new UserException("Invalid XML file " + xmlFileName);
       }
-    } catch (IOException | SAXException ex) {
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
   }
-
-
 }

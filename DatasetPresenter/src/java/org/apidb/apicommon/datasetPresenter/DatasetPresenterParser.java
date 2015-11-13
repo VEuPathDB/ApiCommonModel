@@ -12,9 +12,11 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.digester.Digester;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.NamedValue;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
+import org.gusdb.fgputil.xml.XmlValidator;
 import org.xml.sax.SAXException;
 
 /**
@@ -23,12 +25,13 @@ import org.xml.sax.SAXException;
  */
 public class DatasetPresenterParser extends XmlParser {
 
+  private final Digester _digester;
+  
   public DatasetPresenterParser() {
-    super(System.getenv("GUS_HOME") + "/lib/rng/datasetPresenter.rng", false);
+    _digester = configureDigester();
   }
 
-  @Override
-  protected Digester configureDigester() {
+  private static Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);
 
@@ -147,19 +150,19 @@ public class DatasetPresenterParser extends XmlParser {
     configureNode(digester, "datasetPresenters/internalDataset",
         InternalDataset.class, "addInternalDataset");
 
-
     return digester;
   }
 
   void validateXmlFile(String xmlFileName) {
     try {
-      configure();
+      XmlValidator validator = new XmlValidator(GusHome.getGusHome() + "/lib/rng/datasetPresenter.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
-      if (!validate(url)) {
+      if (!validator.validate(url)) {
         throw new UserException("Invalid XML file " + xmlFileName);
       }
-    } catch (IOException | SAXException ex) {
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
   }
@@ -168,11 +171,11 @@ public class DatasetPresenterParser extends XmlParser {
 
     DatasetPresenterSet datasetPresenterSet = null;
     try {
-      configure();
       validateXmlFile(xmlFileName);
       File xmlFile = new File(xmlFileName);
-      datasetPresenterSet = (DatasetPresenterSet) digester.parse(xmlFile);
-    } catch (IOException | SAXException ex) {
+      datasetPresenterSet = (DatasetPresenterSet) _digester.parse(xmlFile);
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
     return datasetPresenterSet;
@@ -219,7 +222,6 @@ public class DatasetPresenterParser extends XmlParser {
           String[] columns = line.split("\t");
           if (columns.length != 3)
             throw new UserException("Default injectors file " + fileName + " does not have three columns in this row: " + System.getProperty("line.separator") + line + System.getProperty("line.separator"));
-
 
           if(columns[1].equals(""))
               columns[1] = null;

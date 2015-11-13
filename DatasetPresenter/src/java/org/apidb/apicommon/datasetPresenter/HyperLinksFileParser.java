@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.net.URL;
 
 import org.apache.commons.digester.Digester;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
+import org.gusdb.fgputil.xml.XmlValidator;
 import org.xml.sax.SAXException;
 
 /**
@@ -15,12 +17,13 @@ import org.xml.sax.SAXException;
  */
 public class HyperLinksFileParser extends XmlParser {
 
+  private final Digester _digester;
+
   public HyperLinksFileParser() {
-    super(System.getenv("GUS_HOME") + "/lib/rng/links.rng", false);
+    _digester = configureDigester();
   }
 
-  @Override
-  protected Digester configureDigester() {
+  private static Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);
 
@@ -44,9 +47,8 @@ public class HyperLinksFileParser extends XmlParser {
 
     HyperLinks links = null;
     try {
-      configure();
       validateXmlFile(xmlFileName);
-      links = (HyperLinks) digester.parse(new File(xmlFileName));
+      links = (HyperLinks) _digester.parse(new File(xmlFileName));
 
       links.setXmlFileName(xmlFileName);
     } catch (IOException | SAXException ex) {
@@ -57,10 +59,10 @@ public class HyperLinksFileParser extends XmlParser {
   
   void validateXmlFile(String xmlFileName) {
     try {
-      configure();
+      XmlValidator validator = new XmlValidator(GusHome.getGusHome() + "/lib/rng/links.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
-      if (!validate(url)) {
+      if (!validator.validate(url)) {
         throw new UserException("Invalid XML file " + xmlFileName);
       }
     } catch (IOException | SAXException ex) {
