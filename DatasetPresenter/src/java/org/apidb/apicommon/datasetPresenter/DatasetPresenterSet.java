@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import org.gusdb.fgputil.xml.NamedValue;
 /**
  * A set of DatasetPresenters. A DatasetPresenterSet has one or more
  * DatasetPresenters. DatasetPresenters have one or more
