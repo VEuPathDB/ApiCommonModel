@@ -8,6 +8,7 @@ import org.apache.commons.digester.Digester;
 import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
+import org.gusdb.fgputil.xml.XmlValidator;
 import org.xml.sax.SAXException;
 
 /**
@@ -16,8 +17,13 @@ import org.xml.sax.SAXException;
  */
 public class ContactsFileParser extends XmlParser {
 
-  @Override
-  protected Digester configureDigester() {
+  private final Digester _digester;
+  
+  public ContactsFileParser() {
+    _digester = configureDigester();
+  }
+
+  private static Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);
 
@@ -60,30 +66,28 @@ public class ContactsFileParser extends XmlParser {
   }
 
   Contacts parseFile(String xmlFileName) {
-
     Contacts contacts = null;
     try {
       validateXmlFile(xmlFileName);
-      contacts = (Contacts) getDigester().parse(new File(xmlFileName));
+      contacts = (Contacts) _digester.parse(new File(xmlFileName));
       contacts.setContactsFileName(xmlFileName);
     } catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
     return contacts;
   }
-  
+
   void validateXmlFile(String xmlFileName) {
     try {
-      configureValidator(GusHome.getGusHome() + "/lib/rng/contacts.rng");
+      XmlValidator validator = new XmlValidator(GusHome.getGusHome() + "/lib/rng/contacts.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
-      if (!validate(url)) {
+      if (!validator.validate(url)) {
         throw new UserException("Invalid XML file " + xmlFileName);
       }
-    } catch (IOException | SAXException ex) {
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
   }
-
-
 }

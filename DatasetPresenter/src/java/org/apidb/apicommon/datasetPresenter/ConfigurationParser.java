@@ -14,8 +14,13 @@ import org.xml.sax.SAXException;
  */
 public class ConfigurationParser extends XmlParser {
 
-  @Override
-  protected Digester configureDigester() {
+  private final Digester _digester;
+
+  public ConfigurationParser() {
+    _digester = configureDigester();
+  }
+
+  private static Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);
 
@@ -36,7 +41,7 @@ public class ConfigurationParser extends XmlParser {
 
   Configuration parseFile(String xmlFileName) {
     try {
-      Configuration config = (Configuration) getDigester().parse(new File(xmlFileName));
+      Configuration config = (Configuration) _digester.parse(new File(xmlFileName));
       if (config.getPassword() == null) throw new UserException("Could not parse password out of tuning manager prop XML file " + xmlFileName);
       if (config.getUsername() == null) throw new UserException("Could not parse schema out of tuning manager prop XML file " + xmlFileName);
       return config;

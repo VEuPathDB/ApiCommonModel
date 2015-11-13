@@ -16,6 +16,7 @@ import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.NamedValue;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
+import org.gusdb.fgputil.xml.XmlValidator;
 import org.xml.sax.SAXException;
 
 /**
@@ -24,8 +25,13 @@ import org.xml.sax.SAXException;
  */
 public class DatasetPresenterParser extends XmlParser {
 
-  @Override
-  protected Digester configureDigester() {
+  private final Digester _digester;
+  
+  public DatasetPresenterParser() {
+    _digester = configureDigester();
+  }
+
+  private static Digester configureDigester() {
     Digester digester = new Digester();
     digester.setValidating(false);
 
@@ -149,10 +155,10 @@ public class DatasetPresenterParser extends XmlParser {
 
   void validateXmlFile(String xmlFileName) {
     try {
-      configureValidator(GusHome.getGusHome() + "/lib/rng/datasetPresenter.rng");
+      XmlValidator validator = new XmlValidator(GusHome.getGusHome() + "/lib/rng/datasetPresenter.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
-      if (!validate(url)) {
+      if (!validator.validate(url)) {
         throw new UserException("Invalid XML file " + xmlFileName);
       }
     }
@@ -167,7 +173,7 @@ public class DatasetPresenterParser extends XmlParser {
     try {
       validateXmlFile(xmlFileName);
       File xmlFile = new File(xmlFileName);
-      datasetPresenterSet = (DatasetPresenterSet) getDigester().parse(xmlFile);
+      datasetPresenterSet = (DatasetPresenterSet) _digester.parse(xmlFile);
     }
     catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
