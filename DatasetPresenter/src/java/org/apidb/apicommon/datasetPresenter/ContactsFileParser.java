@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.URL;
 
 import org.apache.commons.digester.Digester;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
 import org.xml.sax.SAXException;
@@ -14,11 +15,6 @@ import org.xml.sax.SAXException;
  * XML schema is described in lib/rng/datasetPresenter.rng.
  */
 public class ContactsFileParser extends XmlParser {
-
-  public ContactsFileParser() {
-    // use the wrong .rng file. it is not worth it for now to make a right one
-    super(System.getenv("GUS_HOME") + "/lib/rng/contacts.rng", false);
-  }
 
   @Override
   protected Digester configureDigester() {
@@ -67,9 +63,8 @@ public class ContactsFileParser extends XmlParser {
 
     Contacts contacts = null;
     try {
-      configure();
       validateXmlFile(xmlFileName);
-      contacts = (Contacts) digester.parse(new File(xmlFileName));
+      contacts = (Contacts) getDigester().parse(new File(xmlFileName));
       contacts.setContactsFileName(xmlFileName);
     } catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
@@ -79,7 +74,7 @@ public class ContactsFileParser extends XmlParser {
   
   void validateXmlFile(String xmlFileName) {
     try {
-      configure();
+      configureValidator(GusHome.getGusHome() + "/lib/rng/contacts.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
       if (!validate(url)) {

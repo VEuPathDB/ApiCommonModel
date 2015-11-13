@@ -9,14 +9,10 @@ import org.gusdb.fgputil.xml.XmlParser;
 import org.xml.sax.SAXException;
 
 /**
- * 
+ * Parses tuning manager XML properties file.  Note no XML validation (e.g. via
+ * RNG schema) is performed on the input file.
  */
 public class ConfigurationParser extends XmlParser {
-
-  public ConfigurationParser() {
-    // use the wrong .rng file.   it is not worth it for now to make a right one
-    super(System.getenv("GUS_HOME") + "/lib/rng/datasetPresenter.rng", false);
-  }
 
   @Override
   protected Digester configureDigester() {
@@ -24,7 +20,6 @@ public class ConfigurationParser extends XmlParser {
     digester.setValidating(false);
 
     digester.addObjectCreate("tuningProps", Configuration.class);
-
 
     configureNode(digester, "tuningProps/password",
         Text.class, "setPassword");
@@ -40,18 +35,15 @@ public class ConfigurationParser extends XmlParser {
   }
 
   Configuration parseFile(String xmlFileName) {
-
-   Configuration config = null;
     try {
-      configure();
-      config = (Configuration) digester.parse(new File(
-          xmlFileName));
+      Configuration config = (Configuration) getDigester().parse(new File(xmlFileName));
       if (config.getPassword() == null) throw new UserException("Could not parse password out of tuning manager prop XML file " + xmlFileName);
       if (config.getUsername() == null) throw new UserException("Could not parse schema out of tuning manager prop XML file " + xmlFileName);
-    } catch (IOException | SAXException ex) {
+      return config;
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
-    return config;
   }
 
 }

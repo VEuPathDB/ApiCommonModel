@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.digester.Digester;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.NamedValue;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
@@ -22,10 +23,6 @@ import org.xml.sax.SAXException;
  * XML schema is described in lib/rng/datasetPresenter.rng.
  */
 public class DatasetPresenterParser extends XmlParser {
-
-  public DatasetPresenterParser() {
-    super(System.getenv("GUS_HOME") + "/lib/rng/datasetPresenter.rng", false);
-  }
 
   @Override
   protected Digester configureDigester() {
@@ -147,19 +144,19 @@ public class DatasetPresenterParser extends XmlParser {
     configureNode(digester, "datasetPresenters/internalDataset",
         InternalDataset.class, "addInternalDataset");
 
-
     return digester;
   }
 
   void validateXmlFile(String xmlFileName) {
     try {
-      configure();
+      configureValidator(GusHome.getGusHome() + "/lib/rng/datasetPresenter.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
       if (!validate(url)) {
         throw new UserException("Invalid XML file " + xmlFileName);
       }
-    } catch (IOException | SAXException ex) {
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
   }
@@ -168,11 +165,11 @@ public class DatasetPresenterParser extends XmlParser {
 
     DatasetPresenterSet datasetPresenterSet = null;
     try {
-      configure();
       validateXmlFile(xmlFileName);
       File xmlFile = new File(xmlFileName);
-      datasetPresenterSet = (DatasetPresenterSet) digester.parse(xmlFile);
-    } catch (IOException | SAXException ex) {
+      datasetPresenterSet = (DatasetPresenterSet) getDigester().parse(xmlFile);
+    }
+    catch (IOException | SAXException ex) {
       throw new UnexpectedException(ex);
     }
     return datasetPresenterSet;
@@ -219,7 +216,6 @@ public class DatasetPresenterParser extends XmlParser {
           String[] columns = line.split("\t");
           if (columns.length != 3)
             throw new UserException("Default injectors file " + fileName + " does not have three columns in this row: " + System.getProperty("line.separator") + line + System.getProperty("line.separator"));
-
 
           if(columns[1].equals(""))
               columns[1] = null;

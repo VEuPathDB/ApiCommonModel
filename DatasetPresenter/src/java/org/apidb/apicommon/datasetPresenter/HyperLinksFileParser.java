@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.URL;
 
 import org.apache.commons.digester.Digester;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.fgputil.xml.Text;
 import org.gusdb.fgputil.xml.XmlParser;
 import org.xml.sax.SAXException;
@@ -14,10 +15,6 @@ import org.xml.sax.SAXException;
  * XML schema is described in lib/rng/datasetPresenter.rng.
  */
 public class HyperLinksFileParser extends XmlParser {
-
-  public HyperLinksFileParser() {
-    super(System.getenv("GUS_HOME") + "/lib/rng/links.rng", false);
-  }
 
   @Override
   protected Digester configureDigester() {
@@ -44,9 +41,8 @@ public class HyperLinksFileParser extends XmlParser {
 
     HyperLinks links = null;
     try {
-      configure();
       validateXmlFile(xmlFileName);
-      links = (HyperLinks) digester.parse(new File(xmlFileName));
+      links = (HyperLinks) getDigester().parse(new File(xmlFileName));
 
       links.setXmlFileName(xmlFileName);
     } catch (IOException | SAXException ex) {
@@ -57,7 +53,7 @@ public class HyperLinksFileParser extends XmlParser {
   
   void validateXmlFile(String xmlFileName) {
     try {
-      configure();
+      configureValidator(GusHome.getGusHome() + "/lib/rng/links.rng");
       File xmlFile = new File(xmlFileName);
       URL url = xmlFile.toURI().toURL();
       if (!validate(url)) {
