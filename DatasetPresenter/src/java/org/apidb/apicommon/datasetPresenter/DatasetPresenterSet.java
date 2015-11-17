@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-
 /**
  * A set of DatasetPresenters. A DatasetPresenterSet has one or more
  * DatasetPresenters. DatasetPresenters have one or more
@@ -146,6 +145,12 @@ public class DatasetPresenterSet {
     }
   }
 
+  void addIdentifierProperty() {
+    for (DatasetPresenter datasetPresenter : presenters.values()) {
+        datasetPresenter.addIdentityProperty();
+    }
+  }
+
   // //////////////////// Static methods //////////////////
 
   static DatasetPresenterSet createFromPresentersDir(String presentersDir, String globalXmlFile) {
@@ -164,7 +169,10 @@ public class DatasetPresenterSet {
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
     propParser.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
     dps.addPropertiesFromFiles(propertiesFromFiles, duplicateDatasetNames);
-    
+
+    // add presenterId
+    dps.addIdentifierProperty();    
+
     return dps;
   }
 
