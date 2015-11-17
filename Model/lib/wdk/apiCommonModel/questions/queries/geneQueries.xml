@@ -1417,22 +1417,23 @@ select '@PROJECT_ID@' as project_id, mgs.source_id, count(distinct internal_id) 
         <paramRef ref="sharedParams.end_point"/>
         <column name="project_id"/>
         <column name="source_id"/>
+        <column name="gene_source_id"/>
         <column name="dynamic_location"/>
 
         <sql includeProjects="TriTrypDB,MicrosporidiaDB,PlasmoDB,CryptoDB,ToxoDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB">
             <![CDATA[
-            SELECT gatr.source_id as source_id, '@PROJECT_ID@' as project_id,
+            SELECT gatr.source_id as source_id, '@PROJECT_ID@' as project_id,gatr.gene_source_id,
                   apidb.tab_to_string(set(cast(COLLECT(
                   fl.sequence_source_id || ': ' || trim(to_char(fl.start_min,'999,999,999')) || ' - ' || trim(to_char(fl.end_max,'999,999,999')) || decode(fl.is_reversed, 1, ' (-)', ' (+)')
                   )  AS apidb.varchartab)), '<br/>') as dynamic_location
-            FROM ApidbTuning.FeatureLocation fl, ApidbTuning.GeneAttributes gatr
+            FROM ApidbTuning.FeatureLocation fl, ApidbTuning.TranscriptAttributes gatr
             WHERE ((gatr.organism = $$organism$$ AND gatr.chromosome = $$chromosomeOptional$$  and fl.is_top_level=1)
                    OR lower(fl.sequence_source_id) = lower($$sequenceId$$))
               AND fl.NA_FEATURE_ID = gatr.NA_FEATURE_ID
               AND fl.end_max >= REGEXP_REPLACE('$$start_point$$', ',| ','')
               AND (fl.start_min <= REGEXP_REPLACE('$$end_point$$', ',| ','') OR REGEXP_REPLACE('$$end_point$$', ',| ','') = 0)
               AND gatr.project_id  = '@PROJECT_ID@'
-            GROUP BY gatr.source_id
+            GROUP BY gatr.source_id,gatr.gene_source_id
            ]]>
        </sql>
 
@@ -2303,25 +2304,26 @@ SELECT * FROM
         <paramRef ref="geneParams.liberal_conservative"/>
         <column name="project_id"/>
         <column name="source_id"/>
+        <column name="gene_source_id"/>
         <column name="lod_score"/>
       <sql>
           <![CDATA[
-           SELECT distinct source_id, '@PROJECT_ID@' as project_id, max(lod_score) as lod_score
-           FROM   (SELECT  distinct ga.source_id,
+           SELECT gene_source_id,source_id, '@PROJECT_ID@' as project_id, max(lod_score) as lod_score
+           FROM   (SELECT  distinct ga.source_id, ga.gene_source_id,
                           CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                                ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
                           END as lod_score
-                   FROM   dots.chromosomeelementfeature  cef, apidb.genefeaturelodscore  gls, 
-                          apidbTuning.geneattributes ga, dots.externalnasequence ens, dots.nalocation nl  
+                   FROM   dots.chromosomeelementfeature  cef, apidb.nafeaturehaploblock gls, 
+                          apidbTuning.transcriptattributes ga, dots.externalnasequence ens, dots.nalocation nl  
                    WHERE  ens.source_id = $$pf_seqid$$  
                    AND  cef.na_sequence_id = ens.na_sequence_id 
                    AND  nl.na_feature_id = cef.na_feature_id 
                    AND (($$liberal_conservative$$ = 'liberal' and nl.start_min <= $$end_point_segment$$  and nl.end_max >= $$start_point$$) 
                          OR ($$liberal_conservative$$ = 'conservative' and nl.start_max <= $$end_point_segment$$  and nl.end_min >= $$start_point$$))	
                    AND cef.name = gls.haplotype_block_name 
-                   AND gls.na_feature_id = ga.na_feature_id
+                   AND gls.na_feature_id = ga.gene_na_feature_id
                    AND to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) >= $$lod_score$$)
-           GROUP BY source_id
+           GROUP BY gene_source_id,source_id
           ]]>
       </sql>
 
