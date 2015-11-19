@@ -908,33 +908,40 @@ WHERE o.taxon_id = ta.taxon_id
        <!-- Strains -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="Strains" isCacheable="false" includeProjects="ToxoDB,HostDB">
+       <sqlQuery name="Strains" isCacheable="false" includeProjects="ToxoDB,PlasmoDB">
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="strain_source_id"/>
+            <column name="strain_gene_source_id"/>
             <column name="project_id"/>
             <column name="strain"/>
 	    <column name="gene_type"/>
-            <column name="product"/>
-            <column name="exon_count"/>
+            <column name="gene_product"/>
+            <column name="gene_exon_count"/>
             <column name="protein_length"/>
             <column name="signalp_scores"/>
             <column name="tm_count"/>
             <column name="proteomics"/>
             <column name="user_comment"/>
-            <column name="old_source_id"/>
+            <column name="gene_transcript_count"/>
             <sql>
             <![CDATA[
-               select ga.source_id, gb.source_id as strain_source_id,
+                     select source_id,gene_source_id,strain_gene_source_id,project_id,strain, gene_type,
+                     gene_transcript_count,gene_product,gene_exon_count,
+                     min(strain_source_id) as strain_source_id,max(signalp_scores) as signalp_scores,
+                     max(tm_count) as tm_count, max(user_comment) as user_comment,
+                     max(proteomics) as proteomics,max(protein_length) as protein_length
+                     from (
+                     select ga.source_id, ga.gene_source_id,
+                     gb.source_id as strain_source_id, gb.gene_source_id as strain_gene_source_id,
                       replace(gb.organism, 'Toxoplasma gondii ', '') as strain,
-                      gb.gene_type,
-                      gb.project_id, gb.product, gb.exon_count, gb.protein_length,
+                      gb.gene_type, gb.gene_transcript_count,
+                      gb.project_id, gb.gene_product, gb.gene_exon_count, gb.protein_length,
                       case when gb.signalp_scores is null then 'No' else 'Yes' end as signalp_scores,
-                      gb.tm_count, toa.old_source_id,
+                      gb.tm_count, 
                       case when ms.aa_sequence_id is null then 'No' else 'Yes' end as proteomics,
                       case when c.stable_id is null then 'No' else 'Yes' end as user_comment
-               from apidbTuning.TranscriptAttributes ga, apidbTuning.GeneAttributes gb,
-                    apidbTuning.TrackOldAnnotation toa,
+               from apidbTuning.TranscriptAttributes ga, apidbTuning.TranscriptAttributes gb,
                     (select distinct aa_sequence_id from apidb.MassSpecSummary) ms,
                     (select distinct stable_id
                      from @COMMENT_SCHEMA@mappedComment@COMMENT_DBLINK@ cmnts
@@ -945,9 +952,9 @@ WHERE o.taxon_id = ta.taxon_id
                where ga.project_id = '@PROJECT_ID@'
                  and gb.gene_id = ga.gene_id
                  and gb.aa_sequence_id = ms.aa_sequence_id(+)
-                 and toa.old_source_id(+) = gb.source_id
-                 and gb.source_id = c.stable_id(+)
-               order by gb.organism
+                 and gb.gene_source_id = c.stable_id(+))
+                 group by source_id,gene_source_id,strain_gene_source_id,project_id,strain,gene_type,
+                 gene_transcript_count,gene_product,gene_exon_count
              ]]>
             </sql>
         </sqlQuery>

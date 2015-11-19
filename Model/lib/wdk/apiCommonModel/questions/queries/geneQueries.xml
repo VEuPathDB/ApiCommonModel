@@ -2237,44 +2237,48 @@ SELECT * FROM
         <paramRef ref="geneParams.percentage_sim_haploblck"/>
         <!-- <paramRef ref="geneParams.any_or_all_hpgrp"/> -->
         <column name="project_id"/>
+        <column name="gene_source_id"/>
         <column name="source_id"/>
         <column name="lod_score"/>
         <column name="cut_off_score"/>
       <sql>
           <![CDATA[
-        SELECT a.source_id, '@PROJECT_ID@' as project_id, a.lod_score, b.cut_off_score
+select q.*,ta.source_id from (
+SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
         FROM
-            (SELECT distinct source_id, max(lod_score) as lod_score
-             FROM   (select distinct ga.source_id,
+            (SELECT gene_source_id, max(lod_score) as lod_score
+             FROM   (select ga.gene_source_id,
                            CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                            ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
                            END as lod_score
-                    from   apidbTuning.geneattributes ga, apidb.genefeaturelodscore  gls
-                    where  gls.na_feature_id = ga.na_feature_id
+                    from   apidbTuning.transcriptattributes ga, apidb.nafeaturehaploblock  gls
+                    where  gls.na_feature_id = ga.gene_na_feature_id
                     and    to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) >= $$lod_score$$
-                    and    lower(ga.source_id) != lower($$pf_gene_id$$)
+                    and    lower(ga.gene_source_id) != lower($$pf_gene_id$$)
                     and    gls.HAPLOTYPE_BLOCK_NAME in (
                            select distinct HAPLOTYPE_BLOCK_NAME 
-                           from   apidbTuning.geneattributes ga, apidb.genefeaturelodscore  gls
-                           where  gls.na_feature_id = ga.na_feature_id 
-                           and lower(ga.source_id) = lower($$pf_gene_id$$) 
+                           from   apidbTuning.transcriptattributes ga, apidb.nafeaturehaploblock  gls
+                           where  gls.na_feature_id = ga.gene_na_feature_id 
+                           and lower(ga.gene_source_id) = lower($$pf_gene_id$$) 
                            and to_binary_double(LOD_SCORE_MANT || 'e' || LOD_SCORE_EXP) >= $$lod_score$$))
-             GROUP BY source_id
+             GROUP BY gene_source_id
              HAVING ((count(*)*100)/(select count(*) 
-                                    from apidbTuning.geneattributes ga, apidb.genefeaturelodscore  gls
-                                    where  gls.na_feature_id = ga.na_feature_id 
-                                    and lower(ga.source_id) = lower($$pf_gene_id$$)
+                                    from apidbTuning.transcriptattributes ga, apidb.nafeaturehaploblock gls
+                                    where  gls.na_feature_id = ga.gene_na_feature_id 
+                                    and lower(ga.gene_source_id) = lower($$pf_gene_id$$)
                                     and to_binary_double(LOD_SCORE_MANT || 'e' || LOD_SCORE_EXP) >= $$lod_score$$)) >= $$percentage_sim_haploblck$$
             ) a,
-            (Select max(cut_off) as cut_off_score, source_id from  (select CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
+            (Select max(cut_off) as cut_off_score, gene_source_id from  (select CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                            ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
-                           END as cut_off, ga.source_id from apidbTuning.geneattributes ga, apidb.genefeaturelodscore  gls
-                           where  gls.na_feature_id = ga.na_feature_id 
-                           and lower(ga.source_id) = lower($$pf_gene_id$$) 
+                           END as cut_off, ga.gene_source_id 
+                           from apidbTuning.transcriptattributes ga, apidb.nafeaturehaploblock gls
+                           where  gls.na_feature_id = ga.gene_na_feature_id 
+                           and lower(ga.gene_source_id) = lower($$pf_gene_id$$) 
                            and to_binary_double(LOD_SCORE_MANT || 'e' || LOD_SCORE_EXP) >= $$lod_score$$)
-                           group by source_id
+                           group by gene_source_id
             ) b
-            WHERE a.source_id != b.source_id
+            WHERE a.gene_source_id != b.gene_source_id) q, apidbtuning.transcriptattributes ta
+            where ta.gene_source_id = q.gene_source_id
          ]]>
       </sql>
 
@@ -4267,9 +4271,10 @@ AND t2.count_per_million >=$$min_norm_count$$
             SELECT DISTINCT ta.source_id, '@PROJECT_ID@' as project_id, ta.gene_source_id
             FROM (SELECT stable_id
                          FROM @COMMENT_SCHEMA@MappedComment@COMMENT_DBLINK@
-                         WHERE project_name = 'PlasmoDB'
+                         WHERE project_name = '@PROJECT_ID@'
                            AND is_visible = 1) comm, apidbtuning.transcriptattributes ta
             WHERE comm.stable_id = ta.gene_source_id
+            or comm.stable_id = ta.source_id
             ]]>
        </sql>
     </sqlQuery> 
