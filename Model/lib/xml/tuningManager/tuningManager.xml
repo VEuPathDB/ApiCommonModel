@@ -3194,8 +3194,8 @@ tablespace indx
                nvl(gene_name.value, 'Unknown') as gene_name,
                nvl(product.value, 'Unknown') as product,
                substr(nvl(geographic_location.value, 'Unknown'), 1, 100) as geographic_location,
-               substr(substr(geographic_location.value, 1, instr(geographic_location.value || ':', ':') - 1), 1, 40)
-                 as country,
+               geographic_location.country,
+               cast (null as varchar2(40)) as curated_country,
                lat_lon.latitude, lat_lon.longitude,
                nvl(lat_lon.value, 'Unknown') as lat_lon,
                nvl(pcr_primers.value, 'Unknown') as pcr_primers,
@@ -3223,7 +3223,9 @@ tablespace indx
               from study.Characteristic c, sres.OntologyTerm ot
               where c.ontology_term_id = ot.ontology_term_id
                 and ot.name = 'product') product,
-             (select c.protocol_app_node_id, c.value
+             (select c.protocol_app_node_id, c.value,
+              substr(substr(c.value, 1, instr(c.value || ':', ':') - 1), 1, 40)
+                 as country
               from study.Characteristic c, sres.OntologyTerm ot
               where c.ontology_term_id = ot.ontology_term_id
                 and ot.name = 'country') geographic_location,
@@ -3296,6 +3298,23 @@ tablespace indx
           and pan.protocol_app_node_id = host_tax_id.protocol_app_node_id(+)
           and pan.protocol_app_node_id = isolate.protocol_app_node_id(+)
           and pan.protocol_app_node_id = strain.protocol_app_node_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update IsolateAttributes&1
+        set curated_country = country
+            where country in (select name from sres.OntologyTerm ot)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update IsolateAttributes&1
+        set curated_country = (select max(ot.name)
+                               from sres.OntologyTerm ot, sres.OntologySynonym os
+                               where os.ontology_synonym = IsolateAttributes&1.country
+                                 and os.ontology_term_id = ot.ontology_term_id)
+        where curated_country is null
       ]]>
     </sql>
     <sql>
