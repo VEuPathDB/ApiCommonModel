@@ -101,10 +101,10 @@ prop=organismAbbrevDisplay
 	<sqlParamValue name="isLogged">0</sqlParamValue>
 	<sqlParamValue name="shift">0.01</sqlParamValue>
 	<attributesList includeProjects="${projectName}"
-	   summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one"
+	   summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one,${exprGraphAttr}"
 	   sorting="fold_change_avg desc" /> 
         <attributesList includeProjects="EuPathDB"
-         summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one,${exprGraphAttr}"
+         summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one"
          sorting="fold_change_avg desc"  /> 
         <summary>
            <![CDATA[
@@ -168,11 +168,11 @@ prop=organismAbbrevDisplay
         <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}RnaSeqProfiles"/>
 
         <attributesList includeProjects="${projectName}"
-              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen,${pctGraphAttr}"
               sorting="percentile desc"
         /> 
         <attributesList includeProjects="EuPathDB"
-              summary="gene_product,min_percentile_chosen,max_percentile_chosen,${pctGraphAttr}"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
               sorting="percentile desc"
         /> 
 
@@ -217,39 +217,28 @@ prop=projectName
              <column name="term"/>
           <sql>
            <![CDATA[
-SELECT study_id AS internal, ps_name || '- ' ||  anal || sense AS term,
+SELECT profile_study_id AS internal, ps_name || '- ' ||  anal || sense AS term,
     CASE WHEN ps_name like '% - %' THEN 
         '${datasetDisplayName}' || SUBSTR(ps_name, INSTR(ps_name,'- ', -1, 1) +1)  ||  anal || sense 
     ELSE  '${datasetDisplayName}'   ||  anal || sense END AS display
 FROM (
-SELECT ps.study_id , REGEXP_REPLACE (ps.name, '\[(.)+\]', '')  AS ps_name
-,  REPLACE (REPLACE ( REPLACE ( REPLACE (  REGEXP_SUBSTR (ps.name, ' \[\S+ ') , 'htseq', 'HTSeq')  , 'cuff' , 'Cufflinks' ), '[', '') , '-', ' ' )  AS anal 
-, CASE  WHEN REGEXP_LIKE  (ps.name, 'cuff')  THEN  '' 
-      WHEN REGEXP_LIKE  (ps.name, ' firststrand')  THEN  '- Sense' 
-      WHEN REGEXP_LIKE  (ps.name, ' secondstrand')  THEN  '- Antisense' 
+SELECT DISTINCT profile_study_id 
+, REGEXP_REPLACE (profile_set_name, '\[(.)+\]', '')  AS ps_name
+, REPLACE (REPLACE ( REPLACE ( REPLACE (  REGEXP_SUBSTR (profile_set_name, ' \[\S+ ') , 'htseq', 'HTSeq')  , 'cuff' , 'Cufflinks' ), '[', '') , '-', ' ' )  AS anal 
+, CASE  WHEN REGEXP_LIKE  (profile_set_name, 'cuff')  THEN  '' 
+      WHEN REGEXP_LIKE  (profile_set_name, ' firststrand')  THEN  '- Sense' 
+      WHEN REGEXP_LIKE  (profile_set_name, ' secondstrand')  THEN  '- Antisense' 
        ELSE '' END AS sense
-from apidb.datasource ds
-  , sres.ExternalDatabase d
-  , sres.ExternalDatabaseRelease r
-  , study.study i
-  , study.study ps
-WHERE ds.TYPE = 'transcript_expression'
-AND ds.subtype = 'rnaseq'
-and ds.name = d.name
-and ds.version = r.version
-and d.external_database_id = r.external_database_id
-and r.external_database_release_id = i.external_database_release_id
-and i.investigation_id is null 
-AND ps.investigation_id = i.study_id
-AND ds.name = '${datasetName}'
+FROM apidbtuning.profile
+WHERE dataset_type = 'transcript_expression'
+AND dataset_subtype = 'rnaseq'
+AND dataset_name = '${datasetName}'
   -- USE 'first' or 'second' strand for Cufflinks below, as needed:
-AND ( REGEXP_LIKE  (ps.name, 'cuff') AND REGEXP_LIKE  (ps.name, 'second')  
-  OR NOT REGEXP_LIKE  (ps.name, 'cuff') )
+AND ( REGEXP_LIKE  (profile_set_name, 'cuff') AND REGEXP_LIKE  (profile_set_name, 'second')  
+  OR NOT REGEXP_LIKE  (profile_set_name, 'cuff') )
   --- for HTSeq, allow ONLY 'HTSeq union'
-AND ( REGEXP_LIKE  (ps.name, 'htseq') AND REGEXP_LIKE  (ps.name, 'union')  
-  OR NOT REGEXP_LIKE  (ps.name, 'htseq') )
- and ps.name not like '%diff'
-ORDER BY ps.name 
+AND ( REGEXP_LIKE  (profile_set_name, 'htseq') AND REGEXP_LIKE  (profile_set_name, 'union')  
+  OR NOT REGEXP_LIKE  (profile_set_name, 'htseq') )
 )
             ]]>
           </sql>
@@ -278,6 +267,7 @@ prop=organismAbbrevDisplay
 name=rnaSeqExpressionGraphAttributes
 anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/transcriptRecord.xml
 prop=datasetName
+prop=presenterId
 prop=datasetShortDisplayName
 prop=projectName
 prop=hasPairedEnds
@@ -290,8 +280,9 @@ prop=exprMetric
 			  includeProjects="${projectName}">
               <text>
                 <![CDATA[
-				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrandNonSpecific${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq::StrandNonSpecific&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=${exprMetric}&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrand${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=fpkm&thumb=1"/-->
+                <!--img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=${exprMetric}&thumb=1"/-->
 				</a>
                 ]]>
               </text>
@@ -303,8 +294,8 @@ prop=exprMetric
 			  includeProjects="${projectName}">
               <text>
                 <![CDATA[
-				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrandNonSpecific${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq::StrandNonSpecific&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=percentile&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrand${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=percentile&thumb=1"/>
 				</a>
                 ]]>
               </text>
@@ -316,6 +307,7 @@ prop=exprMetric
 name=rnaSeqSsExpressionGraphAttributes
 anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/transcriptRecord.xml
 prop=datasetName
+prop=presenterId
 prop=datasetShortDisplayName
 prop=projectName
 prop=hasPairedEnds
@@ -326,8 +318,8 @@ prop=exprMetric
 			  inReportMaker="false" truncateTo="100000" sortable="false" includeProjects="${projectName}">
 	     <text>
                 <![CDATA[
-				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrandSpecific${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq::StrandSpecific&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=${exprMetric}_sense&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.Trans criptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrand${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=${exprMetric}_sense&thumb=1"/>
 				</a>
                 ]]>
 	     </text>
@@ -337,8 +329,8 @@ prop=exprMetric
 			  inReportMaker="false" truncateTo="100000" sortable="false" includeProjects="${projectName}">
 	     <text>
                 <![CDATA[
-				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrandSpecific${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq::StrandSpecific&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=${exprMetric}_antisense&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrand${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=${exprMetric}_antisense&thumb=1"/>
                 </a>
 				]]>
 	     </text>
@@ -348,8 +340,8 @@ prop=exprMetric
 			  inReportMaker="false" truncateTo="100000" sortable="false" includeProjects="${projectName}">
 	     <text>
                 <![CDATA[
-				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrandSpecific${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq::StrandSpecific&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=percentile_sense&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrand${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=percentile_sense&thumb=1"/>
 				</a>
                 ]]>
 	     </text>
@@ -359,8 +351,8 @@ prop=exprMetric
 			  inReportMaker="false" truncateTo="100000" sortable="false" includeProjects="${projectName}">
 	     <text>
                 <![CDATA[
-				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrandSpecific${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq::StrandSpecific&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=percentile_antisense&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#RNASeqStrand${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=RNASeq&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=percentile_antisense&thumb=1"/>
 				</a>
                 ]]>
 				
@@ -443,12 +435,11 @@ citation     = sub {  $CFG->citationFromExtDatabaseNamePattern( '${datasetName}'
 
 
 
-
-
 [templateStart] 
-name=rnaSeqStrandNonSpecificGraph
-anchorFile=ApiCommonWebsite/View/lib/perl/GraphPackage/Templates/RNASeq/StrandNonSpecific.pm
+name=rnaSeqGraph
+anchorFile=ApiCommonWebsite/View/lib/perl/GraphPackage/Templates/RNASeq.pm
 prop=datasetName
+prop=presenterId
 prop=graphDatasetName
 prop=projectName
 prop=hasPairedEnds
@@ -457,45 +448,18 @@ prop=graphBottomMarginSize
 prop=graphForceXLabelsHorizontal
 prop=graphSampleLabels
 >templateTextStart<
-package ApiCommonWebsite::View::GraphPackage::Templates::RNASeq::StrandNonSpecific::${graphDatasetName};
-use base qw( ApiCommonWebsite::View::GraphPackage::Templates::RNASeq::StrandNonSpecific );
+package ApiCommonWebsite::View::GraphPackage::Templates::RNASeq::${presenterId};
+# FOR: ${graphDatasetName};
+use base qw( ApiCommonWebsite::View::GraphPackage::Templates::RNASeq );
 use strict;
-sub getIsPairedEnd { return 1 if('${hasPairedEnds}' eq 'true'); }
-sub getColor { return'${graphColor}' }
-sub getBottomMarginSize { return ${graphBottomMarginSize} }
-sub getForceXLabelsHorizontalString { return '${graphForceXLabelsHorizontal}' }
+sub getGraphType { 'bar' }
+sub excludedProfileSetsString { '' }
 sub getSampleLabelsString { '${graphSampleLabels}' }
-1;
->templateTextEnd<
-
-
-[templateStart] 
-name=rnaSeqStrandSpecificGraph
-anchorFile=ApiCommonWebsite/View/lib/perl/GraphPackage/Templates/RNASeq/StrandSpecific.pm
-prop=datasetName
-prop=graphDatasetName
-prop=projectName
-prop=hasPairedEnds
-prop=graphColor
-prop=graphBottomMarginSize
-prop=graphForceXLabelsHorizontal
-prop=graphSampleLabels
->templateTextStart<
-package ApiCommonWebsite::View::GraphPackage::Templates::RNASeq::StrandSpecific::${graphDatasetName};
-use base qw( ApiCommonWebsite::View::GraphPackage::Templates::RNASeq::StrandSpecific );
-use strict;
-sub init {
-  my $self = shift;
-  $self->SUPER::init(@_);
-  $self->setIsPairedEnd(1) if('${hasPairedEnds}' eq 'true');
-  $self->setColor('${graphColor}');
-  $self->setBottomMarginSize(${graphBottomMarginSize});
-  $self->setForceXLabelsHorizontalString('${graphForceXLabelsHorizontal}');
-  $self->makeGraphs(@_);
-  return $self;
-}
-
-sub getSampleLabelsString { '${graphSampleLabels}' }
+sub getColorsString { '${graphColor}'  } 
+sub getForceXLabelsHorizontalString { '${graphForceXLabelsHorizontal}' } 
+sub getBottomMarginSize { ${graphBottomMarginSize} }
+sub getExprPlotPartModuleString { 'RNASeq' }
+sub getXAxisLabel { '' }
 1;
 >templateTextEnd<
 
