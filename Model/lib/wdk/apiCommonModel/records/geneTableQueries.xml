@@ -143,6 +143,8 @@
        <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB,PlasmoDB,FungiDB,PiroplasmaDB,CryptoDB,MicrosporidiaDB,HostDB">
             <column name="source_id" />
             <column name="project_id" />
+            <column name="summary" />
+            <column name="eupathdb_release" />
             <column name="graph_ids" />
             <column name="module" />
             <column name="species" />
@@ -161,16 +163,34 @@
             <sql>
             <![CDATA[
 select *
-from (select ga.source_id,  ga.project_id, ga.organism as gene_organism, ga.species,
-             graph_descrip.dataset as dataset_name, psgene.profile_graph_ids as graph_ids,
-             case when psgene.profile_graph_ids is null then 0 else 1 end as has_graph_data,
-             tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
-             'FALSE' has_meta_data, '' as meta_data_categories,
-             graph_descrip.*
+from (select
+      ga.source_id,
+      ga.project_id,
+      ga.organism as gene_organism,
+      ga.species,
+      nvl(dp.summary, dp.description) as summary,
+      nvl2(
+        -- NULL if build_number_introduced is 0 or 1
+        DECODE(dp.build_number_introduced,
+               0, NULL,
+               1, NULL,
+                  dp.build_number_introduced),
+        '@PROJECT_ID@ ' || bd.release_number || ' / ' || bd.release_date,
+        NULL
+      ) as eupathdb_release,
+      graph_descrip.dataset as dataset_name,
+      psgene.profile_graph_ids as graph_ids,
+      case when psgene.profile_graph_ids is null then 0 else 1 end as has_graph_data,
+      tn.name as graph_organism,
+      'TRUE' as mainOpen,
+      'FALSE' as dataOpen,
+      'FALSE' has_meta_data, '' as meta_data_categories,
+      graph_descrip.*
 
       from apidbtuning.geneattributes ga, 
            APIDBTUNING.datasetnametaxon dsnt, 
-           apidbtuning.datasetPresenter dp,
+           apidbtuning.datasetPresenter dp left join apidbtuning.eupathbuilddates bd
+               on dp.build_number_introduced = bd.build_number and bd.project = '@PROJECT_ID@',
            sres.externalDatabase d, 
            SRES.externaldatabaserelease r, 
            sres.taxonname tn, 
