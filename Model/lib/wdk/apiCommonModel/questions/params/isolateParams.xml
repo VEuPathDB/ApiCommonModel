@@ -322,14 +322,17 @@
     <column name="term"/>
     <column name="internal"/>
     <sql>
-    <![CDATA[
-    select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
-    from apidb.isolatevocabulary
-    where type = 'isolation_source'
-    start with term in (select distinct isolation_source from apidbtuning.isolateattributes)
-    connect by prior parent = term
-    order by parentTerm, term
-    ]]>
+      <![CDATA[
+        select name as term, name as internal
+        from sres.OntologyTerm
+        where name in (select lower(isolation_source) from apidbTuning.isolateAttributes)
+          and external_database_release_id 
+               in (select edr.external_database_release_id
+                    from sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+                    where edr.external_database_id = ed.external_database_id
+                      and ed.name in ('not OBO_Ontology_envo_RSRC', 'OBO_Ontology_uberon_RSRC'))
+        order by lower(name)
+      ]]>
     </sql>
     </sqlQuery>
 
@@ -575,16 +578,33 @@ and v.product = 'SAG1'
       <column name="internal"/>
       <column name="term"/>
       <column name="parentTerm"/>
-
       <sql>
-      <![CDATA[
-    select distinct initcap(term) as term, term as internal, initcap(parent) as parentTerm
-    from apidb.isolatevocabulary
-    where type = 'geographic_location'
-    start with term in (select distinct geographic_location from apidbtuning.isolateattributes)
-    connect by prior parent = term
-    order by parentTerm, term
-      ]]>
+        <![CDATA[
+          with country
+               as (select ontology_term_id
+                   from sres.OntologyTerm
+                   where name in (select curated_country from apidbTuning.isolateAttributes)
+                     AND NAME NOT LIKE '%Ivoire%'
+                     and external_database_release_id
+                           in (select edr.external_database_release_id
+                               from sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+                               where ed.name = 'Ontology_gaz_RSRC'
+                                 and edr.external_database_id = ed.external_database_id)),
+               continentalization
+               as (select subject_term_id as country_id, object_term_id as continent_id
+                   from sres.OntologyRelationship
+                   where subject_term_id in (select ontology_term_id from country))
+            -- countries
+            select countryTerm.name as term, countryTerm.name as internal, continentTerm.name as parentTerm
+            from continentalization c, sres.OntologyTerm countryTerm, sres.OntologyTerm continentTerm
+            where c.country_id = countryTerm.ontology_term_id
+              and c.continent_id = continentTerm.ontology_term_id
+          union
+            -- continents
+            select name as term, name as internal, null as parentTerm
+            from sres.OntologyTerm
+            where ontology_term_id in (select continent_id from continentalization)
+        ]]>
       </sql>
     </sqlQuery>
 
