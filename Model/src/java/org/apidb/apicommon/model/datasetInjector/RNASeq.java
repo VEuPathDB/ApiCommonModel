@@ -20,13 +20,10 @@ public class RNASeq extends  DatasetInjector {
       setShortAttribution();
 
       String projectName = getPropValue("projectName");
-
+      String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
 
       setOrganismAbbrevFromDatasetName();
-
-      // perl packages disallow some characters in the package name... use this to name the graphs
-      setGraphDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
@@ -40,9 +37,6 @@ public class RNASeq extends  DatasetInjector {
         throw new RuntimeException(datasetName + " datasetShortDisplayName cannot be null");
       }
       
-      setPropValue("graphGenePageSection", "expression");
-
-
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
           if(getPropValueAsBoolean("hasPairedEnds")) {
@@ -60,8 +54,6 @@ public class RNASeq extends  DatasetInjector {
           // Strand Specific Could be factored into subclasses
           if(getPropValueAsBoolean("isStrandSpecific")) {
 
-              setPropValue("graphModule", "RNASeq::StrandSpecific");
-
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
@@ -73,11 +65,12 @@ public class RNASeq extends  DatasetInjector {
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
               injectTemplate("rnaSeqProfileSetParamQuery");
-              injectTemplate("rnaSeqStrandSpecificGraph");
-      
+              //injectTemplate("rnaSeqStrandSpecificGraph");
+	      injectTemplate("rnaSeqGraph");
           } else {
 
-              setPropValue("graphModule", "RNASeq::StrandNonSpecific");
+              //setPropValue("graphModule", "RNASeq::StrandNonSpecific");
+              setPropValue("graphModule", "RNASeq");
 
               setPropValue("graphVisibleParts", exprMetric);
               injectTemplate("pathwayGraphs");
@@ -90,7 +83,8 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqExpressionGraphAttributes");
               injectTemplate("rnaSeqProfileSetParamQuery");
 
-              injectTemplate("rnaSeqStrandNonSpecificGraph");
+              //injectTemplate("rnaSeqStrandGraph");
+              injectTemplate("rnaSeqGraph");
           }
 
 
@@ -172,11 +166,12 @@ public class RNASeq extends  DatasetInjector {
   public void addModelReferences() {
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-          if(getPropValueAsBoolean("isStrandSpecific")) {
+	  setPropValue("graphModule", "RNASeq");
+	  /*  if(getPropValueAsBoolean("isStrandSpecific")) {
               setPropValue("graphModule", "RNASeq::StrandSpecific");
           } else {
               setPropValue("graphModule", "RNASeq::StrandNonSpecific");
-          }
+	      } */
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
