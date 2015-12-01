@@ -20,7 +20,7 @@ public class RNASeq extends  DatasetInjector {
       setShortAttribution();
 
       String projectName = getPropValue("projectName");
-      String presenterId = getPropValue("presenterId");
+      //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
 
       setOrganismAbbrevFromDatasetName();
