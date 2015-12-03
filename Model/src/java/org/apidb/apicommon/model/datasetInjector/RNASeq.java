@@ -23,6 +23,9 @@ public class RNASeq extends  DatasetInjector {
       //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
 
+      // TODO : get this value from Presenter
+      setPropValue("switchStrands", "0");
+      
       setOrganismAbbrevFromDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
@@ -39,25 +42,30 @@ public class RNASeq extends  DatasetInjector {
       
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-          if(getPropValueAsBoolean("hasPairedEnds")) {
+	  // plas-rbld has NO '%rpkm%' name entries in the study.study table. Are all fpkm then?
+          //if(getPropValueAsBoolean("hasPairedEnds")) {
               setPropValue("exprMetric", "fpkm");
               setPropValue("graphYAxisDescription", "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
-          } else {
-              setPropValue("exprMetric", "rpkm");
-              setPropValue("graphYAxisDescription", "Transcript levels of reads per kilobase of exon model per million mapped reads (RPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
-          }
+	      //} else {
+              //setPropValue("exprMetric", "rpkm");
+              //setPropValue("graphYAxisDescription", "Transcript levels of reads per kilobase of exon model per million mapped reads (RPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
+	      //}
 
           String exprMetric = getPropValue("exprMetric");
 
           injectTemplate("rnaSeqAttributeCategory");
 
-          // Strand Specific Could be factored into subclasses
           if(getPropValueAsBoolean("isStrandSpecific")) {
+
+      // TODO: Presenter to pass a boolean to switch these
+      setPropValue("sense","firststrand") ;
+      setPropValue("antisense","secondstrand") ;
+
+      Boolean switchStrands = getPropValueAsBoolean("switchStrands");
 
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
-              setPropValue("graphVisibleParts", exprMetric + "_sense," + exprMetric + "_antisense,percentile_sense,percentile_antisense");
               setPropValue("exprGraphAttr", datasetName + 
                            "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
               setPropValue("pctGraphAttr", datasetName + 
