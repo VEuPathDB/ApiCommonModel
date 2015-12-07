@@ -455,7 +455,7 @@ public class DatasetPresenterSetLoader {
         citation = rs.getString(1);
     } catch (SQLException e) {
 	// if that fails, get it from the NCBI web service
-        System.out.println("fail: had to hit NCBI");
+        System.out.println("fail: " + e.toString() + "; had to hit NCBI");
 	citation = publication.getCitation();
     }
 
