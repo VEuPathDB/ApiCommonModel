@@ -452,6 +452,7 @@ public class DatasetPresenterSetLoader {
         System.out.println("looking in " + config.getUsername() + " schema in database for pubmed ID " + publication.getPubmedId());
         pubmedQuery.setString(1, publication.getPubmedId());
         ResultSet rs = pubmedQuery.executeQuery();
+        rs.next();
         citation = rs.getString(1);
     } catch (SQLException e) {
 	// if that fails, get it from the NCBI web service
