@@ -277,6 +277,7 @@ public class DatasetPresenterSetLoader {
       PreparedStatement presenterStmt = getPresenterStmt();
       PreparedStatement contactStmt = getContactStmt();
       PreparedStatement publicationStmt = getPublicationStmt();
+      PreparedStatement pubmedQuery = getPubmedQuery();
       PreparedStatement referenceStmt = getReferenceStmt();
       PreparedStatement linkStmt = getLinkStmt();
       PreparedStatement historyStmt = getHistoryStmt();
@@ -301,7 +302,7 @@ public class DatasetPresenterSetLoader {
         }
 
         for (Publication pub : datasetPresenter.getPublications()) {
-          loadPublication(datasetPresenterId, pub, publicationStmt);
+	    loadPublication(datasetPresenterId, pub, publicationStmt, pubmedQuery);
         }
 
         for (ModelReference ref : datasetPresenter.getModelReferences()) {
@@ -427,14 +428,43 @@ public class DatasetPresenterSetLoader {
     return dbConnection.prepareStatement(sql);
   }
 
-  private void loadPublication(String datasetPresenterId, Publication publication,
-      PreparedStatement stmt) throws SQLException {
-    stmt.setString(1, datasetPresenterId);
-    stmt.setString(2, publication.getPubmedId());
-    stmt.setString(3, publication.getCitation());
+  PreparedStatement getPubmedQuery() {
+    PreparedStatement query;
+    String sql = "select max(citation) as citation "
+                 + "from " + config.getUsername() + ".datasetPublication "
+                 + " where pmid = ?";
 
     try {
-        stmt.execute();
+        query = dbConnection.prepareStatement(sql);
+    } catch (SQLException e) {
+        query = null;
+    }
+    return query;
+  }
+
+  private void loadPublication(String datasetPresenterId, Publication publication,
+			       PreparedStatement insertStmt, PreparedStatement pubmedQuery) throws SQLException {
+
+    String citation;
+
+    try {
+	// try to get it from an existing DatasetPublication record
+        System.out.println("looking in database for pubmed ID " + publication.getPubmedId());
+        pubmedQuery.setString(1, publication.getPubmedId());
+        ResultSet rs = pubmedQuery.executeQuery();
+        citation = rs.getString(1);
+    } catch (SQLException e) {
+	// if that fails, get it from the NCBI web service
+        System.out.println("fail: had to hit NCBI");
+	citation = publication.getCitation();
+    }
+
+    insertStmt.setString(1, datasetPresenterId);
+    insertStmt.setString(2, publication.getPubmedId());
+    insertStmt.setString(3, citation);
+
+    try {
+        insertStmt.execute();
     } catch (SQLException e) {
         System.out.println("*****Error Loading Publication*****");
         System.out.println(publication.toString());
