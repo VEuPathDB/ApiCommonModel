@@ -449,14 +449,14 @@ public class DatasetPresenterSetLoader {
 
     try {
 	// try to get it from an existing DatasetPublication record
-        System.out.println("looking in " + config.getUsername() + " schema in database for pubmed ID " + publication.getPubmedId());
+        // System.out.println("looking in " + config.getUsername() + " schema in database for pubmed ID " + publication.getPubmedId());
         pubmedQuery.setString(1, publication.getPubmedId());
         ResultSet rs = pubmedQuery.executeQuery();
         rs.next();
         citation = rs.getString(1);
     } catch (SQLException e) {
 	// if that fails, get it from the NCBI web service
-        System.out.println("fail: " + e.toString() + "; had to hit NCBI");
+        // System.out.println("fail: " + e.toString() + "; had to hit NCBI");
 	citation = publication.getCitation();
     }
 
