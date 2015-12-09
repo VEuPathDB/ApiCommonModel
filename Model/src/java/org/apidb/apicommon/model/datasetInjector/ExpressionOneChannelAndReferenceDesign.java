@@ -44,7 +44,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
     }
 
     protected void setPercentileProfileFilter() {
-        setPropValue("percentileProfileSetPattern", "%");
+        setPropValue("percentileChannelPattern", "%");
     }
 
     @Override

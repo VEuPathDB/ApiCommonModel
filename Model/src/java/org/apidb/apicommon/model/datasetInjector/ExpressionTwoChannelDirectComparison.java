@@ -9,7 +9,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         super.injectTemplates();
 
         setPropValue("decodeProfileSet", "");
-        setPropValue("percentileProfileSetPattern", "%");
+        setPropValue("percentileChannelPattern", "%");
 
         injectTemplate("expressionProfileSetParamQuery");
         setPropValue("defaultFoldDifference","2.0"); 
