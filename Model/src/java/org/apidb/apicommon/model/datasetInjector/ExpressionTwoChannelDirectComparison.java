@@ -16,11 +16,11 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         String lcDataType = getPropValue("dataType").toLowerCase();
         if(!lcDataType.equals("proteomics")) { 
-                String redPctSampleDecode = makeDecodeMappingStrings(getPropValue("redPctSampleMap"));
-                String greenPctSampleDecode = makeDecodeMappingStrings(getPropValue("greenPctSampleMap"));
+                String channelOnePctSampleDecode = makeDecodeMappingStrings(getPropValue("channelOnePctSampleMap"));
+                String channelTwoPctSampleDecode = makeDecodeMappingStrings(getPropValue("channelTwoPctSampleMap"));
                 
-                setPropValue("redPctSampleDecode", redPctSampleDecode);
-                setPropValue("greenPctSampleDecode", greenPctSampleDecode);
+                setPropValue("channelOnePctSampleDecode", channelOnePctSampleDecode);
+                setPropValue("channelTwoPctSampleDecode", channelTwoPctSampleDecode);
         } else {
             setPropValue("defaultFoldDifference","1.5");
                 
