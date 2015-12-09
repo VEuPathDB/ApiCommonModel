@@ -82,7 +82,6 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         String[][] exprDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {
-                                   {"profileSetNameMap", "Optionally replace profileset names"},
                                    {"hasMultipleSamples", ""},
                                    //                                   {"hasSimilarityData", ""},
         };

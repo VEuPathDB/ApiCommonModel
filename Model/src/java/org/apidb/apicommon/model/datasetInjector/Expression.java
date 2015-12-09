@@ -172,7 +172,8 @@ public abstract class Expression extends DatasetInjector {
                                    {"optionalQuestionDescription", "This text will be appended to fold change and percentile questions"},
                                    {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                    {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
-                                   {"linePlotXAxisLabel", "Sets the x-axis label for line graphs that don't override the xaxis tick mark labels."}
+                                   {"linePlotXAxisLabel", "Sets the x-axis label for line graphs that don't override the xaxis tick mark labels."},
+                                   {"profileSetNameMap", "Optionally replace profileset names"}
         };
 
         
