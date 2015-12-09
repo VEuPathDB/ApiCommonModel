@@ -2,7 +2,6 @@
 
 <querySet name="GeneId" queryType="id" isCacheable="true">
 
-<!--
   <postCacheInsertSql>
      <sql>
         <![CDATA[
@@ -27,7 +26,6 @@
         ]]>
      </sql>
   </postCacheInsertSql>
--->
 
 
   <!-- notes: 
@@ -467,11 +465,13 @@ where chip_total_reps > $$chip_replicates_plasmo$$
         <column name="source_id"/>
 	<column name="gene_source_id"/>
         <column name="matched_result"/>
+        <column name="project_id"/>
 	<!-- column name="input_id"/ -->
         
         <sql>
             <![CDATA[
-            select gene_source_id, source_id, 'Y' as matched_result
+            select gene_source_id, source_id, 'Y' as matched_result,
+            '@PROJECT_ID@' as project_id
             from ApidbTuning.TranscriptAttributes
             where lower(source_id) like regexp_replace(replace(replace(lower($$single_gene_id$$),
                                                                '*', '%'),
@@ -4193,6 +4193,30 @@ AND t2.count_per_million >=$$min_norm_count$$
 
   <querySet name="GeneTransforms" queryType="transform" isCacheable="true" doNotTest="true">
 
+  <postCacheInsertSql>
+     <sql>
+        <![CDATA[
+           insert into ##WDK_CACHE_TABLE##
+                       (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, matched_result)
+           with matches
+                as (select *
+                    from ##WDK_CACHE_TABLE##
+                    where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                row_offset
+                as (select max(wdk_row_id) as the_max from matches),
+                mismatches
+                as (  select source_id, gene_source_id
+                      from apidbTuning.transcriptAttributes
+                      where gene_source_id in (select gene_source_id from matches)
+                    minus
+                      select source_id, gene_source_id
+                      from matches)
+           select ##WDK_CACHE_INSTANCE_ID##,
+                  rownum + the_max, 0, source_id, gene_source_id, 'N'
+           from row_offset, mismatches
+        ]]>
+     </sql>
+  </postCacheInsertSql>
 
     <sqlQuery name="GenesByMissingTranscripts"  >
         <paramRef ref="geneParams.gene_result"/>  <!-- actually transcripts -->
