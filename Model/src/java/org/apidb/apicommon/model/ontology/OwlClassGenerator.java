@@ -6,6 +6,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import org.kohsuke.args4j.CmdLineException;
+import org.kohsuke.args4j.CmdLineParser;
+import org.kohsuke.args4j.Option;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.AddAxiom;
 import org.semanticweb.owlapi.model.IRI;
@@ -18,58 +21,55 @@ import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
-/** 
+/**
  * 	Read tab-delimited file and convert to ontology classes associated with some annotationProperties in OWL format
  *  	1st Row is header and need to skip
  *  	2nd Row specifies the AnnotationProperty ID in the ontology
- *  	1st Col is term label
- *  	3rd Col is term parent IRI
- *  	4th Col and following are annotations of the term
- *  
- *  Generate ICEMR india variables as classes
- *  
+ *  	By default, 1st Col is term label, 2nd Col is term parent IRI, and 4th Col and following are annotations of the term
+ *
+ *  We need to specify the starting ID need to assign to a new term, if the starting ID is -1, then the label of the term will be used as the ID
+ *
  *  @author Jie Zheng
  */
 
 public class OwlClassGenerator {
 	public static void main(String[] args) {
-		// path that contains ICEMR terminology related documents
-		String path = "/home/jbrestel/data/edam/";
-		
-		// Ontology term URI base
-		String idBase = "http://purl.obolibrary.org/eupath/";
+		OwlClassGeneratorOptions bean = new OwlClassGeneratorOptions();
+	    CmdLineParser parser = new CmdLineParser(bean);
 
-		// input tab-delimited file
-		String inFilename = "individuals.txt";	
-		int labelPos = 0;
-		int parentPos = 1;
-		int annotPos = 3;
-		
-		// unique ID assigned to the newly added terms
-		int startID = 1;
-		
-		// output owl file for variables
-		//String ontIRIstr = "http://purl.obolibrary.org/obo/eupath/indiaStudyType.owl";
-		//String outFilename = "indiaStudyType.owl";
-		String ontIRIstr = "http://purl.obolibrary.org/obo/eupath/categories.owl";
-		String outFilename = "categories.owl";
-		
-		// load tab-delimited file 
+	    try {
+	        parser.parseArgument(args);
+	    } catch( CmdLineException e ) {
+	        System.err.println(e.getMessage());
+	        parser.printUsage(System.err);
+	        System.exit(1);
+	    };
+
+		String path = bean.getPath();
+		String inputFilename = bean.getInputFilename();
+		String idBase = bean.getIdBase();
+		String outputFilename = bean.getOutputFilename();
+		String ontoIRIstr = bean.getOntoIRIstr();
+		int labelPos = bean.getLabelPos();
+		int parentPos = bean.getParentPos();
+		int annotPos = bean.getAnnotPos();
+		int startId = bean.getStartId();
+
+		// load tab-delimited file
 		BufferedReader br = null;
 		ArrayList <String[]> matrix = new ArrayList <String[]> ();
-		
+
 		try {
-			br = new BufferedReader(new FileReader(path + inFilename));
-			
-			String line = br.readLine(); 
-			String[] colNames = line.split("\t");
-			
+			br = new BufferedReader(new FileReader(path + inputFilename));
+
+			String line = br.readLine();
+
 			while( (line = br.readLine()) != null)
 			{
-				String[] items = line.split("\t"); 				
+				String[] items = line.split("\t");
 				matrix.add(items);
 			}
-			System.out.println("Successfully read text file: " + inFilename);
+			System.out.println("Successfully read text file: " + inputFilename);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -82,39 +82,45 @@ public class OwlClassGenerator {
 				ex.printStackTrace();
 			}
 		}
-		        
+
     	// create an OWL file
-        OWLOntologyManager manager = OWLManager.createOWLOntologyManager();	
-		OWLOntology outOWL = OntologyManipulator.create(manager, ontIRIstr);
+        OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
+		OWLOntology outOWL = OntologyManipulator.create(manager, ontoIRIstr);
 
         // Create factory to obtain a reference to a class
         OWLDataFactory df = manager.getOWLDataFactory();
 
         // Create annotation properties based on the IDs provided in the tab-delimited file on the 2nd row
         ArrayList<OWLAnnotationProperty> annotProps = new ArrayList<OWLAnnotationProperty>();
-        String[] items = matrix.get(0);	
+        String[] items = matrix.get(0);
         for (int k = annotPos; k< items.length; k++) {
         	if (items[k].trim().length() > 0) {
         		OWLAnnotationProperty annotProp = df.getOWLAnnotationProperty(IRI.create(idBase +items[k].trim()));
         		annotProps.add(annotProp);
-        	}      	
+        	}
         }
-        
+
         // create classes
 	   	for (int i = 1; i < matrix.size(); i++) {
 	   		items = matrix.get(i);
-	   		
+
 	   		// generate class IRI
-	   		String termIRIstr = idBase + getEupathID(startID);
-	   		startID ++;  
-	   			
+	   		String termIRIstr;
+
+	   		if (startId == -1) {
+	   			termIRIstr = ontoIRIstr + "#" +  items[labelPos].trim();
+	   		} else {
+	   			termIRIstr = idBase + getEupathID(startId);
+	   			startId ++;
+	   		}
+
 	   		OWLClass cls = df.getOWLClass(IRI.create(termIRIstr));
 
 	   		// add class parent
 	   		OWLClass parent = df.getOWLClass(IRI.create(items[parentPos].trim()));
 	        OWLAxiom axiom = df.getOWLSubClassOfAxiom(cls, parent);
 	        manager.applyChange(new AddAxiom(outOWL, axiom));
-	        
+
 	        // add term label
 	        OWLAnnotationProperty labelProp = df.getOWLAnnotationProperty(OWLRDFVocabulary.RDFS_LABEL.getIRI());
 	        OWLAnnotation label = df.getOWLAnnotation(labelProp, df.getOWLLiteral(items[labelPos].trim()));
@@ -122,24 +128,23 @@ public class OwlClassGenerator {
         	manager.applyChange(new AddAxiom(outOWL, axiom));
         	//System.out.println(termIRIstr + "\t" + items[labelPos].trim());
 
-	        
 	        // add other annotation properties
 	        for (int j = annotPos; j < items.length; j ++) {
 	        	if (items[j].trim().length()>0) {
-	        		OWLAnnotation annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));        	
+	        		OWLAnnotation annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));
 	        		axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
 	        		manager.applyChange(new AddAxiom(outOWL, axiom));
 	        	}
 	        }
 	   	}
 
-	   	OntologyManipulator.saveToFile(manager, outOWL, path + outFilename);  	
+	   	OntologyManipulator.saveToFile(manager, outOWL, path + outputFilename);
 	}
 
 	public static String getEupathID (int startID) {
-		String s = "0000000" + startID; 
-		String id = "CATEGORIES_" + s.substring(s.length()-7);
-		
+		String s = "0000000" + startID;
+		String id = "INDIVIDUAL_" + s.substring(s.length()-7);
+
 		return id;
 	}
 }
