@@ -15,15 +15,50 @@ prop=dataType
              <column name="term"/>
           <sql>
            <![CDATA[
-SELECT DISTINCT profile_study_id AS internal, profile_set_name AS term,'${datasetDisplayName}'  AS display 
-FROM apidbtuning.profile
-WHERE dataset_type = 'transcript_expression'
-AND dataset_subtype = 'array'
-AND dataset_name = '${datasetName}'
+SELECT DISTINCT profile_study_id AS internal, profile_set_name AS term,
+                 decode(ps.name, '', '', ${decodeProfileSet}  '${datasetDisplayName}') as display
+FROM apidbtuning.profileType
+WHERE dataset_name = '${datasetName}'
+AND profile_set_name not in ( ${excludedProfileSetsList})
+AND profile_type = 'values'
             ]]>
           </sql>
         </sqlQuery>
         <processQuery name="${datasetName}${dataType}Profiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
+            <wsColumn name="display" width="200"/>
+            <wsColumn name="internal" width="200"/>
+            <wsColumn name="term" width="200"/>
+        </processQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=expressionPctProfileSetParamQuery
+anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/questions/params/geneParams.xml
+prop=datasetName
+prop=datasetNamePattern
+prop=datasetDisplayName 
+prop=projectName
+prop=decodeProfileSet
+prop=excludedProfileSetsList
+prop=dataType
+>templateTextStart<
+      <sqlQuery name="${datasetName}${dataType}PctProfiles" includeProjects="${projectName}">
+             <column name="display"/>
+             <column name="internal"/>
+             <column name="term"/>
+          <sql>
+           <![CDATA[
+SELECT DISTINCT profile_study_id AS internal, profile_set_name AS term,
+                 decode(ps.name, '', '', ${decodeProfileSet}  '${datasetDisplayName}') as display
+FROM apidbtuning.profileType
+WHERE dataset_name = '${datasetName}'
+AND profile_set_name not in ( ${excludedProfileSetsList})
+AND profile_type like '%percentile%'
+            ]]>
+          </sql>
+        </sqlQuery>
+        <processQuery name="${datasetName}${dataType}PctProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
             <wsColumn name="display" width="200"/>
             <wsColumn name="internal" width="200"/>
             <wsColumn name="term" width="200"/>
@@ -318,24 +353,22 @@ prop=excludedProfileSetsList
 prop=dataType
 >templateTextStart<
       <sqlQuery name="${datasetName}${dataType}Samples" includeProjects="${projectName}">
+             <paramRef ref="geneParams.profileset_generic"/>
              <column name="display"/>
              <column name="internal"/>
              <column name="term"/>
           <sql>
            <![CDATA[
-	   SELECT  protocol_app_node_id as internal, protocol_app_node_name as term,
-	      protocol_app_node_name AS display
-	    FROM (
-	      SELECT  DISTINCT ps.protocol_app_node_id, ps.protocol_app_node_name, ps.node_order_num
-	      FROM apidbtuning.ProfileSamples ps, apidbtuning.profileType pt
-	      WHERE ps.study_id = pt.profile_study_id 
-              AND ( pt.dataset_name  = '${datasetName}' OR pt.dataset_name like '${datasetNamePattern}')
+	      SELECT  ps.protocol_app_node_id, ps.protocol_app_node_name
+	      FROM apidbtuning.ProfileSamples ps
+	      WHERE ps.study_id = $$profileset_generic$$
+	      AND profile_type='values'
 	      ORDER BY ps.node_order_num
-	      )
             ]]>
           </sql>
         </sqlQuery>
         <processQuery name="${datasetName}${dataType}Samples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
+             <paramRef ref="geneParams.profileset_generic"/> 
             <wsColumn name="display" width="200"/>
             <wsColumn name="internal" width="200"/>
             <wsColumn name="term" width="200"/>
@@ -391,48 +424,37 @@ prop=datasetDisplayName
 prop=projectName
 prop=redPctSampleDecode
 prop=greenPctSampleDecode
+prop=channelOnePctSampleDecode
+prop=channelTwoPctSampleDecode
 prop=percentileProfileSetPattern
-prop=excludedProfileSetsList
 prop=dataType
 >templateTextStart<
       <sqlQuery name="${datasetName}${dataType}PctSamples" includeProjects="${projectName}">
              <paramRef ref="geneParams.profileset_generic"/>    
+             <paramRef ref="geneParams.channel"/>    
              <column name="internal"/>
              <column name="term"/>
           <sql>
            <![CDATA[
-select * from (
-          SELECT pen.profile_element_name_id as internal, 
-                pen.name || ':  CH01 ' ||
-                decode(pen.name, '', '', ${redPctSampleDecode}
-                       pen.name) as term
-          FROM apidb.profileelementname pen,apidb.profileset ps,
-               sres.externaldatabase d, SRES.externaldatabaserelease r
-          WHERE r.external_database_release_id = ps.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and pen.profile_set_id =  ps.profile_set_id
-          and d.name = '${datasetName}'
-          and lower(ps.name) like 'red percentile%'
-          and ps.name not in ( ${excludedProfileSetsList})
-UNION
-          SELECT pen.profile_element_name_id as internal, 
-                 pen.name || ':  CH02 ' ||
-                 decode(pen.name, '', '', ${greenPctSampleDecode}
-                        pen.name) as term
-          FROM apidb.profileelementname pen,apidb.profileset ps,
-               sres.externaldatabase d, SRES.externaldatabaserelease r
-          WHERE r.external_database_release_id = ps.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and pen.profile_set_id =  ps.profile_set_id
-          and d.name = '${datasetName}'
-          and lower(ps.name) like 'green percentile%'
-          and ps.name not in ( ${excludedProfileSetsList})
-          ) order by term
+	      SELECT  protocol_app_node_id,
+	      CASE WHEN  ($$channel$$ ='channel1') THEN
+                protocol_app_node_name ||
+                decode(protocol_app_node_name, '', '', ${redPctSampleDecode}
+                       protocol_app_node_name
+		ELSE  protocol_app_node_name || 
+                decode(protocol_app_node_name, '', '', ${greenPctSampleDecode}
+                       protocol_app_node_name)
+		    END) as term
+	      FROM apidbtuning.ProfileSamples ps
+	      WHERE ps.study_id = $$profileset_generic$$	
+	      AND profile_type like '%$$channel$$%'
+	      ORDER BY ps.node_order_num
             ]]>
           </sql>
         </sqlQuery>
         <processQuery name="${datasetName}${dataType}PctSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
             <paramRef ref="geneParams.profileset_generic"/>    
+             <paramRef ref="geneParams.channel"/>    
             <wsColumn name="internal" width="200"/>
             <wsColumn name="term" width="200"/>
         </processQuery>
@@ -463,7 +485,7 @@ prop=defaultFoldDifference
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGeneric" 
          recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
-        <paramRef ref="geneParams.samples_direct_comp_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
+        <paramRef ref="geneParams.samples_fc_ref_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef ref="geneParams.fold_difference" default="${defaultFoldDifference}"/>
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
@@ -664,6 +686,7 @@ prop=proteinCodingParamVisible
         <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}Profiles" visible="false"/>
         <paramRef ref="geneParams.samples_percentile_generic" queryRef="GeneVQ.${datasetName}${dataType}PctSamples"/>
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
+        <paramRef ref="geneParams.channel" visible="true"/>
         <attributesList includeProjects="${projectName}"
               summary="gene_product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
               sorting="percentile desc"
