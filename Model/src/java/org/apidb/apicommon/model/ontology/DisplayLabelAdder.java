@@ -33,7 +33,7 @@ public class DisplayLabelAdder
 	        System.err.println(e.getMessage());
 	        parser.printUsage(System.err);
 	        System.exit(1);
-	    };
+	    }
 
 		String path = bean.getPath();
 		String inputFilename = path + bean.getInputFilename();

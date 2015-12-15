@@ -8,7 +8,6 @@ import java.util.ArrayList;
 
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
-import org.kohsuke.args4j.Option;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.AddAxiom;
 import org.semanticweb.owlapi.model.IRI;
@@ -43,7 +42,7 @@ public class OwlClassGenerator {
 	        System.err.println(e.getMessage());
 	        parser.printUsage(System.err);
 	        System.exit(1);
-	    };
+	    }
 
 		String path = bean.getPath();
 		String inputFilename = bean.getInputFilename();

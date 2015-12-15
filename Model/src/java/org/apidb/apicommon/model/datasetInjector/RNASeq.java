@@ -61,7 +61,7 @@ public class RNASeq extends  DatasetInjector {
       setPropValue("sense","firststrand") ;
       setPropValue("antisense","secondstrand") ;
 
-      Boolean switchStrands = getPropValueAsBoolean("switchStrands");
+      //Boolean switchStrands = getPropValueAsBoolean("switchStrands");
 
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");

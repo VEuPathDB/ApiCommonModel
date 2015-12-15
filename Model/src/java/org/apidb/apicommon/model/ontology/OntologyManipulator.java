@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 /**
@@ -273,7 +274,6 @@ public class OntologyManipulator {
 		return targetOnt;
 	}
 	
-	@SuppressWarnings("unchecked")
 	public static OWLOntology setOntologyID (OWLOntologyManager manager, OWLOntology ont, String newIRIstr) {
 		OWLOntologyID oldID = ont.getOntologyID();
 		String oldIRIstr = oldID.getOntologyIRI().toString();
@@ -289,19 +289,19 @@ public class OntologyManipulator {
 			// change the namespace if it is same as the ontologyIRI
 			OWLOntologyXMLNamespaceManager nsManager = new OWLOntologyXMLNamespaceManager(manager, ont);
 			Map<String, String> prefixNSs = nsManager.getPrefixNamespaceMap();
-			Set s = prefixNSs.entrySet();
-			Iterator it = s.iterator();
+			Set<Entry<String,String>> s = prefixNSs.entrySet();
+			Iterator<Entry<String,String>> it = s.iterator();
 
 	        while(it.hasNext())
 	        {
 	            // key=value separator this by Map.Entry to get key and value
-	            Map.Entry<String, String> m =(Map.Entry<String, String>)it.next();
+	            Map.Entry<String, String> m = it.next();
 
 	            // getKey is used to get key of Map
-	            String prefix = (String) m.getKey();
+	            String prefix = m.getKey();
 
 	            // getValue is used to get value of key in Map
-	            String namespace = (String) m.getValue();
+	            String namespace = m.getValue();
 
 	            System.out.println("Prefix:"+ prefix +"  Namespace:" + namespace);
 	        }
@@ -310,7 +310,6 @@ public class OntologyManipulator {
 		return ont;
 	}
 	
-	@SuppressWarnings("unchecked")
 	public static void printPrefixNSs (OWLOntologyManager manager, OWLOntology ont) {
 		OWLOntologyID id = ont.getOntologyID();
 		System.out.println("Ontology: " + id.getOntologyIRI().toString());
@@ -320,18 +319,18 @@ public class OntologyManipulator {
 		
 		OWLOntologyXMLNamespaceManager nsManager = new OWLOntologyXMLNamespaceManager(manager, ont);
 		Map<String, String> prefixNSs = nsManager.getPrefixNamespaceMap();
-		Set s = prefixNSs.entrySet();
-		Iterator it = s.iterator();
+		Set<Entry<String,String>> s = prefixNSs.entrySet();
+		Iterator<Entry<String,String>> it = s.iterator();
 
 	    while(it.hasNext()) {
 	    	// key=value separator this by Map.Entry to get key and value
-	        Map.Entry<String, String> m =(Map.Entry<String, String>)it.next();
+	        Map.Entry<String, String> m = it.next();
 
 	        // getKey is used to get key of Map
-	        String prefix = (String) m.getKey();
+	        String prefix = m.getKey();
 
 	        // getValue is used to get value of key in Map
-	        String namespace = (String) m.getValue();
+	        String namespace = m.getValue();
 
 	        System.out.println("Prefix:"+ prefix +"  Namespace:" + namespace);
 	    }

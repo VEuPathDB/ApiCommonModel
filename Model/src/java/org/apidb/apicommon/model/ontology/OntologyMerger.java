@@ -30,12 +30,12 @@ public class OntologyMerger {
 	        System.err.println(e.getMessage());
 	        parser.printUsage(System.err);
 	        System.exit(1);
-	    };
+	    }
 
 		String path = bean.getPath();
 		String inputFilename = path + bean.getInputFilename();
 		String outputFilename = path + bean.getOutputFilename();
-		String ontoIRIstr = bean.getOntoIRIstr();
+		//String ontoIRIstr = bean.getOntoIRIstr();
 
 	    // Get hold of an ontology manager
         OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
