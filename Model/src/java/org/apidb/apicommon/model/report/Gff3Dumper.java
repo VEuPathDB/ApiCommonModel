@@ -188,14 +188,15 @@ public class Gff3Dumper {
       logger.info("Collecting gene records....");
       geneReport.writeRecords(writer);
 
+      // commented out fasta sequence in gff3 - refs #21488
       // collect the protein sequences
-      logger.info("Collecting protein sequences....");
-      writer.println("##FASTA");
-      geneReport.writeSequences(writer);
+      //logger.info("Collecting protein sequences....");
+      //writer.println("##FASTA");
+      //geneReport.writeSequences(writer);
 
       // collect the genomic sequences
-      logger.info("Collecting genomic sequences....");
-      seqReport.writeSequences(writer);
+      //logger.info("Collecting genomic sequences....");
+      //seqReport.writeSequences(writer);
     }
     finally {
       seqReport.complete();
