@@ -5953,43 +5953,36 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
       <![CDATA[
         create table Profile&1 nologging as
         select ds.name as dataset_name, ds.type as dataset_type, ds.subtype as dataset_subtype,
-               profile.profile_type, profile.gene_source_id, profile.study_id as profile_study_id,
+               profile.profile_type, ta.gene_source_id, profile.study_id as profile_study_id,
                ps.name as profile_set_name, profile.profile_as_string,
                profile.max_value, profile.min_value,
                profile.max_timepoint, profile.min_timepoint
         from apidb.DataSource ds, sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
-             study.Study i, study.Study ps,
-             (select res.profile_type, sl.study_id, ta.gene_source_id,
+             study.Study i, study.Study ps, TranscriptAttributes ta,
+             (select res.profile_type, sl.study_id, res.na_feature_id,
                      listagg (res.value, chr(9)) within group (order by pan.node_order_num) as profile_as_string,
                      max(res.value) as max_value, min(value) as min_value,
                      max(pan.name) keep (dense_rank last order by value) as max_timepoint,
                      max(pan.name) keep (dense_rank first order by value) as min_timepoint
               from study.StudyLink sl, study.ProtocolAppNode pan,
-                   TranscriptAttributes ta,
                    (  select 'values' as profile_type, value, na_feature_id, protocol_app_node_id
                       from results.NaFeatureExpression
-                      where value is not null
                     union
                       select 'channel1_percentiles' as profile_type,
                               percentile_channel1 as value, na_feature_id, protocol_app_node_id
                       from results.NaFeatureExpression
-                      where percentile_channel1 is not null
                     union
                       select 'channel2_percentiles' as profile_type,
                               percentile_channel2 as value, na_feature_id, protocol_app_node_id
                       from results.NaFeatureExpression
-                      where percentile_channel2 is not null
--- "standard_error" values aren't like others, so this doesn't really work 
---                     union
---                       select 'standard_error' as profile_type,
---                               standard_error as value, na_feature_id, protocol_app_node_id
---                       from results.NaFeatureExpression
---                       where standard_error is not null
+                    union
+                      select 'standard_error' as profile_type,
+                              standard_error as value, na_feature_id, protocol_app_node_id
+                      from results.NaFeatureExpression
                    ) res
               where sl.protocol_app_node_id = pan.protocol_app_node_id
-                and pan.protocol_app_node_id = res.protocol_app_node_id
-                and res.na_feature_id = ta.gene_na_feature_id
-              group by res.profile_type, sl.study_id, ta.gene_source_id
+                and pan.protocol_app_node_id = res.protocol_app_node_id(+)
+              group by res.profile_type, sl.study_id, res.na_feature_id
              ) profile
         where ds.name = d.name
           and ps.investigation_id = i.study_id
@@ -5998,6 +5991,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
           and r.external_database_release_id = i.external_database_release_id
           and i.investigation_id is null
           and profile.study_id = ps.study_id
+          and profile.na_feature_id = ta.gene_na_feature_id
       ]]>
     </sql>
     <sql>
