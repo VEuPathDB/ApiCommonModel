@@ -237,7 +237,6 @@
             <column name="description" />
             <column name="x_axis" />
             <column name="y_axis" />
-            <column name="visible_parts" />
             <column name="has_graph_data"/>
 	    <column name="has_meta_data"/>
 	    <column name="meta_data_categories"/>
@@ -245,66 +244,52 @@
             <column name="is_graph_custom"/>
             <sql>
             <![CDATA[
-select *
-from (select ga.source_id,  ga.project_id, ga.organism as gene_organism, ga.species,
+select ga.source_id,  ga.gene_source_id, ga.project_id, ga.organism as gene_organism, ga.species,
              graph_descrip.dataset as dataset_name, psgene.profile_graph_ids as graph_ids,
              case when psgene.profile_graph_ids is null then 0 else 1 end as has_graph_data,
              tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
              'FALSE' has_meta_data, '' as meta_data_categories,
              graph_descrip.*
 
-      from apidbtuning.geneattributes ga, 
+      from apidbtuning.transcriptattributes ga, 
            APIDBTUNING.datasetnametaxon dsnt, 
            apidbtuning.datasetPresenter dp,
-           sres.externalDatabase d, 
-           SRES.externaldatabaserelease r, 
            sres.taxonname tn, 
            apidbtuning.taxonspecies ts, 
            sres.taxonname sn,
+
            (
             -- foreach profile_set name / source id:  list all genes whose gene group contains data for that profile_set
             --        ***the profile_graph_ids are those which are valid to be graphed for the gene group
-            select source_id, external_database_release_id,
+            select source_id, dataset_name,
                    apidb.tab_to_string(set(cast(COLLECT(profile_graph_id) as apidb.varchartab)), ',') as profile_graph_ids
             from (
-                    select other_gene.source_id, ps.external_database_release_id,
-                           this_gene.source_id as profile_graph_id
+                    select other_gene.source_id, p.dataset_name,
+                           this_gene.gene_source_id as profile_graph_id
                     from dots.geneinstance this_gi, dots.geneinstance other_gi,
-                         apidbtuning.geneattributes this_gene, apidbtuning.geneattributes other_gene,
-                         apidb.profileset ps, apidb.profile p
+                         apidbtuning.transcriptattributes this_gene, apidbtuning.transcriptattributes other_gene,
+                         apidbtuning.profile p
                     where this_gi.gene_id = other_gi.gene_id
-                      and this_gi.na_feature_id = this_gene.na_feature_id
-                      and other_gi.na_feature_id = other_gene.na_feature_id
-                      and this_gene.source_id = p.source_id
-                      and p.profile_set_id = ps.profile_set_id
+                      and this_gi.na_feature_id = this_gene.gene_na_feature_id
+                      and other_gi.na_feature_id = other_gene.gene_na_feature_id
+                      and this_gene.gene_source_id = p.gene_source_id
                       and this_gene.orthomcl_name = other_gene.orthomcl_name
                   union
-                    select p.source_id, ps.external_database_release_id, p.source_id as profile_graph_id
-                    from apidb.profileset ps, apidb.profile p where p.profile_set_id = ps.profile_set_id
+                    select ga.source_id, p.dataset_name, p.gene_source_id as profile_graph_id
+                    from apidbtuning.profile p, apidbtuning.transcriptattributes ga
+                    where p.gene_source_id = ga.gene_source_id
                  )
-            group by source_id, external_database_release_id) psgene,
+            group by source_id, dataset_name
+            ) psgene,
            (  select '' as dataset, '' as display_name, '' as description, '' as module,
-                     '' as x_axis, '' y_axis, '' as visible_parts, '' as is_graph_custom,
+                     '' as x_axis, '' y_axis,  '' as is_graph_custom,
                      1 as order_num
-              from dual
-            union
-              select 'pfal3D7_microarrayExpression_Winzeler_CellCycle_RSRC' as dataset,
-                     'Overlay of Intraerythrocytic Expression Profiles' as display_name,
-                     '1. Studies by the Derisi Lab of P. falciparum strains HB3, 3D7, and Dd2 used glass slide arrays.<br/> 2. Studies by the Winzeler Lab of Sorbitol- and Temperature-synchronized 3D7 strain parasites used Affymetrix oligonucleotide arrays.' as description,
-                     'OverlayIRBC::Ver2' as module,
-                     'Hours Post-Erythrocytic Invasion' as x_axis,
-                     '(derisi,winzeler) Expression Values - log(ratio);<br> (percentile) Ranking percentile of intensity, relative to all other genes' as y_axis,
-                     'derisi,winzeler,percentile' as visible_parts,
-                     'true' as is_graph_custom,
-                     0 as order_num
               from dual
       -- TEMPLATE_ANCHOR genePageGraphDescriptions
       -- TEMPLATE_ANCHOR microarrayGraphDescriptions
            ) graph_descrip
         where ga.source_id = psgene.source_id
-          and psgene.external_database_release_id = r.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and d.name = dsnt.name
+          and psgene.dataset_name = dsnt.name
           and dsnt.dataset_presenter_id = dp.dataset_presenter_id
           and graph_descrip.dataset = dp.name
           and dsnt.taxon_id = tn.taxon_id
@@ -313,8 +298,6 @@ from (select ga.source_id,  ga.project_id, ga.organism as gene_organism, ga.spec
           and ts.species_taxon_id = sn.taxon_id
           and sn.name_class = 'scientific name'
           and ga.species = sn.name
-     )
-order by order_num
             ]]>
             </sql>
         </sqlQuery>
@@ -1338,12 +1321,12 @@ WHERE o.taxon_id = ta.taxon_id
             SELECT DISTINCT dr.primary_identifier AS pathway_id,
                             TRIM(REPLACE(decode(dr.lowercase_secondary_identifier, null, dr.primary_identifier, dr.lowercase_secondary_identifier), CHR(191),'')) AS pathway_name,
                             dr.remark as activity, 
-                            gf.source_id, '@PROJECT_ID@' as project_id
-            FROM dots.GeneFeature gf,
+                            gf.gene_source_id, gf.source_id, '@PROJECT_ID@' as project_id
+            FROM apidbtuning.transcriptattributes gf,
                  dots.DbRefNaFeature drnf,
                  sres.DbRef dr, sres.ExternalDatabaseRelease edr,
                  sres.ExternalDatabase ed
-            WHERE gf.na_feature_id = drnf.na_feature_id
+            WHERE gf.gene_na_feature_id = drnf.na_feature_id
             AND drnf.db_ref_id = dr.db_ref_id
             AND dr.external_database_release_id = edr.external_database_release_id
             AND edr.external_database_id = ed.external_database_id
@@ -3076,6 +3059,7 @@ WHERE generic.source_id = specific.source_id (+)
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
+
             <column name="substrates_ids"/>
             <column name="substrates"/>
             <column name="enzyme"/>
@@ -3086,54 +3070,10 @@ WHERE generic.source_id = specific.source_id (+)
             <column name="pathway_id"/>
             <column name="direction"/>
             <sql>
+
             <![CDATA[
-Select distinct Prds.products_ids, Subtrs.substrates_ids, Prds.products, Subtrs.substrates, Subtrs.Enzyme, Subtrs.Pathway,
-      REPLACE(Subtrs.reaction, ' ', '+') as reaction,
-       Subtrs.source_id as pathway_id, ga.source_id as source_id, '@PROJECT_ID@' as project_id,
-       case when Subtrs.dir = 0 then 'Reversible'
-            else 'Irreversible' end as direction 
-From (select apidb.tab_to_string(set(cast(COLLECT('<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pc.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pc.compound || '</a>') AS apidb.varchartab))) as products,
-             apidb.tab_to_string(set(cast(COLLECT(pc.compound) AS apidb.varchartab))) as products_ids,
-             nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id, pc.pathway
-      from   ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr,ApiDBTuning.PathwayCompounds pc, 
-             ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc,
-             ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl
-      where nn1.node_type_id = 1
-      and nr.node_id = nn1.network_node_id
-      and nr.associated_node_id = nn2.network_node_id
-      and nrc.network_relationship_id = nr.network_relationship_id
-      and nrt.network_relationship_type_id = nrc.network_relationship_type_id
-      and nrl.network_rel_context_id = nrc.network_rel_context_id
-      and nrc.network_context_id = n.network_context_id
-      and pc.compound = nn2.display_label
-      group by n.name, pc.pathway, nrt.display_name, nn1.display_label, nrc.source_node) Prds,
-     (select apidb.tab_to_string(set(cast(COLLECT('<a href="showRecord.do?name=CompoundRecordClasses.CompoundRecordClass&source_id=' || pc.compound_source_id || '&project_id=' || '@PROJECT_ID@' || '">' || pc.compound || '</a>') AS apidb.varchartab))) as substrates,
-             apidb.tab_to_string(set(cast(COLLECT(pc.compound) AS apidb.varchartab))) as substrates_ids,
-             nn1.display_label as enzyme, nrt.display_name as reaction, nrc.source_node as dir, n.name as source_id, pc.pathway
-      from ApiDB.NetworkNode nn1, ApiDB.NetworkNode nn2, ApiDB.networkrelationship nr, 
-           ApiDB.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc, ApiDBTuning.PathwayCompounds pc,
-           ApiDB.NetworkContext n, ApiDB.NetworkRelContextLink nrl 
-      where nn1.node_type_id = 1
-      and nr.associated_node_id = nn1.network_node_id
-      and nr.node_id = nn2.network_node_id
-      and nrc.network_relationship_id = nr.network_relationship_id
-      and nrt.network_relationship_type_id = nrc.network_relationship_type_id
-      and nrl.network_rel_context_id = nrc.network_rel_context_id
-      and nrc.network_context_id = n.network_context_id
-      and pc.compound = nn2.display_label
-      group by n.name, pc.pathway, nrt.display_name, nn1.display_label, nrc.source_node) Subtrs, dots.Transcript t, 
-      dots.translatedAaFeature taf, sres.enzymeClass ec,dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga
-Where Subtrs.dir = Prds.dir
-And   Prds.reaction = Subtrs.reaction
-And   Subtrs.enzyme = Prds.enzyme
-And   Subtrs.source_id = Prds.source_id
-AND   subtrs.pathway = prds.pathway
-AND   ga.na_feature_id = t.parent_id
-AND   t.na_feature_id = taf.na_feature_id
-AND   taf.aa_sequence_id = asec.aa_sequence_id
-AND   asec.enzyme_class_id = ec.enzyme_class_id
-AND   Subtrs.enzyme = ec.ec_number
-ORDER BY subtrs.pathway
+
+TODO:  Join apidbtuning.pathwaycompounds to apidbtuning.transcrriptpathway (ec)
             ]]>
            </sql>
         </sqlQuery>
