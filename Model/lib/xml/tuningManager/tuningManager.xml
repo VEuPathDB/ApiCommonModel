@@ -5507,7 +5507,7 @@ AND edr.external_database_id = ed.external_database_id
          GBrowse, and PBrowse, and also in the creation of the MSGeneSummary
          tuning table.
       </comment>
-    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="SampleDisplayInfo"/>
     <internalDependency name="DatasetPresenter"/>
     <externalDependency name="apidb.MassSpecSummary"/>
@@ -5537,6 +5537,7 @@ from (select dbms_lob.SUBSTR(seq.SEQUENCE,
        pep.*
 from dots.aasequence seq, (
 select ga.source_id, 
+       ga.gene_source_id,
        mss.protocol_app_node_id, 
        dsp.display_name as experiment,
        d.name as external_database_name,
@@ -5592,15 +5593,13 @@ group by msps.source_id, msps.external_database_name, msps.experiment, msps.samp
   </tuningTable>
 
 
-<!--
-
 
   <tuningTable name="MSModifiedPeptideSummary">
     <comment> Mass-spec experiment results for a peptide. Used by the model, GBrowse,
          and PBrowse.
       </comment>
-    <internalDependency name="GeneAttributes"/>
-    <internalDependency name="MassSpecTerms"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="SampleDisplayInfo"/>
     <internalDependency name="DatasetPresenter"/>
     <externalDependency name="dots.AAFeature"/>
     <externalDependency name="dots.AALocation"/>
@@ -5609,6 +5608,7 @@ group by msps.source_id, msps.external_database_name, msps.experiment, msps.samp
     <externalDependency name="Sres.SequenceOntology"/>
     <externalDependency name="apidb.massSpecSummary"/>
     <externalDependency name="apidb.massSpecSummary"/>
+    <externalDependency name="study.protocolappnode"/>
     <sql>
       <![CDATA[
 create table MSModifiedPeptideSummary&1 nologging as
@@ -5619,11 +5619,12 @@ select dbms_lob.substr(seq.sequence, pep.aa_end_max - pep.aa_start_min + 1,
        pep.*
 from   dots.aasequence seq,
        (select ga.source_id                     as source_id,
+               ga.gene_source_id                as gene_source_id,
                so.term_name                     as modification_type,
                nvl(dsp.display_name, sample)    as experiment,
                ed.name                          as external_database_name,
                mss.external_database_release_id as external_database_release_id,
-               mst.sample                       as Sample,
+               mst.sample_display_name          as Sample,
                mss.sample_file                  as sample_file,
                mss.aa_sequence_id               as aa_sequence_id,
                msf.aa_feature_id                as peptide_aa_feature_id,
@@ -5638,9 +5639,9 @@ from   dots.aasequence seq,
                apidb.massspecsummary mss,
                dots.aalocation aal,
                dots.aalocation aalp,
-               massspecterms mst,
+               sampledisplayinfo mst,
                sres.sequenceontology so,
-               geneattributes ga,
+               transcriptattributes ga,
                sres.externaldatabase ed,
                sres.externaldatabaserelease edr,
                datasetnametaxon dsnt,
@@ -5654,14 +5655,16 @@ from   dots.aasequence seq,
                edr.external_database_release_id
            and ed.name = dsnt.name (+)
            and dsnt.dataset_presenter_id = dsp.dataset_presenter_id (+)
-           and ( ed.name || '|' || mss.sample_file = mst.internal_id
-                 or ed.name = mst.internal_id )
+           and mss.protocol_app_node_id = pan.protocol_app_node_id
+           and ed.name = mst.dataset_name
+           and mst.sample = pan.name
            and edr.external_database_id = ed.external_database_id
            and pot.sequence_ontology_id = so.sequence_ontology_id) pep
 where  pep.aa_sequence_id = seq.aa_sequence_id 
       ]]>
     </sql>
   </tuningTable>
+
 
 
   <tuningTable name="Ssgcid" alwaysUpdate="true">
@@ -5671,7 +5674,6 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     <program commandLine="buildSsgcidTT"/>
   </tuningTable>
 
--->
 
   <tuningTable name="SampleDisplayInfo" alwaysUpdate="true">
     <comment> Used by the model and GBrowse, as well as an input in the creation of
@@ -5680,14 +5682,14 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     <program commandLine="buildSampleDisplayInfoTT"/>
   </tuningTable>
 
-<!--
+
   <tuningTable name="GbrowseTracksOrganism" alwaysUpdate="true">
     <comment> Associates an organism with the GBrowse and PBrowse tracks available
          for it. Used by the gene record.
       </comment>
     <program commandLine="buildGbrowseImageUrlTT"/>
   </tuningTable>
--->
+
 
   <tuningTable name="DatasetPresenter" alwaysUpdate="true">
     <comment> Data for a dataset. Used widely in the model, and by GBrowse.
