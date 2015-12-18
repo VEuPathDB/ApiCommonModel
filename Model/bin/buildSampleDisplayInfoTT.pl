@@ -7,7 +7,7 @@ use lib "$ENV{GUS_HOME}/lib/perl";
 use XML::Simple;
 
 use File::Basename;
-
+p
 use DBI;
 use DBD::Oracle;
 
@@ -32,14 +32,14 @@ GetOptions("propfile=s" => \$propfile,
 die "required parameter missing" unless ($propfile && $instance && $suffix);
 
 my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
-my $tabFileLocation = "$ENV{PROJECT_HOME}/ApiCommonShared/Model/data/MSTermTab.xls";
+my $tabFileLocation = "$ENV{PROJECT_HOME}/ApiCommonShared/Model/data/SampleDisplayInfo.xls";
 
 &run();
 
 sub run{
 
   unless (-e $tabFileLocation)  {
-    die "Mass Spec Tab file :$tabFileLocation does not exist";
+    die "Tab file :$tabFileLocation does not exist";
   }
 
   if($help) {
@@ -50,7 +50,7 @@ sub run{
 
   # parse Tab file
 
-  my $insertStatement = "INSERT INTO MassSpecTerms$suffix(project_id,organism,sample,internal_id,sort_order,html_color) VALUES (?,?,?,?,?,?)";
+  my $insertStatement = "INSERT INTO SampleDisplayInfo$suffix(dataset_name, sample, sample_display_name, sort_order, html_color) VALUES (?,?,?,?,?)";
   my $insertRow = $dbh->prepare($insertStatement);
   my @lines = [];
   createEmptyTable($dbh,$suffix);
@@ -89,15 +89,9 @@ sub run{
   }
 
   foreach my $line (@lines) {
-    (my $project_id, my $organism, my $sample, my $ext_db_name, my $sample_file, my $sort_order, my $color ) = split("\t",$line) unless $line=~/^#/;
-    my $internal_id = $ext_db_name;
-    if ($sample_file) {
-      $internal_id .= '|'.$sample_file;
-    }
+    my ($ext_db_name, $sample, $sample_display, $sort_order, $color ) = split("\t",$line) unless $line=~/^#/;
     if ($ext_db_name) {
-      $insertRow->execute($project_id,$organism,$sample,$internal_id,$sort_order,$color);
-    }
-    else {
+      $insertRow->execute($ext_db_name, $sample, $sample_display, $sort_order,$color);
     }
   }
   $dbh->commit();
@@ -108,17 +102,15 @@ sub createEmptyTable {
      my ($dbh, $suffix) = @_;
 
     $dbh->do(<<SQL) or die "creating table";
-     create table MassSpecTerms$suffix (
-	project_id   varchar2(20),
-	organism     varchar2(255),
-	sample       varchar2(129),
-	internal_id  varchar2(255),
+     create table SampleDisplayInfo$suffix (
+       dataset_name varchar2(255),
+	sample       varchar2(255),
+	sample_display_name       varchar2(255),
         sort_order   number,
         html_color   varchar2(64)
   ) nologging
 SQL
 $dbh->{PrintError} = 0;
-
 }
 
 sub usage {
@@ -126,7 +118,7 @@ sub usage {
   if($e) {
     print STDERR $e . "\n";
   }
-  print STDERR "usage:  createMassSpecTerms.pl -instance <instance> -propfile <file> -suffix <NNNN> [ -schema <login> ] [ -debug ] [ -help ] \n";
+  print STDERR "usage:  buildSampleDisplayInfo.pl -instance <instance> -propfile <file> -suffix <NNNN> [ -schema <login> ] [ -debug ] [ -help ] \n";
   exit;
 }
 
