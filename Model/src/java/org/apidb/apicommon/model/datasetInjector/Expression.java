@@ -46,6 +46,9 @@ public abstract class Expression extends DatasetInjector {
         setPropValue("isLogged", "1"); 
     }
 
+    protected void setGraphsVisibleParts(String visibleParts) {
+        setPropValue("graphVisibleParts", visibleParts); 
+    }
 
     /***
      *   list of key value pairs
@@ -98,7 +101,7 @@ public abstract class Expression extends DatasetInjector {
         setDataType();
         setExprGraphVisiblePart();
         setGraphModule();
-        setCleanGraphModule();
+        setCleanGraphModule(); 
         setExprPlotPartModule();
         setGraphYAxisDescription();
         setProteinCodingProps();
@@ -120,11 +123,11 @@ public abstract class Expression extends DatasetInjector {
 
         setPropValue("graphVisibleParts", exprGraphVp);
         injectTemplate("pathwayGraphs");
-
+ 
         if(getPropValueAsBoolean("hasPercentileData")) {        
-            setPropValue("graphVisibleParts", exprGraphVp + ",percentile");
+           setGraphsVisibleParts(exprGraphVp + ",percentile");
         } else {
-            setPropValue("graphVisibleParts", exprGraphVp);
+            setGraphsVisibleParts(exprGraphVp);
         }
 
         // these are universal for injected expression experiments

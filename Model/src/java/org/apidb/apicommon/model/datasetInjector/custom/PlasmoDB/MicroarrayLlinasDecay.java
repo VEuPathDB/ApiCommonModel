@@ -22,6 +22,11 @@ public class MicroarrayLlinasDecay extends ExpressionOneChannelAndReferenceDesig
     }
 
     @Override
+    protected void setGraphsVisibleParts(String visibleParts) {
+        setPropValue("graphVisibleParts", visibleParts + ",exprn_val_log_ratio"); 
+    }
+ 
+    @Override
     protected void setGraphModule() {
         setPropValue("graphModule", "Expression");
     }
@@ -47,7 +52,7 @@ public class MicroarrayLlinasDecay extends ExpressionOneChannelAndReferenceDesig
     public String[][] getPropertiesDeclaration() {
         String[][] exprDeclaration = super.getPropertiesDeclaration();
         
-        String [][] declaration = {{"hasPercentileData", ""},
+        String [][] declaration = {{"hasPercentileData", ""}, 
         };
 
         return combinePropertiesDeclarations(exprDeclaration, declaration);
