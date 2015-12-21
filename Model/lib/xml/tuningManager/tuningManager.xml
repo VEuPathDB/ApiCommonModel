@@ -2747,136 +2747,83 @@ tablespace indx
     </sql>
   </tuningTable>
 
-<!--
+
   <tuningTable name="SnpStrains">
-    <comment> Each record captures info for an (organism, strain,
-         external_database_release_id) 3-tuple. Used in the model, including
-         gene and SNP queries, as well as the gene record. Also used by the
-         FindPolymorphismsPlugin in the workflow.
+    <comment> Each record captures info for a strain/protocol app node. Used in the model, including
+         gene and SNP queries, as well as the gene record. 
      </comment>
-    <internalDependency name="OrganismAttributes"/>
-    <externalDependency name="apidb.Snp"/>
-    <externalDependency name="apidb.Datasource"/>
-    <externalDependency name="apidb.Organism"/>
-    <externalDependency name="sres.ExternalDatabase"/>
-    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="apidb.Sequencevariation"/>
+    <externalDependency name="sres.taxonname"/>
+    <externalDependency name="study.protocolappnode"/>
+    <externalDependency name="dots.nasequence"/>
     <sql>
       <![CDATA[
 CREATE TABLE SnpStrains&1 NOLOGGING AS
-SELECT s.name as study_name
-     , oa.organism_name as organism
-     , b.name as strain
-     , sd.name as study_db_name
-     , bd.name as biosample_db_name
-     , sr.external_database_release_id
-     , ds.taxon_id
-from  study.study s
-    , rad.studybiomaterial sb
-    , study.biosample b
-    , sres.externaldatabase sd
-    , sres.externaldatabaserelease sr
-    , sres.externaldatabase bd
-    , sres.externaldatabaserelease br
-    , apidb.datasource ds
-    , organismattributes oa
-WHERE s.study_id = sb.study_id
-  and s.external_database_release_id = sr.external_database_release_id
-  and sr.external_database_id = sd.external_database_id
-  and sb.bio_material_id = b.bio_material_id
-  and b.external_database_release_id = br.external_database_release_id
-  and br.external_database_id = bd.external_database_id
-  and sd.name = ds.name
-  and oa.component_taxon_id = ds.taxon_id
-  and ds.type = 'isolates' 
-  and ds.subtype = 'HTS_SNP'
-UNION /* use union to get the reference strain */
-SELECT distinct s.name as study_name
-     , oa.organism_name as organism
-     , o.strain_abbrev as strain
-     , sd.name as study_db_name
-     , sd.name as biosample_db_name
-     , sr.external_database_release_id
-     , ds.taxon_id
-from  study.study s
-    , rad.studybiomaterial sb
-    , study.biosample b
-    , sres.externaldatabase sd
-    , sres.externaldatabaserelease sr
-    , sres.externaldatabase bd
-    , sres.externaldatabaserelease br
-    , apidb.datasource ds
-    , organismattributes oa
-    , apidb.organism o
-WHERE s.study_id = sb.study_id
-  and s.external_database_release_id = sr.external_database_release_id
-  and sr.external_database_id = sd.external_database_id
-  and sb.bio_material_id = b.bio_material_id
-  and b.external_database_release_id = br.external_database_release_id
-  and br.external_database_id = bd.external_database_id
-  and sd.name = ds.name
-  and oa.component_taxon_id = ds.taxon_id
-  and oa.source_id = o.abbrev
-  and ds.type = 'isolates' 
-  and ds.subtype = 'HTS_SNP'
+select distinct pan.name as protocol_app_node_name, pan.protocol_app_node_id, sv.strain, tn.name as organism
+from apidb.sequencevariation sv
+   , study.protocolappnode pan
+   , dots.nasequence s
+   , sres.taxonname tn
+where pan.protocol_app_node_id = sv.protocol_app_node_id
+and sv.ref_na_sequence_id = s.na_sequence_id
+and s.taxon_id = tn.taxon_id
+and tn.name_class = 'scientific name'
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE INDEX SnpStrains_ix&1 ON SnpStrains&1(study_db_name,external_database_release_id,strain,organism)
+        CREATE INDEX SnpStrains_ix&1 ON SnpStrains&1(strain,organism)
 tablespace indx
       ]]>
     </sql>
   </tuningTable>
 
   <tuningTable name="SnpChipStrains">
-    <comment> Each record captures info for an (organism, strain,
-         external_database_release_id) 3-tuple. Used in the model, including
-         gene and SNP queries, as well as the gene record. Also used by the
-         FindPolymorphismsPlugin in the workflow.
+    <comment> Each record captures info for a strain/protocol app node. Used in the model, including
+         gene and SNP queries, as well as the gene record.
      </comment>
-    <internalDependency name="GenomicSeqAttributes"/>
-    <externalDependency name="dots.SnpFeature"/>
-    <externalDependency name="dots.SeqVariation"/>
+    <externalDependency name="results.SeqVariation"/>
     <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="apidb.datasource"/>
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <sql>
       <![CDATA[
 CREATE TABLE SnpChipStrains&1 NOLOGGING AS
-   select distinct var.strain as strain, 
-                   var.organism, 
-                   var.name,
-                   var.external_database_release_id,
-                   bs.name as isolate_id,
-                   ed.name as extdb_name,
-                   tn.taxon_id
-     from dots.seqVariation var,
-       sres.externaldatabase ed, 
-       sres.externaldatabaserelease edr,
-       SRES.TAXONNAME tn,
-       study.study s,
-       RAD.STUDYBIOMATERIAL sbm,
-       study.biosample bs
-    where edr.external_database_id = ed.external_database_id
-   and var.external_database_release_id = edr.external_database_release_id
-   and Var.organism = tn.name
-   and lower(ed.name) like '%snpchip%'
-   and s.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-   and s.study_id = sbm.study_id
-   and bs.BIO_MATERIAL_ID = sbm.BIO_MATERIAL_ID
-   and bs.name = var.strain 
+select distinct pan.name as protocol_app_node_name, pan.protocol_app_node_id, sv.strain, tn.name as organism, ds.subtype as platform
+from study.study s
+   , study.studylink sl
+   , study.protocolappnode pan
+   , apidb.datasource ds
+   , SRES.EXTERNALDATABASE d
+   , SRES.EXTERNALDATABASERELEASE r
+   , sres.taxonname tn
+   , results.seqvariation sv
+where ds.type = 'isolates'
+and ds.subtype != 'HTS_SNP'
+and ds.name = d.name
+and ds.version = r.version
+and d.EXTERNAL_DATABASE_ID = r.EXTERNAL_DATABASE_ID
+and r.EXTERNAL_DATABASE_RELEASE_ID = s.EXTERNAL_DATABASE_RELEASE_ID
+and s.study_id = sl.study_id
+and sl.protocol_app_node_id = pan.PROTOCOL_APP_NODE_ID
+and ds.taxon_id = tn.taxon_id
+and tn.name_class = 'scientific name'
+and pan.PROTOCOL_APP_NODE_ID = sv.PROTOCOL_APP_NODE_ID
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE INDEX SnpChipStrains_ix&1 ON SnpChipStrains&1(extdb_name,external_database_release_id,strain,organism)
+        CREATE INDEX SnpChipStrains_ix&1 ON SnpChipStrains&1(strain,organism,platform)
 tablespace indx
       ]]>
     </sql>
   </tuningTable>
 
--->
+
 
 
   <tuningTable name="IsolateAttributes">
