@@ -7451,6 +7451,35 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
          <!-- <suggest selectMode="all" /> -->
        </filterParam>
 
+       <filterParam name="ref_samples_filter_metadata_all" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="GeneVQ.GenericSamplesMulti"
+                      metadataQueryRef="GeneVQ.SamplesMetadataMulti"
+                      metadataSpecQueryRef="GeneVQ.SamplesMetadataSpec"
+                      prompt="Reference Samples"
+                      multiPick="true"
+                      dependedParamRef="geneParams.profileset_generic_all"
+                      quote="true"
+                      suppressNode="false">
+         <help>
+              Select reference samples. 
+         </help>
+         <!-- <suggest selectMode="all" /> -->
+       </filterParam>
+
+       <filterParam name="comp_samples_filter_metadata_all" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="GeneVQ.GenericSamplesMulti"
+                      metadataQueryRef="GeneVQ.SamplesMetadataMulti"
+                      metadataSpecQueryRef="GeneVQ.SamplesMetadataSpec"
+                      prompt="Comparison Samples"
+                      multiPick="true"
+                      dependedParamRef="geneParams.profileset_generic_all"
+                      quote="true"
+                      suppressNode="false">
+         <help>
+              Select comparison samples. 
+         </help>
+         <!-- <suggest selectMode="all" /> -->
+       </filterParam>
  
        <flatVocabParam name="profileset_generic_all"
                      includeProjects="PlasmoDB,EuPathDB"
@@ -9906,7 +9935,6 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
                 listagg(ps.profile_set_id,',') within group(order by ps.profile_set_id) as internal
         from apidb.profileset ps, sres.externalDatabase ed, sres.externalDatabaseRelease edr
         where ed.name like '%ICEMR_RSRC'
-        and lower (ed.name) not like'%amazonia%'
         and ps.external_database_release_id = edr.external_database_release_id
         and ed.external_database_id =edr.external_database_id  
             </sql>
@@ -11367,6 +11395,28 @@ select * from (
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
+		 <sqlQuery name="GenericSamplesMulti" includeProjects="PlasmoDB">
+             <paramRef ref="geneParams.profileset_generic_all"/>
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>
+          select pen.name as term, 
+                 profile_element_name_id as internal,
+                 pen.name as display
+          from apidb.profileelementname pen, study.biosample bs
+          where profile_set_id in ( $$profileset_generic_all$$ )
+            and pen.name = bs.name
+          order by element_order
+          </sql>
+        </sqlQuery>
+
+      <processQuery name="GenericSamplesMulti" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="geneParams.profileset_generic_all"/>
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
 
       <sqlQuery name="GenericCoverageSamples" excludeProjects="EuPathDB">
              <paramRef ref="geneParams.profileset_generic_coverage"/>
@@ -12433,6 +12483,53 @@ where ps.external_database_release_id = s.external_database_release_id
 
         <processQuery name="SamplesMetadata" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
             <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"  queryRef="GeneVQ.GenericProfiles"/> 
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="value" width="100" wsName="value"/>
+            <wsColumn name="property"  width="100" wsName="property"/>
+        </processQuery>
+
+	   <sqlQuery name="SamplesMetadataMulti" doNotTest="1" includeProjects="PlasmoDB">   
+            <paramRef ref="geneParams.profileset_generic_all" quote="false"/>
+            <column name="term" />
+            <column name="value"/>
+            <column name="property" />
+            <sql>
+           <![CDATA[
+select distinct pen.name as term,
+                initcap (
+                      case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
+                           then (regexp_replace(bmc.value,'\s[^0-9]+',''))
+                           else bmc.value
+                      end) as value, 
+                oe.value as property
+from 
+apidb.profileset ps,
+apidb.profileelementname pen,
+Study.Study S,
+Rad.Studybiomaterial Sbm,
+study.biosample bm,
+STUDY.biomaterialcharacteristic bmc,
+study.ontologyEntry oe
+
+
+where ps.external_database_release_id = s.external_database_release_id
+  and ps.profile_set_id =pen.profile_set_id
+  and S.Study_Id = Sbm.Study_Id
+  and sbm.Bio_Material_Id = bm.Bio_Material_Id
+  and bm.bio_material_id = bmc.bio_material_id
+  and pen.name = bm.name
+  and ps.profile_set_id in ( $$profileset_generic_all$$ )
+  and bmc.ontology_entry_id = oe.ontology_entry_id
+  and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
+  and lower(bmc.value) != 'unknown'
+  and lower(oe.category) != 'date_of_birth'
+  and lower(oe.category) != 'sample_origin'
+           ]]>
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="SamplesMetadataMulti" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="geneParams.profileset_generic_all" quote="false"/> 
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="value" width="100" wsName="value"/>
             <wsColumn name="property"  width="100" wsName="property"/>
