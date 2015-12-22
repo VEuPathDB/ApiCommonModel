@@ -1,6 +1,140 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tuningConfig>
 
+<tuningTable name="ProtocolAppNodesWithResults" prefixEnabled="false">
+    <comment>Table of protocol app node ids and the name of the result table where they are referenced
+    </comment>
+    <externalDependency name="Results.NAFeatureDiffResult"/>
+    <externalDependency name="Results.ReporterIntensity"/>
+    <externalDependency name="Results.SegmentResult"/>
+    <externalDependency name="Results.CompoundMassSpec"/>
+    <externalDependency name="Results.NaFeatureHostResponse"/>
+    <externalDependency name="Results.NAFeatureExpression"/>
+    <externalDependency name="Results.EditingEvent"/>
+    <externalDependency name="Results.FamilyDiffResult"/>
+    <externalDependency name="Results.FamilyExpression"/>
+    <externalDependency name="Results.GeneDiffResult"/>
+    <externalDependency name="Results.GeneExpression"/>
+    <externalDependency name="Results.GeneSimilarity"/>
+    <externalDependency name="Results.ReporterDiffResult"/>
+    <externalDependency name="Results.ReporterExpression"/>
+    <externalDependency name="Results.RnaDiffResult"/>
+    <externalDependency name="Results.RnaExpression"/>
+    <externalDependency name="Results.SegmentDiffResult"/>
+    <externalDependency name="Results.SeqVariation"/>
+    <externalDependency name="ApiDB.SequenceVariation"/>
+    <externalDependency name="ApiDB.MassSpecSummary"/>
+    <externalDependency name="ApiDB.ChrCopyNumber"/>
+    <externalDependency name="ApiDB.GeneCopyNumber"/>
+    <sql>
+      <![CDATA[
+create table ProtocolAppNodesWithResults&1 as
+    select protocol_app_node_id, 'Results::NAFeatureDiffResult' as result_table from Results.NAFeatureDiffResult
+    union
+    select protocol_app_node_id, 'Results::ReporterIntensity' as result_table from Results.ReporterIntensity
+    union
+    select protocol_app_node_id, 'Results::SegmentResult' as result_table from Results.SegmentResult
+    union
+    select protocol_app_node_id, 'Results::CompoundMassSpec' as result_table from Results.CompoundMassSpec
+    union
+    select protocol_app_node_id, 'Results::NaFeatureHostResponse' as result_table from Results.NaFeatureHostResponse
+    union
+    select protocol_app_node_id, 'ApiDB::ChrCopyNumber' as result_table from ApiDB.ChrCopyNumber
+    union
+    select protocol_app_node_id, 'ApiDB::GeneCopyNumber' as result_table from ApiDB.GeneCopyNumber
+    union
+    select protocol_app_node_id, 'Results::NAFeatureExpression' as result_table from Results.NAFeatureExpression
+    union
+    select protocol_app_node_id, 'Results::EditingEvent' as result_table from Results.EditingEvent
+    union
+      select protocol_app_node_id, 'Results::FamilyDiffResult' as result_table from Results.FamilyDiffResult
+    union
+      select protocol_app_node_id, 'Results::FamilyExpression' as result_table from Results.FamilyExpression
+    union
+      select protocol_app_node_id, 'Results::GeneDiffResult' as result_table from Results.GeneDiffResult
+    union
+      select protocol_app_node_id, 'Results::GeneExpression' as result_table from Results.GeneExpression
+    union
+      select protocol_app_node_id, 'Results::GeneSimilarity' as result_table from Results.GeneSimilarity
+    union
+      select protocol_app_node_id, 'Results::ReporterDiffResult' as result_table from Results.ReporterDiffResult
+    union
+      select protocol_app_node_id, 'Results::ReporterExpression' as result_table from Results.ReporterExpression
+      union
+    select protocol_app_node_id, 'Results::RnaDiffResult' as result_table from Results.RnaDiffResult
+      union
+    select protocol_app_node_id, 'Results::RnaExpression' as result_table from Results.RnaExpression
+      union
+    select protocol_app_node_id, 'Results::SegmentDiffResult' as result_table from Results.SegmentDiffResult
+    union
+      select protocol_app_node_id, 'Results::SeqVariation' as result_table from Results.SeqVariation
+    union
+    select protocol_app_node_id, 'ApiDB::SequenceVariation' as result_table from apidb.sequencevariation
+    union
+    select protocol_app_node_id, 'ApiDB::MassSpecSummary' as result_table from apidb.MASSSPECSUMMARY;
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="" prefixEnabled="false">
+    <comment>
+    </comment>
+    <internalDependency name="ProtocolAppNodesWithResults"/>
+    <externalDependency name="Study.ProtocolApp"/>
+    <externalDependency name="Study.Input"/>
+    <externalDependency name="Study.Output"/>
+    <externalDependency name="Study.ProtocolAppNode"/>
+    <externalDependency name="Study.Characteristic"/>
+    <externalDependency name="SRes.OntologyTerm"/>
+    <externalDependency name="Study.Protocol"/>
+    <externalDependency name="Study.ProtocolParam"/>
+    <externalDependency name="Study.ProtocolAppParam"/>
+    <intermediateTable name="ProtocolAppNodeIO"/>
+    <sql>
+      <![CDATA[
+CREATE TABLE ProtocolAppNodeIO NOLOGGING AS
+select i.PROTOCOL_APP_NODE_ID input_node_id, pa.PROTOCOL_APP_ID, o.PROTOCOL_APP_NODE_ID output_node_id
+from study.protocolapp pa
+      , study.input i
+      , study.output o
+where i.PROTOCOL_APP_ID = pa.PROTOCOL_APP_ID
+and o.PROTOCOL_APP_ID = pa.PROTOCOL_APP_ID
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE TABLE ProtocolAppNodeMetaData&1 NOLOGGING AS
+with node_inputs as(
+select connect_by_root output_node_id as protocol_app_node_id, input_node_id, PROTOCOL_APP_ID
+from ProtocolAppNodeIO
+start with OUTPUT_NODE_ID in ( select protocol_app_node_id from ProtocolAppNodesWithResults
+)
+connect by prior input_node_id = output_node_id
+)
+-- MAIN QUERY STARTS HERE (UNION of Characteristics and Protocols)
+select node_inputs.protocol_app_node_id, 'Characteristics' as first, mt.name as second, ot.name as term, c.value as value, c.characteristic_id, null as protocol_app_param_id
+from study.protocolappnode pan
+   , STUDY.CHARACTERISTIC c
+   , sres.ontologyterm ot
+   , sres.ontologyterm mt
+   , node_inputs
+where pan.PROTOCOL_APP_NODE_ID = c.PROTOCOL_APP_NODE_ID
+and pan.TYPE_ID = mt.ontology_term_id
+and c.ontology_term_id = ot.ontology_term_id
+and node_inputs.input_node_id = pan.protocol_app_node_id
+union
+select node_inputs.protocol_app_node_id, 'Protocols' as first, p.name as second, pp.name as term, pap.value, null, pap.protocol_app_param_id
+from node_inputs
+   , study.protocolappparam pap
+   , study.protocolparam pp
+   , study.protocol p
+where node_inputs.protocol_app_id = pap.protocol_app_id
+and pap.protocol_param_id = pp.protocol_param_id
+and pp.protocol_id = p.protocol_id
+      ]]>
+    </sql>
+  </tuningTable>
 
   <tuningTable name="TranscriptPathway">
     <internalDependency name="TranscriptAttributes"/>
