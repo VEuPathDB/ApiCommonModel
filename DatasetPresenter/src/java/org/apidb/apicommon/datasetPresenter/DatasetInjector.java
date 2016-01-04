@@ -3,11 +3,10 @@ package org.apidb.apicommon.datasetPresenter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.Iterator;
+
 import org.apidb.apicommon.comparator.NaturalOrderComparator;
 
 /**
@@ -323,7 +322,7 @@ public abstract class DatasetInjector {
           } else {
            String[] orgName =  orgProps.get("organismFullName").split(" ");
             String orgAbbrevDisplay = String.valueOf(orgName[0].charAt(0));
-	    orgAbbrevDisplay += "." + String.valueOf(orgName[1].charAt(0)) + "."; 
+	    orgAbbrevDisplay += "." + String.valueOf(orgName[1].substring(0,3) ) + "."; 
             return orgAbbrevDisplay;
           }
         } 
@@ -385,23 +384,37 @@ public abstract class DatasetInjector {
     }
   }
 
-  protected List<String> getSampleList(String prefix, String suffix){
-    /** This method returns a list of the samples associated with an experiment extracted from the global dataset properties. */
+
+  protected List<String> getSampleList() {
+    /** Alternative version that queries the global dataset props rather than relying on regex. */
     Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
-    Pattern sampleDatasetNamePattern = Pattern.compile(prefix + "(.*?)" + suffix);
-    List<String> sampleNames = new ArrayList<String>();
+    String experimentName = getPropValue("experimentName");
+    String organismAbbrev = getPropValue("organismAbbrev");
     Iterator<String> globalPropsKeys = globalProps.keySet().iterator();
-    while (globalPropsKeys.hasNext()){
-        Matcher m = sampleDatasetNamePattern.matcher(globalPropsKeys.next());
-        if (m.find()){
-            sampleNames.add(m.group(1));
+    List<String> sampleNames = new ArrayList<String>();
+    while (globalPropsKeys.hasNext()) {
+        String dataset = globalPropsKeys.next();
+        if (dataset.contains(experimentName)) {
+            Map<String, String> datasetProps = globalProps.get(dataset);
+            if (datasetProps.containsKey("experimentName") && datasetProps.get("organismAbbrev").equals(organismAbbrev)) {
+                if (datasetProps.get("experimentName").equals(experimentName)) {
+                    if (datasetProps.containsKey("sampleName")) {
+                        sampleNames.add(datasetProps.get("sampleName"));
+                    } else if (datasetProps.containsKey("snpStrainAbbrev")) {
+                        sampleNames.add(datasetProps.get("snpStrainAbbrev"));
+                    }
+                } else if (datasetProps.get("experimentName").equals(getPropValue("name"))) {
+                    if (datasetProps.containsKey("sampleName")) {
+                        sampleNames.add(datasetProps.get("sampleName"));
+                    }
+                }
+            }
         }
     }
-    if (sampleNames.isEmpty()){
-        throw new UserException ("No sample names found for dataset" + datasetName + sampleDatasetNamePattern);
+    if (sampleNames.isEmpty()) {
+        throw new UserException ("No sample names found for experiment " + experimentName);
     }
-    Collections.sort(sampleNames,new NaturalOrderComparator());
+    Collections.sort(sampleNames, new NaturalOrderComparator());
     return sampleNames;
   }
-
 }

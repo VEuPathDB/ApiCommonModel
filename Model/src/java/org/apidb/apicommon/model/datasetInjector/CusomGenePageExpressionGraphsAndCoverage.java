@@ -29,12 +29,8 @@ public abstract class CusomGenePageExpressionGraphsAndCoverage extends CusomGene
           setPropValue("experimentName", experimentName);
 
           // String organismAbbrev = getPropValue("organismAbbrev");
-          String sampleNamePrefix = ":" + experimentName + "_";
-          String sampleNameSuffix = "_rnaSeqSample_RSRC";
-          
 
-
-          List<String> sampleNames = getSampleList(sampleNamePrefix, sampleNameSuffix);
+          List<String> sampleNames = getSampleList();
           String subtracks = "";
           for (int i=0; i<sampleNames.size(); i++) {
               String subtrack = sampleNames.get(i);

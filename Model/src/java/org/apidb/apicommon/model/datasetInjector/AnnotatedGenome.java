@@ -9,7 +9,7 @@ public class AnnotatedGenome extends DatasetInjector {
 
     protected boolean hasFilters = true;
 
-    @Override
+
     public void injectTemplates() {
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information

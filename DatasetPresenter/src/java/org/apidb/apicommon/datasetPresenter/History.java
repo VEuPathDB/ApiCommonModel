@@ -6,6 +6,8 @@ public class History {
   private String genomeVersion;
   private String annotationSource;
   private String annotationVersion;
+  private String functionalAnnotationSource;
+  private String functionalAnnotationVersion;
   private String comment;
   
   public void setBuildNumber(Integer buildNumber) {
@@ -26,6 +28,14 @@ public class History {
    
   public void setAnnotationVersion(String annotationVersion) {
     this.annotationVersion = annotationVersion;
+  }
+  
+  public void setFunctionalAnnotationSource(String functionalAnnotationSource) {
+    this.functionalAnnotationSource = functionalAnnotationSource;
+  }
+   
+  public void setFunctionalAnnotationVersion(String functionalAnnotationVersion) {
+    this.functionalAnnotationVersion = functionalAnnotationVersion;
   }
   
   public void setComment(String comment) {
@@ -50,6 +60,14 @@ public class History {
   
   public String getAnnotationVersion() {
     return annotationVersion;
+  }  
+  
+  public String getFunctionalAnnotationSource() {
+    return functionalAnnotationSource;
+  }
+  
+  public String getFunctionalAnnotationVersion() {
+    return functionalAnnotationVersion;
   }  
   
   public String getComment() {

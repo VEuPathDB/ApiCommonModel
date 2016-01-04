@@ -180,18 +180,16 @@ public class GenBankFeature {
                 start = PARTIAL_START + start;
             }
 
-
-            if(this.hasPartialStart && strand.equals("reverse") && count == this.locations.size() - 1) {
-                end = PARTIAL_START + end;
-            }
-
-
             if(this.hasPartialEnd && strand.equals("forward") && count == this.locations.size() - 1) {
                 end = PARTIAL_END + end;
             }
 
 
-            if(this.hasPartialEnd && count == 0 && strand.equals("reverse")) {
+            if(this.hasPartialStart && strand.equals("reverse") && count == 0) {
+                end = PARTIAL_START + end;
+            }
+
+            if(this.hasPartialEnd && count == this.locations.size() - 1 && strand.equals("reverse")) {
                 start = PARTIAL_END + start;
             }
 

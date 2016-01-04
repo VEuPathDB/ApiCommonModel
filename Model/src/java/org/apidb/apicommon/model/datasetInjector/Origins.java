@@ -3,7 +3,7 @@ package org.apidb.apicommon.model.datasetInjector;
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import java.util.List;
 
-public class CopyNumberVariations extends  DatasetInjector {
+public class Origins extends  DatasetInjector {
   
   /*
    * getPropValues() gets the property values provided by the datasetPresenter
@@ -17,14 +17,24 @@ public class CopyNumberVariations extends  DatasetInjector {
   @Override
   public void injectTemplates() {
 
-      setPropValue ("organismAbbrevDisplay", getOrganismAbbrevDisplayFromDatasetName().replace(":", " "));
+      setPropValue ("organismAbbrevDisplay", getOrganismAbbrevDisplayFromDatasetName());
 
       List<String> sampleNames = getSampleList();
       
       for (int i=0; i<sampleNames.size(); i++){
-          setPropValue("sampleName", sampleNames.get(i).replace("_CNV", ""));
-          injectTemplate("copyNumberVariationsDatabase");
-          injectTemplate("copyNumberVariationsTrack");
+          if (sampleNames.get(i).endsWith("_ref")){
+            String reference = sampleNames.get(i);
+            for (int j=0; j<sampleNames.size(); j++) {
+                if (sampleNames.get(j) != reference) {
+                    String comparison = sampleNames.get(j);
+                    setPropValue("reference", reference.replace("_ref", ""));
+                    setPropValue("comparison", comparison);
+                    setPropValue("fileName", reference + "_" + comparison + ".bw");
+                    injectTemplate("originsDatabase");
+                    injectTemplate("originsTrack");
+                }
+            }
+         }
       }
 
   }
@@ -32,9 +42,6 @@ public class CopyNumberVariations extends  DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
   }
   
   // declare properties required beyond those inherited from the datasetPresenter

@@ -5,8 +5,10 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class AntibodyArray extends DatasetInjector {
 
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "Arcsinh(1+50x) transform of signal intensity";
-
+        String yAxisDescription = "Log2 transform of signal intensity";
+        if(getPropValue("function").equals("arcsinh")) {
+            yAxisDescription = "Arcsinh(1+50x) transform of signal intensity";
+        }
         setPropValue("graphYAxisDescription", yAxisDescription);
     }
 
@@ -14,8 +16,17 @@ public class AntibodyArray extends DatasetInjector {
         setPropValue("profileSetFilterPattern", "%");
     }
 
-
-
+    protected void setFunctionProperties() {
+        if(getPropValue("function").equals("")) {
+            setPropValue("function", "log2");
+        } else if(getPropValue("function").equals("arcsinh")) {
+            setPropValue("function_display", "(arcsinh(1+50x))");
+            setPropValue("function_help","The arcsinh(1+50x) transform of the average intensity values for the");
+        } else {
+            setPropValue("function_display", "(log2)");
+            setPropValue("function_help","The log base 2 transform of the average intensity values for the");
+        }
+    }
     @Override
     public void addModelReferences() {
         //  setGraphModule();
@@ -66,8 +77,10 @@ public class AntibodyArray extends DatasetInjector {
         setPropValue("datasetDescrip", datasetDescrip.replace("'", ""));
 
         setPropValue("isGraphCustom", "true");
-
-
+ 
+        if(getPropValue("defaultGraphCategory").equals("")) {
+                setPropValue("defaultGraphCategory","age");
+            }
 
         String excludeProfileSets = getPropValue("excludedProfileSets");
 
@@ -81,11 +94,19 @@ public class AntibodyArray extends DatasetInjector {
         }
 
         setPropValue("excludedProfileSetsList", excludedProfileSetsList);
+        setFunctionProperties() ;
+
+        String help = getPropValue("function_help");
+        System.out.println(help);
+
+        String fn_display = getPropValue("function_display");
+        System.out.println(fn_display);
+
         injectTemplate("antibodyArrayProfileSetParamQuery");
 
         injectTemplate("antibodyArrayQuestion");
 
-        //   injectTemplate("antibodyArrayCategories");
+        injectTemplate("antibodyArrayCategories");
 
         injectTemplate("antibodyArrayAttributeCategory");
         injectTemplate("antibodyArrayGraphDescriptions");
@@ -102,6 +123,8 @@ public class AntibodyArray extends DatasetInjector {
                                    {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                    {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
                                    {"graphModule", ""},
+                                   {"defaultGraphCategory"},
+                                   {"function", ""},
         };
 
         

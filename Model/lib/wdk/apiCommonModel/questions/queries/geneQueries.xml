@@ -663,7 +663,7 @@ where chip_total_reps > $$chip_replicates_plasmo$$
   <!-- BLAST   when apidb using apifed (instead of wu-blast), remember to set useTermOnly in the organism param, in similarityParams.xml   -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <processQuery name="GenesBySimilarity"
+    <processQuery name="GenesBySimilarity" 
              processName="org.apidb.apicomplexa.wsfplugin.blast.EuPathBlastPlugin">
 
         <testParamValues includeProjects="CryptoDB">
@@ -1505,11 +1505,11 @@ select '@PROJECT_ID@' as project_id, 'Y' as matched_result, mgs.source_id, count
     <sqlQuery name="GenesByLocation" excludeProjects="EuPathDB"
                doNotTest="true">
 
+      <!-- TODO:  check this param.  not there in trunk when merged-->
         <paramRef ref="organismParams.reference_strains_only"/>
+
         <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomes" multiPick="false" displayType="select" includeProjects="TriTrypDB,ToxoDB,PlasmoDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB" quote="true"> <help>Select the organism you wish to query against.</help></paramRef>
         <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomes" multiPick="false" displayType="select" includeProjects="CryptoDB" quote="true" default="Cryptosporidium parvum Iowa II"> <help>Select the organism you wish to query against.</help></paramRef>
-
-
 
         <paramRef ref="sharedParams.chromosomeOptional" includeProjects="PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB"  queryRef="SharedVQ.ChromosomeOrderNum"/>
         <paramRef ref="sharedParams.sequenceId"/>
@@ -1554,6 +1554,7 @@ select '@PROJECT_ID@' as project_id, 'Y' as matched_result, mgs.source_id, count
        </sql>
     </sqlQuery>
 
+
     <processQuery name="GenesByLocation" includeProjects="EuPathDB" 
                     doNotTest="true"
 		processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
@@ -1571,7 +1572,6 @@ select '@PROJECT_ID@' as project_id, 'Y' as matched_result, mgs.source_id, count
         <wsColumn name="dynamic_location" width="100" wsName="dynamic_location"/>
                 
     </processQuery>
-
 
     <sqlQuery name="GenesBySequenceSourceId" excludeProjects="EuPathDB"
                doNotTest="true">
@@ -1615,6 +1615,8 @@ select '@PROJECT_ID@' as project_id, 'Y' as matched_result, mgs.source_id, count
 
         <paramRef ref="organismParams.reference_strains_only"/>
 <paramRef ref="organismParams.organism" displayType="select" multiPick="false" queryRef="organismVQ.withChromosomesSNPs" quote="true">
+
+
           <help>The organism you choose will determine the organism from which to return genes.  That will also restrict the set of isolates you may choose as SNPs are identified by aligning the reads from those isolates to this genome.</help>
         </paramRef>
        <paramRef ref="snpChipParams.snp_assay_type"/>
@@ -2817,7 +2819,6 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
     </processQuery>
 
-
     <sqlQuery name="GenesByFoldChangeWithMetaData" includeProjects="PlasmoDB"  >
 
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"/>
@@ -2827,26 +2828,52 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
       <paramRef ref="geneParams.p_value" default="0.05"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.metadata_for_graph" quote="false"/>
 
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="matched_result"/>
-        <column name="difference"/>
-        <column name="p_value" sortingColumn="sorting_p_value"/>
-        <column name="sorting_p_value"/>
-        <column name="avg_group_one"/>
-        <column name="avg_group_two"/>
-        <column name="meta_data_category"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="p_value" sortingColumn="sorting_p_value"/>
+      <column name="sorting_p_value"/>
+      <column name="avg_group_one"/>
+      <column name="avg_group_two"/>
+      <column name="meta_data_category"/>
 
       <sqlParamValue includeProjects="PlasmoDB" name="isLogged">0</sqlParamValue>
       <sqlParamValue includeProjects="PlasmoDB" name="lowerBound">0.0001</sqlParamValue>
-  
+        <sqlParamValue includeProjects="PlasmoDB" name="function">'log2'</sqlParamValue>
       <sql>
       <![CDATA[
 select one.source_id,
        '@PROJECT_ID@' as project_id, 'Y' as matched_result,
-       round(( Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1)) ) - (Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1))),6) as difference,
-       round(   Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1))  ,6 ) as Avg_Group_One,
-       round(   Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1)),6  ) As Avg_Group_Two,
+       round ((
+             case 
+                    when lower(&&function&&) = 'arcsinh'
+                    then(( Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1)) ) - (Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1))))
+                    when lower(&&function&&) = 'log2' and &&isLogged&& = 0
+                    then   (CASE 
+                                         WHEN (avg_comp / avg_ref) >= 1
+                                          THEN (avg_comp / avg_ref)
+                                          ELSE (-1 / (avg_comp / avg_ref))
+                                   END
+            )
+                   when lower(&&function&&) = 'log2' and &&isLogged&& = 1
+                   then (CASE WHEN power(2, avg_comp) / power(2,avg_ref) >= 1
+                                      THEN power(2, avg_comp) / power(2,avg_ref)
+                                      ELSE (-1 / (power(2,avg_comp) / power(2,avg_ref)))
+                              END
+                              )
+           else (avg_comp - avg_ref)
+           end),6)  as difference,
+       round((
+       case 
+           when lower(&&function&&) = 'arcsinh'
+           then Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1))
+           else avg_comp 
+           end),6) as Avg_Group_One,
+       round((
+       case 
+           when lower(&&function&&) = 'arcsinh'
+           then round(   Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1)),6  )
+           else avg_ref 
+           end),6)  As Avg_Group_Two,
        to_char( p_value,'9.99EEEE' ) p_value,
        p_value sorting_p_value,
        '$$metadata_for_graph$$' as meta_data_category
@@ -2857,40 +2884,31 @@ select source_id,
        stats_t_test_indepu(source_set,reported_value) p_value
 From (
   
-      select source_id,
-             pe.value as reported_value,
+      select p.source_id,
+             avg (pe.value) as reported_value,
              'ref' as source_set
-      from apidb.profileset ps,
-           apidb.profile p,
-           apidb.profileelementname pen,
+      from apidb.profile p,
            apidb.profileelement pe
-      where ps.profile_set_id = p.profile_set_id
-      and   ps.profile_set_id = pen.profile_set_id
-      and   p.profile_id = pe.profile_id
-      and   pen.profile_element_name_id = pe.profile_element_name_id
-      and   ps.profile_set_id = $$profileset_generic$$
-      and   pen.profile_element_name_id in ( $$ref_samples_filter_metadata$$ )
+      where p.profile_id = pe.profile_id
+      and   pe.profile_element_name_id in ( $$ref_samples_filter_metadata$$ 
+)
+      group by source_id, 'ref', pe.PROFILE_ELEMENT_NAME_ID
 union
-       select source_id,
-             pe.value as reported_value,
+ select p.source_id,
+            avg( pe.value) as reported_value,
              'comp' as source_set
-      from apidb.profileset ps,
-           apidb.profile p,
-           apidb.profileelementname pen,
+      from apidb.profile p,
            apidb.profileelement pe
-      where ps.profile_set_id = p.profile_set_id
-      and   ps.profile_set_id = pen.profile_set_id
-      and   p.profile_id = pe.profile_id
-      and   pen.profile_element_name_id = pe.profile_element_name_id
-      and   ps.profile_set_id = $$profileset_generic$$
-      and   pen.profile_element_name_id in ( $$comp_samples_filter_metadata$$ )
+      where p.profile_id = pe.profile_id
+      and   pe.profile_element_name_id in ( $$comp_samples_filter_metadata$$ 
+)
+      group by source_id, 'comp', pe.PROFILE_ELEMENT_NAME_ID
       )
       group by source_id) one
       where p_value <= $$p_value$$
         and  ('$$regulated_dir_immune_response$$' = 'increased' and avg_comp > avg_ref 
               or 
               '$$regulated_dir_immune_response$$' = 'decreased' and avg_ref > avg_comp)
-
       ]]>
       </sql>
 
@@ -2923,6 +2941,78 @@ union
         <wsColumn name="difference" wsName="difference"/>
         <wsColumn name="meta_data_category" wsName="meta_data_category"/>
 		
+   </processQuery>
+
+    <sqlQuery name="GenesByTimeSeriesFoldChangeBradyBoothroyd" includeProjects="ToxoDB" 
+              isCacheable="true">
+
+      <testParamValues>
+	<paramValue name="ts_fc_one_matt">2 days</paramValue>
+	<paramValue name="ts_fc_two_matt">4 days</paramValue>
+      </testParamValues>
+
+        <paramRef ref="geneParams.ts_fc_two_matt"/>
+        <paramRef ref="geneParams.ts_fc_one_matt"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="fold_change"/>
+        <column name="avg_group_one"/>
+        <column name="avg_group_two"/>
+      <sql includeProjects="ToxoDB">
+          <![CDATA[
+ select one.source_id, '@PROJECT_ID@' as project_id,
+                   round((CASE WHEN power(2, one.average) / power(2,two.average) >= 1
+                                 THEN power(2, one.average) / power(2,two.average)
+                           ELSE -1 / (power(2,one.average) / power(2,two.average))
+                   END),1) as fold_change,
+        round(one.average,2) as avg_group_one,
+        round(two.average,2) as avg_group_two
+ from (
+ select p.source_id, avg(pe.value) as average
+ from  apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$ts_fc_one_matt$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) one,
+ (
+ select p.source_id, avg(pe.value) as average
+ from apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
+ where pen.profile_element_name_id in ($$ts_fc_two_matt$$)
+ and p.profile_set_id = pen.profile_set_id
+ and pe.profile_id = p.profile_id
+ and pe.element_order = pen.element_order
+ group by p.source_id ) two
+ where one.source_id = two.source_id
+ and  $$regulated_dir$$ (
+               case when one.average >= two.average
+                   then power(2,one.average) / power(2,two.average)
+                   else -( power(2,two.average) / power(2,one.average))
+                   end ) >= $$fold_change$$
+          ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByTimeSeriesFoldChangeBradyBoothroyd" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+      <testParamValues>
+	<paramValue name="ts_fc_one_matt">2 days</paramValue>
+	<paramValue name="ts_fc_two_matt">4 days</paramValue>
+      </testParamValues>
+
+        <paramRef ref="geneParams.ts_fc_two_matt" quote="false"/>
+        <paramRef ref="geneParams.ts_fc_one_matt" quote="false"/>
+        <paramRef ref="geneParams.fold_change"/>
+        <paramRef ref="geneParams.regulated_dir"/>
+        <wsColumn name="project_id" width="20" wsName="project_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="fold_change" wsName="fold_change"/>
+        <wsColumn name="avg_group_one" wsName="avg_group_one"/>
+        <wsColumn name="avg_group_two" wsName="avg_group_two"/>
+>>>>>>> .merge-right.r71239
     </processQuery>
 
 
@@ -3717,6 +3807,7 @@ ORDER BY hl1.source_id
   <!-- GenesByTelomereProximity -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
+
     <sqlQuery name="GenesByTelomereProximity" includeProjects="PlasmoDB"  >
         <paramRef ref="organismParams.reference_strains_only"/>
         <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomes" multiPick="false" displayType="select" quote="true"> <help>Select the organism you wish to query against.</help></paramRef>
@@ -3745,6 +3836,7 @@ ORDER BY hl1.source_id
 
     <processQuery name="GenesByTelomereProximity" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+
         <paramRef ref="organismParams.reference_strains_only"/>
         <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomes"  multiPick="false"  
 		  noTranslation="true"><help>Select organism you wish to query against</help></paramRef>
