@@ -120,7 +120,7 @@ public class DetailTableLoader extends BaseCLI {
         + " should match the directory name under $GUS_HOME, where " + "model-config.xml is stored.");
 
     addSingleValueOption(ARG_SQL_FILE, true, null, "The file that contains"
-        + " a sql that returns the primary key columns of the records");
+       + " a sql that returns the primary key columns of the records");
 
     addSingleValueOption(ARG_RECORD, true, null, "The full name of the " + "record class to be dumped.");
 
@@ -224,7 +224,7 @@ public class DetailTableLoader extends BaseCLI {
     String pkNames;
     String pkBind;
 
-    // So far (November 2012) WDK data types all have one- or two-column primary key.
+    // So far (November 2015) WDK data types all have one- or two-column primary key.
     switch (pkColumns.length) {
       case 1:
         pkNames = pkColumns[0];
@@ -234,9 +234,13 @@ public class DetailTableLoader extends BaseCLI {
         pkNames = pkColumns[0] + ", " + pkColumns[1];
         pkBind = "?,?";
         break;
+      case 3:
+        pkNames = pkColumns[0] + ", " + pkColumns[1] + ", " + pkColumns[2];
+        pkBind = "?,?,?";
+        break;
       default:
         throw new WdkModelException(
-            "DetailTableLoader assumes that a primary key comprises no more than 2 columns");
+            "DetailTableLoader assumes that a primary key comprises no more than 3 columns");
     }
 
     String insertSql = "insert into " + detailTable + " (" + pkNames +
