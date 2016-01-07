@@ -316,8 +316,10 @@ public class DetailTableLoader extends BaseCLI {
           "__api-report-detail-aggregate", 2000);
       String pk0 = "";
       String pk1 = "";
+      String pk2 = "";
       String prevPk0 = "";
       String prevPk1 = "";
+      String prevPk2 = "";
       StringBuilder aggregatedContent = new StringBuilder();
       int insertCount = 0;
       int detailCount = 0;
@@ -328,17 +330,21 @@ public class DetailTableLoader extends BaseCLI {
         pk0 = resultSet.getString(pkColumns[0]);
         if (pkColumns.length > 1) {
           pk1 = resultSet.getString(pkColumns[1]);
+	  if (pkColumns.length > 2) {
+	      pk2 = resultSet.getString(pkColumns[2]);
+	  }
         }
-        if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
+        if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1) || !pk2.equals(prevPk2))) {
           insertCount++;
           insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-              prevPk1, title, pkColumns.length, insertCount, false);
+					prevPk1, prevPk2, title, pkColumns.length, insertCount, false);
           aggregatedContent = new StringBuilder();
           rowCount = 0;
         }
         first = false;
         prevPk0 = pk0;
         prevPk1 = pk1;
+        prevPk2 = pk2;
   
         // aggregate the columns of one row
         String formattedValues[] = formatAttributeValues(resultSet, table);
@@ -357,7 +363,7 @@ public class DetailTableLoader extends BaseCLI {
       if (aggregatedContent.length() != 0) {
         insertCount++;
         insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-            prevPk1, title, pkColumns.length, insertCount, true);
+				      prevPk1, prevPk2, title, pkColumns.length, insertCount, true);
       }
       else {
         // add any remaining rows to DB
@@ -477,7 +483,7 @@ public class DetailTableLoader extends BaseCLI {
    * @param idSql
    */
   private long insertDetailRow(PreparedStatement insertStmt, String insertSql, StringBuilder contentBuf,
-      int rowCount, TableField table, String pk0, String pk1, String title, int pkCount,
+			       int rowCount, TableField table, String pk0, String pk1, String pk2, String title, int pkCount,
       int insertCount, boolean forceBatchUpdate) throws SQLException {
 
     long start = System.currentTimeMillis();
@@ -491,6 +497,9 @@ public class DetailTableLoader extends BaseCLI {
     insertStmt.setString(1, pk0);
     if (pkCount > 1) {
       insertStmt.setString(2, pk1);
+      if (pkCount > 2) {
+	  insertStmt.setString(3, pk2);
+      }
     }
     insertStmt.setString(pkCount + 1, table.getName());
     insertStmt.setString(pkCount + 2, title);
