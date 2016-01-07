@@ -224,7 +224,7 @@ public class DetailTableLoader extends BaseCLI {
     String pkNames;
     String pkBind;
 
-    // So far (November 2015) WDK data types all have one- or two-column primary key.
+    // So far (November 2015) WDK data types all at most a 3 col primary key.
     switch (pkColumns.length) {
       case 1:
         pkNames = pkColumns[0];
