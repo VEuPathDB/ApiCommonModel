@@ -22,7 +22,7 @@ public class MicroarrayOneChannelRma extends ExpressionOneChannelAndReferenceDes
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Microarray::RMA");
+        setPropValue("graphModule", "Expression");
     }
 
     @Override

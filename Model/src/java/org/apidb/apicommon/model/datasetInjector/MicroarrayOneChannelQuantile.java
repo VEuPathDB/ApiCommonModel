@@ -22,7 +22,7 @@ public class MicroarrayOneChannelQuantile extends ExpressionOneChannelAndReferen
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Microarray::Quantile");
+        setPropValue("graphModule", "Expression");
     }
 
     @Override

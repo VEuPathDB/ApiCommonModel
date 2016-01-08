@@ -24,7 +24,7 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Microarray::TwoChannel");
+        setPropValue("graphModule", "ExpressionTwoChannel");
     }
 
 
