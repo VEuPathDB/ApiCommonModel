@@ -24,7 +24,7 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Expression");
+        setPropValue("graphModule", "ExpressionTwoChannel");
     }
 
     @Override
