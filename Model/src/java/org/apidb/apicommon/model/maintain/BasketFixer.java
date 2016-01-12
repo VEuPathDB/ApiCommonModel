@@ -95,7 +95,7 @@ public class BasketFixer extends BaseCLI {
 								   type, aliasTable, idColumn, pkColumn);
         for (int userId : users.keySet()) {
             Map<String, String> ids = users.get(userId);
-            changeIds(wdkModel, type, userId, ids);
+            changeIds(wdkModel, type, userId, ids, pkColumn);
         }
     }
 
