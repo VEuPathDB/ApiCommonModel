@@ -81,9 +81,9 @@ public class BasketFixer extends BaseCLI {
         for (String projectId : projects) {
             logger.info("Fixing basket for project " + projectId);
             WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
-            fixBasket(wdkModel, "GeneRecordClasses.GeneRecordClass", "ApidbTuning.GeneId",  "gene", "pk_column2");
+            fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "ApidbTuning.GeneId",  "gene", "pk_column_2");
             updateTranscripts(wdkModel);
-            fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence", "pk_column1");
+            fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence", "pk_column_1");
             logger.info("=========================== done ============================");
             wdkModel.releaseResources();
         }
@@ -271,27 +271,30 @@ public class BasketFixer extends BaseCLI {
       
       String allTranscriptRowsSql = " from " + userSchema + " user_baskets"
           + " WHERE project_id = '" + wdkModel.getProjectId() + "'"
-          + " AND record_class = TranscriptRecordClasses.TranscriptRecordClass";
+          + " AND record_class = 'TranscriptRecordClasses.TranscriptRecordClass'";
 
-      String createTempTableSql = "CREATE TABLE basketTemp FROM select * " + allTranscriptRowsSql;
+      String createTempTableSql = "CREATE TABLE basketTemp AS (select * " + allTranscriptRowsSql + ")";
       String deleteBasketTranscriptsSql = "DELETE " + allTranscriptRowsSql;
       
       String insertTranscriptsSql = "INSERT into " +  userSchema + "user_baskets" + dblink 
               + "(BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, "
               + "PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
-              + " SELECT BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, t.source_id as PK_COLUMN_1, "
-              + "PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID" 
-              + " FROM " + userSchema + "user_baskets" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
+              + " SELECT distinct b.BASKET_ID, b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID, t.source_id as PK_COLUMN_1, "
+              + "b.PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
+              + " FROM basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
               + "   WHERE b.pk_column_2 = t.gene_source_id ";
              
       try {
+        if (wdkModel.getUserDb().getPlatform().checkTableExists(userDbDataSource, wdkModel.getUserDb().getDefaultSchema(), "basketTemp"))
+          SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE basketTemp", "basket-maintenance-delete-temp-table");
+         
         // copy transcript baskets to temp table
         SqlUtils.executeUpdate(userDbDataSource, createTempTableSql, "basket-maintenance-create-temp-table");
         
         // delete transcript baskets from basket table
         SqlUtils.executeUpdate(userDbDataSource, deleteBasketTranscriptsSql, "basket-maintenance-delete-transcripts");
 
-        // join to appDb to find new set of transcripts for each gene
+        // join to appDb to insert new set of transcripts for each gene into basket
         SqlUtils.executeUpdate(appDbDataSource, insertTranscriptsSql, "basket-maintenance-inesrt-transcripts");
       
         // delete temp table
