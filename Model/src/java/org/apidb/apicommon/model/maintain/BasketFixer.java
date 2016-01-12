@@ -81,18 +81,18 @@ public class BasketFixer extends BaseCLI {
         for (String projectId : projects) {
             logger.info("Fixing basket for project " + projectId);
             WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
-            fixBasket(wdkModel, "GeneRecordClasses.GeneRecordClass", "ApidbTuning.GeneId",  "gene");
-            fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence");
+            fixBasket(wdkModel, "GeneRecordClasses.GeneRecordClass", "ApidbTuning.GeneId",  "gene", "pk_column2");
+            fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence", "pk_column1");
             logger.info("=========================== done ============================");
             wdkModel.releaseResources();
         }
     }
 
-    public void fixBasket(WdkModel wdkModel, String type, String aliasTable, String idColumn) throws WdkModelException {
+  public void fixBasket(WdkModel wdkModel, String type, String aliasTable, String idColumn, String pkColumn) throws WdkModelException {
         logger.info("Fixing "+type+" basket...");
 
         Map<Integer, Map<String, String>> users = getDeprecatedIds(wdkModel,
-                type, aliasTable, idColumn);
+								   type, aliasTable, idColumn, pkColumn);
         for (int userId : users.keySet()) {
             Map<String, String> ids = users.get(userId);
             changeIds(wdkModel, type, userId, ids);
@@ -100,18 +100,18 @@ public class BasketFixer extends BaseCLI {
     }
 
     private Map<Integer, Map<String, String>> getDeprecatedIds(
-            WdkModel wdkModel, String type, String aliasTable, String idColumn)
+            WdkModel wdkModel, String type, String aliasTable, String idColumn, String pkColumn)
             throws WdkModelException {
         Map<Integer, Map<String, String>> users = new HashMap<Integer, Map<String, String>>();
 
         String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
         String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
         DataSource dataSource = wdkModel.getAppDb().getDataSource();
-        String sql = "SELECT b.user_id, b.pk_column_1 AS old_id,        "
+        String sql = "SELECT b.user_id, b." + pkColumn + " AS old_id,        "
                 + "          a." + idColumn + " AS new_id               "
                 + "   FROM " + userSchema + "user_baskets" + dblink + " b "
                 + "     LEFT JOIN " + aliasTable + " a "
-                + "       ON b.pk_column_1 = a.id "
+                + "       ON b." + pkColumn + " = a.id "
                 + "   WHERE b.project_id = ? AND b.record_class = ?";
 
         ResultSet resultSet = null;
@@ -194,18 +194,18 @@ public class BasketFixer extends BaseCLI {
     }
 
     private void changeIds(WdkModel wdkModel, String type, int userId,
-            Map<String, String> ids) throws WdkModelException {
+			   Map<String, String> ids, String pkColumn) throws WdkModelException {
         logger.info("Updating basket for user #" + userId);
         
         String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
         DataSource dataSource = wdkModel.getUserDb().getDataSource();
         String sqlUpdate = "UPDATE " + userSchema + "user_baskets "
-                + " SET pk_column_1 = ? "
+                + " SET " + pkColumn + " = ? "
                 + " WHERE project_id = ? AND user_id = ? "
-                + "   AND record_class = ? AND pk_column_1 = ?";
+                + "   AND record_class = ? AND " + pkColumn + " = ?";
         String sqlDelete = "DELETE FROM " + userSchema + "user_baskets "
                 + " WHERE project_id = ? AND user_id = ? "
-                + "   AND record_class = ? AND pk_column_1 = ?";
+                + "   AND record_class = ? AND " + pkColumn + " = ?";
 
         PreparedStatement psUpdate = null, psDelete = null;
         try {
