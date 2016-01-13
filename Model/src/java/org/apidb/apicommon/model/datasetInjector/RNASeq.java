@@ -19,6 +19,8 @@ public class RNASeq extends  DatasetInjector {
   public void injectTemplates() {
       setShortAttribution();
 
+
+
       String projectName = getPropValue("projectName");
       //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
@@ -39,6 +41,8 @@ public class RNASeq extends  DatasetInjector {
       if (datasetShortDisplayName == null || datasetShortDisplayName.equals("")) {
         throw new RuntimeException(datasetName + " datasetShortDisplayName cannot be null");
       }
+
+      injectTemplate("datasetCategory");
       
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 

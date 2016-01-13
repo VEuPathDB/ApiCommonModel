@@ -106,6 +106,8 @@ public abstract class Expression extends DatasetInjector {
 
         String lcDataType = getPropValue("dataType").toLowerCase();
 
+        injectTemplate("datasetCategory");
+
         injectTemplate(lcDataType + "AttributeCategory");
 
         injectTemplate("expressionGraphAttributesExpression");
