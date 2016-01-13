@@ -3364,6 +3364,7 @@ union
       <paramRef ref="geneParams.profileset_generic"/>
         <column name="project_id"/>
         <column name="source_id"/>
+        <column name="gene_source_id"/>
         <column name="matched_result"/>
         <column name="fold_difference"/>
 
@@ -3371,37 +3372,36 @@ union
       <sqlParamValue name="shift">0.0001</sqlParamValue>
       <sql>
       <![CDATA[
-
-      select ga.source_id, 'Y' as matched_result,
+	 SELECT ta.gene_source_id, ta.source_id, 'Y' as matched_result,
              '@PROJECT_ID@' as project_id,
              round(max(expr.fold_difference), 2) as fold_difference
-      from (
-            select p.subject_row_id as gene_feature_id,
+	  FROM (
+            select res.na_feat_expression_id as gene_feature_id,
                           case 
                             when &&isLogged&& != 1 
                             then 
                                    case 
-                                   when pe.value< 1 
-                                   then -1/pe.value + &&shift&&
-                                   else pe.value 
-                                   end
-                                   
+                                   when res.value< 1 
+                                   then -1/res.value + &&shift&&
+                                   else res.value 
+                                   end                                   
                             else (
                                  case 
-                                   when pe.value < 0
-                                   then -1/nvl(power(2, pe.value), 1)
-                                   else  nvl(power(2, pe.value), 1) 
+                                   when res.value < 0
+                                   then -1/nvl(power(2, res.value), 1)
+                                   else  nvl(power(2, res.value), 1) 
                                    end
                                 ) 
                             end as fold_difference
-            from apidb.profileelement pe, apidb.profile p
-            where pe.profile_element_name_id = $$samples_fc_ref_generic$$
-            and pe.profile_id = p.profile_id
-           ) expr, apidbtuning.geneattributes ga
-        where ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+             FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
+             WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
+	     AND pan.protocol_app_node_id in  ($$samples_fc_ref_generic$$)
+	     AND pan.protocol_app_node_id = res.protocol_app_node_id
+           ) expr, apidbtuning.transcriptattributes ta
+        where ( $$protein_coding_only$$ = 'no' OR ta.gene_type = $$protein_coding_only$$ )
         and $$regulated_dir$$ (expr.fold_difference)   >=  $$fold_difference$$ 
-        and ga.na_feature_id = expr.gene_feature_id
-        group by ga.source_id
+        and ta.gene_na_feature_id = expr.gene_feature_id
+        group by ta.gene_source_id, ta.source_id
       ]]>
       </sql>
 
