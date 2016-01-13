@@ -21,7 +21,7 @@ import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
 /**
- * 	Read tab-delimited file and convert to ontology classes associated with some annotationProperties in OWL format
+ * Read tab-delimited file and convert to ontology classes associated with some annotationProperties in OWL format
  *  	1st Row is header and need to skip
  *  	2nd Row specifies the AnnotationProperty ID in the ontology
  *  	By default, 1st Col is term label, 2nd Col is term parent IRI, and 4th Col and following are annotations of the term
@@ -47,6 +47,7 @@ public class OwlClassGenerator {
 		String path = bean.getPath();
 		String inputFilename = bean.getInputFilename();
 		String idBase = bean.getIdBase();
+		String domainName = bean.getDomainName();
 		String outputFilename = bean.getOutputFilename();
 		String ontoIRIstr = bean.getOntoIRIstr();
 		int labelPos = bean.getLabelPos();
@@ -109,27 +110,36 @@ public class OwlClassGenerator {
 	   		if (startId == -1) {
 	   			termIRIstr = ontoIRIstr + "#" +  items[labelPos].trim();
 	   		} else {
-	   			termIRIstr = idBase + getEupathID(startId);
+	   			termIRIstr = idBase + getOntologyTermID(domainName,startId);
 	   			startId ++;
 	   		}
 
 	   		OWLClass cls = df.getOWLClass(IRI.create(termIRIstr));
 
 	   		// add class parent
-	   		OWLClass parent = df.getOWLClass(IRI.create(items[parentPos].trim()));
-	        OWLAxiom axiom = df.getOWLSubClassOfAxiom(cls, parent);
-	        manager.applyChange(new AddAxiom(outOWL, axiom));
+	   		OWLClass parent = null;
+	   		String parentStr = items[parentPos].trim();
+	   		if (parentStr.startsWith("http")) {
+	   			parent = df.getOWLClass(IRI.create(parentStr));
+	   		} else if (parentStr.length() > 0){
+	   			parent = df.getOWLClass(IRI.create(ontoIRIstr + "#" + parentStr));
+	   		} else {
+	   			parent = df.getOWLClass(IRI.create("http://www.w3.org/2002/07/owl#Thing"));
+	   		}
+	   		
+	   		OWLAxiom axiom = df.getOWLSubClassOfAxiom(cls, parent);
+	   		manager.applyChange(new AddAxiom(outOWL, axiom));
 
 	        // add term label
 	        OWLAnnotationProperty labelProp = df.getOWLAnnotationProperty(OWLRDFVocabulary.RDFS_LABEL.getIRI());
 	        OWLAnnotation label = df.getOWLAnnotation(labelProp, df.getOWLLiteral(items[labelPos].trim()));
-        	axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), label);
+	        axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), label);
         	manager.applyChange(new AddAxiom(outOWL, axiom));
         	//System.out.println(termIRIstr + "\t" + items[labelPos].trim());
 
 	        // add other annotation properties
 	        for (int j = annotPos; j < items.length; j ++) {
-	        	if (items[j].trim().length()>0) {
+	        	if (items[j].trim().length()>0 && annotProps.size() > j-annotPos) {
 	        		OWLAnnotation annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));
 	        		axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
 	        		manager.applyChange(new AddAxiom(outOWL, axiom));
@@ -140,9 +150,9 @@ public class OwlClassGenerator {
 	   	OntologyManipulator.saveToFile(manager, outOWL, path + outputFilename);
 	}
 
-	public static String getEupathID (int startID) {
+	public static String getOntologyTermID (String domainName, int startID) {
 		String s = "0000000" + startID;
-		String id = "INDIVIDUAL_" + s.substring(s.length()-7);
+		String id = domainName.toUpperCase() + "_" + s.substring(s.length()-7);
 
 		return id;
 	}

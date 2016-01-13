@@ -9,7 +9,7 @@ import org.kohsuke.args4j.Option;
  */
 public class OwlClassGeneratorOptions {
     @Option(name="-path", usage ="the directory contains input file and also used for saved output file", required = false)
-    private String path = "C:/Users/jiezheng/Documents/EuPathDB/ontology/test files/";
+    private String path = "C:/Users/jiezheng/Documents/EuPathDB/test files/";
 
     @Option(name="-inputFilename", usage="input tab-delimited file that will be used to convert to OWL format file", required = false)
     private String inputFilename = "individuals.txt";
@@ -26,8 +26,12 @@ public class OwlClassGeneratorOptions {
     @Option(name="-idBase", usage="Ontology term URI base", required = false)
     private String idBase = "http://purl.obolibrary.org/eupath/";
 
-    @Option(name="-startId", usage="unique ID assigned to the newly added terms", required = false)
-    private String startId = "1";
+    @Option(name="-domainName", usage="used to create IRI for newly added terms"
+    		+ "", required = false)
+    private String domainName = "EUPATH";
+    
+    @Option(name="-startId", usage="unique ID assigned to the newly added terms when startId >0, otherwise, the term label will be used", required = false)
+    private String startId = "-1";
 
     @Option(name="-ontoIRIstr", usage="IRI of ontology converted from the tab-delimited file", required = false)
     private String ontoIRIstr = "http://purl.obolibrary.org/obo/eupath/category_individuals.owl";
@@ -47,6 +51,10 @@ public class OwlClassGeneratorOptions {
     	return this.idBase;
     }
 
+    public String getDomainName () {
+    	return this.domainName;
+    }
+    
     public int getLabelPos () {
     	int pos = Integer.parseInt(this.labelPos) -1;
     	return pos;
