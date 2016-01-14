@@ -70,14 +70,38 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
-              setPropValue("exprGraphAttr", datasetName + 
-                           "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
-              setPropValue("pctGraphAttr", datasetName + 
-                           "_sense_pct_graph," + datasetName + "_antisense_pct_graph");
+
+              String senseExprGraphAttr = datasetName + "_sense_expr_graph";
+              String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
+
+              String sensePctGraphAttr = datasetName + "_sense_pct_graph";
+              String antisensePctGraphAttr = datasetName + "_antisense_pct_graph";
+
+
+              // These are used for the question
+              setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr);
+              setPropValue("pctGraphAttr", sensePctGraphAttr + "," + antisensePctGraphAttr);
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
+
+              // Inject the text attributes into the ontology for the results summary page
+              setPropValue("graphTextAttrName", senseExprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+              setPropValue("graphTextAttrName", antisenseExprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+
+              setPropValue("graphTextAttrName", sensePctGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+
+              setPropValue("graphTextAttrName", antisensePctGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+
               injectTemplate("rnaSeqProfileSetParamQuery");
-              //injectTemplate("rnaSeqStrandSpecificGraph");
+
 	      injectTemplate("rnaSeqGraph");
           } else {
 
@@ -89,13 +113,24 @@ public class RNASeq extends  DatasetInjector {
 
               setPropValue("graphVisibleParts", exprMetric + ",percentile");
 
-              setPropValue("exprGraphAttr", datasetName + "_expr_graph");
-              setPropValue("pctGraphAttr", datasetName + "_pct_graph");
+
+              String exprGraphAttr = datasetName + "_expr_graph";
+              String pctGraphAttr = datasetName + "_pct_graph";
+
+              setPropValue("exprGraphAttr", exprGraphAttr);
+              setPropValue("pctGraphAttr", pctGraphAttr);
 
               injectTemplate("rnaSeqExpressionGraphAttributes");
               injectTemplate("rnaSeqProfileSetParamQuery");
 
-              //injectTemplate("rnaSeqStrandGraph");
+
+              // Add text attribute to the categories ontology
+              setPropValue("graphTextAttrName", exprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+              setPropValue("graphTextAttrName", pctGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
               injectTemplate("rnaSeqGraph");
           }
 
