@@ -20,8 +20,6 @@ import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
-import owl2.TextFileReader;
-
 /**
  * 	Add one or more annotation properties to existing ontology terms
  *
