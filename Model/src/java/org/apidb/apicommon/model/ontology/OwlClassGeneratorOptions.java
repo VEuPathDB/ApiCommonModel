@@ -34,10 +34,10 @@ public class OwlClassGeneratorOptions {
     private String startId = "-1";
 
     @Option(name="-ontoIRIstr", usage="IRI of ontology converted from the tab-delimited file", required = false)
-    private String ontoIRIstr = "http://purl.obolibrary.org/obo/eupath/category_individuals.owl";
+    private String ontoIRIstr = "http://purl.obolibrary.org/obo/eupath/individuals.owl";
 
     @Option(name="-outputFilename", usage="The filename of output OWL file", required = false)
-    private String outputFilename = "category_individuals.owl";
+    private String outputFilename = "individuals.owl";
 
     public String getPath () {
     	return this.path;
