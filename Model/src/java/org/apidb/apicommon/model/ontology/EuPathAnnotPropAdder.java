@@ -18,7 +18,6 @@ import org.semanticweb.owlapi.model.OWLClass;
 import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
-import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
 /**
  * 	Add one or more annotation properties to existing ontology terms
@@ -97,13 +96,13 @@ public class EuPathAnnotPropAdder
         for (int k = annotPos; k< items.length; k++) {
 			int start = items[k].indexOf("(");
 			int end = items[k].indexOf(")");
-			if (start >= 0 && end >=0) {
-				languageCodes[k] = items[k].substring(start+1, end);
+			if (start >= 0 && end > start) {
+				languageCodes[k] = items[k].substring(start+1, end).trim();
 			} else {
 				languageCodes[k] = "";
 			}
 		}
-
+        
         // Create annotation properties based on the IDs provided in the tab-delimited file on the 2nd row
         ArrayList<OWLAnnotationProperty> annotProps = new ArrayList<OWLAnnotationProperty>();
         items = matrix.get(1);
