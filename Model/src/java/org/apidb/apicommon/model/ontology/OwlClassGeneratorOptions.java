@@ -9,7 +9,7 @@ import org.kohsuke.args4j.Option;
  */
 public class OwlClassGeneratorOptions {
     @Option(name="-path", usage ="the directory contains input file and also used for saved output file", required = false)
-    private String path = "C:/Users/jiezheng/Documents/EuPathDB/test files/";
+        private String path = "/var/www/PlasmoDB/plasmo.jbrestel/gus_home/lib/wdk/ontology/";
 
     @Option(name="-inputFilename", usage="input tab-delimited file that will be used to convert to OWL format file", required = false)
     private String inputFilename = "individuals.txt";

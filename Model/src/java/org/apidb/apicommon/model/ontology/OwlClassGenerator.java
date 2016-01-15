@@ -33,14 +33,15 @@ import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
 public class OwlClassGenerator {
 	public static void main(String[] args) {
+
 		OwlClassGeneratorOptions bean = new OwlClassGeneratorOptions();
 	    CmdLineParser parser = new CmdLineParser(bean);
 
 	    try {
 	        parser.parseArgument(args);
 	    } catch( CmdLineException e ) {
-	        System.err.println(e.getMessage());
 	        parser.printUsage(System.err);
+                //	        System.err.println(e.getMessage());
 	        System.exit(1);
 	    }
 
@@ -104,6 +105,12 @@ public class OwlClassGenerator {
 	   	for (int i = 1; i < matrix.size(); i++) {
 	   		items = matrix.get(i);
 
+                        String trimmedName = items[0].trim();
+
+                        if(trimmedName.equals("") || trimmedName.startsWith("#")) {
+                            continue;
+                        }
+
 	   		// generate class IRI
 	   		String termIRIstr;
 
@@ -118,7 +125,9 @@ public class OwlClassGenerator {
 
 	   		// add class parent
 	   		OWLClass parent = null;
+
 	   		String parentStr = items[parentPos].trim();
+
 	   		if (parentStr.startsWith("http")) {
 	   			parent = df.getOWLClass(IRI.create(parentStr));
 	   		} else if (parentStr.length() > 0){
