@@ -22,8 +22,11 @@ import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
 /**
  * Read tab-delimited file and convert to ontology classes associated with some annotationProperties in OWL format
- *  	1st Row is header and need to skip
+ *  	1st Row is header and contains language setting information of annotations in the format '(language code)', language code is like, en for English, es for Spanish
  *  	2nd Row specifies the AnnotationProperty ID in the ontology
+ * 			For annotationProperty ID, it can be in two formats:
+ *  		- existing annotationProperty, provide its ID, such as EUPATH_0000274
+ *  		- new annotationProperty, using readable label, such as eupath.owl#targetType
  *  	By default, 1st Col is term label, 2nd Col is term parent IRI, and 4th Col and following are annotations of the term
  *
  *  We need to specify the starting ID need to assign to a new term, if the starting ID is -1, then the label of the term will be used as the ID
@@ -63,8 +66,7 @@ public class OwlClassGenerator {
 		try {
 			br = new BufferedReader(new FileReader(path + inputFilename));
 
-			String line = br.readLine();
-
+			String line = null;
 			while( (line = br.readLine()) != null)
 			{
 				String[] items = line.split("\t");
@@ -91,9 +93,23 @@ public class OwlClassGenerator {
         // Create factory to obtain a reference to a class
         OWLDataFactory df = manager.getOWLDataFactory();
 
+        // Find annotation language information based on the column header in the tab-delimited file (1st row)		
+        String[] items = matrix.get(0);
+		String[] languageCodes = new String[items.length];
+		
+        for (int k = annotPos; k< items.length; k++) {
+			int start = items[k].indexOf("(");
+			int end = items[k].indexOf(")");
+			if (start >= 0 && end > start) {
+				languageCodes[k] = items[k].substring(start+1, end).trim();
+			} else {
+				languageCodes[k] = "";
+			}
+		}
+        
         // Create annotation properties based on the IDs provided in the tab-delimited file on the 2nd row
         ArrayList<OWLAnnotationProperty> annotProps = new ArrayList<OWLAnnotationProperty>();
-        String[] items = matrix.get(0);
+        items = matrix.get(1);
         for (int k = annotPos; k< items.length; k++) {
         	if (items[k].trim().length() > 0) {
         		OWLAnnotationProperty annotProp = df.getOWLAnnotationProperty(IRI.create(idBase +items[k].trim()));
@@ -102,7 +118,7 @@ public class OwlClassGenerator {
         }
 
         // create classes
-	   	for (int i = 1; i < matrix.size(); i++) {
+	   	for (int i = 2; i < matrix.size(); i++) {
 	   		items = matrix.get(i);
 
                         String trimmedName = items[0].trim();
@@ -149,8 +165,16 @@ public class OwlClassGenerator {
 	        // add other annotation properties
 	        for (int j = annotPos; j < items.length; j ++) {
 	        	if (items[j].trim().length()>0 && annotProps.size() > j-annotPos) {
-	        		OWLAnnotation annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));
-	        		axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
+	        		OWLAnnotation annot = null;
+    	        	String lang = languageCodes[j];
+
+    	        	if (lang.length() == 0) {
+    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));
+    	        	} else {
+    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim(), lang));
+    	        	}
+
+    	        	axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
 	        		manager.applyChange(new AddAxiom(outOWL, axiom));
 	        	}
 	        }
