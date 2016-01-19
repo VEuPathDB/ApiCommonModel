@@ -427,7 +427,7 @@ public class DatasetPresenter {
    * @param datasetNamesToProperties
    */
   void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
-    String datasetKey = propValues.containsKey("projectName")? propValues.get("projectName") + ":" + getDatasetName() : getDatasetName();
+      String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + getDatasetName() : getDatasetName();
 
     System.out.println("datasetName=" + getDatasetName() + "\tdatasetKey=" + datasetKey);
     
