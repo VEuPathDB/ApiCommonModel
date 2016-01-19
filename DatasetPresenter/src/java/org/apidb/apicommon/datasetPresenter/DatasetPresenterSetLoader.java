@@ -356,8 +356,9 @@ public class DatasetPresenterSetLoader {
         " (dataset_presenter_id, name, dataset_name_pattern, " +
         "display_name, short_display_name, short_attribution, summary, " +
         "protocol, usage, description, caveat, acknowledgement, release_policy, " +
-        "display_category, type, subtype, is_species_scope, build_number_introduced)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        "display_category, type, subtype, is_species_scope, build_number_introduced, " +
+        "category)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -393,6 +394,10 @@ public class DatasetPresenterSetLoader {
     }
 
     stmt.setInt(i++, buildNumberIntroduced.intValue());
+
+    String datasetClassCategory = datasetPresenter.getPropValue("datasetClassCategory");
+    stmt.setString(i++, datasetClassCategory);
+
     stmt.execute();
   }
 
