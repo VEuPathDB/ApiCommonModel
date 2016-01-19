@@ -24,10 +24,10 @@ public class EuPathAnnotPropAdderOptions {
     private String idBase = "http://purl.obolibrary.org/eupath/";
 
     @Option(name="-ontoIRIstr", usage="IRI of ontology converted from the tab-delimited file", required = false)
-    private String ontoIRIstr = "http://purl.obolibrary.org/obo/eupath/category_extraAnnotProps.owl";
+    private String ontoIRIstr = "http://purl.obolibrary.org/obo/eupath/annotation.owl";
 
     @Option(name="-outputFilename", usage="The filename of output OWL file", required = false)
-    private String outputFilename = "category_extraAnnotProps.owl";
+    private String outputFilename = "annotation.owl";
 
     public String getPath () {
     	return this.path;
