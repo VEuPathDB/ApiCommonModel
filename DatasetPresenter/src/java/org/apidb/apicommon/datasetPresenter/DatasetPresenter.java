@@ -51,7 +51,7 @@ public class DatasetPresenter {
   private Map<String, NameTaxonPair> nameTaxonPairs = new HashMap<String, NameTaxonPair>(); // expanded from pattern if we have one
   private String override = null;
 
-  private List<String> datasetNamesFromPattern;
+  private List<String> datasetNamesFromPattern  = new ArrayList<String>();
 
     void addDatasetNameToList(String datasetName) {
         this.datasetNamesFromPattern.add(datasetName);
