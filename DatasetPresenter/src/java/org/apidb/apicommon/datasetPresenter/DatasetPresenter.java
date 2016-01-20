@@ -51,6 +51,12 @@ public class DatasetPresenter {
   private Map<String, NameTaxonPair> nameTaxonPairs = new HashMap<String, NameTaxonPair>(); // expanded from pattern if we have one
   private String override = null;
 
+  private List<String> datasetNamesFromPattern;
+
+    void addDatasetNameToList(String datasetName) {
+        this.datasetNamesFromPattern.add(datasetName);
+    }
+
   void setFoundInDb() {
     foundInDb = true;
   }
@@ -427,10 +433,12 @@ public class DatasetPresenter {
    * @param datasetNamesToProperties
    */
   void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
-      String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + getDatasetName() : getDatasetName();
 
-    System.out.println("datasetName=" + getDatasetName() + "\tdatasetKey=" + datasetKey);
-    
+      String representative = datasetNamesFromPattern.get(0);
+      String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + representative : representative;
+
+      boolean isFromPattern = datasetNamesFromPattern.size() > 1;
+
     if (duplicateDatasetNames.contains(datasetKey)) throw new UserException("datasetPresenter '" + getDatasetName()
         + "' is attempting to use properties from dataset '" + datasetKey + "' but that dataset is not unique in the dataset properties files");
     
@@ -451,7 +459,11 @@ public class DatasetPresenter {
       if (datasetInjectorConstructor != null) {
         if (datasetInjectorConstructor.getPropValues().containsKey(key)) throw new UserException("a templateInjector in datasetPresenter '" + getDatasetName()
             + "' has a property duplicated from dataset property file provided by the dataset class: " + key);
-        datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
+
+        // Other properties are not valid when using pattern
+        if(!isFromPattern || (isFromPattern &&key.equals("datasetClassCategory"))) {
+            datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
+        }
       }
     }
   }

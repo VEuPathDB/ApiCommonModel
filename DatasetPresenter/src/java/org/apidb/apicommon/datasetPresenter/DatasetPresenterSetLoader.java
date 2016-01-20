@@ -181,6 +181,10 @@ public class DatasetPresenterSetLoader {
         String type = rs.getString(3);
         String subtype = rs.getString(4);
         Boolean isSpeciesScope = rs.getBoolean(5);
+
+        // track all dataset names for presenter
+        datasetPresenter.addDatasetNameToList(name);
+
         if (datasetPresenter.getOverride() == null) {
           if (datasetNamesFoundInDb.contains(name))
             throw new UserException(
