@@ -463,8 +463,6 @@ public class DatasetPresenter {
   }
 
     void addCategoriesForPattern(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
-      boolean isFromPattern = datasetNamesFromPattern.size() > 1;
-      if(!isFromPattern) return;
       if(propValues.containsKey("datasetClassCategory")) return;
 
       String datasetKey = datasetNamesFromPattern.get(0);
