@@ -19,7 +19,11 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
 
     @Override
     protected void setExprGraphVisiblePart() {
-        setPropValue("exprGraphVisiblePart", "exprn_val");
+	if (getPropValue("graphType").equals("scatter")) {
+	    setPropValue("exprGraphVisiblePart", "scatter");
+	} else {
+	    setPropValue("exprGraphVisiblePart", "exprn_val");
+	}
     }
 
     @Override
@@ -38,6 +42,7 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
         
         String [][] declaration = {{"percentileChannelPattern", "Which profileset (red/green) has the samples. (ie. not the channel w/ the common reference)."},
                                    {"hasPercentileData", ""},
+				   {"graphType", ""},
         };
         return combinePropertiesDeclarations(microarrayDeclaration, declaration);
     }
