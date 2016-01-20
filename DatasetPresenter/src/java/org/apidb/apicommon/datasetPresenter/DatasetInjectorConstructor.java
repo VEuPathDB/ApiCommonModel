@@ -97,6 +97,11 @@ public class DatasetInjectorConstructor {
     this.globalDatasetProperties = globalDatasetProperties;
   }
 
+    Map<String, Map<String, String>> getGlobalDatasetProperties() {
+        return this.globalDatasetProperties;
+  }
+
+
   /**
    * Use reflection to construct a subclass of DatasetInjector. Initialize the
    * subclass's property values with those from this object.

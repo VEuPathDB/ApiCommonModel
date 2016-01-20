@@ -145,6 +145,14 @@ public class DatasetPresenterSet {
     }
   }
 
+    void addCategoriesForPattern() {
+        for (DatasetPresenter datasetPresenter : presenters.values()) {
+            if(!datasetPresenter.getDatasetNamePattern().equals("") && datasetPresenter.getDatasetNamePattern() != null) {
+                datasetPresenter.addCategoriesForPattern();
+            }
+        }
+    }
+
   void addIdentifierProperty() {
     for (DatasetPresenter datasetPresenter : presenters.values()) {
         datasetPresenter.addIdentityProperty();

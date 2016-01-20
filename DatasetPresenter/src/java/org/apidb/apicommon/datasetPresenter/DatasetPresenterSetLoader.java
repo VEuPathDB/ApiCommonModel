@@ -639,10 +639,16 @@ public class DatasetPresenterSetLoader {
 
     System.err.println("Parsing and validating DatasetPresenters XML files found in directory "
         + presentersDir);
+
+    // ADDS PROPS HERE
     DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir, globalPresentersFile);
     DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile, contactsFile, defaultInjectorsFile, defaultLinksFile, instance, suffix);
     dpsl.setDatasetPresenterSet(datasetPresenterSet);
+
+    // RUNS SQL HERE
     Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
+    datasetPresenterSet.addCategoriesForPattern();
+
     if (namesFromDbNotFound.size() != 0)
       throw new UserException(
           "The following Dataset names in Apidb.Datasource are not mentioned or matched by the input DatasetPresenters:"

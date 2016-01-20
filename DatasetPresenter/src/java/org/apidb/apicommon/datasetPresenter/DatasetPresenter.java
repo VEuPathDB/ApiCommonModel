@@ -433,11 +433,7 @@ public class DatasetPresenter {
    * @param datasetNamesToProperties
    */
   void addPropertiesFromFile(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
-
-      String representative = datasetNamesFromPattern.get(0);
-      String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + representative : representative;
-
-      boolean isFromPattern = datasetNamesFromPattern.size() > 1;
+      String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + getDatasetName() : getDatasetName();
 
     if (duplicateDatasetNames.contains(datasetKey)) throw new UserException("datasetPresenter '" + getDatasetName()
         + "' is attempting to use properties from dataset '" + datasetKey + "' but that dataset is not unique in the dataset properties files");
@@ -461,10 +457,28 @@ public class DatasetPresenter {
             + "' has a property duplicated from dataset property file provided by the dataset class: " + key);
 
         // Other properties are not valid when using pattern
-        if(!isFromPattern || (isFromPattern &&key.equals("datasetClassCategory"))) {
+        datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
+      }
+    }
+  }
+
+    void addCategoriesForPattern() {
+      Map<String,Map<String,String>> datasetNamesToProperties = datasetInjectorConstructor.getGlobalDatasetProperties();
+
+      String representative = datasetNamesFromPattern.get(0);
+      String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + representative : representative;
+
+      boolean isFromPattern = datasetNamesFromPattern.size() > 1;
+
+      if (!datasetNamesToProperties.containsKey(datasetKey)) return;
+    
+      Map<String,String> propsFromFile = datasetNamesToProperties.get(datasetKey);
+    
+      for (String key : propsFromFile.keySet()) {
+        if(isFromPattern &&key.equals("datasetClassCategory")) {
             datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
         }
       }
     }
-  }
+
 }
