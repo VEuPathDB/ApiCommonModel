@@ -180,12 +180,10 @@ public class DatasetPresenterSet {
     DatasetPresenterSet dps = dpp.parseDir(presentersDir, globalXmlFile);
     
     // add properties from dataset prop files to presenters
-    Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
-    Set<String> duplicateDatasetNames = new HashSet<String>();
 
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
-    propParser.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
-    dps.addPropertiesFromFiles(propertiesFromFiles, duplicateDatasetNames);
+    propParser.parseAllPropertyFiles(dps.propertiesFromFiles, dps.duplicateDatasetNames);
+    dps.addPropertiesFromFiles(dps.propertiesFromFiles, dps.duplicateDatasetNames);
 
     // add presenterId
     dps.addIdentifierProperty();    
