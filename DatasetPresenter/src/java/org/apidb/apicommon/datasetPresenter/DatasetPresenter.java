@@ -474,7 +474,7 @@ public class DatasetPresenter {
     
       for (String key : propsFromFile.keySet()) {
         if(isFromPattern && key.equals("datasetClassCategory")) {
-            //            datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
+            datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
         }
       }
     }
