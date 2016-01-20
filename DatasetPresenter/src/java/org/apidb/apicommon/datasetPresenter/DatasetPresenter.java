@@ -462,21 +462,19 @@ public class DatasetPresenter {
     }
   }
 
-    void addCategoriesForPattern() {
-      Map<String,Map<String,String>> datasetNamesToProperties = datasetInjectorConstructor.getGlobalDatasetProperties();
+    void addCategoriesForPattern(Map<String,Map<String,String>> datasetNamesToProperties, Set<String> duplicateDatasetNames) {
+      boolean isFromPattern = datasetNamesFromPattern.size() > 1;
+      if(!isFromPattern) return;
 
       String representative = datasetNamesFromPattern.get(0);
       String datasetKey = propValues.containsKey("projectName") && !propValues.get("projectName").equals("@PROJECT_ID@") ? propValues.get("projectName") + ":" + representative : representative;
-
-      boolean isFromPattern = datasetNamesFromPattern.size() > 1;
-
       if (!datasetNamesToProperties.containsKey(datasetKey)) return;
     
       Map<String,String> propsFromFile = datasetNamesToProperties.get(datasetKey);
     
       for (String key : propsFromFile.keySet()) {
-        if(isFromPattern &&key.equals("datasetClassCategory")) {
-            datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
+        if(isFromPattern && key.equals("datasetClassCategory")) {
+            //            datasetInjectorConstructor.addProp(new NamedValue(key, propsFromFile.get(key)));
         }
       }
     }
