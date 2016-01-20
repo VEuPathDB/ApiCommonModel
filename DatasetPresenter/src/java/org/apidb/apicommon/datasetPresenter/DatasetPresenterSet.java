@@ -147,7 +147,7 @@ public class DatasetPresenterSet {
 
     void addCategoriesForPattern() {
         for (DatasetPresenter datasetPresenter : presenters.values()) {
-            if(!datasetPresenter.getDatasetNamePattern().equals("") && datasetPresenter.getDatasetNamePattern() != null) {
+            if(datasetPresenter.getDatasetNamePattern() != null && !datasetPresenter.getDatasetNamePattern().equals("")) {
                 datasetPresenter.addCategoriesForPattern();
             }
         }
