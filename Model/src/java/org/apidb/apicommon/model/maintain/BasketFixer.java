@@ -273,7 +273,7 @@ public class BasketFixer extends BaseCLI {
           + " WHERE project_id = '" + wdkModel.getProjectId() + "'"
           + " AND record_class = 'TranscriptRecordClasses.TranscriptRecordClass'";
 
-      String createTempTableSql = "CREATE TABLE basketTemp AS (select * " + allTranscriptRowsSql + ")";
+      String createTempTableSql = "CREATE TABLE " +  userSchema + "basketTemp AS (select * " + allTranscriptRowsSql + ")";
       String deleteBasketTranscriptsSql = "DELETE " + allTranscriptRowsSql;
       
       String insertTranscriptsSql = "INSERT into " +  userSchema + "user_baskets" + dblink 
@@ -281,7 +281,7 @@ public class BasketFixer extends BaseCLI {
               + "PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
               + " SELECT distinct b.BASKET_ID, b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
               + "t.source_id as PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
-              + " FROM basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
+              + " FROM " +  userSchema + "basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
               + "   WHERE b.pk_column_2 = t.gene_source_id ";
              
       try {
@@ -298,7 +298,7 @@ public class BasketFixer extends BaseCLI {
         SqlUtils.executeUpdate(appDbDataSource, insertTranscriptsSql, "basket-maintenance-inesrt-transcripts");
       
         // delete temp table
-        SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE basketTemp", "basket-maintenance-delete-temp-table");
+        //SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE basketTemp", "basket-maintenance-delete-temp-table");
       }
       catch (SQLException e) {
           throw new WdkModelException(e);
