@@ -12527,6 +12527,23 @@ where ps.external_database_release_id = s.external_database_release_id
   and lower(bmc.value) != 'unknown'
   and lower(oe.category) != 'date_of_birth'
   and lower(oe.category) != 'sample_origin'
+union 
+      select distinct pen.name as term,
+                initcap (
+                      case when ps.Name like '%Amazonia%'
+                           then  'Amazonia'
+                           when ps.Name like '%Uganda East Africa%'
+                           then 'PRISM (Uganda East Africa)'
+                           when regexp_like(ps.name,'.*South.* Africa.*')
+                           then 'Southern Africa'
+                           else regexp_replace(ps.name,' +ICEMR.*$','')
+                      end) as value,
+                'ICEMR' as property
+from 
+apidb.profileset ps,
+apidb.profileelementname pen
+where ps.profile_set_id =pen.profile_set_id
+  and ps.profile_set_id in ( $$profileset_generic_all$$ )
            ]]>
             </sql>
         </sqlQuery>
@@ -13039,9 +13056,19 @@ select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as 
             <column name="spec_property"/>
             <column name="spec_value" />
             <sql>
-           <![CDATA[                              
-		   With pre_main as  (
-SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+           <![CDATA[  
+	   With pre_main as  (
+  SELECT 'ICEMR' as property, 'type' as spec_property, 'string' as spec_value FROM dual
+ UNION
+ SELECT 'ICEMR' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
+ UNION
+ SELECT 'ICEMR' as property, 'display' as spec_property, 'ICEMR' as spec_value FROM dual
+UNION
+ SELECT 'ICEMR' as property, 'leaf' as spec_property, 'true' as spec_value FROM dual
+UNION 
+ SELECT 'ICEMR' as property, 'description' as spec_property, 'International Center of Excellence for Malaria Research which provided clinical data' as spec_value FROM dual
+UNION 
+  SELECT 'GeographicLocation' as property, 'type' as spec_property, 'string' as spec_value FROM dual
  UNION
  SELECT 'GeographicLocation' as property, 'filter' as spec_property, 'membership' as spec_value FROM dual
  UNION
@@ -13442,35 +13469,59 @@ Union
 Select 'P_vivax_parasite_density_by_microscope' as property,  'units' as spec_property, '(/ul)' as spec_value from dual
 Union
 Select 'P_vivax_parasite_density_by_microscope' as property,  'display' as spec_property, 'P. vivax parasite density by microscope' as spec_value from dual
+
+
 ),
 main as ( 
 select distinct pre_main.* 
             from pre_main, (
-                 select distinct 
-                        oe.value as property
-                   from apidb.profileset ps,
-                        apidb.profileelementname pen,
-                        Study.Study S,
-                        Rad.Studybiomaterial Sbm,
-                        study.biosample bm,
-                        STUDY.biomaterialcharacteristic bmc,
-                        study.ontologyEntry oe
-                  where ps.external_database_release_id = s.external_database_release_id
-                    and ps.profile_set_id =pen.profile_set_id
-                    and S.Study_Id = Sbm.Study_Id
-                    and sbm.Bio_Material_Id = bm.Bio_Material_Id
-                    and bm.bio_material_id = bmc.bio_material_id
-                    and pen.name = bm.name
-                    and ps.profile_set_id in ( Select ps.profile_set_id
-                                                 from apidb.profileset ps, sres.externalDatabase ed, sres.externalDatabaseRelease edr
-                                                where ed.name like '%ICEMR_RSRC'
-                                                  and ps.external_database_release_id = edr.external_database_release_id
-                                                  and ed.external_database_id =edr.external_database_id   )
-                                                  and bmc.ontology_entry_id = oe.ontology_entry_id
-                                                  and bmc.value is not null and regexp_like(bmc.value, '^.*[[:alnum:]]+.*$')
-                                                  and lower(bmc.value) != 'unknown'
-                                                  and lower(oe.category) != 'date_of_birth'
-                                                  and lower(oe.category) != 'sample_origin') fp
+select distinct pen.name as term,
+                initcap (
+                      case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
+                           then (regexp_replace(bmc.value,'\s[^0-9]+',''))
+                           else bmc.value
+                      end) as value, 
+                oe.value as property
+from 
+apidb.profileset ps,
+apidb.profileelementname pen,
+Study.Study S,
+Rad.Studybiomaterial Sbm,
+study.biosample bm,
+STUDY.biomaterialcharacteristic bmc,
+study.ontologyEntry oe
+
+
+where ps.external_database_release_id = s.external_database_release_id
+  and ps.profile_set_id =pen.profile_set_id
+  and S.Study_Id = Sbm.Study_Id
+  and sbm.Bio_Material_Id = bm.Bio_Material_Id
+  and bm.bio_material_id = bmc.bio_material_id
+  and pen.name = bm.name
+--  and ps.profile_set_id in ( $$profileset_generic_all$$ )
+  and bmc.ontology_entry_id = oe.ontology_entry_id
+  and bmc.value is not null and regexp_like(bmc.value, '.*[[:alnum:]]+.*')
+  and lower(bmc.value) != 'unknown'
+  and lower(oe.category) != 'date_of_birth'
+  and lower(oe.category) != 'sample_origin'
+union 
+      select distinct pen.name as term,
+                initcap (
+                      case when ps.Name like '%Amazonia%'
+                           then  'Amazonia'
+                           when ps.Name like '%Uganda East Africa%'
+                           then 'PRISM (Uganda East Africa)'
+                           when regexp_like(ps.name,'.*South.* Africa.*')
+                           then 'Southern Africa'
+                           else regexp_replace(ps.name,' +ICEMR.*$','')
+                      end) as value,
+                'ICEMR' as property
+from 
+apidb.profileset ps,
+apidb.profileelementname pen
+where ps.profile_set_id =pen.profile_set_id
+ -- and ps.profile_set_id in ( $$profileset_generic_all$$ )
+) fp
             where pre_main.property = fp.property),
 Tree as ( SELECT oe.value as property, 'parent' as spec_property, oe.category as spec_value
            FROM STUDY.ontologyentry oe
@@ -13521,8 +13572,7 @@ Union
 select 'GeographicLocation' as property,	'parent' as spec_property,	'' as spec_value from dual
 Union
 select 'Host' as property,	'parent' as spec_property,	'EnvironmentalHistory' as spec_value from dual
-))
-
+)) 
             ]]>
 
 
