@@ -264,6 +264,7 @@ public class BasketFixer extends BaseCLI {
     
     private void updateTranscripts(WdkModel wdkModel) throws WdkModelException {
       
+			logger.info("Updating transcripts...");
       String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
       DataSource userDbDataSource = wdkModel.getUserDb().getDataSource();
       DataSource appDbDataSource = wdkModel.getAppDb().getDataSource();
