@@ -48,16 +48,29 @@ public class SpliceSites extends  DatasetInjector {
       if(getPropValueAsBoolean("hasMultipleSamples")) {
         injectTemplate("spliceSitesProfileSetParamQuery");
         injectTemplate("spliceSitesFoldChangeQuestion");
-        injectTemplate("spliceSitesFoldChangeCategories");
+        //        injectTemplate("spliceSitesFoldChangeCategories");
+
+        setPropValue("searchCategory", "searchCategory-fold-change");
+        setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName());
+        injectTemplate("internalGeneSearchCategory");
+
 
         injectTemplate("spliceSitesProfileSetsQuery");
         injectTemplate("spliceSitesDifferentialQuestion");
-        injectTemplate("spliceSitesDifferentialCategories");
+        //        injectTemplate("spliceSitesDifferentialCategories");
+        setPropValue("searchCategory", "searchCategory-splice-site-loc");
+        setPropValue("questionName", "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
+        injectTemplate("internalGeneSearchCategory");
+
       }
 
       injectTemplate("spliceSitesPctProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
-      injectTemplate("spliceSitesPercentileCategories");
+      //      injectTemplate("spliceSitesPercentileCategories");
+      setPropValue("searchCategory", "searchCategory-percentile");
+      setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
+      injectTemplate("internalGeneSearchCategory");
+
 
       if(getPropValue("graphPriorityOrderGrouping").equals("")) {
         setPropValue("graphPriorityOrderGrouping", "5");

@@ -137,12 +137,19 @@ public class RNASeq extends  DatasetInjector {
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               injectTemplate("rnaSeqFoldChangeQuestion");
-              injectTemplate("rnaSeqFoldChangeCategories");
+              //              injectTemplate("rnaSeqFoldChangeCategories");
+              setPropValue("searchCategory", "searchCategory-fold-change");
+              setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
+              injectTemplate("internalGeneSearchCategory");
+
 
           }
 
           injectTemplate("rnaSeqPercentileQuestion");
-          injectTemplate("rnaSeqPercentileCategories");
+          //          injectTemplate("rnaSeqPercentileCategories");
+          setPropValue("searchCategory", "searchCategory-percentile");
+          setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+          injectTemplate("internalGeneSearchCategory");
 
 
           if(getPropValue("graphPriorityOrderGrouping").equals("")) {

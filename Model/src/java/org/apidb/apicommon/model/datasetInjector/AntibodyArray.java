@@ -106,7 +106,11 @@ public class AntibodyArray extends DatasetInjector {
 
         injectTemplate("antibodyArrayQuestion");
 
-        injectTemplate("antibodyArrayCategories");
+        //        injectTemplate("antibodyArrayCategories");
+        setPropValue("searchCategory", "searchCategory-T-test-2-sample-unequal-variance");
+        setPropValue("questionName", "GeneQuestions.GenesByAntibodyArray" + getDatasetName());
+        injectTemplate("internalGeneSearchCategory");
+
 
         injectTemplate("antibodyArrayAttributeCategory");
         injectTemplate("antibodyArrayGraphDescriptions");

@@ -24,16 +24,29 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
             if(getPropValueAsBoolean("hasPageData")) {
                 injectTemplate("expressionFoldChangeWithConfidenceQuestion");
-                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
+                //                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
+
+                setPropValue("searchCategory", "searchCategory-fold-change-with-confidence");
+                setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Confidence");
+                injectTemplate("internalGeneSearchCategory");
+
             }
 
             injectTemplate("expressionFoldChangeQuestion");
-            injectTemplate(lcDataType + "FoldChangeCategories");
+            //            injectTemplate(lcDataType + "FoldChangeCategories");
+            setPropValue("searchCategory", "searchCategory-fold-change");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName());
+            injectTemplate("internalGeneSearchCategory");
+
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPercentileQuestion");
-            injectTemplate(lcDataType + "PercentileCategories");
+            //            injectTemplate(lcDataType + "PercentileCategories");
+            setPropValue("searchCategory", "searchCategory-percentile");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Percentile");
+            injectTemplate("internalGeneSearchCategory");
+
         }
 
         if(getPropValueAsBoolean("hasSimilarityData")) {

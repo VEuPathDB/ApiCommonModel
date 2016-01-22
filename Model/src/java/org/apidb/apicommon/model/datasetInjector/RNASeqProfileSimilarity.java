@@ -9,7 +9,10 @@ public class RNASeqProfileSimilarity extends RNASeq {
         super.injectTemplates();
 
         injectTemplate("rnaSeqProfileSimilarityQuestion");
-        injectTemplate("rnaSeqProfileSimilarityCategories");
+        //        injectTemplate("rnaSeqProfileSimilarityCategories");
+        setPropValue("searchCategory", "searchCategory-similarity");
+        setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "ProfileSimilarity");
+        injectTemplate("internalGeneSearchCategory");
     }
 
 

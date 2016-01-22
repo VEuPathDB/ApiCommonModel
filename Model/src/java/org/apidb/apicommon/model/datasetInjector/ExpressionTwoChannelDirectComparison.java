@@ -33,19 +33,40 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
             injectTemplate("expressionFoldChangeWithFDRQuestionDirect");
-            injectTemplate(lcDataType + "FoldChangeWithFDRCategoriesDirect");
+            //            injectTemplate(lcDataType + "FoldChangeWithFDRCategoriesDirect");
+            setPropValue("searchCategory", "searchCategory-fold-change-with-fdr");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithFDR" + getDatasetName());
+            injectTemplate("internalGeneSearchCategory");
+
+
+
+
         } else if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
-            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
+            //            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
+            setPropValue("searchCategory", "searchCategory-fold-change-with-confidence");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithConfidence" + getDatasetName());
+            injectTemplate("internalGeneSearchCategory");
+
         } else {
             injectTemplate("expressionFoldChangeQuestionDirect");
-            injectTemplate(lcDataType + "FoldChangeCategoriesDirect");
+
+            //injectTemplate(lcDataType + "FoldChangeCategoriesDirect");
+            setPropValue("searchCategory", "searchCategory-direct-comparison");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName());
+            injectTemplate("internalGeneSearchCategory");
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPctSamplesParamQueryDirect");
             injectTemplate("expressionPctProfileSetParamQuery");
-            injectTemplate(lcDataType + "PercentileCategoriesDirect");
+
+            //            injectTemplate(lcDataType + "PercentileCategoriesDirect");
+            setPropValue("searchCategory", "searchCategory-percentile");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName() + "Percentile");
+            injectTemplate("internalGeneSearchCategory");
+
+
             injectTemplate("expressionPercentileQuestionDirect");
         }
 
