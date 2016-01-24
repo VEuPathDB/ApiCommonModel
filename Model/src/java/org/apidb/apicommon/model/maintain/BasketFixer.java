@@ -270,7 +270,7 @@ public class BasketFixer extends BaseCLI {
       DataSource appDbDataSource = wdkModel.getAppDb().getDataSource();
       String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
       
-      String allTranscriptRowsSql = " from " + userSchema + " user_baskets"
+      String allTranscriptRowsSql = " from " + userSchema + "user_baskets"
           + " WHERE project_id = '" + wdkModel.getProjectId() + "'"
           + " AND record_class = 'TranscriptRecordClasses.TranscriptRecordClass'";
 
