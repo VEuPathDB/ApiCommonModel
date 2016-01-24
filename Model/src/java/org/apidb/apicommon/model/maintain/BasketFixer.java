@@ -183,7 +183,7 @@ public class BasketFixer extends BaseCLI {
                 if (ids.size() == 0) users.remove(userId);
             }
             logger.info("total " + users.size()
-                    + " users needs to be changed.");
+                    + " users needs to be changed, based on " + aliasTable);
         }
         catch (SQLException e) {
         	throw new WdkModelException(e);
