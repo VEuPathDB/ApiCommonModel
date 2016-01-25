@@ -20,6 +20,8 @@ import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
+import owl2.OntologyManipulator;
+
 /**
  * Read tab-delimited file and convert to ontology classes associated with some annotationProperties in OWL format
  *  	1st Row is header and contains language setting information of annotations in the format '(language code)', language code is like, en for English, es for Spanish
@@ -69,8 +71,10 @@ public class OwlClassGenerator {
 			String line = null;
 			while( (line = br.readLine()) != null)
 			{
-				String[] items = line.split("\t");
-				matrix.add(items);
+				if (!(line.trim().startsWith("##") || line.trim().length()==0)) {
+					String[] items = line.split("\t");
+					matrix.add(items);
+				}
 			}
 			System.out.println("Successfully read text file: " + inputFilename);
 		} catch (FileNotFoundException e) {
@@ -100,8 +104,8 @@ public class OwlClassGenerator {
         for (int k = annotPos; k< items.length; k++) {
 			int start = items[k].indexOf("(");
 			int end = items[k].indexOf(")");
-			if (start >= 0 && end > start) {
-				languageCodes[k] = items[k].substring(start+1, end).trim();
+			if (start >= 0 && end >=0) {
+				languageCodes[k] = items[k].substring(start+1, end);
 			} else {
 				languageCodes[k] = "";
 			}
@@ -111,8 +115,9 @@ public class OwlClassGenerator {
         ArrayList<OWLAnnotationProperty> annotProps = new ArrayList<OWLAnnotationProperty>();
         items = matrix.get(1);
         for (int k = annotPos; k< items.length; k++) {
-        	if (items[k].trim().length() > 0) {
-        		OWLAnnotationProperty annotProp = df.getOWLAnnotationProperty(IRI.create(idBase +items[k].trim()));
+        	String item = cleanString(items[k]);
+        	if (item.length() > 0) {
+        		OWLAnnotationProperty annotProp = df.getOWLAnnotationProperty(IRI.create(idBase +item));
         		annotProps.add(annotProp);
         	}
         }
@@ -120,18 +125,12 @@ public class OwlClassGenerator {
         // create classes
 	   	for (int i = 2; i < matrix.size(); i++) {
 	   		items = matrix.get(i);
-
-                        String trimmedName = items[0].trim();
-
-                        if(trimmedName.equals("") || trimmedName.startsWith("#")) {
-                            continue;
-                        }
-
+	   		
 	   		// generate class IRI
 	   		String termIRIstr;
 
 	   		if (startId == -1) {
-	   			termIRIstr = ontoIRIstr + "#" +  items[labelPos].trim();
+	   			termIRIstr = ontoIRIstr + "#" +  cleanString(items[labelPos]);
 	   		} else {
 	   			termIRIstr = idBase + getOntologyTermID(domainName,startId);
 	   			startId ++;
@@ -141,9 +140,7 @@ public class OwlClassGenerator {
 
 	   		// add class parent
 	   		OWLClass parent = null;
-
-	   		String parentStr = items[parentPos].trim();
-
+	   		String parentStr = cleanString(items[parentPos]);
 	   		if (parentStr.startsWith("http")) {
 	   			parent = df.getOWLClass(IRI.create(parentStr));
 	   		} else if (parentStr.length() > 0){
@@ -157,24 +154,25 @@ public class OwlClassGenerator {
 
 	        // add term label
 	        OWLAnnotationProperty labelProp = df.getOWLAnnotationProperty(OWLRDFVocabulary.RDFS_LABEL.getIRI());
-	        OWLAnnotation label = df.getOWLAnnotation(labelProp, df.getOWLLiteral(items[labelPos].trim()));
+	        OWLAnnotation label = df.getOWLAnnotation(labelProp, df.getOWLLiteral(cleanString(items[labelPos])));
 	        axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), label);
         	manager.applyChange(new AddAxiom(outOWL, axiom));
         	//System.out.println(termIRIstr + "\t" + items[labelPos].trim());
 
 	        // add other annotation properties
 	        for (int j = annotPos; j < items.length; j ++) {
-	        	if (items[j].trim().length()>0 && annotProps.size() > j-annotPos) {
+	        	String item = cleanString(items[j]);
+	        	if (item.length()>0 && annotProps.size() > j-annotPos) {
 	        		OWLAnnotation annot = null;
     	        	String lang = languageCodes[j];
-
+	        		
     	        	if (lang.length() == 0) {
-    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));
+    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(item));
     	        	} else {
-    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim(), lang));
+    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(item, lang));
     	        	}
-
-    	        	axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
+    	        	
+	        		axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
 	        		manager.applyChange(new AddAxiom(outOWL, axiom));
 	        	}
 	        }
@@ -188,5 +186,11 @@ public class OwlClassGenerator {
 		String id = domainName.toUpperCase() + "_" + s.substring(s.length()-7);
 
 		return id;
+	}
+	
+	public static String cleanString (String s) {
+		s = s.trim().replaceAll("^\"|\"$", "");	
+
+		return s;
 	}
 }

@@ -64,9 +64,11 @@ public class EuPathAnnotPropAdder
 			String line = null;
 
 			while( (line = br.readLine()) != null)
-			{
-				String[] items = line.split("\t");
-				matrix.add(items);
+			{			
+				if (!(line.trim().startsWith("##") || line.trim().length()==0)) {
+					String[] items = line.split("\t");
+					matrix.add(items);
+				}
 			}
 			System.out.println("Successfully read text file: " + inputFilename);
 		} catch (FileNotFoundException e) {
@@ -107,8 +109,9 @@ public class EuPathAnnotPropAdder
         ArrayList<OWLAnnotationProperty> annotProps = new ArrayList<OWLAnnotationProperty>();
         items = matrix.get(1);
         for (int k = annotPos; k< items.length; k++) {
-        	if (items[k].trim().length() > 0) {
-        		OWLAnnotationProperty annotProp = df.getOWLAnnotationProperty(IRI.create(idBase +items[k].trim()));
+        	String item = cleanString(items[k]);
+        	if (item.length() > 0) {
+        		OWLAnnotationProperty annotProp = df.getOWLAnnotationProperty(IRI.create(idBase + item));
         		annotProps.add(annotProp);
         	}
         }
@@ -121,14 +124,15 @@ public class EuPathAnnotPropAdder
 
 	        // add annotation properties
 	        for (int j = annotPos; j < items.length; j ++) {
-	        	if (items[j].trim().length()>0 && annotProps.size() > j-annotPos) {
+	        	String item = cleanString(items[j]);
+	        	if (item.length()>0 && annotProps.size() > j-annotPos) {
 	        		OWLAnnotation annot = null;
     	        	String lang = languageCodes[j];
 
     	        	if (lang.length() == 0) {
-    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim()));
+    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(item));
     	        	} else {
-    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(items[j].trim(), lang));
+    	        		annot = df.getOWLAnnotation(annotProps.get(j-annotPos), df.getOWLLiteral(item, lang));
     	        	}
 
     	        	OWLAxiom axiom = df.getOWLAnnotationAssertionAxiom(cls.getIRI(), annot);
@@ -138,5 +142,11 @@ public class EuPathAnnotPropAdder
 	   	}
 
 	   	OntologyManipulator.saveToFile(manager, outOWL, path + outputFilename);
+	}
+	
+	public static String cleanString (String s) {
+		s = s.trim().replaceAll("^\"|\"$", "");	
+
+		return s;
 	}
 }
