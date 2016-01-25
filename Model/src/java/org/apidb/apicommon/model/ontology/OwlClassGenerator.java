@@ -20,8 +20,6 @@ import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 
-import owl2.OntologyManipulator;
-
 /**
  * Read tab-delimited file and convert to ontology classes associated with some annotationProperties in OWL format
  *  	1st Row is header and contains language setting information of annotations in the format '(language code)', language code is like, en for English, es for Spanish
