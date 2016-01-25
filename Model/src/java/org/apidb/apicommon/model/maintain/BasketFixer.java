@@ -26,7 +26,10 @@ import org.gusdb.wdk.model.WdkModelException;
  */
 public class BasketFixer extends BaseCLI {
 
-    private static final Logger logger = Logger.getLogger(BasketFixer.class);
+	private static final Logger logger = Logger.getLogger(BasketFixer.class);
+
+	// account used to run maintennace scripts
+	private static final String WDKMAINT = "wdkmaint.";
 
     public static void main(String[] args) throws Exception {
         String cmdName = System.getProperty("cmdName");
@@ -82,8 +85,8 @@ public class BasketFixer extends BaseCLI {
             logger.info("Fixing basket for project " + projectId);
             WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
             fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "ApidbTuning.GeneId",  "gene");
-            updateTranscripts(wdkModel);
-            fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence");
+						updateTranscripts(wdkModel);
+						fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence");
             logger.info("=========================== done ============================");
             wdkModel.releaseResources();
         }
@@ -274,7 +277,7 @@ public class BasketFixer extends BaseCLI {
           + " WHERE project_id = '" + wdkModel.getProjectId() + "'"
           + " AND record_class = 'TranscriptRecordClasses.TranscriptRecordClass'";
 
-      String createTempTableSql = "CREATE TABLE " +  userSchema + "basketTemp AS (select * " + allTranscriptRowsSql + ")";
+      String createTempTableSql = "CREATE TABLE basketTemp AS (select * " + allTranscriptRowsSql + ")";
       String deleteBasketTranscriptsSql = "DELETE " + allTranscriptRowsSql;
       
       String insertTranscriptsSql = "INSERT into " +  userSchema + "user_baskets" + dblink 
@@ -282,8 +285,8 @@ public class BasketFixer extends BaseCLI {
               + "PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
               + " SELECT distinct b.BASKET_ID, b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
               + "t.source_id as PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
-              + " FROM " +  userSchema + "basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
-              + "   WHERE b.pk_column_2 = t.gene_source_id ";
+              + " FROM " +  WDKMAINT + "basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
+              + "   WHERE b.pk_column_1 = t.gene_source_id ";
              
       try {
         if (wdkModel.getUserDb().getPlatform().checkTableExists(userDbDataSource, wdkModel.getUserDb().getDefaultSchema(), "basketTemp"))
