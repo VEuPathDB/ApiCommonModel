@@ -37,6 +37,8 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("includeProjects", projectName);
       }
 
+      setPropValue("graphModule", "RNASeq");
+
       String datasetShortDisplayName = getPropValue("datasetShortDisplayName");
       if (datasetShortDisplayName == null || datasetShortDisplayName.equals("")) {
         throw new RuntimeException(datasetName + " datasetShortDisplayName cannot be null");
@@ -104,10 +106,6 @@ public class RNASeq extends  DatasetInjector {
 
 	      injectTemplate("rnaSeqGraph");
           } else {
-
-              //setPropValue("graphModule", "RNASeq::StrandNonSpecific");
-              setPropValue("graphModule", "RNASeq");
-
               setPropValue("graphVisibleParts", exprMetric);
               injectTemplate("pathwayGraphs");
 
