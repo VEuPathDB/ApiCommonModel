@@ -22,9 +22,14 @@ public class CopyNumberVariations extends  DatasetInjector {
       List<String> sampleNames = getSampleList();
       
       for (int i=0; i<sampleNames.size(); i++){
-          setPropValue("sampleName", sampleNames.get(i).replace("_CNV", ""));
+          String sampleName = sampleNames.get(i).replace("_CNV", "");
+
+          setPropValue("sampleName", sampleName);
           injectTemplate("copyNumberVariationsDatabase");
           injectTemplate("copyNumberVariationsTrack");
+
+          setPropValue("gbrowseTrackName", getDatasetName() + sampleName);
+          injectTemplate("gbrowseTrackCategory");
       }
 
   }

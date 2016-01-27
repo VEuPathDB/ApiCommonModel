@@ -32,6 +32,7 @@ public class IsolatesHTS extends DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       for (int i=0; i<sampleNames.size(); i++){
+
           setPropValue("sampleName", sampleNames.get(i));
 
           String gbrowseDBName = organismAbbrev + "_" + experimentName + "_" + sampleNames.get(i) + sampleNameSuffix;
@@ -39,6 +40,10 @@ public class IsolatesHTS extends DatasetInjector {
 
           injectTemplate("htsSnpSampleDatabase");
           injectTemplate("htsSnpSampleCoverageXYTrack");
+
+          setPropValue("gbrowseTrackName", gbrowseDBName);
+          injectTemplate("gbrowseTrackCategory");
+
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
       }       

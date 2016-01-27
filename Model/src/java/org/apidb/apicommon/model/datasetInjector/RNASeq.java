@@ -172,7 +172,15 @@ public class RNASeq extends  DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("rnaSeqCoverageTrack");
+      setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
+      injectTemplate("gbrowseTrackCategory");
+
       injectTemplate("rnaSeqCoverageTrackUnlogged");
+      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+      injectTemplate("gbrowseTrackCategory");
+
+
+
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
       if(Boolean.parseBoolean(showIntronJunctions)) {
@@ -208,6 +216,8 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("subtracks", subtracks);
 
           injectTemplate("rnaSeqJunctionsTrack");
+          setPropValue("gbrowseTrackName", getDatasetName() + "Junctions");
+          injectTemplate("gbrowseTrackCategory");
       }
 
   }

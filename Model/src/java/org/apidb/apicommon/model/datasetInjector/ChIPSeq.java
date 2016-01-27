@@ -14,13 +14,23 @@ public class ChIPSeq extends DatasetInjector {
 
       if(scale.toLowerCase().equals("log")) {
           injectTemplate("chipSeqCoverageTrack");
+          setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
+          injectTemplate("gbrowseTrackCategory");
       } 
       else if(scale.toLowerCase().equals("linear")) {
           injectTemplate("chipSeqCoverageTrackUnlogged");
+          setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+          injectTemplate("gbrowseTrackCategory");
       } 
       else if(scale.toLowerCase().equals("both")) {
           injectTemplate("chipSeqCoverageTrack");
           injectTemplate("chipSeqCoverageTrackUnlogged");
+
+          setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
+          injectTemplate("gbrowseTrackCategory");
+          setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+          injectTemplate("gbrowseTrackCategory");
+
       } 
       else {
           throw new WdkRuntimeException("property [scale] should be one of [log,linear,both]");

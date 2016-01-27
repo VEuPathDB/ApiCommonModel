@@ -32,6 +32,8 @@ public class Origins extends  DatasetInjector {
                     setPropValue("fileName", reference + "_" + comparison + ".bw");
                     injectTemplate("originsDatabase");
                     injectTemplate("originsTrack");
+                    setPropValue("gbrowseTrackName", getDatasetName() + getPropValue("reference") + comparison);
+                    injectTemplate("gbrowseTrackCategory");
                 }
             }
          }

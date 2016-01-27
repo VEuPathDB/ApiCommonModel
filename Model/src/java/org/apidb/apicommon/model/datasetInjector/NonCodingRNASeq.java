@@ -10,6 +10,9 @@ public class NonCodingRNASeq extends DatasetInjector {
       setOrganismAbbrevFromDatasetName();
 
       injectTemplate("ncRNASeqCoverageTrack");
+
+      setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
+      injectTemplate("gbrowseTrackCategory");
   }
 
   @Override
