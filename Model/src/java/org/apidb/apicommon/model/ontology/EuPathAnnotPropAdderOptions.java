@@ -21,7 +21,7 @@ public class EuPathAnnotPropAdderOptions {
     private String annotPos = "3";
 
     @Option(name="-idBase", usage="Ontology term URI base", required = false)
-    private String idBase = "http://purl.obolibrary.org/eupath/";
+    private String idBase = "http://purl.obolibrary.org/obo/";
 
     @Option(name="-ontoIRIstr", usage="IRI of ontology converted from the tab-delimited file", required = false)
     private String ontoIRIstr = "http://purl.obolibrary.org/obo/eupath/annotation.owl";

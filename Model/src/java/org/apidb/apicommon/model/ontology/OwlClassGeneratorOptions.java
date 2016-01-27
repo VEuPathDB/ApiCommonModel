@@ -24,12 +24,12 @@ public class OwlClassGeneratorOptions {
     private String annotPos = "4";
 
     @Option(name="-idBase", usage="Ontology term URI base", required = false)
-    private String idBase = "http://purl.obolibrary.org/eupath/";
+    private String idBase = "http://purl.obolibrary.org/obo/";
 
     @Option(name="-domainName", usage="used to create IRI for newly added terms"
     		+ "", required = false)
     private String domainName = "EUPATH";
-    
+
     @Option(name="-startId", usage="unique ID assigned to the newly added terms when startId >0, otherwise, the term label will be used", required = false)
     private String startId = "-1";
 
@@ -54,7 +54,7 @@ public class OwlClassGeneratorOptions {
     public String getDomainName () {
     	return this.domainName;
     }
-    
+
     public int getLabelPos () {
     	int pos = Integer.parseInt(this.labelPos) -1;
     	return pos;
