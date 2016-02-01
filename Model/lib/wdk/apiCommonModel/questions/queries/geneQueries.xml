@@ -766,6 +766,44 @@ where chip_total_reps > $$chip_replicates_plasmo$$
 
     <processQuery name="GenesByMotifSearch" excludeProjects="EuPathDB"  
              processName="org.apidb.apicomplexa.wsfplugin.motifsearch.ProteinMotifPlugin">
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                -- set gene_source_id
+                update ##WDK_CACHE_TABLE##
+                set gene_source_id = (select gene_source_id
+                                      from apidbTuning.transcriptAttributes
+                                      where source_id = ##WDK_CACHE_TABLE##.source_id)
+                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                  and gene_source_id is null
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                -- insert missing transcripts of included genes
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select source_id, gene_source_id
+                           from apidbTuning.transcriptAttributes
+                           where gene_source_id in (select gene_source_id from matches)
+                         minus
+                           select source_id, gene_source_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
       <testParamValues includeProjects="PiroplasmaDB">
 	<paramValue name="motif_organism">Theileria parva strain Muguga</paramValue>
       </testParamValues>
@@ -780,8 +818,9 @@ where chip_total_reps > $$chip_replicates_plasmo$$
        <paramRef ref="sharedParams.motif_expression" noTranslation="true" />
        <paramRef ref="geneSimilarityParams.motif_organism" quote="false" />
         <wsColumn name="source_id" width="50" wsName="SourceID"/>
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
         <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
         <wsColumn name="Locations" width="3999"/>
         <wsColumn name="MatchCount" width="10"/>
         <wsColumn name="Sequence" width="3999"/>
@@ -3207,6 +3246,42 @@ union
     <processQuery name="GenesByGenericProfileSimilarity" includeProjects="PlasmoDB,ToxoDB,CryptoDB,HostDB"  
              processName="org.apidb.apicomplexa.wsfplugin.profile.ProfileSimilarityPlugin"
 	     doNotTest="true">
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                update ##WDK_CACHE_TABLE##
+                set source_id = (select min(source_id)
+                                 from apidbTuning.transcriptAttributes
+                                 where gene_source_id = ##WDK_CACHE_TABLE##.gene_source_id)
+                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                  and source_id is null
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select source_id, gene_source_id
+                           from apidbTuning.transcriptAttributes
+                           where gene_source_id in (select gene_source_id from matches)
+                         minus
+                           select source_id, gene_source_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'Y'
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
         <paramRef ref="geneParams.ProfileGeneId" noTranslation="true"/>
         <paramRef ref="geneParams.ProfileDistanceMethod"  quote="false"/>
         <paramRef ref="geneParams.ProfileNumToReturn"/>
@@ -3216,8 +3291,8 @@ union
         <paramRef ref="geneParams.profile_time_shift"/>
         <paramRef ref="geneParams.ProfileScaleFactor"/>
         <paramRef ref="geneParams.ProfileMinPoints"/>
-        <wsColumn name="source_id" width="50" wsName="GeneID"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="GeneID"/>
         <wsColumn name="project_id" width="20" wsName="ProjectId"/>
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
         <wsColumn name="distance" wsName="Distance" width="50"/>
