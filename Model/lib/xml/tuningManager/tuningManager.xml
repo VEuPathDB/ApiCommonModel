@@ -140,16 +140,18 @@ create table ProtocolAppNodesResults&1 as
             start with output_node_id in (select protocol_app_node_id from ProtocolAppNodesResults)
             connect by prior input_node_id = output_node_id
            )
-        select node_inputs.protocol_app_node_id, mt.name as category, ot.name as term,
-               c.value as value, c.characteristic_id, ds.name as dataset_name, pan.name as pan_name,
-               ds.type, ds.subtype, tn.name as organism
-        from node_inputs, study.ProtocolAppNode pan, study.Characteristic c, sres.OntologyTerm ot,
+        select sample_pan.protocol_app_node_id, mt.name as category, attribute_term.name as term,
+               nvl(c.value, value_term.name) as value, c.characteristic_id,
+               ds.name as dataset_name, sample_pan.name as pan_name, ds.type,
+               ds.subtype, tn.name as organism
+        from node_inputs, study.ProtocolAppNode pan, study.Characteristic c, sres.OntologyTerm value_term,
              sres.ontologyTerm mt, study.StudyLink sl, study.Study s, study.Study i,
-             sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
-             apidb.Datasource ds, sres.TaxonName tn
+             sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed, sres.OntologyTerm attribute_term,
+             apidb.Datasource ds, sres.TaxonName tn, study.ProtocolAppNode sample_pan
         where pan.protocol_app_node_id = c.protocol_app_node_id
           and pan.type_id = mt.ontology_term_id
-          and c.ontology_term_id = ot.ontology_term_id
+          and c.ontology_term_id = value_term.ontology_term_id(+)
+          and c.qualifier_id = attribute_term.ontology_term_id(+)
           and node_inputs.input_node_id = pan.protocol_app_node_id
           and node_inputs.protocol_app_node_id = sl.protocol_app_node_id
           and sl.study_id = s.study_id
@@ -157,6 +159,7 @@ create table ProtocolAppNodesResults&1 as
           and i.external_database_release_id = edr.external_database_release_id
           and edr.external_database_id = ed.external_database_id
           and ed.name = ds.name
+          and node_inputs.protocol_app_node_id = sample_pan.protocol_app_node_id
           and ds.taxon_id = tn.taxon_id(+)
           and (tn.name_class = 'scientific name' or tn.name_class is null)
       ]]>
