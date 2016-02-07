@@ -166,6 +166,82 @@ create table ProtocolAppNodesResults&1 as
     </sql>
   </tuningTable>
 
+  <tuningTable name="MetadataSpec">
+    <comment>
+    </comment>
+    <internalDependency name="PANProtocolMetadata"/>
+    <sql>
+      <![CDATA[
+        create table MetadataSpec&1 nologging as
+        select * from (
+        with icemr_mapping
+        as (select dataset_name,
+                   case
+                     when lower(dataset_name) like '%icemr%' then 1
+                     else 0
+                   end as is_icemr
+            from (  select distinct dataset_name
+                    from apidbTuning.panCharacteristicMetadata
+                  union
+                    select distinct dataset_name
+                    from apidbTuning.panProtocolMetadata)),
+        metadata
+        as (  select organism, dataset_name, category, term, value
+              from apidbTuning.panCharacteristicMetadata
+            union
+              select organism, dataset_name, category, term, value
+              from apidbTuning.panProtocolMetadata)
+        -- parent
+        select distinct organism, m.dataset_name, is_icemr, term as property, 'parent' as spec_property, category as spec_value
+        from metadata m, icemr_mapping im
+        where m.dataset_name = im.dataset_name
+        -- leaf
+        union
+        select distinct organism, m.dataset_name, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
+        from metadata m, icemr_mapping im
+        where m.dataset_name = im.dataset_name
+        -- filter
+        union
+        select distinct organism, m.dataset_name, is_icemr, term as property, 'filter' as spec_property,
+               case
+                  when term in ('Time To Onset', 'age') then 'range'
+                  else 'membership'
+               end as spec_value
+        from metadata m, icemr_mapping im
+        where m.dataset_name = im.dataset_name
+        -- display
+        union
+        select distinct organism, m.dataset_name, is_icemr, term as property, 'display' as spec_property, initcap(term) as spec_value
+        from metadata m, icemr_mapping im
+        where m.dataset_name = im.dataset_name
+        -- type
+        union
+        select organism, m.dataset_name, is_icemr, term as property, 'type' as spec_property,
+               case
+                 when is_string = 1 then 'string'
+                 else 'number'
+               end as spec_value
+        from (select organism, dataset_name, term,
+                     max(case when regexp_like (nvl(value,0),'^[[:digit:]]*[.]?[[:digit:]]*$') or value is null
+                                then 0
+                              else 1
+                         end) as is_string
+              from metadata
+              group by organism, dataset_name, term
+             ) m,
+             icemr_mapping im
+        where m.dataset_name = im.dataset_name
+        ) order by organism, dataset_name, property, spec_property, spec_value
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index msix1&1
+        on MetadataSpec&1 (dataset_name, organism, is_icemr, property, spec_property, spec_value)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="TranscriptPathway">
     <internalDependency name="TranscriptAttributes"/>
     <externalDependency name="sres.Pathway"/>
