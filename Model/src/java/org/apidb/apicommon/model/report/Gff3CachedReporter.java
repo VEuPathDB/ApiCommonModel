@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.OutputStream;
@@ -124,19 +121,17 @@ public class Gff3CachedReporter extends Reporter {
   public void configure(JSONObject newConfig) {
     super.configure(newConfig);
 
-    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE);
+    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON))
+      fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON);
 
     // include transcript
-    if (newConfig.has(FIELD_HAS_TRANSCRIPT)) {
-      String value = newConfig.getString(FIELD_HAS_TRANSCRIPT);
-      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
-    }
+
+    if (newConfig.has(FIELD_HAS_TRANSCRIPT))
+      hasTranscript = newConfig.getBoolean(FIELD_HAS_TRANSCRIPT);
 
     // include protein
-    if (newConfig.has(FIELD_HAS_PROTEIN)) {
-      String value = newConfig.getString(FIELD_HAS_PROTEIN);
-      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
-    }
+    if (newConfig.has(FIELD_HAS_PROTEIN))
+      hasProtein = newConfig.getBoolean(FIELD_HAS_PROTEIN);
   }
 
   @Override
