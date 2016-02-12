@@ -95,7 +95,7 @@ create table ProtocolAppNodesResults&1 as
     <sql>
       <![CDATA[
         create table ProtocolAppNodeIO nologging as
-        select i.PROTOCOL_APP_NODE_ID input_node_id, pa.protocol_app_id, o.protocol_app_node_id output_node_id
+        select i.protocol_app_node_ID input_node_id, pa.protocol_app_id, o.protocol_app_node_id output_node_id
         from study.ProtocolApp pa, study.Input i, study.Output o
         where i.protocol_app_id = pa.protocol_app_id
           and o.protocol_app_id = pa.protocol_app_id
@@ -129,6 +129,7 @@ create table ProtocolAppNodesResults&1 as
           and node_inputs.protocol_app_node_id = pan.protocol_app_node_id
           and ds.taxon_id = tn.taxon_id(+)
           and (tn.name_class = 'scientific name' or tn.name_class is null)
+          and p.name not like '%::%' -- avoid Perl class names
       ]]>
     </sql>
     <sql>
@@ -173,7 +174,7 @@ create table ProtocolAppNodesResults&1 as
     <sql>
       <![CDATA[
         create table MetadataSpec&1 nologging as
-        select * from (
+        SELECT * from (
         with icemr_mapping
         as (select dataset_name,
                    case
@@ -181,56 +182,94 @@ create table ProtocolAppNodesResults&1 as
                      else 0
                    end as is_icemr
             from (  select distinct dataset_name
-                    from panCharacteristicMetadata
+                    from apidbTuning.panCharacteristicMetadata
                   union
                     select distinct dataset_name
-                    from panProtocolMetadata)),
+                    from apidbTuning.panProtocolMetadata)),
+        protocol_metadata
+        as (select distinct organism, dataset_name, category, term, value
+            from apidbTuning.panProtocolMetadata),
+        characteristic_metadata
+        as (select distinct organism, dataset_name, category, term, value
+            from apidbTuning.panCharacteristicMetadata),
         metadata
-        as (  select organism, dataset_name, category, term, value
-              from panCharacteristicMetadata
+        as (  select *
+              from protocol_metadata
             union
-              select organism, dataset_name, category, term, value
-              from panProtocolMetadata)
+              select *
+              from characteristic_metadata)
         -- parent
-        select distinct organism, m.dataset_name, is_icemr, term as property, 'parent' as spec_property, category as spec_value
-        from metadata m, icemr_mapping im
-        where m.dataset_name = im.dataset_name
+          select distinct organism, m.dataset_name, is_icemr, term as property, 'parent' as spec_property, category as spec_value
+          from metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
         -- leaf
         union
-        select distinct organism, m.dataset_name, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
-        from metadata m, icemr_mapping im
-        where m.dataset_name = im.dataset_name
+          select distinct organism, m.dataset_name, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
+          from metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
         -- filter
         union
-        select distinct organism, m.dataset_name, is_icemr, term as property, 'filter' as spec_property,
-               case
-                  when term in ('Time To Onset', 'age') then 'range'
-                  else 'membership'
-               end as spec_value
-        from metadata m, icemr_mapping im
-        where m.dataset_name = im.dataset_name
+          select distinct organism, m.dataset_name, is_icemr, term as property, 'filter' as spec_property,
+                 case
+                    when term in ('Time To Onset', 'age') then 'range'
+                    else 'membership'
+                 end as spec_value
+          from metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
         -- display
         union
-        select distinct organism, m.dataset_name, is_icemr, term as property, 'display' as spec_property, initcap(term) as spec_value
-        from metadata m, icemr_mapping im
-        where m.dataset_name = im.dataset_name
+          select distinct organism, m.dataset_name, is_icemr, term as property, 'display' as spec_property, initcap(term) as spec_value
+          from metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
         -- type
         union
-        select organism, m.dataset_name, is_icemr, term as property, 'type' as spec_property,
-               case
-                 when is_string = 1 then 'string'
-                 else 'number'
-               end as spec_value
-        from (select organism, dataset_name, term,
-                     max(case when regexp_like (nvl(value,0),'^[[:digit:]]*[.]?[[:digit:]]*$') or value is null
-                                then 0
-                              else 1
-                         end) as is_string
-              from metadata
-              group by organism, dataset_name, term
-             ) m,
-             icemr_mapping im
-        where m.dataset_name = im.dataset_name
+          select organism, m.dataset_name, is_icemr, term as property, 'type' as spec_property,
+                 case
+                   when is_string = 1 then 'string'
+                   else 'number'
+                 end as spec_value
+          from (select organism, dataset_name, term,
+                       max(case when regexp_like (nvl(value,0),'^[[:digit:]]*[.]?[[:digit:]]*$') or value is null
+                                  then 0
+                                else 1
+                           end) as is_string
+                from metadata
+                group by organism, dataset_name, term
+               ) m,
+               icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        -- parents: parent
+        union
+          select distinct organism, m.dataset_name, is_icemr, category as property, 'parent' as spec_property, 'protocol' as spec_value
+          from protocol_metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        union
+          select distinct organism, m.dataset_name, is_icemr, category as property, 'parent' as spec_property, 'characteristic' as spec_value
+          from characteristic_metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        -- parents: display
+        union
+          select distinct organism, m.dataset_name, is_icemr, category as property, 'display' as spec_property, category as spec_value
+          from metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        -- grandparents: parent
+        union
+          select distinct organism, m.dataset_name, is_icemr, 'protocol' as property, 'parent' as spec_property, '' as spec_value
+          from protocol_metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        union
+          select distinct organism, m.dataset_name, is_icemr, 'characteristic' as property, 'parent' as spec_property, '' as spec_value
+          from characteristic_metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        -- grandparents: display
+        union
+          select distinct organism, m.dataset_name, is_icemr, 'protocol' as property, 'display' as spec_property, 'Protocol' as spec_value
+          from protocol_metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
+        union
+          select distinct organism, m.dataset_name, is_icemr, 'characteristic' as property, 'display' as spec_property, 'Characteristic' as spec_value
+          from characteristic_metadata m, icemr_mapping im
+          where m.dataset_name = im.dataset_name
         ) order by organism, dataset_name, property, spec_property, spec_value
       ]]>
     </sql>
