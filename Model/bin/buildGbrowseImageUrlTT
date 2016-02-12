@@ -69,6 +69,33 @@ sub run{
   my $insertRow = $dbh->prepare($insertStatement);
   &createEmptyTable($dbh,$suffix);
 
+  ## the synteny tracks defined in gbrewseImageUrls.xml are only from reference strains.  When the users
+  ## is viewing a non-reference genome, we want to show that track at the top followed by the reference for that
+  ## species followed by the rest of the subtracks.
+  my $orgSql = "select distinct ga.organism,o.IS_REFERENCE_STRAIN
+from apidb.organism o, apidbtuning.geneattributes ga
+where ga.taxon_id = o.taxon_id";
+  my $orgStmt = $dbh->prepare($orgSql);
+  $orgStmt->execute();
+  my $orgRef; ##value is reference 0|1
+  while (my $ref = $orgStmt->fetchrow_arrayref()) {
+    $orgRef->{$ref->[0]} = $ref->[1];
+#    print STDERR "$ref->[0] = $ref->[1]\n";
+  }
+  my $orgToRef = &getOrgToRef($orgRef);  ##value is hash {reference}=reference_org and {abbrev}
+  ###next get list of all organisms used for gbrowse tracks and add abbrev.
+  foreach my $urlSpec (@{$xml->{url}}) {
+    my $organisms = $urlSpec->{org};
+    foreach my $orgHash (@$organisms) {
+      my $organism = $orgHash->{organism};
+      next unless $orgToRef->{$organism};
+      $orgToRef->{$organism}->{abbrev} = $orgHash->{abbrev};
+    }
+  }
+#  foreach my $org (keys%$orgToRef){
+#    print STDERR "$org: reference=$orgToRef->{$org}->{reference}, abbrev=$orgToRef->{$org}->{abbrev}\n";
+#  }
+
   foreach my $urlSpec (@{$xml->{url}}) {
     my $organisms = $urlSpec->{org};
     my $tracks = $urlSpec->{track};
@@ -80,6 +107,7 @@ sub run{
     foreach my $orgHash (@$organisms) {
       my $organism = $orgHash->{organism};
       my $abbrev = $orgHash->{abbrev};
+      next unless $orgToRef->{$organism};
 
 
       my @fTracks;
@@ -104,8 +132,14 @@ sub run{
               push @subtracks, $subtrackName;
             }
           }
+          ##need to change the abbrev to the reference strain for this organism then unshift the subtracks for this org to beginning of array
+          my $sabbrev = $orgRef->{$organism} == 1 ? $abbrev : $orgToRef->{$orgToRef->{$organism}->{reference}}->{abbrev};
 
-          my @sortedSubtracks = sort {$b =~ /$abbrev/ <=> $a =~ /$abbrev/} @subtracks;
+          my @sortedSubtracks = sort {$b =~ /$sabbrev/ <=> $a =~ /$sabbrev/} @subtracks;
+          if($orgRef->{$organism} == 0){
+            unshift(@sortedSubtracks,$abbrev."_gene");
+            unshift(@sortedSubtracks,$abbrev."_span");
+          }
           push @fTracks, $name . "/" . join('+', @sortedSubtracks);
         }
         else {
@@ -114,6 +148,7 @@ sub run{
       }
       my $gtracks = join('%1E', @fTracks);
       $insertRow->execute($organism, $type, $gtracks);
+#      print "$organism: $gtracks\n";
     }
   }
 
@@ -121,6 +156,26 @@ sub run{
 
   $dbh->commit();
   $dbh->disconnect();
+}
+
+sub getOrgToRef{
+  my $orgRef = shift;
+  my %gs;
+  foreach my $org (keys%{$orgRef}){
+    next unless $orgRef->{$org} == 1;
+    if($org =~ /^(\w+\s+\w+)/){
+#      print STDERR "getOrgToRef: $org ==> $1 = $orgRef->{$org}\n";
+      $gs{$1} = $org;
+    }
+  }
+  my $orgToRef = {};
+  foreach my $org (keys%{$orgRef}){
+    if($org =~ /^(\w+\s+\w+)/){
+      $orgToRef->{$org}->{reference} = $gs{$1};
+#      print STDERR "  $org ==> reference:$gs{$1}\n";
+    }
+  }
+  return $orgToRef;
 }
 
 sub createEmptyTable {
