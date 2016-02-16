@@ -125,7 +125,6 @@ public class Gff3CachedReporter extends Reporter {
       fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON);
 
     // include transcript
-
     if (newConfig.has(FIELD_HAS_TRANSCRIPT))
       hasTranscript = newConfig.getBoolean(FIELD_HAS_TRANSCRIPT);
 

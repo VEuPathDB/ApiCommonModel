@@ -85,7 +85,7 @@ public class Gff3Reporter extends Reporter {
 
   private boolean hasTranscript = false;
   private boolean hasProtein = false;
-  private String fileType = null;
+  private String fileType = "text";
 
   private PreparedStatement psQuery;
 
@@ -188,7 +188,8 @@ public class Gff3Reporter extends Reporter {
   public void configure(Map<String, String> newConfig) {
     super.configure(newConfig);
 
-    if (newConfig.containsKey(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardReporter.Configuration.ATTACHMENT_TYPE);
+    if (newConfig.containsKey(StandardReporter.Configuration.ATTACHMENT_TYPE))
+      fileType = newConfig.get(StandardReporter.Configuration.ATTACHMENT_TYPE);
 
     // include transcript
     if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
@@ -207,19 +208,16 @@ public class Gff3Reporter extends Reporter {
   public void configure(JSONObject newConfig) {
     super.configure(newConfig);
 
-    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE);
+    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON))
+      fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON);
 
     // include transcript
-    if (newConfig.has(FIELD_HAS_TRANSCRIPT)) {
-      String value = newConfig.getString(FIELD_HAS_TRANSCRIPT);
-      hasTranscript = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
-    }
+    if (newConfig.has(FIELD_HAS_TRANSCRIPT))
+      hasTranscript = newConfig.getBoolean(FIELD_HAS_TRANSCRIPT);
 
     // include protein
-    if (newConfig.has(FIELD_HAS_PROTEIN)) {
-      String value = newConfig.getString(FIELD_HAS_PROTEIN);
-      hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
-    }
+    if (newConfig.has(FIELD_HAS_PROTEIN))
+      hasProtein = newConfig.getBoolean(FIELD_HAS_PROTEIN);
   }
 
   @Override
