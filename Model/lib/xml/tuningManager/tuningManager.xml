@@ -1033,7 +1033,7 @@ select case
        least(nl.start_min, nl.end_max) as start_min,
        greatest(nl.start_min, nl.end_max) as end_max,
        nl.is_reversed, nf.parent_id, nf.sequence_ontology_id,
-       cast (null as number) as is_top_level, ef.coding_start, ef.coding_end,
+       cast (null as number) as is_top_level, -- ef.coding_start, ef.coding_end,
        nf.external_database_release_id,
        (select project from project_mapping where organism = tn.name) as project_id
 from dots.NaFeature nf, dots.NaLocation nl, &prefixGenomicSeqAttributes ns,
@@ -1073,16 +1073,17 @@ select /* virtual feature locations mapped through SequencePiece */
        end as is_reversed,
        nf.parent_id, nf.sequence_ontology_id,
        cast (null as number) as is_top_level,
-       case
-         when sp.strand_orientation in ('-', '-1')
-           then sp.distance_from_left + sp.end_position - coding_start + 1
-           else sp.distance_from_left + ef.coding_start - sp.start_position + 1
-       end as coding_start,
-       case
-         when sp.strand_orientation in ('-', '-1')
-           then sp.distance_from_left + sp.end_position - coding_end + 1
-         else sp.distance_from_left + coding_end - sp.start_position + 1
-       end as coding_end, nf.external_database_release_id,
+--        case
+--          when sp.strand_orientation in ('-', '-1')
+--            then sp.distance_from_left + sp.end_position - coding_start + 1
+--            else sp.distance_from_left + ef.coding_start - sp.start_position + 1
+--        end as coding_start,
+--        case
+--          when sp.strand_orientation in ('-', '-1')
+--            then sp.distance_from_left + sp.end_position - coding_end + 1
+--          else sp.distance_from_left + coding_end - sp.start_position + 1
+--        end as coding_end,
+        nf.external_database_release_id,
        (select project from project_mapping where organism = tn.name) as project_id
 from dots.NaFeature nf, dots.NaLocation nl, &prefixGenomicSeqAttributes contig,
      &prefixSequencePieceClosure sp, &prefixGenomicSeqAttributes scaffold, dots.ExonFeature ef,
@@ -1228,7 +1229,7 @@ tablespace indx
     <sql>
       <![CDATA[
 create index featloc_parent_ix&1 on &prefixFeatureLocation&1
-             (parent_id, na_feature_id, is_reversed, coding_start, coding_end, na_sequence_id, feature_type)
+             (parent_id, na_feature_id, is_reversed, na_sequence_id, feature_type)
 tablespace indx
       ]]>
     </sql>
@@ -5887,6 +5888,28 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id 
 	ORDER BY s.name,pan.node_order_num
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="NaFeatureExpressionDups">
+    <externalDependency name="results.NaFeatureExpression"/>
+    <sql>
+      <![CDATA[
+        create table NaFeatureExpressionDups&1 as
+        select na_feature_id, protocol_app_node_id
+        from results.NaFeatureExpression
+        where (na_feature_id, protocol_app_node_id)
+              in (select na_feature_id, protocol_app_node_id
+                  from results.NaFeatureExpression
+                  group by na_feature_id, protocol_app_node_id
+                  having count(*) > 1)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create unique index nfadix&1 on NaFeatureExpressionDups&1 (na_feature_id, protocol_app_node_id)
       ]]>
     </sql>
   </tuningTable>
