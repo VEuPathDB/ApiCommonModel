@@ -10,7 +10,7 @@ public class RodMalPhenotype extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "RodMalPhenotype");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "RodMalPhenotype");
     //addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRodentMalariaPhenotype");
   }
 

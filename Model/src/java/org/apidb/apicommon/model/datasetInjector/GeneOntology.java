@@ -12,7 +12,7 @@ public class GeneOntology extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGoTerm"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearch"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "GoTerms"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GoTerms"); 
   }
 
   // second column is for documentation

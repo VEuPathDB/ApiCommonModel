@@ -11,7 +11,7 @@ public class MicroarrayFerdigEQtl extends CusomGenePageExpressionGraphs {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEqtlProfileSimilarity"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEQTL_HaploGrpSimilarity"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEQTL_Segments"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Plasmo_eQTL_Table"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Plasmo_eQTL_Table"); 
       addWdkReference("SpanRecordClasses.SpanRecordClass", "question", "SpanQuestions.DynSpansByEQTLtoGenes"); 
   }
 

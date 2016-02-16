@@ -96,8 +96,8 @@ public class SpliceSites extends  DatasetInjector {
       setGraphModule();
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "SpliceSites"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "PolyASites"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SpliceSites"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PolyASites"); 
 
       if(getPropValueAsBoolean("hasMultipleSamples")) {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",

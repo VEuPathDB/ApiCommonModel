@@ -11,7 +11,7 @@ public class GOAssociations extends DatasetInjector {
   @Override
   public void addModelReferences() {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGoTerm");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "GoTerms");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GoTerms");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ann_go_function");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ann_go_process");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ann_go_component");

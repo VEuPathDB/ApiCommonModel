@@ -230,12 +230,12 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithSignalPeptide");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTransmembraneDomains");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Notes");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Alias");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "AlternateProducts");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "ProteinDatabase");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "GeneLocation");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "PubMed");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AlternateProducts");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
 
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");

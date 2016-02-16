@@ -11,7 +11,7 @@ public class PreviousVersionAnnotations extends DatasetInjector {
   @Override
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByOldAnnotation"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "PreviousReleaseGenes"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PreviousReleaseGenes"); 
   }
 
   // second column is for documentation

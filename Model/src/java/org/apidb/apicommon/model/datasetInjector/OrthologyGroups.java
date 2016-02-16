@@ -10,7 +10,7 @@ public class OrthologyGroups extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Orthologs");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Orthologs");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByOrthologPattern");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByOrthologs");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesOrthologousToAGivenGene");

@@ -11,7 +11,7 @@ public class Y2HInteractions extends DatasetInjector {
   @Override
   public void addModelReferences() {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteinProteinInteraction");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "Y2hInteractions");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Y2hInteractions");
   }
 
   // second column is for documentation

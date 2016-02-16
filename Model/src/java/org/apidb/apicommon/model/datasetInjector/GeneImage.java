@@ -10,7 +10,7 @@ public class GeneImage extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "CellularLocalization");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CellularLocalization");
   }
 
   // second column is for documentation

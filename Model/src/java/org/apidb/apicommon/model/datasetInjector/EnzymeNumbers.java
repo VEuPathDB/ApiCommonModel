@@ -10,7 +10,7 @@ public class EnzymeNumbers extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "table", "EcNumber");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "EcNumber");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEcNumber");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearch");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "ec_numbers_string");
