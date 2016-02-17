@@ -14,6 +14,8 @@ public class MicroarrayProbes extends DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("microarrayProbesGBrowseTrack");
+
+      setPropValue("gbrowseTrackName", "MicroarrayProbes_" + getDatasetName() );
       injectTemplate("gbrowseTrackCategory");
 
   }
