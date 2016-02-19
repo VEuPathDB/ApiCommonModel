@@ -257,6 +257,7 @@ public class AnnotatedGenome extends DatasetInjector {
                                           {"optionalSpecies", "if species name contains two words, e.g. sp. 1"},
                                           {"specialLinkDisplayText", "gene-page text for genome annotation status"},
                                           {"specialLinkExternalDbName", "external DB name for annotation link"},
+                                          {"isCurated", "values true|false for whether genome is under active curation"},
     };
 
     return propertiesDeclaration;
