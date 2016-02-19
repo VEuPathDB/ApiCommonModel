@@ -95,6 +95,11 @@ public abstract class DatasetInjector {
     propValues.put(key, value);
   }
 
+
+    protected Map<String, String> getPropValues() {
+        return this.propValues;
+    }
+
   protected String getPropValue(String key) {
     return propValues.get(key);
   }
