@@ -2961,14 +2961,14 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
     </processQuery>
 
-    <sqlQuery name="GenesByFoldChangeWithMetaData" includeProjects="PlasmoDB"  >
+    <sqlQuery name="GenesByTTestWithMetadata" includeProjects="PlasmoDB"  >
 
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"/>
+      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.metadata_datasets" quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.ref_samples_filter_metadata" quote="false"/>
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.comp_samples_filter_metadata" quote="false"/>
       <paramRef ref="geneParams.regulated_dir_immune_response" quote="false"/>
       <paramRef ref="geneParams.p_value" default="0.05"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.metadata_for_graph" quote="false"/>
+      <!-- <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.metadata_for_graph" quote="false"/> -->
 
       <column name="project_id"/>
       <column name="source_id"/>
@@ -2977,86 +2977,61 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
       <column name="sorting_p_value"/>
       <column name="avg_group_one"/>
       <column name="avg_group_two"/>
-      <column name="meta_data_category"/>
+      <!-- column name="meta_data_category"/ -->
 
       <sqlParamValue includeProjects="PlasmoDB" name="isLogged">0</sqlParamValue>
       <sqlParamValue includeProjects="PlasmoDB" name="lowerBound">0.0001</sqlParamValue>
         <sqlParamValue includeProjects="PlasmoDB" name="function">'log2'</sqlParamValue>
       <sql>
       <![CDATA[
-select one.source_id,
-       '@PROJECT_ID@' as project_id, 'Y' as matched_result,
-       round ((
-             case 
-                    when lower(&&function&&) = 'arcsinh'
-                    then(( Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1)) ) - (Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1))))
-                    when lower(&&function&&) = 'log2' and &&isLogged&& = 0
-                    then   (CASE 
-                                         WHEN (avg_comp / avg_ref) >= 1
-                                          THEN (avg_comp / avg_ref)
-                                          ELSE (-1 / (avg_comp / avg_ref))
-                                   END
-            )
-                   when lower(&&function&&) = 'log2' and &&isLogged&& = 1
-                   then (CASE WHEN power(2, avg_comp) / power(2,avg_ref) >= 1
-                                      THEN power(2, avg_comp) / power(2,avg_ref)
-                                      ELSE (-1 / (power(2,avg_comp) / power(2,avg_ref)))
-                              END
-                              )
-           else (avg_comp - avg_ref)
-           end),6)  as difference,
-       round((
-       case 
-           when lower(&&function&&) = 'arcsinh'
-           then Ln((1+(50*avg_comp)) + Sqrt(Power((1+(avg_comp*50)),2) +1))
-           else avg_comp 
-           end),6) as Avg_Group_One,
-       round((
-       case 
-           when lower(&&function&&) = 'arcsinh'
-           then round(   Ln((1+(50*avg_ref)) + Sqrt(Power((1+(50*Avg_ref)),2) +1)),6  )
-           else avg_ref 
-           end),6)  As Avg_Group_Two,
-       to_char( p_value,'9.99EEEE' ) p_value,
-       p_value sorting_p_value,
-       '$$metadata_for_graph$$' as meta_data_category
-from (
-select source_id,
-       round(AVG(DECODE(source_set, 'ref', reported_value, null)),3) avg_ref,
-       round(AVG(DECODE(source_set, 'comp', reported_value, null)),3) avg_comp,
-       stats_t_test_indepu(source_set,reported_value) p_value
-From (
-  
-      select p.source_id,
-             avg (pe.value) as reported_value,
-             'ref' as source_set
-      from apidb.profile p,
-           apidb.profileelement pe
-      where p.profile_id = pe.profile_id
-      and   pe.profile_element_name_id in ( $$ref_samples_filter_metadata$$ 
-)
-      group by source_id, 'ref', pe.PROFILE_ELEMENT_NAME_ID
-union
- select p.source_id,
-            avg( pe.value) as reported_value,
-             'comp' as source_set
-      from apidb.profile p,
-           apidb.profileelement pe
-      where p.profile_id = pe.profile_id
-      and   pe.profile_element_name_id in ( $$comp_samples_filter_metadata$$ 
-)
-      group by source_id, 'comp', pe.PROFILE_ELEMENT_NAME_ID
-      )
-      group by source_id) one
-      where p_value <= $$p_value$$
-        and  ('$$regulated_dir_immune_response$$' = 'increased' and avg_comp > avg_ref 
-              or 
-              '$$regulated_dir_immune_response$$' = 'decreased' and avg_ref > avg_comp)
+select ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+       round(case 
+               when (avg_comp / avg_ref) >= 1
+                 then (avg_comp / avg_ref)
+               else (-1 / (avg_comp / avg_ref))
+             end, 6) as difference,
+       round(case
+               when lower(&&function&&) = 'arcsinh'
+                 then apidb.arcsinh(avg_comp)
+               when lower(&&function&&) = 'linear'
+                 then avg_comp
+               else log(2, avg_comp)
+             end, 6) as avg_group_one,
+       round(case
+               when lower(&&function&&) = 'arcsinh'
+                 then apidb.arcsinh(avg_ref)
+               when lower(&&function&&) = 'linear'
+                 then avg_ref
+               else log(2, avg_ref)
+             end, 6) as avg_group_two,
+       to_char( p_value, '9.99EEEE') as p_value,
+       p_value sorting_p_value
+from apidbTuning.transcriptAttributes ta,
+     (select na_feature_id,
+             round(avg(decode(source_set, 'ref', reported_value, null)), 3) avg_ref,
+             round(avg(decode(source_set, 'comp', reported_value, null)), 3) avg_comp,
+             stats_t_test_indepu(source_set, reported_value) p_value
+      from (  select na_feature_id, avg(power(2, value)) as reported_value, 'ref' as source_set
+              from results.NaFeatureHostResponse
+              where protocol_app_node_id in ($$ref_samples_filter_metadata$$)
+              group by na_feature_id, protocol_app_node_id
+            union
+              select na_feature_id, avg(power(2, value)) as reported_value, 'comp' as source_set
+              from results.NaFeatureHostResponse
+              where protocol_app_node_id in ($$comp_samples_filter_metadata$$)
+              group by na_feature_id, protocol_app_node_id
+           )
+      group by na_feature_id) one
+where one.na_feature_id = ta.gene_na_feature_id
+  and p_value <= $$p_value$$
+  and ('$$regulated_dir_immune_response$$' = 'increased' and avg_comp > avg_ref
+       or 
+       '$$regulated_dir_immune_response$$' = 'decreased' and avg_ref > avg_comp)
       ]]>
       </sql>
 
     </sqlQuery>
-    <processQuery name="GenesByFoldChangeWithMetaData" includeProjects="EuPathDB"
+    <processQuery name="GenesByTTestWithMetadata" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false"/>
       <!--
@@ -3083,7 +3058,7 @@ union
         <wsColumn name="p_value" wsName="p_value"/>
         <wsColumn name="sorting_p_value" wsName="sorting_p_value"/>
         <wsColumn name="difference" wsName="difference"/>
-        <wsColumn name="meta_data_category" wsName="meta_data_category"/>
+        <!-- wsColumn name="meta_data_category" wsName="meta_data_category"/ -->
 		
    </processQuery>
 
