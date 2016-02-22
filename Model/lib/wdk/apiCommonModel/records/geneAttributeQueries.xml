@@ -98,6 +98,8 @@
             <column name="end_max"/>
             <column name="start_min_text" sortingColumn="start_min"/>
             <column name="end_max_text" sortingColumn="end_max"/>
+            <column name="strand_plus_minus"/> 
+            <column name="strain" ignoreCase="true"/> 
             <column name="product" ignoreCase="true"/>
             <column name="name" ignoreCase="true"/>
             <column name="gene_type" ignoreCase="true"/>
@@ -186,6 +188,7 @@
                    , end_max
                    , trim(to_char(bfmv.start_min,'999,999,999')) as start_min_text
                    , trim(to_char(bfmv.end_max,'999,999,999')) as end_max_text
+                   , bfmv.strand_plus_minus
                    , bfmv.product
                    , bfmv.name
                    , gene_type
@@ -219,6 +222,7 @@
                    , bfmv.sequence_id
                    , bfmv.organism as organism_full
                    , genus_species
+                   , strain
                    , bfmv.ncbi_tax_id
                    , bfmv.so_id
                    , bfmv.so_term_name
@@ -236,6 +240,41 @@
                    , chromosome_order_num
             from ApidbTuning.GeneAttributes bfmv
             ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="GeneOverview">
+            <column name="project_id" ignoreCase="true"/>
+            <column name="source_id" ignoreCase="true"/>
+            <column name="genome_status" ignoreCase="true"/>
+            <column name="data_release_policy" ignoreCase="false"/>
+            <column name="new_product_name" ignoreCase="false"/>
+            <column name="special_link" ignoreCase="false"/>
+            <column name="user_comment_link" ignoreCase="false"/>
+            <sql>
+              <![CDATA[
+select ga.project_id,ga.source_id,prod.search_string as new_product_name, gsum.release_policy as data_release_policy,
+CASE WHEN gsum.is_reference_strain = 1 THEN decode(gsum.is_curated_genome,'true','<span style="color: red">Curated</span>','false','') || ' Reference Strain' 
+ELSE decode(gsum.is_curated_genome,'true','<span style={{color: ''red''}}>Curated</span>','false','') || ' Non-Reference Strain' END as genome_status,
+CASE WHEN ua.status = 1 THEN '<a href="'||REPLACE(gsum.link_url, 'EXTERNAL_ID_HERE', ga.source_id)||'">View updated annotation at GeneDB</a>' ELSE 
+  CASE WHEN gsum.link_text is not null THEN 
+    CASE WHEN gsum.link_url is not null THEN '<a href="'||REPLACE(gsum.link_url, 'EXTERNAL_ID_HERE', ga.source_id)||'">'||gsum.link_text||'</a>' ELSE gsum.link_text 
+    END ELSE ''
+  END 
+END as special_link,
+CASE WHEN comm.num_comments >= 1 THEN 'View <span style={{color: ''red''}}>'||comm.num_comments||'</span> user comment'||CASE WHEN comm.num_comments = 1 THEN '' ELSE 's' END ELSE 'Add the first User Comment' END as user_comment_link
+from apidbtuning.annotatedgenomesummary gsum, apidbtuning.geneattributes ga, apidbtuning.changedgeneproduct prod,
+(select distinct gene, 1 as status from apidbtuning.annotationchange) ua,
+(select stable_id,project_name,count(*) as num_comments
+from @COMMENT_SCHEMA@comments@COMMENT_DBLINK@
+where is_visible = 1
+group by stable_id,project_name) comm
+where gsum.taxon_id = ga.taxon_id
+and ga.source_id = ua.gene(+)
+and ga.source_id = prod.gene(+)
+and ga.source_id = comm.stable_id(+)
+and ga.project_id = comm.project_name(+)
+              ]]>
             </sql>
         </sqlQuery>
 
