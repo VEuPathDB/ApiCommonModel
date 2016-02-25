@@ -3287,6 +3287,97 @@ ORDER BY
 
 
 
+          <sqlQuery name="ProteinExpressionPBrowse" isCacheable="false" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="lc_project_id"/>
+            <column name="transcript_id"/>
+            <column name="protein_gtracks"/>
+            <column name="sum_sequence_count"/>
+            <column name="unique_sequence_count"/>
+            <column name="sum_spectrum_count"/>
+            <column name="sample_count"/>
+            <sql>
+            <![CDATA[
+SELECT
+  ta.source_id as transcript_id
+, ta.gene_source_id as source_id
+, ta.project_id
+, lower(ta.project_id) as lc_project_id
+, (apidb.tab_to_string( SET(CAST(collect(track_names ORDER BY order_num, track_names) AS apidb.varchartab)), '%1E')) AS protein_gtracks
+, mssum.sum_sequence_count
+, mssum.unique_sequence_count
+, mssum.sum_spectrum_count
+, mssum.sample_count
+FROM
+  (select
+    'MassSpecPeptides_' ||dsp.name AS track_names
+  , ga.source_id
+  , '1' AS order_num
+  FROM
+    apidb.datasource ds
+  , apidbtuning.datasetpresenter dsp
+  , APIDB.massspecsummary mss
+  , SRES.externaldatabase ed
+  , sres.externaldatabaserelease edr
+  , APIDBTUNING.transcriptattributes ga
+  WHERE
+    (
+      ds.name LIKE dsp.dataset_name_pattern
+      OR ds.name = dsp.name
+    )
+    AND ds.name LIKE '%_massSpec_%'
+    AND ds.type = 'protein_expression'
+    AND mss.external_database_release_id = edr.external_database_release_id
+    AND edr.external_database_id = ed.external_database_id
+    AND ed.name = ds.name
+    AND ga.aa_sequence_id = mss.aa_sequence_id
+  UNION
+  SELECT
+    'UnifiedPostTraslationalMod' AS track_names
+  , source_id
+  , '2' AS order_num
+  FROM
+    APIDBTUNING.MSModifiedPeptideSummary
+  ) tracks
+,(SELECT
+    source_id
+  , COUNT(mps.peptide_sequence) AS sum_sequence_count
+  , COUNT(DISTINCT mps.peptide_sequence) AS unique_sequence_count
+  , SUM(mps.spectrum_count) AS sum_spectrum_count
+  , COUNT(DISTINCT mps.sample) AS sample_count
+  FROM
+    apidbtuning.mspeptidesummary mps
+  GROUP BY
+    source_id
+  ) mssum
+, apidbtuning.transcriptattributes ta
+WHERE
+  ta.source_id = tracks.source_id
+  AND ta.source_id = mssum.source_id
+GROUP BY
+  ta.source_id
+, ta.gene_source_id
+, ta.project_id
+, mssum.sum_sequence_count
+, mssum.unique_sequence_count
+, mssum.sum_spectrum_count
+, mssum.sample_count
+             ]]>
+            </sql>
+          </sqlQuery>
+
+
+
+
+
+
+
+
+
+
+
+
           <sqlQuery name="Taxonomy" isCacheable="false" excludeProjects="EuPathDB">
             <column name="source_id"/>
             <column name="project_id"/>

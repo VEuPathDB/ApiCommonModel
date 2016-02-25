@@ -327,26 +327,10 @@ and ga.project_id = comm.project_name(+)
             <column name="synteny_gtracks" />
             <sql>
             <![CDATA[  
-            with has_proteomic_data as (     
-                    select source_id
-                    from
-                      (select
-                         ga.gene_source_id as source_id
-                         from APIDB.massspecsummary mss, APIDBTUNING.transcriptattributes ga
-                        where ga.aa_sequence_id =mss.aa_sequence_id
-                       ))
-            select ga.source_id as source_id, ga.project_id, 
-                   gto.gtracks||'%1EUnifiedMassSpecPeptides' as  synteny_gtracks
-            from apidbtuning.gbrowsetracksorganism gto, apidbtuning.geneattributes ga,has_proteomic_data
-            where ga.organism = gto.organism
-              and ga.source_id = has_proteomic_data.source_id
-              and gto.type = 'synteny'
-            union 
             select ga.source_id as source_id, ga.project_id, 
                    gto.gtracks as  synteny_gtracks
             from apidbtuning.gbrowsetracksorganism gto, apidbtuning.geneattributes ga
             where ga.organism = gto.organism
-              and ga.source_id not in (select source_id from has_proteomic_data)
               and gto.type = 'synteny'
             union 
             select ga.source_id as source_id, ga.project_id, 
@@ -364,6 +348,57 @@ and ga.project_id = comm.project_name(+)
 
 
 
+          <sqlQuery name="ProteinExpressionPtracks" isCacheable="false" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="protein_expression_gtracks"/>
+            <sql>
+            <![CDATA[
+SELECT
+  ta.source_id
+, ta.project_id
+,(apidb.tab_to_string( SET(CAST(collect(track_names ORDER BY order_num, track_names) AS apidb.varchartab)), '%1E')) AS protein_expression_gtracks
+FROM
+  (SELECT
+    'MassSpecPeptides_'
+    ||dsp.name AS track_names
+  , ga.gene_source_id
+  , '1' AS order_num
+  FROM
+    apidb.datasource ds
+  , apidbtuning.datasetpresenter dsp
+  , APIDB.massspecsummary mss
+  , SRES.externaldatabase ed
+  , sres.externaldatabaserelease edr
+  , APIDBTUNING.transcriptattributes ga
+  WHERE
+    (
+      ds.name LIKE dsp.dataset_name_pattern
+      OR ds.name = dsp.name
+    )
+    AND ds.name LIKE '%_massSpec_%'
+    AND ds.type = 'protein_expression'
+    AND mss.external_database_release_id = edr.external_database_release_id
+    AND edr.external_database_id = ed.external_database_id
+    AND ed.name = ds.name
+    AND ga.aa_sequence_id = mss.aa_sequence_id
+  UNION
+  SELECT
+    'UnifiedPostTraslationalMod' AS track_names
+  , source_id
+  , '2' AS order_num
+  FROM
+    APIDBTUNING.MSModifiedPeptideSummary
+  ) tracks
+, apidbtuning.geneattributes ta
+WHERE
+  ta.source_id = tracks.gene_source_id (+)
+GROUP BY
+  ta.source_id
+, ta.project_id  
+             ]]>
+            </sql>
+          </sqlQuery>
 
 
 
