@@ -4701,13 +4701,12 @@ SQL
         values (?, ?, ?, ?, ?, ?, ?, ?)
 SQL
 
-
-
       my $soQuery = $dbh->prepare(<<SQL) or die $dbh->errstr;
       select na_feature_id, sequence_ontology_id from dots.GeneFeature
 SQL
+
     my $edrQuery = $dbh->prepare(<<SQL) or die $dbh->errstr;
-select distinct external_database_release_id from dots.geneFeature
+select distinct gf.external_database_release_id, gf.is_predicted from dots.geneFeature gf
 SQL
 
       $soQuery->execute();
@@ -4719,12 +4718,13 @@ SQL
  
       $edrQuery->execute();
 
-      while (my ($genomeExtDbRlsId) = $edrQuery->fetchrow_array()) {
+      while (my ($genomeExtDbRlsId, $isPredicted) = $edrQuery->fetchrow_array()) {
         foreach my $isTopLevel ((0, 1)) {
           my $geneModelLocations = GUS::Community::GeneModelLocations->new($dbh, $genomeExtDbRlsId, $isTopLevel);
 
           my $geneList = $geneModelLocations->getAllGeneIds();
           foreach my $geneId (@$geneList) {
+
             # still use this for the sequence_is_piece
             my $gmh = $geneModelLocations->getGeneModelHashFromGeneSourceId($geneId);
 
@@ -4779,6 +4779,7 @@ SQL
                   $feature->start(),
                   $feature->end(),
                   $feature->strand() * -1, #is_reversed
+                  $utrDirection,
                   ($feature->get_tag_values("PARENT_NA_FEATURE_ID"))[0], # parent_id
                   $genomeExtDbRlsId, # external_database_release_id
                   $isTopLevel, # is_top_level
@@ -4804,10 +4805,12 @@ SQL
 
                 # have bioperl calculate the intron coords for the transcript
                 # NOTE:  the parent of the intron will be the transcript not the gene (may be some redundancy)
-                foreach my $intron ($feature->introns()) {
-                  my $intronLocation = $intron->location();
 
-                  $intronInsert->execute(
+                unless($isPredicted) {
+                  foreach my $intron ($feature->introns()) {
+                    my $intronLocation = $intron->location();
+
+                    $intronInsert->execute(
                     $feature->seq_id(), # sequence_source_id
                     ($feature->get_tag_values("NA_SEQUENCE_ID"))[0], # na_sequence_id
                     $intronLocation->start(),
@@ -4818,6 +4821,7 @@ SQL
                     $isTopLevel, # is_top_level
                       )
                       or die $dbh->errstr;
+                  }
                 }
               }
 
@@ -4843,20 +4847,6 @@ SQL
       ]]>
     </perl>
   </tuningTable>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
   <tuningTable name="IsolateSequence">
