@@ -4216,7 +4216,6 @@ tablespace indx
     </sql>
   </tuningTable>
 
-
   <tuningTable name="TranscriptLocation" prefixEnabled="true">
     <comment>Genomic locations of transcripts
     </comment>
@@ -4234,6 +4233,7 @@ tablespace indx
     <ancillaryTable name="GeneLocation"/>
     <ancillaryTable name="ExonLocation"/>
     <ancillaryTable name="UtrLocation"/>
+    <ancillaryTable name="IntronLocation"/>
     <sql>
       <![CDATA[
         create table &prefixGeneLocation&1 (
@@ -4318,13 +4318,26 @@ tablespace indx
       ]]>
     </sql>
 
+    <sql>
+      <![CDATA[
+        create table &prefixIntronLocation&1 (
+          sequence_source_id           varchar2(50),
+          na_sequence_id               number(10),
+          start_min                    number,
+          end_max                      number,
+          is_reversed                  number(1),
+          parent_id                    number(10),
+          external_database_release_id number(10),
+          is_top_level                 number
+        )
+      ]]>
+    </sql>
+
     <perl>
       <![CDATA[
       use strict;
       use lib "$ENV{GUS_HOME}/lib/perl";
       use GUS::Community::GeneModelLocations;
-
-      use Data::Dumper;
 
       my $geneInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
         insert into &prefixGeneLocation&1
@@ -4364,347 +4377,9 @@ SQL
         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
 
-      my $soQuery = $dbh->prepare(<<SQL) or die $dbh->errstr;
-      select sequence_ontology_id from dots.NaFeature
-      where na_feature_id = ?
-SQL
-
-      my $edrQuery = $dbh->prepare(<<SQL) or die $dbh->errstr;
-      select distinct external_database_release_id from dots.geneFeature
-SQL
-      $edrQuery->execute();
-
-      while (my ($genomeExtDbRlsId) = $edrQuery->fetchrow_array()) {
-        foreach my $isTopLevel ((0, 1)) {
-          my $geneModelLocations = GUS::Community::GeneModelLocations->new($dbh, $genomeExtDbRlsId, $isTopLevel);
-
-          my $geneList = $geneModelLocations->getAllGeneIds();
-          foreach my $geneId (@$geneList) {
-            my $gmh = $geneModelLocations->getGeneModelHashFromGeneSourceId($geneId);
-
-            next if $isTopLevel == 0 && $gmh->{sequence_is_piece} == 0;
-
-            my $geneNaFeatureId = $gmh->{na_feature_id};
-            my $seqOntId = getSeqOntId($geneNaFeatureId);
-
-            $geneInsert->execute(
-                                 $gmh->{source_id}, # feature_source_id
-                                 $gmh->{sequence_source_id}, # sequence_source_id
-                                 $gmh->{na_sequence_id}, # na_sequence_id
-                                 $geneNaFeatureId, # na_feature_id
-                                 $gmh->{start}, # start_min
-                                 $gmh->{end}, # end_max
-                                 $gmh->{strand} == -1 ? 1 : 0, # is_reversed
-                                 $isTopLevel, # is_top_level
-                                 $seqOntId, # sequence_ontology_id
-                                 $genomeExtDbRlsId # external_database_release_id
-                                )
-                 or die $dbh->errstr;
-
-            # iterate through this gene's transcripts
-            my %transcriptHash = %{$gmh->{transcripts}};
-            foreach my $transcriptId (keys(%transcriptHash)) {
-              my $isReversed;
-              my $transcriptNaFeatureId = $transcriptHash{$transcriptId}->{na_feature_id};
-
-            if ( $transcriptHash{$transcriptId}->{proteins} ) {
-              # iterate through this transcript's proteins
-              my %proteinHash = %{$transcriptHash{$transcriptId}->{proteins}};
-              foreach my $proteinId (keys(%proteinHash)) {
-
-                # iterate through this protein's exons
-                my $seenCds;
-                foreach my $exon (@{$proteinHash{$proteinId}->{exons}}) {
-                  $isReversed = ($exon->{strand} == -1) ? 1 : 0;
-                  my $exonStart = $exon->{exon_start};
-                  my $exonEnd = $exon->{exon_end};
-                  my $cdsStart = $exon->{cds_start};
-                  my $cdsEnd = $exon->{cds_end};
-
-                  if ($cdsStart) {
-                    $seenCds = 1;
-                    # dump a CDS
-                    $cdsInsert->execute(
-                                        $transcriptId, # transcript_source_id
-                                        $proteinId, # protein_source_id
-                                        $transcriptHash{$transcriptId}->{sequence_source_id}, # sequence_source_id
-                                        $transcriptHash{$transcriptId}->{na_sequence_id}, # na_sequence_id
-                                        $cdsStart, # start_min
-                                        $cdsEnd, # end_max
-                                        $isReversed, # is_reversed
-                                        $transcriptNaFeatureId, # parent_id
-                                        $isTopLevel, # is_top_level
-                                        $genomeExtDbRlsId, # external_database_release_id
-                                       )
-                     or die $dbh->errstr;
-                  }
-
-                  my ($dumpUtr, $utrStart, $utrEnd);
-                  if ($exon->{is_all_utr}) {
-                     $dumpUtr = 1;
-                     $utrStart = $exonStart;
-                     $utrEnd = $exonEnd;
-                  } elsif ($cdsStart && ($cdsStart != $exonStart) ) {
-                     $dumpUtr = 1;
-                     $utrStart = $exonStart;
-                     $utrEnd = $cdsStart;
-                  } elsif ($cdsStart && ($cdsEnd != $exonEnd) ) {
-                     $dumpUtr = 1;
-                     $utrStart = $cdsEnd;
-                     $utrEnd = $exonEnd;
-                  }
-
-                  if ($dumpUtr) {
-
-                    my $utrDirection;
-                    if ( (!$isReversed && !$seenCds) || ($isReversed && $seenCds) ) {
-                      $utrDirection = 5;
-                    } else {
-                      $utrDirection = 3;
-                    }
-
-                    $utrInsert->execute(
-                                        $transcriptHash{$transcriptId}->{sequence_source_id}, # sequence_source_id
-                                        $transcriptHash{$transcriptId}->{na_sequence_id}, # na_sequence_id
-                                        $utrStart, # start_min
-                                        $utrEnd, # end_max
-                                        $isReversed, # is_reversed
-                                        $utrDirection, # direction
-                                        $transcriptNaFeatureId, # parent_id
-                                        $genomeExtDbRlsId, # external_database_release_id
-                                        $isTopLevel, # is_top_level
-                                       )
-                      or die $dbh->errstr;
-                  } # if dumpUtr
-
-
-                } # foreach exon
-              } # foreach proteinId
-            } # if transcript has proteins
-
-              $transcriptInsert->execute(
-                                         $transcriptId, # feature_source_id
-                                         $transcriptHash{$transcriptId}->{sequence_source_id}, # sequence_source_id
-                                         $transcriptHash{$transcriptId}->{na_sequence_id}, # na_sequence_id
-                                         $transcriptHash{$transcriptId}->{na_feature_id}, # na_feature_id
-                                         $transcriptHash{$transcriptId}->{start}, # start_min
-                                         $transcriptHash{$transcriptId}->{end}, # end_max
-                                         $isReversed, # is_reversed
-                                         $geneNaFeatureId, # parent_id
-                                         $isTopLevel, # is_top_level
-                                         $genomeExtDbRlsId, # external_database_release_id
-                                        )
-               or die $dbh->errstr;
-
-         } # foreach transcriptId
-
-            # iterate through this gene's exons
-            my %exonHash = %{$gmh->{exons}};
-            foreach my $exonId (keys(%exonHash)) {
-                $exonInsert->execute(
-                                     $exonId, # feature_source_id
-                                     $exonHash{$exonId}->{sequence_source_id}, # sequence_source_id
-                                     $exonHash{$exonId}->{na_sequence_id}, # na_sequence_id
-                                     $exonHash{$exonId}->{na_feature_id}, # na_feature_id
-                                     $exonHash{$exonId}->{start}, # start_min
-                                     $exonHash{$exonId}->{end}, # end_max
-                                     $exonHash{$exonId}->{strand} == -1 ? 1 : 0, # is_reversed
-                                     $geneNaFeatureId, # parent_id
-                                     $genomeExtDbRlsId, # external_database_release_id
-                                     $isTopLevel, # is_top_level
-                                          )
-                 or die $dbh->errstr;
-            } # foreach exonId
-          } # foreach geneId
-        } # foreach isTopLevel (0, 1)
-
-      } # while (fetch external_database_release_id)
-
-      sub getSeqOntId {
-        my ($naFeatureId) = @_;
-
-        $soQuery->execute($naFeatureId)
-           or die $dbh->errstr;
-
-        my ($id) = $soQuery->fetchrow_array();
-        $soQuery->finish();
-
-        return $id;
-      }
-      ]]>
-    </perl>
-  </tuningTable>
-
-
-
-
-
-
-
-  <tuningTable name="TranscriptLocationJB" prefixEnabled="true">
-    <comment>Genomic locations of transcripts
-    </comment>
-    <externalDependency name="dots.AaFeatureExon"/>
-    <externalDependency name="dots.ExonFeature"/>
-    <externalDependency name="dots.GeneFeature"/>
-    <externalDependency name="dots.NaLocation"/>
-    <externalDependency name="dots.NaSequence"/>
-    <externalDependency name="dots.RnaFeatureExon"/>
-    <externalDependency name="dots.SequencePiece"/>
-    <externalDependency name="dots.Transcript"/>
-    <externalDependency name="dots.TranslatedAaFeature"/>
-    <externalDependency name="dots.TranslatedAaSequence"/>
-    <ancillaryTable name="CdsLocationJB"/>
-    <ancillaryTable name="GeneLocationJB"/>
-    <ancillaryTable name="ExonLocationJB"/>
-    <ancillaryTable name="UtrLocationJB"/>
-    <ancillaryTable name="IntronLocationJB"/>
-    <sql>
-      <![CDATA[
-        create table &prefixGeneLocationJB&1 (
-          feature_source_id            varchar2(80),
-          sequence_source_id           varchar2(50),
-          na_sequence_id               number(10),
-          na_feature_id                number(10),
-          start_min                    number,
-          end_max                      number,
-          is_reversed                  number(1),
-          sequence_ontology_id         number(10),
-          external_database_release_id number(10),
-          is_top_level                 number
-        )
-      ]]>
-    </sql>
-
-    <sql>
-      <![CDATA[
-        create table &prefixTranscriptLocationJB&1 (
-          feature_source_id            varchar2(80),
-          sequence_source_id           varchar2(50),
-          na_sequence_id               number(10),
-          na_feature_id                number(10),
-          start_min                    number,
-          end_max                      number,
-          is_reversed                  number(1),
-          parent_id                    number(10),
-          external_database_release_id number(10),
-          is_top_level                 number
-        )
-      ]]>
-    </sql>
-
-    <sql>
-      <![CDATA[
-        create table &prefixExonLocationJB&1 (
-          feature_source_id            varchar2(80),
-          sequence_source_id           varchar2(50),
-          na_sequence_id               number(10),
-          na_feature_id                number(10),
-          start_min                    number,
-          end_max                      number,
-          is_reversed                  number(1),
-          parent_id                    number(10),
-          external_database_release_id number(10),
-          is_top_level                 number
-        )
-      ]]>
-    </sql>
-
-    <sql>
-      <![CDATA[
-        create table &prefixCdsLocationJB&1 (
-          protein_source_id            varchar2(80),
-          transcript_source_id         varchar2(80),
-          sequence_source_id           varchar2(50),
-          na_sequence_id               number(10),
-          start_min                    number,
-          end_max                      number,
-          is_reversed                  number(1),
-          parent_id                    number(10),
-          external_database_release_id number(10),
-          is_top_level                 number
-        )
-      ]]>
-    </sql>
-
-    <sql>
-      <![CDATA[
-        create table &prefixUtrLocationJB&1 (
-          sequence_source_id           varchar2(50),
-          na_sequence_id               number(10),
-          start_min                    number,
-          end_max                      number,
-          is_reversed                  number(1),
-          direction                    number(1),
-          parent_id                    number(10),
-          external_database_release_id number(10),
-          is_top_level                 number
-        )
-      ]]>
-    </sql>
-
-    <sql>
-      <![CDATA[
-        create table &prefixIntronLocationJB&1 (
-          sequence_source_id           varchar2(50),
-          na_sequence_id               number(10),
-          start_min                    number,
-          end_max                      number,
-          is_reversed                  number(1),
-          parent_id                    number(10),
-          external_database_release_id number(10),
-          is_top_level                 number
-        )
-      ]]>
-    </sql>
-
-    <perl>
-      <![CDATA[
-      use strict;
-      use lib "$ENV{GUS_HOME}/lib/perl";
-      use GUS::Community::GeneModelLocations;
-
-      my $geneInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
-        insert into &prefixGeneLocationJB&1
-            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id,
-             start_min, end_max, is_reversed, is_top_level,
-             sequence_ontology_id, external_database_release_id)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-SQL
-
-      my $transcriptInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
-        insert into &prefixTranscriptLocationJB&1
-            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id,
-             start_min, end_max, is_reversed, parent_id, is_top_level, external_database_release_id)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-SQL
-
-      my $exonInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
-        insert into &prefixExonLocationJB&1
-            (feature_source_id, sequence_source_id, na_sequence_id, na_feature_id, 
-             start_min, end_max, is_reversed, parent_id,
-             external_database_release_id, is_top_level)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-SQL
-
-      my $cdsInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
-        insert into &prefixCdsLocationJB&1
-            (transcript_source_id, protein_source_id, sequence_source_id, na_sequence_id,
-             start_min, end_max, is_reversed, parent_id, is_top_level, external_database_release_id)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-SQL
-
-      my $utrInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
-        insert into &prefixUtrLocationJB&1
-            (sequence_source_id, na_sequence_id,
-             start_min, end_max, is_reversed, direction, parent_id,
-             external_database_release_id, is_top_level)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-SQL
-
 
       my $intronInsert = $dbh->prepare(<<SQL) or die $dbh->errstr;
-        insert into &prefixIntronLocationJB&1
+        insert into &prefixIntronLocation&1
             (sequence_source_id, na_sequence_id,
              start_min, end_max, is_reversed, parent_id,
              external_database_release_id, is_top_level)
