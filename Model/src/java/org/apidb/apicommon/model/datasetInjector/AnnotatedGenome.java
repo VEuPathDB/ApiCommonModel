@@ -258,6 +258,7 @@ public class AnnotatedGenome extends DatasetInjector {
                                           {"specialLinkDisplayText", "gene-page text for genome annotation status"},
                                           {"specialLinkExternalDbName", "external DB name for annotation link"},
                                           {"isCurated", "values true|false for whether genome is under active curation"},
+                                          {"updatedAnnotationText", "text to use when making link to updated record"},
     };
 
     return propertiesDeclaration;
