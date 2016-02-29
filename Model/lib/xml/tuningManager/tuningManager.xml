@@ -1969,7 +1969,12 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        pa.annotated_go_id_process,
        pa.predicted_go_id_component,
        pa.predicted_go_id_function,
-       pa.predicted_go_id_process
+       pa.predicted_go_id_process,
+       relIntronUtrCoords.transcript_start_min,
+       relIntronUtrCoords.transcript_end_max,
+       relIntronUtrCoords.genomic_relative_coords as gen_rel_intron_utr_coords,
+       utr_lengths.five_prime_utr_length, 
+       utr_lengths.three_prime_utr_length
 FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
      sres.externalDatabaseRelease soRls,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
@@ -2073,7 +2078,44 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
             and edr.external_database_id = ed.external_database_id
             and edr.id_type = 'previous id'
           group by drnf.na_feature_id
-     ) olds
+     ) olds, 
+    (select
+      na_feature_id
+     , transcript_start_min
+     , transcript_end_max
+    , '[' || listagg('["' || feature_type || '",' || start_min || ',' || end_max || ']', ',') within GROUP (ORDER BY start_min) || ']' AS genomic_relative_coords
+    FROM
+      (SELECT
+        tl.feature_source_id
+      , tl.na_feature_id
+      , feature_type
+      , fl.start_min - tl.start_min + 1 AS start_min
+      , fl.end_max - tl.start_min + 1 as end_max
+      , tl.start_min as transcript_start_min
+      , tl.end_max as transcript_end_max
+      FROM
+        apidbtuning.transcriptlocation tl
+      , apidbtuning.featurelocation fl
+      where
+        tl.na_feature_id = fl.parent_id 
+        and fl.feature_type in('UTR', 'Intron')
+      )
+    group by
+      na_feature_id, transcript_start_min, transcript_end_max
+    ) relIntronUtrCoords
+  , (select t.na_feature_id as transcript_na_feature_id, five_prime.utr_length as five_prime_utr_length, three_prime.utr_length as three_prime_utr_length
+     from dots.transcript t
+      ,(select parent_id, sum(end_max-start_min + 1) as utr_length from apidbtuning.utrlocation
+       where direction = 5
+       group by parent_id
+       ) five_prime
+      ,(select parent_id, sum(end_max-start_min + 1) as utr_length from apidbtuning.utrlocation
+       where direction = 3
+       group by parent_id
+       ) three_prime
+     where t.na_feature_id = five_prime.parent_id (+)
+     and t.na_feature_id = three_prime.parent_id (+)
+  ) utr_lengths
 WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = nl.na_feature_id
   AND nl.is_top_level = 1
@@ -2117,6 +2159,8 @@ WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = entrez_table.na_feature_id(+)
   AND gf.na_feature_id = olds.na_feature_id(+)
   AND t.source_id = pa.transcript_source_id(+)
+  AND t.na_feature_id_id = relIntronUtrCoords.transcript_na_feature_id 
+ AND t.na_feature_id = utr_lengths.transcript_na_feature_id 
       ]]>
     </sql>
     <!--  source_id:  if source_id is not unique, use protein_source_id -->
