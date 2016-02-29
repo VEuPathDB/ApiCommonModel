@@ -203,18 +203,6 @@ public class AnnotatedGenome extends DatasetInjector {
       injectTemplate("distinctGeneFilter"); 
     }
 
-    // special gene linkout
-    String specialLinkExternalDbName = getPropValue("specialLinkExternalDbName");
-    if (specialLinkExternalDbName != null && !specialLinkExternalDbName.isEmpty() ) {
-      injectTemplate("geneSpecialLinkouts");
-    }
-
-    // special gene text
-    String specialLinkDisplayText = getPropValue("specialLinkDisplayText");
-    if (specialLinkDisplayText != null && !specialLinkDisplayText.isEmpty()) {
-      injectTemplate("geneSpecialText");
-    }
-    
   }
 
   @Override
