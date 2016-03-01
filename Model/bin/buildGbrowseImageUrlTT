@@ -111,17 +111,14 @@ where ga.taxon_id = o.taxon_id";
 
 
       my @fTracks;
-      my @synTracks; # should only be one but array ok
-      my $hasSynteny;
       foreach my $track (@$tracks) {
         my $name = $track->{name};
-
-        $hasSynteny = 1 if($name eq 'Synteny');
 
         my $abbrevFirst = $track->{abbrevFirst};
         my $subtracks = $track->{subtrack};
 
         if($subtracks) {
+          my %syntenyNames;
           my @subtracks;
           foreach my $subtrack (@$subtracks) {
             my $setName = $subtrack->{set};
@@ -132,9 +129,17 @@ where ga.taxon_id = o.taxon_id";
               die "Could not map subtrack set $subtrackName to a subtrackSet" unless($names);
 
               push @subtracks, @$names;
+              foreach my $n (@$names){
+                if($n =~ /(_gene|_span)$/){
+                  $syntenyNames{$1} = 1;
+                }
+              }
             }
             else {
               push @subtracks, $subtrackName;
+              if($subtrackName =~ /(_gene|_span)$/){
+                $syntenyNames{$1} = 1;
+              }
             }
           }
           ##need to change the abbrev to the reference strain for this organism then unshift the subtracks for this org to beginning of array
@@ -142,24 +147,20 @@ where ga.taxon_id = o.taxon_id";
 
           my @sortedSubtracks = sort {$b =~ /$sabbrev/ <=> $a =~ /$sabbrev/} @subtracks;
           if($orgRef->{$organism} == 0){
-            unshift(@sortedSubtracks,$abbrev."_gene");
-            unshift(@sortedSubtracks,$abbrev."_span");
+            foreach my $key (keys%syntenyNames){
+              unshift(@sortedSubtracks,$abbrev.$key); 
+            }
           }
-          push @fTracks, $name . "/" . join('+', @sortedSubtracks) unless($name eq 'Synteny');
-          push @synTracks, $name . "/" . join('+', @sortedSubtracks) if($name eq 'Synteny' || $name eq 'Gene');
+          push @fTracks, $name . "/" . join('+', @sortedSubtracks);
         }
         else {
-          push @fTracks, $name unless($name eq 'Synteny');;
-          push @synTracks, $name if($name eq 'Synteny' || $name eq 'Gene');;
+          push @fTracks, $name;
         }
       }
       my $gtracks = join('%1E', @fTracks);
       $insertRow->execute($organism, $type, $gtracks);
 
-      my $syntracks = join('%1E', @synTracks);
-      $insertRow->execute($organism, 'synteny', $syntracks) if($hasSynteny);
-
-#      print "$organism: $gtracks\n";
+      print "$organism:$type: $gtracks\n";
     }
   }
 
