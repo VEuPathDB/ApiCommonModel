@@ -57,8 +57,11 @@
 
         <sql>
         <![CDATA[
-             SELECT DISTINCT ds.source_id, '@PROJECT_ID@' AS project_id 
-             FROM ($$span_id$$) ds
+                 select ids.source_id,gsa.project_id from 
+                    ( SELECT distinct ds.source_id, ds.project_id,
+                        regexp_substr(ds.source_id, '[^:]+', 1, 1) as seq_source_id
+                             FROM ($$span_id$$) ds) ids, apidbtuning.genomicseqattributes gsa
+                             where gsa.source_id = ids.seq_source_id
            ]]>
         </sql>
     </sqlQuery>
@@ -213,7 +216,7 @@
         <column name="assoc_genes"/>
       <sql>
           <![CDATA[
-    SELECT sequence_id, start_loc, end_loc, (sequence_id || ':' || start_loc || '-' || end_loc) as source_id, 
+    SELECT sequence_id, start_loc, end_loc, sequence_id || ':' || start_loc || '-' || end_loc || ':f' as source_id, 
            '@PROJECT_ID@' as project_id, max(lod_score) as lod_score,
            apidb.tab_to_string(set(CAST(COLLECT(gene_id order by gene_id) AS apidb.varchartab)),', ') as assoc_genes
     FROM  (SELECT  ga.source_id as gene_id,ens.source_id as sequence_id,
@@ -222,9 +225,9 @@
                     CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                                ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
                     END as lod_score
-           FROM    dots.chromosomeelementfeature  cef, apidb.genefeaturelodscore  gls,
+           FROM    dots.chromosomeelementfeature  cef, apidb.nafeaturehaploblock gls,
                     dots.externalnasequence ens, dots.nalocation nl, apidbTuning.geneattributes ga, ($$ds_gene_ids$$) ds 
-           where lower(ga.source_id) = lower(ds.source_id)
+           where lower(ga.source_id) = lower(ds.gene_source_id)
            and gls.na_feature_id = ga.na_feature_id
            and cef.name = gls.HAPLOTYPE_BLOCK_NAME
            and nl.na_feature_id = cef.na_feature_id
