@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.MicroarrayTwoChannelReferenceDesign;
 
-public class MicroarrayFerdigEQtl extends CusomGenePageExpressionGraphs {
+public class MicroarrayFerdigEQtl extends MicroarrayTwoChannelReferenceDesign {
 
   @Override
   public void addModelReferences() {
@@ -15,6 +15,10 @@ public class MicroarrayFerdigEQtl extends CusomGenePageExpressionGraphs {
       addWdkReference("SpanRecordClasses.SpanRecordClass", "question", "SpanQuestions.DynSpansByEQTLtoGenes"); 
   }
 
+    @Override
+    protected void setDataType() {
+        setDataType("Phenotype");
+    }
 
 }
 

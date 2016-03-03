@@ -59,7 +59,6 @@ public class RNASeq extends  DatasetInjector {
 
           String exprMetric = getPropValue("exprMetric");
 
-          injectTemplate("rnaSeqAttributeCategory");
 
           if(getPropValueAsBoolean("isStrandSpecific")) {
 

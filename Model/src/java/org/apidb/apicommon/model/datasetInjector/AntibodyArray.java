@@ -112,7 +112,6 @@ public class AntibodyArray extends DatasetInjector {
         injectTemplate("internalGeneSearchCategory");
 
 
-        injectTemplate("antibodyArrayAttributeCategory");
         injectTemplate("antibodyArrayGraphDescriptions");
 
         injectTemplate("datasetExampleGraphDescriptions");

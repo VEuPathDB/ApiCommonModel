@@ -108,8 +108,6 @@ public abstract class Expression extends DatasetInjector {
 
         injectTemplate("datasetCategory");
 
-        injectTemplate(lcDataType + "AttributeCategory");
-
         setPropValue("graphTextAttrName", "exprGraphAttr" + getDatasetName() + "_expr_graph");
 
         injectTemplate("expressionGraphAttributesExpression");
