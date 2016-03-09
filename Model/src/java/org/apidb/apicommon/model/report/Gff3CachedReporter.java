@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -33,6 +34,11 @@ import org.json.JSONObject;
 public class Gff3CachedReporter extends Reporter {
 
   private static Logger logger = Logger.getLogger(Gff3Reporter.class);
+
+  private static final String[] SUPPORTED_RECORD_CLASS_NAMES = {
+      "GeneRecordClasses.GeneRecordClass",
+      "TranscriptRecordClasses.TranscriptRecordClass"
+  };
 
   public static final String PROPERTY_TABLE_CACHE = "table_cache";
   public static final String PROPERTY_RECORD_ID_COLUMN = "record_id_column";
@@ -182,7 +188,7 @@ public class Gff3CachedReporter extends Reporter {
 
     // this reporter only works for GeneRecordClasses.GeneRecordClass
     String rcName = getQuestion().getRecordClass().getFullName();
-    if (!rcName.equals("GeneRecordClasses.GeneRecordClass"))
+    if (!Arrays.asList(SUPPORTED_RECORD_CLASS_NAMES).contains(rcName))
       throw new WdkModelException("Unsupported record type: " + rcName);
 
     // write header
