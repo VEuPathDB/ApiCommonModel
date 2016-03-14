@@ -14,7 +14,7 @@ public class Publication {
 
     public String getCitation() {
         if (pubmedId == null || pubmedId.equals("")) return null;
-        if (citation == null) {
+        if (citation == null || citation.equals("")) {
             try {
                 byte[] bo = new byte[100000];
                 byte[] err = new byte[100000];
