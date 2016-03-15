@@ -457,6 +457,10 @@ public class DatasetPresenterSetLoader {
     } catch (SQLException e) {
 	// if that fails, get it from the NCBI web service
         // System.out.println("fail: " + e.toString() + "; had to hit NCBI");
+	citation = null;
+    }
+
+    if (citation == null || citation.equals("")) {
 	citation = publication.getCitation();
     }
 
