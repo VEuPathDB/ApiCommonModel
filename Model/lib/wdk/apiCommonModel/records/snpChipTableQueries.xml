@@ -37,7 +37,7 @@ SELECT snp.source_id,
        var.product,
        'todo' as phenotype
 FROM  
-       results.SeqVariation var, ApidbTuning.SnpAttributesDots snp
+       results.SeqVariation var, ApidbTuning.SnpChipAttributes snp
 WHERE var.snp_na_feature_id = snp.na_feature_id
              ]]>
            </sql>
@@ -58,7 +58,7 @@ WHERE var.snp_na_feature_id = snp.na_feature_id
  SELECT sa.source_id, 
        '@PROJECT_ID@' AS project_id,
        var.strain,
-       loc.value as country,
+       nvl(loc.value,'unknown') as country,
        CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
             WHEN sa.gene_source_id is null THEN ''
        ELSE var.allele 
@@ -67,11 +67,11 @@ WHERE var.snp_na_feature_id = snp.na_feature_id
        'todo' as phenotype,
        var.product
 FROM  results.seqvariation var,
-      ApidbTuning.SnpAttributesDots sa,
+      ApidbTuning.SnpChipAttributes sa,
       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc
 WHERE var.snp_na_feature_id = sa.na_feature_id
   AND var.allele in ('A','C','G','T')
-  AND loc.Protocol_App_Node_Id = var.Protocol_App_Node_Id
+  AND loc.Protocol_App_Node_Id(+) = var.Protocol_App_Node_Id
              ]]>
         </sql>
       </sqlQuery>
@@ -85,31 +85,64 @@ WHERE var.snp_na_feature_id = sa.na_feature_id
             <column name="source_id" />
             <column name="project_id" />
             <column name="other_snp_id"/>
-            <column name="link"/>
-            <column name="name"/>
+            <column name="geographic_location"/>
+            <column name="type"/>
+            <column name="platform"/>
+            <column name="major_allele"/>
+            <column name="minor_allele"/>
+            <column name="other_allele"/>
+            <column name="num_strains"/>
 
             <sql>
             <![CDATA[
-SELECT sa.source_id,  '@PROJECT_ID@' AS project_id,
-       sb.source_id other_snp_id,
-       'showRecord.do?name=SnpRecordClasses.SnpRecordClass'|| chr(38) || 'project_id=@PROJECT_ID@' || chr(38) || 'source_id=' || sb.source_id as link,
-       sb.dataset as name
-FROM  ApidbTuning.SnpAttributesDots sa, 
-      apidbtuning.snpAttributes sb
-WHERE sa.na_sequence_id = sb.na_sequence_id
-  and sa.start_min = sb.location
-  and sb.source_id != sa.source_id
-Union
-SELECT sa.source_id,  '@PROJECT_ID@' AS project_id,
-       sb.source_id other_snp_id, 
-       'showRecord.do?name=SnpChipRecordClasses.SnpChipRecordClass' || chr(38) || 'project_id=@PROJECT_ID@' || chr(38) || 'source_id=' || sb.source_id as link,
-       sb.dataset as name
-FROM  ApidbTuning.SnpAttributesDots sa, 
-      ApidbTuning.SnpAttributesDots sb
+select source_id,snp_source_id as other_snp_id,'@PROJECT_ID@' AS project_id,geographic_location, platform,type,total_strains as num_strains,
+major_allele || ' ('||maj_freq||')' as major_allele,
+CASE WHEN minor_allele is not null THEN 
+   CASE WHEN other_allele is not null THEN minor_allele || ' ('||other_freq||')' ELSE minor_allele || ' ('||min_freq||')' END 
+ELSE null END as minor_allele,
+CASE WHEN other_allele is not null THEN other_allele || ' ('||min_freq||')' ELSE null END as other_allele
+from (
+select source_id,snp_source_id,geographic_location,platform,type,
+substr(listagg(allele, ', ') within group (order by count_strains desc),1,1) as major_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),4,1) as minor_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),7,1) as other_allele,
+sum(count_strains) as total_strains,
+round((max(count_strains) / sum(count_strains)),2) as maj_freq,
+round((min(count_strains) / sum(count_strains)),2) as min_freq,
+round((median(count_strains) / sum(count_strains)),2) as other_freq
+from (
+select source_id,snp_source_id,platform,'snp' as type,geographic_location,allele,product,count(*) as count_strains
+from (
+SELECT sa.source_id, sb.source_id as snp_source_id, sb.platform,'@PROJECT_ID@' AS project_id,
+       var.strain,
+       var.allele, var.product, var.coverage,
+        nvl(loc.value,'unknown') as geographic_location
+FROM   results.SeqVariation var, apidbtuning.snpChipAttributes sa, apidbtuning.snpChipAttributes sb,
+       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc
 WHERE sa.na_sequence_id = sb.na_sequence_id
   and sa.start_min = sb.start_min
   and sb.source_id != sa.source_id
-
+and sb.na_feature_id = var.snp_na_feature_id
+and var.allele in ('A','C','G','T')
+and var.protocol_app_node_id = loc.protocol_app_node_id(+) )
+group by source_id,snp_source_id,geographic_location,platform,allele,product 
+UNION
+select source_id,snp_source_id,platform,'snp-chip' as type,geographic_location,allele,product,count(*) as count_strains
+from (
+SELECT sa.source_id, sb.source_id as snp_source_id, 'HTS_SNP' as platform, '@PROJECT_ID@' AS project_id,
+       var.strain,
+       var.allele, var.product, var.coverage,
+        nvl(loc.value,'unknown') as geographic_location
+FROM   apidb.SequenceVariation var, apidbtuning.snpChipAttributes sa, apidbtuning.snpAttributes sb,
+       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc
+WHERE sa.na_sequence_id = sb.na_sequence_id
+  and sa.start_min = sb.location
+  and sb.source_id != sa.source_id
+and sb.na_sequence_id = var.ref_na_sequence_id
+and var.location = sb.location
+and var.protocol_app_node_id = loc.protocol_app_node_id(+) )
+group by source_id,snp_source_id,geographic_location,platform,allele,product )
+group by source_id,snp_source_id,type,geographic_location,platform)
              ]]>
            </sql>
 
@@ -137,31 +170,26 @@ ELSE null END as minor_allele,
 CASE WHEN other_allele is not null THEN other_allele || ' ('||min_freq||')' ELSE null END as other_allele
 from (
 select source_id,geographic_location,
-substr(listagg(allele_gene_strand, ', ') within group (order by count_strains desc),1,1) as major_allele,
-substr(listagg(allele_gene_strand, ', ') within group (order by count_strains desc),4,1) as minor_allele,
-substr(listagg(allele_gene_strand, ', ') within group (order by count_strains desc),7,1) as other_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),1,1) as major_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),4,1) as minor_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),7,1) as other_allele,
 sum(count_strains) as total_strains,
 round((max(count_strains) / sum(count_strains)),2) as maj_freq,
 round((min(count_strains) / sum(count_strains)),2) as min_freq,
 round((median(count_strains) / sum(count_strains)),2) as other_freq
 from (
-select source_id,geographic_location,allele_gene_strand,product,count(*) as count_strains
+select source_id,geographic_location,allele,product,count(*) as count_strains
 from (
 SELECT sa.source_id, '@PROJECT_ID@' AS project_id,
        CASE WHEN var.strain = sa.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
-       CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN sa.gene_source_id is null THEN ''
-            ELSE var.allele 
-       END as allele_gene_strand,
-       var.product,
-       var.coverage,
+       var.allele, var.product, var.coverage,
         nvl(loc.value,'unknown') as geographic_location
-FROM   results.SeqVariation var, apidbtuning.snpattributesdots sa,
+FROM   results.SeqVariation var, apidbtuning.snpChipAttributes sa,
        (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc
 WHERE sa.na_feature_id = var.snp_na_feature_id
 and var.allele in ('A','C','G','T')
 and var.protocol_app_node_id = loc.protocol_app_node_id(+) )
-group by source_id,geographic_location,allele_gene_strand,product )
+group by source_id,geographic_location,allele,product )
 group by source_id,geographic_location)
                 ]]>
             </sql>
