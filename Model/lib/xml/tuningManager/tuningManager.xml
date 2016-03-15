@@ -642,7 +642,6 @@ where p.rn = 1
   </tuningTable>
 
 
-<!--
 
   <tuningTable name="OrganismAttributes">
     <comment> Stores per-organism information. Used by the organism record, as well
@@ -650,10 +649,11 @@ where p.rn = 1
       </comment>
     <internalDependency name="TaxonSpecies"/>
     <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="GeneId"/>
     <internalDependency name="IsolateAttributes"/>
     <internalDependency name="GoTermSummary"/>
-    <internalDependency name="ChIPchipGene"/>
+    <!-- internalDependency name="ChIPchipGene"/ -->
     <internalDependency name="TFBSGene"/>
     <internalDependency name="EstAlignmentGeneSummary"/>
     <internalDependency name="EstAttributes"/>
@@ -722,31 +722,28 @@ CREATE TABLE DataSourceCount nologging as (
       <![CDATA[
 CREATE TABLE ProfileCount nologging as (
         select ga.taxon_id,         
-              count(distinct(case when lower(ps.name) like '%rt_pcr%' 
+                            count(distinct(case when p.dataset_type = 'transcript_expression'
+                                   and p.dataset_subtype like '%rt_pcr%' 
                                    and ga.is_deprecated = 0 
-                                  then p.source_id
+                                  then p.gene_source_id
                                   else ''
                                    end)) as rtPCRCount,     
-              count(distinct(case when lower(ds.name) like '%rna%' 
+              count(distinct(case when p.dataset_type = 'transcript_expression'
+                                   and p.dataset_subtype = 'rnaseq'
                                    and ga.is_deprecated = 0 
-                                  then p.source_id
+                                  then p.gene_source_id
                                   else ''
                                    end)) as rnaSeqCount,
-              count(distinct(case when ds.type = 'transcript_expression'
-                                   and ds.subtype = 'array'
+              count(distinct(case when p.dataset_type = 'transcript_expression'
+                                   and p.dataset_subtype = 'array'
                                    and ga.is_deprecated = 0 
-                                  then p.source_id
+                                  then p.gene_source_id
                                   else ''
                                    end)) as geneArrayCount
-         from Apidb.DataSource ds
-              inner join sres.externalDatabase ed on ds.name = ed.name
-              inner join sres.externalDatabaseRelease edr on ed.external_database_id = edr.external_database_id
-              inner join apidb.ProfileSet ps on ps.external_database_release_id =edr.external_database_release_id
-              inner join apidb.Profile p on  ps.profile_set_id = p.profile_set_id       
-              right outer join geneAttributes ga on ga.source_id = p.source_id
+         from Profile p
+              right outer join GeneAttributes ga on ga.source_id = p.gene_source_id
          group by ga.taxon_id
-)
-       
+)       
       ]]>
     </sql>
     <sql>
@@ -800,16 +797,16 @@ select genomestat.taxon_id,
        nvl(count(distinct case when ga.is_pseudo =1  then ga.source_id else '' end),0) as pseudoGeneCount,    
        nvl(count(distinct case when ga.gene_type ='protein coding' then ga.source_id else '' end),0) as codingGeneCount,
        nvl(count(distinct case when ga.gene_type ='protein coding' then '' else ga.source_id end),0) as otherGeneCount, 
-       nvl(count (distinct (case when ga.is_deprecated = 0
-                  then ccg.gene_source_id
-                  else NULL 
-                  end)),0) ChipChipGeneCount ,
+       --nvl(count (distinct (case when ga.is_deprecated = 0
+       --           then ccg.gene_source_id
+       --           else NULL 
+       --           end)),0) ChipChipGeneCount ,
       nvl(count (distinct (case when ga.is_deprecated = 0
                   then pp.source_id
                   else NULL 
                   end)),0) orthologCount, 
       nvl(count (distinct (case when ga.is_deprecated = 0
-                  then gts.source_id
+                  then gts.gene_source_id
                   else NULL 
                   end)),0) goCount, 
       nvl(count (distinct (case when ga.is_deprecated = 0
@@ -824,16 +821,17 @@ select genomestat.taxon_id,
                   then est.source_id
                   else NULL 
                   end)),0) estCount,
-      nvl(count (distinct (case when (ga.is_deprecated = 0 and ec_numbers is not null)
+      nvl(count (distinct (case when (ga.is_deprecated = 0 and ta.ec_numbers is not null)
                   then ga.source_id 
                   else NULL 
                   end)),0) ecNumberCount
         FROM   GeneAttributes ga
                left outer join apidb.phylogeneticprofile pp on ga.source_id = pp.source_id
-               left outer join gotermsummary gts on ga.source_id = gts.source_id
+               left outer join gotermsummary gts on ga.source_id = gts.gene_source_id
                left outer join TFBSGene tfbs on ga.source_id = tfbs.gene_source_id
-               left outer join apidb.MassSpecSummary mss on ga.aa_sequence_id = mss.aa_sequence_id
-               left outer join chipchipgene ccg on ga.source_id = ccg.gene_source_id
+               left outer join TranscriptAttributes ta on ta.gene_source_id = ga.source_id
+               left outer join apidb.MassSpecSummary mss on ta.aa_sequence_id = mss.aa_sequence_id
+               --left outer join chipchipgene ccg on ga.source_id = ccg.gene_source_id
                left outer join (SELECT distinct s.gene as source_id 
                                   FROM EstAlignmentGeneSummary s, EstAttributes e 
                                   WHERE s.est_gene_overlap_length >= 100 
@@ -897,7 +895,7 @@ SELECT o.project_name as project_id,
        gc.pseudoGeneCount as pseudoGeneCount,
        gc.codingGeneCount as codingGeneCount,
        gc.otherGeneCount as otherGeneCount,
-       gc.ChipChipGeneCount as ChipChipGeneCount,
+       --gc.ChipChipGeneCount as ChipChipGeneCount,
        gc.orthologCount as orthologCount,
        gc.goCount as goCount,    
        gc.tfbsCount as tfbsCount,
@@ -945,7 +943,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
--->
+
 
   <tuningTable name="PdbSimilarity">
     <comment> Each record maps a gene to a PDB structure. Used by the model to find
