@@ -3596,7 +3596,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
-
+-->
 
   <tuningTable name="ChIPchipGene">
     <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by
@@ -3611,18 +3611,18 @@ tablespace indx
         create table ChIPchipGene&1 NOLOGGING AS
 select distinct
       ga.source_id as gene_source_id,
-      aef.feature_source_id as probe_id,
-      aef.na_feature_id as chip_na_feature_id,
+      -- aef.feature_source_id as probe_id,
+      -- aef.na_feature_id as chip_na_feature_id,
       CASE 
         WHEN ga.is_reversed = 0 
-        THEN round(abs(ga.start_min - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)),0)
-        ELSE round(abs(ga.end_max - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)),0) 
+        THEN round(abs(ga.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0)
+        ELSE round(abs(ga.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0) 
       END as distance,
       CASE 
         WHEN /* distance > 0 */
           CASE WHEN ga.is_reversed = 0 
-            THEN ga.start_min - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)
-            ELSE ga.end_max - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)
+            THEN ga.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+            ELSE ga.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
           END > 0 
         THEN 
           CASE 
@@ -3637,18 +3637,16 @@ select distinct
             ELSE '+'
           END 
         END as direction
-from  ExpressionElement aef,
-      FeatureLocation arrloc,
-      GeneAttributes ga,
-      rad.analysis a,
-      rad.protocol p
-where aef.na_feature_id = arrloc.na_feature_id
-and   aef.analysis_id = a.analysis_id
-and   a.protocol_id = p.protocol_id
-and   p.name in ('ChIP chip Peak Calls','ChIP_chip_Einstein_called_peaks','NimbleScan_ChIP_Hakimi_called_peaks')
-and   arrloc.na_sequence_id = ga.na_sequence_id
-and   ( (ga.is_reversed = 0 and abs((((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min) - ga.start_min) <= 3000)
-                  or (ga.is_reversed = 1 and abs((((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min) - ga.end_max) <= 3000) )
+from  GeneAttributes ga,
+      Results.segmentresult sr,
+      Study.StudyLink sl, 
+      Study.Study s
+where   sr.na_sequence_id = ga.na_sequence_id
+  and   s.study_id = sl.study_id
+  and   sl.protocol_app_node_id = sr.protocol_app_node_id
+  and   lower(s.name) like '%chip%peaks'
+  and   ( (ga.is_reversed = 0 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ga.start_min) <= 3000)
+                  or (ga.is_reversed = 1 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ga.end_max) <= 3000) )
       ]]>
     </sql>
     <sql>
@@ -3658,7 +3656,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
--->
+
 
   <tuningTable name="TFBSGene">
     <comment> Used by gene queries, as well as by generateGeneMetrics. Also an input
