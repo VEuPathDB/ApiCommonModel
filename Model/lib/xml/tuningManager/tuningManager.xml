@@ -265,12 +265,48 @@ create table ProtocolAppNodesResults&1 as
               from protocol_metadata
             union
               select *
-              from characteristic_metadata)
+              from characteristic_metadata),
+        ontology_tree_metadata
+        as (select distinct term_id, dataset_name, organism, subtype,
+                            case
+                              when lower(dataset_name) like '%icemr%' then 1
+                              else 0
+                            end as is_icemr
+            from apidbTuning.PANCharacteristicMetadata
+            where lower(dataset_name) like '%icemr$' or dataset_name like '%Crompton%'
+           ),
+        leaf_term
+        as (select distinct term_id
+            from ontology_tree_metadata
+           ),
+        graph_edge
+        as (select subject_term_id as child_term_id, object_term_id as parent_term_id
+            from sres.OntologyRelationship
+            start with subject_term_id in (select term_id from leaf_term)
+            connect by subject_term_id = prior object_term_id),
+        unparented_term
+        as (select parent_term_id as term_id from graph_edge
+            minus
+            select child_term_id as term_id from graph_edge),
+        distinct_term
+        as (select parent_term_id as term_id from graph_edge
+            union
+            select child_term_id as term_id from graph_edge),
+        leaf_ancestor_pair
+        as (select ancestor.term_id as ancestor_term_id, descendent.term_id as leaf_term_id
+            from distinct_term ancestor, distinct_term descendent
+            where descendent.term_id
+                  in (select child_term_id
+                      from graph_edge
+                      start with parent_term_id = ancestor.term_id
+                      connect by prior child_term_id = parent_term_id)
+              and descendent.term_id in (select term_id from leaf_term)
+            )
         -- parent
           select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'parent' as spec_property, category as spec_value
           from metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         -- leaf
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
@@ -312,40 +348,52 @@ create table ProtocolAppNodesResults&1 as
           select distinct organism, m.dataset_name, subtype, is_icemr, category as property, 'parent' as spec_property, 'protocol' as spec_value
           from protocol_metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, category as property, 'parent' as spec_property, 'characteristic' as spec_value
           from characteristic_metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         -- parents: display
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, category as property, 'display' as spec_property, category as spec_value
           from metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         -- grandparents: parent
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, 'protocol' as property, 'parent' as spec_property, '' as spec_value
           from protocol_metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, 'characteristic' as property, 'parent' as spec_property, '' as spec_value
           from characteristic_metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         -- grandparents: display
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, 'protocol' as property, 'display' as spec_property, 'Protocol' as spec_value
           from protocol_metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         union
           select distinct organism, m.dataset_name, subtype, is_icemr, 'characteristic' as property, 'display' as spec_property, 'Characteristic' as spec_value
           from characteristic_metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
-            and is_icemr = 0
+            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+        union
+          select otm.organism, otm.dataset_name, otm.subtype, otm.is_icemr,
+                 child.name as property, 'parent' as spec_property, parent.name as spec_value
+          from ontology_tree_metadata otm, leaf_ancestor_pair lap,
+               (select child_term_id, parent_term_id from graph_edge
+                union
+                select term_id as child_term_id, null as parent_term_id from unparented_term) edge,
+               sres.OntologyTerm child, sres.OntologyTerm parent
+          where edge.child_term_id = lap.ancestor_term_id
+            and lap.leaf_term_id = otm.term_id
+            and edge.child_term_id = child.ontology_term_id
+            and edge.parent_term_id = parent.ontology_term_id(+)
         ) order by organism, dataset_name, property, spec_property, spec_value
       ]]>
     </sql>
