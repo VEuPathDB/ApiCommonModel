@@ -193,6 +193,7 @@ create table ProtocolAppNodesResults&1 as
           and ds.taxon_id = tn.taxon_id(+)
           and (tn.name_class = 'scientific name' or tn.name_class is null)
           and p.name not like '%::%' -- avoid Perl class names
+          and p.name not like '%data transformation' -- avoid data transformation protocol parameters
       ]]>
     </sql>
     <sql>
@@ -235,9 +236,56 @@ create table ProtocolAppNodesResults&1 as
     </sql>
   </tuningTable>
 
+  <tuningTable name="FallbackMetadata">
+    <comment>
+      For datasets that have results but no metadata, a fallback set of metadata comprising the name of each ProtocolAppNode
+    </comment>
+    <internalDependency name="ProtocolAppNodesResults"/>
+    <internalDependency name="PANProtocolMetadata"/>
+    <externalDependency name="apidb.Datasource"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <sql>
+      <![CDATA[
+        create table FallbackMetadata&1 nologging as
+        select ds.name as dataset_name, ds.subtype, tn.name as organism,
+               case
+                  when lower(ds.name) like '%icemr%' then 1
+                  else 0
+                end as is_icemr,
+               pan.name as pan_name, pan.protocol_app_node_id, 'name' as term_name
+        from study.ProtocolAppNode pan, apidb.Datasource ds, study.StudyLink sl,
+             sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
+             sres.TaxonName tn,
+             (  select s.study_id, i.external_database_release_id
+                from study.Study s, study.Study i
+                where s.investigation_id = i.study_id
+              union
+                select s.study_id, s.external_database_release_id
+                from study.Study s) study_release
+        where pan.protocol_app_node_id in (select protocol_app_node_id
+                                           from ProtocolAppNodesResults)
+          and ds.name not in (select dataset_name from PANProtocolMetadata)
+          and ds.name not in (select dataset_name from PANCharacteristicMetadata)
+          and pan.protocol_app_node_id = sl.protocol_app_node_id
+          and sl.study_id = study_release.study_id
+          and study_release.external_database_release_id = edr.external_database_release_id
+          and edr.external_database_id = ed.external_database_id
+          and ed.name = ds.name
+          and ds.taxon_id = tn.taxon_id(+)
+          and (tn.name_class = 'scientific name' or tn.name_class is null)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="MetadataSpec">
     <comment>
     </comment>
+    <internalDependency name="FallbackMetadata"/>
     <internalDependency name="PANProtocolMetadata"/>
     <sql>
       <![CDATA[
@@ -250,16 +298,16 @@ create table ProtocolAppNodesResults&1 as
                      else 0
                    end as is_icemr
             from (  select distinct dataset_name
-                    from apidbTuning.panCharacteristicMetadata
+                    from panCharacteristicMetadata
                   union
                     select distinct dataset_name
-                    from apidbTuning.panProtocolMetadata)),
+                    from panProtocolMetadata)),
         protocol_metadata
         as (select distinct organism, subtype, dataset_name, category, term, value
-            from apidbTuning.panProtocolMetadata),
+            from panProtocolMetadata),
         characteristic_metadata
         as (select distinct organism, subtype, dataset_name, category, term, value
-            from apidbTuning.panCharacteristicMetadata),
+            from panCharacteristicMetadata),
         metadata
         as (  select *
               from protocol_metadata
@@ -272,7 +320,7 @@ create table ProtocolAppNodesResults&1 as
                               when lower(dataset_name) like '%icemr%' then 1
                               else 0
                             end as is_icemr
-            from apidbTuning.PANCharacteristicMetadata
+            from PANCharacteristicMetadata
             where lower(dataset_name) like '%icemr$' or dataset_name like '%Crompton%'
            ),
         leaf_term
@@ -302,7 +350,12 @@ create table ProtocolAppNodesResults&1 as
                       start with parent_term_id = ancestor.term_id
                       connect by prior child_term_id = parent_term_id)
               and descendent.term_id in (select term_id from leaf_term)
-            )
+            ),
+        fallback
+        as (select distinct dataset_name, subtype, organism, is_icemr, term_name as property
+            from FallbackMetadata
+           )
+        -- END OF WITH CLAUSES (whew!)
         -- parent
           select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'parent' as spec_property, category as spec_value
           from metadata m, icemr_mapping im
@@ -310,7 +363,7 @@ create table ProtocolAppNodesResults&1 as
             and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
         -- leaf
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
+          select organism, m.dataset_name, subtype, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
           from metadata m, icemr_mapping im
           where m.dataset_name = im.dataset_name
         -- filter
@@ -395,6 +448,26 @@ create table ProtocolAppNodesResults&1 as
             and lap.leaf_term_id = otm.term_id
             and edge.child_term_id = child.ontology_term_id
             and edge.parent_term_id = parent.ontology_term_id(+)
+        -- fallback: parent
+        union
+          select organism, dataset_name, subtype, is_icemr, property, 'parent' as spec_property, '' as spec_value
+          from fallback
+        -- fallback: display
+        union
+          select organism, dataset_name, subtype, is_icemr, property, 'display' as spec_property, initcap(property) as spec_value
+          from fallback
+        -- fallback: filter
+        union
+          select organism, dataset_name, subtype, is_icemr, property, 'filter' as spec_property, 'membership' as spec_value
+          from fallback
+        -- fallback: leaf
+        union
+          select organism, dataset_name, subtype, is_icemr, property, 'leaf' as spec_property, 'true' as spec_value
+          from fallback
+        -- fallback: type
+        union
+          select organism, dataset_name, subtype, is_icemr, property, 'type' as spec_property, 'string' as spec_value
+          from fallback
         ) order by organism, dataset_name, property, spec_property, spec_value
       ]]>
     </sql>
@@ -2200,8 +2273,8 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
       , fl.start_min - tl.start_min + 1 AS start_min
       , fl.end_max - tl.start_min + 1 as end_max
       FROM
-        apidbtuning.transcriptlocation tl
-      , apidbtuning.featurelocation fl
+        transcriptlocation tl
+      , featurelocation fl
       where
         tl.na_feature_id = fl.parent_id 
         and fl.feature_type in('UTR', 'Intron')
@@ -2213,12 +2286,12 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
     ) relIntronUtrCoords
   , (select t.na_feature_id as transcript_na_feature_id, five_prime.utr_length as five_prime_utr_length, three_prime.utr_length as three_prime_utr_length
      from dots.transcript t
-      ,(select parent_id, sum(end_max-start_min + 1) as utr_length from apidbtuning.utrlocation
+      ,(select parent_id, sum(end_max-start_min + 1) as utr_length from utrlocation
        where direction = 5
          and is_top_level = 1
        group by parent_id
        ) five_prime
-      ,(select parent_id, sum(end_max-start_min + 1) as utr_length from apidbtuning.utrlocation
+      ,(select parent_id, sum(end_max-start_min + 1) as utr_length from utrlocation
        where direction = 3
          and is_top_level = 1
        group by parent_id
@@ -5602,23 +5675,23 @@ and sdi.sample = replace (pep.sample ,' (MS Summary)', '')
       <![CDATA[
 create table AnnotatedGenomeSummary&1 nologging as
 select dsp.name as external_db_name, ga.organism,ga.taxon_id,o.is_reference_strain,
-(select value from apidbtuning.datasetproperty 
+(select value from datasetproperty 
 where dataset_presenter_id = dsp.dataset_presenter_id 
 and property = 'isCurated') as is_curated_genome,
-(select value from apidbtuning.datasetproperty 
+(select value from datasetproperty 
 where dataset_presenter_id = dsp.dataset_presenter_id 
 and property = 'updatedAnnotationText') as updated_link_text,
-(select value from apidbtuning.datasetproperty 
+(select value from datasetproperty 
 where dataset_presenter_id = dsp.dataset_presenter_id 
 and property = 'specialLinkDisplayText') as special_link_text,
-(select rel.id_url from apidbtuning.datasetproperty p,  sres.externaldatabase db, sres.externaldatabaserelease rel
+(select rel.id_url from datasetproperty p,  sres.externaldatabase db, sres.externaldatabaserelease rel
 where p.dataset_presenter_id = dsp.dataset_presenter_id
 and db.name = p.value
 and db.external_database_id = rel.external_database_id
 and p.property = 'specialLinkExternalDbName') as link_url,
 dsp.release_policy
-from apidbtuning.datasetpresenter dsp, apidb.organism o,
-(select distinct external_db_name,taxon_id,organism from apidbtuning.geneattributes) ga
+from datasetpresenter dsp, apidb.organism o,
+(select distinct external_db_name,taxon_id,organism from geneattributes) ga
 where dsp.name like '%_primary_genome_RSRC'
 and dsp.name = ga.external_db_name
 and o.taxon_id = ga.taxon_id
