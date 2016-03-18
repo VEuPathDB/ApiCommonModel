@@ -105,6 +105,8 @@ public class RNASeq extends  DatasetInjector {
 
 	      injectTemplate("rnaSeqGraph");
           } else {
+	      setPropValue("sense","unstranded") ;
+
               setPropValue("graphVisibleParts", exprMetric);
               injectTemplate("pathwayGraphs");
 
