@@ -4469,6 +4469,41 @@ tablespace indx
     </sql>
   </tuningTable>
 
+  
+  <tuningTable name="GeneIntronPercent" prefixEnabled="true">
+    <comment>Contained introns from Gsnap with percentages of max intron score
+    </comment>
+    <externalDependency name="apidb."/>
+    <internalDependency name="ApidbTuning.GeneAttributes"/>
+    <sql>
+      <![CDATA[
+               create table &prefixGeneIntronPercent&1 NOLOGGING AS
+with core as 
+(select ga.source_id as gene_id,rif.na_sequence_id,rif.mapping_start,rif.mapping_end,sum(rif.score) as score
+  FROM   apidb.IntronJunction rif, apidbtuning.geneattributes ga
+  WHERE ga.na_sequence_id = rif.na_sequence_id
+     and rif.mapping_start > ga.start_min
+     and rif.mapping_end < ga.end_max
+  GROUP BY ga.source_id,rif.na_sequence_id, rif.mapping_end, rif.mapping_start
+  having sum(rif.score) > 2)
+  select o.na_sequence_id,o.mapping_start,o.mapping_end,o.score,round(100 * o.score / mscore.max_score,1) as gene_percentage,sum_score as gene_sum_score,
+  avg_score as gene_avg_score
+from
+  (select gene_id,max(score) as max_score,sum(score) as sum_score,round(avg(score),1) as avg_score 
+   from core 
+   group by gene_id) mscore,
+   core o
+   where o.gene_id = mscore.gene_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create index GeneIntronPerc_ix&1 on GeneIntronPercent&1 (na_sequence_id,mapping_start,mapping_end)
+tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="TranscriptLocation" prefixEnabled="true">
     <comment>Genomic locations of transcripts
     </comment>
