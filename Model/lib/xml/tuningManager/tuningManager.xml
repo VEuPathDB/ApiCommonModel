@@ -4478,12 +4478,17 @@ tablespace indx
     <sql>
       <![CDATA[
                create table &prefixGeneIntronPercent&1 NOLOGGING AS
+select na_sequence_id,mapping_start,mapping_end,max(score) as score,min(gene_percentage) as intron_percent,
+  max(gene_sum_score) as gene_sum_score, max(gene_avg_score) as gene_avg_score
+from (
 with core as 
 (select ga.source_id as gene_id,rif.na_sequence_id,rif.mapping_start,rif.mapping_end,sum(rif.score) as score
   FROM   apidb.IntronJunction rif, apidbtuning.geneattributes ga
   WHERE ga.na_sequence_id = rif.na_sequence_id
-     and rif.mapping_start > ga.start_min
-     and rif.mapping_end < ga.end_max
+     and rif.mapping_start <= ga.end_max
+     and rif.mapping_end >= ga.start_min
+     and rif.mapping_end - rif.mapping_start < 10000
+     and ga.source_id = 'PF3D7_0206100'
   GROUP BY ga.source_id,rif.na_sequence_id, rif.mapping_end, rif.mapping_start
   having sum(rif.score) > 1)
   select o.na_sequence_id,o.mapping_start,o.mapping_end,o.score,round(100 * o.score / mscore.max_score,1) as gene_percentage,sum_score as gene_sum_score,
@@ -4493,12 +4498,13 @@ from
    from core 
    group by gene_id) mscore,
    core o
-   where o.gene_id = mscore.gene_id
+   where o.gene_id = mscore.gene_id)
+   group by na_sequence_id,mapping_start,mapping_end
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index GeneIntronPerc_ix&1 on GeneIntronPercent&1 (na_sequence_id,mapping_start,mapping_end)
+create index GeneIntronPerc_ix&1 on GeneIntronPercent&1 (na_sequence_id,mapping_start,mapping_end,intron_percent)
 tablespace indx
       ]]>
     </sql>
