@@ -4477,39 +4477,55 @@ tablespace indx
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
-               create table &prefixGeneIntronPercent&1 NOLOGGING AS
+create table &prefixGeneIntronPercent&1 NOLOGGING AS
 select na_sequence_id,mapping_start,mapping_end,max(score) as score,min(gene_percentage) as intron_percent,
-  max(gene_sum_score) as gene_sum_score, max(gene_avg_score) as gene_avg_score
+  max(total_exp) as total_fpkm, max(score) / max(total_exp) as score_exp_ratio
 from (
 with core as 
-(select ga.source_id as gene_id,rif.na_sequence_id,rif.mapping_start,rif.mapping_end,sum(rif.score) as score
+(select ga.na_feature_id,rif.na_sequence_id,rif.mapping_start,rif.mapping_end,sum(rif.score) as score
     FROM   apidb.IntronJunction rif, 
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr,
          apidbtuning.geneattributes ga
   WHERE ga.na_sequence_id = rif.na_sequence_id
+     and ga.na_feature_id = 24813
      and rif.mapping_start <= ga.end_max
      and rif.mapping_end >= ga.start_min
      and rif.mapping_end - rif.mapping_start < 10000
      AND rif.external_database_release_id = edbr.external_database_release_id 
      AND edb.external_database_id = edbr.external_database_id 
      AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
-  GROUP BY ga.source_id,rif.na_sequence_id, rif.mapping_end, rif.mapping_start
+  GROUP BY ga.na_feature_id,rif.na_sequence_id, rif.mapping_end, rif.mapping_start
   having sum(rif.score) > 1)
   select o.na_sequence_id,o.mapping_start,o.mapping_end,o.score,round(100 * o.score / mscore.max_score,1) as gene_percentage,sum_score as gene_sum_score,
-  avg_score as gene_avg_score
+  avg_score as gene_avg_score,exp.total_exp
 from
-  (select gene_id,max(score) as max_score,sum(score) as sum_score,round(avg(score),1) as avg_score 
+  (select nafe.na_feature_id,round(sum(nafe.value),1) as total_exp
+    from study.protocolappnode pan, results.nafeatureexpression nafe, study.study s, apidbtuning.ProfileSamples ps,
+    sres.externaldatabase edb, sres.externaldatabaserelease edbr
+    where (pan.name like '%htseq-union - firststrand - fpkm%'
+    or pan.name like '%htseq-union - unstranded - fpkm%')
+    and Pan.Protocol_App_Node_Id = Ps.Protocol_App_Node_Id
+    and ps.profile_type = 'values'
+    and ps.study_id = s.study_id
+    AND s.external_database_release_id = edbr.external_database_release_id 
+    AND edb.external_database_id = edbr.external_database_id 
+    AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
+    and Pan.Protocol_App_Node_Id = nafe.Protocol_App_Node_Id
+    and nafe.na_feature_id = 24813
+   group by nafe.na_feature_id) exp,
+  (select na_feature_id,max(score) as max_score,sum(score) as sum_score,round(avg(score),1) as avg_score 
    from core 
-   group by gene_id) mscore,
+   group by na_feature_id) mscore,
    core o
-   where o.gene_id = mscore.gene_id)
+   where o.na_feature_id = mscore.na_feature_id
+   and exp.na_feature_id = o.na_feature_id)
    group by na_sequence_id,mapping_start,mapping_end
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index GeneIntronPerc_ix&1 on GeneIntronPercent&1 (na_sequence_id,mapping_start,mapping_end,intron_percent)
+create index GeneIntronPerc_ix&1 on GeneIntronPercent&1 (na_sequence_id,mapping_start,mapping_end)
 tablespace indx
       ]]>
     </sql>
