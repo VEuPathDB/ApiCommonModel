@@ -297,7 +297,7 @@ CREATE TABLE DataSourceCount nologging as (
       <![CDATA[
        create table CommunityCount nologging as
        select taxon_id, count(*) as communityCount
-       from apidbTuning.GeneAttributes
+       from GeneAttributes
        where (source_id, project_id)
               in (select distinct stable_id, project_name
                   from userlogins5.mappedComment@prodn.login_comment
@@ -2665,14 +2665,14 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
- create or replace view apidbtuning.snpchipattributes as
-  select * from apidbtuning.snpattributesdots
+ create or replace view snpchipattributes as
+  select * from snpattributesdots
   where type in ('Broad_barcode', 'Broad_3k_chip', 'Broad_hd_array','Broad_ar_array')
       ]]>
     </sql>
     <sql>
       <![CDATA[
-   GRANT SELECT ON apidbtuning.snpchipattributes TO gus_r
+   GRANT SELECT ON snpchipattributes TO gus_r
       ]]>
     </sql>
   </tuningTable>
@@ -3376,7 +3376,7 @@ SELECT distinct var.strain,
        d.name as extdb_name, vd.name as var_extdb_name, sa.taxon_id
 FROM   apidb.snp snp, 
        apidb.sequencevariation var,     
-       apidbtuning.SequenceAttributes sa,
+       SequenceAttributes sa,
        sres.ExternalDatabase d, 
        sres.ExternalDatabaseRelease rel,
        sres.ExternalDatabase vd, 
@@ -5552,9 +5552,12 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
     <!-- Each record maps an organism to its BLAST abbreviation. Used by
          BLAST-query parameters. Propagated to portal instances.
       -->
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="sres.TaxonName"/>
     <internalDependency name="OrganismAbbreviationWS"/>
     <internalDependency name="OrganismTree"/>
     <internalDependency name="EstAttributes"/>
+    <internalDependency name="TaxonSpecies"/>
     <sql>
       <![CDATA[
        create table OrganismAbbreviationBlast&1 nologging as
@@ -5572,17 +5575,22 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   select distinct sp.name as organism,
                   ot.parentTerm as parent,
                   REGEXP_REPLACE(org.name_for_filenames, org.strain_abbrev,'', 1, 1) as abbreviation 
-  from sres.TaxonName sp, taxonspecies ts, apidb.Organism org, organismtree ot,
-       estattributes ea, sres.TaxonName etn, taxonspecies ets
+  from sres.TaxonName sp, taxonspecies ts, apidb.Organism org, organismtree ot       
   where org.taxon_id = ts.taxon_id
   and ts.species_taxon_id = sp.taxon_id
   and sp.name_class = 'scientific name'
   and ot.term = sp.name
   and org.strain_abbrev is not null
   and org.name_for_filenames is not null
-  and ets.species_taxon_id = sp.taxon_id
-  and (ets.taxon_id = etn.taxon_id OR ets.species_taxon_id = etn.taxon_id)
-  and etn.name = ea.organism
+  and sp.taxon_id in (select ets.species_taxon_id
+                      from sres.TaxonName etn, taxonspecies ets
+                      where ets.taxon_id = etn.taxon_id
+                        and etn.name in (select organism from EstAttributes)
+                      union
+                      select ets.species_taxon_id
+                      from sres.TaxonName etn, taxonspecies ets
+                      where ets.species_taxon_id = etn.taxon_id
+                        and etn.name in (select organism from estattributes))
   union
   -- TrichDB EST Legacy
 --  select 'Trichomonas vaginalis' as organism, 'Trichomonas' as parent, 'Tvaginalis' as abbreviation from dual union  
