@@ -67,11 +67,19 @@ public class OwlClassGenerator {
 			br = new BufferedReader(new FileReader(path + inputFilename));
 
 			String line = null;
+			int lineNum = 0;
 			while( (line = br.readLine()) != null)
 			{
+			    lineNum ++;
 				if (!(line.trim().startsWith("##") || line.trim().length()==0)) {
 					String[] items = line.split("\t");
 					matrix.add(items);
+				
+					if (items.length > matrix.get(0).length) {
+					    System.out.println("Generation of the OWl file, " + outputFilename + ", stop because input tab-delimited file line " + lineNum + " has extra columns");
+					    System.out.println("\t" + inputFilename + " Line " + lineNum + " has " + items.length + " columns and required columns number is " + matrix.get(0).length);
+					    System.exit(0);
+					}
 				}
 			}
 			System.out.println("Successfully read text file: " + inputFilename);
