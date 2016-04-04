@@ -956,7 +956,7 @@
                       metadataSpecQueryRef="SharedVQ.SnpChipStrainsMetadataSpec"
                       prompt="Isolates"
                       multiPick="true"
-                      dependedParamRef="organismParams.organism,snpChipParams.snp_assay_type,organismParams.reference_strains_only"
+                      dependedParamRef="organismParams.organism,sharedParams.snp_assay_type,organismParams.reference_strains_only"
                       quote="false"
                       suppressNode="false">
          <help>
@@ -971,7 +971,7 @@
                       metadataSpecQueryRef="SharedVQ.SnpChipStrainsMetadataSpec"
                       prompt="Isolates"
                       multiPick="true"
-                      dependedParamRef="organismParams.organism,snpChipParams.snp_assay_type,organismParams.reference_strains_only"
+                      dependedParamRef="organismParams.organism,sharedParams.snp_assay_type,organismParams.reference_strains_only"
                       quote="true"
                       suppressNode="false">
          <help>
@@ -1510,10 +1510,10 @@
       </flatVocabParam>
 
     <flatVocabParam name="snp_assay_type" includeProjects="PlasmoDB,EuPathDB"
-          queryRef="snpChipVQ.type_from_dataset"
+          queryRef="snpChipVQ.type_from_organism"
           prompt="Isolate assay type"
           multiPick="false"
-          dependedParamRef="sharedParams.metadata_datasets"
+          dependedParamRef="snpChipParams.organism"
           quote="true"> 
       <help>
         Choose the isolate type you want to query
@@ -2667,6 +2667,31 @@ GROUP BY a.question_name
             <wsColumn name="spec_value"  width="1000" wsName="spec_value"/>
         </processQuery>
 
+        <sqlQuery name="MetadataSpecByOrganismAndArray" doNotTest="1" includeProjects="PlasmoDB"> 
+            <paramRef ref="snpChipParams.organism"/>
+            <paramRef ref="sharedParams.snp_assay_type"/>
+            <column name="property" />
+            <column name="spec_property"/>
+            <column name="spec_value" />
+            <sql>
+              <![CDATA[
+                select property, spec_property, spec_value
+                from apidbTuning.MetadataSpec
+                where subtype = $$snp_assay_type$$
+                  and organism = '$$organism$$'
+              ]]>
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="MetadataSpecByOrganismAndArray" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="snpChipParams.organism"/>
+            <paramRef ref="sharedParams.snp_assay_type"/>
+            <wsColumn name="property" width="100" wsName="property"/>
+            <wsColumn name="spec_property" width="100" wsName="spec_property"/>
+            <wsColumn name="spec_value"  width="1000" wsName="spec_value"/>
+        </processQuery>
+
+
       <sqlQuery name="SamplesWithMetadata" excludeProjects="EuPathDB">
          <paramRef ref="sharedParams.metadata_datasets"/>
          <column name="internal"/>
@@ -2715,6 +2740,64 @@ GROUP BY a.question_name
             ]]>
             </sql>
         </sqlQuery>
+
+        <sqlQuery name="SamplesMetadataByOrganismArray" doNotTest="1" includeProjects="PlasmoDB">
+          <paramRef ref="snpChipParams.organism"/>
+          <paramRef ref="sharedParams.snp_assay_type"/>
+          <column name="term" />
+          <column name="value"/>
+          <column name="property" />
+          <sql>
+            <![CDATA[
+                select pan_name as term, term as property, value
+                from apidbTuning.panCharacteristicMetadata
+                where subtype = $$snp_assay_type$$
+                  and organism = '$$organism$$'
+              union
+                select pan_name as term, term as property, value
+                from apidbTuning.panProtocolMetadata
+                where subtype = $$snp_assay_type$$
+                  and organism = '$$organism$$'
+              union
+                select pan_name as term, term_name as property, pan_name as value
+                from apidbTuning.FallbackMetadata
+                where subtype = $$snp_assay_type$$
+                  and organism = '$$organism$$'
+            ]]>
+            </sql>
+        </sqlQuery>
+
+      <sqlQuery name="SamplesByOrganismArray" excludeProjects="EuPathDB">
+         <paramRef ref="snpChipParams.organism"/>
+         <paramRef ref="sharedParams.snp_assay_type"/>
+         <column name="internal"/>
+         <column name="term"/>
+         <column name="display"/>
+         <sql>
+             select pan_name as term, pan_name as display, protocol_app_node_id as internal
+             from apidbTuning.panCharacteristicMetadata
+             where subtype = $$snp_assay_type$$
+               and organism = '$$organism$$'
+           union
+             select pan_name as term, pan_name as display, protocol_app_node_id as internal
+             from apidbTuning.panProtocolMetadata
+             where subtype = $$snp_assay_type$$
+               and organism = '$$organism$$'
+           union
+             select pan_name as term, pan_name as display, protocol_app_node_id as internal
+             from apidbTuning.FallbackMetadata
+             where subtype = $$snp_assay_type$$
+               and organism = '$$organism$$'
+          </sql>
+      </sqlQuery>
+
+      <processQuery name="SamplesByOrganismArray"
+                    processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+         <paramRef ref="geneParams.profileset_generic"/>
+         <wsColumn name="internal" width="100" wsName="internal"/>
+         <wsColumn name="term" width="100" wsName="term"/>
+         <wsColumn name="display" width="100" wsName="display"/>
+      </processQuery>
 
        <sqlQuery name="MetadataDatasets" excludeProjects="EuPathDB">
              <column name="internal"/>
@@ -2766,6 +2849,35 @@ GROUP BY a.question_name
 
       <processQuery name="fromDataset" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="term ASC" includeProjects="EuPathDB">
         <paramRef ref="sharedParams.metadata_datasets"/>
+	<wsColumn name="internal" width="100" wsName="internal"/>
+	<wsColumn name="term" width="100" wsName="term"/>
+      </processQuery>
+
+        <sqlQuery name="SnpChipMetadataDatasetsByOrganism" doNotTest="1" includeProjects="PlasmoDB">   
+          <paramRef ref="snpChipParams.organism"/>
+          <column name="term" />
+          <column name="display" />
+          <column name="internal"/>
+          <sql>
+            <![CDATA[
+            SELECT dsnt.name AS term
+            , dsnt.name as internal
+            , dsp.display_name AS display
+            FROM
+              apidbtuning.datasetpresenter dsp
+            , apidbtuning.datasetnametaxon dsnt
+            WHERE
+              dsp.dataset_presenter_id = dsnt.dataset_presenter_id
+              AND dsp.subtype in ('Broad_3k_array', 'Broad_75K_array', 'Broad_barcode', 'NIH_10k')
+              AND dsnt.name in (SELECT dataset_name
+                                FROM ApidbTuning.MetadataSpec
+                                WHERE organism = '$$organism$$')
+            ORDER BY dsnt.name DESC            ]]>
+            </sql>
+        </sqlQuery>
+
+      <processQuery name="SnpChipMetadataDatasetsByOrganism" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="term ASC" includeProjects="EuPathDB">
+        <paramRef ref="organismParams.organism"/>
 	<wsColumn name="internal" width="100" wsName="internal"/>
 	<wsColumn name="term" width="100" wsName="term"/>
       </processQuery>

@@ -142,20 +142,10 @@
 
     
     <flatVocabParam name="snp_assay_type" includeProjects="PlasmoDB,EuPathDB"
-          queryRef="snpChipVQ.snps_only"
+          queryRef="snpChipVQ.type_from_organism"
           prompt="Isolate assay type"
           multiPick="false"
-          quote="true"> 
-      <help>
-        Choose the isolate type you want to query
-      </help>
-    </flatVocabParam>
-
-    <flatVocabParam name="snp_assay_type_dataset" includeProjects="PlasmoDB,EuPathDB"
-          queryRef="snpChipVQ.type_from_dataset"
-          prompt="Isolate assay type"
-          multiPick="false"
-          dependedParamRef="sharedParams.metadata_datasets"
+          dependedParamRef="snpChipParams.organism"
           quote="true"> 
       <help>
         Choose the isolate type you want to query
@@ -168,6 +158,27 @@
                   visible="false">
         <recordClass ref="SnpRecordClasses.SnpRecordClass" />
     </answerParam>
+
+      <flatVocabParam name="organism"
+                      queryRef="snpChipVQ.withChipSNPs"
+                     prompt="Organism"
+                     quote="false"
+                     suppressNode ="true">
+      </flatVocabParam>
+
+       <filterParam name="ref_samples_filter_metadata" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="SharedVQ.SamplesByOrganismArray"
+                      metadataQueryRef="SharedVQ.SamplesMetadataByOrganismArray"
+                      metadataSpecQueryRef="SharedVQ.MetadataSpecByOrganismAndArray"
+                      prompt="Reference Samples"
+                      multiPick="true"
+                      dependedParamRef="snpChipParams.organism,sharedParams.snp_assay_type"
+                      quote="true"
+                      trimMetadataTerms="false">
+         <help>
+              Select reference samples. 
+         </help>
+       </filterParam>
 
   </paramSet>
 
@@ -191,31 +202,43 @@
         </sql>
      </sqlQuery>
 
-     <sqlQuery name="type_from_dataset" includeProjects="PlasmoDB,EuPathDB">
-        <paramRef ref="sharedParams.metadata_datasets"/>
+     <sqlQuery name="type_from_organism" includeProjects="PlasmoDB,EuPathDB">
+        <paramRef ref="snpChipParams.organism"/>
         <column name="internal"/>
         <column name="term"/>
         <column name="display"/>
         <sql>
         <![CDATA[
-           WITH q
-           AS (SELECT CASE
-                       WHEN lower('$$metadata_datasets$$') LIKE '%artesunate%'
-                         THEN 'Broad_ar_array'
-                       WHEN lower('$$metadata_datasets$$') LIKE '%75k%'
-                         THEN 'Broad_hd_array'
-                       WHEN lower('$$metadata_datasets$$') LIKE '%barcode%'
-                         THEN 'Broad_barcode'
-                       WHEN lower('$$metadata_datasets$$') LIKE '%3k%'
-                         THEN 'Broad_3k_chip'
-                       ELSE '$$metadata_datasets$$'
-                     END as type_string
-              FROM dual)
-           SELECT type_string AS term, type_string AS internal, type_string AS display
-           FROM q
+           SELECT DISTINCT subtype as term, subtype as internal, subtype as display
+           FROM apidbTuning.MetadataSpec
+           WHERE subtype IN ('Broad_3k_array', 'Broad_75K_array', 'NIH_10k', 'Broad_barcode')
+             AND organism = '$$organism$$'
        ]]>
         </sql>
      </sqlQuery>
+
+    <!--================-->
+    <!-- with chip SNPs -->
+    <!--================-->
+
+    <sqlQuery name="withChipSNPs"
+              includeProjects="PiroplasmaDB,GiardiaDB,AmoebaDB,CryptoDB,FungiDB,PlasmoDB,ToxoDB,TriTrypDB,TrichDB">
+      <column name="internal"/>
+      <column name="term"/>
+      <sql>
+        <![CDATA[
+          select distinct organism as term, organism as internal
+          from apidbTuning.MetadataSpec
+          where subtype in ('Broad_barcode', 'Broad_3k_array', 'NIH_10k', 'Broad_75K_array')
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <processQuery name="withChipSNPs" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"
+                  sorting="term ASC" includeProjects="EuPathDB">
+      <wsColumn name="internal" width="255" wsName="internal"/>
+      <wsColumn name="term" width="255" wsName="term"/>
+    </processQuery>
 
    </querySet>
 

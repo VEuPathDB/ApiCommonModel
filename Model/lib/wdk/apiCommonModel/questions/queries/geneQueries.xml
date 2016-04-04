@@ -1748,12 +1748,11 @@ from
     <processQuery name="GenesBySnps" includeProjects="PlasmoDB"
               processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindGenesWithChipSnpCharsPlugin">
 
-        <paramRef ref="sharedParams.metadata_datasets" queryRef="GeneVQ.SnpChipMetadataDatasets"/>
-        <paramRef ref="sharedParams.organism" visible="false"/>
-        <paramRef ref="snpChipParams.snp_assay_type" visible="false"/>
-        <paramRef ref="sharedParams.ref_samples_filter_metadata" quote="false" prompt="Samples"/>
+        <paramRef ref="snpChipParams.organism" visible="false"/>
+        <paramRef ref="sharedParams.snp_assay_type"/>
+        <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Samples" noTranslation="false"/>
 	<paramRef ref="snpParams.WebServicesPath"/>
-	<paramRef ref="snpParams.ReadFrequencyPercent" visible="false"/>
+	<paramRef ref="snpChipParams.ReadFrequencyPercent" visible="false"/>
         <paramRef ref="snpParams.MinPercentMinorAlleles" />
 	<paramRef ref="snpParams.MinPercentIsolateCalls"  />
         <paramRef ref="geneParams.snp_class"/>
@@ -1776,202 +1775,6 @@ from
         <wsColumn name="chip_total_snps" columnType="number"/>
     </processQuery>
 
-    <!--sqlQuery name="GenesBySnps" includeProjects="PlasmoDB" >
-
-        <testParamValues includeProjects="PlasmoDB">
-            <paramValue name="snp_strain_m">Pf-7G8</paramValue>
-            <paramValue name="snp_strain_a">Pf-3D7</paramValue>
-        </testParamValues>
-
-        <paramRef ref="organismParams.organism" displayType="select" multiPick="false" 
-                  quote="true" queryRef="organismVQ.withChromosomesSNPs">
-                  <help>Select organism you wish to query against</help>
-        </paramRef>
-
-       <paramRef ref="snpChipParams.snp_assay_type"/>
-        <paramRef ref="sharedParams.snpchip_strain_meta"/>
-        <paramRef ref="geneParams.snp_stat"/>
-        <paramRef ref="geneParams.occurrences_lower"/>
-        <paramRef ref="geneParams.occurrences_upper"/>
-        <paramRef ref="geneParams.dn_ds_ratio_lower"/>
-        <paramRef ref="geneParams.dn_ds_ratio_upper"/>
-        <paramRef ref="geneParams.snp_density_lower"/>
-        <paramRef ref="geneParams.snp_density_upper"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="matched_result"/>
-        <column name="cds_snp_density"/>
-        <column name="dn_ds_ratio"/>
-        <column name="num_synonymous"/>
-        <column name="num_non_synonymous"/>
-        <column name="num_noncoding"/>
-        <column name="num_nonsense"/>
-        <column name="total_snps"/>
-
-        <sqlParamValue name="approxZero">0.1</sqlParamValue>
-
-        <sql>
-            <![CDATA[
-WITH variants
-     AS (SELECT var.parent_id
-                ,Count(var.na_feature_id)                                                               AS allele_count
-                ,var.allele
-                ,var.product
-                ,Count(var.strain)                                                                      AS strain_count
-         FROM   dots.SeqVariation var
-         WHERE  var.organism = $$organism$$
-                AND var.strain IN ( $$snpchip_strain_meta$$ )
-                AND name IN ( $$snp_assay_type$$ )
-         GROUP  BY parent_id
-                   ,allele
-                   ,product
-         ORDER  BY parent_id
-                   ,allele),
-     alleles
-     AS (SELECT one.parent_id
-                ,one.allele allele_one
-                ,one.allele_count
-                ,two.allele AS allele_two
-                ,1          AS allele_count_equal
-         FROM   variants one,
-                variants two
-         WHERE  one.parent_id = two.parent_id
-                AND one.allele_count = two.allele_count
-                AND one.allele != two.allele
-         UNION
-         SELECT one.parent_id
-                ,one.allele allele_one
-                ,one.allele_count
-                ,two.allele AS allele_two
-                ,0          AS allele_count_equal
-         FROM   variants one,
-                variants two
-         WHERE  one.parent_id = two.parent_id
-                AND one.allele_count > two.allele_count
-         ORDER  BY parent_id),
-     ranked_alleles
-     AS (SELECT parent_id
-                ,allele_one AS major_allele
-                ,allele_two AS minor_allele
-         FROM   alleles
-         WHERE  parent_id IN (SELECT parent_id
-                              FROM   alleles
-                              GROUP  BY parent_id
-                              HAVING Count(parent_id) = 1)
-                AND allele_count_equal = 0
-         UNION
-         SELECT major.parent_id
-                ,major.allele_one AS major_allele
-                ,minor.allele_one AS minor_allele
-         FROM   alleles major,
-                alleles minor
-         WHERE  major.parent_id = minor.parent_id
-                AND major.allele_count > minor.allele_count
-                AND major.allele_count_equal = 0
-         UNION
-         SELECT major.parent_id
-                ,major.allele_one AS major_allele
-                ,minor.allele_one AS minor_allele
-         FROM   alleles major,
-                alleles minor,
-                APIDBTUNING.SNPCHIPATTRIBUTES snp
-         WHERE  major.parent_id = minor.parent_id
-                AND major.allele_count_equal = 1
-                AND major.allele_one = minor.allele_two
-                AND major.allele_two = minor.allele_one
-                AND major.allele_one = snp.major_allele)
-SELECT source_id
-       ,'@PROJECT_ID@'                                                    AS project_id
-       ,Round(non_synonymous / CASE synonymous
-                                 WHEN 0 THEN NULL
-                                 ELSE synonymous
-                               END, 2)                                    AS dn_ds_ratio
-       ,non_synonymous                                                    AS num_non_synonymous
-       ,synonymous                                                        AS num_synonymous
-       ,non_coding                                                        AS num_noncoding
-       ,STOP                                                              AS num_nonsense
-       ,cds_length
-       ,Round(( ( non_synonymous + synonymous ) / cds_length * 1000 ), 2) AS cds_snp_density
-       ,total                                                             AS total_snps
-FROM   (SELECT cds_length
-               ,na_feature_id
-               ,source_id
-               ,SUM(synonymous)           AS synonymous
-               ,SUM(non_synonymous)       AS non_synonymous
-               ,SUM(non_coding)           AS non_coding
-               ,SUM(STOP)                 AS STOP
-               ,( SUM(non_coding) + SUM(synonymous)
-                  + SUM(non_synonymous) ) AS total
-        FROM   (SELECT gf.cds_length
-                       ,gf.na_feature_id
-                       ,gf.source_id
-                       ,CASE
-                          WHEN major.product IS NULL THEN 1
-                          ELSE 0
-                        END           AS non_coding
-                       ,CASE
-                          WHEN total_products.distinct_products > 1 THEN 1
-                          ELSE 0
-                        END           AS non_synonymous
-                       ,CASE
-                          WHEN total_products.distinct_products = 1 THEN 1
-                          ELSE 0
-                        END           AS synonymous
-                       ,CASE
-                          WHEN Regexp_like(total_products.products, '\*') THEN 1
-                          ELSE 0
-                        END           AS STOP
-                FROM   apidbtuning.snpChipAttributes sa,
-                       apidbtuning.geneattributes gf,
-                       (SELECT DISTINCT var.*
-                        FROM   variants var,
-                               ranked_alleles ra
-                        WHERE  var.parent_id = ra.parent_id
-                               AND var.allele = ra.major_allele) major,
-                       (SELECT var.parent_id
-                               ,SUM (allele_count)                     AS allele_count
-                               ,Listagg(ra.minor_allele, ',')
-                                  within GROUP (ORDER BY strain_count) AS alleles
-                               ,Listagg(var.product, ',')
-                                  within GROUP (ORDER BY strain_count) AS products
-                        FROM   variants var,
-                               ranked_alleles ra
-                        WHERE  var.parent_id = ra.parent_id
-                               AND var.allele != ra.major_allele
-                        GROUP  BY var.parent_id) minor,
-                       (SELECT DISTINCT var.parent_id
-                                        ,Count (DISTINCT Product)               AS distinct_products
-                                        ,Count (*)                              AS total_products
-                                        ,Listagg(var.product, ',')
-                                           within GROUP (ORDER BY strain_count) AS products
-                        FROM   variants var
-                        GROUP  BY var.parent_id) total_products
-                WHERE  gf.source_id = sa.GENE_SOURCE_ID
-                       AND sa.na_feature_id = major.parent_id
-                       AND sa.na_feature_id = minor.parent_id
-                       AND sa.na_feature_id = total_products.parent_id)
-        GROUP  BY cds_length
-                  ,na_feature_id
-                  ,source_id)
-WHERE  non_synonymous / CASE synonymous
-                          WHEN 0 THEN &&approxZero&&
-                        ELSE synonymous
-                        END >= $$dn_ds_ratio_lower$$
-       AND ( -1 = $$dn_ds_ratio_upper$$
-              OR non_synonymous / CASE synonymous
-                                    WHEN 0 THEN &&approxZero&&
-                                  ELSE synonymous
-                                  END <= $$dn_ds_ratio_upper$$ )
-       AND $$snp_stat$$ >= $$occurrences_lower$$
-       AND ( -1 = $$occurrences_upper$$
-              OR $$snp_stat$$ <= $$occurrences_upper$$ )
-       AND ( non_synonymous + synonymous ) / cds_length * 1000 >= $$snp_density_lower$$
-       AND ( -1 = $$snp_density_upper$$
-              OR ( non_synonymous + synonymous ) / cds_length * 1000 <= $$snp_density_upper$$ ) 
- 
-           ]]>
-       </sql>
-    </sqlQuery>
 
     <processQuery name="GenesBySnps" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"  doNotTest="true">
 
@@ -1999,7 +1802,7 @@ WHERE  non_synonymous / CASE synonymous
         <wsColumn name="num_noncoding" width="10"/>
         <wsColumn name="num_nonsense" width="10"/>
         <wsColumn name="total_snps" width="10"/>
-   </processQuery-->
+   </processQuery>
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Genes By NGS Snps -->
