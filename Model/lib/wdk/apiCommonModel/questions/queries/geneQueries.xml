@@ -1748,9 +1748,52 @@ from
     <processQuery name="GenesBySnps" includeProjects="PlasmoDB"
               processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindGenesWithChipSnpCharsPlugin">
 
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                -- set source_id
+                update ##WDK_CACHE_TABLE##
+                set source_id = (select min(source_id)
+                                      from apidbTuning.transcriptAttributes
+                                      where gene_source_id = ##WDK_CACHE_TABLE##.gene_source_id)
+                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                  and source_id is null
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                -- insert missing transcripts of included genes
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result,
+cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous, num_noncoding, num_nonsense, chip_total_snps)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select source_id, gene_source_id
+                           from apidbTuning.transcriptAttributes
+                           where gene_source_id in (select gene_source_id from matches)
+                         minus
+                           select source_id, gene_source_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, mm.source_id, mm.gene_source_id,  '@PROJECT_ID@', 'Y',
+                       wct.cds_snp_density, wct.chip_dn_ds_ratio, wct.chip_num_synonymous,
+                       wct.chip_num_non_synonymous, wct.num_noncoding, wct.num_nonsense, wct.chip_total_snps
+                from row_offset ro, mismatches mm, ##WDK_CACHE_TABLE## wct
+                where mm.gene_source_id = wct.gene_source_id
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+
         <paramRef ref="snpChipParams.organism" visible="false"/>
         <paramRef ref="sharedParams.snp_assay_type"/>
-        <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Samples" noTranslation="false"/>
+        <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Samples"/>
 	<paramRef ref="snpParams.WebServicesPath"/>
 	<paramRef ref="snpChipParams.ReadFrequencyPercent" visible="false"/>
         <paramRef ref="snpParams.MinPercentMinorAlleles" />
@@ -1820,9 +1863,8 @@ from
         <testParamValues includeProjects="TriTrypDB">
             <paramValue name="ngsSnp_strain_meta">Tb-927</paramValue>
         </testParamValues>
-
         <paramRef ref="organismParams.reference_strains_only"/>
-        <paramRef ref="organismParams.organism" displayType="select" multiPick="false" queryRef="organismVQ.withNgsSNPs" quote="true">
+        <paramRef ref="organismParams.organism" displayType="select" multiPick="false" queryRef="organismVQ.withNgsSNPdatasets" quote="true">
           <help>The organism you choose will determine the organism from which to return genes.  That will also restrict the set of isolates you may choose as SNPs are identified by aligning the reads from those isolates to this genome.</help>
         </paramRef>
 
