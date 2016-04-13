@@ -1,6 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tuningConfig>
 
+<tuningTable name="OrganismSelectTaxonRank" prefixEnabled="false">
+    <comment>Taxon ranks for organisms                                                                                                     
+    </comment>
+    <externalDependency name="apidb.organism"/>
+    <externalDependency name="sres.taxonname"/>
+    <externalDependency name="sres.taxon"/>
+    <sql>
+      <![CDATA[         
+create table OrganismSelectTaxonRank&1 as 
+with organism_rank as (
+select tn1.name as organism, tn2.name as parent_organism, 
+case when tn2.name = 'Oomycetes' then 'class' else r.rank end as rank
+
+from (
+select CONNECT_BY_ROOT taxon_id as input, taxon_id, rank
+from sres.taxon
+start with taxon_id in (select taxon_id from apidb.organism where is_annotated_genome = 1)
+connect by prior parent_id = taxon_id) r
+, sres.taxonname tn1
+, sres.taxonname tn2
+where r.input = tn1.taxon_id
+and r.taxon_id = tn2.taxon_id
+and tn1.name_class = 'scientific name'
+and tn2.name_class = 'scientific name'
+and (r.rank in ('phylum', 'genus', 'species', 'kingdom', 'class') or (r.rank = 'no rank' and tn2.name = 'Oomycetes'))
+
+)
+
+select organisms.organism, phylum.parent_organism as phylum, genus.parent_organism as genus, species.parent_organism as species ,kingdom.parent_organism as kingdom, class.parent_organism as class
+from 
+(select distinct organism from organism_rank) organisms,
+(select * from organism_rank where rank= 'phylum') phylum,
+(select * from organism_rank where rank= 'genus') genus,
+(select * from organism_rank where rank= 'species') species,
+(select * from organism_rank where rank= 'kingdom') kingdom,
+(select * from organism_rank where rank= 'class') class
+where organisms.organism = phylum.organism (+)
+and organisms.organism = genus.organism (+)
+and organisms.organism = species.organism (+)
+and organisms.organism = kingdom.organism (+)
+and organisms.organism = class.organism (+)
+ ]]>
+</sql>
+</tuningTable>
+
+
+
 <tuningTable name="PathwayAttributes" prefixEnabled="false">
     <comment>Attributes for Metabolic Pathways
     </comment>
