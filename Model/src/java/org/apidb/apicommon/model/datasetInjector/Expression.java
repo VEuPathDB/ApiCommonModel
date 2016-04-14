@@ -82,7 +82,7 @@ public abstract class Expression extends DatasetInjector {
 
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
-
+	setShortAttribution();
         setOrganismAbbrevFromDatasetName();
 
         String projectName = getPropValue("projectName");
