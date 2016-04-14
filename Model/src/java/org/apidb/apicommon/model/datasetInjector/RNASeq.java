@@ -137,7 +137,7 @@ public class RNASeq extends  DatasetInjector {
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               injectTemplate("rnaSeqFoldChangeQuestion");
               //              injectTemplate("rnaSeqFoldChangeCategories");
-              setPropValue("searchCategory", "searchCategory-fold-change");
+              setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
               setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
               injectTemplate("internalGeneSearchCategory");
 
@@ -146,7 +146,7 @@ public class RNASeq extends  DatasetInjector {
 
           injectTemplate("rnaSeqPercentileQuestion");
           //          injectTemplate("rnaSeqPercentileCategories");
-          setPropValue("searchCategory", "searchCategory-percentile");
+          setPropValue("searchCategory", "searchCategory-transcriptomics-percentile");
           setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
           injectTemplate("internalGeneSearchCategory");
 

@@ -26,7 +26,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
                 injectTemplate("expressionFoldChangeWithConfidenceQuestion");
                 //                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
 
-                setPropValue("searchCategory", "searchCategory-fold-change-with-confidence");
+                setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change-with-confidence");
                 setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Confidence");
                 injectTemplate("internalGeneSearchCategory");
 
@@ -34,7 +34,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 
             injectTemplate("expressionFoldChangeQuestion");
             //            injectTemplate(lcDataType + "FoldChangeCategories");
-            setPropValue("searchCategory", "searchCategory-fold-change");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
 
@@ -43,7 +43,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPercentileQuestion");
             //            injectTemplate(lcDataType + "PercentileCategories");
-            setPropValue("searchCategory", "searchCategory-percentile");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-percentile");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Percentile");
             injectTemplate("internalGeneSearchCategory");
 

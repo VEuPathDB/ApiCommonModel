@@ -34,7 +34,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
             injectTemplate("expressionFoldChangeWithFDRQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithFDRCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-fold-change-with-fdr");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change-with-fdr");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithFDR" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
 
@@ -44,7 +44,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         } else if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-fold-change-with-confidence");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"fold-change-with-confidence");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithConfidence" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
 
@@ -52,7 +52,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
             injectTemplate("expressionFoldChangeQuestionDirect");
 
             //injectTemplate(lcDataType + "FoldChangeCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-direct-comparison");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-direct-comparison");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
         }
@@ -62,7 +62,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
             injectTemplate("expressionPctProfileSetParamQuery");
 
             //            injectTemplate(lcDataType + "PercentileCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-percentile");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-percentile");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName() + "Percentile");
             injectTemplate("internalGeneSearchCategory");
 

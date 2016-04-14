@@ -22,6 +22,14 @@ public abstract class Expression extends DatasetInjector {
 
     protected abstract void setGraphYAxisDescription();
 
+    protected String getSearchCategoryType() {
+	String lcDatasetClassCategory=getPropValue("datasetClassCategory").toLowerCase();
+	if (lcDatasetClassCategory.equals("proteomics")) {
+	    return lcDatasetClassCategory;
+	}
+	return "transcriptomics";
+    }
+	
     protected void setProfileSetFilterPattern() {
         setPropValue("profileSetFilterPattern", "%");
     }
