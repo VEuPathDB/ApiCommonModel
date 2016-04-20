@@ -27,6 +27,7 @@ public class RNASeq extends  DatasetInjector {
       
       Boolean switchStrands = getPropValueAsBoolean("switchStrands");
 
+      setPropValue("metadataFileSuffix","");
       setOrganismAbbrevFromDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
@@ -64,6 +65,7 @@ public class RNASeq extends  DatasetInjector {
 	      if (switchStrands) {
 		  setPropValue("antisense","firststrand") ;
 		  setPropValue("sense","secondstrand") ;
+		  setPropValue("metadataFileSuffix","_alt");
 	      } else {
 		  setPropValue("sense","firststrand") ;
 		  setPropValue("antisense","secondstrand") ;
