@@ -24,10 +24,9 @@ public class RNASeq extends  DatasetInjector {
       String projectName = getPropValue("projectName");
       //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
-
-      // TODO : get this value from Presenter
-      setPropValue("switchStrands", "0");
       
+      Boolean switchStrands = getPropValueAsBoolean("switchStrands");
+
       setOrganismAbbrevFromDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
@@ -62,12 +61,13 @@ public class RNASeq extends  DatasetInjector {
 
           if(getPropValueAsBoolean("isStrandSpecific")) {
 
-      // TODO: Presenter to pass a boolean to switch these
-      setPropValue("sense","firststrand") ;
-      setPropValue("antisense","secondstrand") ;
-
-      //Boolean switchStrands = getPropValueAsBoolean("switchStrands");
-
+	      if (switchStrands) {
+		  setPropValue("antisense","firststrand") ;
+		  setPropValue("sense","secondstrand") ;
+	      } else {
+		  setPropValue("sense","firststrand") ;
+		  setPropValue("antisense","secondstrand") ;
+	      }
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
@@ -251,6 +251,7 @@ public class RNASeq extends  DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},
+                                 {"switchStrands", ""},
                                  {"graphColor", ""},
                                  {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
