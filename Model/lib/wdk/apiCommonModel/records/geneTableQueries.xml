@@ -1333,18 +1333,42 @@ ORDER BY
             <column name="project_id"/>
             <column name="pathway_source_id"/>
             <column name="pathway_name"/>
+            <column name="reactions"/>
+            <column name="enzyme"/>
+            <column name="pathway_source"/>
 
             <sql>
             <![CDATA[
-SELECT DISTINCT
-  gene_source_id as source_id
-, '@PROJECT_ID@' AS project_id
-, pathway_source_id
-, pathway_name
-FROM
-  apidbtuning.transcriptpathway
-ORDER BY
-  pathway_name
+            select distinct
+            source_id
+            , project_id
+            , pathway_source_id
+            , pathway_name
+            , listagg(reaction_source_id, ', ') within group (order by reaction_source_id) as reactions
+            , enzyme
+            , pathway_source
+            from (
+                SELECT DISTINCT
+                tp.GENE_SOURCE_ID as source_id
+                , '@PROJECT_ID@' AS project_id
+                , tp.PATHWAY_SOURCE_ID
+                , tp.PATHWAY_NAME
+                , pr.reaction_source_id
+                , pr.ENZYME
+                , pa.PATHWAY_SOURCE
+                FROM
+                apidbtuning.transcriptpathway tp
+                , apidbtuning.pathwayattributes pa 
+                , apidbtuning.pathwaycompounds pc
+                , apidbtuning.pathwayreactions pr
+                where tp.PATHWAY_ID = pa.PATHWAY_ID
+                and pc.PATHWAY_ID = pa.PATHWAY_ID
+                and pr.REACTION_ID = pc.REACTION_ID
+                and tp.EC_NUMBER like replace(pr.enzyme, '-', '%')
+                ORDER BY pathway_name
+                )
+            group by source_id, project_id, pathway_source_id, pathway_name, enzyme, pathway_source
+            order by pathway_source_id, pathway_source
             ]]>
             </sql>
         </sqlQuery>
@@ -3131,21 +3155,41 @@ order by quant_type asc, fold_change desc
 
             <column name="source_id"/>
             <column name="project_id"/>
-            <column name="reaction"/>
             <column name="pathway_source"/>
-            <column name="chebi_accession"/>
+            <column name="reaction_source_id"/>
+            <column name="reaction_url"/>
             <column name="enzyme"/>
-            <column name="type"/>
+            <column name="expasy_url"/>
+            <column name="equation"/>
+            <column name="reversible"/>
+            <column name="substrates_text"/>
+            <column name="products_text"/>
             <sql>
             <![CDATA[
-select distinct ta.gene_source_id as source_id,  ta.project_id, pc.reaction, pc.pathway_source, pc.CHEBI_ACCESSION, pc.enzyme, pc.type
-from apidbtuning.pathwaycompounds pc
-   , apidbtuning.transcriptattributes ta
-   , dots.aasequenceenzymeclass asec
-   , sres.enzymeclass ec
-where ta.aa_sequence_id = asec.aa_sequence_id
-and asec.enzyme_class_id = ec.enzyme_class_id
-and pc.enzyme like replace(ec.ec_number, '-', '%')
+            select distinct ta.GENE_SOURCE_ID as source_id
+            , ta.PROJECT_ID
+            , pa.PATHWAY_SOURCE
+            , pr.REACTION_SOURCE_ID
+            , pr.REACTION_URL
+            , pr.ENZYME
+            , pr.EXPASY_URL
+            , pr.EQUATION_HTML as equation
+            , decode (pr.IS_REVERSIBLE, '1', 'Y', '0', 'N') as reversible
+            , pr.SUBSTRATES_TEXT
+            , pr.PRODUCTS_TEXT
+            from apidbtuning.transcriptattributes ta
+            , apidbtuning.pathwayattributes pa
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , apidbtuning.transcriptpathway tp
+            where ta.GENE_SOURCE_ID = tp.GENE_SOURCE_ID
+            and tp.EC_NUMBER like replace(pr.ENZYME, '-', '%')
+            and pr.REACTION_ID = pc.REACTION_ID
+            and pr.EXT_DB_NAME = pc.EXT_DB_NAME
+            and pr.EXT_DB_VERSION = pc.EXT_DB_VERSION
+            and pc.PATHWAY_ID = pa.PATHWAY_ID
+            and tp.PATHWAY_ID = pa.PATHWAY_ID
+            order by pr.REACTION_SOURCe_ID, pa.PATHWAY_SOURCE
             ]]>
            </sql>
         </sqlQuery>

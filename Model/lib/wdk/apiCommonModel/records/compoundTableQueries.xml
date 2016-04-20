@@ -86,38 +86,78 @@
 
 
     <sqlQuery name="CompoundsFromMetabolicPathways">
-      <column name="source_id"  />
+      <column name="source_id"/>
       <column name="project_id"/>
-      <column name="type"/>
       <column name="pathway_source"/>
-      <column name="pathway_name"/>
-      <column name="pathway_source_id"/>
+      <column name="reaction_source_id"/>
+      <column name="reaction_url"/>
       <column name="enzyme"/>
-      <column name="enzyme_link"/>
-      <column name="reaction"/>
-      <column name="reaction_link"/>
+      <column name="expasy_url"/>
+      <column name="equation_html"/>
+      <column name="substrates_text"/>
+      <column name="products_text"/>
       <sql>
-	<![CDATA[
-       WITH enzy AS (SELECT DISTINCT ec.ec_number 
-            FROM apidbtuning.transcriptAttributes gf,
-                 dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec
-            WHERE asec.aa_sequence_id = gf.aa_sequence_id
-              AND ec.enzyme_class_id = asec.enzyme_class_id)
-       SELECT  '@PROJECT_ID@' AS project_id, pc.chebi_accession AS source_id, 
-          pc.pathway_source, p.name AS pathway_name, pc.pathway AS pathway_source_id, pc.reaction, 
-          CASE WHEN pathway_source = 'KEGG' THEN '<a href="http://www.genome.jp/dbget-bin/www_bget?' || REPLACE (reaction, ' ', '+') || ' ">' || pc.reaction || '</a>' 
-          WHEN pathway_source ='TrypanoCyc' THEN '<a href="http://vm-trypanocyc.toulouse.inra.fr/TRYPANO/NEW-IMAGE?type=REACTION-IN-PATHWAY&object=' || pc.reaction  || '</a>' 
-          ELSE pc.reaction END as reaction_link,
-          pc.type, pc.enzyme,
-          CASE WHEN pc.enzyme IN (SELECT ec_number FROM enzy) 
-          THEN '<a href="processQuestion.do?questionFullName=GeneQuestions.InternalGenesByEcNumber&organism=all&'  || 'array%28ec_source%29=all&' || 'array%28ec_number_pattern%29=N/A&ec_wildcard=' || pc.enzyme || '&' || 'questionSubmit=Get+Answer'  || '">' || pc.enzyme || '</a>'
-          ELSE  pc.enzyme   END AS enzyme_link
-       FROM apidbtuning.pathwayCompounds pc, SRES.pathway p
-       WHERE pc.pathway = p.source_id
-       ORDER BY pc.pathway_source, p.name
-	]]>
-	    </sql>
-        </sqlQuery>
+    <!--TODO use internal genes by ec number query when fixed-->
+	    <![CDATA[
+            select distinct '@PROJECT_ID@' as project_id
+            , pc.CHEBI_ACCESSION as source_id
+            , pa.PATHWAY_SOURCE
+            , pr.REACTION_SOURCE_ID
+            , pr.REACTION_URL
+            , pr.ENZYME
+            , pr.EXPASY_URL
+            , pr.EQUATION_HTML
+            , pr.SUBSTRATES_TEXT
+            , pr.PRODUCTS_TEXT
+            from apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , apidbtuning.pathwayattributes pa
+            where pc.reaction_id = pr.reaction_id
+            and pc.PATHWAY_ID = pa.PATHWAY_ID
+            and pc.EXT_DB_NAME = pr.EXT_DB_NAME
+            and pc.EXT_DB_VERSION = pr.EXT_DB_VERSION
+	    ]]>
+	  </sql>
+    </sqlQuery>
+
+    <sqlQuery name="PathwaysFromCompounds">
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="pathway_source_id"/>
+        <column name="pathway_name"/>
+        <column name="reactions"/>
+        <column name="pathway_source"/>
+        <sql>
+            <![CDATA[
+                select distinct
+                project_id
+                , source_id
+                , pathway_source_id
+                , pathway_name
+                , listagg (reaction_source_id, ', ') within group (order by reaction_source_id) as reactions
+                , pathway_source
+                from (
+                select distinct
+                '@PROJECT_ID@' as project_id
+                , pc.CHEBI_ACCESSION as source_id
+                , pa.SOURCE_ID as pathway_source_id
+                , pa.NAME as pathway_name
+                , pa.PATHWAY_SOURCE
+                , pr.REACTION_SOURCE_ID
+                from
+                apidbtuning.pathwaycompounds pc
+                , apidbtuning.pathwayreactions pr
+                , apidbtuning.pathwayattributes pa
+                where pc.PATHWAY_ID = pa.PATHWAY_ID
+                and pr.REACTION_ID = pc.REACTION_ID
+                )
+                where source_id is not null
+                group by project_id, source_id, pathway_source_id, pathway_name, pathway_source
+            ]]>
+        </sql>
+    </sqlQuery>
+
+       
 
 
 	<!--
