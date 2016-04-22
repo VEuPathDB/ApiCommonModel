@@ -12,7 +12,7 @@ public class NcbiTaxonomy extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTaxon"); 
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon"); 
-      addWdkReference("IsolateRecordClasses.IsolateRecordClass", "question", "IsolateQuestions.IsolateByTaxon"); 
+      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByTaxon"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview"); 
   }
 
