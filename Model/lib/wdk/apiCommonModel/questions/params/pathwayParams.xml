@@ -25,7 +25,8 @@
                      queryRef="PathwayVQ.MetbPathwaysList"
                      prompt="Pathway Name or ID"
                      quote="true"
-                     displayType="typeAhead">
+                     displayType="typeAhead"
+                     dependedParamRef="pathwayParams.pathways_source">
             <help>Enter a Pathway ID (e.g. "ec00061") or Pathway name (e.g. "Fatty acid biosynthesis").</help>
             <suggest selectMode="none" />
         </flatVocabParam>
@@ -83,31 +84,40 @@
             <column name="term" />
             <column name="display" />
             <sql>
-	    SELECT distinct  replace(replace(ed.name, 'Pathways_',''), '_RSRC','') as display, 
-	      replace(replace(ed.name, 'Pathways_',''), '_RSRC','') as term,
-	      edr.external_database_release_id as internal
-	    FROM sres.pathway p, sres.externalDatabase ed, sres.externalDatabaseRelease edr
-	    WHERE p.external_database_release_id=edr.external_database_release_id
-	    AND edr.external_database_id = ed.external_database_id
-	    UNION
-	    SELECT 'Any' AS display, 'Any' AS term, 1 AS internal
-	    FROM dual
+            select distinct pa.pathway_source as display
+           , pa.pathway_source as term
+           , edr.external_database_release_id as internal
+           from apidbtuning.pathwayattributes pa
+           , sres.externaldatabase ed
+           , sres.externaldatabaserelease edr
+           where pa.EXTERNAL_DB_NAME = ed.NAME
+           and edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+           UNION
+           select 'Any' as display, 'Any' as term, 1 as internal
+           from dual
             </sql>
         </sqlQuery>
 
         <sqlQuery name="MetbPathwaysList"  doNotTest="1" excludeProjects="EuPathDB">
+            <paramRef ref="pathwayParams.pathways_source"/>
             <column name="internal" />
             <column name="term" />
             <column name="display" />
             <sql>
-            SELECT name ||' ('|| source_id||')' as display,
-                            name ||' ('|| source_id||')' as term,
-                            pathway_id as internal
-            FROM sres.pathway
-            WHERE source_id NOT IN ('ec01100','ec01110','ec01120')
-	    UNION
-	    SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
-	    FROM dual
+            SELECT p.name ||' ('|| p.source_id||') (' || pa.pathway_source || ')' as display
+            , '('|| p.source_id||') (' || pa.pathway_source || ')' as term
+            , p.pathway_id as internal
+            FROM sres.pathway p
+            , apidbtuning.pathwayattributes pa
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE p.pathway_id = pa.pathway_id
+            AND pa.external_db_name = ed.name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$=1)
+	        UNION
+	        SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
+	        FROM dual
             </sql>
         </sqlQuery>
 
