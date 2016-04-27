@@ -18,7 +18,7 @@
             SELECT  p.source_id
             , '@PROJECT_ID@' as project_id
             , pa.pathway_source
-            FROM   sres.Pathway p
+            FROM sres.Pathway p
             , apidbtuning.pathwayattributes pa 
             , sres.externaldatabase ed
             , sres.externaldatabaserelease edr
@@ -58,43 +58,96 @@
         <column name="type"/>
         <sql>
             <![CDATA[
-SELECT  '@PROJECT_ID@' as project_id, source_id, 
+WITH ds
+AS (select pathway_source from ($$ds_pathway_id$$))
+SELECT  '@PROJECT_ID@' as project_id, source_id, pathway_source,
           apidb.tab_to_string(set(cast(COLLECT(identifier) AS apidb.varchartab))) as identifiers,
           apidb.tab_to_string(set(cast(COLLECT(type) AS apidb.varchartab))) as type
 FROM (
 -- Compounds
-SELECT pc.pathway as source_id, ds.source_id AS identifier, 'compound' as type, pc.external_database_release_id
-FROM apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
-WHERE ds.source_id = pc.compound
-  OR   ds.source_id = pc.chebi_accession
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'compound' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwaycompounds pc
+, apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE (ds.pathway_source = pc.compound_source_id
+  OR   ds.pathway_source = pc.chebi_accession)
+AND pc.ext_db_name = ed.name
+AND edr.external_database_id = ed.external_database_id
+and pa.pathway_id = pc.pathway_id
 UNION
 -- Enzyme
-SELECT pc.pathway as source_id, ds.source_id AS identifier, 'enzyme' as type, pc.external_database_release_id
-FROM apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
-WHERE ds.source_id = pc.enzyme
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'enzyme' as type
+, edr.external_database_release_id
+FROM apidbtuning.transcriptpathway tp
+, apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE ds.pathway_source = tp.ec_number
+AND pa.pathway_id = tp.pathway_id
+AND pa.external_db_name = ed.name
+and edr.external_database_id = ed.external_database_id
 UNION
 -- Gene
-SELECT pc.pathway as source_id, ds.source_id AS identifier, 'gene' as type, pc.external_database_release_id
-FROM sres.enzymeClass ec,dots.aaSequenceEnzymeClass asec,ApidbTuning.GeneId gi, 
-     ApidbTuning.TranscriptAttributes ta, apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
-WHERE lower(gi.id) = lower(ds.source_id)
-AND    ta.gene_source_id = gi.gene
-AND    ta.aa_sequence_id = asec.aa_sequence_id
-AND    asec.enzyme_class_id = ec.enzyme_class_id
-AND    pc.enzyme = ec.ec_number
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'gene' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwayattributes pa
+, apidbtuning.transcriptpathway tp
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE lower(tp.gene_source_id) = lower(ds.pathway_source)
+AND    tp.pathway_id = pa.pathway_id
+AND    pa.external_db_name = ed.name
+AND    edr.external_database_id = ed.external_database_id
 UNION
 -- Reaction
-SELECT pc.pathway as source_id, ds.source_id AS identifier, 'reaction' as type, pc.external_database_release_id
-FROM apidbtuning.pathwaycompounds pc, ($$ds_pathway_id$$) ds
-WHERE ds.source_id = pc.reaction
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'reaction' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwaycompounds pc
+, apidbtuning.pathwayreactions pr
+, apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE ds.pathway_source = pr.reaction_source_id
+AND pr.reaction_id = pc.reaction_id
+AND pc.pathway_id = pa.pathway_id
+AND pa.external_db_name = pr.ext_db_name
+AND pa.external_db_name = ed.name
+AND ed.external_database_id = edr.external_database_id
 UNION
 -- Pathways from direct pathwayNodes
-SELECT p.source_id, ds.source_id AS identifier, 'pathway' as type, p.external_database_release_id
-FROM sres.pathway p, ($$ds_pathway_id$$) ds
-WHERE ds.source_id = p.source_id 
+SELECT distinct pa.source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'pathway' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE ds.pathway_source = pa.source_id
+AND pa.external_db_name = ed.name
+AND edr.external_database_id = ed.external_database_id 
 )
 WHERE (external_database_release_id = $$pathways_source$$ OR $$pathways_source$$=1) 
-GROUP BY source_id
+GROUP BY source_id, pathway_source
 ORDER BY source_id
 	    ]]>
         </sql>
