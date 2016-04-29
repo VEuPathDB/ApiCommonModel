@@ -212,6 +212,7 @@ create table ProtocolAppNodesResults&1 as
     <comment>
     </comment>
     <internalDependency name="ProtocolAppNodesResults"/>
+    <internalDependency name="SampleId"/>
     <externalDependency name="study.ProtocolApp"/>
     <externalDependency name="study.Input"/>
     <externalDependency name="study.Output"/>
@@ -225,6 +226,7 @@ create table ProtocolAppNodesResults&1 as
     <ancillaryTable name="PANCharacteristicMetadata"/>
     <ancillaryTable name="SampleCharMetadata"/>
     <ancillaryTable name="SampleProtocolMetadata"/>
+    <ancillaryTable name="SampleDownstream"/>
     <sql>
       <![CDATA[
         create table ProtocolAppNodeIO&1 nologging as
@@ -371,6 +373,44 @@ create table ProtocolAppNodesResults&1 as
           and node_inputs.protocol_app_node_id = pan.protocol_app_node_id
           and p.name not like '%::%' -- avoid Perl class names
           and p.name not like '%data transformation'
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+SELECT
+  p1.name
+, p1.protocol_app_node_id
+, p.name AS protocol
+, p2.name AS output
+, p2.protocol_app_node_id AS output_protoocl_app_node_id
+, CASE
+    WHEN ot.name LIKE 'data%'
+    THEN 'Data'
+    ELSE p2.isa_type
+  END AS isa_type
+, ot.name AS material_type
+FROM
+  (SELECT
+    connect_by_root input_node_id AS protocol_app_node_id
+  , output_node_id
+  , protocol_app_id
+  FROM
+    apidbtuning.protocolappnodeio
+    start with input_node_id in (SELECT protocol_app_node_id FROM apidbtuning.sampleid)
+    CONNECT BY prior output_node_id = input_node_id
+  ) io
+, study.protocolappnode p1
+, study.protocolappnode p2
+, sres.ontologyterm ot
+, study.protocol p
+, study.protocolapp pa
+WHERE
+  io.protocol_app_node_id = p1.protocol_app_node_id
+  AND io.output_node_id = p2.protocol_app_node_id
+  AND p2.type_id = ot.ontology_term_id
+  AND io.protocol_app_id = pa.protocol_app_id
+  AND pa.protocol_id = p.protocol_id
       ]]>
     </sql>
   </tuningTable>
