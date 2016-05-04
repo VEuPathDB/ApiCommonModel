@@ -963,7 +963,7 @@ where p.rn = 1
     <internalDependency name="GeneId"/>
     <internalDependency name="PopsetAttributes"/>
     <internalDependency name="GoTermSummary"/>
-    <internalDependency name="ChIPchipGene"/>
+    <internalDependency name="ChIPchipTranscript"/>
     <internalDependency name="TFBSGene"/>
     <internalDependency name="EstAlignmentGeneSummary"/>
     <internalDependency name="EstAttributes"/>
@@ -1107,7 +1107,7 @@ select genomestat.taxon_id,
        nvl(count(distinct case when ga.gene_type ='protein coding' then ga.source_id else '' end),0) as codingGeneCount,
        nvl(count(distinct case when ga.gene_type ='protein coding' then '' else ga.source_id end),0) as otherGeneCount, 
        nvl(count (distinct (case when ga.is_deprecated = 0
-                  then ccg.gene_source_id
+                  then cct.gene_source_id
                   else NULL 
                   end)),0) ChipChipGeneCount ,
       nvl(count (distinct (case when ga.is_deprecated = 0
@@ -1140,7 +1140,7 @@ select genomestat.taxon_id,
                left outer join TFBSGene tfbs on ga.source_id = tfbs.gene_source_id
                left outer join TranscriptAttributes ta on ta.gene_source_id = ga.source_id
                left outer join apidb.MassSpecSummary mss on ta.aa_sequence_id = mss.aa_sequence_id
-               left outer join chipchipgene ccg on ga.source_id = ccg.gene_source_id
+               left outer join chipchipTranscript cct on ga.source_id = cct.gene_source_id
                left outer join (SELECT distinct s.gene as source_id 
                                   FROM EstAlignmentGeneSummary s, EstAttributes e 
                                   WHERE s.est_gene_overlap_length >= 100 
@@ -2303,6 +2303,7 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        t.na_feature_id,
        SUBSTR(COALESCE(preferred_product.product, any_product.product, 'unspecified product'), 1, 300) 
             AS transcript_product,
+       tl.start_min, tl.end_max,
        tl.start_min as coding_start,
        tl.end_max as coding_end,
        tl.is_reversed,   --CHECK if needed
@@ -3916,60 +3917,60 @@ tablespace indx
   </tuningTable>
 -->
 
-  <tuningTable name="ChIPchipGene">
+  <tuningTable name="ChIPchipTranscript">
     <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by
          generateGeneMetrics. Also an input to OrganismAttributes.
      </comment>
-    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
     <externalDependency name="results.SegmentResult"/>
     <externalDependency name="study.StudyLink"/>
     <externalDependency name="study.Study"/>
     <sql>
       <![CDATA[
-      create table ChIPchipGene&1 NOLOGGING AS
-      select distinct ga.source_id as gene_source_id, sr.protocol_app_node_id,
+      create table ChIPchipTranscript&1 NOLOGGING AS
+      select distinct ta.source_id, ta.gene_source_id, sr.protocol_app_node_id,
       CASE 
-        WHEN ga.is_reversed = 0 
-        THEN round(abs(ga.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0)
-        ELSE round(abs(ga.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0) 
+        WHEN ta.is_reversed = 0 
+        THEN round(abs(ta.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0)
+        ELSE round(abs(ta.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0) 
       END as distance,
       CASE 
         WHEN /* distance > 0 */
-          CASE WHEN ga.is_reversed = 0 
-            THEN ga.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
-            ELSE ga.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+          CASE WHEN ta.is_reversed = 0 
+            THEN ta.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+            ELSE ta.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
           END > 0 
         THEN 
           CASE 
-            WHEN ga.is_reversed = 0 
+            WHEN ta.is_reversed = 0 
             THEN '-' 
             ELSE '+'
           END 
         ELSE 
           CASE 
-            WHEN ga.is_reversed = 1 
+            WHEN ta.is_reversed = 1 
             THEN '-' 
             ELSE '+'
           END 
         END as direction
-from  GeneAttributes ga,
+from  TranscriptAttributes ta,
       Results.segmentresult sr,
       Study.StudyLink sl, 
       Study.Study s
-where   sr.na_sequence_id = ga.na_sequence_id
+where   sr.na_sequence_id = ta.na_sequence_id
   and   s.study_id = sl.study_id
   and   sl.protocol_app_node_id = sr.protocol_app_node_id
   and   lower(s.name) like '%chip%peaks'
-  and   ( (ga.is_reversed = 0 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ga.start_min) <= 3000)
-                  or (ga.is_reversed = 1 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ga.end_max) <= 3000) )
+  and   ( (ta.is_reversed = 0 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.start_min) <= 3000)
+                  or (ta.is_reversed = 1 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.end_max) <= 3000) )
       ]]>
     </sql>
-    <!--sql>
+    <sql>
       <![CDATA[
-       create index chpgene_geneid_idx&1 ON ChIPchipGene&1 (gene_source_id, chip_na_feature_id)
+       create index chpgene_geneid_idx&1 ON ChIPchipTranscript&1 (protocol_app_node_id, source_id, gene_source_id)
 tablespace indx
       ]]>
-    </sql-->
+    </sql>
   </tuningTable>
 
 
