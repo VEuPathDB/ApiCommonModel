@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class KeggPathways extends DatasetInjector {
+public class Pathways extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
