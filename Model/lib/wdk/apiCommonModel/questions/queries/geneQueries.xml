@@ -371,10 +371,10 @@ where chip_total_reps > $$chip_replicates$$
           <paramValue name="chip_replicates_plasmo">1</paramValue>
         </testParamValues>
 
-        <paramRef ref="geneParams.chip_experiment"/>
-        <paramRef ref="geneParams.chip_antibody_plasmo"/>
-        <paramRef ref="geneParams.chip_genotypes"/>
-        <paramRef ref="geneParams.chip_replicates_plasmo" quote="false"/>
+      <paramRef ref="sharedParams.metadata_datasets" quote="false"
+                queryRef="SharedVQ.ChipchipDataset"/>
+
+      <paramRef ref="sharedParams.chipchip_samples"/>
         <paramRef ref="geneParams.chip_distance"/>
         <paramRef ref="geneParams.chip_direction"/>
 
@@ -383,34 +383,17 @@ where chip_total_reps > $$chip_replicates$$
         <column name="matched_result"/>
         <column name="project_id"/>
         <column name="chip_distance"/>
-        <column name="chip_antibodies"/>
-        <column name="chip_genotype"/>
         <column name="chip_score"/>
 
-      <sql>
-             <![CDATA[
-select q.*, 'Y' as matched_result from (select outer.gene_source_id as source_id,
-                       '@PROJECT_ID@' as project_id, 
-                        outer.antibody as chip_antibodies, outer.genotype as chip_genotype,
-                        max(outer.distance) as chip_distance,
-                        max(outer.score) as chip_score,
-                        count(*) as chip_total_reps
-                from (select inner.gene_source_id,inner.antibody, inner.genotype, max(inner.distance) as distance,max(inner.score) as score
-                      from (select ccg.gene_source_id,cpp.antibody,cpp.genotype,ccg.distance,cpp.replicate,dtf.float_value as score 
-                            from   ApidbTuning.ChIPchipGene ccg,
-                                   rad.datatransformationresult dtf,
-                                   ApidbTuning.ChIPProtocolParams cpp
-                            where ccg.chip_na_feature_id = dtf.row_id
-                            and   dtf.analysis_id = cpp.analysis_id
-                            and   cpp.protocol_type = 'called_peaks'
-                            and   ('not applicable' in lower($$chip_genotypes$$) OR lower(cpp.genotype) in  lower($$chip_genotypes$$))
-                            and   ('not applicable' in lower($$chip_antibody_plasmo$$) OR lower(cpp.antibody) in  lower($$chip_antibody_plasmo$$))
-                            and   ccg.distance <= $$chip_distance$$ 
-                            and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
-                            and   cpp.experiment_name = '$$chip_experiment$$') inner
-                group by inner.gene_source_id,inner.antibody, inner.genotype,inner.replicate) outer
-             group by outer.gene_source_id,outer.antibody, outer.genotype) q
-where chip_total_reps > $$chip_replicates_plasmo$$
+        <sql>
+          <![CDATA[
+            select 'Y' as matched_result, source_id, gene_source_id, '@PROJECT_ID@' as project_id,
+                   min(distance) as chip_distance, max(score) as chip_score
+            from apidbTuning.ChipChipTranscript
+            where protocol_app_node_id in ($$chipchip_samples$$)
+              and ($$chip_direction$$ = 'Either' OR direction = $$chip_direction$$)
+              and distance < $$chip_distance$$
+            group by source_id, gene_source_id
            ]]>
        </sql>
     </sqlQuery>
