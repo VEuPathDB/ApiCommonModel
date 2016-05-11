@@ -44,6 +44,19 @@ sub run{
 
   &usage() if($help);
 
+
+#creating a hash from apidb.organism to check public abbreviations
+  my $abbrevSql = "select distinct public_abbrev from apidb.organism";
+  my $abbrevStmt = $dbh->prepare($abbrevSql);
+  $abbrevStmt->execute();
+  my %pubAbbrevHash;
+  while (my $pubAbbrev = $abbrevStmt->fetchrow_arrayref()) {
+      $pubAbbrevHash{$pubAbbrev->[0]} = 1;
+  }
+ # foreach my $ab (keys %pubAbbrevHash) {
+#      print $ab."\n";
+ # }
+
   my $xml = XMLin($xmlFile, KeyAttr => [], ForceArray => 1, SuppressEmpty => undef);
 
   my $subtrackSets = {};
@@ -85,19 +98,30 @@ where ga.taxon_id = o.taxon_id";
   my $orgToRef = &getOrgToRef($orgRef);  ##value is hash {reference}=reference_org and {abbrev}
   ###next get list of all organisms used for gbrowse tracks and add abbrev.
   foreach my $urlSpec (@{$xml->{url}}) {
-    my $organisms = $urlSpec->{org};
-    foreach my $orgHash (@$organisms) {
-      my $organism = $orgHash->{organism};
-      next unless $orgToRef->{$organism};
-      $orgToRef->{$organism}->{abbrev} = $orgHash->{abbrev};
-    }
+      my $organisms = $urlSpec->{org};
+      foreach my $orgHash (@$organisms) {
+	  my $organism = $orgHash->{organism};
+	  next unless $orgToRef->{$organism};
+	  $orgToRef->{$organism}->{abbrev} = $orgHash->{abbrev};
+	  
+	  
+	  
+#####JP note: want to check that these abbrevs exist in the db as public abbrev. use sql query to make hash
+      }
   }
-#  foreach my $org (keys%$orgToRef){
+  foreach my $org (keys%$orgToRef) {
 #    print STDERR "$org: reference=$orgToRef->{$org}->{reference}, abbrev=$orgToRef->{$org}->{abbrev}\n";
-#  }
+      my $ab_to_check = $orgToRef->{$org}->{abbrev};
+      if (exists $pubAbbrevHash{$ab_to_check} ) {
+	  #print "$org has the abbreviation $ab_to_check which is a public abbreviation in apidb.organism\n";
+      }
+      else {
+	  print "ERROR $org has the abbreviation $ab_to_check which is a not public abbreviation in apidb.organism please change this\n";
+      }
+  }
 
   foreach my $urlSpec (@{$xml->{url}}) {
-    my $organisms = $urlSpec->{org};
+      my $organisms = $urlSpec->{org};
     my $tracks = $urlSpec->{track};
     my $project = $urlSpec->{project};
     my $type = $urlSpec->{type};
