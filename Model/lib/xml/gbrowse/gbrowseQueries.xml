@@ -376,29 +376,33 @@ SELECT feature_id, type, source, 'Score=' || unique_reads as name, parent_id, st
 'URS=' || unique_reads || '$dlm' ||
 'NRS=' || nu_reads  atts
 FROM (
-  SELECT rif.sample_name || '_' || rif.mapping_start || '_' || rif.mapping_end as feature_id,
+  SELECT rif.sample_name || '_' || rif.segment_start || '_' || rif.segment_end as feature_id,
          'gsnap' type, 
          '$source' source, 
          na_sequence_id parent_id, 
-         mapping_start startm, 
-         mapping_end end, 
+         segment_start startm, 
+         segment_end end, 
          score,
          edb.name as db_name, 
          rif.sample_name as sample,
          rif.unique_reads,
          rif.nu_reads
   FROM   apidb.IntronJunction rif, 
+         study.studylink sl,
+         study.study s,
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr 
-  WHERE  rif.mapping_start <= $rend 
-     AND rif.mapping_end >= $base_start 
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start 
      AND rif.na_sequence_id = $srcfeature_id
-     AND mapping_end - mapping_start < $$intronSizeLimit$$
+     AND segment_end - segment_start < $$intronSizeLimit$$
      AND  score > 1
-     AND rif.external_database_release_id = edbr.external_database_release_id 
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
      AND edb.external_database_id = edbr.external_database_id 
      AND edb.name  $$edname$$
---  GROUP BY rif.mapping_start, mapping_end, edb.name, na_sequence_id
+--  GROUP BY rif.segment_start, segment_end, edb.name, na_sequence_id
 )
 --GROUP BY feature_id, name type, source, parent_id,startm, end, atts
 ORDER BY startm
@@ -416,34 +420,38 @@ SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_i
 'NRS=' || listagg(nu_reads, '|') within group (order by db_name) || '$dlm' ||
 'Scores=' || listagg(scores, '|') within group (order by db_name) atts
 FROM (
-  SELECT rif.mapping_start || '_' || rif.mapping_end as feature_id,
+  SELECT rif.segment_start || '_' || rif.segment_end as feature_id,
          'gsnap' type, 
          '$source' source, 
          na_sequence_id parent_id, 
-         mapping_start startm, 
-         mapping_end end, 
-         sum(score) as sum_exp_score,
+         segment_start startm, 
+         segment_end end, 
+         sum(rif.unique_reads) as sum_exp_score,
          edb.name as db_name, 
          dsp.display_name,
          listagg(rif.sample_name, ',') within group (order by rif.sample_name) as samples,
-         listagg(score, ',') within group (order by rif.sample_name) scores,
+         listagg(rif.unique_reads, ',') within group (order by rif.sample_name) scores,
          listagg(rif.unique_reads, ',') within group (order by rif.sample_name) as unique_reads,
          listagg(rif.nu_reads, ',') within group (order by rif.sample_name) as nu_reads,
          sum(rif.unique_reads) as total_reads
   FROM   apidb.IntronJunction rif, 
+         study.studylink sl,
+         study.study s,
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr,
          apidbtuning.datasetpresenter dsp
-  WHERE  rif.mapping_start <= $rend 
-     AND rif.mapping_end >= $base_start 
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start 
      AND rif.na_sequence_id = $srcfeature_id
-     AND mapping_end - mapping_start < $$intronSizeLimit$$
-     AND score > 1
-     AND rif.external_database_release_id = edbr.external_database_release_id 
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND rif.unique_reads > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
      AND edb.external_database_id = edbr.external_database_id 
      AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
      and edb.name = dsp.name
-  GROUP BY rif.mapping_start, mapping_end, edb.name, dsp.display_name, na_sequence_id
+  GROUP BY rif.segment_start, segment_end, edb.name, dsp.display_name, na_sequence_id
 )
 GROUP BY feature_id, type, source, parent_id,startm, end
 having sum(total_reads) > 3 
@@ -466,34 +474,44 @@ intron_percent,sum(total_reads) as score,score_exp_ratio,
 'IntronRatio=' || score_exp_ratio || '$dlm' ||
 'Scores=' || listagg(scores, '|') within group (order by db_name) atts
 FROM (
-  SELECT rif.mapping_start || '_' || rif.mapping_end as feature_id,
+  SELECT rif.segment_start || '_' || rif.segment_end as feature_id,
          'gsnap' type, 
          '$source' source, 
          na_sequence_id parent_id, 
-         mapping_start startm, 
-         mapping_end end, 
-         sum(score) as sum_exp_score,
+         segment_start startm, 
+         segment_end end, 
+         sum(rif.unique_reads) as sum_exp_score,
          edb.name as db_name, 
          dsp.display_name,
-         listagg(rif.sample_name, ',') within group (order by rif.sample_name) as samples,
-         listagg(score, ',') within group (order by rif.sample_name) scores,
-         listagg(rif.unique_reads, ',') within group (order by rif.sample_name) as unique_reads,
-         listagg(rif.nu_reads, ',') within group (order by rif.sample_name) as nu_reads,
+         listagg(pan.name, ',') within group (order by pan.name) as samples,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) scores,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) as unique_reads,
+         listagg(rif.nu_reads, ',') within group (order by pan.name) as nu_reads,
          sum(rif.unique_reads) as total_reads
   FROM   apidb.IntronJunction rif, 
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr,
-         apidbtuning.datasetpresenter dsp
-  WHERE  rif.mapping_start <= $rend 
-     AND rif.mapping_end >= $base_start
+         study.studylink sl,
+         study.study s,
+         apidbtuning.datasetpresenter dsp,
+         study.input inp,
+         study.output oup, 
+         study.protocolappnode pan
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start
      AND rif.na_sequence_id = $srcfeature_id
-     AND mapping_end - mapping_start < $$intronSizeLimit$$
-     AND score > 1
-     AND rif.external_database_release_id = edbr.external_database_release_id 
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND rif.unique_reads > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
      AND edb.external_database_id = edbr.external_database_id 
      AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
-     and edb.name = dsp.name
-  GROUP BY rif.mapping_start, rif.mapping_end, edb.name, dsp.display_name, na_sequence_id
+     AND edb.name = dsp.name
+     AND rif.protocol_app_node_id = oup.protocol_app_node_id
+     AND oup.protocol_app_id = inp.protocol_app_id
+     AND inp.protocol_app_node_id = pan.protocol_app_node_id
+  GROUP BY rif.segment_start, rif.segment_end, edb.name, dsp.display_name, na_sequence_id
 ) details, ApidbTuning.GeneIntronPercent gip
    where details.parent_id = gip.na_sequence_id(+)
      AND details.startm = gip.mapping_start(+) 
@@ -521,34 +539,44 @@ intron_percent,sum(total_reads) as score,score_exp_ratio,
 'IntronRatio=' || score_exp_ratio || '$dlm' ||
 'Scores=' || listagg(scores, '|') within group (order by db_name) atts
 FROM (
-  SELECT rif.mapping_start || '_' || rif.mapping_end as feature_id,
+  SELECT rif.segment_start || '_' || rif.segment_end as feature_id,
          'gsnap' type, 
          '$source' source, 
          na_sequence_id parent_id, 
-         mapping_start startm, 
-         mapping_end end, 
-         sum(score) as sum_exp_score,
+         segment_start startm, 
+         segment_end end, 
+         sum(rif.unique_reads) as sum_exp_score,
          edb.name as db_name, 
          dsp.display_name,
-         listagg(rif.sample_name, ',') within group (order by rif.sample_name) as samples,
-         listagg(score, ',') within group (order by rif.sample_name) scores,
-         listagg(rif.unique_reads, ',') within group (order by rif.sample_name) as unique_reads,
-         listagg(rif.nu_reads, ',') within group (order by rif.sample_name) as nu_reads,
-         sum(rif.score) as total_reads
+         listagg(pan.name, ',') within group (order by pan.name) as samples,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) scores,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) as unique_reads,
+         listagg(rif.nu_reads, ',') within group (order by pan.name) as nu_reads,
+         sum(rif.unique_reads) as total_reads
   FROM   apidb.IntronJunction rif, 
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr,
-         apidbtuning.datasetpresenter dsp
-  WHERE  rif.mapping_start <= $rend 
-     AND rif.mapping_end >= $base_start
+         study.studylink sl,
+         study.study s,
+         apidbtuning.datasetpresenter dsp,
+         study.input inp,
+         study.output oup, 
+         study.protocolappnode pan
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start
      AND rif.na_sequence_id = $srcfeature_id
-     AND mapping_end - mapping_start < $$intronSizeLimit$$
-     AND score > 1
-     AND rif.external_database_release_id = edbr.external_database_release_id 
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND rif.unique_reads > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
      AND edb.external_database_id = edbr.external_database_id 
      AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
-     and edb.name = dsp.name
-  GROUP BY rif.mapping_start, rif.mapping_end, edb.name, dsp.display_name, na_sequence_id
+     AND edb.name = dsp.name
+     AND rif.protocol_app_node_id = oup.protocol_app_node_id
+     AND oup.protocol_app_id = inp.protocol_app_id
+     AND inp.protocol_app_node_id = pan.protocol_app_node_id
+  GROUP BY rif.segment_start, rif.segment_end, edb.name, dsp.display_name, na_sequence_id
 ) details, ApidbTuning.GeneIntronPercCont gip
    where details.parent_id = gip.na_sequence_id(+)
      AND details.startm = gip.mapping_start(+) 
