@@ -219,23 +219,36 @@ HAVING (('$$any_or_all_pathway$$' = 'any')
  
     <sqlQuery name="PathwaysByCompounds" doNotTest="true"  excludeProjects="EuPathDB"
               displayName="Compound">
-        <paramRef ref="compoundParams.ds_compound_id" default="C00074"/>
+        <paramRef ref="compoundParams.ds_compound_id" default="CHEBI:58601"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="compoundParams.any_or_all_pathway"/>
         <column name="project_id"/>
-        <column name="pathway_source"/> <!-- TODO -->
+        <column name="pathway_source"/>
         <column name="source_id"/>
         <sql>
             <![CDATA[
-            SELECT DISTINCT p.pathway as source_id, '@PROJECT_ID@' as project_id
-            FROM   apidbtuning.PathwayCompounds p, apidbtuning.compoundId cid, ($$ds_compound_id$$) ds
-            WHERE  p.chebi_accession = cid.compound
-            AND   cid.id = ds.source_id
-           GROUP BY p.pathway
-           HAVING (('$$any_or_all_pathway$$' = 'any') 
-                   OR (count(*) = (select count(*) 
-                        FROM ($$ds_compound_id$$) ds
-                        WHERE ds.source_id IN (SELECT DISTINCT compound FROM apidbtuning.PathwayCompounds ))
-               ))
+            SELECT DISTINCT pa.source_id
+            , '@PROJECT_ID@' as project_id
+            , pa.pathway_source
+            FROM
+            apidbtuning.compoundid ci
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayattributes pa
+            , ($$ds_compound_id$$) ds
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE pc.chebi_accession = ci.compound
+            AND pa.pathway_id = pc.pathway_id
+            AND ci.compound = ds.source_id
+            AND pa.external_db_name = ed.name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.external_database_release_id  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.source_id, pa.pathway_source
+            HAVING (('$$any_or_all_pathway$$' = 'any') 
+            OR (count(*) = (select count(*) 
+            FROM ($$ds_compound_id$$) ds
+                WHERE ds.source_id IN (SELECT DISTINCT chebi_accession FROM apidbtuning.PathwayCompounds ))
+             ))
                ]]>
         </sql>
     </sqlQuery>
