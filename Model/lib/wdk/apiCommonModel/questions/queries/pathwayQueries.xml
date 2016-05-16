@@ -171,6 +171,7 @@ ORDER BY source_id
     <sqlQuery name="PathwaysByGeneList" doNotTest="true"  excludeProjects="EuPathDB"
               displayName="ID">
         <paramRef ref="sharedParams.ds_gene_ids" default="%%defaultGeneList%%"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="geneParams.any_or_all_pathway"/>
         <column name="project_id"/>
         <column name="source_id"/>
@@ -179,23 +180,29 @@ ORDER BY source_id
         <column name="gene_count"/>
         <sql>
             <![CDATA[
-SELECT DISTINCT pc.pathway AS source_id,ta.aa_sequence_id ,'@PROJECT_ID@' AS project_id,
-       count(DISTINCT ta.gene_source_id) AS gene_count,
-       apidb.tab_to_string(SET(CAST(COLLECT(ta.gene_source_id) AS apidb.varchartab))) AS genes
-FROM   sres.enzymeClass ec,  ($$ds_gene_ids$$) ds,
-       dots.aaSequenceEnzymeClass asec,ApidbTuning.GeneId gi, ApidbTuning.TranscriptAttributes ta,
-ApidbTuning.pathwayCompounds pc
-WHERE ta.aa_sequence_id = asec.aa_sequence_id
-AND    lower(gi.id) = lower(ds.gene_source_id)
-AND    ta.gene_source_id = gi.gene
-AND    asec.enzyme_class_id = ec.enzyme_class_id
-AND    pc.enzyme = ec.ec_number
-GROUP BY pc.pathway,ta.aa_sequence_id,asec.aa_sequence_id
-HAVING (('$$any_or_all_pathway$$' = 'any') 
-        OR (count(*) = (select count(*) 
-                        from ApidbTuning.TranscriptAttributes ta,($$ds_gene_ids$$) ds
-                        where lower (ds.gene_source_id) = lower (ta.gene_source_id) 
-                       )))
+            SELECT DISTINCT
+            '@PROJECT_ID@' as project_id
+            , pa.SOURCE_ID
+            , pa.PATHWAY_SOURCE
+            , apidb.tab_to_string(SET(CAST(COLLECT(tp.gene_source_id) AS apidb.varchartab))) AS genes
+            , count(DISTINCT tp.gene_source_id) AS gene_count
+            FROM apidbtuning.pathwayattributes pa
+            , apidbtuning.transcriptpathway tp
+            , SRES.EXTERNALDATABASE ed
+            , SRES.EXTERNALDATABASERELEASE edr
+            , ($$ds_gene_ids$$) ds
+            WHERE lower(tp.GENE_SOURCE_ID) = lower(ds.gene_source_id)
+            AND tp.PATHWAY_ID = pa.PATHWAY_ID
+            AND pa.EXTERNAL_DB_NAME = ed.NAME
+            AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE
+            HAVING (('$$any_or_all_pathway$$' = 'any' )
+              OR (count(*) = (SELECT count (*)
+                FROM APIDBTUNING.TRANSCRIPTPATHWAY tp
+                , ($$ds_gene_ids$$) ds
+                WHERE lower (ds.gene_source_id) = lower (tp.gene_source_id)
+                )))
 	    ]]>
         </sql>
     </sqlQuery>
