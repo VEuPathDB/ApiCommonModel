@@ -97,10 +97,8 @@ public class AntibodyArray extends DatasetInjector {
         setFunctionProperties() ;
 
         String help = getPropValue("function_help");
-        System.out.println(help);
 
         String fn_display = getPropValue("function_display");
-        System.out.println(fn_display);
 
         injectTemplate("antibodyArrayProfileSetParamQuery");
 
