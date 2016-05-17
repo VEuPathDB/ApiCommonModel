@@ -5904,6 +5904,7 @@ where compound_name is NULL
         , ext_db_version
         , enzyme
         , expasy_url
+        , expasy_html
         , substrates_html || ' ' || sign || ' ' || products_html as equation_html
         , substrates_text || ' ' || sign || ' ' || products_text as equation_text
         , case when sign = '<=>' then 1 else 0 end as is_reversible
@@ -5916,6 +5917,7 @@ where compound_name is NULL
             , reaction_url
             , ext_db_name
             , ext_db_version
+            , (case when expasy_url is not null then '<a href="' || expasy_url || '">' || enzyme || '</a>' else enzyme end) as expasy_html
             , enzyme
             , expasy_url
             , (case when (listagg (case when type_list like '%substrate%' then compound end, ',') within group (order by compound)) = (listagg (case when type_list like '%product%' then compound end, ',') within group (order by compound)) or is_reversible = 1 then '<=>' else '=>' end) as sign
@@ -5935,11 +5937,11 @@ where compound_name is NULL
               , ed.NAME as ext_db_name
               , edr.VERSION as ext_db_version
               , pn.DISPLAY_LABEL as enzyme
-              , 'http://enzyme.expasy.org/cgi-bin/enzyme/enzyme-search-ec?field1='
+              , (case when pn.display_label like '%.%.%.%' then 'http://enzyme.expasy.org/cgi-bin/enzyme/enzyme-search-ec?field1='
                   ||ec.ec_number_1
                   ||decode(ec.ec_number_2, null, null,chr(38) || 'field2='||ec.ec_number_2)
                   ||decode(ec.ec_number_3, null, null,chr(38) || 'field3='||ec.ec_number_3)
-                  ||decode(ec.ec_number_4, null, null,chr(38) || 'field4='||ec.ec_number_4) as expasy_url
+                  ||decode(ec.ec_number_4, null, null,chr(38) || 'field4='||ec.ec_number_4) else null end ) as expasy_url
               , listagg (pc.type, ',') within group (order by pc.pathway_id) as type_list
               , max (prel.is_reversible) KEEP (DENSE_RANK LAST ORDER BY prel.is_reversible) over (partition by pr.pathway_reaction_id) as is_reversible
               , nvl(pc.chebi_accession, pc.compound_source_id) as compound
@@ -5962,7 +5964,7 @@ where compound_name is NULL
               and prel.NODE_ID = pn.PATHWAY_NODE_ID
               and ot.name = 'enzyme'
               and ot.ONTOLOGY_TERM_ID = pn.PATHWAY_NODE_TYPE_ID
-              and ec.EC_NUMBER = pn.DISPLAY_LABEL
+              and  (pn.display_label not like '%.%.%.%' or ec.EC_NUMBER = pn.display_label)
               and pc.EXT_DB_NAME = ed.NAME
               and pc.EXT_DB_VERSION = edr.VERSION
               and ed.EXTERNAL_DATABASE_ID = edr.EXTERNAL_DATABASE_ID
