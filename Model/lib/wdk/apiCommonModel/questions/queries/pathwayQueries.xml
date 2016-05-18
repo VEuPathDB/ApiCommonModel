@@ -296,10 +296,11 @@ ORDER BY source_id
     <sqlQuery name="PathwaysByGeneIds" doNotTest="true"
               displayName="ID">
         <paramRef ref="geneParams.gene_result"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="geneParams.any_or_all_pathway"/>
         <paramRef ref="geneParams.use_ec_wildcard"/>
         <column name="project_id"/>
-        <column name="pathway_source"/> <!-- TODO -->
+        <column name="pathway_source"/>
         <column name="source_id"/>
         <column name="genes"/>
         <column name="ecNums"/>
@@ -308,20 +309,34 @@ ORDER BY source_id
 
         <sql>
             <![CDATA[
-SELECT DISTINCT pc.pathway AS source_id , '@PROJECT_ID@' as project_id, 
-       count(distinct ec.ec_number) as enzyme_count,
-       apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as genes, 
-       apidb.tab_to_string(set(cast(COLLECT(pc.enzyme) AS apidb.varchartab))) as ecNums, 
-       max(ds.wdk_weight) as wdk_weight
-FROM ($$gene_result$$) ds, ApiDBTuning.PathwayCompounds pc
-       sres.enzymeClass ec, dots.aaSequenceEnzymeClass asec, ApidbTuning.CompoundAttributes ca
-WHERE  ds.source_id =  ga.source_id
-AND   ga.aa_sequence_id = asec.aa_sequence_id
-AND    asec.enzyme_class_id = ec.enzyme_class_id
-AND    (  ( ec.ec_number LIKE REPLACE(pc.enzyme,'-', '%')  OR pc.enzyme LIKE REPLACE(ec.ec_number,'-', '%')  )
-         $$use_ec_wildcard$$  ec.ec_number = pc.enzyme    )
-GROUP BY pc.pathway
-HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.transcriptAttributes ta,($$gene_result$$) ds  where lower(ga.source_id) = lower(ds.source_id)) 
+            SELECT DISTINCT 
+            pa.source_id
+            , '@PROJECT_ID@' as project_id
+            , pa.PATHWAY_SOURCE
+            , count(distinct tp.ec_number) as enzyme_count
+            , apidb.tab_to_string(set(cast(COLLECT(tp.gene_source_id) AS apidb.varchartab))) as genes
+            , apidb.tab_to_string(set(cast(COLLECT(pr.ENZYME) AS apidb.varchartab))) as ecNums
+            , max(ds.wdk_weight) as wdk_weight
+            FROM 
+            apidbtuning.pathwayattributes pa
+            , apidbtuning.transcriptpathway tp
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            , ($$gene_result$$) ds
+            WHERE tp.GENE_SOURCE_ID = ds.gene_source_id
+            AND (tp.EC_NUMBER like replace(pr.ENZYME, '-', '%')
+                $$use_ec_wildcard$$ tp.EC_NUMBER = pr.ENZYME)
+            AND pr.REACTION_ID = pc.REACTION_ID
+            AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+            AND pc.EXT_DB_NAME = ed.NAME
+            AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+            AND pc.PATHWAY_ID = pa.PATHWAY_ID
+            and tp.PATHWAY_ID = pa.PATHWAY_ID
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE, pa.PATHWAY_ID, tp.PATHWAY_ID
+            HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.transcriptpathway tp, ($$gene_result$$) ds where lower(tp.gene_source_id) = lower(ds.gene_source_id))
                ]]>
         </sql>
     </sqlQuery>
