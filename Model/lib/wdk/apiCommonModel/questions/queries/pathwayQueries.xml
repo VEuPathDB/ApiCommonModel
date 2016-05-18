@@ -349,22 +349,36 @@ ORDER BY source_id
     <sqlQuery name="PathwaysByCompoundIds" doNotTest="true"
               displayName="ID">
         <paramRef ref="compoundParams.compound_result"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="compoundParams.any_or_all_pathway"/>
         <column name="project_id"/>
         <column name="source_id"/>
-        <column name="pathway_source"/> <!-- TODO -->
+        <column name="pathway_source"/>
         <column name="compounds"/>
         <column name="compound_count"/>
         <column name="wdk_weight" />
 
         <sql>
             <![CDATA[
-SELECT DISTINCT pc.pathway AS source_id , '@PROJECT_ID@' as project_id, count(distinct ds.source_id) as compound_count,
-       apidb.tab_to_string(set(cast(COLLECT(pc.chebi_accession) AS apidb.varchartab))) as compounds, max(ds.wdk_weight) as wdk_weight
-FROM ($$compound_result$$) ds, ApiDBTuning.PathwayCompounds pc
-WHERE  pc.chebi_accession = ds.source_id
-GROUP BY pc.pathway
-HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.PathwayCompounds pc,($$compound_result$$) ds  where lower(pc.chebi_accession) = lower(ds.source_id)) 
+            SELECT DISTINCT pa.SOURCE_ID
+            , pa.PATHWAY_SOURCE
+            , '@PROJECT_ID@' as project_id
+            , count(distinct ds.source_id) as compound_count
+            , apidb.tab_to_string(set(cast(COLLECT(pc.chebi_accession) AS apidb.varchartab))) as compounds
+            , max(ds.wdk_weight) as wdk_weight
+            FROM ($$compound_result$$) ds
+            , apidbtuning.pathwayattributes pa
+            , ApiDBTuning.PathwayCompounds pc
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE  pc.chebi_accession = ds.source_id
+            AND pa.PATHWAY_ID = pc.PATHWAY_ID
+            AND pa.EXTERNAL_DB_NAME = ed.NAME
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE
+            HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) 
+                from apidbtuning.PathwayCompounds pc, ($$compound_result$$) ds where lower(pc.chebi_accession) = lower(ds.source_id))
                ]]>
         </sql>
     </sqlQuery>
