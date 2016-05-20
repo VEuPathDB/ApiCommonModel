@@ -3467,11 +3467,44 @@ and tl.is_top_level = 1
             <column name="percentile_channel2"/>
             <sql>
             <![CDATA[
+SELECT x.*, '@PROJECT_ID@' AS project_id 
+FROM ( 
 select ga.source_id 
-, '@PROJECT_ID@' as project_id
 , dnt.dataset_presenter_id as dataset_id
 --, nvl(psdi.profile_set_display_name, ps.name) as profile_set_display_name
-, CASE WHEN (1>0) THEN  -- i.e. switchstrands =1  
+, REGEXP_REPLACE (pan.name, ' \(.*\)', '') AS sample_name
+, round(nfe.value, 2) as value
+, round(nfe.standard_error, 2) as standard_error
+, round(nfe.percentile_channel1, 2) as percentile_channel1
+, round(nfe.percentile_channel2, 2) as percentile_channel2
+from results.nafeatureexpression nfe
+ , apidbtuning.geneattributes ga
+ , study.protocolappnode pan
+ , study.studylink sl
+ , study.study ps
+ , study.study i
+ , sres.externaldatabaserelease r
+ , sres.externaldatabase d
+ , apidbtuning.profilesetdisplayinfo psdi
+ , apidbtuning.datasetnametaxon dnt
+ , apidbtuning.datasetproperty dp 
+where ga.na_feature_id = nfe.na_feature_id
+and nfe.protocol_app_node_id = pan.protocol_app_node_id
+and pan.protocol_app_node_id = sl.protocol_app_node_id
+and sl.study_id = ps.study_id
+and ps.investigation_id = i.study_id
+and i.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and ps.name = psdi.profile_set_name (+)
+and d.name = dnt.name
+and dnt.dataset_presenter_id=dp.dataset_presenter_id
+and dp.property='datasetClassCategory'
+and NOT dp.value='RNASeq'
+UNION
+select ga.source_id 
+, dnt.dataset_presenter_id as dataset_id
+--, nvl(psdi.profile_set_display_name, ps.name) as profile_set_display_name
+, CASE WHEN (dp.value>0) THEN  -- i.e. switchstrands =1  
     REPLACE (REPLACE (REGEXP_REPLACE( REGEXP_REPLACE (REGEXP_REPLACE (pan.name, ' \- \S+\] \S+', ''), '\[cuff' , 'Cufflinks' ), '\[htseq', 'HTSeq'), 'firststrand', 'antisense'),'secondstrand','sense')
   ELSE 
   REPLACE (REPLACE (REGEXP_REPLACE( REGEXP_REPLACE (REGEXP_REPLACE (pan.name, ' \- \S+\] \S+', ''), '\[cuff' , 'Cufflinks' ), '\[htseq', 'HTSeq'), 'firststrand', 'sense'),'secondstrand','antisense')
@@ -3501,11 +3534,13 @@ and r.external_database_id = d.external_database_id
 and ps.name = psdi.profile_set_name (+)
 and d.name = dnt.name
 and dnt.dataset_presenter_id=dp.dataset_presenter_id
-and dp.property='switchStrands'
+and dp.property like 'switchStrands'
 and ( (dp.value>0 AND ps.name not like '%cuff - secondstrand%')
      OR  ps.name not like '%cuff - secondstrand%')
 and ps.name not like '%htseq-intersection-nonempty%'
 and ps.name not like '%htseq-intersection-strict%'
+) x ORDER BY dataset_id
+
              ]]>
             </sql>
           </sqlQuery>
