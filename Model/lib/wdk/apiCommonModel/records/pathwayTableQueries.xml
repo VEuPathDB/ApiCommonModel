@@ -11,33 +11,41 @@
       <sqlQuery name="CompoundsFromMetabolicPathways" >
             <column name="source_id"/>
             <column name="project_id"/>
-            <column name="pathway_source"/> <!-- TODO -->
-            <column name="substrates"/>
+            <column name="pathway_source"/>
+            <column name="reaction_source_id"/>
+            <column name="reaction_url"/>
             <column name="enzyme"/>
-            <column name="enzyme_link"/>
-            <column name="reaction"/>
-            <column name="products"/>
-            <column name="direction"/>
+            <column name="expasy_url"/>
+            <column name="expasy_html"/>
+            <column name="equation"/>
+            <column name="reversible"/>
+            <column name="substrates_text"/>
+            <column name="products_text"/>            
             <sql>
             <![CDATA[
-WITH enzy AS (SELECT DISTINCT ec.ec_number 
-            FROM apidbtuning.transcriptAttributes gf,
-                 dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec
-            WHERE asec.aa_sequence_id = gf.aa_sequence_id
-              AND ec.enzyme_class_id = asec.enzyme_class_id)
-SELECT  '@PROJECT_ID@' as project_id, pc1.pathway AS source_id, pc1.reaction, pc1.enzyme,
-CASE WHEN pc1.enzyme IN (SELECT ec_number FROM enzy) 
- THEN '<a href="processQuestion.do?questionFullName=GeneQuestions.InternalGenesByEcNumber&organism=all&'  || 'array%28ec_source%29=all&' || 'array%28ec_number_pattern%29=N/A&ec_wildcard=' || pc1.enzyme || '&' || 'questionSubmit=Get+Answer'  || '">' || pc1.enzyme || '</a>'
-              ELSE  pc1.enzyme   END AS enzyme_link, 
-apidb.tab_to_string(SET(CAST(COLLECT( pc1.chebi_accession ) AS apidb.varchartab))) AS substrates,
-apidb.tab_to_string(set(cast(COLLECT( pc2.chebi_accession ) AS apidb.varchartab))) AS products,
-CASE WHEN pc1.TYPE = 'substrate/product' THEN  'reversible' ELSE 'irreversible' END as direction
-FROM apidbtuning.pathwayCompounds pc1,  apidbtuning.pathwayCompounds pc2
-WHERE pc1.pathway_id = pc2.pathway_id 
-AND pc1.reaction = pc2.reaction
-AND pc1.TYPE = 'substrate' AND pc2.TYPE = 'product'
-GROUP BY pc1.pathway, pc1.enzyme, pc1.reaction, pc1.TYPE
-ORDER BY pc1.enzyme
+            SELECT DISTINCT '@PROJECT_ID@' as project_id
+            , pa.SOURCE_ID
+            , pa.PATHWAY_SOURCE
+            , pr.REACTION_SOURCE_ID
+            , pr.REACTION_URL
+            , pr.ENZYME
+            , pr.EXPASY_URL
+            , pr.EXPASY_HTML
+            , pr.EQUATION_HTML as equation
+            , decode (pr.IS_REVERSIBLE, '1', 'Y', '0', 'N') as reversible
+            , pr.SUBSTRATES_TEXT
+            , pr.PRODUCTS_TEXT
+            FROM
+            apidbtuning.pathwayattributes pa
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , sres.pathwaynode pn
+            WHERE pc.pathway_id = pa.PATHWAY_ID
+            AND pn.PATHWAY_ID = pa.PATHWAY_ID
+            AND pr.REACTION_ID = pc.REACTION_ID
+            AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+            AND pr.ENZYME = pn.DISPLAY_LABEL
+            ORDER BY pr.ENZYME
             ]]>
            </sql>
         </sqlQuery>
