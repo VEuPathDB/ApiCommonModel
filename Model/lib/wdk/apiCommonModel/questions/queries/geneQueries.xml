@@ -293,77 +293,6 @@
   <!-- ChIP chip chromatin marks -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesByChIPchipToxo" includeProjects="ToxoDB">
-        <testParamValues includeProjects="ToxoDB">
-          <paramValue name="chip_antibody_toxo">H3K4me3|none</paramValue>
-          <paramValue name="chip_replicates">No</paramValue>
-        </testParamValues>
-
-        <paramRef ref="geneParams.chip_strains"/>
-        <paramRef ref="geneParams.chip_antibody_toxo"/>
-        <paramRef ref="geneParams.chip_replicates" quote="false"/>
-        <paramRef ref="geneParams.chip_distance"/>
-        <paramRef ref="geneParams.chip_direction"/>
-        
-        <column name="source_id"/>
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="project_id"/>
-        <column name="chip_distance"/>
-        <column name="chip_total_reps"/>
-        <column name="chip_antibodies"/>
-        <column name="chip_treatment"/>
-
-       <sql>
-             <![CDATA[
-select q.*, 'Y' as matched_result from  (select outer.gene_source_id as source_id,
-                       '@PROJECT_ID@' as project_id, 
-                        outer.antibody as chip_antibodies, outer.treatment as chip_treatment,
-                        max(outer.distance) as chip_distance,
-                        count(*) as chip_total_reps
-                from (select inner.gene_source_id,inner.antibody, inner.treatment, max(inner.distance) as distance
-                      from (select ccg.gene_source_id,cpp.antibody,cpp.treatment,ccg.distance,cpp.replicate 
-                            from   ApidbTuning.ChIPchipGene ccg,
-                                   rad.datatransformationresult dtf,
-                                   ApidbTuning.ChIPProtocolParams cpp
-                            where ccg.chip_na_feature_id = dtf.row_id
-                            and   dtf.analysis_id = cpp.analysis_id
-                            and   rtrim(cpp.antibody || '|' || cpp.treatment) in ($$chip_antibody_toxo$$)   
-                            and   ccg.distance <= $$chip_distance$$ 
-                            and   ('Either' = $$chip_direction$$ OR ccg.direction = $$chip_direction$$)
-                            and   cpp.strain = $$chip_strains$$) inner
-                       group by inner.gene_source_id,inner.antibody, inner.treatment,inner.replicate) outer
-                 group by outer.gene_source_id,outer.antibody, outer.treatment) q
-where chip_total_reps > $$chip_replicates$$
-          ]]>
-       </sql>
-    </sqlQuery>
-
-       
-    <processQuery name="GenesByChIPchipToxo" includeProjects="EuPathDB"
-             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <testParamValues>
-          <paramValue name="chip_antibody_toxo">H3K4me3|none</paramValue>
-          <paramValue name="chip_replicates">No</paramValue>
-        </testParamValues>
-
-        <paramRef ref="geneParams.chip_strains"  quote="false"/>
-        <paramRef ref="geneParams.chip_antibody_toxo" quote="false"/>
-        <paramRef ref="geneParams.chip_replicates"  quote="false"/>
-        <paramRef ref="geneParams.chip_distance"/>
-        <paramRef ref="geneParams.chip_direction"  quote="false"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" wsName="ProjectId"/>
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="chip_distance" width="32"/>
-        <wsColumn name="chip_total_reps" width="32"/>
-        <wsColumn name="chip_antibodies" width="32"/>
-        <wsColumn name="chip_treatment" width="32"/>
-      
-    </processQuery>
-
-
     <sqlQuery name="GenesByChIPchip" includeProjects="PlasmoDB,ToxoDB">
         <testParamValues>
           <paramValue name="chip_antibody_plasmo">H3K9me3</paramValue>
@@ -377,6 +306,7 @@ where chip_total_reps > $$chip_replicates$$
       <paramRef ref="sharedParams.chipchip_samples"/>
         <paramRef ref="geneParams.chip_distance"/>
         <paramRef ref="geneParams.chip_direction"/>
+        <paramRef ref="geneParams.chip_score"/>
 
         <column name="source_id"/>
         <column name="gene_source_id"/>
@@ -392,7 +322,8 @@ where chip_total_reps > $$chip_replicates$$
             from apidbTuning.ChipChipTranscript
             where protocol_app_node_id in ($$chipchip_samples$$)
               and ($$chip_direction$$ = 'Either' OR direction = $$chip_direction$$)
-              and distance < $$chip_distance$$
+              and distance <= $$chip_distance$$
+              and score >= $$chip_score$$
             group by source_id, gene_source_id
            ]]>
        </sql>
