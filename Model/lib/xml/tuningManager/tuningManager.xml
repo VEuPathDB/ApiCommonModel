@@ -475,7 +475,7 @@ FROM
   study.protocolappparam pap
 , study.protocolparam pp
 , study.protocol p
-, apidbtuning.protocolappnodeio io
+, protocolappnodeio io
 , study.protocolappnode pan
 WHERE
   pp.protocol_param_id = pap.protocol_param_id
@@ -4041,6 +4041,61 @@ tablespace indx
     </sql>
   </tuningTable>
 
+  <tuningTable name="ChipSeqTranscript">
+    <comment> Used by the GenesByChipSeq query
+     </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="PANProtocolMetadata"/>
+    <internalDependency name="FallbackMetadata"/>
+    <externalDependency name="results.SegmentResult"/>
+    <sql>
+      <![CDATA[
+      create table ChipSeqTranscript&1 NOLOGGING AS
+      select distinct ta.source_id, ta.gene_source_id, sr.protocol_app_node_id,
+      CASE 
+        WHEN ta.is_reversed = 0 
+        THEN round(abs(ta.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0)
+        ELSE round(abs(ta.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0) 
+      END as distance,
+      CASE 
+        WHEN /* distance > 0 */
+          CASE WHEN ta.is_reversed = 0 
+            THEN ta.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+            ELSE ta.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+          END > 0 
+        THEN 
+          CASE 
+            WHEN ta.is_reversed = 0 
+            THEN '-' 
+            ELSE '+'
+          END 
+        ELSE 
+          CASE 
+            WHEN ta.is_reversed = 1 
+            THEN '-' 
+            ELSE '+'
+          END 
+        END as direction,
+      sr.score1 as score
+from  TranscriptAttributes ta,
+      results.SegmentResult sr
+where sr.na_sequence_id = ta.na_sequence_id
+  and sr.protocol_app_node_id
+          in (      select protocol_app_node_id from FallbackMetadata where subtype = 'chipseq'
+              union select protocol_app_node_id from panProtocolMetadata where subtype = 'chipseq'
+              union select protocol_app_node_id from panCharacteristicMetadata where subtype = 'chipseq')
+  and ( (ta.is_reversed = 0 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.start_min) <= 3000)
+                  or (ta.is_reversed = 1 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.end_max) <= 3000) )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index chpsq_id_idx&1 ON ChipSeqTranscript&1 (protocol_app_node_id, source_id, gene_source_id)
+tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
 
   <tuningTable name="TFBSGene">
     <comment> Used by gene queries, as well as by generateGeneMetrics. Also an input
@@ -4746,7 +4801,7 @@ from (
 with core as 
 (select ga.na_feature_id,rif.na_sequence_id,rif.segment_start as mapping_start,rif.segment_end as mapping_end,sum(rif.unique_reads) as score
     FROM   apidb.IntronJunction rif, 
-         apidbtuning.geneattributes ga
+         geneattributes ga
   WHERE ga.na_sequence_id = rif.na_sequence_id
      and rif.segment_start <= ga.end_max
      and rif.segment_end >= ga.start_min
@@ -4757,7 +4812,7 @@ with core as
   avg_score as gene_avg_score,exp.total_exp
 from
   (select nafe.na_feature_id,round(sum(nafe.value),1) as total_exp
-    from study.protocolappnode pan, results.nafeatureexpression nafe, apidbtuning.ProfileSamples ps
+    from study.protocolappnode pan, results.nafeatureexpression nafe, ProfileSamples ps
     where (pan.name like '%htseq-union - firststrand - fpkm%'
     or pan.name like '%htseq-union - unstranded - fpkm%')
     and Pan.Protocol_App_Node_Id = Ps.Protocol_App_Node_Id
@@ -4948,7 +5003,7 @@ from (
 with core as 
 (select ga.na_feature_id,rif.na_sequence_id,rif.segment_start as mapping_start,rif.segment_end as mapping_end,sum(rif.unique_reads) as score,sum(rif.unique_reads) as unique_reads
     FROM   apidb.IntronJunction rif, 
-         apidbtuning.geneattributes ga
+         geneattributes ga
   WHERE ga.na_sequence_id = rif.na_sequence_id
      and rif.segment_start >= ga.start_min - 50
      and rif.segment_end <= ga.end_max + 50
@@ -4960,7 +5015,7 @@ with core as
   avg_score as gene_avg_score,exp.total_exp
 from
   (select nafe.na_feature_id,round(sum(nafe.value),1) as total_exp
-    from study.protocolappnode pan, results.nafeatureexpression nafe, apidbtuning.ProfileSamples ps
+    from study.protocolappnode pan, results.nafeatureexpression nafe, ProfileSamples ps
     where (pan.name like '%htseq-union - firststrand - fpkm%'
     or pan.name like '%htseq-union - unstranded - fpkm%')
     and Pan.Protocol_App_Node_Id = Ps.Protocol_App_Node_Id
@@ -6996,7 +7051,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
   <tuningTable name="ExternalDbDatasetPresenter">
     <comment>
       A materialization of the oft-computed join of sres.externalDatabaseRelease,
-      sres.externalDatabase, and apidbtuning.DatasetPresenter.
+      sres.externalDatabase, and DatasetPresenter.
     </comment>
     <internalDependency name="DatasetPresenter"/>
     <externalDependency name="sres.ExternalDatabase"/>
@@ -7008,7 +7063,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                edr.external_database_release_id, SUBSTR(edr.version, 1, 40) AS external_database_version,
                dsp.dataset_presenter_id, dsp.name AS dataset_presenter_name,
                dsp.display_name AS dataset_presenter_display_name
-        FROM sres.externalDatabaseRelease edr,  sres.externalDatabase ed, apidbtuning.DatasetPresenter dsp
+        FROM sres.externalDatabaseRelease edr,  sres.externalDatabase ed, DatasetPresenter dsp
         WHERE ed.external_database_id = edr.external_database_id
           AND (ed.name = dsp.name
                OR ed.name LIKE dsp.dataset_name_pattern)
