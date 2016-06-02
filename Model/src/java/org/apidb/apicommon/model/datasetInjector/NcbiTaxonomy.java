@@ -18,6 +18,7 @@ public class NcbiTaxonomy extends DatasetInjector {
     for (Map.Entry<String, Map<String, String>> props : globalProps.entrySet()) {
         Map<String, String> map = props.getValue();
         if(map.containsKey("isReferenceStrain") && 
+           map.get("isAnnotatedGenome").toLowerCase().equals("true") &&
            map.get("isReferenceStrain").toLowerCase().equals("true") &&
            props.getKey().startsWith(map.get("projectName")) ) {
             
