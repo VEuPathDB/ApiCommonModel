@@ -202,20 +202,24 @@
 
       <sql>
 	<![CDATA[
-       SELECT DISTINCT pc.compound_source_id as source_id, '@PROJECT_ID@' as project_id,
-              count(distinct ds.source_id) as gene_count,
-              apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as genes, max(ds.wdk_weight) as wdk_weight
-         FROM ($$gene_result$$)ds,
-              sres.enzymeClass ec, dots.aaSequenceEnzymeClass asec, 
-              ApidbTuning.GeneId gi, ApidbTuning.TranscriptAttributes ta,
-              apidbtuning.PathwayCompounds pc
-        WHERE ta.aa_sequence_id = asec.aa_sequence_id
-          AND lower(gi.id) = lower(ds.source_id)
-          AND ta.gene_source_id = gi.gene
-          AND asec.enzyme_class_id = ec.enzyme_class_id
-          AND pc.enzyme = ec.ec_number
-	  AND (pc.type = $$compound_type$$ OR 'either' = $$compound_type$$)
-      GROUP BY pc.compound_source_id
+    SELECT DISTINCT ca.source_id
+    , '@PROJECT_ID@' as project_id
+    , count(distinct ds.source_id) as gene_count
+    , apidb.tab_to_string(set(cast(collect(ds.source_id) as apidb.varchartab))) as genes
+    , max(ds.wdk_weight) as wdk_weight
+    FROM ($$gene_result$$) ds
+    , apidbtuning.transcriptpathway tp
+    , apidbtuning.pathwayreactions pr
+    , apidbtuning.pathwaycompounds pc
+    , apidbtuning.compoundattributes ca
+    WHERE tp.gene_source_id = ds.gene_source_id
+    AND tp.ec_number like replace(pr.enzyme, '-', '%')
+    AND pr.reaction_id = pc.reaction_id
+    AND pr.ext_db_name = pc.ext_db_name
+    AND pc.pathway_id = tp.pathway_id
+    AND ca.source_id = pc.chebi_accession
+    AND ((pr.is_reversible = 0 AND pc.type = $$compound_type$$) OR (pr.is_reversible = 1 AND $$compound_type$$ = 'substrate/product') OR $$compound_type$$ = 'either')
+    GROUP BY ca.source_id
 	]]>
         </sql>
     </sqlQuery>
