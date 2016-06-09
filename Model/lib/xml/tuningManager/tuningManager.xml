@@ -2328,7 +2328,6 @@ tablespace indx
       <![CDATA[
 CREATE TABLE &prefixTranscriptAttributes&1 NOLOGGING AS
 SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as project_id,
-       --source_id : set initially as the transcript_source_id
        t.source_id,
        --first the gene attributes:
        gf.source_id AS gene_source_id, 
@@ -2596,16 +2595,6 @@ WHERE gf.source_id = gene.source_id
  AND t.na_feature_id = utr_lengths.transcript_na_feature_id 
       ]]>
     </sql>
-    <!--  source_id:  if source_id is not unique, use protein_source_id -->
-    <sql>
-      <![CDATA[
-update &prefixTranscriptAttributes&1 ta
-set ta.source_id = ta.protein_source_id 
-where ta.source_id in 
-  (select source_id from 
-    ( select count(*), source_id from &prefixTranscriptAttributes&1 group by source_id having count(*)>1))
-      ]]>
-    </sql>
     <sql>
       <![CDATA[
 update &prefixTranscriptAttributes&1 ga
@@ -2785,6 +2774,13 @@ and ga.orthomcl_name is null
         update &prefixTranscriptAttributes&1
         set representative_transcript = source_id
         where representative_transcript is null
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX TransAttr_lwrsrc_ix&1
+          ON &prefixTranscriptAttributes&1 (lower(source_id), gene_source_id, project_id, source_id)
+          TABLESPACE INDX
       ]]>
     </sql>
   </tuningTable>
@@ -4623,9 +4619,9 @@ where sim.query_id = extq.na_sequence_id
     <sql>
       <![CDATA[
 CREATE TABLE &prefixTranscriptSequence&1 NOLOGGING AS
-SELECT ta.transcript_source_id AS source_id, ta.project_id, sns.sequence
+SELECT ta.source_id, ta.project_id, sns.sequence
 FROM &prefixTranscriptAttributes ta, dots.SplicedNaSequence sns
-WHERE ta.transcript_source_id = sns.source_id
+WHERE ta.source_id = sns.source_id
       ]]>
     </sql>
     <sql>
@@ -4647,11 +4643,11 @@ tablespace indx
     <sql>
       <![CDATA[
 CREATE TABLE CodingSequence&1 NOLOGGING AS
-SELECT ta.transcript_source_id  AS source_id, ta.project_id,
+SELECT ta.source_id, ta.project_id,
        SUBSTR(sns.sequence, tf.translation_start,                            
               tf.translation_stop - tf.translation_start + 1) as sequence
 FROM TranscriptAttributes ta, dots.SplicedNaSequence sns, dots.TranslatedAaFeature tf
-WHERE ta.transcript_source_id = sns.source_id
+WHERE ta.source_id = sns.source_id
  AND ta.na_feature_id = tf.na_feature_id
       ]]>
     </sql>
