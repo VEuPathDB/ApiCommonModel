@@ -4217,30 +4217,66 @@ AND t2.count_per_million >=$$min_norm_count$$
   <!-- Genes by Metabolic Pathways -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesByMetabolicPathwayKegg"  excludeProjects="EuPathDB,FungiDB"  >
+    <sqlQuery name="GenesByMetabolicPathway"  excludeProjects="EuPathDB,FungiDB"  >
+        <paramRef ref="organismParams.organism"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="pathwayParams.metabolic_pathway_id_with_genes"/>
-	<paramRef ref="pathwayParams.pathway_wildcard"/>
+	    <paramRef ref="pathwayParams.pathway_wildcard"/>
+        <paramRef ref="pathwayParams.exact_match_only"/>
         <column name="project_id"/>
         <column name="gene_source_id"/>
         <column name="source_id"/>
         <column name="matched_result"/>
+        <column name="ec_pathway"/>
+        <column name="ec_gene"/>
       <sql>
           <![CDATA[
-            SELECT distinct ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
-            FROM   sres.enzymeClass ec,
-              dots.aaSequenceEnzymeClass asec, ApidbTuning.TranscriptAttributes ta,
-              ApidbTuning.pathwayCompounds pc, sres.pathway p              
-            WHERE  ta.aa_sequence_id = asec.aa_sequence_id
-            AND    asec.enzyme_class_id = ec.enzyme_class_id
-            AND    pc.enzyme = ec.ec_number
-            AND    p.pathway_id = pc.pathway_id
-            AND    ( p.pathway_id in ($$metabolic_pathway_id_with_genes$$)
-              OR lower(p.name) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%') )
+            SELECT DISTINCT gene_source_id
+            , source_id
+            , '@PROJECT_ID@' as project_id
+            , 'Y' as matched_result
+            , listagg (ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
+            , listagg (ec_gene, ', ') within group (order by ec_pathway) as ec_gene
+            FROM (
+                SELECT DISTINCT gene_source_id
+                , source_id
+                , ec_pathway
+                , listagg(ec_gene, ', ') within group (order by ec_gene) as ec_gene
+                FROM (
+                    SELECT DISTINCT gene_source_id
+                    , source_id
+                    , listagg (enzyme, ', ') within group (order by enzyme) as ec_pathway
+                    , ec_number as ec_gene
+                    FROM (
+                        SELECT DISTINCT ta.gene_source_id
+                        , ta.source_id
+                        , pr.enzyme
+                        , tp.ec_number
+                        FROM apidbtuning.transcriptattributes ta
+                        , apidbtuning.transcriptpathway tp
+                        , apidbtuning.pathwayattributes pa
+                        , apidbtuning.pathwaycompounds pc
+                        , apidbtuning.pathwayreactions pr
+                        WHERE (pa.pathway_id in ($$metabolic_pathway_id_with_genes$$)
+                            OR lower(pa.name) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%') )
+                        AND pc.pathway_id = pa.pathway_id
+                        AND tp.pathway_id = pa.pathway_id
+                        AND ta.gene_source_id = tp.gene_source_id
+                        AND pr.reaction_id = pc.reaction_id
+                        AND pr.ext_db_name = pc.ext_db_name
+                        AND ((tp.ec_number like replace (pr.enzyme, '-', '%') AND $$exact_match_only$$ = 0) OR (tp.ec_number = pr.enzyme AND $$exact_match_only$$ = 1))
+                        AND ta.taxon_id in ($$organism$$)
+                    )
+                    GROUP BY gene_source_id, source_id, ec_number
+                )
+                GROUP BY gene_source_id, source_id, ec_pathway
+            )
+            GROUP BY gene_source_id, source_id
           ]]>
       </sql>
     </sqlQuery>
 
-    <processQuery name="GenesByMetabolicPathwayKegg" includeProjects="EuPathDB"
+    <processQuery name="GenesByMetabolicPathway" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
         <paramRef ref="pathwayParams.metabolic_pathway_id_with_genes" quote="false"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
