@@ -13,6 +13,26 @@
 	  default="C00993 CHEBI:58681 2.3.2.1 PF3D7_0919700 ec01057 RXN-9655"/>
     </datasetParam>
 
+    <enumParam name="exact_match_only"
+               prompt="EC Exact Match Only"
+               multiPick="false"
+               quote="false">
+        <noTranslation value="true" includeProjects="EuPathDB" />
+        <help>
+            <![CDATA[Choose whether to only use exact EC number matches.]]>
+        </help>
+        <enumList>
+            <enumValue>
+                <term>No</term>
+                <internal>0</internal>
+            </enumValue>
+            <enumValue>
+                <term>Yes</term>
+                <internal>1</internal>
+            </enumValue>
+        </enumList>
+    </enumParam>
+
         <flatVocabParam name="pathways_source" 
                      queryRef="PathwayVQ.PathwaysSource"
                      prompt="Pathway Source"
@@ -45,7 +65,8 @@
                      queryRef="PathwayVQ.MetbPathwaysWithGenesList"
                      prompt="Pathway Name or ID"
                      quote="true"
-                     displayType="typeAhead">
+                     displayType="typeAhead"
+                     dependedParamRef="pathwayParams.pathways_source">
             <help>Enter a Pathway ID (e.g. "ec00061") or Pathway name (e.g. "Fatty acid biosynthesis").</help>
             <suggest selectMode="none" />
         </flatVocabParam>
@@ -149,22 +170,25 @@
 
 
         <sqlQuery name="MetbPathwaysWithGenesList"  doNotTest="1" excludeProjects="EuPathDB">
+            <paramRef ref="pathwayParams.pathways_source"/>
             <column name="internal" />
             <column name="term" />
             <column name="display" />
             <sql>
-            SELECT DISTINCT p.name ||' ('|| p.source_id||')' AS display,
-                            p.NAME ||' ('|| p.source_id||')'  AS term,
-                            p.pathway_id as internal
-            FROM  sres.enzymeClass ec, dots.aaSequenceEnzymeClass asec, ApidbTuning.TranscriptAttributes ga, 
-               ApidbTuning.pathwayCompounds pc, sres.pathway p
-            WHERE ga.aa_sequence_id = asec.aa_sequence_id
-            AND asec.enzyme_class_id = ec.enzyme_class_id
-            AND pc.enzyme = ec.ec_number
-            AND p.pathway_id = pc.pathway_id
-	    UNION
-	    SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
-	    FROM dual
+            SELECT DISTINCT pa.name ||' ('|| pa.source_id||') (' || pa.pathway_source || ')' as display
+            , '('|| pa.source_id||') (' || pa.pathway_source || ')' as term
+            , pa.pathway_id as internal
+            FROM apidbtuning.pathwayattributes pa
+            , apidbtuning.transcriptpathway tp
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE tp.pathway_id = pa.pathway_id
+            AND pa.external_db_name = ed.name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$=1)
+            UNION
+            SELECT 'N/A' as display, 'N/A' as term, 0 as internal
+            FROM dual
             </sql>
         </sqlQuery>
 
@@ -176,6 +200,7 @@
 
 
         <sqlQuery name="MetbPathwayIDsWithGenesList"  doNotTest="1" excludeProjects="EuPathDB">
+            <paramRef ref="pathwayParams.pathways_source"/>
             <column name="internal" />
             <column name="term" />
             <column name="display" />
