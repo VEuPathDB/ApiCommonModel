@@ -251,11 +251,9 @@ public class Gff3CachedReporter extends Reporter {
     String idSql = baseAnswer.getSortedIdSql();
 
     StringBuffer sql = new StringBuffer("SELECT tc." + COLUMN_CONTENT);
-    sql.append(" FROM " + tableCache + " tc, (" + idSql + ") ac");
-    sql.append(" WHERE tc.table_name = '" + recordName + "' ");
-    for (String column : pkColumns) {
-      sql.append(" AND tc." + column + " = ac." + column);
-    }
+    sql.append(" FROM " + tableCache + " tC WHERE tc.source_id in (select gene_source_id from (" + idSql + ") ac)");
+    sql.append(" AND tc.table_name = '" + recordName + "' ");
+
 
     DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
@@ -298,12 +296,7 @@ public class Gff3CachedReporter extends Reporter {
 
     StringBuffer sql = new StringBuffer("SELECT ");
     sql.append("tc.").append(COLUMN_CONTENT).append(" FROM ");
-    sql.append(tableCache).append(" tc, (").append(idSql).append(") ac");
-    sql.append(" WHERE tc.table_name IN (").append(sqlIn).append(")");
-    for (String column : pkColumns) {
-      sql.append(" AND tc.").append(column).append(" = ac.").append(column);
-    }
-    // sql.append(" ORDER BY tc.table_name ASC");
+    sql.append(tableCache).append(" tc where tc.source_id in (select gene_source_id from (").append(idSql).append(") aC)");
 
     DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
