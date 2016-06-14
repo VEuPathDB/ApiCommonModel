@@ -4291,30 +4291,44 @@ AND t2.count_per_million >=$$min_norm_count$$
     <!-- Genes by Compounds -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <sqlQuery name="GenesByReactionCompounds"  excludeProjects="EuPathDB,FungiDB">
-        <paramRef ref="compoundParams.pubchem_compound_id"/>
+        <paramRef ref="organismParams.organism"/>
+        <paramRef ref="compoundParams.chebi_compound_id"/>
         <paramRef ref="compoundParams.compound_type" />
+        <paramRef ref="pathwayParams.exact_match_only"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="matched_result"/>
       <sql>
           <![CDATA[
-       SELECT distinct ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
-         FROM sres.enzymeClass ec, 
-              dots.aaSequenceEnzymeClass asec, ApidbTuning.TranscriptAttributes ta,
-              ApidbTuning.PathwayCompounds pc
-        WHERE ta.aa_sequence_id = asec.aa_sequence_id
-          AND asec.enzyme_class_id = ec.enzyme_class_id
-          AND pc.enzyme = ec.ec_number
-	  AND (pc.type = $$compound_type$$ OR 'either' = $$compound_type$$)
-          AND pc.chebi_accession IN ($$pubchem_compound_id$$ )
+            SELECT DISTINCT ta.source_id
+            , ta.gene_source_id
+            , 'Y' as matched_result
+            , '@PROJECT_ID@' as project_id
+            FROM apidbtuning.transcriptattributes ta
+            , apidbtuning.transcriptpathway tp
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE pc.chebi_accession in ($$chebi_compound_id$$)
+            AND pr.reaction_id = pc.reaction_id
+            AND pr.ext_db_name = pc.ext_db_name
+            AND tp.pathway_id = pc.pathway_id
+            AND ((tp.ec_number like replace(pr.enzyme, '-', '%') AND $$exact_match_only$$ = 0) OR (tp.ec_number = pr.enzyme AND $$exact_match_only$$ = 1))
+            AND ta.gene_source_id = tp.gene_source_id
+            AND ta.taxon_id in ($$organism$$)
+            AND ed.name = pc.ext_db_name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
           ]]>
       </sql>
     </sqlQuery>
 <!--
     <processQuery name="GenesByReactionCompounds" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="compoundParams.pubchem_compound_id" noTranslation="true"/>
+        <paramRef ref="compoundParams.chebi_compound_id" noTranslation="true"/>
         <paramRef ref="compoundParams.compound_type" />
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
