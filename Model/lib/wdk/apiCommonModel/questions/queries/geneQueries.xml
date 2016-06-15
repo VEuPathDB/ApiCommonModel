@@ -4339,6 +4339,8 @@ AND t2.count_per_million >=$$min_norm_count$$
 
     <sqlQuery name="GenesByPathwayIds" includeProjects="PlasmoDB"  >
         <paramRef ref="pathwayParams.pathway_result"/>
+        <paramRef ref="organismParams.organism"/>
+        <paramRef ref="pathwayParams.exact_match_only"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="wdk_weight" />
@@ -4346,15 +4348,26 @@ AND t2.count_per_million >=$$min_norm_count$$
         <column name="matched_result"/>
       <sql>
           <![CDATA[
-            SELECT distinct ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result, max(ps.wdk_weight) as wdk_weight
-            FROM   sres.enzymeClass ec,($$pathway_result$$) ps,
-              dots.aaSequenceEnzymeClass asec, ApidbTuning.TranscriptAttributes ta,
-              ApidbTuning.pathwayCompounds pc, sres.pathway p              
-            WHERE  ta.aa_sequence_id = asec.aa_sequence_id
-            AND    asec.enzyme_class_id = ec.enzyme_class_id
-            AND    pc.enzyme = ec.ec_number
-            AND    p.pathway_id = pc.pathway_id
-            AND    p.source_id = ps.source_id
+            SELECT DISTINCT ta.source_id
+            , ta.gene_source_id
+            , '@PROJECT_ID@' as project_id
+            , 'Y' as matched_result
+            , max(ps.wdk_weight) as wdk_weight
+            FROM apidbtuning.pathwayattributes pa
+            , apidbtuning.transcriptpathway tp
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , apidbtuning.transcriptattributes ta
+            , ($$pathway_result$$) ps
+            WHERE pa.source_id = ps.source_id
+            AND pa.pathway_source = ps.pathway_source
+            AND pc.pathway_id = pa.pathway_id
+            AND tp.pathway_id = pa.pathway_id
+            AND pr.reaction_id = pc.reaction_id
+            AND pr.ext_db_name = pc.ext_db_name
+            AND ((tp.ec_number like replace(pr.enzyme, '-', '%') AND $$exact_match_only$$ = 0) OR (tp.ec_number = pr.enzyme AND $$exact_match_only$$ = 1))
+            AND ta.gene_source_id = tp.gene_source_id
+            AND ta.taxon_id in ($$organism$$) 
             GROUP BY ta.source_id, ta.gene_source_id
           ]]>
       </sql>
