@@ -4315,6 +4315,7 @@ AND t2.count_per_million >=$$min_norm_count$$
             WHERE pc.chebi_accession in ($$chebi_compound_id$$)
             AND pr.reaction_id = pc.reaction_id
             AND pr.ext_db_name = pc.ext_db_name
+            AND ((pr.is_reversible = 0 AND pc.type = $$compound_type$$) OR (pr.is_reversible = 1 AND $$compound_type$$ = 'substrate/product') OR $$compound_type$$ = 'either')
             AND tp.pathway_id = pc.pathway_id
             AND ((tp.ec_number like replace(pr.enzyme, '-', '%') AND $$exact_match_only$$ = 0) OR (tp.ec_number = pr.enzyme AND $$exact_match_only$$ = 1))
             AND ta.gene_source_id = tp.gene_source_id
@@ -4375,7 +4376,10 @@ AND t2.count_per_million >=$$min_norm_count$$
 
     <sqlQuery name="GenesByCompoundIds" includeProjects="PlasmoDB"  >
       <paramRef ref="compoundParams.compound_result"/>
+      <paramRef ref="organismParams.organism"/>
       <paramRef ref="compoundParams.compound_type" />
+      <paramRef ref="pathwayParams.pathways_source"/>
+      <paramRef ref="pathwayParams.exact_match_only"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
@@ -4384,16 +4388,30 @@ AND t2.count_per_million >=$$min_norm_count$$
 
       <sql>
           <![CDATA[
-       SELECT distinct ta.gene_source_id, ta.source_id, 'Y' as matched_result,
-              '@PROJECT_ID@' as project_id, max(ds.wdk_weight) as wdk_weight
-         FROM sres.enzymeClass ec,
-              dots.aaSequenceEnzymeClass asec, ApidbTuning.TranscriptAttributes ta,
-              ($$compound_result$$) ds, apidbtuning.PathwayCompounds pc
-        WHERE ta.aa_sequence_id = asec.aa_sequence_id
-          AND asec.enzyme_class_id = ec.enzyme_class_id
-          AND pc.enzyme = ec.ec_number
-	  AND (pc.type = $$compound_type$$ OR 'either' = $$compound_type$$)
-      GROUP BY ta.gene_source_id, ta.source_id
+            SELECT DISTINCT ta.gene_source_id
+            , ta.source_id
+            , 'Y' as matched_result
+            , '@PROJECT_ID@' as project_id
+            , max (ds.wdk_weight) as wdk_weight
+            FROM apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , apidbtuning.transcriptpathway tp
+            , apidbtuning.transcriptattributes ta
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            , ($$compound_result$$) ds
+            WHERE pc.chebi_accession = ds.source_id
+            AND pr.reaction_id = pc.reaction_id
+            AND pr.ext_db_name = pc.ext_db_name
+            AND ((pr.is_reversible = 0 AND pc.type = $$compound_type$$) OR (pr.is_reversible = 1 AND $$compound_type$$ = 'substrate/product') OR $$compound_type$$ = 'either')
+            AND ed.name = pc.ext_db_name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            AND tp.pathway_id = pc.pathway_id
+            AND ((tp.ec_number like replace(pr.enzyme, '-', '%') AND $$exact_match_only$$ = 0) OR (tp.ec_number = pr.enzyme AND $$exact_match_only$$ = 1))
+            AND ta.gene_source_id = tp.gene_source_id
+            AND ta.taxon_id in ($$organism$$)
+            GROUP BY ta.gene_source_id, ta.source_id
           ]]>
       </sql>
     </sqlQuery>
