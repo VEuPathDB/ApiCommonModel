@@ -34,7 +34,7 @@ die "required parameter missing" unless ($propfile && $instance && $suffix);
 my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
 createTables($dbh, $suffix);
-indexChanges($dbh, $suffix);
+createIndex($dbh, $suffix);
 
 print STDERRR "about to get genome list\n" if $debug;
 my $genomeListRef = getGenomeList($dbh);
@@ -54,6 +54,8 @@ renameOldChanges($dbh, $suffix);
 
 $dbh->commit() or print STDERR $dbh->errstr;
 
+createTextIndex($dbh, $suffix);
+
 print STDERR "Saved $totalChangedGenes total changed genes from web service\n";
 
 sub getGenomeList {
@@ -72,9 +74,9 @@ with Sanger_names as -- organism name/ID pairs from Sanger web service
      local_taxa as -- name/GUS ID/genome date tuples from the current database instance
         (select ga.organism, ga.taxon_id, 
                 to_char(min(nvl(edr.release_date, to_date('$sentinelDate', 'yyyy-mm-dd'))), 'yyyy-mm-dd') as sinceDate
-         from ApidbTuning.TranscriptAttributes ga, dots.GeneFeature gf,
+         from GeneAttributes ga, dots.GeneFeature gf,
               sres.ExternalDatabaseRelease edr
-         where ga.gene_na_feature_id = gf.na_feature_id
+         where ga.na_feature_id = gf.na_feature_id
            and gf.external_database_release_id = edr.external_database_release_id
          group by ga.organism, ga.taxon_id),
      hardwired_mapping as -- you say "tater", I say "spud"
@@ -94,7 +96,7 @@ with Sanger_names as -- organism name/ID pairs from Sanger web service
                       'Plasmodium yoelii yoelii 17X' as eupathdb_name from dual
          union select 'Trypanosoma brucei gambiense' as sanger_name,
                       'Trypanosoma brucei gambiense DAL972' as eupathdb_name from dual),
-     exact_match as -- Sanger name matches TranscriptAttributes.organism
+     exact_match as -- Sanger name matches GeneAttributes.organism
         (select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
                 lt.sinceDate, 'match: exact match' as match_method
          from sanger_names sn, local_taxa lt
@@ -133,7 +135,7 @@ with Sanger_names as -- organism name/ID pairs from Sanger web service
            and hm.eupathdb_name = lt.organism),
      including_genus_only_match as -- above, UNIONed with
                                    -- Sanger genus (i.e. space-delimited first word) matches local Genus
-                                   --         (walk Taxon tree from TranscriptAttributes taxon_id
+                                   --         (walk Taxon tree from GeneAttributes taxon_id
                                    --          to genus rank, get scientific name)
         (select * from including_hardwired_mapping
          union 
@@ -145,7 +147,7 @@ with Sanger_names as -- organism name/ID pairs from Sanger web service
                      from sres.Taxon t, sres.TaxonName tn
                      where t.taxon_id = tn.taxon_id
                        and tn.name_class = 'scientific name'
-                     start with t.taxon_id in (select taxon_id from ApidbTuning.TranscriptAttributes)
+                     start with t.taxon_id in (select taxon_id from GeneAttributes)
                      connect by (prior t.parent_id = t.taxon_id and prior t.rank != 'genus'))
                where rank = 'genus') local_genus
          where sn.name not in (select sanger_name from including_hardwired_mapping)
@@ -557,7 +559,7 @@ sub renameOldChanges {
 update AnnotationChange$suffix
 set gene = 'old change: ' || gene, searchable = ''
 where change_date < (select edr.release_date
-                       from TranscriptAttributes ga, dots.NaFeature nf, sres.ExternalDatabaseRelease edr
+                       from GeneAttributes ga, dots.NaFeature nf, sres.ExternalDatabaseRelease edr
                        where ga.source_id = AnnotationChange$suffix.gene
                          and nf.na_feature_id = ga.na_feature_id
                          and edr.external_database_release_id = nf.external_database_release_id
@@ -566,14 +568,17 @@ SQL
 
 }
 
-sub indexChanges {
-
-# index AnnotationChange table
+sub createIndex {
     my ($dbh, $suffix) = @_;
+
     $dbh->do(<<SQL) or die "creating main index";
       create index AnotCh_ix$suffix
       on AnnotationChange$suffix (gene, change_date) tablespace INDX
 SQL
+}
+
+sub createTextIndex {
+    my ($dbh, $suffix) = @_;
 
     $dbh->do(<<SQL) or die "creating Oracle Text index";
       create index AnotChText_ix$suffix
