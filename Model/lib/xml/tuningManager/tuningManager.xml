@@ -588,7 +588,10 @@ WHERE
         graph_edge
         as (select subject_term_id as child_term_id, object_term_id as parent_term_id
             from sres.OntologyRelationship
-         -- WHERE EXTERNAL_DATABASE_RELEASE_ID IN ( <ICEMR ontology> )
+            where external_database_release_id in (select edr.external_database_release_id
+                                                   from sres.externaldatabase ed, sres.externaldatabaserelease edr
+                                                   where ed.external_database_id = edr.external_database_id
+                                                     and ed.name = 'Ontology_icemr_RSRC')
             start with subject_term_id in (select term_id from leaf_term)
             connect by subject_term_id = prior object_term_id),
         unparented_term
@@ -600,14 +603,17 @@ WHERE
             union
             select child_term_id as term_id from graph_edge),
         leaf_ancestor_pair
-        as (select ancestor.term_id as ancestor_term_id, descendent.term_id as leaf_term_id
-            from distinct_term ancestor, distinct_term descendent
-            where descendent.term_id
-                  in (select child_term_id
-                      from graph_edge
-                      start with parent_term_id = ancestor.term_id
-                      connect by prior child_term_id = parent_term_id)
-              and descendent.term_id in (select term_id from leaf_term)
+        as (  select ancestor.term_id as ancestor_term_id, descendent.term_id as leaf_term_id
+              from distinct_term ancestor, distinct_term descendent
+              where descendent.term_id
+                    in (select child_term_id
+                        from graph_edge
+                        start with parent_term_id = ancestor.term_id
+                        connect by prior child_term_id = parent_term_id)
+                and descendent.term_id in (select term_id from leaf_term)
+            union
+              select term_id as ancestor_term_id, term_id as leaf_term_id
+              from leaf_term
             ),
         fallback
         as (select distinct dataset_name, subtype, organism, is_icemr, term_name as property
