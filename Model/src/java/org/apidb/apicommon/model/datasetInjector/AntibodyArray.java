@@ -58,7 +58,9 @@ public class AntibodyArray extends DatasetInjector {
 
         injectTemplate("antibodyArrayGraphAttributesExpression");
 
-
+        if(getPropValue("isGraphCustom").equals("true")) {
+            setPropValue("isGraphCustom", "true");
+        }
 
         injectTemplate("pathwayGraphs");
 
