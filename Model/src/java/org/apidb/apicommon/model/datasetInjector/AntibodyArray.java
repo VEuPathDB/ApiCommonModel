@@ -128,6 +128,8 @@ public class AntibodyArray extends DatasetInjector {
                                    {"graphModule", ""},
                                    {"defaultGraphCategory"},
                                    {"function", ""},
+                                   {"isGraphCustom", ""},
+                    
         };
 
         
