@@ -38,6 +38,8 @@ $destRootDir = $outputDir if ($outputDir);
 my @projects ;
 if ($includeProjects eq 'EuPath'){
     @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB SchistoDB/;
+} elsif ($includeProjects eq 'GUS4'){
+    @projects  = qw/CryptoDB PiroplasmaDB PlasmoDB ToxoDB/;
 } elsif ($includeProjects eq 'ALL'){
     @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB SchistoDB FungiDB/;
 } else {
@@ -98,7 +100,9 @@ foreach my $p (@projects) {
 	  }
 	  closedir $dir;
       } else {
+	  print "Copy START\n cp -ap -s $stagingDir{$p} $destDir\n";
 	  system("cp -ap -s $stagingDir{$p} $destDir");
+	  print "Copy END\n";
       }
   }
 
