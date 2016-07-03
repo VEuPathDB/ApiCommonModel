@@ -4856,12 +4856,10 @@ tablespace indx
     <sql>
       <![CDATA[
 create table GeneIntronJunction&1 NOLOGGING AS
-with namemapping as ( 
-Select distinct edp.dataset_presenter_display_name as exp_name, junexp.sample_name,
-junexp.junctions_pan_id, junexp.exp_pan_id, dp.value as switch_strands
-FROM study.studylink sl, study.study s, externaldbdatasetpresenter edp, datasetproperty dp,
-(select distinct junc.protocol_app_node_id as junctions_pan_id, assay.name as junc_name, fpkm.protocol_app_node_id as exp_pan_id,
+with junexp as (
+select distinct junc.protocol_app_node_id as junctions_pan_id, assay.name as junc_name, fpkm.protocol_app_node_id as exp_pan_id,
 regexp_replace(fpkm.name, ' \[htseq-union.*', '') as sample_name, 
+pvc.protocol_param_value as strand,
 CASE WHEN pvc.protocol_param_value = 'secondstrand' THEN 1 ELSE 0 END as secondstrand
 from (select j.protocol_app_node_id,min(input_node_id) as input_node_id
 from (select distinct protocol_app_node_id from apidb.intronjunction) j
@@ -4887,22 +4885,40 @@ and fpkm.protocol_app_node_id = pvc.protocol_app_node_id
 AND pvc.protocol_param = 'Strand'
 and (pvc.protocol_param_value = 'unstranded'
      OR pvc.protocol_param_value = 'firststrand'
-     OR pvc.protocol_param_value = 'secondstrand')) junexp
-where junexp.junctions_pan_id = sl.protocol_app_node_id
+     OR pvc.protocol_param_value = 'secondstrand')
+), 
+--end of junexp 
+namemapping as (
+Select distinct edp.dataset_presenter_display_name as exp_name, junexp.sample_name,
+junexp.junctions_pan_id, junexp.exp_pan_id, dp.value as switch_strands,junexp.strand
+FROM junexp, study.studylink sl, study.study s, externaldbdatasetpresenter edp, datasetproperty dp, datasetproperty sj
+where sl.protocol_app_node_id = junexp.junctions_pan_id
+--and sl.protocol_app_node_id = 434499
 and s.study_id = sl.study_id
 and s.name like '%[junctions]'
 and s.external_database_release_id = edp.external_database_release_id
 and dp.dataset_presenter_id = edp.dataset_presenter_id
 AND dp.property = 'switchStrands'
-AND dp.value = junexp.secondstrand),  
--- end of namemapping
+AND dp.value = junexp.secondstrand
+and sj.dataset_presenter_id = edp.dataset_presenter_id
+AND sj.property = 'showIntronJunctions'
+AND sj.value = 'true'),  
+-- end of namemapping 
+isrmult as (
+ select protocol_app_node_id, 'total' as type, count(*) as total_junctions, sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+ from apidb.intronjunction
+ where unique_reads >= 1
+ group by protocol_app_node_id
+), 
+-- end of isrmult
 core as (
 select nm.exp_name, nm.sample_name, junc.protocol_app_node_id, junc.na_sequence_id,junc.segment_start,junc.segment_end,
-junc.unique_reads, junc.nu_reads,max(nafe.value) as value,nm.switch_strands,
-CASE WHEN max(nafe.value) > 0 THEN junc.unique_reads / max(nafe.value) ELSE -1 END as exp_ratio,
+junc.unique_reads, round(junc.unique_reads * isrm.multiplier,2) as isrpm, junc.nu_reads,max(nafe.value) as value,nm.switch_strands, nm.strand,
+CASE WHEN max(nafe.value) > 0 THEN round(junc.unique_reads / max(nafe.value),4) ELSE -1 END as exp_ratio,
+CASE WHEN max(nafe.value) > 0 THEN round(junc.unique_reads * isrm.multiplier / max(nafe.value),4) ELSE -1 END as isrpm_exp_ratio,
 junc.is_reversed,
-/* note:  need to deal with datasets that are unstranded ... this always assumes stranded. */
-CASE WHEN nm.switch_strands = -1
+-- note:  need to deal with datasets that are unstranded ... this always assumes stranded. 
+CASE WHEN nm.switch_strands = -1 OR nm.strand = 'unstranded'
   THEN -1
   WHEN (substr(listagg(ga.is_reversed, ', ') within group (order by nafe.value desc),1,1) = junc.is_reversed AND nm.switch_strands = 0)
     OR (substr(listagg(ga.is_reversed, ', ') within group (order by nafe.value desc),1,1) != junc.is_reversed AND nm.switch_strands = 1)
@@ -4913,22 +4929,24 @@ CASE WHEN count(*) > 1
   THEN rtrim(regexp_substr(listagg(ga.source_id, ', ') within group (order by nafe.value desc),'^.*?,'),',')
   ELSE min(ga.source_id)
 END as gene_source_id
-FROM apidb.intronjunction junc, geneattributes ga, results.nafeatureexpression nafe, namemapping nm
+FROM apidb.intronjunction junc, geneattributes ga, results.nafeatureexpression nafe, namemapping nm, isrmult isrm
 WHERE nafe.protocol_app_node_id = nm.exp_pan_id
 AND nm.junctions_pan_id = junc.protocol_app_node_id
+AND isrm.protocol_app_node_id = junc.protocol_app_node_id
 AND nafe.na_feature_id = ga.na_feature_id
 AND ga.na_sequence_id = junc.na_sequence_id
 AND ga.start_min <= junc.segment_start
 AND ga.end_max >= junc.segment_end
 group by nm.exp_name, nm.sample_name,junc.Protocol_App_Node_Id,junc.na_sequence_id,junc.segment_start,junc.segment_end,
-         junc.unique_reads,junc.nu_reads,nm.switch_strands,junc.is_reversed ),
-totalexpression as (
+         junc.unique_reads,junc.nu_reads,nm.switch_strands,junc.is_reversed, isrm.multiplier, nm.strand ),  
+--end of core
+ totalexpression as (
 select Nm.Junctions_Pan_Id,avg(nafe.value) as avg_expression, median(value) as median_expression
 from results.nafeatureexpression nafe, namemapping nm
 where Nm.Exp_Pan_Id = nafe.protocol_app_node_id
 group by Nm.Junctions_Pan_Id
 )
-/* end with to generate core, namemapping and totalexpression --
+/* end with to generate core, namemapping, isrmult and totalexpression --
 ------------   start of SQL  ------------- */
 select protocol_app_node_id,exp_name,sample_name,na_sequence_id,segment_start,segment_end,
 CASE WHEN switch_strands = 0 
@@ -4936,51 +4954,67 @@ CASE WHEN switch_strands = 0
   WHEN switch_strands = 1
   THEN decode(is_reversed,0,1,1,0,-1)
   ELSE -1
-END as is_reversed,
-unique_reads, nu_reads,
-value as exp_value,round(exp_ratio,4) as intron_exp_ratio,round(100 * percent_max_sample,1) as percent_max_sample,
-round(100 * percent_max_total,1) as percent_max_total,round(total_ratio,4) as total_ratio,matches_gene_strand,
-intron_sample_avgexp_ratio, intron_sample_medexp_ratio
-from (select c.*,gene_tot.total_ratio,
+END as is_reversed, strand,
+unique_reads, isrpm, nu_reads,
+round(value,4) as exp_value,round(exp_ratio,4) as intron_exp_ratio,round(isrpm_exp_ratio,4) as isrpm_exp_ratio,
+round(100 * percent_max_sample,1) as percent_max_sample,
+round(100 * percent_max_total,1) as percent_max_total,
+round(total_ratio,4) as total_ratio,matches_gene_strand,
+decode(percent_max_sample,-1,0,1) as is_contained, gene_source_id,
+intron_sample_avgexp_ratio, isrpm_sample_avgexp_ratio, intron_sample_medexp_ratio,isrpm_sample_medexp_ratio,
+total_junctions as sample_total_junctions,multiplier as sample_multiplier
+from (select c.*,gene_tot.total_ratio,gene_tot.isrpm_total_ratio,
 CASE WHEN gene_tot.max_total_unique >= 1 THEN c.unique_reads / gene_tot.max_total_unique ELSE 0 END as percent_max_total,
 CASE WHEN sample_tot.max_sample_unique >= 1 THEN c.unique_reads / sample_tot.max_sample_unique ELSE 0 END as percent_max_sample,
 CASE WHEN te.avg_expression > 0 THEN round(c.unique_reads/te.avg_expression,4) ELSE 0 END as intron_sample_avgexp_ratio,
-CASE WHEN te.median_expression > 0 THEN round(c.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio
+CASE WHEN te.avg_expression > 0 THEN round(c.isrpm/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
+CASE WHEN te.median_expression > 0 THEN round(c.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
+CASE WHEN te.median_expression > 0 THEN round(c.isrpm/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
+isrmult.total_junctions,isrmult.multiplier
   from
-  (select gene_source_id,max(unique_reads) as max_total_unique, sum(value) as total_exp, 
-  CASE WHEN sum(value) > 0 THEN sum(unique_reads) / sum(value) ELSE null END as total_ratio 
+  (select gene_source_id,max(unique_reads) as max_total_unique, max(isrpm) as max_isrpm_unique, sum(value) as total_exp, 
+  CASE WHEN sum(value) > 0 THEN sum(unique_reads) / sum(value) ELSE null END as total_ratio,
+  CASE WHEN sum(value) > 0 THEN sum(isrpm) / sum(value) ELSE null END as isrpm_total_ratio
   from core
   group by core.gene_source_id) gene_tot, 
-  (select protocol_app_node_id,gene_source_id,max(unique_reads) as max_sample_unique 
+  (select protocol_app_node_id,gene_source_id,max(unique_reads) as max_sample_unique,max(isrpm) as max_sample_isrpm 
   from core
   group by protocol_app_node_id,gene_source_id) sample_tot,
-  core c, totalexpression te
+  core c, totalexpression te, isrmult
   where gene_tot.gene_source_id = c.gene_source_id
   AND sample_tot.protocol_app_node_id = c.protocol_app_node_id
   AND sample_tot.gene_source_id = c.gene_source_id
-  AND te.junctions_pan_id = c.protocol_app_node_id)
+  AND te.junctions_pan_id = c.protocol_app_node_id
+  AND c.protocol_app_node_id = isrmult.protocol_app_node_id
   UNION ALL
--- union this with intronjunction that are not in core adding in exp_name,sample_name and adjusting the is_reversed appropriately base on switch_strands
+-- union this with intronjunction that are not in core adding in exp_name,sample_name 
 -- first do minus to get missing junctions and join to names.
-select introns.Protocol_App_Node_Id,names.exp_name,names.sample_name,introns.na_sequence_id,introns.segment_start,introns.segment_end, 
+-- need to add in the isrpm stuff as is above.  Will need to join to isrmult
+select names.exp_name,names.sample_name,introns.Protocol_App_Node_Id,introns.na_sequence_id,introns.segment_start,introns.segment_end, 
+introns.unique_reads,round(introns.unique_reads * isrmult.multiplier,2) as isrpm, introns.nu_reads,
+-1 as value,names.switch_strands, names.strand,-1 as exp_ratio,-1 as isrpm_exp_ratio,
 CASE WHEN names.switch_strands = 0 
   THEN introns.is_reversed
   WHEN names.switch_strands = 1
   THEN decode(introns.is_reversed,0,1,1,0,-1)
   ELSE -1
 END as is_reversed,
-introns.unique_reads,introns.nu_reads,
--1 as exp_value,-1 as intron_exp_ratio,-1 as percent_max_sample, -1 as percent_max_total,-1 as total_ratio,-1 as matches_gene_strand,
+-1 as matches_gene_strand, '' as gene_source_id,-1 as total_ratio,-1 as isrpm_total_ratio,
+-1 as percent_max_total, -1 as percent_max_sample,
 CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads/te.avg_expression,4) ELSE 0 END as intron_sample_avgexp_ratio,
-CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio
+CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
+CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
+CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
+isrmult.total_junctions,isrmult.multiplier
 FROM (select Protocol_App_Node_Id,na_sequence_id,segment_start,segment_end, unique_reads,nu_reads,is_reversed
 from apidb.intronjunction
 MINUS
 select Protocol_App_Node_Id,na_sequence_id,segment_start,segment_end, unique_reads,nu_reads,is_reversed
 from core) introns,
-namemapping names, totalexpression te
+namemapping names, totalexpression te, isrmult
 where introns.protocol_app_node_id = names.junctions_pan_id
 AND te.junctions_pan_id = introns.protocol_app_node_id
+AND introns.protocol_app_node_id = isrmult.protocol_app_node_id)
       ]]>
     </sql>
     <sql>
