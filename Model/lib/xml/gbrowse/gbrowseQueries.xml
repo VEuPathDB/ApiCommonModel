@@ -673,7 +673,10 @@ FROM apidbtuning.geneintronjunction
      AND na_sequence_id = $srcfeature_id 
      AND segment_end - segment_start <= $$intronSizeLimit$$
      AND unique_reads >= 1
-     AND intron_sample_avgexp_ratio >= $$minIntronRatio$$
+     AND ((is_contained = 1
+         AND isrpm_exp_ratio >= $$minContainedRatio$$)
+         OR (is_contained = 0
+         AND isrpm_sample_avgexp_ratio >= $$minNonConteainedRatio$$))
      AND sample_multiplier <= $$maxIsrpmMult$$
 )
 , genesample as (
@@ -691,7 +694,7 @@ SELECT gene_source_id,sum(unique_reads) as tot_unique,sum(isrpm) as tot_isrpm
   GROUP by gene_source_id
 )
 SELECT * from (
-SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained,
+SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
 CASE WHEN max_gene_unique is not null THEN round(sum(total_reads) / max_gene_unique * 100,1) ELSE null END as percent_max,
 sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
 'Exps=' || listagg(display_name, '|') within group (order by display_name) || '$dlm' ||
@@ -706,7 +709,8 @@ sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
 'ISRPM=' || listagg(isrpm, '|') within group (order by display_name) || '$dlm' ||
 'NRS=' || listagg(nu_reads, '|') within group (order by display_name) || '$dlm' ||
 'TotalScore=' || sum(total_reads) || '$dlm' ||
---'MatchesGeneStrand=' || matches_gene_strand || '$dlm' ||
+'MatchesGeneStrand=' || matches_gene_strand || '$dlm' ||
+'IsReversed=' || is_reversed || '$dlm' ||
 'IntronPercent=' || CASE WHEN max_gene_unique is not null THEN round(sum(total_reads) / max_gene_unique * 100,1) ELSE null END || '$dlm' ||
 'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
 FROM (
@@ -718,7 +722,7 @@ SELECT segment_start || '_' || segment_end as feature_id,
          segment_end end, 
          sum(unique_reads) as sum_exp_score, 
          exp_name as display_name, is_contained as contained,
---         matches_gene_strand,
+         matches_gene_strand, is_reversed,
          listagg(sample_name, ',') within group (order by sample_name) as samples,
          listagg(unique_reads, ',') within group (order by sample_name) unique_reads,
          listagg(isrpm, ',') within group (order by sample_name) isrpm,
@@ -736,8 +740,8 @@ AND iw.segment_end >= $base_start
 AND iw.gene_source_id = gt.gene_source_id(+)
 AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
 and iw.gene_source_id = gs.gene_source_id(+)
-GROUP BY na_sequence_id, segment_start, segment_end, exp_name, is_contained, gt.max_gene_unique/* matches_gene_strand*/)
-GROUP BY feature_id, type, source, parent_id,startm, end, contained,max_gene_unique/*,matches_gene_strand*/)
+GROUP BY na_sequence_id, segment_start, segment_end, exp_name, is_contained, gt.max_gene_unique, matches_gene_strand, is_reversed)
+GROUP BY feature_id, type, source, parent_id,startm, end, contained,max_gene_unique,matches_gene_strand, is_reversed)
   WHERE (contained = 1
   AND percent_max >= $$minIntronPercent$$
   AND score >= $$minContainedScore$$)
