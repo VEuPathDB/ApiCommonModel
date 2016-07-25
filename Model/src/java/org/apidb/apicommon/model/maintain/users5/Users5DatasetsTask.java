@@ -111,7 +111,7 @@ public class Users5DatasetsTask implements MigrationTask, ModelAware {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsSelect);
+      SqlUtils.closeResultSetAndStatement(rsSelect, null);
       SqlUtils.closeStatement(psUpdate);
     }
   }

@@ -119,7 +119,7 @@ public class Users5StepParamsTask implements MigrationTask, ModelAware {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsStep);
+      SqlUtils.closeResultSetAndStatement(rsStep, null);
       SqlUtils.closeStatement(psUpdate);
     }
   }

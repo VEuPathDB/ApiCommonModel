@@ -272,7 +272,7 @@ public class Gff3CachedReporter extends Reporter {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsTable);
+      SqlUtils.closeResultSetAndStatement(rsTable, null);
     }
   }
 
@@ -317,7 +317,7 @@ public class Gff3CachedReporter extends Reporter {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsTable);
+      SqlUtils.closeResultSetAndStatement(rsTable, null);
     }
   }
 

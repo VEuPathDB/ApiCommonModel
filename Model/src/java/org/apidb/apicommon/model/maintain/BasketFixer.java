@@ -119,9 +119,10 @@ public class BasketFixer extends BaseCLI {
       + "   WHERE b.project_id = ? AND b.record_class = ?";
 
     ResultSet resultSet = null;
+    PreparedStatement ps = null;
     try {
       logger.debug("executing sql to find invalid basket ids...\n" + sql);
-      PreparedStatement ps = SqlUtils.getPreparedStatement(dataSource,
+      ps = SqlUtils.getPreparedStatement(dataSource,
                                                            sql);
       ps.setFetchSize(5000);
       ps.setString(1, wdkModel.getProjectId());
@@ -192,7 +193,7 @@ public class BasketFixer extends BaseCLI {
       throw new WdkModelException(e);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(resultSet);
+      SqlUtils.closeResultSetAndStatement(resultSet, ps);
     }
     return users;
   }
