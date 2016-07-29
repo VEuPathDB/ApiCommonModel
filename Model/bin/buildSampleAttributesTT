@@ -36,19 +36,21 @@ sub run{
   my $failures = 0;
 
   my @fields;
-  my $fieldsSql = "select replace(term, ' ', '_') as term from (
-select distinct 'c_' || lower(term) as term from apidbtuning.samplecharmetadata
-union
-select distinct 'p_' || lower(term) as term from apidbtuning.sampleprotocolmetadata
-) where length(term) <= 30";
+  my $fieldsSh = $dbh->prepare(<<SQL);
+      -- turn terms into column names
+      select replace(replace(replace(term, ' ', '_'), -- space -> underscore
+                             '-', '_'),  -- hyphen -> underscore
+                     '''', '') as term -- apostrophe -> nothing
+      from (  select distinct 'c_' || lower(term) as term
+              from apidbtuning.samplecharmetadata
+            union
+              select distinct 'p_' || lower(term) as term
+              from apidbtuning.sampleprotocolmetadata
+           ) where length(term) <= 30
+SQL
 
-  my $fieldsSh = $dbh->prepare($fieldsSql);
   $fieldsSh->execute();
   while(my ($field) = $fieldsSh->fetchrow_array()) {
-    my $oldField = $field;
-    $field =~ s/-/_/g;
-    print STDERR "changed field from \"$oldField\" to \"$field\"\n"
-      if $field ne $oldField;
     push @fields, $field;
   }
   $fieldsSh->finish();
