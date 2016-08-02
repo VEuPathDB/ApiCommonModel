@@ -47,7 +47,7 @@ public class RNASeq extends  DatasetInjector {
       injectTemplate("datasetCategory");
 
       if(getPropValueAsBoolean("isDESeq")) {
-	injectTemplate("DESeqProfileSetParamQuery");
+	    injectTemplate("DESeqProfileSetParamQuery");
       }
       
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
