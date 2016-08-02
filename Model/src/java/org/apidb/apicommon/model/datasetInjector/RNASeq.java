@@ -248,7 +248,7 @@ public class RNASeq extends  DatasetInjector {
           }
 	  
 	  if (getPropValueAsBoolean("isDESeq")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GenesByDESeqpchachabaudi_Mosquito_And_Blood_Transmitted_rnaSeq_RSRC");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqpchachabaudi_Mosquito_And_Blood_Transmitted_rnaSeq_RSRCDESeq");
 	  }
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
