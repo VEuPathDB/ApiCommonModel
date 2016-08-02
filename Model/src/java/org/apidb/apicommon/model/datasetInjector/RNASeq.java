@@ -45,6 +45,10 @@ public class RNASeq extends  DatasetInjector {
       }
 
       injectTemplate("datasetCategory");
+
+      if(getPropValueAsBoolean("isDESeq")) {
+	injectTemplate("DESeqProfileSetParamQuery");
+      }
       
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
@@ -242,6 +246,11 @@ public class RNASeq extends  DatasetInjector {
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
 
           }
+	  
+	  if (getPropValueAsBoolean("isDESeq")) {
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GenesByDESeqpchachabaudi_Mosquito_And_Blood_Transmitted_rnaSeq_RSRC");
+	  }
+
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
       }
@@ -264,6 +273,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
                                  {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
                                  {"graphForceXLabelsHorizontal", "should the x axis labels be always horiz"},
+				 {"isDESeq", ""},
       };
 
     return declaration;
