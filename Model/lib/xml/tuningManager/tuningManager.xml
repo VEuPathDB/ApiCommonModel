@@ -4969,6 +4969,13 @@ AND ga.end_max >= junc.segment_end
 group by nm.exp_name, nm.sample_name,junc.Protocol_App_Node_Id,junc.na_sequence_id,junc.segment_start,junc.segment_end,
          junc.unique_reads,junc.nu_reads,nm.switch_strands,junc.is_reversed, isrm.multiplier, nm.strand ),  
 --end of core
+isrmultcons as (
+ select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions, sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+ from core
+ where unique_reads >= 1
+ and matches_gene_strand = 1
+ group by protocol_app_node_id
+),
  totalexpression as (
 select Nm.Junctions_Pan_Id,avg(nafe.value) as avg_expression, median(value) as median_expression
 from results.nafeatureexpression nafe, namemapping nm
@@ -4985,7 +4992,8 @@ round(100 * percent_max_total,1) as percent_max_total,
 round(total_ratio,4) as total_ratio,matches_gene_strand,
 decode(percent_max_sample,-1,0,1) as is_contained, gene_source_id,
 intron_sample_avgexp_ratio, isrpm_sample_avgexp_ratio, intron_sample_medexp_ratio,isrpm_sample_medexp_ratio,
-total_junctions as sample_total_junctions,multiplier as sample_multiplier
+total_junctions as sample_total_junctions,multiplier as sample_multiplier, consistent_multiplier, 
+round(consistent_multiplier / multiplier,4) as cons_total_mult_ratio
 from (select c.*,gene_tot.total_ratio,gene_tot.isrpm_total_ratio,
 CASE WHEN gene_tot.max_total_unique >= 1 THEN c.unique_reads / gene_tot.max_total_unique ELSE 0 END as percent_max_total,
 CASE WHEN sample_tot.max_sample_unique >= 1 THEN c.unique_reads / sample_tot.max_sample_unique ELSE 0 END as percent_max_sample,
@@ -4993,7 +5001,7 @@ CASE WHEN te.avg_expression > 0 THEN round(c.unique_reads/te.avg_expression,4) E
 CASE WHEN te.avg_expression > 0 THEN round(c.isrpm/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(c.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(c.isrpm/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
-isrmult.total_junctions,isrmult.multiplier
+isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_multiplier
   from
   (select gene_source_id,max(unique_reads) as max_total_unique, max(isrpm) as max_isrpm_unique, sum(value) as total_exp, 
   CASE WHEN sum(value) > 0 THEN sum(unique_reads) / sum(value) ELSE null END as total_ratio,
@@ -5003,12 +5011,13 @@ isrmult.total_junctions,isrmult.multiplier
   (select protocol_app_node_id,gene_source_id,max(unique_reads) as max_sample_unique,max(isrpm) as max_sample_isrpm 
   from core
   group by protocol_app_node_id,gene_source_id) sample_tot,
-  core c, totalexpression te, isrmult
+  core c, totalexpression te, isrmult, isrmultcons
   where gene_tot.gene_source_id = c.gene_source_id
   AND sample_tot.protocol_app_node_id = c.protocol_app_node_id
   AND sample_tot.gene_source_id = c.gene_source_id
   AND te.junctions_pan_id = c.protocol_app_node_id
   AND c.protocol_app_node_id = isrmult.protocol_app_node_id
+  AND c.protocol_app_node_id = isrmultcons.protocol_app_node_id
   UNION ALL
 -- union this with intronjunction that are not in core adding in exp_name,sample_name 
 -- first do minus to get missing junctions and join to names.
@@ -5028,16 +5037,17 @@ CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads/te.avg_expressio
 CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
-isrmult.total_junctions,isrmult.multiplier
+isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_multiplier
 FROM (select Protocol_App_Node_Id,na_sequence_id,segment_start,segment_end, unique_reads,nu_reads,is_reversed
 from apidb.intronjunction
 MINUS
 select Protocol_App_Node_Id,na_sequence_id,segment_start,segment_end, unique_reads,nu_reads,is_reversed
 from core) introns,
-namemapping names, totalexpression te, isrmult
+namemapping names, totalexpression te, isrmult,isrmultcons
 where introns.protocol_app_node_id = names.junctions_pan_id
 AND te.junctions_pan_id = introns.protocol_app_node_id
-AND introns.protocol_app_node_id = isrmult.protocol_app_node_id)
+AND introns.protocol_app_node_id = isrmult.protocol_app_node_id
+AND introns.protocol_app_node_id = isrmultcons.protocol_app_node_id)
       ]]>
     </sql>
     <sql>
