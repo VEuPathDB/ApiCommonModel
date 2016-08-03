@@ -26,18 +26,18 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", "Llinas::pHMetabolite"); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClasas", "table", "MassSpecGraphsDataTable");
   }
 
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-      //String[][] propertiesDeclaration = {};
       String[][] propertiesDeclaration = {    {"graphModule", ""},
                                               {"graphXAxisSamplesDescription", ""},
                                               {"graphYAxisDescription", ""},
-                                              {"graphVisibleParts", ""},
                                               {"graphPriorityOrderGrouping", ""},
       };
 
