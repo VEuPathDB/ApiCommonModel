@@ -4985,6 +4985,12 @@ isrmult as (
  group by protocol_app_node_id
 ), 
 -- end of isrmult
+annot as (
+select distinct feature_type,na_sequence_id,start_min, end_max, is_reversed
+from featurelocation 
+where feature_type = 'Intron'
+),
+-- end of annot = annotated introns
 core as (
 select nm.exp_name, nm.sample_name, junc.protocol_app_node_id, junc.na_sequence_id,junc.segment_start,junc.segment_end,
 junc.unique_reads, round(junc.unique_reads * isrm.multiplier,2) as isrpm, junc.nu_reads,max(nafe.value) as value,nm.switch_strands, nm.strand,
@@ -4997,8 +5003,8 @@ CASE WHEN substr(listagg(ga.is_reversed, ', ') within group (order by nafe.value
 CASE WHEN count(*) > 1
   THEN rtrim(regexp_substr(listagg(ga.source_id, ', ') within group (order by nafe.value desc),'^.*?,'),',')
   ELSE min(ga.source_id)
-END as gene_source_id
-FROM apidb.intronjunction junc, geneattributes ga, results.nafeatureexpression nafe, namemapping nm, isrmult isrm
+END as gene_source_id,decode(annot.feature_type,'Intron','Yes','No') as annotated_intron
+FROM apidb.intronjunction junc, geneattributes ga, results.nafeatureexpression nafe, namemapping nm, isrmult isrm, annot
 WHERE nafe.protocol_app_node_id = nm.exp_pan_id
 AND nm.junctions_pan_id = junc.protocol_app_node_id
 AND isrm.protocol_app_node_id = junc.protocol_app_node_id
@@ -5006,8 +5012,13 @@ AND nafe.na_feature_id = ga.na_feature_id
 AND ga.na_sequence_id = junc.na_sequence_id
 AND ga.start_min <= junc.segment_start
 AND ga.end_max >= junc.segment_end
+AND junc.na_sequence_id = annot.na_sequence_id(+)
+AND junc.segment_start = annot.start_min(+)
+AND junc.segment_end = annot.end_max(+)
+and junc.is_reversed = annot.is_reversed(+)
 group by nm.exp_name, nm.sample_name,junc.Protocol_App_Node_Id,junc.na_sequence_id,junc.segment_start,junc.segment_end,
-         junc.unique_reads,junc.nu_reads,nm.switch_strands,junc.is_reversed, isrm.multiplier, nm.strand ),  
+         junc.unique_reads,junc.nu_reads,nm.switch_strands,junc.is_reversed, isrm.multiplier, nm.strand, annot.feature_type
+),  
 --end of core
 isrmultcons as (
  select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions, sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
@@ -5016,7 +5027,7 @@ isrmultcons as (
  and matches_gene_strand = 1
  group by protocol_app_node_id
 ),
- totalexpression as (
+totalexpression as (
 select Nm.Junctions_Pan_Id,avg(nafe.value) as avg_expression, median(value) as median_expression
 from results.nafeatureexpression nafe, namemapping nm
 where Nm.Exp_Pan_Id = nafe.protocol_app_node_id
@@ -5071,7 +5082,7 @@ CASE WHEN names.switch_strands = 0
   THEN decode(introns.is_reversed,0,1,1,0,-1)
   ELSE -1
 END as is_reversed,
--1 as matches_gene_strand, '' as gene_source_id,-1 as total_ratio,-1 as isrpm_total_ratio,
+-1 as matches_gene_strand, '' as gene_source_id,'No' as annotated_intron, -1 as total_ratio,-1 as isrpm_total_ratio,
 -1 as percent_max_total, -1 as percent_max_sample,
 CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads/te.avg_expression,4) ELSE 0 END as intron_sample_avgexp_ratio,
 CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
