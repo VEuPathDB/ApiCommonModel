@@ -156,6 +156,12 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
           injectTemplate("internalGeneSearchCategory");
 
+	  if(getPropValueAsBoolean("isDESeq")) {
+	      injectTemplate("rnaSeqDESeqQuestion");
+	      setPropValue("searchCategory", "searchCategory-transcriptomics-differential-expression");
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DESeq");
+	      injectTemplate("internalGeneSearchCategory");
+	  }
 
           if(getPropValue("graphPriorityOrderGrouping").equals("")) {
               setPropValue("graphPriorityOrderGrouping", "1");
@@ -248,7 +254,7 @@ public class RNASeq extends  DatasetInjector {
           }
 	  
 	  if (getPropValueAsBoolean("isDESeq")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqpchachabaudi_Mosquito_And_Blood_Transmitted_rnaSeq_RSRCDESeq");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DESeq");
 	  }
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
