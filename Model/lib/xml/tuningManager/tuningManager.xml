@@ -3874,28 +3874,31 @@ tablespace indx
               from study.Characteristic c, sres.OntologyTerm ot
               where c.qualifier_id =ot.ontology_term_id
                 and ot.name = 'country') geographic_location,
-             (-- geographic coordinates are loaded as strings, e.g. '12.96 S 38.46 W'
+             (-- for decimal latitude and longitude with one-letter compass points
+              --  (e.g. '12.96 S 38.46 W') parse out the latitude and longitude
               select c.protocol_app_node_id,
                      case
-                       when
-                         c.value is null then null
-                       else
-                         to_number(substr(c.value, 1, instr(c.value, ' ') - 1))
-                         * case substr(c.value, instr(c.value, ' ') + 1, 1)
-                             when 'S' then -1
-                             else 1
-                           end
+                       when regexp_replace(c.value, '[0-9.]* [NS] [0-9.]* [EW]', 'latitude direction longitude direction')
+                            = 'latitude direction longitude direction'
+                         then
+                           to_number(substr(c.value, 1, instr(c.value, ' ') - 1))
+                           * case substr(c.value, instr(c.value, ' ') + 1, 1)
+                               when 'S' then -1
+                               else 1
+                             end
+                       else null
                      end as latitude,
                      case
-                       when
-                         c.value is null then null
-                       else
-                         to_number(substr(c.value, instr(c.value, ' ', 1, 2) + 1,
-                                          instr(substr(c.value, instr(c.value, ' ', 1, 2) + 1, 99), ' ') - 1))
-                         * case substr(c.value, -1, 1)
-                             when 'W' then -1
-                             else 1
-                           end
+                       when regexp_replace(c.value, '[0-9.]* [NS] [0-9.]* [EW]', 'latitude direction longitude direction')
+                            = 'latitude direction longitude direction'
+                         then
+                           to_number(substr(c.value, instr(c.value, ' ', 1, 2) + 1,
+                                            instr(substr(c.value, instr(c.value, ' ', 1, 2) + 1, 99), ' ') - 1))
+                           * case substr(c.value, -1, 1)
+                               when 'W' then -1
+                               else 1
+                             end
+                       else null
                      end as longitude,
                      c.value
               from study.Characteristic c, sres.OntologyTerm ot
@@ -3983,7 +3986,7 @@ tablespace indx
       <![CDATA[
         update PopsetAttributes&1 a
         set (a.latitude, a.longitude) = (select g.lat, g.lng
-                                from apidb.IsolateGPS g, sres.OntologyTerm ot 
+                                from apidb.IsolateGPS g, sres.OntologyTerm ot
                                where a.curated_geographic_location = ot.name
                                  and ot.source_id = g.gazetteer_id )
        ]]>
