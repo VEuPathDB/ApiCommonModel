@@ -39,7 +39,7 @@ my @projects ;
 if ($includeProjects eq 'EuPath'){
     @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB SchistoDB/;
 } elsif ($includeProjects eq 'GUS4'){
-    @projects  = qw/CryptoDB PiroplasmaDB PlasmoDB ToxoDB/;
+    @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TrichDB TriTrypDB FungiDB/;
 } elsif ($includeProjects eq 'ALL'){
     @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB SchistoDB FungiDB/;
 } else {
