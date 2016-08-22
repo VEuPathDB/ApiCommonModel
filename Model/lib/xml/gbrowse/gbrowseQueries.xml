@@ -668,8 +668,8 @@ FROM (
 with inwindow as (
 SELECT *
 FROM apidbtuning.geneintronjunction
-  WHERE  segment_start <= $rend + 10000
-     AND segment_end >= $base_start - 10000
+  WHERE  segment_end <= $rend
+     AND segment_start >= $base_start
      AND na_sequence_id = $srcfeature_id 
      AND segment_end - segment_start <= $$intronSizeLimit$$
      AND unique_reads >= 1
@@ -680,34 +680,43 @@ FROM apidbtuning.geneintronjunction
      AND sample_multiplier <= $$maxIsrpmMult$$
      AND total_cons_mult_ratio >= $$isrpmRatio$$
 )
+, distids as (
+select distinct gene_source_id from inwindow
+)
 , genesample as (
-SELECT protocol_app_node_id,gene_source_id,max(unique_reads) as sample_unique,max(isrpm) as sample_isrpm
-  FROM inwindow
-  where gene_source_id is not null
-  GROUP By protocol_app_node_id,gene_source_id)
+SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_unique,max(ij.isrpm) as sample_isrpm
+  FROM apidbtuning.geneintronjunction ij, distids
+  WHERE ij.gene_source_id = distids.gene_source_id
+  AND ij.matches_gene_strand = 1
+  GROUP By ij.protocol_app_node_id,ij.gene_source_id)
 , genetotal as (
 SELECT gene_source_id,max(tot_unique) as max_gene_unique,max(tot_isrpm) as max_gene_isrpm
 FROM (
-SELECT gene_source_id,sum(unique_reads) as tot_unique,sum(isrpm) as tot_isrpm
-  FROM inwindow
-  where gene_source_id is not null
-  GROUP by gene_source_id,segment_start,segment_end)
+SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot_isrpm
+  FROM apidbtuning.geneintronjunction ij, distids
+  WHERE ij.gene_source_id = distids.gene_source_id
+  AND ij.matches_gene_strand = 1
+  GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
   GROUP by gene_source_id
 )
 SELECT * from (
 SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
 CASE WHEN max_gene_unique is not null THEN round(sum(total_reads) / max_gene_unique * 100,1) ELSE null END as percent_max,
 sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
-'Exps=' || apidb.tab_to_clob(set(CAST(COLLECT(display_name order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'Samples=' || apidb.tab_to_clob(set(CAST(COLLECT(samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'AvgExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(intron_sample_avgexp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'IsrpmAvgExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm_sample_avgexp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'ExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(intron_exp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'IsrpmExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm_exp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'IsrpmPerMaxSample=' || apidb.tab_to_clob(set(CAST(COLLECT(percent_isrpm_max_samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'PerMaxSample=' || apidb.tab_to_clob(set(CAST(COLLECT(percent_max_samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'URS=' || apidb.tab_to_clob(set(CAST(COLLECT(unique_reads order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
-'ISRPM=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+--'Exps=' || apidb.tab_to_clob(set(CAST(COLLECT(display_name order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'Exps=' || listagg(display_name, '|') within group (order by display_name) || '$dlm' ||
+--'Samples=' || apidb.tab_to_clob(set(CAST(COLLECT(samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'Samples=' || listagg(samples, '|') within group (order by display_name) || '$dlm' ||
+--'IsrpmAvgExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm_sample_avgexp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'IsrpmAvgExpRatio=' || listagg(isrpm_sample_avgexp_ratios, '|') within group (order by display_name) || '$dlm' ||
+--'IsrpmExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm_exp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'IsrpmExpRatio=' || listagg(isrpm_exp_ratios, '|') within group (order by display_name) || '$dlm' ||
+--'PerMaxSample=' || apidb.tab_to_clob(set(CAST(COLLECT(percent_max_samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'PerMaxSample=' || listagg(percent_max_samples, '|') within group (order by display_name) || '$dlm' ||
+--'URS=' || apidb.tab_to_clob(set(CAST(COLLECT(unique_reads order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'URS=' || listagg(unique_reads, '|') within group (order by display_name) || '$dlm' ||
+--'ISRPM=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'ISRPM=' || listagg(isrpm, '|') within group (order by display_name) || '$dlm' ||
 --'NRS=' || apidb.tab_to_clob(set(CAST(COLLECT(nu_reads order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
 'NRS=' || listagg(nu_reads, '|') within group (order by display_name) || '$dlm' ||
 'TotalScore=' || sum(total_reads) || '$dlm' ||
@@ -729,18 +738,13 @@ SELECT segment_start || '_' || segment_end as feature_id,
          listagg(sample_name, ',') within group (order by sample_name) as samples,
          listagg(unique_reads, ',') within group (order by sample_name) unique_reads,
          listagg(isrpm, ',') within group (order by sample_name) isrpm,
-         listagg(intron_sample_avgexp_ratio, ',') within group (order by sample_name) as intron_sample_avgexp_ratios,
          listagg(isrpm_sample_avgexp_ratio, ',') within group (order by sample_name) as isrpm_sample_avgexp_ratios,
-         listagg(intron_exp_ratio, ',') within group (order by sample_name) as intron_exp_ratios, 
-         listagg(isrpm_exp_ratio, ',') within group (order by sample_name) as isrpm_exp_ratios, 
+         listagg(isrpm_exp_ratio, ',') within group (order by sample_name) as isrpm_exp_ratios,  
          listagg(round(unique_reads / nvl(gs.sample_unique,-1) * 100,1), ',') within group (order by sample_name) as percent_max_samples,
-         listagg(round(isrpm / nvl(gs.sample_unique,-1) * 100,1), ',') within group (order by sample_name) as percent_isrpm_max_samples,
          listagg(nu_reads, ',') within group (order by sample_name) as nu_reads,
          sum(unique_reads) as total_reads, avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp,gt.max_gene_unique
 FROM inwindow iw, genesample gs, genetotal gt
-WHERE iw.segment_start <= $rend
-AND iw.segment_end >= $base_start
-AND iw.gene_source_id = gt.gene_source_id(+)
+WHERE iw.gene_source_id = gt.gene_source_id(+)
 AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
 and iw.gene_source_id = gs.gene_source_id(+)
 GROUP BY iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_unique, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron)
