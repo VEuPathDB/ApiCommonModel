@@ -2,7 +2,7 @@
 
 use strict;
 use lib "$ENV{GUS_HOME}/lib/perl";
-use WDK::Model::CommandHelper;
+use FgpUtil::Util::CommandHelper;
 use IO::File;
 use Cwd;
 
@@ -19,9 +19,9 @@ use lib $ENV{CGILIB};
 my $CGIBIN = $ENV{CGIBIN};
 my $GUS_HOME = $ENV{GUS_HOME};
 
-my $CLASSPATH = &WDK::Model::CommandHelper::getJavaClasspath($GUS_HOME);
-my $sysProps = &WDK::Model::CommandHelper::getSystemProps($GUS_HOME, 'createGenBankFiles');
-my $args = &WDK::Model::CommandHelper::getJavaArgs(@ARGV);
+my $CLASSPATH = &FgpUtil::Util::CommandHelper::getJavaClasspath($GUS_HOME);
+my $sysProps = &FgpUtil::Util::CommandHelper::getSystemProps($GUS_HOME, 'createGenBankFiles');
+my $args = &FgpUtil::Util::CommandHelper::getJavaArgs(@ARGV);
 my $tempFileName = "genbank.tmp";
 my $reporter = "genbank";
 my $baseDir;
@@ -29,10 +29,13 @@ my $model;
 
 my @sequences;
 
+my $params;
+
 # get the model and dir (will pass other params directly)
 &GetOptions('dir=s' => \$baseDir,
             'model=s' => \$model,
-            'question=s', 'params=s'
+            'question=s', 
+            'params=s',
             );
 
 $baseDir = &Cwd::abs_path() unless($baseDir);
@@ -57,51 +60,121 @@ my $sequenceIdToGenbankFile = &lookupOriginalGenbankFiles($dbh);
 my $cmd = "java $sysProps -classpath $CLASSPATH org.gusdb.wdk.model.report.Dumper -reporter $reporter -fileName $tempFileName $args";
 system($cmd);
 
-
 opendir(DIR, $baseDir) or die "Cannot open directory $baseDir for reading: $!";
 
 while (my $tblFile = readdir(DIR)) { 
   next unless $tblFile =~ /$tempFileName/;
 
 
-  open(TBL, $tblFile) or die "Cannot open file $tblFile for reading: $!";
+  open(TBL, "$baseDir/$tblFile") or die "Cannot open file $tblFile for reading: $!";
 
-  my $defline = <TBL>;
-  chomp $defline;
-  my ($junk, $sequenceId) = split(/\t/, $defline);
 
+  my ($sequenceId, $newTblFile);
+
+  my %distinctFiles;
+  my %distinctSeqIds;
+
+  while(<TBL>) {
+    chomp;
+    if(/\>Feature/) {
+      my @a = split(/\t/, $_);
+      $sequenceId = $a[1];
+
+      $distinctFiles{$sequenceIdToGenbankFile->{$sequenceId}}++;
+      $distinctSeqIds{$sequenceId}++;
+
+      $newTblFile = $sequenceId . ".tbl";
+
+      open(OUT, ">$baseDir/$newTblFile") or die "Cannot open $newTblFile for writing:$!";
+    }
+    print OUT "$_\n";
+
+  }
 
   close TBL;
 
-  my $newTblFile = $sequenceId . ".tbl";
-  my $fasta = $sequenceId . ".fsa";
+  foreach my $sid (keys %distinctSeqIds) {
 
-  rename($tblFile, $newTblFile);
+    my $seqSources =  &getSequenceSources($dbh, $sid);
+    open(FASTA, ">$baseDir/$sid.fsa");
 
+    my $seq = $seqSources->{sequence};
+    my $organism = $seqSources->{organism};
+    my $chromosome = $seqSources->{chromosome};
+    my $taxon = $seqSources->{ncbi_tax_id};
+    my $molType = "genomic";
 
-  my $gbFile = $sequenceIdToGenbankFile->{$sequenceId};
+    my $header = ">$sid ";
+    $header .= "[organism=$organism] " if $organism;
+    $header .= "[chromosome=$chromosome] " if $chromosome;
+    $header .= "[moltype=$molType] " if $molType;
+    $header .= "[db_xref=taxon:$taxon] " if $taxon;
 
-  my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'genbank');
-
-  my $seqioFsa = Bio::SeqIO->new(-format => 'Fasta', -file => "> $fasta");
-
-  while(my $seq = $seqio->next_seq()) {
-    next unless($seq->id eq $sequenceId);
-
-    $seqioFsa->write_seq($seq);
+    print FASTA "$header\n$seq\n";
+    close FASTA;
   }
+
+=comment out
+  foreach my $gbFile (keys %distinctFiles) {
+    my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'embl');
+
+    while(my $seq = $seqio->next_seq()) {
+      my $fasta = $seq->id . ".fsa";
+
+
+      my @seqFeatures = $seq->top_SeqFeatures();
+
+      my $first = $seqFeatures[0];
+
+      my @tags = $first->get_all_tags();
+
+      my ($chromosome) = $first->get_tag_values('chromosome');
+      my ($organism) = $first->get_tag_values('organism');
+      my ($molType) = $first->get_tag_values('mol_type');
+
+
+      $seq->display_id($seq->id() . " [organism=$organism] [chromosome=$chromosome] [moltype=$molType]");
+
+      my $seqioFsa = Bio::SeqIO->new(-format => 'Fasta', -file => "> $fasta");
+      $seqioFsa->write_seq($seq);
+    }
+  }
+=cut
+
 }
 
 close DIR;
 
 
 # Run tbl2asn with validation flag
-$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt -V v";
+$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt  -V vb -Z $baseDir/discrep";
 system($cmd);
-
 
 $dbh->disconnect();
 
+sub getSequenceSources {
+  my ($dbh, $seqid) = @_;
+
+  my %rv;
+
+  my $sql = "select sa.organism, sa.chromosome, sa.ncbi_tax_id, etn.sequence
+from ApidbTuning.GenomicSeqAttributes sa,  dots.externalnasequence etn
+where sa.na_sequence_id = etn.na_sequence_id and sa.source_id = '$seqid' ";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($organism, $chromosome, $ncbi_tax_id, $sequence) = $sh->fetchrow_array()) {
+    $rv{organism}    = $organism;
+    $rv{chromosome}  = $chromosome;
+    $rv{ncbi_tax_id} = $ncbi_tax_id;
+    $rv{sequence}    = $sequence;
+  }
+
+  $sh->finish();
+
+  return \%rv;
+}
 
 sub lookupOriginalGenbankFiles {
   my ($dbh) = @_;
@@ -120,11 +193,13 @@ and gf.row_alg_invocation_id = ap.algorithm_invocation_id";
   $sh->execute();
 
   while(my ($sequence, $file) = $sh->fetchrow_array()) {
-    $file =~ s/^\/files\/cbil\/data\/cbil/\/eupath\/data/;
+#    $file =~ s/^\/files\/cbil\/data\/cbil/\/eupath\/data/;
     $rv{$sequence} = $file;
 
 
   }
+
+
 
   $sh->finish();
 

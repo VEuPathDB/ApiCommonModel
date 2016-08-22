@@ -1,0 +1,68 @@
+#!/usr/bin/perl
+
+use strict;
+use Switch;
+use FileHandle;
+
+usage() unless scalar(@ARGV) == 1;
+
+my ($stepsToRunnablesFile) = @ARGV;
+
+my %gusHomeBin;
+opendir(DIR, "$ENV{GUS_HOME}/bin") || die  "can't open gushome bin dir '$ENV{GUS_HOME}/bin'\n";
+while(my $file = readdir(DIR)) {
+  next if $file =~ /^\./;
+  $gusHomeBin{$file} = 1;
+}
+closedir(DIR);
+
+open(O, ">$stepsToRunnablesFile") || die "Can't open file '$stepsToRunnablesFile for writing\n";
+
+# mclOutToGroupsFile/step.log:Thu May 24 22:18:25 2012    running:  orthomclMclToGroups
+# mclOutToGroupsFile/step.log:Thu May 24 22:18:25 2012    running:  ga ApiCommonData::Load::Plugin::InsertWhatever
+my $step;
+my %runnablesForStep;
+
+# get very first runnable
+while (<STDIN>) {
+  next unless /^(\S+)\/step\.log.*Running command \(in test mode, so only pretending\) :  (ga )?(\S+)/;
+  my $runnable = $3;
+  my $possibleStep = $1;
+  next unless $gusHomeBin{$runnable} || $runnable =~ /\:/;
+  $step = $possibleStep;
+  $runnablesForStep{$runnable} = 1;
+  last;
+}
+
+while (<STDIN>) {
+  next unless /^(\S+)\/step\.log.*Running command \(in test mode, so only pretending\) :  (ga )?(\S+)/;
+  my $possibleStep = $1;
+  my $possibleRunnable = $3;
+  if ($possibleStep ne $step) {
+    print O "$step\n" if scalar(keys(%runnablesForStep));
+    foreach my $runnable (keys(%runnablesForStep)) { print O "  $runnable\n"; }
+    %runnablesForStep = ();
+  }
+  my $runnable = $possibleRunnable;
+  next unless $gusHomeBin{$runnable} || $runnable =~ /\:/;
+  $step = $possibleStep;
+  $runnablesForStep{$runnable} = 1;
+}
+
+
+####################################################################
+
+sub usage {
+
+die "
+Find the commands and plugins a workflow runs, in the order run.
+
+Usage:  gus4FindOrderedRunnables steps_to_runnables_output_file
+
+Takes on stdin the output of this command, run from the workflow steps/ dir:
+ grep \"Running command (in test mode\" `ls -rt \$WORKFLOW_DIR/steps/*/step.log` 
+
+
+";
+
+}

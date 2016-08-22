@@ -1,0 +1,608 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+$| = 1; # don't buffer stdout
+
+use DBI;
+use Data::Dumper;
+use Getopt::Long qw(GetOptions);
+use LWP::UserAgent;
+use HTTP::Request;
+use HTTP::Response;
+use XML::Simple;
+use ApiCommonShared::Model::tmUtils;
+
+# To check that no genome of interest has a null release_date in sres.ExternalDatabaseRelease,
+# we will use nvl() to set an impossibly early date in the case of a null. If this
+# value appears in the result set then nvl() must have done its work. So we'll die.
+my $sentinelDate = '1918-08-13';
+
+my $annotationInsert;
+my $commentInsert;
+
+my ($propfile, $instance, $schema, $suffix, $debug);
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "debug!" => \$debug,
+	  );
+die "required parameter missing" unless ($propfile && $instance && $suffix);
+
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+createTables($dbh, $suffix);
+createIndex($dbh, $suffix);
+
+print STDERRR "about to get genome list\n" if $debug;
+my $genomeListRef = getGenomeList($dbh);
+my @genomeList = @$genomeListRef;
+my $totalChangedGenes;
+
+foreach my $genome (@genomeList) {
+  if ($genome->{SINCEDATE} eq $sentinelDate) {
+    die "sres.ExternalDatabaseRelease.release_date is null for $genome->{EUPATHDB_NAME}";
+  }
+
+  $totalChangedGenes += processChangedGenes($dbh, $genome->{SANGER_ID}, $genome->{SINCEDATE}, $suffix, $genome->{EUPATHDB_NAME});
+}
+
+populateGenesAndProducts($dbh, $suffix);
+renameOldChanges($dbh, $suffix);
+
+$dbh->commit() or print STDERR $dbh->errstr;
+
+createTextIndex($dbh, $suffix);
+
+print STDERR "Saved $totalChangedGenes total changed genes from web service\n";
+
+sub getGenomeList {
+
+    my ($dbh) = @_;
+
+    my $taxa = getOfferedTaxa();
+
+    # the successive subqueries of this query use increasingly broad techniques
+    # to match GeneDB and EuPathDB organism name. The techniques are described
+    # inline. Note that each has as one of its conditions that the GeneDB name
+    # didn't have a match in an earlier one.
+    my $sql = <<SQL;
+with Sanger_names as -- organism name/ID pairs from Sanger web service
+        ($taxa),
+     local_taxa as -- name/GUS ID/genome date tuples from the current database instance
+        (select ga.organism, ga.taxon_id, 
+                to_char(min(nvl(edr.release_date, to_date('$sentinelDate', 'yyyy-mm-dd'))), 'yyyy-mm-dd') as sinceDate
+         from GeneAttributes ga, dots.GeneFeature gf,
+              sres.ExternalDatabaseRelease edr
+         where ga.na_feature_id = gf.na_feature_id
+           and gf.external_database_release_id = edr.external_database_release_id
+         group by ga.organism, ga.taxon_id),
+     hardwired_mapping as -- you say "tater", I say "spud"
+        (select 'Leishmania infantum JPCM5 ' as sanger_name,
+                'Leishmania infantum' as eupathdb_name
+         from dual
+         union select 'Leishmania major Friedlin' as sanger_name,
+                      'Leishmania major strain Friedlin' as eupathdb_name
+         from dual
+         union select 'Trypanosoma brucei Lister 427' as sanger_name,
+                      'Trypanosoma brucei Lister strain 427' as eupathdb_name from dual
+         union select 'Trypanosoma brucei brucei, strain 927' as sanger_name,
+                      'Trypanosoma brucei TREU927' as eupathdb_name from dual
+         union select 'Plasmodium yoelii YM' as sanger_name,
+                      'Plasmodium yoelii yoelii YM' as eupathdb_name from dual
+         union select 'Plasmodium yoelii 17X' as sanger_name,
+                      'Plasmodium yoelii yoelii 17X' as eupathdb_name from dual
+         union select 'Trypanosoma brucei gambiense' as sanger_name,
+                      'Trypanosoma brucei gambiense DAL972' as eupathdb_name from dual),
+     exact_match as -- Sanger name matches GeneAttributes.organism
+        (select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: exact match' as match_method
+         from sanger_names sn, local_taxa lt
+         where sn.name = lt.organism),
+     including_taxon_tree as -- exact_match query (above), UNIONed with
+                             -- Sanger name matches TaxonName.name for the species
+        (select * from exact_match
+         union 
+         select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: TaxonSpecies table (EuPathDB taxon - Sanger species)' as match_method
+         from sanger_names sn, sres.TaxonName tn, TaxonSpecies ts, local_taxa lt
+         where sn.name not in (select sanger_name from exact_match)
+           and sn.name = tn.name
+           and tn.taxon_id = ts.species_taxon_id
+           and ts.taxon_id = lt.taxon_id),
+     including_eupathdb_as_parent as -- including_taxon_tree query (above), UNIONed with
+                                     -- EuPathDB taxon is parent of taxon with Sanger name
+        (select * from including_taxon_tree
+         union 
+         select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: Taxon tree (EupSanger taxon is parent of Sanger taxon)' as match_method
+         from sanger_names sn, sres.TaxonName tn, sres.Taxon t, local_taxa lt
+         where sn.name not in (select sanger_name from exact_match)
+           and sn.name = tn.name
+           and tn.taxon_id = t.taxon_id
+           and t.parent_id = lt.taxon_id),
+     including_hardwired_mapping as -- above three, UNIONed with
+                                    -- hardwired_mapping joins Sanger name with our organism
+        (select * from including_eupathdb_as_parent
+         union 
+         select sn.name as sanger_name, lt.organism as eupathdb_name, sn.sanger_id,
+                lt.sinceDate, 'match: hardwired mapping' as match_method
+         from sanger_names sn, hardwired_mapping hm, local_taxa lt
+         where sn.name not in (select sanger_name from including_eupathdb_as_parent)
+           and sn.name = hm.sanger_name
+           and hm.eupathdb_name = lt.organism),
+     including_genus_only_match as -- above, UNIONed with
+                                   -- Sanger genus (i.e. space-delimited first word) matches local Genus
+                                   --         (walk Taxon tree from GeneAttributes taxon_id
+                                   --          to genus rank, get scientific name)
+        (select * from including_hardwired_mapping
+         union 
+         select sn.name as sanger_name, '' as eupathdb_name, sn.sanger_id,
+                '' as sinceDate, 'match: genus-only' as match_method
+         from sanger_names sn,
+              (select distinct name
+               from (select t.taxon_id, t.rank, tn.name
+                     from sres.Taxon t, sres.TaxonName tn
+                     where t.taxon_id = tn.taxon_id
+                       and tn.name_class = 'scientific name'
+                     start with t.taxon_id in (select taxon_id from GeneAttributes)
+                     connect by (prior t.parent_id = t.taxon_id and prior t.rank != 'genus'))
+               where rank = 'genus') local_genus
+         where sn.name not in (select sanger_name from including_hardwired_mapping)
+           and substr(sn.name, 1, instr(sn.name, ' ') - 1) = local_genus.name)
+select * from including_genus_only_match order by sanger_name
+SQL
+    print STDERR "SQL is:\n$sql\n\n" if $debug;
+
+    my $stmt = $dbh->prepare($sql)
+      or print STDERR $dbh->errstr;
+
+    print STDERRR "getting list of taxa\n" if $debug;
+    $stmt->execute();
+    print STDERRR "done execute()ing taxa query \n" if $debug;
+    my @genomeList;
+    while (my $ref = $stmt->fetchrow_hashref()) {
+      # print STDERR "adding " . Dumper($ref) . " to the list\n" if $debug;
+      if ($ref->{MATCH_METHOD} eq 'match: genus-only') {
+	print STDERR "WARNING: GeneDB taxon \"" . $ref->{SANGER_NAME}
+                     . "\" does not match any taxon in the local instance.\n";
+      } else {
+	push(@genomeList, $ref);
+      }
+    }
+
+    print STDERRR "got list of taxa\n" if $debug;
+    return \@genomeList;
+  }
+
+
+sub getOfferedTaxa {
+
+  my $ua = new LWP::UserAgent;
+  my $url = "http://www.genedb.org/services/organisms/list";
+
+  print STDERR "getting list of available taxa from $url\"\n";
+  my $request = new HTTP::Request('GET', $url);
+  my $response = $ua->request($request);
+  if (!$response->is_success) {
+    die "trying to get taxon list with URL ->>\"$url\<<-.  Got response ->>" . $response->content . "<<- (end of response to taxon-list request)";
+  }
+
+  my $simple = XML::Simple->new();
+  my $taxonList = $simple->XMLin($response->content, KeyAttr => [] );
+
+  # print "\ntaxonList:\n" . Dumper($taxonList) . "\n<- taxonList";
+  # print "\ntaxonList->results->result:\n" . Dumper($taxonList->{results}->{result}) . "\n<- taxonList";
+
+  my @selects;
+  foreach my $taxon (@{$taxonList->{results}->{result}}) {
+    # remove leading/trailing blanks (a valid taxon name never has those, but Sanger sometimes adds them
+    # my $txn = $taxon->{name};
+    my $txn = $taxon->{genus} . " " . $taxon->{species};
+    $txn =~ s/^\s*(\S*(\s*\S+)*)\s*/$1/;
+    push(@selects, "select '" . $txn . "' as name, '" . $taxon->{id} . "' as sanger_id from dual");
+  }
+
+  my $taxonSubquery = join("\nunion ", @selects);
+
+  return $taxonSubquery;
+}
+
+sub processChangedGenes {
+
+  my ($dbh, $taxonomyId, $sinceDate, $suffix, $eupathdbName) = @_;
+
+  die "bad taxonomyId" if !defined($taxonomyId);
+
+  my $ua = new LWP::UserAgent;
+  my $url = "http://www.genedb.org/services/features/annotation_changes?date=$sinceDate&organism=org:$taxonomyId";
+  print STDERR "getting list of gene changes for taxon \"$eupathdbName\" from URL \"$url\"\n";
+  my $request;
+  my $response;
+
+  my $retries = 0;
+  my $MAX_RETRIES = 10;
+  do {
+    print STDERR "trying again (retry $retries) with \"$url\"" if $retries;
+    $request = new HTTP::Request('GET', $url);
+    $response = $ua->request($request);
+
+      if (!$response->is_success # request failed
+         || $response->content =~ /<error / ) {  # response was an error message
+        print STDERR "unsuccessful when trying to get changed-gene list for organism ID $taxonomyId with URL $url .  Got response ->>"
+                      . $response->content . "<<- (end of response to gene-list request for organism ID $taxonomyId)";
+      }
+
+  } until (++$retries >= $MAX_RETRIES || ($response->content && $response->is_success && !($response->content =~ /<error /)));
+
+  if (!$response->is_success || $response->content =~ /<error /) {
+    die "trying to get changed-gene list for taxonomy ID $taxonomyId with URL $url";
+  }
+
+  # <response>
+  #   <results>
+
+  #     <result xsi:type="feature" organismId="19" uniqueName="Tb927.10.14890:pep">
+  #       <changes>
+  #         <change type="annotation" detail="added_controlled_curation" date="2014-02-23" user="FLK"/>
+  #         <change type="annotation" detail="added_comment" date="2014-02-23" user="FLK"/>
+  #       </changes>
+  #       <isObsolete>false</isObsolete>
+  #       <type name="polypeptide"/>
+  #       <products/>
+  #     </result>
+
+  #     <result> . . . </result>
+
+  #   </results>
+  # </response>
+
+  my $simple = XML::Simple->new();
+  my $bigList = $simple->XMLin($response->content, forcearray => 1);
+  my $results = $bigList->{results};
+  my $resultList = $results->[0]->{result};
+
+  my $annotationInsert = getAnnotationInsert($dbh, $suffix);
+  my $commentInsert = getCommentInsert($dbh, $suffix);
+  my $changeCount = 0;
+  foreach my $result (@$resultList) {
+      my $changeList = $result->{changes}->[0]->{change};
+      foreach my $change (@$changeList) {
+	  $changeCount++;
+	  $annotationInsert->execute($result->{uniqueName}, $change->{date}, $change->{detail},
+                                    $result->{uniqueName}, $change->{date}, $change->{detail})
+	      or die "Can't insert AnnotationChange record (uniqueName \"" . $result->{uniqueName}
+                     . "\" date \"" . $change->{date} . "\" change \"" . $change->{detail} . "\"\n";
+      }
+
+  }
+
+  print STDERR "$changeCount changes from web service for taxonomy ID $taxonomyId\n";
+
+  return $changeCount;
+
+}
+
+sub getAnnotationInsert {
+
+    my ($dbh, $suffix) = @_;
+    if (!$annotationInsert) {
+    $annotationInsert = $dbh->prepare(<<SQL);
+      insert into AnnotationChange$suffix (feature_name, change_date, change)
+      select ?, to_date(?, 'yyyy-mm-dd'), ?
+      from dual
+      where (select count(*)
+             from AnnotationChange$suffix
+             where feature_name = ? and change_date = to_date(?, 'yyyy-mm-dd') and change = ?)
+            = 0
+SQL
+  }
+
+  return $annotationInsert;
+}
+
+sub getCommentInsert {
+
+    my ($dbh, $suffix) = @_;
+    if (!$commentInsert) {
+    $commentInsert = $dbh->prepare(<<SQL);
+      insert into ReviewedComment$suffix (gene, comment_id)
+      select ?, ?
+      from dual
+      where (select count(*)
+             from ReviewedComment$suffix
+             where gene = ? and comment_id = ?)
+            = 0
+SQL
+  }
+
+  return $commentInsert;
+}
+
+sub createTables {
+    my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating AnnotationChange table";
+create table AnnotationChange$suffix (
+   gene         varchar2(50),
+   change_date  date,
+   change       varchar2(2000),
+   feature_name varchar2(50),
+   product      varchar2(200),
+   name         varchar2(30),
+   searchable   varchar2(230)
+) nologging
+SQL
+
+    $dbh->do(<<SQL) or die "creating ReviewedComment table";
+create table ReviewedComment$suffix (
+   gene       varchar2(50),
+   comment_id varchar2(10)
+) nologging
+SQL
+
+  # copy records from existing tables (if any)
+  $dbh->{PrintError} = 0;
+  $dbh->{RaiseError} = 0;
+  $dbh->do(<<SQL);
+  insert into AnnotationChange$suffix
+              (gene, change_date, change, feature_name, product, name, searchable)
+  select gene, change_date, change, feature_name, product, name, searchable from AnnotationChange
+SQL
+
+  $dbh->do(<<SQL);
+  insert into ReviewedComment$suffix
+              (gene, comment_id)
+  select gene, comment_id from ReviewedComment
+SQL
+  $dbh->{PrintError} = 1;
+  $dbh->{RaiseError} = 1;
+
+}
+
+sub populateGenesAndProducts {
+    # use another Sanger web service to get the gene and product associated with a changed feature
+
+    my ($dbh, $suffix) = @_;
+
+    my $stmt = $dbh->prepare(<<SQL) or die "preparing select records with null gene";
+      select distinct feature_name
+      from AnnotationChange$suffix
+      where gene is null
+    -- this union would also check genes that have comments, regardless of whether we got an annotation change
+    -- GeneDB assures us that that is not needed, and it slows things down a lot
+    -- union
+    --   select stable_id
+    --   from userlogins5.mappedComment\@prodn.login_comment
+    --   where project_name in (select name from core.projectInfo)
+    --     and is_visible = 1
+    --     and comment_target_id = 'gene'
+SQL
+
+    my $updateStmt = $dbh->prepare(<<SQL) or die "preparing gene/product update statement";
+      update AnnotationChange$suffix
+      set gene = ?, product = ?, name = ?, searchable = ?
+      where feature_name = ?
+SQL
+
+  $stmt->execute();
+  print STDERRR "done execute()ing query for changes without gene IDs\n" if $debug;
+  while (my ($feature) = $stmt->fetchrow_array()) {
+    print STDERRR "getting gene and product for feature \"$feature\"\n" if $debug;
+
+    my ($gene, $product, $name) = getFeatureGeneAndProduct($feature);
+    ($gene, $product, $name) = getFeatureSynonymGeneAndProduct($feature)
+      if !$gene;
+
+    if ($gene) {
+      print STDERR "set gene to \"$gene\", product to \"$product\", and name to \"$name\" for feature \"$feature\"\n" if $debug;
+      $updateStmt->execute($gene, $product, $name, $product . " " . $name, $feature) or print STDERR $dbh->errstr;
+    } else {
+      print STDERR "WARNING: no gene (gene \"$gene\" and product \"$product\") for feature \"$feature\"\n";
+    }
+  }
+}
+
+sub getFeatureGeneAndProduct {
+
+    my ($feature) = @_;
+
+    my $ua = new LWP::UserAgent;
+    my $url = "http://www.genedb.org/services/feature/hierarchy?uniqueName=$feature";
+    print STDERR "getting info for feature \"$feature\" with URL \"$url\"\n" if $debug;
+    my $request;
+    my $response;
+
+    $request = new HTTP::Request('GET', $url);
+    $response = $ua->request($request);
+
+    if (!$response->is_success || $response->content =~ /<error /) {
+      print STDERR "WARNING: failure getting feature hierarchy for feature \"$feature\" with URL \"$url\"\n";
+	return('', '')
+    }
+
+    my $simple = XML::Simple->new();
+    my $contentString = $response->content;
+    $contentString = removeBogusCharacters($contentString);
+
+    my $info = $simple->XMLin($contentString, forcearray => 1, KeyAttr => [] );
+    # print STDERR "info:\n" . Dumper($info). "\n";
+
+    my $gene = $info->{results}->[0]->{result}->[0]->{uniqueName};
+    my $name = $info->{results}->[0]->{result}->[0]->{name};
+
+    my $product;
+    my @commentList;
+
+    # some features have terms. . .
+    foreach my $term (@{$info->{results}->[0]->{result}->[0]->{terms}->[0]->{term}}) {
+      $product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+
+	my $props = $term->{props};
+	if ($props) {
+	  my $prop = $props->[0]->{prop};
+	  if ($prop) {
+	    foreach my $item (@{$prop}) {
+	      my $value = $item->{value};
+	      while ($value =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=\D*(\d*)(.*)$/i) {
+		my $commentId = $2;
+		$value = $3;
+		print STDERR "type 1 reviewed-comment flag for comment id \"$commentId\", gene \"$gene\"\n" if $debug;
+		push (@commentList, $commentId);
+	      }
+	    }
+	  }
+	}
+    }
+
+    # . . . and some features have chidren that have terms
+    foreach my $child (@{$info->{results}->[0]->{result}->[0]->{children}}) {
+      foreach my $term (@{$child->{terms}->[0]->{term}}) {
+	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+
+	my $props = $term->{props};
+	if ($props) {
+	  my $prop = $props->[0]->{prop};
+	  if ($prop) {
+	    foreach my $item (@{$prop}) {
+	      my $value = $item->{value};
+	      while ($value =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=\D*(\d*)(.*)$/i) {
+		my $commentId = $2;
+		$value = $3;
+		print STDERR "type 2 reviewed-comment flag for comment id \"$commentId\", gene \"$gene\"\n" if $debug;
+		push (@commentList, $commentId);
+	      }
+	    }
+	  }
+	}
+      }
+    }
+
+    # . . . and some features have chidren whose children have terms
+    foreach my $child (@{$info->{results}->[0]->{result}->[0]->{children}->[0]->{children}}) {
+      foreach my $term (@{$child->{terms}->[0]->{term}}) {
+
+	$product = $term->{name} if ($term->{cv}->[0]->{name} eq "genedb_products");
+
+	my $props = $term->{props};
+	if ($props) {
+	  my $prop = $props->[0]->{prop};
+	  if ($prop) {
+	    foreach my $item (@{$prop}) {
+	      my $value = $item->{value};
+	      while ($value =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=\D*(\d*)(.*)$/i) {
+		my $commentId = $2;
+		$value = $3;
+		print STDERR "type 3 reviewed-comment flag for comment id \"$commentId\", gene \"$gene\"\n" if $debug;
+		push (@commentList, $commentId);
+	      }
+	    }
+	  }
+	}
+      }
+    }
+
+    # sanity check: if a product is in there, we must find it
+    if (!$product && $contentString =~ /genedb_products/) {
+      print STDERR "web-service parse failure: response to URL \"$url\" contains \"genedb_products\", but a (non-null) product was not found in it.\n";
+    }
+
+    # sanity check 2: if a comment is in there, we must find that
+    if (!@commentList && $contentString =~ /(tritryp_uc|trytryp_uc|trityp_uc|tritrypdb_uc|plasmodb_uc|eupathdb_uc)=(.*)$/) {
+      print STDERR "web-service parse failure: response to URL \"$url\" contains a reviewed-comment tag, but no comment IDs were found in it.\n";
+    }
+
+    # store reviewed-comment IDs
+    if ($gene) {
+      foreach my $commentId (@commentList) {
+	$commentInsert->execute($gene, $commentId, $gene, $commentId);
+      }
+    }
+
+    return($gene, $product, $name);
+}
+
+sub getFeatureSynonymGeneAndProduct {
+
+    my ($feature) = @_;
+
+    my $ua = new LWP::UserAgent;
+    my $url = "http://www.genedb.org/services/features/synonyms?features=$feature";
+    print STDERR "getting synonym for feature \"$feature\"\n" if $debug;
+    my $request;
+    my $response;
+    $request = new HTTP::Request('GET', $url);
+    $response = $ua->request($request);
+
+    if (!$response->is_success || $response->content =~ /<error /) {
+	print STDERR "warning: failure to get synonym for feature \"$feature\" using URL $url\n";
+	return("");
+    }
+
+    my $simple = XML::Simple->new();
+    my $info = $simple->XMLin($response->content, forcearray => 1, KeyAttr => [] );
+    # print "info:\n" . Dumper($info). "\n";
+
+    my $realName = $info->{results}->[0]->{result}->[0]->{uniqueName};
+
+    print STDERR "real name = \"$realName\"\n" if $debug;
+    return(getFeatureGeneAndProduct($realName));
+}
+
+sub renameOldChanges {
+# suppress changes (by changing the gene ID to "old change: <gene ID>") for genes whose data-load is newer than the newest change
+
+    my ($dbh, $suffix) = @_;
+    $dbh->do(<<SQL) or die "renaming genes to suppress old-news annotations";
+update AnnotationChange$suffix
+set gene = 'old change: ' || gene, searchable = ''
+where change_date < (select edr.release_date
+                       from GeneAttributes ga, dots.NaFeature nf, sres.ExternalDatabaseRelease edr
+                       where ga.source_id = AnnotationChange$suffix.gene
+                         and nf.na_feature_id = ga.na_feature_id
+                         and edr.external_database_release_id = nf.external_database_release_id
+                         and edr.release_date is not null)
+SQL
+
+}
+
+sub createIndex {
+    my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating main index";
+      create index AnotCh_ix$suffix
+      on AnnotationChange$suffix (gene, change_date) tablespace INDX
+SQL
+}
+
+sub createTextIndex {
+    my ($dbh, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating Oracle Text index";
+      create index AnotChText_ix$suffix
+      on AnnotationChange$suffix (searchable)
+      indextype is ctxsys.context
+      parameters('DATASTORE CTXSYS.DEFAULT_DATASTORE SYNC (ON COMMIT)')
+SQL
+
+}
+
+sub removeBogusCharacters {
+
+  # Some of the text in the values in the XML returned by GeneDB
+  # contain non-printing characters
+  # (e.g. http://www.genedb.org/services/feature/hierarchy?uniqueName=TcCLB.507993.369:pep
+  #  -- look for the phrase "10 hits per gene")
+  # These are the bane of XML::Simple, and must be removed. This function replaces
+  # them with spaces.
+
+  my ($contentString) = @_;
+  for (my $i = 0; $i < length($contentString); $i++) {
+    substr($contentString, $i, 1, " ")
+      if ord(substr($contentString, $i, 1)) > 127;
+  }
+
+  return $contentString;
+}

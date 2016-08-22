@@ -1,762 +1,180 @@
 <wdkModel>
 
-  <querySet name="SnpsBy" queryType="id" includeProjects="PlasmoDB,ToxoDB,EuPathDB,CryptoDB,AmoebaDB,TriTrypDB">
+  <querySet name="SnpsBy" queryType="id" isCacheable="true" includeProjects="PlasmoDB,ToxoDB,EuPathDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB">
+
+    <postCacheUpdateSql>
+       <sql>
+          <![CDATA[
+             delete from ##WDK_CACHE_TABLE## -- delete invalid SNP IDs
+             where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+             and source_id in (  select source_id
+                                 from ##WDK_CACHE_TABLE##
+                                 where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                               minus
+                                 select source_id
+                                 from apidbTuning.snpAttributes)
+          ]]>
+       </sql>
+    </postCacheUpdateSql>
+    <postCacheUpdateSql>
+       <sql>
+          <![CDATA[
+             update ##WDK_CACHE_TABLE## -- renumber rows after delete
+             set wdk_row_id = rownum
+             where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+          ]]>
+       </sql>
+    </postCacheUpdateSql>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- ID -->
+    <!-- NGS SNP ID -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-      <sqlQuery name="SnpBySourceId" doNotTest="true" includeProjects="PlasmoDB,ToxoDB,CryptoDB,AmoebaDB,TriTrypDB"  isCacheable="true">
-          <paramRef ref="snpParams.snp_id"/>
+      <sqlQuery name="NgsSnpBySourceId" doNotTest="true" includeProjects="PlasmoDB,ToxoDB,CryptoDB,AmoebaDB,PiroplasmaDB,GiardiaDB,TriTrypDB,FungiDB" >
+          <paramRef ref="snpParams.ngs_snp_id"/>
 	  <column name="source_id"/>
 	  <column name="project_id"/>
-	  <sql>
+        <sql>
 	    <![CDATA[
-	      SELECT distinct sf.source_id AS source_id, '@PROJECT_ID@' as project_id
-	      FROM dots.SnpFeature sf, ($$snp_id$$) ds
-	      WHERE LOWER(sf.source_id) LIKE LOWER(REPLACE(REPLACE(ds.source_id,' ',''), '*', '%'))
+	      SELECT distinct s.source_id AS source_id, '@PROJECT_ID@' as project_id
+	      FROM apidb.snp s, ($$ngs_snp_id$$) ds
+	      WHERE s.source_id = ds.source_id
 	    ]]>
-	  </sql>
+        </sql>
       </sqlQuery>
 
-     <processQuery name="SnpBySourceId" includeProjects="EuPathDB" 
-              isCacheable="true" doNotTest="true" 
+     <processQuery name="NgsSnpBySourceId" includeProjects="EuPathDB" 
+              doNotTest="true" 
               processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-          <paramRef ref="snpParams.snp_id" noTranslation="true" />
-          <paramRef ref="sharedParams.signature" noTranslation="true"/>
+          <paramRef ref="snpParams.ngs_snp_id" noTranslation="true" />
+          <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
 	  <wsColumn name="source_id" width="50" wsName="source_id"/>
           <wsColumn name="project_id" width="32" wsName="project_id"/>
       </processQuery>
 
+
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Gene ID -->
+    <!-- NGS SNP by Isolate Group -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-      <sqlQuery name="SnpsByGeneId" doNotTest="true" includeProjects="PlasmoDB,ToxoDB,CryptoDB"
-             isCacheable="true">
-        <paramRef ref="sharedParams.ds_gene_ids" excludeProjects="CryptoDB,ToxoDB"/>
-        <paramRef ref="sharedParams.ds_gene_ids" default="TGME49_039250" includeProjects="ToxoDB"/>
-        <paramRef ref="sharedParams.ds_gene_ids" default="cgd3_510" includeProjects="CryptoDB"/>
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
-                  quote="true" queryRef="organismVQ.withSNPs">
-              <help>Select Organism you wish to query against</help>
-        </paramRef>
+    <processQuery name="NgsSnpsByIsolateGroup" includeProjects="PlasmoDB,ToxoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,CryptoDB,AmoebaDB,EuPathDB,FungiDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindPolymorphismsPlugin">
 
-        <paramRef ref="sharedParams.snp_strain_a"/>
-        <paramRef ref="sharedParams.snp_strain_m"/>
-        <column name="source_id"/>
-        <column name="project_id"/>
-        <column name="snp_location"/>
-        <column name="ref_strain"/>
-        <column name="comp_strains"/>
-        <column name="ref_allele"/>
-        <column name="comp_alleles"/>
-        <column name="phenotype"/>
-        <column name="prot_pos"/>
-        <column name="ref_product"/>
-        <column name="comp_products"/>
-
-        <sql>
-            <![CDATA[
-select * from (
-SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product,                              
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_all END) AS apidb.varchartab), ', ') as comp_alleles,                
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_product END) AS apidb.varchartab), ', ') as comp_products,                
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.phenotype END) AS apidb.varchartab), ', ') as phenotype,                  
-  apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a = snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as ref_strain,              
-  apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as comp_strains 
-FROM                 
-  (SELECT /*+ ordered */ 
-    hits.source_id as source_id,nas.source_id || ':' || trim(to_char(l.start_min,'999,999,999')) as snp_location,                               
-    sva.strain as ref_strain, svb.strain as comp_strain,                               
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(sva.allele)                                  
-    ELSE sva.allele END as ref_allele,                 
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(svb.allele)                                 
-    ELSE svb.allele END as comp_all,                 
-    CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product then 'non-syn' ELSE 'non-coding' END as phenotype,                               
-    sva.product as ref_product, svb.product as comp_product,                           
-    hits.position_in_protein as prot_pos,
-    sva.allele as allele_a, svb.allele as allele_b, svb.strain as strain_b
-  FROM 
-    ( SELECT /*+ ordered */
-      distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
-      sf.position_in_protein,sf.source_id
-      FROM ($$ds_gene_ids$$) ds,
-           ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
-           dots.SeqVariation isva, dots.SeqVariation isvb,
-            ( select distinct organism,extdb_name as name,external_database_release_id 
-              from apidbtuning.snpstrains) ss
-      WHERE lower(gi.id) = lower(ds.source_id)
-        AND gf.source_id = gi.gene
-        AND gf.na_feature_id = sf.parent_id
-        AND ss.organism = $$organism$$
-        AND ss.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-        AND sf.external_database_release_id = ss.external_database_release_id
-        AND sf.na_feature_id = isva.parent_id
-        AND sf.na_feature_id = isvb.parent_id
-        AND isva.strain = $$snp_strain_a$$                               
-        AND isvb.strain in ($$snp_strain_m$$)
-        AND isva.allele != isvb.allele ) hits,
-    dots.NaSequence nas, dots.NALocation gene_loc, dots.NALocation l,
-    dots.SeqVariation sva, dots.SeqVariation svb
-  WHERE hits.na_sequence_id = nas.na_sequence_id
-    AND hits.gene_na_feature_id = gene_loc.na_feature_id
-    AND hits.snp_na_feature_id = l.na_feature_id
-    AND hits.snp_na_feature_id = sva.parent_id 
-    AND hits.snp_na_feature_id = svb.parent_id 
-    AND sva.strain = $$snp_strain_a$$                               
-    AND svb.strain in ($$snp_strain_m$$)                             
-    ) snpq                              
-GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product
-)
-           ]]>
-       </sql>
-
-    </sqlQuery>
-
-    <processQuery name="SnpsByGeneId" includeProjects="EuPathDB" doNotTest="true" 
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-
-        <paramRef ref="sharedParams.ds_gene_ids" default="TGME49_039250" noTranslation="true"/>
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
-                  quote="true" queryRef="organismVQ.withSNPs">
-              <help>Select Organism you wish to query against</help>
-        </paramRef>
-        <paramRef ref="sharedParams.snp_strain_a"  quote="false" noTranslation="true"/>
-        <paramRef ref="sharedParams.snp_strain_m"  quote="false" noTranslation="true"/>
-        <paramRef ref="sharedParams.signature" noTranslation="true"/>
-        <wsColumn name="source_id"  width="50" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="snp_location" width="32"/>
-        <wsColumn name="ref_strain" width="32"/>
-        <wsColumn name="comp_strains" width="32"/>
-        <wsColumn name="ref_allele" width="32"/>
-        <wsColumn name="comp_alleles" width="32"/>
-        <wsColumn name="phenotype" width="32"/>
-        <wsColumn name="prot_pos" width="32"/>
-        <wsColumn name="ref_product" width="32"/>
-        <wsColumn name="comp_products" width="32"/> 
+      <paramRef ref="organismParams.organismSinglePick" prompt="Organism" displayType="select" quote="false" queryRef="organismVQ.withNgsSNPs">
+        <help>The Organism defines the species identity of the Isolates and the genome against which each isolate's SNPs were called.  
+        After choosing an Organism, the set of isolates available for forming groups is limited to isolates aligned to your chosen Organism's genome.</help>
+        <!-- The organism you choose will determine the genome to which the SNPs have been mapped.  
+        That will also restrict the set of isolates you may choose as SNPs are identified by 
+        aligning the reads from those isolates to this genome. -->
+        <!-- visibleHelp>The organism you choose will determine the genome to which the SNPs have been mapped.  That will also restrict the set of isolates you may choose as SNPs are identified by aligning the reads from those isolates to this genome.</visibleHelp -->
+      </paramRef>
+      <paramRef ref="snpParams.ngsSnp_strain_meta" quote="false" />
+      <paramRef ref="snpParams.WebServicesPath"/>
+      <paramRef ref="snpParams.ReadFrequencyPercent" />
+  <!--    <paramRef ref="snpParams.MinPercentMinorAlleles" groupRef="snpParamGroupSet.between_isolates"/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" groupRef="snpParamGroupSet.between_isolates"/>  -->
+      <paramRef ref="snpParams.MinPercentMinorAlleles" />
+      <paramRef ref="snpParams.MinPercentIsolateCalls" />
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/> <!-- need width 8 for oracle to give us xx.x precision in the display -->
+      <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+      <wsColumn name="Phenotype" width="15"/>
     </processQuery>
 
-      <sqlQuery name="HtsSnpsByGeneId" doNotTest="true" includeProjects="ToxoDB,TriTrypDB,AmoebaDB"
-             isCacheable="true">
-        <paramRef ref="sharedParams.ds_gene_ids" default="EHI_012330" includeProjects="AmoebaDB"/>
-        <paramRef ref="sharedParams.ds_gene_ids" default="TGME49_039250, TGGT1_075470" includeProjects="ToxoDB"/>
-        <paramRef ref="sharedParams.ds_gene_ids" default="Tb927.3.5530" includeProjects="TriTrypDB"/>
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
-                  quote="true" queryRef="organismVQ.withHtsSNPs">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="sharedParams.htsSnp_strain_a"/>
-        <paramRef ref="sharedParams.htsSnp_strain_m"/>
-        <paramRef ref="sharedParams.hts_snps_coverage"/>
-        <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB,AmoebaDB"/>
-        <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="ToxoDB"/>
-        <paramRef ref="sharedParams.hts_snps_pvalue"/>
-        <column name="source_id"/>
-        <column name="project_id"/>
-        <column name="snp_location"/>
-        <column name="ref_strain"/>
-        <column name="comp_strains"/>
-        <column name="ref_allele"/>
-        <column name="comp_alleles"/>
-        <column name="phenotype"/>
-        <column name="prot_pos"/>
-        <column name="ref_product"/>
-        <column name="comp_products"/>
+    <processQuery name="NgsSnpsByLocation" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,CryptoDB,PiroplasmaDB,GiardiaDB,AmoebaDB,FungiDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindPolymorphismsWithSeqFilterPlugin">
 
-        <sql>
-            <![CDATA[
-select * from (
-SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.snp_location,snpq.prot_pos,
-  apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_allele) AS apidb.varchartab), ', ') as ref_allele,
-  apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_product) AS apidb.varchartab), ', ') as ref_product,
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_all END) AS apidb.varchartab), ', ') as comp_alleles,                
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.comp_product END) AS apidb.varchartab), ', ') as comp_products,                
-  apidb.tab_to_string(CAST(COLLECT(distinct CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.phenotype END) AS apidb.varchartab), ', ') as phenotype,                  
-  $$htsSnp_strain_a$$ as ref_strain,              
-  apidb.tab_to_string(CAST(COLLECT(CASE WHEN snpq.allele_a != snpq.allele_b THEN snpq.strain_b END) AS apidb.varchartab), ', ') as comp_strains 
-FROM                 
-  (SELECT /*+ ordered */ 
-    hits.source_id as source_id,nas.source_id || ':' || trim(to_char(l.start_min,'999,999,999')) as snp_location,                               
-    sva.strain as ref_strain, svb.strain as comp_strain,                               
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(sva.allele)                                  
-    ELSE sva.allele END as ref_allele,                 
-    CASE WHEN gene_loc.is_reversed = 1 THEN apidb.reverse_complement(svb.allele)                                 
-    ELSE svb.allele END as comp_all,                 
-    CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product then 'non-syn' ELSE 'non-coding' END as phenotype,                               
-    sva.product as ref_product, svb.product as comp_product,                           
-    hits.position_in_protein as prot_pos,
-    sva.allele as allele_a, svb.allele as allele_b, svb.strain as strain_b
-  FROM 
-    ( SELECT /*+ ordered */
-      distinct gf.na_feature_id as gene_na_feature_id, gf.na_sequence_id, sf.na_feature_id as snp_na_feature_id,
-      sf.position_in_protein,sf.source_id
-      FROM ($$ds_gene_ids$$) ds,
-           ApidbTuning.GeneId gi, dots.GeneFeature gf, dots.SnpFeature sf,
-           dots.SeqVariation isva, dots.SeqVariation isvb,
-            ( select distinct organism,extdb_name as name,external_database_release_id 
-              from apidbtuning.snpstrains) ss
-      WHERE lower(gi.id) = lower(ds.source_id)
-        AND gf.source_id = gi.gene
-        AND gf.na_feature_id = sf.parent_id
-        AND ss.organism = $$organism$$
-        AND ss.name = 'InsertSnps.pm NGS SNPs INTERNAL'
-        AND sf.external_database_release_id = ss.external_database_release_id
-        AND sf.na_feature_id = isva.parent_id
-        AND sf.na_feature_id = isvb.parent_id
-        AND isva.strain = $$htsSnp_strain_a$$                               
-        AND isvb.strain in ($$htsSnp_strain_m$$)
-        AND isva.allele != isvb.allele
-        AND NVL(isva.pvalue,0) <= $$hts_snps_pvalue$$
-        AND NVL(isva.allele_percent,100) >= $$hts_snps_allele_freq$$
-        AND NVL(isva.coverage,1000) >= $$hts_snps_coverage$$
-        AND NVL(isvb.pvalue,0) <= $$hts_snps_pvalue$$
-        AND NVL(isvb.allele_percent,100) >= $$hts_snps_allele_freq$$
-        AND NVL(isvb.coverage,1000) >= $$hts_snps_coverage$$
-        ) hits,
-    dots.NaSequence nas, dots.NALocation gene_loc, dots.NALocation l,
-    dots.SeqVariation sva, dots.SeqVariation svb
-  WHERE hits.na_sequence_id = nas.na_sequence_id
-    AND hits.gene_na_feature_id = gene_loc.na_feature_id
-    AND hits.snp_na_feature_id = l.na_feature_id
-    AND hits.snp_na_feature_id = sva.parent_id 
-    AND hits.snp_na_feature_id = svb.parent_id 
-    AND sva.strain = $$htsSnp_strain_a$$                               
-    AND svb.strain in ($$htsSnp_strain_m$$)                             
-    ) snpq                              
-GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
-)
-           ]]>
-       </sql>
+      <!-- need to have quote=true so that dependent param query works.  the wsf plugin remove the for its use -->
 
-    </sqlQuery>
-
-    <processQuery name="HtsSnpsByGeneId" includeProjects="EuPathDB" doNotTest="true" 
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="sharedParams.ds_gene_ids"  default="Tb927.3.5530" noTranslation="true"/>
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
-                  quote="true" queryRef="organismVQ.withHtsSNPs">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="sharedParams.htsSnp_strain_a"  quote="false" />
-        <paramRef ref="sharedParams.htsSnp_strain_m"  quote="false" />
-        <paramRef ref="sharedParams.hts_snps_coverage" noTranslation="true"/>
-        <paramRef ref="sharedParams.hts_snps_allele_freq" noTranslation="true"/>
-        <paramRef ref="sharedParams.hts_snps_pvalue" noTranslation="true"/>
-        <paramRef ref="sharedParams.signature" noTranslation="true"/>
-        <wsColumn name="source_id"  width="50" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="snp_location" width="32"/>
-        <wsColumn name="ref_strain" width="32"/>
-        <wsColumn name="comp_strains" width="32"/>
-        <wsColumn name="ref_allele" width="32"/>
-        <wsColumn name="comp_alleles" width="32"/>
-        <wsColumn name="phenotype" width="32"/>
-        <wsColumn name="prot_pos" width="32"/>
-        <wsColumn name="ref_product" width="32"/>
-        <wsColumn name="comp_products" width="32"/> 
+      <paramRef ref="organismParams.organismSinglePick" prompt="Organism" displayType="select" quote="false" queryRef="organismVQ.withNgsSNPs">
+        <help>The Organism defines the species identity of the Isolates and the genome against which each isolate's SNPs were called.  
+        After choosing an Organism, the set of isolates available for forming groups is limited to isolates aligned to your chosen Organism's genome.</help>
+      </paramRef>
+      <paramRef ref="sharedParams.chromosomeOptionalForNgsSnps" multiPick="false"/>
+      <paramRef ref="sharedParams.sequenceId"/>
+      <paramRef ref="sharedParams.start_point"/>
+      <paramRef ref="sharedParams.end_point"/>
+      <paramRef ref="snpParams.ngsSnp_strain_meta" quote="false" prompt="Samples"/>
+      <paramRef ref="snpParams.WebServicesPath"/>
+      <paramRef ref="snpParams.ReadFrequencyPercent"/>
+   <!--   <paramRef ref="snpParams.MinPercentMinorAlleles" groupRef="snpParamGroupSet.between_isolates"/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" groupRef="snpParamGroupSet.between_isolates"/>  -->
+      <paramRef ref="snpParams.MinPercentMinorAlleles" />
+      <paramRef ref="snpParams.MinPercentIsolateCalls" />
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/>
+      <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+      <wsColumn name="Phenotype" width="15"/>
     </processQuery>
 
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Location -->
-    <!-- 
-         This query contains two nested inline views.  The 
-         inner, named "hits", identifies SNPs within the given 
-         genomic region for which the reference strain has a 
-         different allele from at least one of the others.  The 
-         outer inline view, "snpq", has one row for each SNP for 
-         each strain (e.g. (100 SNPs) x (1 reference + 3 other 
-         strains) = 400 records).  At the top level, the query 
-         itself then groups all rows of a SNP into a single row 
-         (which, for the above example, would mean grouping four 
-         rows into one).
-         
-         It seems necessary to have these three levels in the 
-         query's structure, but it might be possible to optimize 
-         within each level.  For instance, the innermost query must 
-         join dots.SnpFeature to dots.NaLocation.  A big 
-         materialized view could precompute this join. -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="SnpsByLocation" includeProjects="PlasmoDB,ToxoDB,CryptoDB" isCacheable="true">
- 
-        <testParamValues includeProjects="CryptoDB">
-            <paramValue name="snp_strain_m">Cp-MD</paramValue>
-            <paramValue name="chromosomeOptional">chromosome 2</paramValue>
-        </testParamValues>
-        <testParamValues includeProjects="ToxoDB">
-            <paramValue name="snp_strain_m">Tg-VEG (type III)</paramValue>
-            <paramValue name="chromosomeOptional">III</paramValue>
-        </testParamValues>
-       <testParamValues includeProjects="PlasmoDB">
-            <paramValue name="snp_strain_m">Pf-Dd2</paramValue>
-            <paramValue name="chromosomeOptional">1</paramValue>
-        </testParamValues>
+    <processQuery name="NgsSnpsByGeneIds" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,CryptoDB,PiroplasmaDB,GiardiaDB,AmoebaDB,FungiDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindSnpsByGeneIdsPlugin">
 
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" 
-                  quote="true" queryRef="organismVQ.withChromosomesSNPs">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
+      <!-- need to have quote=true so that dependent param query works.  the wsf plugin remove the for its use -->
 
-         <paramRef ref="sharedParams.chromosomeOptional" queryRef="SharedVQ.ChromosomeOrderNumSNPs" multiPick="true"/>
-          <paramRef ref="sharedParams.start_point"/>
-          <paramRef ref="sharedParams.end_point"/>
-          <paramRef ref="sharedParams.snp_strain_a"/>
-          <paramRef ref="sharedParams.snp_strain_m"/>
-          <column name="source_id"/>
-	  <column name="project_id"/>
-          <column name="gene"/>
-          <column name="snp_location"/>
-          <column name="ref_strain"/>
-          <column name="comp_strains"/>
-          <column name="ref_allele"/>
-          <column name="comp_alleles"/>
-          <column name="phenotype"/>
-          <column name="prot_pos"/>
-          <column name="ref_product"/>
-          <column name="comp_products"/>
-
-        <sql includeProjects="PlasmoDB,ToxoDB,CryptoDB">
-            <![CDATA[
-              select * from (
-            SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_all) AS apidb.varchartab), ', ') as comp_alleles,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_product) AS apidb.varchartab), ', ') as comp_products,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.phenotype) AS apidb.varchartab), ', ') as phenotype,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_strain) AS apidb.varchartab), ', ') as ref_strain,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_strain) AS apidb.varchartab), ', ') as comp_strains
-            FROM
-              (-- records in apid.polymorphism are constrained that
-               -- strain_a < strain_b, so this subquery is the union of two
-               -- possibilities:
-               -- first, when ref strain name < comp strain name
-               -- (i.e. ref is strain a, comp is strain b)
-               SELECT 
-                       p.snp_source_id as source_id,
-                      seq.source_id || ':' || trim(to_char(p.start_min,'999,999,999')) as snp_location,
-                p.strain_a AS ref_strain, p.strain_b AS comp_strain,
-                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_a)
-                     ELSE p.allele_a END as ref_allele,
-                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_b)
-                     ELSE p.allele_b END as comp_all,
-                CASE WHEN p.product_a = p.product_b then 'syn' WHEN p.product_a != p.product_b THEN 'non-syn'
-                     ELSE 'non-coding' END as phenotype,
-                p.product_a AS ref_product, p.product_b AS comp_product,
-                p.position_in_protein as prot_pos,
-                p.gene_source_id as gene
-               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq, 
-                    ( select distinct organism,extdb_name as name,external_database_release_id 
-                      from apidbtuning.snpstrains) ss
-               WHERE ss.organism = $$organism$$
-                 AND ss.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-                 AND p.external_database_release_id = ss.external_database_release_id
-                 AND seq.na_sequence_id = p.na_sequence_id
-                 AND seq.chromosome in ( $$chromosomeOptional$$ )
-                 AND p.strain_a = $$snp_strain_a$$ -- ref
-                 AND p.strain_b in ($$snp_strain_m$$) -- comp
-                 AND $$snp_strain_a$$ < p.strain_b
-                 AND p.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
-                 AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
-              UNION
-               -- second, when comp strain name < ref strain name
-               -- (ref is strain b, comp is strain a)
-               SELECT p.snp_source_id as source_id,
-                      seq.source_id || ':' || trim(to_char(p.start_min,'999,999,999')) as snp_location,
-                p.strain_b AS ref_strain, p.strain_a AS comp_strain,
-                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_b)
-                     ELSE p.allele_b END as ref_allele,
-                CASE WHEN p.gene_is_reversed = 1 THEN apidb.reverse_complement(p.allele_a)
-                     ELSE p.allele_a END as comp_all,
-                CASE WHEN p.product_a = p.product_b then 'syn' WHEN p.product_a != p.product_b THEN 'non-syn'
-                     ELSE 'non-coding' END as phenotype,
-                p.product_b AS ref_product, p.product_a AS comp_product,
-                p.position_in_protein as prot_pos, p.gene_source_id as gene
-               FROM apidbtuning.Polymorphism p, apidbtuning.sequenceAttributes seq,
-                    ( select distinct organism,extdb_name as name,external_database_release_id 
-                      from apidbtuning.snpstrains) ss
-               WHERE ss.organism = $$organism$$
-                 AND ss.name in ('Genomic Sequence SNPs','Pf_plasmoDbCombinedSnps_RSRC','Widmer SNPs')
-                 AND p.external_database_release_id = ss.external_database_release_id
-                 AND seq.na_sequence_id = p.na_sequence_id
-                 AND seq.chromosome in ( $$chromosomeOptional$$ )
-                 AND p.strain_b = $$snp_strain_a$$ -- ref
-                 AND p.strain_a in ($$snp_strain_m$$) -- comp
-                 AND p.strain_a < $$snp_strain_a$$
-                 AND p.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
-                 AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR p.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))
-                 ) snpq
-            GROUP BY snpq.source_id,snpq.gene,snpq.snp_location,snpq.prot_pos,snpq.ref_allele,snpq.ref_product)
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="SnpsByLocation" includeProjects="EuPathDB"
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" >
-
-        <testParamValues>
-            <paramValue name="snp_strain_m">Cp-MD</paramValue>
-            <paramValue name="chromosomeOptional">chromosome 2</paramValue>
-            <paramValue name="organism">Cryptosporidium parvum</paramValue>
-        </testParamValues>
-
-          <!--<paramRef ref="organismParams.organism" queryRef="organismVQ.tg-pf"/>-->
-          <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesSNPs"  multiPick="false" default="Plasmodium falciparum"  noTranslation="true">
-              <help>Select Organism you wish to query against.</help>
-          </paramRef>
-          <paramRef ref="sharedParams.chromosomeOptional" quote="false" noTranslation="true" />
-          <paramRef ref="sharedParams.start_point"/>
-          <paramRef ref="sharedParams.end_point"/>
-          <paramRef ref="sharedParams.snp_strain_a" quote="false"/>
-          <paramRef ref="sharedParams.snp_strain_m" quote="false"/>
-          <wsColumn name="source_id" width="50" wsName="source_id"/>
-          <wsColumn name="project_id" width="32" wsName="project_id"/>
-          <wsColumn name="gene" width="32"/>
-          <wsColumn name="snp_location" width="32"/>
-          <wsColumn name="ref_strain" width="32"/>
-          <wsColumn name="comp_strains" width="32"/>
-          <wsColumn name="ref_allele" width="32"/>
-          <wsColumn name="comp_alleles" width="32"/>
-          <wsColumn name="phenotype" width="32"/>
-          <wsColumn name="prot_pos" width="32"/>
-          <wsColumn name="ref_product" width="32"/>
-          <wsColumn name="comp_products" width="32"/>
-      </processQuery>
-
-
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="HtsSnpsByLocation" includeProjects="ToxoDB,TriTrypDB,AmoebaDB" isCacheable="true">
- 
-        <testParamValues includeProjects="ToxoDB">
-            <paramValue name="snp_strain_m">Tg-VEG (type III)</paramValue>
-            <paramValue name="chromosomeOptional">III</paramValue>
-        </testParamValues>
-
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withChromosomesHtsSNPs" excludeProjects="AmoebaDB">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="organismParams.organism" displayType="listBox" multiPick="false" quote="true" queryRef="organismVQ.withHtsSNPs" includeProjects="AmoebaDB">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-         <paramRef ref="sharedParams.chromosomeOptional" queryRef="SharedVQ.ChromosomeOrderNumHtsSNPs" multiPick="true" excludeProjects="AmoebaDB"/>
-         <paramRef ref="sharedParams.chromosomeOptional"  includeProjects="AmoebaDB"/>
-          <paramRef ref="sharedParams.sequenceId" default="DS571145" includeProjects="AmoebaDB"/>
-          <paramRef ref="sharedParams.sequenceId" excludeProjects="AmoebaDB"/>
-          <paramRef ref="sharedParams.start_point"/>
-          <paramRef ref="sharedParams.end_point"/>
-          <paramRef ref="sharedParams.htsSnp_strain_a"/>
-          <paramRef ref="sharedParams.htsSnp_strain_m"/>
-          <paramRef ref="sharedParams.hts_snps_coverage"/>
-          <paramRef ref="sharedParams.hts_snps_allele_freq" default="40" includeProjects="TriTrypDB,AmoebaDB"/>
-          <paramRef ref="sharedParams.hts_snps_allele_freq" default="80" includeProjects="ToxoDB"/>
-          <paramRef ref="sharedParams.hts_snps_pvalue"/>
-          <column name="source_id"/>
-	  <column name="project_id"/>
-          <column name="gene"/>
-          <column name="snp_location"/>
-          <column name="ref_strain"/>
-          <column name="comp_strains"/>
-          <column name="ref_allele"/>
-          <column name="comp_alleles"/>
-          <column name="phenotype"/>
-          <column name="prot_pos"/>
-          <column name="ref_product"/>
-          <column name="comp_products"/>
-
-        <sqlParamValue name="seqIdOrChrom" excludeProjects="AmoebaDB">
-                 AND ( seq.chromosome in ( $$chromosomeOptional$$ )
-                     OR lower(seq.source_id) = lower($$sequenceId$$) )
-        </sqlParamValue>
-        <sqlParamValue name="seqIdOrChrom" includeProjects="AmoebaDB">
-                 AND lower(seq.source_id) = lower($$sequenceId$$) 
-        </sqlParamValue>
-
-        <sql>
-            <![CDATA[
-              select * from (
-            SELECT snpq.source_id, '@PROJECT_ID@' as project_id,snpq.gene,snpq.snp_location,snpq.prot_pos,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_allele) AS apidb.varchartab), ', ') as ref_allele,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_allele) AS apidb.varchartab), ', ') as comp_alleles,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_product) AS apidb.varchartab), ', ') as ref_product,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_product) AS apidb.varchartab), ', ') as comp_products,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.phenotype) AS apidb.varchartab), ', ') as phenotype,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.ref_strain) AS apidb.varchartab), ', ') as ref_strain,
-              apidb.tab_to_string(CAST(COLLECT(distinct snpq.comp_strain) AS apidb.varchartab), ', ') as comp_strains
-            FROM
-              (
-               SELECT 
-                       sf.source_id as source_id,
-                      seq.source_id || ':' || trim(to_char(fl.start_min,'999,999,999')) as snp_location,
-                sva.strain AS ref_strain, svb.strain AS comp_strain,
-                sva.allele as ref_allele,
-                svb.allele as comp_allele,
-                CASE WHEN sva.product = svb.product then 'syn' WHEN sva.product != svb.product THEN 'non-syn'
-                     ELSE 'non-coding' END as phenotype,
-                sva.product AS ref_product, svb.product AS comp_product,
-                sf.position_in_protein as prot_pos,
-                sf.gene_source_id as gene
-               FROM dots.SeqVariation sva, dots.SeqVariation svb, apidbtuning.snpattributes sf,
-                    apidbtuning.featurelocation fl,apidbtuning.sequenceAttributes seq
-               WHERE sf.organism = $$organism$$
-                 AND sf.dataset = 'InsertSnps.pm NGS SNPs INTERNAL'
-                 AND fl.na_feature_id = sf.na_feature_id
-                 AND fl.na_sequence_id = seq.na_sequence_id
-                 &&seqIdOrChrom&&
-                 AND fl.start_min >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
-                 AND (REGEXP_REPLACE('$$end_point$$', ',| ','') = 0 OR fl.start_min < REGEXP_REPLACE('$$end_point$$', ',| ',''))                
-                 AND sf.na_feature_id = sva.parent_id
-                 AND sf.na_feature_id = svb.parent_id
-                 AND sva.strain = $$htsSnp_strain_a$$ -- ref
-                 AND svb.strain in ($$htsSnp_strain_m$$) -- comp
-                 AND sva.allele != svb.allele
-                 AND NVL(sva.pvalue,0) <= $$hts_snps_pvalue$$
-                 AND NVL(sva.allele_percent,100) >= $$hts_snps_allele_freq$$
-                 AND NVL(sva.coverage,1000) >= $$hts_snps_coverage$$
-                 AND NVL(svb.pvalue,0) <= $$hts_snps_pvalue$$
-                 AND NVL(svb.allele_percent,100) >= $$hts_snps_allele_freq$$
-                 AND NVL(svb.coverage,1000) >= $$hts_snps_coverage$$
-                 ) snpq
-                 GROUP BY snpq.source_id,snpq.gene, snpq.snp_location,snpq.prot_pos
-                 )
-           ]]>
-       </sql>
-
-    </sqlQuery>
-
-
-    <processQuery name="HtsSnpsByLocation" includeProjects="EuPathDB"
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" >
-
-        <testParamValues>
-            <paramValue name="snp_strain_m">Cp-MD</paramValue>
-            <paramValue name="chromosomeOptional">chromosome 2</paramValue>
-            <paramValue name="organism">Cryptosporidium parvum</paramValue>
-        </testParamValues>
-
-          <paramRef ref="organismParams.organism" queryRef="organismVQ.withChromosomesHtsSNPs"  multiPick="false" default="Plasmodium falciparum"  noTranslation="true">
-              <help>Select Organism you wish to query against.</help>
-          </paramRef>
-          <paramRef ref="sharedParams.chromosomeOptional" quote="false" noTranslation="true" default="No chromosomes defined for organisms in AmoebaDB"/>
-          <paramRef ref="sharedParams.sequenceId"  default="DS571145"/>
-          <paramRef ref="sharedParams.start_point"/>
-          <paramRef ref="sharedParams.end_point"/>
-          <paramRef ref="sharedParams.htsSnp_strain_a"  quote="false"/>
-          <paramRef ref="sharedParams.htsSnp_strain_m"  quote="false"/>
-          <paramRef ref="sharedParams.hts_snps_coverage"/>
-          <paramRef ref="sharedParams.hts_snps_allele_freq"/>
-          <paramRef ref="sharedParams.hts_snps_pvalue"/>
-          <wsColumn name="source_id" width="50" wsName="source_id"/>
-          <wsColumn name="project_id" width="32" wsName="project_id"/>
-          <wsColumn name="gene" width="32"/>
-          <wsColumn name="snp_location" width="32"/>
-          <wsColumn name="ref_strain" width="32"/>
-          <wsColumn name="comp_strains" width="32"/>
-          <wsColumn name="ref_allele" width="32"/>
-          <wsColumn name="comp_alleles" width="32"/>
-          <wsColumn name="phenotype" width="32"/>
-          <wsColumn name="prot_pos" width="32"/>
-          <wsColumn name="ref_product" width="32"/>
-          <wsColumn name="comp_products" width="32"/>
-      </processQuery>
-
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Allele Frequency -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="SnpsByAlleleFrequency" includeProjects="PlasmoDB" 
-          isCacheable="true">
-        <paramRef ref="snpParams.minor_allele_min"/>
-        <paramRef ref="snpParams.minor_allele_max"/>
-        <paramRef ref="snpParams.min_strain_count"/>
-        <column name="source_id"/> 
-        <column name="project_id"/>
-        <sql>
-            <![CDATA[
-              select source_id,project_id
-              from ApidbTuning.SnpAttributes 
-              where dataset = 'Pf_plasmoDbCombinedSnps_RSRC'
-              and minor_allele_frequency >= $$minor_allele_min$$
-              and minor_allele_frequency <= $$minor_allele_max$$
-              and strain_count >= $$min_strain_count$$
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="SnpsByAlleleFrequency" includeProjects="EuPathDB"
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="organismParams.organism" default="Plasmodium falciparum" visible="false" />
-        <paramRef ref="snpParams.min_strain_count" />
-        <paramRef ref="snpParams.minor_allele_min" />
-        <paramRef ref="snpParams.minor_allele_max" />
-        <wsColumn name="source_id" width="32" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="minor_alleles"/>
-        <wsColumn name="minor_products"/>
-        <wsColumn name="minor_strains"/>
-        <wsColumn name="major_strains"/>
+      <paramRef ref="organismParams.organismSinglePick" prompt="Organism" displayType="select" quote="false" queryRef="organismVQ.withNgsSNPs">
+        <help>The Organism defines the species identity of the Isolates and the genome against which each isolate's SNPs were called.  
+        After choosing an Organism, the set of isolates available for forming groups is limited to isolates aligned to your chosen Organism's genome.</help>
+      </paramRef>
+      <paramRef ref="sharedParams.ds_gene_ids" default="EHI_012330" includeProjects="AmoebaDB"/>
+      <paramRef ref="sharedParams.ds_gene_ids" default="TGME49_039250, TGGT1_075470" includeProjects="ToxoDB"/>
+      <paramRef ref="sharedParams.ds_gene_ids" default="TcCLB.403869.10" includeProjects="TriTrypDB"/>
+      <paramRef ref="sharedParams.ds_gene_ids" default="PF3D7_1133400" includeProjects="PlasmoDB"/>
+      <paramRef ref="sharedParams.ds_gene_ids" default="cgd3_510" includeProjects="CryptoDB"/>
+      <paramRef ref="sharedParams.ds_gene_ids" default="Afu2g00910" includeProjects="FungiDB"/>
+      <paramRef ref="snpParams.ngsSnp_strain_meta" quote="false"/>
+      <paramRef ref="snpParams.WebServicesPath"/>
+      <paramRef ref="snpParams.ReadFrequencyPercent" />
+      <paramRef ref="snpParams.MinPercentMinorAlleles"/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls"/>
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/>
+      <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+      <wsColumn name="Phenotype" width="15"/>
     </processQuery>
 
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Isolate Pattern -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <processQuery name="NgsSnpsByTwoIsolateGroups" includeProjects="PlasmoDB,ToxoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,CryptoDB,AmoebaDB,FungiDB" 
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindMajorAllelesPlugin">
 
-    <sqlQuery name="SnpsByIsolatePattern" doNotTest="true" includeProjects="PlasmoDB" 
-          isCacheable="true">
-        <paramRef ref="snpParams.isolate_set_a"/>
-        <paramRef ref="snpParams.set_a_percent"/>
-        <paramRef ref="snpParams.isolate_set_b"/>
-        <paramRef ref="snpParams.set_b_percent"/>
-        <column name="source_id"/> 
-        <column name="project_id"/>
-        <column name="set_a_allele"/>
-        <column name="set_b_allele"/>
-        <column name="set_a_count"/>
-        <column name="set_b_count"/>
-        <sql>
-            <![CDATA[
-              select seta.snp_source_id as source_id,'@PROJECT_ID@' as project_id,
-              seta.allele as set_a_allele,setb.allele as set_b_allele,
-              seta.total as set_a_count, setb.total as set_b_count
-              from (select isnp.snp_source_id,isnp.allele,count(*) as total
-              from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_a$$) ds
-              where isnp.is_source_id = ds.source_id
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'Pf_plasmoDbCombinedSnps_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= (select count(*) from ($$isolate_set_a$$)) * $$set_a_percent$$ / 100) seta,
-              (select isnp.snp_source_id,isnp.allele, count(*) as total
-              from ApidbTuning.IsolateSNPs isnp, ($$isolate_set_b$$) ds
-              where isnp.is_source_id = ds.source_id
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'Pf_plasmoDbCombinedSnps_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= (select count(*) from ($$isolate_set_b$$)) * $$set_b_percent$$ / 100) setb
-              where seta.snp_source_id = setb.snp_source_id
-              and seta.allele != setb.allele
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="SnpsByIsolatePattern" includeProjects="EuPathDB" doNotTest="true"
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="sharedParams.signature" noTranslation="true"/>
-        <paramRef ref="snpParams.isolate_set_a"/>
-        <paramRef ref="snpParams.set_a_percent"/>
-        <paramRef ref="snpParams.isolate_set_b"/>
-        <paramRef ref="snpParams.set_b_percent"/>
-   
-        <wsColumn name="source_id" width="32" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="set_a_allele"/>
-        <wsColumn name="set_b_allele"/>
-        <wsColumn name="set_a_count"/>
-        <wsColumn name="set_b_count"/>
-    </processQuery>
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Isolate Pattern by history id -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="SnpsByIsolatePatternHistory" includeProjects="PlasmoDB" 
-          isCacheable="true">
-        <paramRef ref="sharedParams.isolateHistoryIdA"/>
-        <paramRef ref="snpParams.set_a_count"/>
-        <paramRef ref="sharedParams.isolateHistoryIdB"/>
-        <paramRef ref="snpParams.set_b_count"/>
-        <column name="source_id"/> 
-        <column name="project_id"/>
-        <column name="set_a_allele"/>
-        <column name="set_b_allele"/>
-        <column name="wdk_weight"/>
-        <sql>
-            <![CDATA[
-              select seta.snp_source_id as source_id,'@PROJECT_ID@' as project_id,
-              seta.allele as set_a_allele,setb.allele as set_b_allele,
-              0 AS wdk_weight
-              from (select isnp.snp_source_id,isnp.allele
-              from ApidbTuning.IsolateSNPs isnp
-              where isnp.is_source_id in (select distinct source_id from $$isolateHitoryIdA$$)
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'Pf_plasmoDbCombinedSnps_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= $$set_a_count$$) seta,
-              (select isnp.snp_source_id,isnp.allele
-              from ApidbTuning.IsolateSNPs isnp
-              where isnp.is_source_id in (select distinct source_id from $$isolateHitoryIdB$$)
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'Pf_plasmoDbCombinedSnps_RSRC'
-              group by isnp.snp_source_id,isnp.allele
-              having count(*) >= $$set_b_count$$) setb
-              where seta.snp_source_id = setb.snp_source_id
-              and seta.allele != setb.allele
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="SnpsByIsolatePatternHistory" includeProjects="EuPathDB"
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="sharedParams.isolateHistoryIdA"/>
-        <paramRef ref="snpParams.set_a_count"/>
-        <paramRef ref="sharedParams.isolateHistoryIdB"/>
-        <paramRef ref="snpParams.set_b_count"/>
-        <wsColumn name="source_id" width="32" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-        <wsColumn name="set_a_allele"/>
-        <wsColumn name="set_b_allele"/>
-        <wsColumn name="wdk_weight" columnType="number" width="12"/>
+      <paramRef ref="organismParams.organismSinglePick" prompt="Organism" displayType="select" quote="false" queryRef="organismVQ.withNgsSNPs">
+        <help>The Organism defines the species identity of the Isolates and the genome against which each isolate's SNPs were called.  
+        After choosing an Organism, the set of isolates available for forming groups is limited to isolates aligned to your chosen Organism's genome.</help>
+      </paramRef>
+      <paramRef ref="sharedParams.ngsSnp_strain_meta_a" prompt="Set A Isolates" quote="false" />
+      <paramRef ref="snpParams.WebServicesPath"/>
+      <paramRef ref="snpParams.ReadFrequencyPercent"  prompt="Set A read frequency threshold &gt;= "/>
+      <paramRef ref="snpParams.MinPercentMajorAlleles" prompt="Set A major allele frequency &gt;= "/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" prompt="Set A percent isolates with base call &gt;= "/>
+      <paramRef ref="sharedParams.ngsSnp_strain_meta_m" prompt="Set B Isolates" quote="false" />
+      <paramRef ref="snpParams.ReadFrequencyPercentTwo"  prompt="Set B read frequency threshold &gt;= "/>
+      <paramRef ref="snpParams.MinPercentMajorAllelesTwo" prompt="Set B major allele frequency &gt;= "/>
+      <paramRef ref="snpParams.MinPercentIsolateCallsTwo" prompt="Set B percent isolates with base call &gt;= "/>
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="MajorAlleleA" width="3"/>
+      <wsColumn name="MajorAllelePctA" width="8" columnType="float"/>
+      <wsColumn name="IsTriallelicA" width="3"/>
+      <wsColumn name="MajorProductA" width="3"/>
+      <wsColumn name="MajorProductIsVariableA" width="3"/>
+      <wsColumn name="MajorAlleleB" width="3"/>
+      <wsColumn name="MajorAllelePctB" width="8" columnType="float"/>
+      <wsColumn name="IsTriallelicB" width="3"/>
+      <wsColumn name="MajorProductB" width="3"/>
+      <wsColumn name="MajorProductIsVariableB" width="3"/>
     </processQuery>
 
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Isolate assay type -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="SnpsByIsolateType" includeProjects="PlasmoDB" 
-          isCacheable="true">
-        <paramRef ref="isolateParams.snp_assay_type"/>
-        <column name="source_id"/> 
-        <column name="project_id"/>
-        <sql>
-            <![CDATA[
-              select distinct snp_source_id as source_id, '@PROJECT_ID@' as project_id
-              from ApidbTuning.IsolateSNPs isnp, ApidbTuning.IsolateAttributes atr
-              where atr.source_id = isnp.is_source_id
-              and atr.data_type in ($$snp_assay_type$$)
-              and isnp.snp_db_name = 'Pf_plasmoDbCombinedSnps_RSRC'
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="SnpsByIsolateType" includeProjects="EuPathDB"
-             isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="isolateParams.snp_assay_type" quote="false" />
-        <wsColumn name="source_id" width="32" wsName="source_id"/>
-        <wsColumn name="project_id" width="32" wsName="project_id"/>
-    </processQuery>
-
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Isolate source id -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="SnpsByIsolateId" includeProjects="PlasmoDB" 
-          isCacheable="true">
-         <testParamValues includeProjects="PlasmoDB">
-            <paramValue name="isolate_id">CP3.479010</paramValue>
-         </testParamValues>
-        <paramRef ref="snpParams.isolate_id"/>
-        <column name="source_id"/> 
-        <column name="project_id"/>
-        <column name="isolate_allele"/>
-        <column name="is_source_id"/>
-        <sql>
-            <![CDATA[
-              select isnp.snp_source_id as source_id, $$isolate_id$$ as is_source_id, 
-                     isnp.allele as isolate_allele, '@PROJECT_ID@' as project_id
-              from ApidbTuning.IsolateSNPs isnp, ApidbTuning.SnpAttributes sa
-              where isnp.is_source_id = $$isolate_id$$
-              and isnp.allele is not null
-              and isnp.snp_db_name = 'Pf_plasmoDbCombinedSnps_RSRC'
-              and isnp.snp_source_id = sa.source_id
-           ]]>
-       </sql>
-    </sqlQuery>
 
 
-    <sqlQuery name="ByWeightFilter" isCacheable="true" doNotTest="true">
+
+    <!-- ===================================================================== -->
+    <!-- ===================================================================== -->
+    <!-- ====== QUERIES BELOW HERE MIGHT NEED RETIRING.  PLEASE REVIEW ======= -->
+    <!-- ===================================================================== -->
+    <!-- ===================================================================== -->
+
+
+    <sqlQuery name="ByWeightFilter" doNotTest="true">
         <paramRef ref="snpParams.snp_result"/>
         <paramRef ref="sharedParams.min_weight" default="0"/>
         <paramRef ref="sharedParams.max_weight" default="100"/>
@@ -780,7 +198,7 @@ GROUP BY snpq.source_id,snpq.snp_location,snpq.prot_pos
   <!-- Dont Care - fake query for internal use -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="DontCare" doNotTest="true" isCacheable="true">
+    <sqlQuery name="DontCare" doNotTest="true">
         <column name="project_id"/>
         <column name="source_id"/>
         <sql>

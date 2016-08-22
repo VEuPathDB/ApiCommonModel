@@ -1,10 +1,12 @@
 <wdkModel>
+
   
   <paramSet name="genomicSimilarityParams">
 
        <flatVocabParam name="motif_organism"
                       queryRef="SimilarityVQ.GenomicMotifFiles"
-                      displayType="checkBox"  
+                      displayType="treeBox"
+                      suppressNode="true"  
                       prompt="Organism"
                       multiPick="true">
       <noTranslation value="true" includeProjects="EuPathDB" />
@@ -13,6 +15,7 @@
          <help>
              Choose one or more organisms to search with the given motif
          </help>
+          <suggest selectMode="all" />
        </flatVocabParam>
 
   </paramSet>
@@ -21,7 +24,8 @@
 
        <flatVocabParam name="motif_organism"
                       queryRef="SimilarityVQ.OrfMotifFiles"
-                      displayType="checkBox"  
+                      displayType="treeBox"  
+                      suppressNode="true"
                       prompt="Organism"
                       multiPick="true">
       <noTranslation value="true" includeProjects="EuPathDB" />
@@ -30,6 +34,7 @@
          <help>
              Choose one or more organisms to search with the given motif
          </help>
+          <suggest selectMode="all" />
        </flatVocabParam>
 
 
@@ -41,7 +46,8 @@
 
        <flatVocabParam name="motif_organism"
                       queryRef="SimilarityVQ.AnnotatedProteinMotifFiles"
-                      displayType="checkBox" 
+                      displayType="treeBox"
+                      suppressNode="true" 
                       prompt="Organism"
                       multiPick="true">
       <noTranslation value="true" includeProjects="EuPathDB" />
@@ -50,132 +56,149 @@
          <help>
              Choose one or more organisms to search with the given motif
          </help>
+          <suggest selectMode="all" />
        </flatVocabParam>
      
   </paramSet>
 
-  <querySet name="SimilarityVQ" queryType="vocab">
+  <querySet name="SimilarityVQ" queryType="vocab" isCacheable="true">
 
 
         <sqlQuery name="OrfMotifFiles">
             <column name="internal" />
+            <column name="parentTerm"/>
             <column name="term" />
             <sql>
                 <![CDATA[ 
-                select abbrev.organism as term, abbrev.abbreviation || 'ORFs'  || '_' || orgs.project_id || '.fasta' as internal
-                From ApidbTuning.OrganismAbbreviationws abbrev, 
-                     (select distinct organism, project_id
-                      from ApidbTuning.SequenceAttributes
+                WITH orgs as (select distinct organism, project_id
+                      from ApidbTuning.GenomicSeqAttributes
   UNION
   -- GiardiaDB uses species for everything  
   select distinct species, project_id
-  from ApidbTuning.GeneAttributes
+  from ApidbTuning.TranscriptAttributes
   where project_id = 'GiardiaDB'
-  UNION
-    -- ToxoDB Apicoplast for GENES and GENOMES
-  select 'Toxoplasma gondii apicoplast' as organism, 'ToxoDB' as project_id
-  from dual
   UNION
   -- Mitochondrial GENES and GENOME
   select distinct organism || ' mitochondrial', project_id
-  from ApidbTuning.SequenceAttributes
+  from ApidbTuning.GenomicSeqAttributes
   where so_id = 'SO:0000819'
   UNION
   -- Plastid GENES and GENOME
   select distinct organism || ' plastid' as organism, project_id
-  from ApidbTuning.SequenceAttributes
+  from ApidbTuning.GenomicSeqAttributes
   where so_id = 'SO:0001259'
-  UNION
-   -- CryptoDB has ESTORFs
-  select 'Cryptosporidium parvum EST' as organism,  'CryptoDB' as project_id from dual
-  UNION 
-  select 'Cryptosporidium muris EST' as organism,  'CryptoDB' as project_id from dual
-                      ) orgs
-               where orgs.organism = abbrev.organism
-               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+  )   
+     select distinct nvl(ot.term, files.term) as term,
+       case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+       case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term)) 
+            then '@WEBSERVICEMIRROR@' || '/' || ot.project_id || '/build-%%buildNumber%%/' || files.abbreviation  || '/motif/ORFs_AA.fasta' 
+       else '-1'
+       end as internal
+from apidbtuning.organismtree ot,
+    (select abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            abbrev.abbreviation 
+     from orgs, apidbtuning.organismabbreviationws abbrev
+     where orgs.organism = abbrev.organism
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+     ) files
+where files.term = ot.organism (+)
                 ]]>
             </sql>
         </sqlQuery>
 
         <sqlQuery name="GenomicMotifFiles">
             <column name="internal" />
+            <column name="parentTerm" />
             <column name="term" />
             <sql>
                 <![CDATA[ 
-                select abbrev.organism as term, abbrev.abbreviation || 'Genomic'  || '_' || orgs.project_id || '.fasta' as internal
-                From ApidbTuning.OrganismAbbreviationws abbrev, 
-                     (select distinct organism, project_id
-                      from ApidbTuning.SequenceAttributes
-  UNION
-  -- GiardiaDB Scaffolds
-  select 'Giardia Assemblage A isolate WB (scaffolds)' as organism, 'GiardiaDB' as project_id
-  from dual
+                with orgs as  (select distinct organism, project_id
+                      from ApidbTuning.GenomicSeqAttributes
   UNION
   select distinct species, project_id
-  from ApidbTuning.GeneAttributes
+  from ApidbTuning.TranscriptAttributes
   where project_id = 'GiardiaDB'
-  UNION
-    -- ToxoDB Apicoplast for GENES and GENOMES
-  select 'Toxoplasma gondii apicoplast' as organism, 'ToxoDB' as project_id
-  from dual
   UNION
   -- Mitochondrial GENES and GENOME
   select distinct organism || ' mitochondrial', project_id
-  from ApidbTuning.SequenceAttributes
+  from ApidbTuning.GenomicSeqAttributes
   where so_id = 'SO:0000819'
   UNION
   -- Plastid GENES and GENOME
   select distinct organism || ' plastid' as organism, project_id
-  from ApidbTuning.SequenceAttributes
+  from ApidbTuning.GenomicSeqAttributes
   where so_id = 'SO:0001259'
-                      ) orgs
-               where orgs.organism = abbrev.organism
-               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+                      )
+     select distinct nvl(ot.term, files.term) as term,
+       case when ot.organism is null 
+            then files.parentterm else ot.parentterm end as parentterm,
+       case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term)) 
+            then '@WEBSERVICEMIRROR@' || '/' || ot.project_id  || '/build-%%buildNumber%%/' || files.abbreviation  || '/motif/GenomeDoubleStrand.fasta' 
+       else '-1'
+       end as internal
+from apidbtuning.organismtree ot,
+    (select abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            abbrev.abbreviation 
+     from orgs, apidbtuning.organismabbreviationws abbrev
+     where orgs.organism = abbrev.organism
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+     ) files
+where files.term = ot.organism (+)
+order by parentterm,term
                 ]]>
             </sql>
         </sqlQuery>
 
         <sqlQuery name="AnnotatedProteinMotifFiles">
             <column name="internal" />
+            <column name="parentTerm" />
             <column name="term" />
             <sql>
                 <![CDATA[ 
-                select abbrev.organism as term, abbrev.abbreviation || 'AnnotatedProteins'  || '_' || orgs.project_id || '.fasta' as internal
-                From ApidbTuning.OrganismAbbreviationws abbrev, 
-                     (select distinct organism, project_id
-                      from ApidbTuning.GeneAttributes 
-                      where organism not in ('Toxoplasma gondii RH')
+with orgs as (
+  select distinct organism, project_id
+  from ApidbTuning.TranscriptAttributes 
+  where ( gene_type = 'protein coding' and organism not in ('Toxoplasma gondii RH') )
   UNION
   -- TrichDB Repeat Genes
   select distinct organism || ' (Repeated Genes)', project_id
-  from ApidbTuning.GeneAttributes
+  from ApidbTuning.TranscriptAttributes
   where project_id = 'TrichDB'
   UNION
   -- GiardiaDB uses species for everything  
   select distinct species, project_id
-  from ApidbTuning.GeneAttributes
+  from ApidbTuning.TranscriptAttributes
   where project_id = 'GiardiaDB'
-  UNION
-  -- GiardiaDB Deprecated Genes
-  select 'Giardia Assemblage A isolate WB (deprecated)' as organism, 'GiardiaDB' as project_id
-  from dual
-  UNION
-    -- ToxoDB Apicoplast for GENES and GENOMES
-  select 'Toxoplasma gondii apicoplast' as organism, 'ToxoDB' as project_id
-  from dual
   UNION  
   -- Mitochondrial GENES
   select distinct organism || ' mitochondrial', project_id
-  from ApidbTuning.SequenceAttributes
+  from ApidbTuning.GenomicSeqAttributes
   where so_id = 'SO:0000819'
   UNION
   -- Plastid GENES
   select distinct organism || ' plastid' as organism, project_id
-  from ApidbTuning.SequenceAttributes
+  from ApidbTuning.GenomicSeqAttributes
   where so_id = 'SO:0001259'
-                      ) orgs
-               where orgs.organism = abbrev.organism
-               and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+                      )
+     select distinct nvl(ot.term, files.term) as term,
+       case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+       case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term)) 
+            then '@WEBSERVICEMIRROR@' || '/' || files.project_id  || '/build-%%buildNumber%%/' || files.abbreviation  || '/motif/AnnotatedProteins.fasta' 
+       else '-1'
+       end as internal
+from apidbtuning.organismtree ot,
+    (select abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            abbrev.abbreviation ,
+            orgs.project_id
+     from orgs, apidbtuning.organismabbreviationws abbrev
+     where orgs.organism = abbrev.organism
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+     ) files
+where files.term = ot.organism (+)
+order by parentTerm,Term
                 ]]>
             </sql>
         </sqlQuery>

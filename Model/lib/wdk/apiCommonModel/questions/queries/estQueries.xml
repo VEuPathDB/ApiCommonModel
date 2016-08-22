@@ -4,14 +4,14 @@
 
   -->
 
-  <querySet name="EstIds" queryType="id">
+  <querySet name="EstIds" queryType="id" isCacheable="true" excludeProjects="HostDB">
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Source id  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="EstBySourceId" doNotTest="true" excludeProjects="EuPathDB"
-         isCacheable="true">
+<!-- Feb 2015: we remove last condition, does not seem needed and slows down by 10mn in fungi -->
+    <sqlQuery name="EstBySourceId" doNotTest="true" excludeProjects="EuPathDB">
         <paramRef ref="estParams.est_id"/>
         <column name="source_id"/>
         <column name="project_id"/>
@@ -21,16 +21,16 @@
             FROM ApidbTuning.EstAttributes ea, ($$est_id$$) ds
             WHERE ea.project_id = '@PROJECT_ID@'
               AND ea.source_id LIKE REGEXP_REPLACE(REPLACE(ds.source_id, '*', '%'), '[[:space:]]', '')
-              AND LOWER(ea.project_id) = LOWER('@PROJECT_ID@')
+              --AND LOWER(ea.project_id) = LOWER('@PROJECT_ID@')
           ]]>
        </sql>
     </sqlQuery>
 
     <processQuery name="EstBySourceId" includeProjects="EuPathDB"
-          isCacheable='true' doNotTest="true"
+          doNotTest="true"
           processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
         <paramRef ref="estParams.est_id" noTranslation="true"/>
-        <paramRef ref="sharedParams.signature" noTranslation="true"/>
+        <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
         <wsColumn name="source_id" width="32" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
     </processQuery>   
@@ -39,8 +39,7 @@
     <!-- Gene ID  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="ByGeneIDs" doNotTest="true" includeProjects="CryptoDB,ToxoDB,GiardiaDB,PlasmoDB,TriTrypDB,TrichDB,AmoebaDB,MicrosporidiaDB,FungiDB,InitDB,PiroplasmaDB"
-            isCacheable='true'>
+    <sqlQuery name="ByGeneIDs" doNotTest="true" includeProjects="CryptoDB,ToxoDB,GiardiaDB,PlasmoDB,TriTrypDB,TrichDB,AmoebaDB,MicrosporidiaDB,FungiDB,SchistoDB,InitDB,PiroplasmaDB">
 
       <paramRef ref="estParams.single_gene_id"/>
       <paramRef ref="sharedParams.bp_overlap_gte"/>
@@ -60,23 +59,25 @@
             <![CDATA[
               select * from (
               SELECT accession as source_id, '@PROJECT_ID@' as project_id,
-               CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(
+               CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(set(
                     CAST(
                       COLLECT(target_sequence_source_id || ':'
                       || trim(to_char(target_start,'999,999,999'))
                       || '-' || trim(to_char(target_end,'999,999,999'))
                       || '(' || decode(is_reversed,0,'+',1,'-',null) || ')')
-                    AS apidb.varchartab), ', ') END AS est_locations,
+                    AS apidb.varchartab)), ', ') END AS est_locations,
                   CASE WHEN count(distinct gene) > 20 THEN count(distinct gene)||' genes' 
-                       ELSE apidb.tab_to_string(CAST(COLLECT(gene) AS apidb.varchartab), ', ') END as genes
+                       ELSE apidb.tab_to_string(set(CAST(COLLECT(gene) AS apidb.varchartab)), ', ') END as genes
             FROM (
                  
                SELECT distinct i.accession,i.gene ,i.target_start,i.target_end, 
                       i.is_reversed, i.target_sequence_source_id
-                FROM ApidbTuning.EstAlignmentGeneSUMMARY i, ApidbTuning.GeneId gi
+                FROM ApidbTuning.EstAlignmentGeneSUMMARY i, ApidbTuning.GeneId gi, apidbtuning.estattributes ea
                 WHERE lower(gi.id) LIKE REGEXP_REPLACE(REPLACE(LOWER($$single_gene_id$$),
                                                        '*', '%'),
                                                '[[:space:]]', '')
+                and ea.source_id = i.accession
+                and ea.project_id = '@PROJECT_ID@'
                 AND i.gene = gi.gene
                 AND i.est_gene_overlap_length >= $$bp_overlap_gte$$
                 AND is_consistent in ($$high_confidence_only$$)
@@ -93,7 +94,7 @@
 
 
  <processQuery name="ByGeneIDs" includeProjects="EuPathDB" doNotTest="true"
-              isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
       <paramRef ref="estParams.single_gene_id" noTranslation="true"/>
       <paramRef ref="sharedParams.bp_overlap_gte"/>
       <paramRef ref="sharedParams.best_alignment_only" 
@@ -118,7 +119,7 @@
 
  <!-- TODO:  Cannot test queries that use dependent params -->
     <sqlQuery name="EstsByLocation" excludeProjects="EuPathDB"
-          isCacheable="true" doNotTest="true">
+          doNotTest="true">
 
         <testParamValues includeProjects="CryptoDB">
           <paramValue name="sequenceId">AAEE01000001</paramValue>
@@ -130,7 +131,7 @@
         </testParamValues>
 
         <testParamValues includeProjects="TriTrypDB">
-          <paramValue name="sequenceId">Tb927_02_v4</paramValue> 
+          <paramValue name="sequenceId">Tb927_02_v5.1</paramValue> 
         </testParamValues>
 
 
@@ -138,31 +139,12 @@
           <paramValue name="sequenceId">Neo_chrIII</paramValue>
           <paramValue name="libraryId">Nc-1 Tachyzoite cDNA Library 2</paramValue> 
         </testParamValues>
-<!--
-        <paramRef ref="organismParams.organismWithEstsInChromosomes" 
-                  includeProjects="PlasmoDB"/>
-        <paramRef ref="organismParams.sequence_organism_text" includeProjects="ToxoDB"/>
--->
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="CryptoDB">
+
+
+        <paramRef ref="organismParams.organismSinglePick"  quote="true" queryRef="organismVQ.withChromosomesESTsAssems" displayType="select" includeProjects="FungiDB,PlasmoDB,CryptoDB,ToxoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB">
               <help>Select Organism you wish to query against.</help>
         </paramRef>
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="MicrosporidiaDB" default="Encephalitozoon cuniculi">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="ToxoDB" default="Toxoplasma gondii ME49">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="TriTrypDB" default="Leishmania major">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" default="Plasmodium vivax" includeProjects="PlasmoDB">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="GiardiaDB">
-              <help>Select Organism you wish to query against.</help>
-        </paramRef>
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" includeProjects="FungiDB"/>
-        <paramRef ref="sharedParams.chromosomeOptional"  includeProjects="PlasmoDB,CryptoDB,ToxoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB"  queryRef="SharedVQ.ChromosomeOrderNumEstAssem"/>
+        <paramRef ref="sharedParams.chromosomeOptional"  includeProjects="FungiDB,PlasmoDB,CryptoDB,ToxoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB" queryRef="SharedVQ.ChromosomeOrderNum"/>
   
   
         <paramRef ref="sharedParams.sequenceId"/>
@@ -181,18 +163,18 @@
         <column name="project_id"/>
         <column name="est_location"/>
 
-        <sql excludeProjects="PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB">
+        <sql excludeProjects="FungiDB,PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB">
             <![CDATA[
             select * from (
             SELECT eags.accession as source_id, '@PROJECT_ID@' as project_id,
-                   apidb.tab_to_string(
+                   apidb.tab_to_string(set(
                      CAST(
                        COLLECT(s.source_id || ':'
                        || trim(to_char(b.target_start,'999,999,999'))
                        || '-' || trim(to_char(b.target_end,'999,999,999'))
                        || '(' || decode(b.is_reversed,0,'+',1,'-',null)
-                       || ')') AS apidb.varchartab), ', ') AS est_location
-            FROM  ApidbTuning.BlatAlignmentLocation b, ApidbTuning.EstAlignmentGeneSUMMARY eags, ApidbTuning.SequenceAttributes s
+                       || ')') AS apidb.varchartab)), ', ') AS est_location
+            FROM  ApidbTuning.BlatAlignmentLocation b, ApidbTuning.EstAlignmentGeneSUMMARY eags, ApidbTuning.GenomicSeqAttributes s
             WHERE lower(s.source_id) = lower($$sequenceId$$)
             AND   s.na_sequence_id = b.target_na_sequence_id
             AND   b.target_start >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
@@ -207,19 +189,19 @@
            ]]>
         </sql>
 
-        <sql includeProjects="PlasmoDB,ToxoDB,CryptoDB,MicrosporidiaDB,TriTrypDB,GiardiaDB">
+        <sql includeProjects="FungiDB,PlasmoDB,ToxoDB,CryptoDB,MicrosporidiaDB,TriTrypDB,GiardiaDB">
             <![CDATA[
             select * from (
             SELECT eags.accession as source_id, '@PROJECT_ID@' as project_id,
-                   apidb.tab_to_string(
+                   apidb.tab_to_string(set(
                      CAST(
                        COLLECT(sa.source_id || ':'
                        || trim(to_char(b.target_start,'999,999,999'))
                        || '-' || trim(to_char(b.target_end,'999,999,999'))
                        || '(' || decode(b.is_reversed,0,'+',1,'-',null)
-                       || ')') AS apidb.varchartab), ', ') AS est_location
-            FROM  ApidbTuning.BlatAlignmentLocation b, ApidbTuning.EstAlignmentGeneSUMMARY eags, ApidbTuning.SequenceAttributes sa
-            WHERE ((sa.chromosome = $$chromosomeOptional$$ and sa.organism = '$$organism$$')
+                       || ')') AS apidb.varchartab)), ', ') AS est_location
+            FROM  ApidbTuning.BlatAlignmentLocation b, ApidbTuning.EstAlignmentGeneSUMMARY eags, ApidbTuning.GenomicSeqAttributes sa
+            WHERE ((sa.chromosome = $$chromosomeOptional$$ and sa.organism = $$organismSinglePick$$)
                OR lower(sa.source_id) = lower($$sequenceId$$))
             AND   sa.na_sequence_id = b.target_na_sequence_id
             AND   b.target_start >=  REGEXP_REPLACE('$$start_point$$', ',| ','')
@@ -236,12 +218,12 @@
     </sqlQuery>
 
     <processQuery name="EstsByLocation" includeProjects="EuPathDB" doNotTest="true" 
-          isCacheable="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="organismParams.organism"  queryRef="organismVQ.withChromosomesESTsAssems" multiPick="false" default="Plasmodium falciparum"  noTranslation="true">
+          processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        <paramRef ref="organismParams.organismSinglePick"  queryRef="organismVQ.withChromosomesESTsAssems" displayType="select" noTranslation="true">
               <help>Select Organism you wish to query against.</help>
         </paramRef> 
 
-        <paramRef ref="sharedParams.chromosomeOptional"  quote="false" noTranslation="true" queryRef="SharedVQ.ChromosomeOrderNumEstAssem"/>
+        <paramRef ref="sharedParams.chromosomeOptional"  quote="false" noTranslation="true"/>
       
         <paramRef ref="sharedParams.sequenceId" noTranslation="true"/>
         <paramRef ref="sharedParams.start_point"/>
@@ -261,8 +243,7 @@
     <!-- Library  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="EstsByLibrary" excludeProjects="EuPathDB" 
-             isCacheable='true'>
+    <sqlQuery name="EstsByLibrary" excludeProjects="EuPathDB">
         <paramRef ref="sharedParams.libraryId"/>
         <column name="source_id" />
         <column name="project_id"/>
@@ -275,7 +256,7 @@
     </sqlQuery>
 
     <processQuery name="EstsByLibrary" includeProjects="EuPathDB" 
-             displayName="Library Name" isCacheable='true' 
+             displayName="Library Name"
              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" >
         <paramRef ref="sharedParams.libraryId"/>
         <wsColumn name="source_id" width="60" wsName="source_id"/>
@@ -287,8 +268,7 @@
     <!-- Gene Overlap  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="EstsWithGeneOverlap" excludeProjects="EuPathDB"
-            isCacheable='true'>
+    <sqlQuery name="EstsWithGeneOverlap" excludeProjects="EuPathDB">
        <paramRef ref="sharedParams.libraryIdGenes" />
        <paramRef ref="sharedParams.bp_overlap_gte"/>
        <paramRef ref="estParams.overlapOrNot"/>
@@ -308,15 +288,15 @@
             <![CDATA[
               select * from (
               SELECT accession as source_id, '@PROJECT_ID@' as project_id,
-               CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(
+               CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(set(
                     CAST(
                       COLLECT(target_sequence_source_id || ':'
                       || trim(to_char(target_start,'999,999,999'))
                       || '-' || trim(to_char(target_end,'999,999,999'))
                       || '(' || decode(is_reversed,0,'+',1,'-',null) || ')')
-                    AS apidb.varchartab), ', ') END AS est_locations,
+                    AS apidb.varchartab)), ', ') END AS est_locations,
                   CASE WHEN count(distinct gene) > 20 THEN count(distinct gene)||' genes'
-                       ELSE apidb.tab_to_string(CAST(COLLECT(gene) AS apidb.varchartab), ', ') END as genes
+                       ELSE apidb.tab_to_string(set(CAST(COLLECT(gene) AS apidb.varchartab)), ', ') END as genes
 	    FROM (
                 SELECT accession,gene ,target_start,target_end, is_reversed, target_sequence_source_id
                 FROM ApidbTuning.EstAlignmentGeneSummary
@@ -337,7 +317,7 @@
 
 
     <processQuery name="EstsWithGeneOverlap" includeProjects="EuPathDB"
-       isCacheable='true' processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+       processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
        <paramRef ref="sharedParams.libraryIdGenes"/>
        <paramRef ref="sharedParams.bp_overlap_gte"/>
        <paramRef ref="estParams.overlapOrNot" quote="false"/>
@@ -353,7 +333,7 @@
 
     <processQuery name="EstsBySimilarity" 
              displayName="BLAST"
-             processName="org.apidb.apicomplexa.wsfplugin.wublast.WuBlastPlugin">
+             processName="org.apidb.apicomplexa.wsfplugin.blast.EuPathBlastPlugin">
 
         <testParamValues includeProjects="GiardiaDB">
             <paramValue name="BlastQuerySequence">AAAATTTACCTCCTTACACCACAGTTAGTCCAGATCATCGACACTGGGACCCGCAGGGGCACCGCCTGGGGCCGCGCCACCGGGCATCCCGCCAGGGAATCCGCCGGGGAACCCACCAGG</paramValue>
@@ -379,6 +359,7 @@
         <testParamValues includeProjects="PlasmoDB">
             <paramValue name="BlastQuerySequence">ATGTTCGTAAAAAATTTTATACATAAATTAAAAGAATTAAAACAAAAATCTTTAGATAAGTTCGCTAATTTATTGTATGATTATGGAGGTTATGTATATGATAGACCTTGTACCTTTATTATATGTAGTTTAATATGTTGTTTACTTTTAACTTGTGGTTTTTATTTTAAAGAACATGAGAAAGATATTTATAAATTATATTCAATATCCAATTCGTATGCCTACGAAACGAATGAAACC</paramValue>
             <paramValue name="BlastDatabaseType">EST</paramValue>
+            <paramValue name="BlastDatabaseOrganism">Plasmodium berghei</paramValue>
         </testParamValues>
 
         <testParamValues includeProjects="TrichDB">
@@ -395,25 +376,34 @@
 
         <testParamValues includeProjects="MicrosporidiaDB">
            <paramValue name="BlastDatabaseType">EST</paramValue>
-           <paramValue name="BlastQuerySequence">GCCGAAGGAAATAGATACCCCATGGTGTCTCTGGAGCTGACCAAGGAAAATATTAATGCGGTTTCTCTTGAGCTGACAGAGAACAAGAAGATGTTTGACAAAAACGTGAATTACGTGATGAGCTTCATGATCAAGAACTTCCCGGAGAAGAGCGAGCTTCTTAG</paramValue>
+           <paramValue name="BlastQuerySequence">GCCGAAGGAAATAGATACCCCATGGTGTCTCTGGAGCTGACCAAGGAAAATATTAATGCGGTTTCTCTTGAGCTGACAGAGAACAAGAAGATGTTTGACAAAAACGTGAATTACGTGATGAGCTTCATGATCAAGAACTTCCCGGAGAAGAGCGAGCTTCTT</paramValue>
+	   <paramValue name="BlastDatabaseOrganism">Encephalitozoon cuniculi</paramValue>
+        </testParamValues>
+
+        <testParamValues includeProjects="PiroplasmaDB">
+           <paramValue name="BlastDatabaseType">EST</paramValue>
+           <paramValue name="BlastQuerySequence">TTACAGATTATATGTTCAAGAAAACAGCTGACTATGAAGATGGAGTCTCAGTTGACATGTCAGAAGTTAGATCACACAGCGATTCTGCCCTGAACGTAATGTTGATC</paramValue>
+	   <paramValue name="BlastDatabaseOrganism">Theileria annulata</paramValue>
         </testParamValues>
 
        <paramRef ref="sharedParams.BlastDatabaseType" quote="false" noTranslation="false" default="EST"/>
        <paramRef ref="sharedParams.BlastAlgorithm" quote="false" noTranslation="false" />
        <paramRef ref="sharedParams.BlastDatabaseOrganism" quote="false" noTranslation="false" />
        <paramRef ref="sharedParams.BlastQuerySequence"/>
+       <paramRef ref="sharedParams.BlastRecordClass" default="EstRecordClasses.EstRecordClass" />
        <paramRef ref="sharedParams.-e"/>
-       <paramRef ref="sharedParams.-v"/>
+ <!--      <paramRef ref="sharedParams.-v"/>  -->
        <paramRef ref="sharedParams.-b"/>
        <paramRef ref="sharedParams.-filter" quote="false" />
 
-       <wsColumn name="source_id" width="32" wsName="Identifier"/>
-       <wsColumn name="project_id" width="32" wsName="ProjectId"/>
-       <wsColumn name="TabularRow" width="3000"/>
-       <wsColumn name="Alignment"  columnType="clob"/>
-       <wsColumn name="Header" width="3000"/>
-       <wsColumn name="Footer"  columnType="clob"/>
- <wsColumn name="Counter" width="30" columnType="number"/>
+       <wsColumn name="source_id" width="60" wsName="identifier"/>
+       <wsColumn name="project_id" width="32"/>
+       <wsColumn name="summary" width="3000"/>
+       <wsColumn name="alignment" columnType="clob"/>
+       <wsColumn name="evalue_mant" columnType="float" />
+       <wsColumn name="evalue_exp" columnType="number" />
+       <wsColumn name="score" columnType="float" />    
+    
     </processQuery>
 
 <!--
@@ -427,18 +417,20 @@
        <paramRef ref="sharedParams.-v"/>
        <paramRef ref="sharedParams.-b"/>
        <paramRef ref="sharedParams.-filter"/>
-       <wsColumn name="source_id" width="60" wsName="source_id"/>
-       <wsColumn name="project_id" width="32" wsName="project_id"/>
-       <wsColumn name="TabularRow" width="3000"/>
-       <wsColumn name="Alignment" width="4000"/>
-       <wsColumn name="Header" width="3000"/>
-       <wsColumn name="Footer" width="3000"/>
+       <wsColumn name="source_id" width="60" wsName="identifier"/>
+       <wsColumn name="project_id" width="32"/>
+       <wsColumn name="summary" width="3000"/>
+       <wsColumn name="alignment" columnType="clob"/>
+       <wsColumn name="evalue_mant" columnType="float" />
+       <wsColumn name="evalue_exp" columnType="number" />
+       <wsColumn name="score" columnType="number" />
+    
     </processQuery>
 -->
 
 
     
-    <sqlQuery name="ByWeightFilter" isCacheable="true" doNotTest="true">
+    <sqlQuery name="ByWeightFilter" doNotTest="true">
         <paramRef ref="estParams.est_result"/>
         <paramRef ref="sharedParams.min_weight" default="0"/>
         <paramRef ref="sharedParams.max_weight" default="100"/>

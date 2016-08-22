@@ -1,0 +1,330 @@
+<wdkModel>
+  <querySet name="CompoundIds" queryType="id" isCacheable="true"
+	    excludeProjects="EuPathDB">
+
+    <!-- ************************************************************ -->
+    <!-- Compound Id -->  
+    <!-- ************************************************************ -->
+ 
+    <sqlQuery name="CompoundsByCompoundID" doNotTest="true"  excludeProjects="EuPathDB"
+              displayName="ID">
+        <paramRef ref="compoundParams.ds_compound_id"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <sql>
+            <![CDATA[
+            SELECT distinct c.source_id, '@PROJECT_ID@' as project_id
+            FROM  apidbtuning.CompoundId cid,  apidbtuning.CompoundAttributes c, ($$ds_compound_id$$) ds
+            WHERE  cid.id = ds.source_id
+            AND cid.compound = c.source_id
+               ]]>
+        </sql>
+    </sqlQuery>
+
+    <processQuery name="CompoundsByCompoundID" includeProjects="EuPathDB"
+          doNotTest="true"
+          processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
+        <paramRef ref="compoundParams.ds_compound_id" noTranslation="true"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="project_id" width="32" wsName="project_id"/>
+    </processQuery>   
+
+    <!-- ************************************************************ -->
+    <!-- Compounds By Text Search -->  
+    <!-- ************************************************************ -->
+    <processQuery name="CompoundsByTextSearch" excludeProjects="EuPathDB"
+          processName="org.apidb.apicomplexa.wsfplugin.textsearch.KeywordSearchPlugin">
+       <paramRef ref="sharedParams.wdk_record_type" default="compound"/>
+       <paramRef ref="sharedParams.text_expression" default="Aminobutanoic" />
+       <paramRef ref="compoundParams.text_fields"/>
+       <wsColumn name="source_id" width="32" wsName="RecordID"/>
+       <wsColumn name="project_id" width="32" wsName="ProjectId"/>
+       <wsColumn name="max_score" width="10" wsName="MaxScore" columnType="float"/>
+       <wsColumn name="fields_matched" width="64" wsName="Datasets"/>
+    </processQuery>
+
+   <processQuery name="CompoundsByTextSearch" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+       <paramRef ref="sharedParams.wdk_record_type" noTranslation="true" default="compound"/>
+       <paramRef ref="sharedParams.text_expression" noTranslation="true" default="Aminobutanoic"/>
+       <paramRef ref="popsetParams.text_fields"  quote="false"/>
+       <wsColumn name="source_id" width="32" wsName="source_id"/>
+       <wsColumn name="project_id" width="32" wsName="project_id"/>
+       <wsColumn name="max_score" width="10" columnType="float"/>
+       <wsColumn name="fields_matched" width="64"/>
+    </processQuery>
+
+    <!-- ************************************************************ -->
+    <!-- Compounds By EC Number -->  
+    <!-- ************************************************************ -->
+ 
+    <sqlQuery name="CompoundsByEcReaction" excludeProjects="EuPathDB">
+
+      <paramRef ref="compoundParams.enzyme" />
+      <paramRef ref="compoundParams.compound_type" />
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="ec_number"/>
+      <sql>
+	<![CDATA[
+        SELECT DISTINCT ca.source_id
+        , pr.enzyme as ec_number
+        , '@PROJECT_ID@' as project_id
+        FROM apidbtuning.pathwaycompounds pc
+        , apidbtuning.pathwayreactions pr
+        , apidbtuning.compoundattributes ca
+        WHERE pr.enzyme = $$enzyme$$
+        AND pc.reaction_id = pr.reaction_id
+        AND ((pr.is_reversible = 0 AND pc.type = $$compound_type$$) OR (pr.is_reversible = 1 AND $$compound_type$$ = 'substrate/product') OR $$compound_type$$ = 'either')
+        AND ca.source_id = pc.chebi_accession
+	]]>
+        </sql>
+    </sqlQuery>
+
+    <processQuery name="CompoundsByEcReaction" includeProjects="EuPathDB"
+		  doNotTest="true"
+		  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
+      <paramRef ref="compoundParams.enzyme" />
+      <paramRef ref="compoundParams.compound_type" />
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="32" wsName="project_id"/>
+      <wsColumn name="compound" width="32"/>   
+      <wsColumn name="ec_number" width="32"/>   
+    </processQuery>   
+
+
+    <sqlQuery name="CompoundsByPathway" doNotTest="true"  excludeProjects="EuPathDB"
+              displayName="compounds by pathway">
+
+     <!-- <paramRef ref="pathwayParams.metabolic_pathway_id_with_compounds"/>-->
+      <paramRef ref="pathwayParams.pathways_source"/>
+      <paramRef ref="pathwayParams.metabolic_pathway_id"/>
+      <paramRef ref="pathwayParams.pathway_wildcard"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <sql>
+	<![CDATA[
+        SELECT DISTINCT ca.source_id
+        , '@PROJECT_ID@' as project_id
+        FROM apidbtuning.pathwaycompounds pc
+        , apidbtuning.pathwayattributes pa
+        , sres.externaldatabase ed
+        , sres.externaldatabaserelease edr
+        , apidbtuning.compoundattributes ca
+        WHERE (pa.pathway_id = $$metabolic_pathway_id$$
+            OR lower(pa.name) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
+            )
+        AND pc.pathway_id = pa.pathway_id
+        AND ed.name = pc.ext_db_name
+        AND edr.external_database_id = ed.external_database_id
+        AND (edr.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$ = 1)
+        AND ca.source_id = pc.chebi_accession
+	    ]]>
+        </sql>
+    </sqlQuery>
+
+    <processQuery name="CompoundsByPathway" includeProjects="EuPathDB"
+		  doNotTest="true"
+		  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
+      <paramRef ref="pathwayParams.metabolic_pathway_id_with_compounds" noTranslation="true"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="32" wsName="project_id"/>
+    </processQuery>   
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Molecular Weight -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="CompoundsByMolecularWeight" excludeProjects="EuPathDB">
+        <paramRef ref="compoundParams.min_molecular_weight"/>
+        <paramRef ref="compoundParams.max_molecular_weight"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+	<column name="molecular_wt"/>
+        <sql>
+            <![CDATA[
+            SELECT source_id, mass as molecular_wt, '@PROJECT_ID@' as project_id
+	    FROM ApidbTuning.CompoundAttributes
+	    WHERE mass <= $$max_molecular_weight$$
+                  AND mass >= $$min_molecular_weight$$
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="CompoundsByMolecularWeight" includeProjects="EuPathDB"
+		  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+      <paramRef ref="compoundParams.min_molecular_weight"/>
+      <paramRef ref="compoundParams.max_molecular_weight"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="20" wsName="project_id"/>
+      <wsColumn name="molecular_wt" width="32"/>   
+    </processQuery>
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Molecular Formula -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="CompoundsByMolecularFormula" excludeProjects="EuPathDB">
+        <paramRef ref="compoundParams.input_formula"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+	<column name="molecular_formula"/>
+        <sql>
+            <![CDATA[
+            SELECT source_id,formula AS molecular_formula, '@PROJECT_ID@' as project_id
+            FROM ApidbTuning.CompoundAttributes 
+            WHERE formula LIKE REPLACE($$input_formula$$,'*','%')
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="CompoundsByMolecularFormula" includeProjects="EuPathDB"
+		  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+      <paramRef ref="compoundParams.input_formula"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="20" wsName="project_id"/>
+      <wsColumn name="molecular_formula" width="32"/>   
+    </processQuery>
+
+    <!-- ************************************************************ -->
+    <!-- Transform : Compounds By Gene ID -->  
+    <!-- ************************************************************ -->
+ 
+    <sqlQuery name="CompoundsByGeneID" doNotTest="true"
+              displayName="ID by gene">
+
+      <paramRef ref="geneParams.gene_result" />
+      <paramRef ref="compoundParams.compound_type" />
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="genes"/>
+      <column name="gene_count"/>
+      <column name="wdk_weight" />
+
+      <sql>
+	<![CDATA[
+    SELECT DISTINCT ca.source_id
+    , '@PROJECT_ID@' as project_id
+    , count(distinct ds.source_id) as gene_count
+    , apidb.tab_to_string(set(cast(collect(ds.source_id) as apidb.varchartab))) as genes
+    , max(ds.wdk_weight) as wdk_weight
+    FROM ($$gene_result$$) ds
+    , apidbtuning.transcriptpathway tp
+    , apidbtuning.pathwayreactions pr
+    , apidbtuning.pathwaycompounds pc
+    , apidbtuning.compoundattributes ca
+    WHERE tp.gene_source_id = ds.gene_source_id
+    AND tp.ec_number like replace(pr.enzyme, '-', '%')
+    AND pr.reaction_id = pc.reaction_id
+    AND pr.ext_db_name = pc.ext_db_name
+    AND pc.pathway_id = tp.pathway_id
+    AND ca.source_id = pc.chebi_accession
+    AND ((pr.is_reversible = 0 AND pc.type = $$compound_type$$) OR (pr.is_reversible = 1 AND $$compound_type$$ = 'substrate/product') OR $$compound_type$$ = 'either')
+    GROUP BY ca.source_id
+	]]>
+        </sql>
+    </sqlQuery>
+
+
+    <!-- ************************************************************ -->
+    <!-- Transform : Compounds By Pathway ID -->  
+    <!-- ************************************************************ -->
+ 
+    <sqlQuery name="CompoundsByPathwayID" doNotTest="true"
+              displayName="ID by pathway">
+
+      <paramRef ref="pathwayParams.pathway_result"/>
+      <paramRef ref="compoundParams.compound_type" />
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="pathways"/>
+      <column name="wdk_weight" />
+
+      <sql>
+	<![CDATA[
+        SELECT DISTINCT ca.source_id,
+        '@PROJECT_ID@' as project_id
+        , apidb.tab_to_string(set(cast(collect(ds.source_id) as apidb.varchartab))) as pathways
+        , max(ds.wdk_weight) as wdk_weight
+        FROM ($$pathway_result$$)ds
+        , apidbtuning.pathwayattributes pa
+        , apidbtuning.pathwaycompounds pc
+        , apidbtuning.pathwayreactions pr
+        , apidbtuning.compoundattributes ca
+        WHERE pa.source_id = ds.source_id
+        AND pa.pathway_source = ds.pathway_source
+        AND pc.pathway_id = pa.pathway_id
+        AND pc.chebi_accession = ca.source_id
+        AND pr.reaction_id = pc.reaction_id
+        AND ((pr.is_reversible = 0 AND pc.type = $$compound_type$$) OR (pr.is_reversible = 1 AND $$compound_type$$ = 'substrate/product') OR $$compound_type$$ = 'either')
+        GROUP BY ca.source_id
+	]]>
+        </sql>
+    </sqlQuery>
+
+
+
+    <sqlQuery name="CompoundsByFoldChange" 
+              includeProjects="PlasmoDB"
+              displayName="Compounds by fold change">
+      <testParamValues includeProjects="PlasmoDB">
+	<paramValue name="samples_fc_comp">Percoll pH 6.4 pellet</paramValue>
+      </testParamValues>
+      <paramRef ref="compoundParams.profileset" />
+      <paramRef ref="compoundParams.samples_fc_ref" />
+      <paramRef ref="compoundParams.samples_fc_comp" />
+      <paramRef ref="compoundParams.fold_change"/>
+      <paramRef ref="compoundParams.regulated_dir"/>
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="fold_change"/>
+
+      <sql>
+	<![CDATA[
+  SELECT  CASE WHEN (one.value >= two.value) THEN round(one.value/two.value,4) 
+           ELSE round(two.value/one.value,4)  END AS fold_change, 
+           ca.source_id, '@PROJECT_ID@' as project_id
+  FROM 
+  (SELECT SUM(r.value) AS value, r.compound_id
+  FROM apidbtuning.profileType pt, study.study s, study.studyLink sl,
+    study.protocolAppNode pan, results.compoundMassSpec r
+  WHERE pt.profile_set_name    = s.name
+  AND sl.study_id              = s.study_id
+  AND sl.protocol_app_node_id  = pan.protocol_app_node_id
+  AND pan.protocol_app_node_id =r.protocol_app_node_id
+  AND pan.protocol_app_node_id =$$samples_fc_ref$$
+  GROUP BY r.compound_id
+  ) one,
+  (SELECT SUM(r.value) AS value, r.compound_id
+  FROM apidbtuning.profileType pt, study.study s, study.studyLink sl,
+    study.protocolAppNode pan, results.compoundMassSpec r
+  WHERE pt.profile_set_name    = s.name
+  AND sl.study_id              = s.study_id
+  AND sl.protocol_app_node_id  = pan.protocol_app_node_id
+  AND pan.protocol_app_node_id =r.protocol_app_node_id
+  AND pan.protocol_app_node_id =$$samples_fc_comp$$
+  GROUP BY r.compound_id
+  ) two,
+  apidbtuning.compoundAttributes ca
+WHERE one.compound_id = two.compound_id
+AND one.compound_id   = ca.id
+AND $$regulated_dir$$ (
+  CASE
+    WHEN (one.value >= two.value
+    AND two.value    > 0)
+    THEN (one.value )/(two.value )
+    WHEN (two.value > one.value
+    AND one.value   > 0)
+    THEN -((two.value )/(one.value ))
+  END ) >=  $$fold_change$$
+   	]]>
+        </sql>
+    </sqlQuery>
+
+
+
+   </querySet>
+
+</wdkModel>

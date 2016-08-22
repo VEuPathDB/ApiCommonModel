@@ -1,0 +1,97 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+# use DBD::Oracle;
+# use YAML qw/LoadFile/;
+use Getopt::Long qw(GetOptions);
+use Data::Dumper;
+use ApiCommonShared::Model::tmUtils;
+use JSON;
+
+my ($help, $propfile, $instance, $schema, $suffix, $debug);
+
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+          );
+
+usage() if ($help);
+
+die "required parameter missing" unless ($propfile && $instance && $suffix);
+
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+# get and parse JSON from Plasmogem server
+open (PLASMOGEM, "curl -H 'Content-Type: application/json' http://plasmogem.sanger.ac.uk/genes/list |")
+  or die "getting Plasmogem data ";
+my $jsonString;
+while (<PLASMOGEM>) {
+  $jsonString .= $_;
+}
+close PLASMOGEM;
+my $plasmogem = decode_json($jsonString);
+
+# create table
+$dbh->do(<<SQL) or die "creating table";
+   create table plasmogem$suffix (
+      gene_id                       varchar2(80),
+      transfection_design_count_ko  number(4),
+      transfection_rsrc_count_ko    number(4),
+      library_clone_count           number(4),
+      transfection_design_count_tag number(4),
+      transfection_rsrc_count_tag   number(4)
+   ) nologging
+SQL
+
+# prepare insert
+my $insertStmt = $dbh->prepare(<<SQL);
+   insert into plasmogem$suffix
+   (gene_id, transfection_design_count_ko, transfection_rsrc_count_ko,
+    library_clone_count, transfection_design_count_tag, transfection_rsrc_count_tag)
+   values (?, ?, ?, ?, ?, ?)
+SQL
+
+my $recordCount = 0;
+foreach my $pgRec (@{$plasmogem->{'json_data'}}) {
+
+  # skip genes with no libraries, knockouts, nor tags
+  next unless $pgRec->{'library_clone_count'} || $pgRec->{'transfection_design_count_tag'}
+              || $pgRec->{'transfection_design_count_ko'};
+
+  $insertStmt->execute($pgRec->{'gene_id'}, $pgRec->{'transfection_design_count_ko'},
+		       $pgRec->{'transfection_resource_count_ko'}, $pgRec->{'library_clone_count'},
+		       $pgRec->{'transfection_design_count_tag'}, $pgRec->{'transfection_resource_count_tag'});
+  $recordCount++;
+}
+$dbh->commit();
+print STDERR "processed $recordCount PlasmoGEM records.\n";
+
+$dbh->do(<<SQL) or die "creating index";
+   create unique index pgem_ix$suffix on plasmogem$suffix (gene_id)
+SQL
+
+$dbh->disconnect();
+
+sub usage {
+  my $e = shift;
+  if($e) {
+    print STDERR $e . "\n";
+  }
+  print STDERR "
+Read the web service provided by PlasmoGEM, and populate the Plasmogem tuning table.
+
+usage:  buildPlasmogemTT -propfile prop_file -instance instance -schema schema -suffix suffix  [-debug] [-help]
+";
+  exit;
+}
+
+1;
+

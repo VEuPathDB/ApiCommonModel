@@ -12,13 +12,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.gusdb.wdk.model.AnswerValue;
-import org.gusdb.wdk.model.AttributeValue;
-import org.gusdb.wdk.model.Question;
-import org.gusdb.wdk.model.RecordInstance;
-import org.gusdb.wdk.model.TableValue;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
+import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.question.Question;
+import org.gusdb.wdk.model.record.RecordInstance;
+import org.gusdb.wdk.model.record.TableValue;
+import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.Reporter;
 import org.json.JSONException;
 
@@ -27,10 +27,10 @@ public class GenBankReporter extends Reporter {
     private static final String PROPERTY_GENE_QUESTION = "gene_question";
     private static final String PROPERTY_SEQUENCE_ID_PARAM = "sequence_param";
     private static final String PROPERTY_SEQUENCE_ID_COLUMN = "sequence_id";
-    private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
+    //private static final String CONFIG_SELECTED_COLUMNS = "selectedFields";
 
     private static final String DB_XREF_QUALIFIER_INTERPRO = "InterPro";
-    private static final String DB_XREF_QUALIFIER_NCBI_TAXON = "taxon";
+    //private static final String DB_XREF_QUALIFIER_NCBI_TAXON = "taxon";
     private static final String DB_XREF_QUALIFIER_ENTREZ_GENE = "GeneID";
     private static final String DB_XREF_QUALIFIER_GOA = "GOA";
     private static final String DB_XREF_QUALIFIER_GI = "GI";
@@ -46,16 +46,18 @@ public class GenBankReporter extends Reporter {
     // Go through the pages of gene records, writing as
     // genbank table format
 
-    public void configure(Map<String, String> config) {
-        super.configure(config);
+    @Override
+    public void configure(Map<String, String> newConfig) {
+        super.configure(newConfig);
     }
 
+    @Override
     public String getConfigInfo() {
         return "This reporter does not have config info yet.";
     }
 
     @Override
-    protected void write(OutputStream out) throws WdkModelException,
+    public void write(OutputStream out) throws WdkModelException,
             NoSuchAlgorithmException, SQLException, JSONException,
             WdkUserException {
         String rcName = getQuestion().getRecordClass().getFullName();
@@ -67,9 +69,7 @@ public class GenBankReporter extends Reporter {
         writer.flush();
     }
 
-    private void pageSequences(PrintWriter writer) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+    private void pageSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
 
         for (AnswerValue answerValue : this) {
             for (RecordInstance record : answerValue.getRecordInstances()) {
@@ -85,7 +85,7 @@ public class GenBankReporter extends Reporter {
                 String geneQuestionName = properties.get(PROPERTY_GENE_QUESTION);
                 Question geneQuestion = (Question) wdkModel.resolveReference(geneQuestionName);
                 AnswerValue geneAnswer = geneQuestion.makeAnswerValue(answerValue.getUser(), params, 0,
-                                                                      maxPageSize, sorting,  null, 0);
+                                                                      maxPageSize, sorting,  null, true, 0);
 
                 // write non gene sequence features
                 writeSequenceFeatures(record, writer);
@@ -98,8 +98,7 @@ public class GenBankReporter extends Reporter {
     }
 
     private void writeTableFormat(AnswerValue geneAnswer, PrintWriter writer, String sequenceId)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         PageAnswerIterator pagedGenes = new PageAnswerIterator(geneAnswer, 1,
                 geneAnswer.getResultSize(), maxPageSize);
@@ -113,39 +112,37 @@ public class GenBankReporter extends Reporter {
     }
 
     private void writeSequenceFeatures(RecordInstance record, PrintWriter writer)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
         // Write feature table header w/ sequence id
         writer.println(">Feature\t" + record.getAttributeValue("source_id"));
 
         // Add non gene features
         writeSimpleGenomicFeature(record, writer, "Repeats");
         writeSimpleGenomicFeature(record, writer, "TandemRepeats");
-        writeSimpleGenomicFeature(record, writer, "LowComplexity");
+        //writeSimpleGenomicFeature(record, writer, "LowComplexity");
     }
 
 
     private void writeSimpleGenomicFeature(RecordInstance record, PrintWriter writer, String tableString)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         TableValue Rows = record.getTableValue(tableString);
         for (Map<String, AttributeValue> row : Rows) {
-            String note = row.get("note").toString();
+            String qualifierKey = row.get("qualifier_key").toString();
+            String qualifierValue = row.get("qualifier_value").toString();
             String featureKey = row.get("feature_key").toString();
             String startMin = row.get("start_min").toString();
             String endMax = row.get("end_max").toString();
             writer.println(startMin + "\t" + endMax + "\t" + featureKey + "\t\t");
-            if(note != null) {
-                writer.println("\t\t\t" + "note" + "\t" + note);
+            if(qualifierKey != null) {
+                writer.println("\t\t\t" + qualifierKey + "\t" + qualifierValue);
             }
         }
     }
 
 
-    private GenBankFeature makeBaseGeneFeature(RecordInstance record, String product)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+    private GenBankFeature makeBaseGeneFeature(RecordInstance record, String product, String name)
+            throws WdkModelException, WdkUserException {
 
             String sourceId = record.getAttributeValue("source_id").toString();
 
@@ -161,11 +158,11 @@ public class GenBankReporter extends Reporter {
                 sequence = record.getAttributeValue("transcript_sequence").toString();
             }
 
-            String ncbiTaxId = record.getAttributeValue("ncbi_tax_id").toString();
+            GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product, name);
 
-            GenBankFeature geneFeature = new GenBankFeature(sourceId, isPseudo, geneType, "gene", sequence, product);
-
-            geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
+            //db_xref type taxon should be used on an OrgRef FEATURE only - tbl2asn
+            //String ncbiTaxId = record.getAttributeValue("ncbi_tax_id").toString();
+            //geneFeature.addDbXref(DB_XREF_QUALIFIER_NCBI_TAXON + ":" + ncbiTaxId);
 
             // RULE:  Alias
             TableValue aliasRows = record.getTableValue("Alias");
@@ -208,9 +205,8 @@ public class GenBankReporter extends Reporter {
         return(matcher.find());
     }
 
-    private List makeGenBankLocations(RecordInstance record, String sequenceId)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+    private List<GenBankLocation> makeGenBankLocations(RecordInstance record, String sequenceId)
+            throws WdkModelException, WdkUserException {
 
         TableValue locations = record.getTableValue("GenBankLocations");
 
@@ -235,8 +231,7 @@ public class GenBankReporter extends Reporter {
 
 
     private GenBankCdsFeature makeCdsFeature(RecordInstance record, GenBankFeature geneFeature)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         int codonStart = 0 ;
 
@@ -253,26 +248,27 @@ public class GenBankReporter extends Reporter {
         
         // RULE : Include protein translation for CDS
         String proteinSequence = record.getAttributeValue("protein_sequence").toString();
+        String proteinId = record.getAttributeValue("protein_source_id").toString();
 
-        GenBankCdsFeature cdsFeature = new GenBankCdsFeature(geneFeature, proteinSequence, geneticCode, codonStart);
+        GenBankCdsFeature cdsFeature = new GenBankCdsFeature(geneFeature, proteinSequence, geneticCode, codonStart, proteinId);
 
         return(cdsFeature);
     }
 
 
     private void writeGeneFeature(RecordInstance record, PrintWriter writer, String sequenceId)
-            throws WdkModelException, NoSuchAlgorithmException, SQLException,
-            JSONException, WdkUserException {
+            throws WdkModelException, WdkUserException {
 
         // Exclude Deprecated Genes? or flag them?
         if (!(wdkModel.getProjectId().equals("GiardiaDB")
               && record.getAttributeValue("is_deprecated").toString().equals("Yes"))) {
 
             String product = record.getAttributeValue("product").toString();
+            String name = record.getAttributeValue("name").toString();
 
             List<GenBankLocation> genbankLocations = makeGenBankLocations(record, sequenceId);
 
-            GenBankFeature geneFeature = makeBaseGeneFeature(record, product);
+            GenBankFeature geneFeature = makeBaseGeneFeature(record, product, name);
             geneFeature.setLocations(genbankLocations);
             writer.print(geneFeature);
             // RULE : Include old locus tag
@@ -367,7 +363,7 @@ public class GenBankReporter extends Reporter {
        }
 
 @Override
-    protected void initialize() throws SQLException {
+    protected void initialize() throws WdkModelException {
     // do nothing
 }
 }

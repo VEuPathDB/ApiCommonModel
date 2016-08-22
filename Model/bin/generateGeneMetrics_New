@@ -1,0 +1,160 @@
+#!/usr/bin/perl
+
+use strict;
+use DBI;
+use IO::File;
+use Getopt::Long;
+use CBIL::Util::PropertySet;
+use ApiCommonWebsite::Model::ModelConfig;
+
+if (!@ARGV) {
+  die ("\nUsage:\t\tgenerateGeneMetrics <Model whose config to read> <list of instances>\n\nExample:\t generateGeneMetrics TriTrypDB plas-inc toxo-inc piro-inc ...\n\nThe user ID and Pwd set in the model-config file for the component specified is used for querying all instances. If this is not the same for all instances then use the generic Apidb user Id in model-config setting.\n\n");
+
+}
+
+
+if ($ARGV[0] !~ /DB/) {die "Please specify a model for reading UserID and Password (ex PlasmoDB) (the script assumes that the userId and password are the same for all instances, if not use the generic ApiDB Uid and Pwd\n";}
+
+my $model = $ARGV[0];
+
+my $c = new ApiCommonWebsite::Model::ModelConfig($model);
+
+
+my $u  = $c->getLogin;
+my $pw = $c->getPassword;
+my $commentTable = $c->getDblApicomm;
+
+
+my @dbInstances = @ARGV[1..(@ARGV-1)];  #('trypbl3n','plastst1','cryp461n','toxo721n','giar252n','tvag132n','ameb171n','piro113n');
+
+#------- Uid and Password..these are fetched from the gus.cnfig file----------
+#my ($gusConfigFile);
+#$gusConfigFile = $ENV{GUS_HOME} . "/config/gus.config" unless($gusConfigFile);
+
+#unless(-e $gusConfigFile) {
+#  print STDERR "gus.config file not found! \n";
+#  exit;
+#}
+
+#my @properties = ();
+#my $gusconfig = CBIL::Util::PropertySet->new($gusConfigFile, \@properties, 1);
+
+#my $u = $gusconfig->{props}->{databaseLogin};
+#my $pw = $gusconfig->{props}->{databasePassword};
+
+#------------------------------------------------------------------------------
+
+my %countHash;
+my %descrHash;
+my %rankHash;
+my @sqlCollection;
+
+&initQueries;
+
+foreach my $instance (@dbInstances) {
+
+  print "Querying instance: $instance ....\n";
+
+  my $dbh = DBI->connect("dbi:Oracle:$instance", $u, $pw) ||  die "Couldn't connect to database: " . DBI->errstr;
+  $dbh->{RaiseError} = 1;
+  my $desc;
+  my $rank;
+  my $category;
+ 
+  foreach my $sql (@sqlCollection) {
+ 
+    my $sth = $dbh->prepare($sql) || die "Couldn't prepare the SQL statement: " . $dbh->errstr;
+    $sth->execute ||  die "Failed to  execute statement: " . $sth->errstr;
+
+    while (my @row = $sth->fetchrow_array()) {
+      $category = $row[2];
+      $desc = $row[3];
+      $rank = $row[4];
+      $countHash{$category}{$row[1]} = $row[0];       
+    }
+    $descrHash{$category} = $desc;
+    $rankHash{$category} = $rank;
+  }
+}
+
+open(xmlFile,">genemetrics.xml");
+
+print (xmlFile "<xmlAnswer>\n\n");
+
+foreach my $category (sort {$rankHash{$a} <=> $rankHash{$b}} keys %rankHash) {
+  print (xmlFile "   <record>\n");
+  print (xmlFile "       <attribute name = \"Metric_Type\">$category<\/attribute>\n");
+  print (xmlFile "       <attribute name = \"Description\">$descrHash{$category}<\/attribute>\n");
+  foreach my $organism (sort keys %{$countHash{$category}}) {
+    next if ($organism eq 'Giardia lamblia ATCC 50803');
+    print (xmlFile "       <attribute name = \"$organism\">$countHash{$category}{$organism}<\/attribute>\n");
+    #print ("            <xmlAttribute name=\"$organism\"\/>\n");
+    #print ("          <c:set var=\"\" value=\"\${record.attributesMap[\'$organism\']}\"\/>\n");
+  } 
+  print (xmlFile "   <\/record>\n\n");
+}
+print (xmlFile "<\/xmlAnswer>");
+
+sub initQueries {
+
+
+$sqlCollection[0] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Gene_Count_Total','Total number of genes',1 as rank from (select count(distinct source_id) as Count , Organism from apidbtuning.geneattributes where is_deprecated = 0 group by Organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[1] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism,'Protein_coding','Number of genes that are protein coding: it includes pseudogenes', 2 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, Sres.SequenceOntology so, DoTS.GeneFeature gf where gf.source_id = ga.source_id and gf.sequence_ontology_id = so.sequence_ontology_id and so.term_name = 'protein_coding' and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[2] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Other_categories','Number of genes that code for products other than proteins (rRNA, tRNA etc.)', 3 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, Sres.SequenceOntology so, DoTS.GeneFeature gf where gf.source_id = ga.source_id and gf.sequence_ontology_id = so.sequence_ontology_id and so.term_name != 'protein_coding' and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[3] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism,'Pseudogenes','Number of genes annotated as pseudogenes', 4 as rank from (select count(distinct source_id) as Count , Organism from apidbtuning.geneattributes where is_pseudo = 1 and is_deprecated = 0  group by organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[4] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Community_entries','Number of genes that have comments,notes from the research community' , 5 as rank from (select count(distinct ga.source_id) Count, ga.Organism from ApiDBTuning.GeneAttributes ga, comments2.comments$commentTable lgc , ApiDBTuning.GeneId gi where lgc.stable_id = gi.id  and gi.gene = ga.source_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[5] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Orthologs', 'Number of genes that have orthologous genes', 6 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga,apidb.phylogeneticprofile pp where ga.source_id = pp.source_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[6] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'GO_terms','Number of genes that have Gene Ontology terms', 7 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, dots.GoAssociation go, dots.TranslatedAaFeature taf, dots.Transcript t where ga.na_feature_id = t.parent_id   AND t.na_feature_id = taf.na_feature_id  AND taf.aa_sequence_id = go.row_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[7] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'EC_numbers','Number of genes that have Enzyme Comission numbers', 8 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, dots.Transcript t, dots.translatedAaFeature taf, dots.aaSequenceEnzymeClass asec Where ga.na_feature_id = t.parent_id  AND t.na_feature_id = taf.na_feature_id AND taf.aa_sequence_id = asec.aa_sequence_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[8] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'SNP','Number of genes that have Single Nucleotide Polymorphism(s)', 9 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, dots.snpfeature sf  where sf.parent_id = ga.na_feature_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[9] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Microarray','Number of genes that have evidence of transcript expression based on Microarray studies', 11 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, ApiDB.Profile p, ApiDB.ProfileSet ps where ps.profile_set_id = p.profile_set_id and p.source_id = ga.source_id and lower(ps.name) not like '%rna%' and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+
+$sqlCollection[10] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'EST','Number of genes that have evidence of transcript expression based on Expressed Sequence Tags studies', 12 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, ( SELECT distinct s.gene as source_id from ApidbTuning.EstAlignmentGeneSummary s, ApidbTuning.EstAttributes e where s.est_gene_overlap_length >= 100 AND s.is_best_alignment in (1) AND s.percent_est_bases_aligned >= 20 AND s.percent_identity >= 90 AND e.best_alignment_count <= 1 and e.source_id = s.accession   GROUP by s.gene HAVING count(*) >= 1) est Where est.source_id = ga.source_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[11] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'SAGE_Tags','Number of genes that have evidence of transcript expression based on SAGE Tags studies', 13 as rank from (select count (distinct ga.source_id) as count, ga.organism from apidbtuning.sagetaggene stg, apidbtuning.geneattributes ga where ga.source_id = stg.gene_source_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[12] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Proteomics', 'Number of genes that have evidence of protein expression based on Mass Spectrometry studies', 14 as rank from ((select count(distinct ga.source_id) as count, ga.organism from apidb.massspecsummary mss, dots.translatedaafeature taaf, dots.transcript t, ApidbTuning.GeneAttributes ga, dots.nasequence nas where mss.aa_sequence_id = taaf.aa_sequence_id and taaf.na_feature_id = t.na_feature_id and t.parent_id = ga.na_feature_id and ga.na_sequence_id = nas.na_sequence_id and ga.is_deprecated = 0 group by ga.organism)) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+
+$sqlCollection[13] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'ChIP_chip','Number of genes that have evidence of transcript expression based on the ChIP on chip studies', 15 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, ApiDbTuning.ChipChipGene ccg where ccg.gene_source_id = ga.source_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[14] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'RnaSeq','Number of genes that have evidence for transcript expression based on Transcriptome sequencing (RNA Seq) experiments', 16 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, ApiDB.Profile p, ApiDB.ProfileSet ps where ps.profile_set_id = p.profile_set_id and p.source_id = ga.source_id and lower(ps.name) like '%rna%' and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[15] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'RT PCR','Number of genes that have evidence for transcript expression based on Reat Time PCR experiments', 17 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga, ApiDB.Profile p, ApiDB.ProfileSet ps where ps.profile_set_id = p.profile_set_id and p.source_id = ga.source_id and lower(ps.name) like '%rt_pcr%' and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[16] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'TF Binding Site','Total number of genes having evidence of expression based on transcription factor binding site indentification experiments', 18 as rank from (select count(distinct ga.source_id) as Count , ga.Organism from ApiDBTuning.GeneAttributes ga,ApidbTuning.TFBSGene tfbs where tfbs.gene_source_id = ga.source_id and ga.is_deprecated = 0 group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+$sqlCollection[17] = "select case when gene.count is NULL then 0 else gene.count end as Count, org.Organism, 'Expression_Total', 'Number of genes that have evidence of expression (Transcript + Protein)', 10 as rank from (Select count(distinct ga.source_id) as count, ga.organism from (
+(SELECT distinct s.gene as source_id from ApidbTuning.EstAlignmentGeneSummary s, ApidbTuning.EstAttributes e where s.est_gene_overlap_length >= 100 AND s.is_best_alignment in (1) AND s.percent_est_bases_aligned >= 20 AND s.percent_identity >= 90 AND e.best_alignment_count <= 1 and e.source_id = s.accession   GROUP by s.gene HAVING count(*) >= 1)
+UNION
+(select distinct ga.source_id from apidbtuning.sagetaggene stg, apidbtuning.geneattributes ga where ga.source_id = stg.gene_source_id)
+UNION
+(select distinct ga.source_id from ApiDBTuning.GeneAttributes ga, ApiDB.Profile p, ApiDB.ProfileSet ps where ps.profile_set_id = p.profile_set_id and p.source_id = ga.source_id and lower(ps.name) not like '%rna%')
+UNION
+(select distinct ga.source_id from ApiDBTuning.GeneAttributes ga, ApiDB.Profile p, ApiDB.ProfileSet ps where ps.profile_set_id = p.profile_set_id and p.source_id = ga.source_id and lower(ps.name) like '%rna%')
+UNION
+(select distinct ga.source_id from ApiDBTuning.GeneAttributes ga, ApiDB.Profile p, ApiDB.ProfileSet ps where ps.profile_set_id = p.profile_set_id and p.source_id = ga.source_id and lower(ps.name) like '%rt_pcr%')
+UNION
+(select distinct ga.source_id from ApiDBTuning.GeneAttributes ga, ApiDbTuning.ChipChipGene ccg where ccg.gene_source_id = ga.source_id)
+UNION
+(select distinct ga.source_id from apidb.massspecsummary mss, dots.translatedaafeature taaf, dots.transcript t, ApidbTuning.GeneAttributes ga, dots.nasequence nas where mss.aa_sequence_id = taaf.aa_sequence_id and taaf.na_feature_id = t.na_feature_id and t.parent_id = ga.na_feature_id and ga.na_sequence_id = nas.na_sequence_id)
+UNION
+(select distinct ga.source_id from ApiDBTuning.GeneAttributes ga,ApidbTuning.TFBSGene tfbs where tfbs.gene_source_id = ga.source_id)
+) unified, apidbtuning.geneattributes ga
+where unified.source_id = ga.source_id
+and ga.is_deprecated = 0
+group by ga.organism) gene, (select distinct organism from apidbtuning.geneattributes) org where org.organism = gene.organism(+)";
+
+}
+
+

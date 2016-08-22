@@ -5,27 +5,28 @@ import java.util.List;
 
 public class GenBankCdsFeature extends GenBankFeature {
 
-    private int codonStart;
+    //private int codonStart;
 
     private String translTable;
 
     private List<String> ecNumbers;
     private List<String> notes;
-    private List<String> signalPeptides;
-    private List<String> transmembraneHelixes;
+    //private List<String> signalPeptides;
+    //private List<String> transmembraneHelixes;
 
-    public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, int codonStart) {
+    public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, int codonStart, String proteinId) {
         super(genbankFeature, "cds");
 
         this.setSequence(sequence);
+        this.setProteinId(proteinId);
 
         this.translTable = translTable;
-        this.codonStart = codonStart;
+        //this.codonStart = codonStart;
 
         this.ecNumbers = new ArrayList<String>();
-        this.notes = new ArrayList<String>();;
-        this.signalPeptides = new ArrayList<String>();
-        this.transmembraneHelixes = new ArrayList<String>();
+        this.notes = new ArrayList<String>();
+        //this.signalPeptides = new ArrayList<String>();
+        //this.transmembraneHelixes = new ArrayList<String>();
     }
 
     protected void addNote(String note) {
@@ -42,7 +43,7 @@ public class GenBankCdsFeature extends GenBankFeature {
         return(super.getSequence());
     }
 
-
+    @Override
     public String toString() {
         String rv = super.toString();
 
@@ -53,7 +54,7 @@ public class GenBankCdsFeature extends GenBankFeature {
         rv = rv + "\t\t\ttranslation\t" + translation + "\n";
 
         for(String ec : this.ecNumbers) {
-            rv = rv + "\t\t\tEc_number\t" + ec + "\n";
+            rv = rv + "\t\t\tEC_number\t" + ec + "\n";
         }
 
         for(String note : this.notes) {

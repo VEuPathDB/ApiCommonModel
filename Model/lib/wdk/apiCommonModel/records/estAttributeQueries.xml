@@ -1,6 +1,6 @@
 <wdkModel>
 
-    <querySet name="EstAttributes" queryType="attribute">
+    <querySet name="EstAttributes" queryType="attribute" isCacheable="false" excludeProjects="HostDB">
 
       <defaultTestParamValues includeProjects="PlasmoDB">
          <paramValue name="source_id">AU087658</paramValue>
@@ -42,17 +42,27 @@
          <paramValue name="source_id">ES880893</paramValue>
          <paramValue name="project_id">MicrosporidiaDB</paramValue>
       </defaultTestParamValues>
+    
+      <defaultTestParamValues includeProjects="PiroplasmaDB">
+         <paramValue name="source_id">AJ922568</paramValue>
+         <paramValue name="project_id">PiroplasmaDB</paramValue>
+      </defaultTestParamValues>
 
-      <defaultTestParamValues includeProjects="FungiDB,InitDB,PiroplasmaDB">
+      <defaultTestParamValues includeProjects="FungiDB">
+         <paramValue name="source_id">FS238575</paramValue>
+         <paramValue name="project_id">FungiDB</paramValue>
+      </defaultTestParamValues>
+
+      <defaultTestParamValues includeProjects="SchistoDB,InitDB">
          <paramValue name="source_id"></paramValue>
          <paramValue name="project_id"></paramValue>
       </defaultTestParamValues>
 
       <testRowCountSql excludeProjects="EuPathDB">
                select count(*)
-               from dots.nasequence s, sres.SequenceOntology so
-               where so.sequence_ontology_id = s.sequence_ontology_id
-                 and so.term_name = 'EST'
+               from dots.nasequence s, sres.ontologyTerm ot
+               where ot.ontology_term_id = s.sequence_ontology_id
+               and ot.name = 'EST'
        </testRowCountSql>
 
        <testRowCountSql includeProjects="EuPathDB">
@@ -62,6 +72,7 @@
        <sqlQuery name="Bfmv">
             <column name="source_id" ignoreCase="true"/>
             <column name="project_id"/>
+            <column name="project_id_lc"/>
             <column name="a_count" />
             <column name="c_count" />
             <column name="g_count" />
@@ -70,35 +81,17 @@
             <column name="length" />
             <column name="primer"  ignoreCase="true"/>
             <column name="dbest_name"  ignoreCase="true"/>
-            <column name="assembly_source_id"  ignoreCase="true"/>
             <column name="vector"  ignoreCase="true"/>
             <column name="stage"  ignoreCase="true"/>
             <column name="organism_text"  ignoreCase="true"/>
             <column name="formatted_organism"  sortingColumn="organism_text" ignoreCase="true"/>
             <column name="ncbi_tax_id"  ignoreCase="true"/>
             <column name="external_db_name"  ignoreCase="true"/>
-            <column name="assembly_est_count"  includeProjects="CryptoDB,ToxoDB,GiardiaDB,TriTrypDB"/>
-            <sql includeProjects="PlasmoDB,EuPathDB">
-            <![CDATA[
-           SELECT bfmv.source_id, bfmv.project_id, bfmv.primer, bfmv.a_count,  bfmv.c_count, 
-                  bfmv.g_count, bfmv.t_count, bfmv.other_count, bfmv.length, 
-                  bfmv.assembly_source_id as assembly_source_id,
-                  bfmv.dbest_name, bfmv.vector, bfmv.stage, bfmv.organism as organism_text,
-                  bfmv.ncbi_tax_id,
-                  '<i>' || SUBSTR(bfmv.organism, 1, 1) || '.' ||
-                  REGEXP_REPLACE(SUBSTR(bfmv.organism, INSTR(bfmv.organism, ' ')), '[[:space:]]+',
-                                 chr(38) || 'nbsp;') || '</i>'
-                    AS formatted_organism,
-                  bfmv.external_db_name
-            FROM  ApidbTuning.EstAttributes bfmv
-            ]]>
-           </sql>
 
-            <sql includeProjects="CryptoDB,ToxoDB,GiardiaDB,TrichDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,FungiDB,InitDB,PiroplasmaDB">
+            <sql>
             <![CDATA[
-           SELECT bfmv.source_id, bfmv.project_id, bfmv.primer, bfmv.a_count,  bfmv.c_count, 
+           SELECT bfmv.source_id, bfmv.project_id, lower(bfmv.project_id) as project_id_lc, bfmv.primer, bfmv.a_count,  bfmv.c_count, 
                   bfmv.g_count, bfmv.t_count, bfmv.other_count, bfmv.length, 
-                  bfmv.assembly_source_id as assembly_source_id, 
                   bfmv.dbest_name, bfmv.vector, bfmv.stage,
                   CASE bfmv.organism when 'Giardia intestinalis' THEN 'Giardia lamblia' else bfmv.organism END as organism_text,
                   bfmv.ncbi_tax_id,
@@ -106,25 +99,26 @@
                   REGEXP_REPLACE(SUBSTR(CASE bfmv.organism when 'Giardia intestinalis' THEN 'Giardia lamblia' else bfmv.organism END, INSTR(bfmv.organism, ' ')), '[[:space:]]+',
                                  chr(38) || 'nbsp;') || '</i>'
                     AS formatted_organism,
-                  bfmv.external_db_name, bfmv.assembly_est_count
+                  bfmv.external_db_name
             FROM  ApidbTuning.EstAttributes bfmv
             ]]>
            </sql>
         </sqlQuery>
 
-        <sqlQuery name="Sequence">
+        <sqlQuery name="Sequence" excludeProjects="EuPathDB">
             <column name="source_id" />
             <column name="project_id" />
             <column name="sequence" />
+	    <column name="sequence_length"/>
             <sql>
                 <![CDATA[
-                  SELECT source_id, project_id, sequence
+                  SELECT source_id, project_id, sequence, length(sequence) AS sequence_length
                   FROM   ApidbTuning.EstSequence
                 ]]>
            </sql>
         </sqlQuery>
 
-        <sqlQuery name="LinkOut">
+        <sqlQuery name="LinkOut" excludeProjects="EuPathDB">
             <column name="source_id" />
             <column name="project_id" />
             <column name="linkout" />
@@ -132,15 +126,9 @@
             <![CDATA[
             SELECT source_id, '@PROJECT_ID@' as project_id,
                 CASE 
-                  WHEN bfmv.dbest_name = 'WatanabeCpHNJ-1' then
-                     '<a href="http://fullmal.hgc.jp/cgi-bin/fulcrypto_start.cgi?UID=11&SEE=1&MXX=750&VSP=&ONF=&SMF=0&VPLN=sp005%7Cstcrm%7Csp005%7Cgn0110%7Csp003%7Ccl0110%7Csp003%7Ccl0610%7Cscale%7Ccl0600%7Csp003%7Ccl0100%7Csp003%7Cgn0100%7C&SRH=1%21'|| bfmv.source_id || '">Full-Cryptosporidium</a>'
-                  WHEN bfmv.dbest_name = 'WatanabeTgRH' then 
-                      '<a href="http://fullmal.hgc.jp/cgi-bin/fultoxo_start.cgi?UID=11&SEE=1&MXX=750&VSP=&ONF=&SMF=0&VPLN=sp005%7Cstcrm%7Csp005%7Cgn0210%7Csp003%7Cgn0310%7Csp003%7Cgn0410%7Csp003%7Cgn0510%7Csp003%7Ccl0210%7Csp003%7Ccl0110%7Csp003%7Ccl0610%7Cscale%7Ccl0600%7Csp003%7Ccl0100%7Csp003%7Ccl0200%7Csp003%7Cgn0500%7Csp003%7Cgn0400%7Csp003%7Cgn0200%7Csp003%7Cgn0300%7C&SRH=1%21' || bfmv.source_id || '">Full-Toxoplasma</a>'
-                  WHEN bfmv.dbest_name = 'WatanabePf3D7_cultured' then 
-                      '<a href="http://fullmal.hgc.jp/cgi-bin/fulmal_start.cgi?UID=11&SEE=1&MXX=750&VSP=&ONF=&SMF=0&VPLN=sp005%7Cstcrm%7Csp005%7Ccl0211%7Csp003%7Ccy0611%7Csp003%7Cyomch0%7Csp003%7Ccy0601%7Csp003%7Ccl0201%7Csp003%7Ccb0111%7Csp003%7Ccb0611%7Csp003%7Cct080%7Csp003%7Ccb0601%7Csp003%7Ccb0101%7Csp003%7Ccv0111%7Csp003%7Ccv0611%7Csp003%7Cct170%7Csp003%7Ccv0601%7Csp003%7Ccv0101%7Csp003%7Csp007%7Cgn0410%7Csp003%7Ccl0610%7Cscale%7Ccl0600%7Csp003%7Cgn0400%7Csp003%7C&SRH=1%21' || bfmv.source_id || '">Full-Malaria</a>'
                   WHEN bfmv.external_db_name = 'C. parvum ESTs' then 
                       '<a href="http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=' || bfmv.source_id || '">NCBI</a>'
-                  WHEN bfmv.external_db_name in ('dbEST','Lbraziliensis_dbEST_RSRC','Linfantum_dbEST_RSRC','Lmajor_dbEST_RSRC','Lmexicana_dbEST_RSRC','Tbrucei_dbEST_RSRC','Tcongolense_dbEST_RSRC','Tcruzi_dbEST_RSRC','Tvivax_dbEST_RSRC','Pf_dbEST_RSRC','Pb_dbEST_RSRC','Pc_dbEST_RSRC','Pg_dbEST_RSRC','Pk_dbEST_RSRC','Pr_dbEST_RSRC','Pv_dbEST_RSRC','Py_dbEST_RSRC') then 
+                  WHEN bfmv.external_db_name like '%dbEST%' THEN 
                       '<a href="http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?val=' || bfmv.source_id || '">NCBI</a>'
                   ELSE 'none'
                 END
@@ -159,15 +147,15 @@
             <sql>
             <![CDATA[
             SELECT e.accession as source_id, '@PROJECT_ID@' as project_id,
-                   c.name as author,
+                   CASE WHEN (c.name IS NOT NULL) THEN c.name ELSE c.last END AS author,
                    c.address1 as affiliation,
                    c.address2 as address
             FROM dots.est e, sres.contact c, 
-                 dots.externalnasequence ens, sres.sequenceontology so
+                 dots.externalnasequence ens, sres.ontologyTerm ot
             WHERE e.contact_id = c.contact_id
             and ens.na_sequence_id = e.na_sequence_id
-            and ens.sequence_ontology_id = so.sequence_ontology_id
-            and so.term_name = 'EST'
+            and ens.sequence_ontology_id = ot.ontology_term_id
+            and ot.name = 'EST'
             ]]>
             </sql>
         </sqlQuery>

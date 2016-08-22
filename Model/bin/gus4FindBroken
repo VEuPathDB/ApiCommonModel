@@ -1,0 +1,107 @@
+#!/usr/bin/perl
+
+use strict;
+use Switch;
+use Data::Dumper;
+
+usage() unless scalar(@ARGV) == 4;
+
+my ($orderedStepsFile, $librariesFile, $brokenStepsOutputFile, $brokenFilesOutputFile) = @ARGV;
+
+my %runnable2libraries;
+my %brokenFiles;
+open(L, $librariesFile) || die "Can't open libraries file '$librariesFile'\n";
+my $runnable;
+while (<L>) {
+  chomp;
+  if (/^(\S+)/) {
+    $runnable = $1;
+    $runnable2libraries{$runnable} = [];
+  } else {
+    my $library = substr($_, 2);
+
+    push(@{$runnable2libraries{$runnable}}, $library);
+  }
+}
+close(L);
+
+open(BROKENSTEPS, ">$brokenStepsOutputFile") || die "Can't open broken steps file '$brokenStepsOutputFile' for writing\n";
+open(BROKENFILES, ">$brokenFilesOutputFile") || die "Can't open broken files file '$brokenFilesOutputFile' for writing\n";
+open(S, $orderedStepsFile) || die "Can't open ordered steps file '$orderedStepsFile'\n";
+
+my $step;
+my %stepFiles;
+if (<S>) {
+  chomp;
+  $step = $_;
+}
+
+while(<S>) {
+  chomp;
+
+  # new step
+  if (/^(\S+)/) {
+    $step = $1;
+    processStep($step);
+    %stepFiles = ();
+  }
+
+  # runnable within step
+  else {
+    my $runnable = substr($_, 2);
+
+    $stepFiles{$runnable} = 1;
+    foreach my $library (@{$runnable2libraries{$runnable}}) {
+      $stepFiles{$library} = 1;
+    }
+  }
+}
+
+sub processStep {
+  my ($step) = @_;
+
+  my $isBroken;
+
+  foreach my $file (keys(%stepFiles)) {
+    my $path;
+
+    if ($file =~ /\:/) {
+      my @pieces = split(/\:\:/, $file);
+      my @path = ("$ENV{GUS_HOME}/lib/perl", @pieces);
+      $path = join('/', @path) . '.pm';
+    } else {
+      $path = "$ENV{GUS_HOME}/bin/$file";
+    }
+
+    open(F, $path) || die "can't open file step's file '$file' at path '$path'\n";
+    my $found;
+    while(<F>) {
+      if (/End GUS4_STATUS/) {
+	$found = 1;
+	last;
+      }
+      if (/GUS4_STATUS.*(broken|unreviewed)/) {
+	print BROKENSTEPS "$step\n" unless $isBroken;
+	$isBroken = 1;
+	print BROKENFILES "$file\n" unless $brokenFiles{$file};
+	$brokenFiles{$file} = 1;
+      }
+    }
+    print STDERR "File '$file' was not stamped\n" unless $found;
+  }
+}
+
+sub usage {
+die "
+Find steps and files that are broken.
+
+Usage: gus4FindBroken ordered_steps_and_runnables runnables_to_libraries offline_steps_output_file broken_files_output_file
+
+Where:
+  -ordered_steps_and_runnables: output from gus4FindOrderedRunnables
+  -runnables_to_libraries:      output from gus4FindLibraries
+  -offline_steps_output_file:   an output fie that contains all broken steps (ordered by test flow run order)
+  -broken_files_output_file:    an output file that shows all broken runnable and library files (also ordered)
+
+";
+}

@@ -1,0 +1,151 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use DBD::Oracle;
+use Getopt::Long;
+
+use XML::Simple;
+
+use ApiCommonShared::Model::tmUtils;
+
+my ($help, $website, $propFile, $runSangerTm, $forceUpdate, $alwaysUpdateOnly);
+
+&GetOptions('help|h' => \$help,
+            'website=s' => \$website,
+            'tuningManagerPropFile=s' => \$propFile,
+            'updateGeneDBAnnotation' => \$runSangerTm,
+          # 'forceUpdate' => \$forceUpdate,  # supported by tuningManager, but not (currently) by tuningMgrMgr
+            'alwaysUpdateOnly' => \$alwaysUpdateOnly
+            );
+
+
+# my $alwaysUpdateTables = 'MassSpecTerms,GbrowseTracksOrganism,DatasetPresenter,TrackOldAnnotation,DatasetDetail';
+my $host = `hostname;`;
+chomp $host;
+my $suffix;
+
+chomp(my $this = `basename $0`);
+my $userAgent = $this . ' ($Revision$) for ' . $ENV{USER};
+$userAgent =~ s/\s*\$\s*//g;
+
+my $isUgaServer;
+
+if($host =~ /\.uga\.edu$/) {
+  $suffix = "s";
+  $isUgaServer = 1;
+}
+elsif($host =~ /\.upenn\.edu$/) {
+  $suffix = "n";
+}
+else {
+  die "hostname could not be resolved to either uga or upenn"
+}
+
+if($help || !$website || !(-e $propFile)) {
+  &usage();
+}
+
+# Get the instanceName and all aliases from dashboard
+my $dashboardUrl = "http://$website/dashboard/xml/wdk/databases/appdb/";
+
+my $databaseUrl = $dashboardUrl . "instancename/value";
+my $aliasesUrl = $dashboardUrl . "aliases";
+
+my $database = `curl --user-agent '$userAgent' -s "$databaseUrl"`;
+chomp $database;
+
+my $isQaSite = $website =~ /^qa\./;
+my $isUgaClone = $database =~ /s$/;
+
+# Exit without error if this is a qa site configured to a penn clone but we are running on a uga server
+if($isQaSite && !$isUgaClone && $isUgaServer) {
+  exit;
+}
+
+my $aliasesXmlString = `curl --user-agent '$userAgent' -s "$aliasesUrl"`;
+my $aliasesXml = XMLin($aliasesXmlString,  ForceArray => 1);
+my @aliases = @{$aliasesXml->{alias}};
+
+# connect to the database using the instanceName (get the instance_nickname from apidb.instancemetainfo)
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($database, "apidb", $propFile);
+$dbh->{RaiseError} = 1;
+$dbh->{AutoCommit} = 0;
+
+my $sql = "select instance_nickname from apidb.instancemetainfo";
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+my $instanceNickname;
+my $count;
+while(my ($tmp) = $sh->fetchrow_array()) {
+  $count++;
+  $instanceNickname = $tmp;
+}
+
+$sh->finish();
+$dbh->disconnect();
+die "problem extracting the instance_nickname from apidb.instancemetainfo for database: $database" unless $count == 1;
+
+# ensure that the name we store in instance_metainfo is a valid alias for the database
+my $isMatch;
+foreach(@aliases) {
+  $isMatch = 1 if(lc($_) eq lc($instanceNickname));
+}
+die "The instance_nickname stored in instancemeainfo [$instanceNickname] does not match a valid ldap alias for the database [$database]" unless($isMatch);
+
+# for inc and rbld ... check that we are on a penn server; otherwise leave alone
+# this is not a problem because joeuser will run from both uga and penn
+if($instanceNickname =~ /(.+)-(rbld|inc)/) {
+  if($isUgaServer) {
+    exit;
+  }
+}
+# correct the suffix based on where we are running
+elsif($instanceNickname =~ /(.+)(n|s)$/) {
+  $instanceNickname = $1 . $suffix;
+}
+else {
+  die "Could not resolve instance_nickname;  should be either inc,rbld or n|s clone";
+}
+
+my $tmmListCmd = "tuningMgrMgr list -propFile $propFile|grep $instanceNickname";
+
+my $isTmConfigured = `$tmmListCmd`;
+chomp $isTmConfigured;
+
+unless($isTmConfigured) {
+  die "WARN: Could not resolve $instanceNickname in the tuning manager registry. If the database has been cloned, use tuningMgrMgr to add the instance to the tuningManager's registry.";
+}
+
+my $forceUpdateString;
+if($forceUpdate) {
+  $forceUpdateString = "-forceUpdate";
+}
+
+my $alwaysUpdateString;
+if($alwaysUpdateOnly) {
+  $alwaysUpdateString = "-alwaysUpdateOnly";
+}
+
+# need to also run the portal tuning manager if we are a "eupa" database
+if($instanceNickname =~ /^eupa/) {
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile");
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile -configFile portalTuningManagerApiDB.xml -schema apidb");
+}
+else {
+  # run the tuningManager
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile $forceUpdateString $alwaysUpdateString");
+}
+
+# need to also run the sanger tuning manager for genedb assoc projects
+if($runSangerTm) {
+  system("tuningMgrMgr updateinstance -instance $instanceNickname -propFile $propFile -configFile sangerTuningManager.xml $forceUpdateString");
+}
+
+sub usage {
+  print STDERR "websiteTuning -website <domain> -tuningManagerPropFile <file>\n -website ex. qa.plasmodb.org (dashboard must be enabled)\n -tuningManagerPropFile is the propfile passed to the tuningmanager\n";
+  exit;
+}

@@ -1,0 +1,311 @@
+#!/usr/bin/perl
+
+use strict;
+use Switch;
+
+usage() unless scalar(@ARGV) >= 1;
+
+my $update = $ARGV[0] eq '-update';
+
+shift @ARGV if $update;
+
+my @files = @ARGV;
+
+
+
+
+my @automaticRules = ( "SRes.OntologyTerm",
+                       "SRes.SequenceOntology",
+                       "Study.OntologyEntry",
+                       "SRes.GOTerm",
+                       "Dots.RNAFeatureExon",
+                       "RAD.SageTag",
+                       "RAD.Analysis",
+                       "ApiDB.Profile",
+                       "Study.Study",
+                       "Dots.Isolate",
+                       "DeprecatedTables",
+                       "Pathway",
+                       "DoTS.SequenceVariation", 
+                       "RNASeq Junctions",
+                       "Simple Rename",
+                       "ApiDB Tuning Gene", 
+                       "Rethink", 
+    );
+my @manualRules = ('dots.gene');
+my @allowedStatus = ('unreviewed', 'broken', 'fixed', 'absent');
+
+foreach my $file (@files) {
+  die "File '$file' does not exist\n" unless -e $file;
+}
+
+foreach my $file (@files) {
+  next if -d $file;
+  open(F, $file) || die "Can't open file '$file' for reading\n";
+  my @fileLines = <F>;
+  close(F);
+  my @reports;
+  foreach my $rule (@automaticRules) {
+    my $report = getAutomaticReport($rule, \@fileLines);
+    push(@reports, $report);
+  }
+  @reports = (@reports, getManualReports(\@fileLines, $file));
+  if ($update) {
+    open(F, ">$file") || die "Can't open file '$file' for reading\n";
+    my $allOk = 1;
+    print F shift @fileLines;  # print first line of file before comment block
+    print F "#vvvvvvvvvvvvvvvvvvvvvvvvv GUS4_STATUS vvvvvvvvvvvvvvvvvvvvvvvvv\n";
+    map { print F "$_\n"; $allOk = 0 if /broken|unreviewed/} @reports;
+    if (!$allOk) {
+      print F "die 'This file has broken or unreviewed GUS4_STATUS rules.  Please remove this line when all are fixed or absent';\n";
+    }
+    print F "#^^^^^^^^^^^^^^^^^^^^^^^^^ End GUS4_STATUS ^^^^^^^^^^^^^^^^^^^^\n";
+    map { print F $_ unless /GUS4_STATUS/; } @fileLines;
+    close(F);
+  }
+  print "\n$file";
+  print "\n" . join("\n", @reports) unless $update;
+}
+print "\n";
+
+###############################################
+
+sub getAutomaticReport {
+  my ($rule, $fileLines) = @_;
+
+  my @fields = ("  # GUS4_STATUS", sprintf("%-30s", $rule), "auto  ", "absent");
+
+  foreach my $line (@$fileLines) {
+
+    next if $line =~ /^\s*\#/;
+
+    switch ($rule) {
+
+      case "SRes.OntologyTerm"
+	{
+	 if ($line =~ /sres\.ontologyterm/i || $line =~ /sres::ontologyterm/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "SRes.SequenceOntology"
+	{
+	 if ($line =~ /sres\.sequenceontology/i || $line =~ /sres::sequenceontology/i ||
+             $line =~ /apidbtuning\.genomicsequence/i || $line =~ /apidbtuning::genomicsequence/i ||
+             $line =~ /apidbtuning\.sequenceattributes/i || $line =~ /apidbtuning::sequenceattributes/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+      case "Study.OntologyEntry"
+	{
+	 if ($line =~ /study\.ontologyentry/i || $line =~ /study::ontologyentry/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+      case "SRes.GOTerm"
+	{
+	 if ($line =~ /sres\.goevidencecode/i || $line =~ /sres::goevidencecode/i ||
+             $line =~ /sres\.gorelationship/i || $line =~ /sres::gorelationship/i ||
+             $line =~ /sres\.gosynonym/i || $line =~ /sres::gosynonym/i ||
+             $line =~ /sres\.goterm/i || $line =~ /sres::goterm/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "Dots.RNAFeatureExon"
+	{
+	 if ($line =~ /dots\.rnafeatureexon/i || $line =~ /dots::rnafeatureexon/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+      case "DoTS.SequenceVariation"
+	{
+	 if ($line =~ /dots\.seqvariation/i || $line =~ /dots::seqvariation/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+      case "RAD.SageTag"
+	{
+	 if ($line =~ /rad\.acquisition/i || $line =~ /rad::acquisition/i ||
+             $line =~ /rad\.assay/i || $line =~ /rad::assay/i ||
+             $line =~ /rad\.quantification/i || $line =~ /rad::quantification/i ||
+             $line =~ /rad\.studyassay/i || $line =~ /rad::studyassay/i ||
+             $line =~ /rad\.arraydesign/i || $line =~ /rad::arraydesign/i ||
+             $line =~ /rad\.sage/i || $line =~ /rad::sage/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+      case "RAD.Analysis"
+	{
+	 if ($line =~ /rad\.analysis/i || $line =~ /rad::analysis/i ||
+             $line =~ /rad\.datatransformation/i || $line =~ /rad::datatransformation/i ||
+             $line =~ /rad\.differential/i || $line =~ /rad::differential/i ||
+             $line =~ /rad\.logicalgroup/i || $line =~ /rad::logicalgroup/i ||
+             $line =~ /rad\.protocol/i || $line =~ /rad::protocol/i ) {
+	   $fields[3] = 'broken';
+	 }
+        }
+
+      case "Simple Rename"
+	{
+	 if ($line =~ /apidb\.genegenomicsequence_split/i || $line =~ /apidb::genegenomicsequence_split/i ||
+             $line =~ /apidb\.genefeaturelodscore/i || $line =~ /apidb::genefeaturelodscore/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+
+      case "ApiDB Tuning Gene"
+	{
+          if ($line =~ /apidbtuning\.geneid/i || $line =~ /apidbtuning::geneid/i ||
+              $line =~ /apidbtuning\.geneattributes/i || $line =~ /apidbtuning::geneattributes/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "ApiDB.Profile"
+	{
+	 if ($line =~ /apidb\.profile/i || $line =~ /apidb::profile/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "Rethink"
+	{
+	 if ($line =~ /apidb\.MassSpecSummary/i || $line =~ /apidb::MassSpecSummary/i ||
+             $line =~ /apidb\.siRNA/i || $line =~ /apidb::siRNA/i ||
+             $line =~ /apidb\.PhenotypeFeature/i || $line =~ /apidb::PhenotypeFeature/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "Pathway"
+	{
+	 if ($line =~ /apidb\.network/i || $line =~ /apidb::network/i ||
+             $line =~ /apidb\.pathway/i || $line =~ /apidb::pathway/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "RNASeq Junctions"
+	{
+	 if ($line =~ /apidb\.rumintronfeature/i || $line =~ /apidb::rumintronfeature/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "Study.Study"
+	{
+	 if ($line =~ /study\.study/i || $line =~ /study::study/i ||
+             $line =~ /study\.bios/i || $line =~ /study::bios/i ||
+             $line =~ /study\.biomaterial/i || $line =~ /study::biomaterial/i ||
+             $line =~ /rad\.studybiomaterial/i || $line =~ /rad::studybiomaterial/i) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      case "Dots.Isolate"
+	{
+	 if ($line =~ /dots\.isolate/i || $line =~ /dots::isolate/i ||
+             $line =~ /apidb\.isolate/i || $line =~ /apidb::isolate/i ||
+             $line =~ /apidb\.vocabularybiomaterial/i || $line =~ /apidb::vocabularybiomaterial/i ||
+             $line =~ /apidb\.continents/i || $line =~ /apidb::continents/i ) {
+	   $fields[3] = 'broken';
+	 }
+	}
+
+
+      case "DeprecatedTables"
+	{
+	 if ($line =~ /sres\.reference/i || $line =~ /sres::reference/i ||
+             $line =~ /sres\.bibreftype/i || $line =~ /sres::bibreftype/i ||
+             $line =~ /sres\.enzymeclassattribute/i || $line =~ /sres::enzymeclassattribute/i ||
+             $line =~ /sres\.ontologyrelationship/i || $line =~ /sres::ontologyrelationship/i ||
+             $line =~ /sres\.contact/i || $line =~ /sres::contact/i ||
+             $line =~ /apidb\.Chromosome6Orthology /i || $line =~ /apidb::Chromosome6Orthology /i ||
+             $line =~ /apidb\.rodentchrcolors/i || $line =~ /apidb::rodentchrcolors/i ||
+             $line =~ /apidb\.toxodbgenes/i || $line =~ /apidb::toxodbgenes/i ||
+             $line =~ /apidb\.transmembrane/i || $line =~ /apidb::transmembrane/i ||
+             $line =~ /apidb\.nextgenseqcoverage/i || $line =~ /apidb::nextgenseqcoverage/i ||
+             $line =~ /apidb\.nextgenseq_align/i || $line =~ /apidb::nextgenseq_align/i ||
+             $line =~ /apidb\.plasmopfallocations/i || $line =~ /apidb::plasmopfallocations/i ||
+             $line =~ /apidb\.plasmomapp/i || $line =~ /apidb::plasmomapp/i  || 
+             $line =~ /apidb\.pathwayimage/i || $line =~ /apidb::pathwayimage/i  || 
+             $line =~ /apidb\.genenamemapping/i || $line =~ /apidb::genenamemapping/i ) {
+
+	   $fields[3] = 'broken';
+	 }
+	}
+
+      else { 
+        die "RULE $rule not handled";
+      }
+
+    }
+  }
+  return join(' | ', @fields);
+
+}
+
+sub getManualReports {
+  my ($fileLines, $file) = @_;
+  my %manualStatus;
+  map { $manualStatus{$_} = 'unreviewed' } @manualRules;
+  my $lineCnt = 0;
+  foreach my $line (@$fileLines) {
+    $lineCnt++;
+    next unless /^  # GUS4_STATUS\|\s+(.*)\s+\| MANUAL\s+\|\s+(\S+)/;
+    my $rule = $1;
+    my $status = $2;
+    die "Invalid rule '$rule' mentioned in file '$file' on line $lineCnt" unless grep(/$rule/, @manualRules);
+    die "Invalid status '$status' mentioned in file '$file' on line $lineCnt" unless grep(/$status/, @allowedStatus);
+    $manualStatus{$rule} = $status;
+  }
+  my @reports;
+  my @fields = ('  # GUS4_STATUS', '', 'manual', '');
+  foreach my $rule (keys(%manualStatus)) {
+    my $rulestr = sprintf("%-30s", $rule);
+    $fields[1] = $rulestr;
+    $fields[3] = $manualStatus{$rule};
+    my $report = join(" | ", @fields);
+    push(@reports, $report);
+  }
+  return @reports;
+}
+
+sub usage {
+
+die "
+Check a file for code that violates the GUS4/Alt Splice migration rules.  Print a report about each file.
+
+Usage: gus4CheckFile [-update] files
+
+Where:
+  -update:  if provided, update the files with a new status section
+  files:    the files to update
+
+Comments in the target files look like this:
+
+# GUS4_STATUS  | RAD.STUDY                 | auto   | broken
+# GUS4_STATUS  | PROTEIN                   | manual | unreviewed
+
+The status codes are:
+  unreviewed
+  absent
+  broken
+  fixed
+
+";
+
+}

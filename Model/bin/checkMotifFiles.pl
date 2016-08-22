@@ -11,7 +11,6 @@ use Getopt::Long;
 
 use Data::Dumper;
 
-#/eupath/data/apiSiteFiles/webServices/TriTrypDB/release-3.1/motif/
 
 my ($help, $apiSiteFilesDir, $eupathDatabase);
 
@@ -44,7 +43,7 @@ my $similarityParamsXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/a
 my $apiCommonModelXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/apiCommonModel.xml";
 
 my $similarityParams = XMLin($similarityParamsXml, ForceArray => 1);
-my $apiCommonModel = XMLin($apiCommonModelXml, ForceArray => 1);
+my $apiCommonModel = XMLin($apiCommonModelXml, keyattr=>[], ForceArray => 1);
 
 my $orfSql =  $similarityParams->{querySet}->{SimilarityVQ}->{sqlQuery}->{OrfMotifFiles}->{sql}->[0];
 my $genomicSql =  $similarityParams->{querySet}->{SimilarityVQ}->{sqlQuery}->{GenomicMotifFiles}->{sql}->[0];
@@ -55,15 +54,21 @@ $genomicSql =~ s/\\'/'/;
 $annotatedProteinsSql =~ s/\\'/'/;
 
 my %projectVersions;
-foreach(@{$apiCommonModel->{modelName}}) {
-  my $version = $_->{version};
-  my $projectId = $_->{displayName};
+foreach(@{$apiCommonModel->{constant}}) {
+  if ($_->{name} eq "buildNumber") {
+    my $version = $_->{content};
 
-  $projectVersions{$projectId} = $version;
+    #  more than one project may be assigned the same buildNumber
+    my @projects = split(',', $_->{includeProjects});
+    foreach my $p (@projects) {
+	$projectVersions{$p} = $version;
+    }
+
+  }
 }
 
 # Get valid project ids
-my $sh = $dbh->prepare("select distinct project_id from ApidbTuning.SequenceAttributes");
+my $sh = $dbh->prepare("select distinct project_id from ApidbTuning.GenomicSeqAttributes");
 $sh->execute();
 
 while(my ($projectId) = $sh->fetchrow_array()) {
@@ -84,9 +89,14 @@ while(my ($projectId) = $sh->fetchrow_array()) {
     my $motifSh = $dbh->prepare($sql);
     $motifSh->execute();
 
-    while(my ($organism, $file) = $motifSh->fetchrow_array()) {
+    while(my ($parent, $organism, $file) = $motifSh->fetchrow_array()) {
+      next if($file eq '-1');
 
-      my $filename = "$apiSiteFilesDir/webServices/$projectId/release-$version/motif/$file";
+      # example $file value:
+      #  @WEBSERVICEMIRROR@/GiardiaDB/build-%%buildNumber%%/GintestinalisAssemblageB/motif/ORFs_AA.fasta
+
+      $file =~ s/\@WEBSERVICEMIRROR\@(.)*buildNumber\%\%\///g;
+      my $filename = "$apiSiteFilesDir/webServices/$projectId/build-$version/$file";
 
       unless(-e $filename) {
         print "ERROR:  Expected file not found:  $filename\n";

@@ -1,0 +1,331 @@
+<wdkModel>
+  <querySet name="CompoundTables" queryType="table" isCacheable="false"  excludeProjects="EuPathDB">
+
+      <defaultTestParamValues includeProjects="@PROJECT_ID@">
+          <paramValue name="source_id">CID:93072</paramValue>
+          <paramValue name="project_id">@PROJECT_ID@</paramValue>
+      </defaultTestParamValues>
+
+    <sqlQuery name="Properties">
+            <column name="project_id"/>
+            <column name="source_id"  />
+            <column name="type"  />
+            <column name="value"  />
+           <sql>
+            <![CDATA[
+	       SELECT * FROM (
+  	         SELECT '@PROJECT_ID@' AS project_id, ca.source_id, struct.type,
+	            to_char(struct.structure) AS value 
+	         FROM ApidbTuning.CompoundAttributes ca, chebi.structures struct
+	         WHERE ca.id = struct.compound_id
+	         AND struct.dimension = '1D'
+	         UNION
+	         SELECT '@PROJECT_ID@' AS project_id, ca.source_id, cd.type,
+	           CASE WHEN cd.type='FORMULA' 
+	           THEN REGEXP_REPLACE(cd.chemical_data,'(\d)','<sub>\1</sub>')
+		   ELSE chemical_data END AS value
+	         FROM ApidbTuning.CompoundAttributes ca, chebi.chemical_data cd
+	         WHERE ca.id = cd.compound_id
+	       ) ORDER BY type
+            ]]>
+            </sql>
+    </sqlQuery>
+
+    <sqlQuery name="IupacNames">
+            <column name="project_id"/>
+            <column name="source_id"  />
+            <column name="value"  />
+           <sql>
+            <![CDATA[
+              SELECT ca.source_id, '@PROJECT_ID@' AS project_id, n.name AS value
+              FROM ApidbTuning.CompoundAttributes ca, chebi.names n
+              WHERE ca.ID = n.compound_id
+              AND n.type='IUPAC NAME'
+              ORDER by lower(n.name)
+            ]]>
+            </sql>
+    </sqlQuery>
+
+    <sqlQuery name="Definition">
+            <column name="project_id"/>
+            <column name="source_id"  />
+            <column name="definition"  />
+           <sql>
+            <![CDATA[
+            SELECT  source_id, '@PROJECT_ID@' AS project_id, definition
+	    FROM ApidbTuning.CompoundAttributes
+            ]]>
+            </sql>
+    </sqlQuery>
+
+
+    <sqlQuery name="SecondaryIds">
+            <column name="project_id"/>
+            <column name="source_id"  />
+            <column name="secondary_ids"  />
+           <sql>
+            <![CDATA[
+            SELECT  source_id, '@PROJECT_ID@' AS project_id, secondary_ids
+	        FROM ApidbTuning.CompoundAttributes
+            WHERE secondary_ids is not null
+            ]]>
+            </sql>
+    </sqlQuery>
+
+    <sqlQuery name="Synonyms">
+            <column name="project_id"/>
+            <column name="source_id"  />
+            <column name="source"  />
+            <column name="value"  />
+           <sql>
+            <![CDATA[
+            SELECT DISTINCT p.chebi_accession AS source_id, 
+	      '@PROJECT_ID@' AS project_id, d.source, d.name as value
+	    FROM chebi.names d, chebi.compounds c, chebi.compounds p
+	    WHERE p.status='C' 
+	    AND d.type in ('SYNONYM', 'NAME')
+	    AND NOT d.SOURCE ='ChEMBL'
+	    AND ((d.compound_id = c.ID AND c.parent_id=p.ID)
+	      OR (d.compound_id = p.ID AND p.parent_id IS NULL))
+	    ORDER BY lower(d.name)
+            ]]>
+            </sql>
+    </sqlQuery>
+
+    <sqlQuery name="Structures">
+            <column name="project_id"/>
+            <column name="source_id" />
+            <column name="struct_num" />
+            <column name="structure" />
+           <sql>
+            <![CDATA[
+            SELECT ca.SOURCE_ID,'@PROJECT_ID@' AS project_id
+              , CASE WHEN ds.structure_id>0 THEN 0 ELSE rownum END AS struct_num
+              , s.structure
+            FROM ApidbTuning.compoundAttributes ca, chebi.structures s, chebi.default_structures ds
+            WHERE ca.ID = s.COMPOUND_ID
+            AND s.id = ds.STRUCTURE_ID (+)
+            AND s.type='mol' and s.DIMENSION='2D' 
+            ORDER BY ds.structure_id
+            ]]>
+            </sql>
+    </sqlQuery>
+
+
+
+    <sqlQuery name="CompoundsFromMetabolicPathways">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="pathway_source"/>
+      <column name="reaction_source_id"/>
+      <column name="reaction_url"/>
+      <column name="enzyme"/>
+      <column name="expasy_url"/>
+      <column name="expasy_html"/>
+      <column name="equation_html"/>
+      <column name="substrates_text"/>
+      <column name="products_text"/>
+      <column name="pathways"/>
+      <sql>
+    <!--TODO use internal genes by ec number query when fixed-->
+	    <![CDATA[
+            select distinct '@PROJECT_ID@' as project_id
+            , pc.CHEBI_ACCESSION as source_id
+            , pa.PATHWAY_SOURCE
+            , pr.REACTION_SOURCE_ID
+            , pr.REACTION_URL
+            , pr.EXPASY_HTML
+            , pr.ENZYME
+            , pr.EXPASY_URL
+            , pr.EQUATION_HTML
+            , pr.SUBSTRATES_TEXT
+            , pr.PRODUCTS_TEXT
+            , count (pa.pathway_id) as pathways
+            from apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , apidbtuning.pathwayattributes pa
+            where pc.reaction_id = pr.reaction_id
+            and pc.PATHWAY_ID = pa.PATHWAY_ID
+            and pc.EXT_DB_NAME = pr.EXT_DB_NAME
+            and pc.EXT_DB_VERSION = pr.EXT_DB_VERSION
+            group by pc.chebi_accession, pa.pathway_source, pr.reaction_source_id, pr.reaction_url, pr.expasy_html
+            , pr.enzyme, pr.expasy_url, pr.equation_html, pr.substrates_text, pr.products_text
+            order by pathways desc
+	    ]]>
+	  </sql>
+    </sqlQuery>
+
+    <sqlQuery name="PathwaysFromCompounds">
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="pathway_source_id"/>
+        <column name="pathway_name"/>
+        <column name="reactions"/>
+        <column name="pathway_source"/>
+        <sql>
+            <![CDATA[
+                select distinct
+                project_id
+                , source_id
+                , pathway_source_id
+                , pathway_name
+                , count (reaction_source_id) as reactions
+                , pathway_source
+                from (
+                select distinct
+                '@PROJECT_ID@' as project_id
+                , pc.CHEBI_ACCESSION as source_id
+                , pa.SOURCE_ID as pathway_source_id
+                , pa.NAME as pathway_name
+                , pa.PATHWAY_SOURCE
+                , pr.REACTION_SOURCE_ID
+                from
+                apidbtuning.pathwaycompounds pc
+                , apidbtuning.pathwayreactions pr
+                , apidbtuning.pathwayattributes pa
+                where pc.PATHWAY_ID = pa.PATHWAY_ID
+                and pr.REACTION_ID = pc.REACTION_ID
+                )
+                where source_id is not null
+                group by project_id, source_id, pathway_source_id, pathway_name, pathway_source
+                order by reactions desc
+            ]]>
+        </sql>
+    </sqlQuery>
+
+       
+
+
+	<!--
+    <sqlQuery name="RelatedCompounds">
+      <column name="source_id"  />
+      <column name="project_id"/>
+      <column name="subst_id"/>
+      <column name="type"/>
+      <column name="related_id"/>
+      <sql>
+	SELECT ca.source_id, '@PROJECT_ID@' AS project_id,
+                        s1.substance_id as subst_id, s2.type, s2.value as related_id
+	  FROM  APIDB.pubchemsubstance s1,  APIDB.pubchemsubstance s2, ApidbTuning.CompoundAttributes ca
+	 WHERE s1.substance_id = s2.substance_id
+	   AND s1.property='CID' 
+	   AND s1.type = 'standardized'
+           AND s1.value = ca.compound_id
+	   AND s2.property='CID'
+	   AND not s1.value = s2.value
+	    </sql>
+        </sqlQuery>
+-->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Mass Spec (Metabolite)  Graphs -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+       <sqlQuery name="MassSpecGraphs" >
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="graph_ids" />
+            <column name="module" />
+            <column name="species" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
+            <column name="display_name" />
+            <column name="description" />
+            <column name="x_axis" />
+            <column name="y_axis" />
+            <column name="has_graph_data"/>
+            <column name="has_meta_data"/>
+            <column name="meta_data_categories"/>
+            <column name="dataset_name"/>
+            <column name="dataset_id"/>
+            <column name="is_graph_custom"/>
+            <column name="summary"/>
+            <column name="short_attribution"/>
+            <column name="assay_type"/>
+
+            <sql>
+            <![CDATA[
+            select '@PROJECT_ID@' as project_id
+            , 'TRUE' as mainOpen
+            , 'FALSE' as dataOpen
+            , 'FALSE' as has_meta_data
+            , '' as meta_data_categories
+            , 'N/A' as species
+            , dp.summary
+            , dp.short_attribution
+            , dp.display_name
+            , dp.description
+            , dp.type as assay_type
+            , dp.dataset_presenter_id as dataset_id
+            , case when graph_ids is null then 0 else 1 end as has_graph_data
+            , gg.*
+            from (
+              select distinct ca.source_id
+              , ca.source_id as graph_ids
+              , cpgd.*
+              from apidbtuning.compoundattributes ca
+              , apidbtuning.profile p
+              , (select '' as dataset_name
+                , '' as module
+                , '' as x_axis
+                , '' as y_axis
+                , '' as is_graph_custom
+                , 1 as order_number
+                from dual
+                -- TEMPLATE_ANCHOR compoundPageGraphDescriptions
+                --template injector not working so hard code for now
+                UNION
+                select 'metaboliteProfiles_LlinasMetabolites_RSRC' as datasetName
+                , 'Llinas::pHMetabolite' as module
+                , 'pH' as x_axis
+                , 'Metabolite levels in infected red blood cells, saponin-purified parasites, and uninfected cells incubated for 4 hours in U-<sup>13</sup> C glutamine containing media titrated to pH 6.4, 7.4, and 8.4. <br /><br /><b>Warning: all metabolite assignments provided in this alpha release should be treated as preliminary.</b>' as y_axis
+                , 'true' as is_graph_custom
+                , 500 as order_number
+                from dual
+              ) cpgd
+              where cpgd.dataset_name = p.DATASET_NAME
+              and regexp_substr(p.source_id, '^CHEBI:\d+') = ca.source_id
+              ) gg
+            , apidbtuning.datasetpresenter dp
+            where gg.dataset_name = dp.name
+             ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="MassSpecGraphsDataTable" isCacheable="false" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="dataset_id"/>
+            <column name="name"/>
+            <column name="isotopomer"/>
+            <column name="value"/>
+            <column name="standard_error"/>
+            <sql><![CDATA[
+                select distinct ca.source_id
+                , '@PROJECT_ID@' as project_id
+                , replace (pan.NAME, '(metabolite_massSpec)', '') as name
+                , nvl(cms.ISOTOPOMER, 'C12') as isotopomer
+                , case when cms.value > 9999
+                    then to_char(cms.VALUE, '9.99EEEE') 
+                    else to_char(round(cms.value, 2))
+                    end as value
+                , round (cms.STANDARD_ERROR, 2) as standard_error
+                , dp.DATASET_PRESENTER_ID as dataset_id
+                from RESULTS.COMPOUNDMASSSPEC cms
+                , apidbtuning.compoundattributes ca
+                , CHEBI.COMPOUNDS c
+                , STUDY.PROTOCOLAPPNODE pan
+                , apidbtuning.datasetpresenter dp
+                where cms.COMPOUND_ID = c.ID
+                and c.CHEBI_ACCESSION = ca.SOURCE_ID
+                and pan.PROTOCOL_APP_NODE_ID = cms.PROTOCOL_APP_NODE_ID
+                and dp.name = 'metaboliteProfiles_LlinasMetabolites_RSRC'
+                and pan.name not like 'blank%'
+                order by ca.SOURCE_ID, ISOTOPOMER, name
+            ]]>
+            </sql>
+        </sqlQuery>
+                
+
+
+    </querySet>
+</wdkModel>

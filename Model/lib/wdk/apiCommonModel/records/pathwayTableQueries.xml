@@ -1,0 +1,206 @@
+<wdkModel>
+
+  <querySet name="PathwayTables" queryType="table" isCacheable="false" excludeProjects="EuPathDB">
+
+      <defaultTestParamValues>
+         <paramValue name="source_id">ec00626</paramValue>
+          <paramValue name="project_id">@PROJECT_ID@</paramValue>
+      </defaultTestParamValues>
+
+
+      <sqlQuery name="CompoundsFromMetabolicPathways" >
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="pathway_source"/>
+            <column name="reaction_source_id"/>
+            <column name="reaction_url"/>
+            <column name="enzyme"/>
+            <column name="expasy_url"/>
+            <column name="expasy_html"/>
+            <column name="equation"/>
+            <column name="reversible"/>
+            <column name="substrates_text"/>
+            <column name="products_text"/>            
+            <sql>
+            <![CDATA[
+            SELECT DISTINCT '@PROJECT_ID@' as project_id
+            , pa.SOURCE_ID
+            , pa.PATHWAY_SOURCE
+            , pr.REACTION_SOURCE_ID
+            , pr.REACTION_URL
+            , pr.ENZYME
+            , pr.EXPASY_URL
+            , pr.EXPASY_HTML
+            , pr.EQUATION_HTML as equation
+            , decode (pr.IS_REVERSIBLE, '1', 'Y', '0', 'N') as reversible
+            , pr.SUBSTRATES_TEXT
+            , pr.PRODUCTS_TEXT
+            FROM
+            apidbtuning.pathwayattributes pa
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , sres.pathwaynode pn
+            WHERE pc.pathway_id = pa.PATHWAY_ID
+            AND pn.PATHWAY_ID = pa.PATHWAY_ID
+            AND pr.REACTION_ID = pc.REACTION_ID
+            AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+            AND pr.ENZYME = pn.DISPLAY_LABEL
+            ORDER BY pr.ENZYME
+            ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="PathwayReactionsXrefs">
+            <column name="project_id"/>
+            <column name="source_id"/>
+            <column name="pathway_source"/>
+            <column name="alt_pathway_source_id"/>
+            <column name="alt_pathway_source"/>
+            <column name="alt_pathway_url"/>
+            <column name="name"/>
+            <column name="reaction_count"/>
+            <column name="alt_reaction_count"/>
+            <column name="pct"/>
+            <column name="overlap_count"/>
+            <sql>
+                <![CDATA[
+                    select tbl.* from (
+                    with pathway_reaction as (select distinct  pathway_id,
+                    pathway_reaction_id from apidb.pathwayreactionrel),
+                      pathway_counts as (select pathway_id, count(*) as ct from
+                    pathway_reaction group by pathway_id)
+                    select
+                       '@PROJECT_ID@' as project_id
+                       , pa1.source_id
+                       , pa1.pathway_source
+                       , pa2.pathway_source as alt_pathway_source
+                       , pa2.source_id as alt_pathway_source_id
+                       , pa2.name
+                       , pc1.ct as reaction_count
+                       , pc2.ct as alt_reaction_count
+                       , case when pc1.ct < pc2.ct then count(*) / pc1.ct else count(*) /
+                    pc2.ct end * 100 as pct
+                       , count(*) as overlap_count
+                    from apidbtuning.pathwayattributes pa1
+                    , apidbtuning.pathwayattributes pa2
+                    ,  pathway_reaction ap
+                    ,  pathway_counts pc1
+                    ,  pathway_counts pc2
+                    ,(SELECT DISTINCT
+                         pr.pathway_id
+                       , prx.associated_reaction_id AS pathway_reaction_id
+                       FROM
+                         pathway_reaction pr
+                       , apidb.pathwayreactionxref prx
+                       WHERE
+                         prx.pathway_reaction_id = pr.pathway_reaction_id
+                       UNION
+                       SELECT DISTINCT
+                         pr.pathway_id
+                       , pr.pathway_reaction_id
+                       FROM
+                         pathway_reaction pr
+                       ) ax
+                    WHERE
+                       ap.pathway_reaction_id = ax.pathway_reaction_id
+                       and pa1.pathway_id = ap.pathway_id
+                       and pa2.pathway_id = ax.pathway_id
+                       and pa1.pathway_id = pc1.pathway_id
+                       and pa2.pathway_id = pc2.pathway_id
+                       and pa1.pathway_id != pa2.pathway_id
+                    HAVING count(*) >1
+                    group by    pa1.source_id
+                       , pa1.pathway_source
+                       , pa2.source_id
+                       , pa2.pathway_source
+                       , pa2.name
+                       , pc1.ct
+                       , pc2.ct
+                    ) tbl
+                    order by tbl.pct desc
+                ]]>
+            </sql>
+        </sqlQuery>
+
+      <sqlQuery name="PathwayGraphs" >
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="pathway_source"/> 
+            <column name="display_name"/>
+            <column name="internal"/>
+            <column name="xaxis_description"/>
+            <sql>
+            <![CDATA[
+select pa.source_id, '@PROJECT_ID@' as project_id, pa.pathway_source,
+       g.display_name, g.internal || '&template=' || decode(g.is_graph_custom, 'true', 0, 1) as internal, g.xaxis_description
+from apidbtuning.pathwayattributes pa, (select '*** Default ***' as display_name, '' as internal, '' as is_graph_custom, '' as xaxis_description, '' as project_id from dual
+      -- TEMPLATE_ANCHOR pathwayGraphs
+) g
+Where g.project_id = '@PROJECT_ID@'
+AND NOT g.internal LIKE '%MassSpec%' 
+            ]]>
+           </sql>
+        </sqlQuery>
+
+
+<!-- not used in GUS4? TODO: comment out after QA if not required
+      <sqlQuery name="ECNumberOrganismMap" >
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="pathway_source"/> 
+            <column name="display_label"/>
+            <column name="x1"/>
+            <column name="y1"/>
+            <column name="x2"/>
+            <column name="y2"/>
+            <column name="organisms"/>
+            <column name="genes"/>
+
+            <sql>
+            <![CDATA[
+               SELECT DISTINCT p.source_id as source_id, '@PROJECT_ID@' as project_id, ec.ec_number as display_label,
+                       (pn.x - (pn.width/2)) as x1, (pn.y - (pn.height/2)) as y1,
+                       (pn.x + (pn.width/2)) as x2, (pn.y + (pn.height/2)) as y2,
+                       apidb.tab_to_string(set(cast(COLLECT(ga.organism) AS apidb.varchartab)), ', ') as organisms,
+                       apidb.tab_to_string(set(cast(COLLECT(ga.source_id) AS apidb.varchartab)), ', ') as genes
+                FROM    ApidbTuning.GenomicSeqAttributes gs,
+                       sres.pathway p, sres.pathwaynode pn,
+                       dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec,ApidbTuning.TranscriptAttributes ga
+                WHERE  gs.na_sequence_id = ga.na_sequence_id
+                AND    ga.aa_sequence_id = asec.aa_sequence_id
+                AND    asec.enzyme_class_id = ec.enzyme_class_id
+                AND    p.pathway_id = pn.pathway_id
+                AND    ec.ec_number = pn.display_label
+                group by p.source_id, ec.ec_number, pn.x, pn.y,pn.width, pn.height
+            ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="CompoundLabel" >
+            <column name="source_id"/>
+            <column name="pathway_source"/> 
+            <column name="compound_source_id"/>
+            <column name="project_id"/>
+            <column name="display_label"/>
+            <column name="x"/>
+            <column name="y"/>
+            <column name="radius"/>
+            <sql>
+              <![CDATA[
+              Select p.source_id, pc.compound_source_id, '@PROJECT_ID@' as project_id,
+                     pn.display_label, pn.x, pn.y, pn.height as radius 
+              From   ApiDB.Pathway p, ApiDB.PathwayNode pn, ApiDBTuning.PathwayCompounds pc
+              Where  p.pathway_id = pn.parent_id
+              And    pn.pathway_node_type_id = 2
+              AND    pn.display_label = pc.compound
+              Group By p.source_id, pc.compound_source_id, pn.display_label, pn.x, pn.y, pn.height, pn.width
+            ]]>
+           </sql>
+        </sqlQuery>
+-->
+
+ </querySet>
+</wdkModel>
+
+
+

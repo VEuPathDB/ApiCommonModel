@@ -1,32 +1,38 @@
 #!/usr/bin/perl
 
+use strict;
+
 use lib "$ENV{GUS_HOME}/lib/perl";
-use FgpUtil::Runtime::CommandHelper;
+use FgpUtil::Util::CommandHelper;
 use Getopt::Long qw(GetOptions);
-use ApiCommonData::Load::TuningConfig::Utils;
+use ApiCommonShared::Model::tmUtils;
 
 my $GUS_HOME = $ENV{GUS_HOME};
-my $CLASSPATH = &FgpUtil::Runtime::CommandHelper::getJavaClasspath($GUS_HOME);
+my $CLASSPATH = &FgpUtil::Util::CommandHelper::getJavaClasspath($GUS_HOME);
+my $sysProps = &FgpUtil::Util::CommandHelper::getSystemProps($GUS_HOME, 'Ssgcid');
 
-my ($propfile, $instance, $schema, $password, $suffix, $project, $version, $subversionDir, $debug);
+my ($propfile, $instance, $schema, $suffix, $debug, $password);
 
+Getopt::Long::Configure("pass_through");
 GetOptions("propfile=s" => \$propfile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
-           "password=s" => \$password,
            "suffix=s" => \$suffix,
-           "project=s" => \$project,
-           "version=s" => \$version,
-           "subversionDir=s" => \$subversionDir,
            "debug!" => \$debug,
 	  );
+die "required parameter missing" unless ($propfile && $instance && $suffix);
 
-($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+($instance, $schema, $password) = ApiCommonShared::Model::tmUtils::getDbLoginInfo($instance, $schema, $propfile);
 
-my $datasetId = 1025689; # dataset ID of SSGCID's Google Fusion Table
-my $tuningTable = ssgcid;
-my $columnList = "target,eupathdb,status,selection_criteria,has_clone,has_protein";
+# fetch JSON from SSGCID
+my $filename = "/tmp/ssgcid" . $suffix . ".json";
+system("wget http://www.ssgcid.org/eupath/list_all?format=json --output-document " . $filename);
 
-open(PROGRAM, "|java $sysProps -classpath $CLASSPATH org.apidb.apicommon.model.fusiontables.FusionTable $datasetId $tuningTable $suffix $columnList");
+# run Java program
+open(PROGRAM, "|java $sysProps -classpath $CLASSPATH org.apidb.apicommon.model.ssgcid.Ssgcid $suffix");
+
 print PROGRAM "$instance\n$schema\n$password";
-close(PROGRAM);
+
+close(PROGRAM) or die "error in called program";
+
+system("rm " . $filename);

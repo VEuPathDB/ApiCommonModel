@@ -4,38 +4,62 @@
   <!-- oooooooooooooooooooooooooo  Dependencies  oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
-  <target name="CBIL-Installation">
-    <ant antfile="../CBIL/build.xml" target="CBIL-Installation">
-      <property name="project" value="CBIL"/>
-      <property name="version" value="latest"/>
-    </ant>
-  </target>  
-
-  <target name="CBIL-Checkout" unless="CBIL.present"> 
-    <ant target="defaultProjectCheckout" inheritAll="false">
-      <property name="svnurl" value="https://www.cbil.upenn.edu/svn/gus/CBIL" />
-      <property name="project" value="CBIL"/>
-      <property name="version" value="internal/api-build-9"/>
-    </ant>
-  </target>  
+  <import file="${projectsDir}/WDK/build.xml" />
+  <import file="${projectsDir}/CBIL/build.xml" />
+  <import file="${projectsDir}/ReFlow/build.xml" />
   
+
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooo    Checkout    oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
   <target name="ApiCommonShared-ChildCheckout">
-    <available file="../CBIL" type="dir" property="CBIL.present" />
+    <available file="${projectsDir}/CBIL" type="dir" property="CBIL.present" />
+    <available file="${projectsDir}/ReFlow" type="dir" property="ReFlow.present" />
+    <available file="${projectsDir}/WDK" type="dir" property="WDK.present" />
     <antcall target="CBIL-Checkout" />
+    <antcall target="ReFlow-Checkout"/>
+    <antcall target="WDK-Checkout"/>
   </target>
   
+  <target name="CBIL-Checkout" unless="CBIL.present">
+    <ant target="defaultProjectCheckout" inheritAll="false">
+      <property name="svnurl" value="https://www.cbil.upenn.edu/svn/gus/CBIL" />
+      <property name="project" value="CBIL"/>
+      <property name="version" value="internal/api-build-9"/>
+    </ant>
+  </target>
+
+  <target name="ReFlow-Checkout" unless="ReFlow.present">
+    <ant target="defaultProjectCheckout" inheritAll="false">
+      <property name="svnurl" value="https://www.cbil.upenn.edu/svn/gus/ReFlow"/>
+      <property name="project" value="ReFlow"/>
+    </ant>
+  </target>
+
+  <target name="WDK-Checkout" unless="WDK.present">
+   <ant target="defaultProjectCheckout" inheritAll="false">
+      <property name="svnurl" value="https://www.cbil.upenn.edu/svn/gus/WDK"/>
+      <property name="project" value="WDK"/>
+      <property name="version" value="WDK_version_1-28"/>
+    </ant>
+  </target>
   
+
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooo    Update    oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
+
   <target name="ApiCommonShared-ChildUpdate" >
     <ant target="defaultProjectUpdate">
       <property name="project" value="CBIL"/>
+    </ant>
+    <ant target="defaultProjectUpdate">
+      <property name="project" value="ReFlow"/>
+    </ant>
+     <ant target="defaultProjectUpdate">
+      <property name="project" value="WDK"/>
     </ant>
   </target>
 
@@ -45,10 +69,15 @@
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
   <target name="ApiCommonShared-Installation" depends="CBIL-Installation,
+                                            ReFlow-Installation,
+                                            WDK-Installation,
+                                            ApiCommonShared/DatasetPresenter-Installation,
                                             ApiCommonShared/Model-Installation">
 
 
-    <ant target="defaultProjectInstall"/>
+    <ant target="defaultProjectInstall">
+      <property name="project" value="ApiCommonShared"/>
+    </ant>
 
   </target>  
    
@@ -69,12 +98,58 @@
 
   <!-- ooooooooooooooooooooooo  Install Components  ooooooooooooooooooooooo -->
 
+  <target name="ApiCommonShared/DatasetPresenter-Installation" depends="ProjectTree">
+    <ant target="defaultComponentInstall">
+      <property name="project" value="ApiCommonShared"/>
+      <property name="component" value="DatasetPresenter"/>
+    </ant>
+  </target>  
+
   <target name="ApiCommonShared/Model-Installation" depends="ProjectTree">
+
     <ant target="defaultComponentInstall">
       <property name="project" value="ApiCommonShared"/>
       <property name="component" value="Model"/>
     </ant>
+
   </target>  
+
+  <!-- ooooooooooooooooooTemporary till TRICH is in Workflow  ooooooooooooooooooooooooo -->
+
+<target name="ApiCommonShared/Datasources-Installation" depends="ProjectTree">
+    <property name="loadresources" value="${targetDir}/lib/xml"/>
+    <property name="cache" value="${targetDir}/config/.cache/datasources"/>
+    <property name="datasources" value="${targetDir}/lib/xml"/>
+    <mkdir dir="${cache}"/>
+    <mkdir dir="${datasources}"/>
+    <copy todir="${loadresources}">
+      <fileset dir="${projectsDir}/ApiCommonShared/Model/lib/xml">
+        <include name="*Resources.xml"/>
+      </fileset>
+    </copy>
+    <echo message="Running updateResourcesWithPubmed"/>
+    <apply executable="${targetDir}/bin/updateResourcesWithPubmed" 
+           dest="${cache}"
+           verbose="true">
+        <srcfile/>
+        <targetfile/>
+        <fileset dir="${loadresources}">
+          <include name="*trichResources.xml"/>
+        </fileset>
+        <mapper type="glob" from="*.xml" to="*-pubmed.xml"/>
+    </apply>
+    <copy todir="${datasources}">
+      <fileset dir="${cache}">
+        <include name="*-pubmed.xml"/>
+      </fileset>
+    </copy>
+
+    <ant target="buildInfo">
+      <property name="component" value="updateResourcesWithPubmed"/>
+    </ant>
+
+  </target>
+
 
 
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
@@ -100,4 +175,3 @@
   </target>  
 
 </project>
-

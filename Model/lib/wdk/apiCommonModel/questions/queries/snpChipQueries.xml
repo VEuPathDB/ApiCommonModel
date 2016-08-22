@@ -1,0 +1,225 @@
+<wdkModel>
+
+  <querySet name="SnpChipsBy" queryType="id"  isCacheable="true" includeProjects="PlasmoDB,EuPathDB">
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- SNP ID -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+      <sqlQuery name="SnpBySourceId" doNotTest="true" includeProjects="PlasmoDB" >
+          <paramRef ref="snpChipParams.snp_id"/>
+    <column name="source_id"/>
+    <column name="project_id"/>
+        <sql>
+      <![CDATA[
+        SELECT sf.source_id AS source_id, '@PROJECT_ID@' as project_id
+        FROM ApidbTuning.SnpAttributesDots sf, ($$snp_id$$) ds
+        WHERE sf.source_id  like (ds.source_id || '%')
+      ]]>
+        </sql>
+      </sqlQuery>
+
+     <processQuery name="SnpBySourceId" includeProjects="EuPathDB" 
+              doNotTest="true" 
+              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+          <paramRef ref="snpChipParams.snp_id" noTranslation="true" />
+          <paramRef ref="sharedParams.wdk_user_signature" noTranslation="true"/>
+    <wsColumn name="source_id" width="50" wsName="source_id"/>
+          <wsColumn name="project_id" width="32" wsName="project_id"/>
+      </processQuery>
+
+
+    <!-- ===================================================================== -->
+    <!-- ===================================================================== -->
+    <!-- ====== QUERIES BELOW HERE MIGHT NEED RETIRING.  PLEASE REVIEW ======= -->
+    <!-- ===================================================================== -->
+    <!-- ===================================================================== -->
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Gene ID -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+   <processQuery name="SnpsByGeneId" includeProjects="PlasmoDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindChipSnpsByGeneIdsPlugin">
+
+      <paramRef ref="organismParams.organismSinglePick" visible="false" quote="true" queryRef="snpChipVQ.withChipSNPs"/>
+      <paramRef ref="sharedParams.snp_assay_type"/>
+      <paramRef ref="sharedParams.ds_gene_ids" default="PF3D7_1133400"/>
+      <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Samples"/>
+      <paramRef ref="snpChipParams.WebServicesPath"/>
+      <paramRef ref="snpChipParams.ReadFrequencyPercent" />
+      <paramRef ref="snpChipParams.MinPercentMinorAlleles"/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" />
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/>
+      <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+      <wsColumn name="Phenotype" width="15"/>
+    </processQuery>
+ 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Location -->
+    <!-- 
+         This query contains two nested inline views.  The 
+         inner, named "hits", identifies SNPs within the given 
+         genomic region for which the reference strain has a 
+         different allele from at least one of the others.  The 
+         outer inline view, "snpq", has one row for each SNP for 
+         each strain (e.g. (100 SNPs) x (1 reference + 3 other 
+         strains) = 400 records).  At the top level, the query 
+         itself then groups all rows of a SNP into a single row 
+         (which, for the above example, would mean grouping four 
+         rows into one).
+         
+         It seems necessary to have these three levels in the 
+         query's structure, but it might be possible to optimize 
+         within each level.  For instance, the innermost query must 
+         join dots.SnpFeature to dots.NaLocation.  A big 
+         materialized view could precompute this join. -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <processQuery name="SnpsByLocation" includeProjects="PlasmoDB"
+                  processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindChipPolymorphismsWithSeqFilterPlugin">
+
+      <!-- need to have quote=true so that dependent param query works.  the wsf plugin remove the for its use -->
+
+      <paramRef ref="organismParams.organismSinglePick" visible="false" quote="true" queryRef="snpChipVQ.withChipSNPs"/>
+      <paramRef ref="sharedParams.chromosomeOptional" queryRef="SharedVQ.ChromosomeOrderNumMultipickForSnps" multiPick="false"/>
+      <paramRef ref="sharedParams.sequenceId"/>
+      <paramRef ref="sharedParams.start_point"/>
+      <paramRef ref="sharedParams.end_point"/>
+      <paramRef ref="sharedParams.snp_assay_type"/>
+      <paramRef ref="snpChipParams.WebServicesPath"/>
+      <!-- <paramRef ref="sharedParams.metadata_datasets" queryRef="GeneVQ.SnpChipMetadataDatasets"/> -->
+      <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Samples"/>
+      <paramRef ref="snpChipParams.ReadFrequencyPercent" />
+      <paramRef ref="snpChipParams.MinPercentMinorAlleles"/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" />
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/>
+      <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+      <wsColumn name="Phenotype" width="15"/>
+    </processQuery>
+ 
+
+
+      <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- by strain                                      -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <processQuery name="SnpsByStrain" includeProjects="PlasmoDB"  
+             processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindChipPolymorphismsPlugin">
+
+      <paramRef ref="organismParams.organismSinglePick" visible="false" quote="true" queryRef="snpChipVQ.withChipSNPs"/>
+      <paramRef ref="sharedParams.snp_assay_type"/>
+      <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Samples"/>
+          <paramRef ref="snpChipParams.WebServicesPath"/>
+          <paramRef ref="snpChipParams.ReadFrequencyPercent" />
+          <paramRef ref="snpChipParams.MinPercentMinorAlleles"/>
+          <paramRef ref="snpParams.MinPercentIsolateCalls" />
+          <wsColumn name="source_id" width="60" wsName="SourceId"/>
+          <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+          <wsColumn name="PercentMinorAlleles" width="8" columnType="float"/> <!-- need width 8 for oracle to give us xx.x precision in the display -->
+          <wsColumn name="PercentIsolateCalls" width="8" columnType="float"/>
+          <wsColumn name="Phenotype" width="15"/>
+    </processQuery>
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Isolate Pattern -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <processQuery name="SnpsByIsolatePattern" includeProjects="PlasmoDB" 
+            processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindChipSnpMajorAllelesPlugin">
+      <!-- need to have quote=true so that dependent param query works.  the wsf plugin removes them for its use -->
+
+      <paramRef ref="organismParams.organismSinglePick" visible="false" quote="true" queryRef="snpChipVQ.withChipSNPs"/>
+      <paramRef ref="sharedParams.snp_assay_type"/>
+      <paramRef ref="snpChipParams.ref_samples_filter_metadata" quote="false" prompt="Set A Isolates"/>
+      <paramRef ref="snpChipParams.ReadFrequencyPercent" />
+      <paramRef ref="snpParams.MinPercentMajorAlleles" prompt="Set A major allele frequency &gt;= "/>
+      <paramRef ref="snpParams.MinPercentIsolateCalls" prompt="Set A percent isolates with base call &gt;= "/>
+      <paramRef ref="snpChipParams.WebServicesPath"/>
+      <paramRef ref="snpChipParams.comp_samples_filter_metadata" quote="false"/>
+      <paramRef ref="snpChipParams.ReadFrequencyPercentTwo"  prompt="Set B read frequency threshold &gt;= " visible="false"/>
+      <paramRef ref="snpParams.MinPercentMajorAllelesTwo" prompt="Set B major allele frequency &gt;= "/>
+      <paramRef ref="snpParams.MinPercentIsolateCallsTwo" prompt="Set B percent isolates with base call &gt;= "/>
+      <wsColumn name="source_id" width="60" wsName="SourceId"/>
+      <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+      <wsColumn name="MajorAlleleA" width="3"/>
+      <wsColumn name="MajorAllelePctA" width="8" columnType="float"/>
+      <wsColumn name="IsTriallelicA" width="3"/>
+      <wsColumn name="MajorProductA" width="3"/>
+      <wsColumn name="MajorProductIsVariableA" width="3"/>
+      <wsColumn name="MajorAlleleB" width="3"/>
+      <wsColumn name="MajorAllelePctB" width="8" columnType="float"/>
+      <wsColumn name="IsTriallelicB" width="3"/>
+      <wsColumn name="MajorProductB" width="3"/>
+      <wsColumn name="MajorProductIsVariableB" width="3"/>
+    </processQuery>
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Isolate assay type -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+<!--
+    <sqlQuery name="SnpsByIsolateType" includeProjects="PlasmoDB" 
+         >
+        <paramRef ref="snpChipParams.snp_assay_type"/>
+        <column name="source_id"/> 
+        <column name="project_id"/>
+        <sql>
+            <![CDATA[
+              select distinct snp.source_id, '@PROJECT_ID@' as project_id
+              from ApidbTuning.SnpChipAttributes snp
+              where snp.type in ($$snp_assay_type$$)
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="SnpsByIsolateType" includeProjects="EuPathDB"
+             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        <paramRef ref="snpChipParams.snp_assay_type" quote="false" />
+        <wsColumn name="source_id" width="32" wsName="source_id"/>
+        <wsColumn name="project_id" width="32" wsName="project_id"/>
+    </processQuery>
+-->
+
+
+    <sqlQuery name="ByWeightFilter" doNotTest="true">
+        <paramRef ref="snpChipParams.snp_result"/>
+        <paramRef ref="sharedParams.min_weight" default="0"/>
+        <paramRef ref="sharedParams.max_weight" default="100"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="wdk_weight" />
+        <sql>
+            <![CDATA[
+            SELECT a.source_id, a.project_id, a.wdk_weight
+            FROM $$snp_result$$ a
+            WHERE a.wdk_weight >= $$min_weight$$
+              AND a.wdk_weight <= $$max_weight$$
+            ]]>
+       </sql>
+    </sqlQuery>
+
+
+
+
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+  <!-- Dont Care - fake query for internal use -->
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="DontCare" doNotTest="true">
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <sql>
+            select source_id, project_id
+            from ApidbTuning.snpattributes
+            where source_id = 'life_is_sweet' 
+        </sql>
+    </sqlQuery>
+    
+  </querySet>
+
+</wdkModel>

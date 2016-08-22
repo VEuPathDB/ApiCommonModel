@@ -1,0 +1,106 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use Getopt::Long qw(GetOptions);
+use Data::Dumper;
+use ApiCommonShared::Model::tmUtils;
+use ApiCommonShared::Model::Pubmed;
+
+my ($help, $propfile, $instance, $schema, $suffix, $debug);
+
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+          );
+
+usage() if ($help);
+
+die "required parameter missing" unless ($propfile && $instance && $suffix);
+
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+# create table
+$dbh->do(<<SQL) or die "creating table";
+   create table Pubmed$suffix (
+      pubmed_id   number(10),
+      title       varchar2(400),
+      authors     varchar2(2000),
+      doi         varchar2(100)
+   ) nologging
+SQL
+
+# prepare insert
+my $insertStmt = $dbh->prepare(<<SQL);
+   insert into Pubmed$suffix
+   (pubmed_id, doi, title, authors)
+   values (?, ?, ?, ?)
+SQL
+
+# get PubMed IDs
+my $stmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
+   select distinct primary_identifier as pubmed_id
+   from sres.DbRef
+   where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
+     and external_database_release_id
+         in (select edd.external_database_release_id
+             from ExternalDbDatasetPresenter edd
+               where lower(edd.dataset_presenter_display_name) like '%pubmed%')
+   order by primary_identifier
+SQL
+
+$stmt->execute();
+my @pmids;
+while (my ($pmid) = $stmt->fetchrow_array()) {
+  my $fetchedPmid = $pmid;
+  $pmid =~ s/\D//g; # strip out non-digits
+  push(@pmids, $pmid);
+  print STDERR "PubMed ID \"$fetchedPmid\" changed to \"$pmid\"\n"
+    if $pmid ne $fetchedPmid;
+}
+
+# create Pubmed object (and query NCBI for data)
+print STDERR "getting PubMed data from NCBI\n";
+my $pubmed = ApiCommonShared::Model::Pubmed->new(\@pmids);
+
+print STDERR "processing PubMed data\n";
+# iterate through list, match up PubMed data, and insert
+foreach my $pmid (@pmids) {
+  my $doi = $pubmed->getDoi($pmid);
+  my $title = $pubmed->getTitle($pmid);
+  my $authors = $pubmed->getAuthors($pmid);
+
+  $insertStmt->execute($pmid, $doi, $title, $authors)
+    or die "inserting record for PubMed ID \"$pmid\"";
+}
+
+# create index
+$dbh->do(<<SQL) or die "creating index";
+   create index pmix$suffix
+      on Pubmed$suffix (pubmed_id, title, authors, doi)
+SQL
+
+$dbh->disconnect();
+
+sub usage {
+  my $e = shift;
+  if($e) {
+    print STDERR $e . "\n";
+  }
+  print STDERR "
+Build a table of PubMed records from PubMed IDs linked in the database.
+
+usage:  buildPubmedTT -propfile prop_file -instance instance -schema schema -suffix suffix  [-debug] [-help]
+";
+  exit;
+}
+
+1;
+

@@ -1,0 +1,179 @@
+#!/bin/bash
+################################################################################
+##
+## file:    apiModelSpellCheck
+## author:  Ryan Doherty
+##
+## purpose: Spellchecks the model XML files, adding words to the dictionary as
+##          necessary.  Users must manually fix misspellings, then run the tool
+##          again until no further misspellings are found.
+##
+##          Option: "apiModelSpellCheck list" will simply list misspelled words
+##
+##          This program uses apiSpell (a configuration of aspell) to check the
+##          spelling.  Currently only <description> elements are spellchecked.
+##          For other options, see:
+##          http://search.cpan.org/~mirod/XML-Twig-3.40/tools/xml_spellcheck/xml_spellcheck
+##
+##          Note: if you've made a mistake and would like to remove words from
+##          the dictionary (or add to it in bulk), simply modify:
+##          ApiCommonShared/Model/lib/wdk/apiCommonModel-spelling-dict.pws
+##
+## returns: 0 if no spelling errors exist, 1 if errors still exist
+##
+##
+## July 2014 cristina:  
+##
+## added directories:
+##              ApiCommonShared/Model/lib/xml   (datasetPresenters such as global.xml)
+##              ApiCommonWebsite/Model/lib/xml  (eg: about.xml, news.xml)
+##              WDK/Model/lib/xml               (eg: strategiesHelp.xml,verbiage.xml)
+##              EuPathPresenters/Model/lib/xml  (datasetPresenters such as PlasmoDB.xml)
+##
+## added more XML elements (to the existing: "description"): 
+##             releasePolicy usage attribute
+##
+################################################################################
+
+# define locations
+projectHome=$PROJECT_HOME
+dataDir=$projectHome/ApiCommonShared/Model/lib/wdk
+
+# directories where to check for spelling errors below, in for loop
+dirName=($dataDir/apiCommonModel
+         $projectHome/ApiCommonWebsite/Model/lib/xml
+         $projectHome/WDK/Model/lib/xml
+         $projectHome/EuPathPresenters/Model/lib/xml
+         $projectHome/ApiCommonShared/Model/lib/xml
+        )
+
+# xml tags where we check for spelling errors
+xmlTagsToCheck=(description releasePolicy usage attribute)
+
+dictionary=$dataDir/apiCommonModel-spelling-dict.pws
+userDict=~/.aspell.en.pws
+
+# temp file locations
+tmpDict=./tmpDict.pws
+tmpUserDict=${userDict}.bak.tmp
+tmpFile=/tmp/apiSpellCheck.$$.tmp
+
+# define backup file extension (must write back original)
+backupExt=.spellcheck.bak
+
+# required programs (must be installed to run)
+requiredPrograms=( 'aspell' 'xml_spellcheck' )
+
+# copy apiCommon dictionary to user's home directory (where aspell will read it)
+function setUpDict() {
+  if [[ -e $userDict ]]; then
+    # save user's current dictionary
+    cp $userDict $tmpUserDict
+  fi
+  cp $dictionary $userDict
+}
+
+# copy user's original dictionary back over apiCommon dictionary
+function unSetUpDict() {
+  if [[ -e $tmpUserDict ]]; then
+    # restore user's dictionary
+    mv $tmpUserDict $userDict
+  else
+    rm $userDict
+  fi
+}
+
+# sets up required files and runs spell checker on file passed (single arg)
+function runSpellcheck() {
+  local file=$1
+  setUpDict
+  xml_spellcheck --include_elements "for i in ${xmlTagsToCheck[@]} do echo $i done" --spellchecker "apiSpell" --backup-extension $backupExt $file > $tmpFile
+  rm ./xml_spellcheck_*.txt
+  mv $file$backupExt $file
+  unSetUpDict
+}
+
+# sorts dictionary and updates word count stat
+function formatDict() {
+  mv $dictionary $tmpDict
+  local wordCount=`cat $tmpDict | grep -v "personal_ws-1.1" | wc -l`
+  echo "personal_ws-1.1 en $wordCount" > $dictionary
+  cat $tmpDict | grep -v "personal_ws-1.1" | sort -u >> $dictionary
+  rm $tmpDict
+}
+
+# ensures required programs are in the path
+function checkRequirements() {
+  local allFound=true
+  for program in "${requiredPrograms[@]}"; do
+    local fullPath=`which $program`
+    if [[ "$fullPath" == "" ]]; then
+      allFound=false
+      echo "Program $program not found in path (required)."
+    fi
+  done
+  if [[ $allFound == false ]]; then
+    echo "Please install the above program(s) and try again."
+    exit 1
+  fi
+}
+
+# returns 1 (error) if previous value was 1 or 
+function getNewReturnVal() {
+  local oldReturnVal=$1
+  local tmpFile=$2
+  local wrongCount=$(wc -l $tmpFile | awk '{ print $1 }')
+  if [[ $wrongCount != 0 || $oldReturnVal = 1 ]]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
+# go through each XML file in the model and process misspelled words
+function main() {
+  checkRequirements
+  returnVal=0
+
+for dirName in "${dirName[@]}"; 
+do
+    for file in `find $dirName -name "*.xml"`; do
+
+    echo "******************************************************"
+    echo "Spellchecking: $file" 
+    echo "...checking tags: ${xmlTagsToCheck[@]}"
+    echo "******************************************************"
+
+    # creates a temporary file with misspelled words
+    runSpellcheck $file
+
+    if [[ "$1" == "list" ]]; then
+      returnVal=`getNewReturnVal $returnVal $tmpFile`
+      cat $tmpFile
+    else
+      for word in `cat $tmpFile`; do
+        echo -n "Add to dictionary (y/n/exit): \"${word}\"? "
+        read response
+        local response=`echo "$response" | tr A-Z a-z | sed 's/ //g'`
+        if [[ $response == exit ]]; then
+          rm $tmpFile
+          echo "Good bye!"
+          exit 1
+        elif [[ $response == y ]] || [[ $response == yes ]]; then
+          echo "$word" >> $dictionary
+          formatDict
+          echo "  Added to dictionary: $word"
+        else
+          # did not add word to dictionary, misspelled words still exist
+          returnVal=1
+        fi
+      done
+    fi
+    rm $tmpFile
+    done
+done
+
+  exit $returnVal
+}
+
+main $1

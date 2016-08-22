@@ -13,17 +13,19 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.HashSet;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 
-import oracle.jdbc.driver.OracleDriver;
+import org.gusdb.fgputil.db.platform.SupportedPlatform;
+import org.gusdb.fgputil.db.pool.ConnectionPoolConfig;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
+import org.gusdb.fgputil.db.pool.SimpleDbConfig;
 
 import com.google.gdata.client.ClientLoginAccountType;
 import com.google.gdata.client.GoogleService;
@@ -104,7 +106,7 @@ public class FusionTable {
      * @param authToken The auth token. (For more information, see
      *                  http://code.google.com/apis/gdata/auth.html#ClientLogin.)
      *
-     * @throws AuthenticationException
+     * @throws AuthenticationException if unable to authenticate with passed token
      *
      * This code instantiates the GoogleService class from the
      * Google Data APIs Client Library,
@@ -138,6 +140,7 @@ public class FusionTable {
 
 	/* Loop through result set, one column per iteration */
 
+	@SuppressWarnings("resource")
 	Scanner scanner = new Scanner(request.getResponseStream(),"UTF-8");
 	boolean processingHeader = true;
 	int columnNumber = 1;
@@ -175,7 +178,7 @@ public class FusionTable {
 		insertStatement.setString(columnNumber, decoded);
 		columnNumber++;
 		if (!match.group(4).equals(",")) { // last column; process row
-		    insertStatement.executeQuery();
+		    insertStatement.executeUpdate();
 		    columnNumber = 1;
 		}
 	    }
@@ -203,10 +206,12 @@ public class FusionTable {
 	}
 
 	String selectQuery = new String("select * from " + datasetId);
-	URL url = new URL(SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8"));
+	String urlString = SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8");
+	URL url = new URL(urlString);
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
 	request.execute();
 	
+	@SuppressWarnings("resource")
 	Scanner scanner = new Scanner(request.getResponseStream(),"UTF-8");
 	boolean processingHeader = true;
 	int columnNumber = 0;
@@ -230,7 +235,7 @@ public class FusionTable {
 		// if a set of expected columns was given, check that this is in it
 		if (expectedColumns.length() > 0) {
 		    if (!expectedColumnSet.contains(decoded))
-			throw new Exception("column \"" + decoded + "\" not contained in expected-column list \"" + expectedColumns + "\"");
+			throw new Exception("column \"" + decoded + "\" not contained in expected-column list \"" + expectedColumns + "\" from URL \"" + urlString + "\"");
 		}
 
 		if (!match.group(4).equals(",")) { // last column; process row
@@ -240,7 +245,7 @@ public class FusionTable {
 
 		    // compare counts of expected vs. received columns
 		    if (expectedColumnSet.size() != columnCount) {
-			throw new Exception("expected " + expectedColumnSet.size() + " columns; received " + columnCount);
+			throw new Exception("expected " + expectedColumnSet.size() + " columns; received " + columnCount + " from URL \"" + urlString);
 		    }
 		}
 	    } else {
@@ -292,8 +297,9 @@ public class FusionTable {
 	    password = in.readLine();
 	} catch (IOException e) {
 	}
-	DriverManager.registerDriver (new OracleDriver());
-	Connection dbc = DriverManager.getConnection("jdbc:oracle:oci:@" + instance, schema, password);
+	ConnectionPoolConfig config = SimpleDbConfig.create(
+	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
+	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
 
 	FusionTable ft = new FusionTable("");
 	String columnList = new String( (args.length == 4) ? args[3] : "");

@@ -1,0 +1,89 @@
+<wdkModel>
+  <querySet name="CompoundAttributes" queryType="attribute" isCacheable="false" excludeProjects="EuPathDB">
+
+      <defaultTestParamValues includeProjects="@PROJECT_ID@">
+          <paramValue name="source_id">CID:93072</paramValue>
+          <paramValue name="project_id">@PROJECT_ID@</paramValue>
+      </defaultTestParamValues>
+
+       <testRowCountSql>
+	 SELECT count(*) FROM ApidbTuning.CompoundAttributes
+       </testRowCountSql>
+
+        <sqlQuery name="Bfmv">
+            <column name="project_id"/>
+            <column name="source_id"  />
+	    <column name="compound_name"/>
+	    <column name="other_names"/>
+            <column name="compound_link"  />
+            <column name="definition" />
+            <column name="formula" />
+            <column name="secondary_ids"/>
+           <sql>
+            <![CDATA[
+	         SELECT '@PROJECT_ID@' AS project_id, source_id,
+		    compound_name, definition, secondary_ids, other_names,
+		    CASE WHEN source_id IS NULL THEN '-' 
+	            ELSE '<a href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=' || source_id || '">' ||  source_id || '</a>' 
+	            END AS compound_link,
+		    formula
+                FROM ApidbTuning.CompoundAttributes
+	    ]]>
+           </sql>
+	</sqlQuery>
+
+	<sqlQuery name="Synonyms">
+	  <column name="project_id"/>
+	  <column name="source_id"/>
+	  <column name="synonyms"/>
+	  <sql>
+	    <![CDATA[
+              SELECT ca.source_id, '@PROJECT_ID@' AS project_id, 
+                   apidb.tab_to_string(set(CAST(COLLECT(n.name) AS apidb.varchartab)),', ') as synonyms
+               FROM ApidbTuning.CompoundAttributes ca, chebi.names n
+               WHERE ca.ID = n.compound_id
+               GROUP BY ca.source_id
+	    ]]>
+	  </sql>
+	</sqlQuery>
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Number of associated metabolic pathways -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <sqlQuery name="PathwaysCount" doNotTest="true">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="pathway_count"/>
+            <sql>
+            <![CDATA[
+        SELECT count (DISTINCT pc.pathway_id) AS pathway_count, '@PROJECT_ID@' AS project_id, 
+           pc.chebi_accession AS source_id
+        FROM   ApiDBTuning.PathwayCompounds pc 
+        GROUP BY chebi_accession
+            ]]>
+            </sql>
+        </sqlQuery>
+
+
+    <sqlQuery name="DefaultStructure">
+            <column name="project_id"/>
+            <column name="source_id" />
+            <column name="default_structure" />
+           <sql>
+            <![CDATA[
+            WITH def_st 
+            AS (SELECT s.compound_id, s.structure 
+                FROM chebi.structures s, chebi.default_structures ds
+                WHERE s.type='mol' and s.dimension='2D' 
+                 AND s.id = ds.structure_id) 
+            SELECT ca.SOURCE_ID, '@PROJECT_ID@' AS project_id, 
+              CASE WHEN ca.id = def_st.compound_id THEN def_st.structure
+              ELSE EMPTY_CLOB() END as default_structure 
+            FROM ApidbTuning.compoundAttributes ca, def_st
+            WHERE ca.ID = def_st.COMPOUND_ID(+)
+            ]]>
+            </sql>
+    </sqlQuery>
+
+
+  </querySet>
+</wdkModel>
