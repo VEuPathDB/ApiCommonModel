@@ -10,8 +10,8 @@ public class LinksPathway extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMetabolicPathway"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MetabolicPathways"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMetabolicPathways"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MetabolicPathwaysMPMP"); 
   }
 
   // second column is for documentation

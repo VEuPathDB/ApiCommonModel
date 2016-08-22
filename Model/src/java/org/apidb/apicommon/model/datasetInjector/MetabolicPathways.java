@@ -9,7 +9,7 @@ public class MetabolicPathways extends DBXRefs {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEcNumber");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEcNumber");
   }
 
   // second column is for documentation

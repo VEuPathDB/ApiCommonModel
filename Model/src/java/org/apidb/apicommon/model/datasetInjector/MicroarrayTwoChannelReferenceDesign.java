@@ -13,18 +13,22 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
     // FOr Microarray Two Channel Ref Design... we want to pick either the red or green percentile profile
     @Override
     protected void setPercentileProfileFilter() {
-        String percentileProfileSetPattern = getPropValue("percentileProfileSetPattern");
-        setPropValue("percentileProfileSetPattern", percentileProfileSetPattern);
+        String percentileChannelPattern = getPropValue("percentileChannelPattern");
+        setPropValue("percentileChannelPattern", percentileChannelPattern);
     }
 
     @Override
     protected void setExprGraphVisiblePart() {
-        setPropValue("exprGraphVisiblePart", "exprn_val");
+	if (getPropValue("graphType").equals("scatter")) {
+	    setPropValue("exprGraphVisiblePart", "scatter");
+	} else {
+	    setPropValue("exprGraphVisiblePart", "exprn_val");
+	}
     }
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Microarray::TwoChannel");
+        setPropValue("graphModule", "ExpressionTwoChannel");
     }
 
     @Override
@@ -36,8 +40,9 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
     public String[][] getPropertiesDeclaration() {
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();
         
-        String [][] declaration = {{"percentileProfileSetPattern", "Which profileset (red/green) has the samples. (ie. not the channel w/ the common reference)."},
+        String [][] declaration = {{"percentileChannelPattern", "Which profileset (red/green) has the samples. (ie. not the channel w/ the common reference)."},
                                    {"hasPercentileData", ""},
+				   {"graphType", ""},
         };
         return combinePropertiesDeclarations(microarrayDeclaration, declaration);
     }

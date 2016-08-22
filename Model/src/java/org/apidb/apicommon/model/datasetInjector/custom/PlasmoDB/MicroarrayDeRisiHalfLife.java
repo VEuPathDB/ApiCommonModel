@@ -6,7 +6,7 @@ public class MicroarrayDeRisiHalfLife extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "DeRisiHalfLife::Combined"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "DeRisiHalfLife::Combined"); 
   }
 
 }

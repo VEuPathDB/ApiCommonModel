@@ -51,6 +51,12 @@ public class DatasetPropertiesParser  {
               duplicateDatasetNames.add(a[1]);
             } else {
               if (!a[1].endsWith("_RSRC")) throw new UserException("Dataset Properties file " + propFileName + " contains dataset " + a[1] + " which does not end in _RSRC");
+
+              if(a[1].contains(":")) {
+                  String[] aa = a[1].split(":",2);
+                  datasetNameToProperties.put(aa[1], datasetProperties);
+              }
+
               datasetNameToProperties.put(a[1], datasetProperties);
             }
           }

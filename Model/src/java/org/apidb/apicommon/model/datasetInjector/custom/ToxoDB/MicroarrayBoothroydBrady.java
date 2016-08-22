@@ -6,7 +6,7 @@ public class MicroarrayBoothroydBrady extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Boothroyd::TzBz"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Boothroyd::TzBz"); 
   }
 
 

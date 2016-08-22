@@ -11,29 +11,24 @@
     <sql>
       <![CDATA[
         create table ChangedGeneProduct&1 nologging as
-        select gene, product, name,
-               case
-                 when name is null then product
-                 else substr(product || ' (' || name || ')', 1, 200)
-               end as search_string
-        from (select gene,
-                     max(product) keep (dense_rank last order by change_date) as product,
-                     max(name) keep (dense_rank last order by change_date) as name
-              from AnnotationChange
-              where gene is not null
-              group by gene)
+        select distinct * from (
+        select ga.source_id as gene, 
+        CASE WHEN ga.product != ac.product THEN ac.product ELSE null END as product,
+        CASE WHEN ga.name != ac.name THEN ac.name ELSE null END as name
+        from (
+        select gene,
+        max(product) keep (dense_rank last order by change_date) as product,
+        max(name) keep (dense_rank last order by change_date) as name
+        from apidbtuning.AnnotationChange ac
+        where gene is not null
+        group by gene) ac, apidbtuning.geneattributes ga
+        where ac.gene = ga.source_id)
+        where product is not null or name is not null
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create unique index cgp_ix&1 on ChangedGeneProduct&1 (gene)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        create index annotation_change_ix&1 on ChangedGeneProduct&1 (search_string)
-        indextype is ctxsys.context
-        parameters('DATASTORE CTXSYS.DEFAULT_DATASTORE SYNC (ON COMMIT)')
       ]]>
     </sql>
   </tuningTable>

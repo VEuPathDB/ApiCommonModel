@@ -22,9 +22,14 @@ public class SmallNcRna extends  DatasetInjector {
       List<String> sampleNames = getSampleList();
       
       for (int i=0; i<sampleNames.size(); i++){
-          setPropValue("sampleName", sampleNames.get(i));
+          String sampleName = sampleNames.get(i);
+
+          setPropValue("sampleName", sampleName);
           injectTemplate("smallNcRnaSampleDatabase");
           injectTemplate("smallNcRnaSampleTrack");
+
+          setPropValue("gbrowseTrackName", getDatasetName() + sampleName);
+          injectTemplate("gbrowseTrackCategory");
       }
 
   }

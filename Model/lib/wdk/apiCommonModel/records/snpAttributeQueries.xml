@@ -83,17 +83,24 @@
             <column name="minor_allele"  />
             <column name="major_allele"  />
             <column name="reference_na"  />
+            <column name="snp_context"  />
+            <column name="snp_context_gene_strand"  />
             <column name="reference_aa"  />
             <column name="reference_strain"  />
+            <column name="lc_project_id"  />
+            <column name="context_start"  />
+            <column name="context_end"  />
             <sqlParamValue  name="dataset_display_names">
                 'InsertSnps.pm NGS SNPs INTERNAL', 'HTS SNPs'
             </sqlParamValue>
             <sql>
             <![CDATA[
-           SELECT bfmv.source_id, bfmv.project_id, bfmv.chromosome_order_num,
+           SELECT bfmv.source_id, bfmv.project_id, bfmv.chromosome_order_num, lower(project_id) as lc_project_id,
                   nvl(dsa.display_name, DECODE(bfmv.dataset, &&dataset_display_names&&, bfmv.dataset)) as dataset,
                   bfmv.dataset as dataset_internal,
                   bfmv.seq_source_id, bfmv.location, 
+                  bfmv.location - 5000 as context_start,
+                  bfmv.location + 5000 as context_end,
                   CASE
                   WHEN bfmv.reference_strain = 'iowa_II' THEN 'IOWA II'
                   WHEN bfmv.reference_strain = 'md' THEN 'MD'
@@ -108,6 +115,7 @@
                     else decode(has_nonsynonymous_allele, 1, 'Has Non-Synonymous', 'Synonymous')
                  end  has_nonsynonymous_allele,
                   bfmv.gene_source_id, bfmv.gene_strand, bfmv.lflank,
+                  bfmv.lflank||'<span style="color: red;font-weight: 500;background-color: #CCCCCC">'||bfmv.reference_na||'</span>'||bfmv.rflank as snp_context,
                   bfmv.rflank, bfmv.reference_na as allele, bfmv.organism as organism_text, bfmv.ncbi_tax_id,
                   '<i>' || SUBSTR(bfmv.organism, 1, 1) || '.' ||
                   REGEXP_REPLACE(SUBSTR(bfmv.organism, INSTR(bfmv.organism, ' ')), '[[:space:]]+',
@@ -118,57 +126,19 @@
                   bfmv.major_product,bfmv.major_allele,bfmv.minor_allele,
                   trim(to_char(bfmv.location,'99,999,999')) as location_text,
                   CASE WHEN bfmv.gene_strand = 'reverse' and bfmv.rflank is not null THEN apidb.reverse_complement(bfmv.rflank) 
-                       WHEN bfmv.gene_strand is null THEN ''
-                       ELSE bfmv.lflank  END as lflank_gene_strand,
+                       ELSE null END as lflank_gene_strand,
                   CASE WHEN bfmv.gene_strand = 'reverse' and bfmv.lflank is not null THEN apidb.reverse_complement(bfmv.lflank) 
-                       WHEN bfmv.gene_strand is null THEN ''
-                       ELSE bfmv.rflank  END as rflank_gene_strand,
+                       ELSE null END as rflank_gene_strand,
                   CASE WHEN bfmv.gene_strand = 'reverse' THEN apidb.reverse_complement(bfmv.reference_na) 
-                       WHEN bfmv.gene_strand is null THEN ''
-                       ELSE bfmv.reference_na END as allele_gene_strand
+                       ELSE null END as allele_gene_strand,
+                  CASE WHEN bfmv.gene_strand = 'reverse' THEN apidb.reverse_complement(bfmv.rflank)||'<span style="color: red;font-weight: 500;background-color: #CCCCCC">'||apidb.reverse_complement(bfmv.reference_na) ||'</span>'||apidb.reverse_complement(bfmv.lflank)
+                       ELSE null END as snp_context_gene_strand
        FROM   ApidbTuning.SnpAttributes bfmv,  apidbtuning.DatasetPresenter dsa
        WHERE bfmv.dataset = dsa.name (+)
              ]]>
            </sql>
 
         </sqlQuery>
-
-<!--
-       <sqlQuery name="isolateSummary" isCacheable="false" includeProjects="PlasmoDB">
-            <column name="source_id" />
-            <column name="project_id" />
-            <column name="iso_major_allele"/>
-            <column name="iso_major_percent"/>
-            <column name="iso_minor_allele"/>
-            <column name="iso_minor_percent"/>
-            <column name="iso_number_strains"/>
-            <sql>
-            <![CDATA[    
-               select snp_source_id as source_id, '@PROJECT_ID@' as project_id,
-                 major_allele as iso_major_allele,
-                 round((to_number(major_count) / total),2) as iso_major_percent,
-                 minor_allele as iso_minor_allele,
-                 round((to_number(minor_count) / total),2) as iso_minor_percent,
-                 total as iso_number_strains
-               from (
-               select snp_source_id,
-                apidb.tab_to_string(set(cast(COLLECT(CASE WHEN row_number = 1 THEN allele END) AS apidb.varchartab)), ', ') as major_allele,
-                apidb.tab_to_string(set(cast(COLLECT(CASE WHEN row_number = 1 THEN to_char(ct) END) AS apidb.varchartab)), ', ') as major_count,
-                apidb.tab_to_string(set(cast(COLLECT(CASE WHEN row_number = 2 THEN allele END) AS apidb.varchartab)), ', ') as minor_allele,
-                apidb.tab_to_string(set(cast(COLLECT(CASE WHEN row_number = 2 THEN to_char(ct) END) AS apidb.varchartab)), ', ') as minor_count,
-                sum(ct) as total
-               from (
-               select rownum as row_number,snp_source_id,allele,ct from (
-               select snp_source_id,allele,count(*) as ct
-               from ApidbTuning.IsolateSNPs
-               where  allele in ('A','C','G','T')
-               group by snp_source_id,allele
-               order by ct desc))
-               group by snp_source_id)
-             ]]>
-           </sql>
-        </sqlQuery>
--->
 
         <sqlQuery name="Sequence" excludeProjects="EuPathDB" doNotTest="1">
             <column name="source_id" />

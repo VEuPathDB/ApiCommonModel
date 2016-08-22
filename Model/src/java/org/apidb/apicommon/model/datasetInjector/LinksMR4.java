@@ -11,7 +11,7 @@ public class LinksMR4 extends DatasetInjector {
   @Override
   public void addModelReferences() {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Mr4Reagents"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMr4Reagents"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMr4Reagents"); 
   }
 
   // second column is for documentation

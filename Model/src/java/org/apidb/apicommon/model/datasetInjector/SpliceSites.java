@@ -40,7 +40,6 @@ public class SpliceSites extends  DatasetInjector {
       setPropValue("exprGraphAttr", datasetName + "_expr_graph");
       setPropValue("pctGraphAttr", datasetName + "_pct_graph");
 
-      injectTemplate("spliceSitesAttributeCategory");
       injectTemplate("spliceSitesExpressionGraphAttributes");
       injectTemplate("spliceSitesGraph");
 
@@ -48,16 +47,29 @@ public class SpliceSites extends  DatasetInjector {
       if(getPropValueAsBoolean("hasMultipleSamples")) {
         injectTemplate("spliceSitesProfileSetParamQuery");
         injectTemplate("spliceSitesFoldChangeQuestion");
-        injectTemplate("spliceSitesFoldChangeCategories");
+        //        injectTemplate("spliceSitesFoldChangeCategories");
+
+        setPropValue("searchCategory", "searchCategory-fold-change");
+        setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName());
+        injectTemplate("internalGeneSearchCategory");
+
 
         injectTemplate("spliceSitesProfileSetsQuery");
         injectTemplate("spliceSitesDifferentialQuestion");
-        injectTemplate("spliceSitesDifferentialCategories");
+        //        injectTemplate("spliceSitesDifferentialCategories");
+        setPropValue("searchCategory", "searchCategory-splice-site-loc");
+        setPropValue("questionName", "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
+        injectTemplate("internalGeneSearchCategory");
+
       }
 
       injectTemplate("spliceSitesPctProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
-      injectTemplate("spliceSitesPercentileCategories");
+      //      injectTemplate("spliceSitesPercentileCategories");
+      setPropValue("searchCategory", "searchCategory-percentile");
+      setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
+      injectTemplate("internalGeneSearchCategory");
+
 
       if(getPropValue("graphPriorityOrderGrouping").equals("")) {
         setPropValue("graphPriorityOrderGrouping", "5");
@@ -81,21 +93,21 @@ public class SpliceSites extends  DatasetInjector {
   @Override
   public void addModelReferences() {
       setGraphModule();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SpliceSites"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PolyASites"); 
 
       if(getPropValueAsBoolean("hasMultipleSamples")) {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
         "GeneQuestions.GenesBySpliceSites" + getDatasetName() );
 
 
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
         "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
       }
 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
           "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
 
   }

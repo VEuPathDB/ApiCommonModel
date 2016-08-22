@@ -78,7 +78,7 @@
                from dots.NaSequence
                where external_database_release_id in (
                  select distinct(dbr.external_database_release_id)
-                 from ApidbTuning.SequenceAttributes a, sres.ExternalDatabase db,
+                 from ApidbTuning.GenomicSeqAttributes a, sres.ExternalDatabase db,
                       sres.ExternalDatabaseRelease dbr
                  where db.name = a.database_name
                    and dbr.version = a.database_version
@@ -89,7 +89,7 @@
             </testRowCountSql>
 
             <testRowCountSql includeProjects="EuPathDB">
-               SELECT count(*) FROM ApidbTuning.SequenceAttributes
+               SELECT count(*) FROM ApidbTuning.GenomicSeqAttributes
             </testRowCountSql>
 
 
@@ -105,12 +105,10 @@
             <column name="old_project_id"/>
             <sql>
               <![CDATA[
-                SELECT sa.source_id, 
+                SELECT distinct a.sequence as source_id, 
                        '@PROJECT_ID@' AS project_id,
                        a.ID as old_source_id, '@PROJECT_ID@' AS old_project_id
-                FROM ApidbTuning.SequenceId a, ApidbTuning.SequenceAttributes sa
-                WHERE sa.source_id = a.sequence
-
+                FROM ApidbTuning.GenomicSequenceId a
               ]]>
             </sql>
 
@@ -125,7 +123,7 @@
        <!-- There are currently two flavors of this query, one for the portal
             and one for components.  The component version references the
             ApidbTuning.Scaffold_Map tuning table (which doesn't exist in portal
-            instances) in order to work around a bug in ApidbTuning.SequenceAttributes.
+            instances) in order to work around a bug in ApidbTuning.GenomicSeqAttributes.
             The bug is that when a contig is mapped to a scaffold that's mapped
             to a chromosome, the "chromosome" field of the scaffold gets
             populated but in the contig it does not. Once this bug is fixed,
@@ -138,8 +136,10 @@
         </testParamValues>      
             <column name="chromosome" sortingColumn="chromosome_order_num"/>
             <column name="chromosome_order_num"/>
+            <column name="description"/>
             <column name="source_id" ignoreCase="true"/>
             <column name="project_id" ignoreCase="true"/>
+            <column name="lc_project_id"/>
             <column name="a_count"  />
             <column name="c_count"/>
             <column name="g_count" />
@@ -153,8 +153,6 @@
             <column name="organism_text" ignoreCase="true"/>
             <column name="formatted_organism"
                     sortingColumn="organism_text" ignoreCase="true"/>
-            <column name="sequence_description" includeProjects="EuPathDB,PlasmoDB"
-                    ignoreCase="true"/>
             <column name="genbank_accession" ignoreCase="true"/>
             <column name="externalDbName"/>
             <column name="externalDbVersion" />
@@ -163,19 +161,27 @@
             <column name="has_msa" excludeProjects="EuPathDB"/>
             <sql excludeProjects="EuPathDB">
             <![CDATA[
-                SELECT bfmv.source_id, bfmv.project_id, bfmv.a_count, bfmv.c_count,
-                    bfmv.g_count, bfmv.t_count, bfmv.other_count,
+                     SELECT bfmv.source_id, bfmv.project_id, lower(bfmv.project_id) as lc_project_id,
+                     bfmv.a_count, bfmv.c_count, bfmv.g_count, bfmv.t_count, bfmv.other_count,
                     bfmv.length, bfmv.at_percent, bfmv.organism as organism_text, bfmv.is_top_level,
                     trim(to_char(bfmv.length,'999,999,999')) as formatted_length,
                     '<i>' || SUBSTR(bfmv.organism, 1, 1) || '.' ||
                     REGEXP_REPLACE(SUBSTR(bfmv.organism, INSTR(bfmv.organism, ' ')), '[[:space:]]+',
                                    chr(38) || 'nbsp;') || '</i>'
                       AS formatted_organism,
-                    bfmv.ncbi_tax_id, bfmv.sequence_description,
+                    bfmv.ncbi_tax_id, 
                     bfmv.genbank_accession, bfmv.database_name,
                     bfmv.database_version as externalDbVersion, database_name as externalDbName,
-                    CASE WHEN bfmv.chromosome_order_num is null THEN 'Not Assigned' ELSE bfmv.chromosome END as chromosome,
-                    CASE WHEN bfmv.chromosome_order_num is null THEN 'Not Assigned' ELSE to_char(bfmv.chromosome_order_num) END as chromosome_order_num,
+                    CASE WHEN bfmv.chromosome_order_num is null 
+                      THEN 'Not Assigned' ELSE bfmv.chromosome END as chromosome,
+                    CASE WHEN bfmv.chromosome_order_num is null 
+                      THEN 'Not Assigned' 
+                      ELSE to_char(bfmv.chromosome_order_num) END as chromosome_order_num,
+                    CASE WHEN (bfmv.sequence_description) IS NOT NULL 
+                        THEN bfmv.sequence_description
+                      WHEN (chromosome IS NOT NULL) 
+                        THEN organism||' - Chromosome '||chromosome_order_num
+                    ELSE organism END AS description,
                     bfmv.source_id as secondary_identifier,
                     DECODE(
                     substr(bfmv.organism, 
@@ -184,7 +190,7 @@
                           ),
                           'parvum', 'cparvum', 'hominis') as cyc_db,
                    bfmv.sequence_type, bfmv.has_msa
-                   FROM ApidbTuning.SequenceAttributes bfmv
+                   FROM ApidbTuning.GenomicSeqAttributes bfmv
              ]]>
            </sql>
            <sql includeProjects="EuPathDB">
@@ -209,10 +215,31 @@
                           ),
                           'parvum', 'cparvum', 'hominis') as cyc_db,
                    bfmv.sequence_type
-                   FROM ApidbTuning.SequenceAttributes bfmv
+                   FROM ApidbTuning.GenomicSeqAttributes bfmv
              ]]>
            </sql>
         </sqlQuery>
+
+        <sqlQuery name="genomicGTracks" excludeProjects="EuPathDB">
+            <column name="source_id" />
+            <column name="project_id"/>
+            <column name="genomic_gtracks" />
+            <sql>
+            <![CDATA[  
+            select ga.source_id as source_id, ga.project_id, 
+                   gto.gtracks as  genomic_gtracks
+            from apidbtuning.gbrowsetracksorganism gto, apidbtuning.genomicseqattributes ga
+            where ga.organism = gto.organism
+              and gto.type = 'genomic'
+            union 
+            select ga.source_id as source_id, ga.project_id, 
+                   'ProtAlign%1EORF300%1ETandemRepeat%1ELowComplexity' as genomic_gtracks
+            from apidbtuning.gbrowsetracksorganism gto, apidbtuning.genomicseqattributes ga
+            where ga.organism = gto.organism(+)
+            and ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto where gto.type = 'genomic')
+            ]]>
+           </sql>
+        </sqlQuery>        
 
         <sqlQuery name="GeneCount">
             <column name="source_id"/>
@@ -221,9 +248,9 @@
             <sql>
             <![CDATA[
            select sa.source_id, sa.project_id, nvl(the_count, 0) as gene_count
-           from ApidbTuning.SequenceAttributes sa,
+           from ApidbTuning.GenomicSeqAttributes sa,
              (select sequence_id as source_id, count(*) as the_count
-              from ApidbTuning.GeneAttributes ga
+              from ApidbTuning.TranscriptAttributes ga
               group by sequence_id) gc
            where sa.source_id = gc.source_id(+)
              ]]>
@@ -237,9 +264,9 @@
             <sql>
             <![CDATA[
            select sa.source_id, sa.project_id, nvl(the_count/the_count, 0) as has_msa
-           from ApidbTuning.SequenceAttributes sa,
+           from ApidbTuning.GenomicSeqAttributes sa,
              (select sa.source_id, sa.project_id, count(*) as the_count
-              from ApidbTuning.SequenceAttributes sa, apidb.synteny syn
+              from ApidbTuning.GenomicSeqAttributes sa, apidb.synteny syn
               where syn.a_na_sequence_id = sa.na_sequence_id
               group by sa.source_id, sa.project_id) s
            where sa.source_id = s.source_id(+)
@@ -260,7 +287,7 @@
                              (SELECT dataset_presenter_id FROM apidbtuning.datasetpublication WHERE pmid IS NOT NULL ) )
                       THEN 1 ELSE 0 END AS is_annotated
                FROM APIDBTUNING.datasetnametaxon dt,
-                    apidbtuning.sequenceattributes sa,
+                    ApidbTuning.GenomicSeqAttributes sa,
                     apidb.datasource ds,
                     apidbtuning.datasetpresenter p
                WHERE sa.taxon_id  = dt.taxon_id
@@ -272,21 +299,18 @@
         </sqlQuery>
 
 
-        <sqlQuery name="ReleasePolicy" excludeProjects="EuPathDB">
+        <sqlQuery name="PresenterInfo" excludeProjects="EuPathDB">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="release_policy"/>
+            <column name="attribution"/>
             <sql>
             <![CDATA[
-               SELECT sa.source_id, sa.project_id, p.release_policy
-               FROM APIDBTUNING.datasetnametaxon dt,
-                    apidbtuning.sequenceattributes sa,
-                    apidb.datasource ds,
-                    apidbtuning.datasetpresenter p
-               WHERE sa.taxon_id  = dt.taxon_id
-                AND dt.name       = ds.name
-                AND ds.type       = 'genome'
-                AND dt.dataset_presenter_id = p.dataset_presenter_id
+                     SELECT sa.source_id, sa.project_id,
+                        dp.description as attribution, dp.release_policy
+                     FROM ApidbTuning.GenomicSeqAttributes sa,
+                     apidbtuning.datasetpresenter dp
+                     WHERE sa.database_name    = dp.name
              ]]>
            </sql>
         </sqlQuery>
@@ -318,7 +342,7 @@
                 FROM dots.NaSequence ens,
                      sres.ExternalDatabaseRelease edr,
                      sres.ExternalDatabase ed,
-                     ApidbTuning.SequenceAttributes sa
+                     ApidbTuning.GenomicSeqAttributes sa
                 WHERE ens.external_database_release_id = edr.external_database_release_id
                   AND sa.source_id = ens.source_id
                   AND edr.external_database_id = ed.external_database_id
@@ -339,7 +363,7 @@
         <sql>
             select ns.source_id, '@PROJECT_ID@' as project_id,
                    ns.sequence as gff_sequence
-            from ApidbTuning.SequenceAttributes gs,
+            from ApidbTuning.GenomicSeqAttributes gs,
                  dots.NaSequence ns
             where ns.na_sequence_id = gs.na_sequence_id
         </sql>
@@ -375,7 +399,7 @@
            select ns.source_id, '@PROJECT_ID@' as project_id,
                    ns.source_id as gff_seqid,
                    '@PROJECT_ID@' as gff_source,
-                   s.term_name as gff_type,
+                   s.name as gff_type,
                    1 as gff_fstart,
                    ns.length as gff_fend,
                    '.' as gff_score,
@@ -390,29 +414,29 @@
                    SUBSTR(tn.name, 1, INSTR(tn.name || '  ', ' ', 1, 2) - 1) as gff_attr_organism_name,
                    g.ncbi_genetic_code_id as gff_attr_translation_table,
                    (CASE WHEN g.ncbi_genetic_code_id = 4 THEN 'circular' ELSE 'linear' END) as gff_attr_topology,
-                   (CASE WHEN s.term_name = 'mitochondrial_chromosome' THEN 'mitochondria' 
-                         WHEN s.term_name = 'apicoplast_chromosome' THEN 'plastid'
+                   (CASE WHEN s.name = 'mitochondrial_chromosome' THEN 'mitochondria' 
+                         WHEN s.name = 'apicoplast_chromosome' THEN 'plastid'
                          ELSE 'nuclear' END) as gff_attr_localization,
                     gs.is_top_level as gff_is_top_level
-            from ApidbTuning.SequenceAttributes gs,
+            from ApidbTuning.GenomicSeqAttributes gs,
                  dots.NaSequence ns,
                  sres.externaldatabase ed,
                  sres.externaldatabaserelease edr,
                  sres.TaxonName tn,
                  sres.Taxon t, 
                  sres.GeneticCode g,
-                 sres.SequenceOntology s
+                 sres.OntologyTerm s
             where ns.na_sequence_id = gs.na_sequence_id
               and ns.external_database_release_id = edr.external_database_release_id
               and edr.external_database_id = ed.external_database_id
               and ns.taxon_id = tn.taxon_id
               and tn.name_class = 'scientific name'
               and gs.taxon_id = t.taxon_id
-              and gs.so_id = s.so_id 
+              and gs.so_id = s.source_id
               and (   (t.genetic_code_id = g.genetic_code_id 
-                       and s.term_name in ('random_sequence', 'contig', 'chromosome', 'supercontig'))
+                       and s.name in ('random_sequence', 'contig', 'chromosome', 'supercontig'))
                    or (t.mitochondrial_genetic_code_id = g.genetic_code_id 
-                       and s.term_name in ('mitochondrial_chromosome', 'apicoplast_chromosome')))
+                       and s.name in ('mitochondrial_chromosome', 'apicoplast_chromosome')))
         </sql>
     </sqlQuery>
 

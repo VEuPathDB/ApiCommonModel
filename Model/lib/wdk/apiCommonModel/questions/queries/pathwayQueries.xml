@@ -1,23 +1,34 @@
 <wdkModel>
-  <querySet name="PathwayIds" queryType="id" isCacheable="false" excludeProjects="EuPathDB">
+  <querySet name="PathwayIds" queryType="id"  isCacheable="true" excludeProjects="EuPathDB">
 
     <!-- ************************************************************ -->
     <!-- Pathway Name -->  
     <!-- ************************************************************ -->
  
     <sqlQuery name="PathwaysByPathwayID" doNotTest="true"  excludeProjects="EuPathDB"
-              displayName="ID" isCacheable="true">
+              displayName="ID">
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="pathwayParams.metabolic_pathway_id"/>
-	<paramRef ref="pathwayParams.pathway_wildcard"/>
+	    <paramRef ref="pathwayParams.pathway_wildcard"/>
         <column name="project_id"/>
         <column name="source_id"/>
+        <column name="pathway_source"/>
         <sql>
             <![CDATA[
-            SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id
-            FROM   ApiDB.NetworkContext n
-            WHERE  (n.network_context_id LIKE REPLACE(REPLACE(REPLACE(REPLACE($$metabolic_pathway_id$$,' ',''),'-', '%'),'*','%'),'any','%')
-         OR lower(n.description) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%') )
-	 AND n.name NOT IN ('ec01100','ec01110','ec01120')
+            SELECT  p.source_id
+            , '@PROJECT_ID@' as project_id
+            , pa.pathway_source
+            FROM sres.Pathway p
+            , apidbtuning.pathwayattributes pa 
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE  (p.pathway_id LIKE REPLACE(REPLACE(REPLACE(REPLACE($$metabolic_pathway_id$$,' ',''),'-', '%'),'*','%'),'any','%')
+            OR lower(p.source_id) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
+            OR lower(p.name) LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$pathway_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%') )
+            AND p.pathway_id = pa.pathway_id
+            AND pa.external_db_name = ed.name
+            AND ed.external_database_id = edr.external_database_id
+            AND (edr.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$ = 1)
                ]]>
         </sql>
     </sqlQuery>
@@ -28,44 +39,208 @@
         <paramRef ref="pathwayParams.metabolic_pathway_id" noTranslation="true"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
+        <wsColumn name="pathway_source" width="32" wsName="pathway_source"/>
     </processQuery>   
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- By Identifiers -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="PathwaysByIdentifierList" doNotTest="true"  excludeProjects="EuPathDB"
+              displayName="ID">
+        <paramRef ref="pathwayParams.ds_pathway_id"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="pathway_source"/>
+        <column name="identifiers"/>
+        <column name="type"/>
+        <sql>
+            <![CDATA[
+WITH ds
+AS (select pathway_source from ($$ds_pathway_id$$))
+SELECT  '@PROJECT_ID@' as project_id, source_id, pathway_source,
+          apidb.tab_to_string(set(cast(COLLECT(identifier) AS apidb.varchartab))) as identifiers,
+          apidb.tab_to_string(set(cast(COLLECT(type) AS apidb.varchartab))) as type
+FROM (
+-- Compounds
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'compound' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwaycompounds pc
+, apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE (ds.pathway_source = pc.compound_source_id
+  OR   ds.pathway_source = pc.chebi_accession)
+AND pc.ext_db_name = ed.name
+AND edr.external_database_id = ed.external_database_id
+and pa.pathway_id = pc.pathway_id
+UNION
+-- Enzyme
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'enzyme' as type
+, edr.external_database_release_id
+FROM apidbtuning.transcriptpathway tp
+, apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE ds.pathway_source = tp.ec_number
+AND pa.pathway_id = tp.pathway_id
+AND pa.external_db_name = ed.name
+and edr.external_database_id = ed.external_database_id
+UNION
+-- Gene
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'gene' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwayattributes pa
+, apidbtuning.transcriptpathway tp
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE lower(tp.gene_source_id) = lower(ds.pathway_source)
+AND    tp.pathway_id = pa.pathway_id
+AND    pa.external_db_name = ed.name
+AND    edr.external_database_id = ed.external_database_id
+UNION
+-- Reaction
+SELECT distinct pa.source_id as source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'reaction' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwaycompounds pc
+, apidbtuning.pathwayreactions pr
+, apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE ds.pathway_source = pr.reaction_source_id
+AND pr.reaction_id = pc.reaction_id
+AND pc.pathway_id = pa.pathway_id
+AND pa.external_db_name = pr.ext_db_name
+AND pa.external_db_name = ed.name
+AND ed.external_database_id = edr.external_database_id
+UNION
+-- Pathways from direct pathwayNodes
+SELECT distinct pa.source_id
+, pa.pathway_source
+, ds.pathway_source AS identifier
+, 'pathway' as type
+, edr.external_database_release_id
+FROM apidbtuning.pathwayattributes pa
+, sres.externaldatabase ed
+, sres.externaldatabaserelease edr
+, ds
+WHERE ds.pathway_source = pa.source_id
+AND pa.external_db_name = ed.name
+AND edr.external_database_id = ed.external_database_id 
+)
+WHERE (external_database_release_id = $$pathways_source$$ OR $$pathways_source$$=1) 
+GROUP BY source_id, pathway_source
+ORDER BY source_id
+	    ]]>
+        </sql>
+    </sqlQuery>
+
+    <processQuery name="PathwaysByIdentifierList" includeProjects="EuPathDB"
+          doNotTest="true"
+          processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="project_id" width="32" wsName="project_id"/>
+        <wsColumn name="pathway_source" width="32" wsName="pathway_source"/>
+        <wsColumn name="identifiers" width="100" wsName="identifier"/>
+        <wsColumn name="type" width="100" wsName="type"/>
+    </processQuery>   
+
 
     <!-- ************************************************************ -->
     <!-- Gene List -->  
     <!-- ************************************************************ -->
  
     <sqlQuery name="PathwaysByGeneList" doNotTest="true"  excludeProjects="EuPathDB"
-              displayName="ID" isCacheable="true">
+              displayName="ID">
         <paramRef ref="sharedParams.ds_gene_ids" default="%%defaultGeneList%%"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
+        <paramRef ref="pathwayParams.exact_match_only"/>
         <paramRef ref="geneParams.any_or_all_pathway"/>
         <column name="project_id"/>
         <column name="source_id"/>
+        <column name="pathway_source"/>
         <column name="genes"/>
         <column name="gene_count"/>
+        <column name="ec_pathway"/>
+        <column name="ec_gene"/>
         <sql>
             <![CDATA[
-SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id, count(distinct ga.source_id) as gene_count,
-       apidb.tab_to_string(set(cast(COLLECT(ga.source_id) AS apidb.varchartab))) as genes
-from   ($$ds_gene_ids$$) ds, sres.enzymeClass ec,
-       dots.aaSequenceEnzymeClass asec,ApidbTuning.GeneId gi, ApidbTuning.GeneAttributes ga,
-       apidb.networkrelationship nr, apidb.networkrelationshiptype nrt,
-       ApiDB.NetworkRelContext nrc,  apidb.NetworkContext n, ApiDB.NetworkRelContextLink nrl, apidb.networknode nn
-where  ga.aa_sequence_id = asec.aa_sequence_id
-AND    lower(gi.id) = lower(ds.source_id)
-AND    ga.source_id = gi.gene
-AND    asec.enzyme_class_id = ec.enzyme_class_id
-and    nn.display_label = ec.ec_number
-and    nr.associated_node_id = nn.network_node_id
-and    nrc.network_relationship_id = nr.network_relationship_id
-and    nrt.network_relationship_type_id = nrc.network_relationship_type_id
-and    nrl.network_rel_context_id = nrc.network_rel_context_id
-and    nrc.network_context_id = n.network_context_id
-group by n.name
-having (('$$any_or_all_pathway$$' = 'any') 
-        OR (count(*) = (select count(*) 
-                        from apidbtuning.geneattributes ga,($$ds_gene_ids$$) ds
-                        where lower (ds.source_id) = lower (ga.source_id)
-                       ))) ]]>
+            SELECT DISTINCT '@PROJECT_ID@' as project_id
+            , source_id
+            , pathway_source
+            , apidb.tab_to_string(SET(CAST(COLLECT(genes) AS apidb.varchartab))) as genes
+            , gene_count
+            , listagg (ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
+            , listagg (ec_gene, ', ') within group (order by ec_pathway) as ec_gene
+            FROM ( 
+                SELECT DISTINCT source_id
+                , pathway_source
+                , genes
+                , gene_count
+                , ec_gene
+                , listagg (ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
+                FROM (
+                    SELECT DISTINCT source_id
+                    , pathway_source
+                    , apidb.tab_to_string(SET(CAST(COLLECT(gene_source_id) AS apidb.varchartab))) as genes
+                    , gene_count
+                    , listagg (ec_gene, ', ') within group (order by ec_gene) as ec_gene
+                    , ec_pathway
+                    FROM (
+                        SELECT DISTINCT pa.SOURCE_ID
+                        , pa.PATHWAY_SOURCE
+                        , tp.gene_source_id
+                        , count(DISTINCT tp.gene_source_id) AS gene_count
+                        , tp.EC_NUMBER as ec_gene
+                        , pr.ENZYME as ec_pathway
+                        FROM apidbtuning.pathwayattributes pa
+                        , apidbtuning.transcriptpathway tp
+                        , apidbtuning.pathwaycompounds pc
+                        , apidbtuning.pathwayreactions pr
+                        , SRES.EXTERNALDATABASE ed
+                        , SRES.EXTERNALDATABASERELEASE edr
+                        , ($$ds_gene_ids$$) ds
+                        WHERE lower(tp.GENE_SOURCE_ID) = lower(ds.gene_source_id)
+                        AND tp.PATHWAY_ID = pa.PATHWAY_ID
+                        AND pc.PATHWAY_ID = pa.PATHWAY_ID
+                        AND pr.REACTION_ID = pc.REACTION_ID
+                        AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+                        AND ((tp.ec_number like replace (pr.enzyme, '-', '%') AND $$exact_match_only$$ = 0) OR (tp.ec_number = pr.enzyme AND $$exact_match_only$$ = 1))
+                        AND pa.EXTERNAL_DB_NAME = ed.NAME
+                        AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+                        AND (edr.EXTERNAL_DATABASE_RELEASE_ID = $$pathways_source$$ or $$pathways_source$$ = 1)
+                        GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE, tp.EC_NUMBER, pr.ENZYME, tp.gene_source_id
+                        HAVING (('$$any_or_all_pathway$$' = 'any' )
+                          OR (count(*) = (SELECT count (*)
+                            FROM APIDBTUNING.TRANSCRIPTPATHWAY tp
+                            , ($$ds_gene_ids$$) ds
+                            WHERE lower (ds.gene_source_id) = lower (tp.gene_source_id)
+                            )))
+                    )
+                    GROUP BY source_id, pathway_source, gene_count, ec_pathway
+                )
+                GROUP BY source_id, pathway_source, genes, gene_count, ec_gene
+            )
+            GROUP BY source_id, pathway_source, gene_count
+	    ]]>
         </sql>
     </sqlQuery>
 
@@ -76,6 +251,7 @@ having (('$$any_or_all_pathway$$' = 'any')
         <paramRef ref="geneParams.any_or_all_pathway" quote="false"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
+        <wsColumn name="pathway_source" width="32" wsName="pathway_source"/>
         <wsColumn name="genes" width="100" wsName="genes"/>
         <wsColumn name="gene_count" width="20" wsName="gene_count"/>
     </processQuery>   
@@ -86,23 +262,37 @@ having (('$$any_or_all_pathway$$' = 'any')
     <!-- ************************************************************ -->
  
     <sqlQuery name="PathwaysByCompounds" doNotTest="true"  excludeProjects="EuPathDB"
-              displayName="Compound" isCacheable="true">
-        <paramRef ref="compoundParams.ds_pubchem_compound_id" default="C00074"/>
+              displayName="Compound">
+        <paramRef ref="compoundParams.ds_compound_id" default="CHEBI:58601"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="compoundParams.any_or_all_pathway"/>
         <column name="project_id"/>
+        <column name="pathway_source"/>
         <column name="source_id"/>
         <sql>
             <![CDATA[
-            SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id
-            FROM   apidbtuning.PathwayCompounds p, ($$ds_pubchem_compound_id$$) ds, apidb.networkContext n
-            WHERE  p.compound = ds.source_id
-            AND    p.network_context_id = n.network_context_id
-           GROUP BY n.name
-           HAVING (('$$any_or_all_pathway$$' = 'any') 
-                   OR (count(*) = (select count(*) 
-                        FROM ($$ds_pubchem_compound_id$$) ds
-                        WHERE ds.source_id IN (SELECT DISTINCT compound FROM apidbtuning.PathwayCompounds ))
-               ))
+            SELECT DISTINCT pa.source_id
+            , '@PROJECT_ID@' as project_id
+            , pa.pathway_source
+            FROM
+            apidbtuning.compoundid ci
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayattributes pa
+            , ($$ds_compound_id$$) ds
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE pc.chebi_accession = ci.compound
+            AND pa.pathway_id = pc.pathway_id
+            AND ci.compound = ds.source_id
+            AND pa.external_db_name = ed.name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.external_database_release_id  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.source_id, pa.pathway_source
+            HAVING (('$$any_or_all_pathway$$' = 'any') 
+            OR (count(*) = (select count(*) 
+            FROM ($$ds_compound_id$$) ds
+                WHERE ds.source_id IN (SELECT DISTINCT chebi_accession FROM apidbtuning.PathwayCompounds ))
+             ))
                ]]>
         </sql>
     </sqlQuery>
@@ -110,23 +300,25 @@ having (('$$any_or_all_pathway$$' = 'any')
     <processQuery name="PathwaysByCompounds" includeProjects="EuPathDB"
           doNotTest="true"
           processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
-        <paramRef ref="compoundParams.ds_pubchem_compound_id" noTranslation="true"/>
+        <paramRef ref="compoundParams.ds_compound_id" noTranslation="true"/>
         <paramRef ref="compoundParams.any_or_all_pathway" quote="false"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
+        <wsColumn name="pathway_source" width="32" wsName="pathway_source"/>
     </processQuery>   
 
 
-    <sqlQuery name="ByWeightFilter" isCacheable="true" doNotTest="true">
+    <sqlQuery name="ByWeightFilter" doNotTest="true">
         <paramRef ref="pathwayParams.pathway_result"/>
         <paramRef ref="sharedParams.min_weight" default="0"/>
         <paramRef ref="sharedParams.max_weight" default="100"/>
         <column name="project_id"/>
+        <column name="pathway_source"/>
         <column name="source_id"/>
         <column name="wdk_weight" />
         <sql>
             <![CDATA[
-            SELECT a.source_id, a.project_id, a.wdk_weight
+            SELECT a.source_id, a.project_id, a.pathway_source, a.wdk_weight
             FROM $$pathway_result$$ a
             WHERE a.wdk_weight >= $$min_weight$$
               AND a.wdk_weight <= $$max_weight$$
@@ -139,11 +331,13 @@ having (('$$any_or_all_pathway$$' = 'any')
     <!-- ************************************************************ -->
 
     <sqlQuery name="PathwaysByGeneIds" doNotTest="true"
-              displayName="ID" isCacheable="true">
+              displayName="ID">
         <paramRef ref="geneParams.gene_result"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="geneParams.any_or_all_pathway"/>
         <paramRef ref="geneParams.use_ec_wildcard"/>
         <column name="project_id"/>
+        <column name="pathway_source"/>
         <column name="source_id"/>
         <column name="genes"/>
         <column name="ecNums"/>
@@ -152,27 +346,34 @@ having (('$$any_or_all_pathway$$' = 'any')
 
         <sql>
             <![CDATA[
-SELECT DISTINCT n.name as source_id, '@PROJECT_ID@' as project_id, count(distinct ec.ec_number) as enzyme_count,
-       apidb.tab_to_string(set(cast(COLLECT(ds.source_id) AS apidb.varchartab))) as genes, 
-       apidb.tab_to_string(set(cast(COLLECT(nn.display_label) AS apidb.varchartab))) as ecNums, 
-       max(ds.wdk_weight) as wdk_weight
-from   ($$gene_result$$) ds, sres.enzymeClass ec,
-       dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga,
-       apidb.networkrelationship nr, apidb.networkrelationshiptype nrt,
-       ApiDB.NetworkRelContext nrc,  apidb.NetworkContext n, ApiDB.NetworkRelContextLink nrl, apidb.networknode nn
-where  ds.source_id =  ga.source_id
-AND ga.aa_sequence_id = asec.aa_sequence_id
-AND    asec.enzyme_class_id = ec.enzyme_class_id
-AND  (   ( ec.ec_number LIKE REPLACE(nn.display_label,'-', '%')  OR nn.display_label LIKE REPLACE(ec.ec_number,'-', '%')  )
-         $$use_ec_wildcard$$  ec.ec_number = nn.display_label    )
-and    nr.associated_node_id = nn.network_node_id
-and    nrc.network_relationship_id = nr.network_relationship_id
-and    nrt.network_relationship_type_id = nrc.network_relationship_type_id
-and    nrl.network_rel_context_id = nrc.network_rel_context_id
-and    nrc.network_context_id = n.network_context_id
-and n.name not in ('ec01100','ec01110','ec01120') /* temporary - these are to be removed later */
-group by n.name
-having '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.geneattributes ga,($$gene_result$$) ds  where lower(ga.source_id) = lower(ds.source_id)) 
+            SELECT DISTINCT 
+            pa.source_id
+            , '@PROJECT_ID@' as project_id
+            , pa.PATHWAY_SOURCE
+            , count(distinct tp.ec_number) as enzyme_count
+            , apidb.tab_to_string(set(cast(COLLECT(tp.gene_source_id) AS apidb.varchartab))) as genes
+            , apidb.tab_to_string(set(cast(COLLECT(pr.ENZYME) AS apidb.varchartab))) as ecNums
+            , max(ds.wdk_weight) as wdk_weight
+            FROM 
+            apidbtuning.pathwayattributes pa
+            , apidbtuning.transcriptpathway tp
+            , apidbtuning.pathwaycompounds pc
+            , apidbtuning.pathwayreactions pr
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            , ($$gene_result$$) ds
+            WHERE tp.GENE_SOURCE_ID = ds.gene_source_id
+            AND (tp.EC_NUMBER like replace(pr.ENZYME, '-', '%')
+                $$use_ec_wildcard$$ tp.EC_NUMBER = pr.ENZYME)
+            AND pr.REACTION_ID = pc.REACTION_ID
+            AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+            AND pc.EXT_DB_NAME = ed.NAME
+            AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+            AND pc.PATHWAY_ID = pa.PATHWAY_ID
+            and tp.PATHWAY_ID = pa.PATHWAY_ID
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE, pa.PATHWAY_ID, tp.PATHWAY_ID
+            HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.transcriptpathway tp, ($$gene_result$$) ds where lower(tp.gene_source_id) = lower(ds.gene_source_id))
                ]]>
         </sql>
     </sqlQuery>
@@ -183,30 +384,38 @@ having '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apid
     <!-- ************************************************************ -->
 
     <sqlQuery name="PathwaysByCompoundIds" doNotTest="true"
-              displayName="ID" isCacheable="true">
+              displayName="ID">
         <paramRef ref="compoundParams.compound_result"/>
+        <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="compoundParams.any_or_all_pathway"/>
         <column name="project_id"/>
         <column name="source_id"/>
+        <column name="pathway_source"/>
         <column name="compounds"/>
         <column name="compound_count"/>
         <column name="wdk_weight" />
 
         <sql>
             <![CDATA[
-SELECT DISTINCT p.source_id , '@PROJECT_ID@' as project_id, count(distinct ds.source_id) as compound_count,
-       apidb.tab_to_string(set(cast(COLLECT(pc.compound) AS apidb.varchartab))) as compounds, max(ds.wdk_weight) as wdk_weight
-FROM ($$compound_result$$) ds, ApiDB.Pathway p, ApiDB.PathwayNode pn, ApiDBTuning.PathwayCompounds pc,
-       ApiDB.NetworkContext nc, ApiDB.NetworkRelContext nrc
-WHERE  pc.compound_source_id = ds.source_id
-AND    p.pathway_id = pn.parent_id
-AND    pn.pathway_node_type_id = 2
-AND    pn.display_label = pc.compound
-AND    p.source_id not in ('ec01100','ec01110','ec01120') /* temporary - these are to be removed later */
-AND    nc.name = p.source_id
-AND    nc.network_context_id  = nrc.network_context_id  
-GROUP BY p.source_id
-HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.PathwayCompounds pc,($$compound_result$$) ds  where lower(pc.compound_source_id) = lower(ds.source_id)) 
+            SELECT DISTINCT pa.SOURCE_ID
+            , pa.PATHWAY_SOURCE
+            , '@PROJECT_ID@' as project_id
+            , count(distinct ds.source_id) as compound_count
+            , apidb.tab_to_string(set(cast(COLLECT(pc.chebi_accession) AS apidb.varchartab))) as compounds
+            , max(ds.wdk_weight) as wdk_weight
+            FROM ($$compound_result$$) ds
+            , apidbtuning.pathwayattributes pa
+            , ApiDBTuning.PathwayCompounds pc
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE  pc.chebi_accession = ds.source_id
+            AND pa.PATHWAY_ID = pc.PATHWAY_ID
+            AND pa.EXTERNAL_DB_NAME = ed.NAME
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
+            GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE
+            HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) 
+                from apidbtuning.PathwayCompounds pc, ($$compound_result$$) ds where lower(pc.chebi_accession) = lower(ds.source_id))
                ]]>
         </sql>
     </sqlQuery>

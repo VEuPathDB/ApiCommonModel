@@ -6,7 +6,7 @@ public class AnnotatedGenomeCentromere extends AnnotatedGenome {
   public void addModelReferences() {
       // add all references from AnnotatedGenome first
       super.addModelReferences();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCentromereProximity");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCentromereProximity");
   }
 
 }

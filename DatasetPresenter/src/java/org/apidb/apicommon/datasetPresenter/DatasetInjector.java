@@ -95,6 +95,11 @@ public abstract class DatasetInjector {
     propValues.put(key, value);
   }
 
+
+    protected Map<String, String> getPropValues() {
+        return this.propValues;
+    }
+
   protected String getPropValue(String key) {
     return propValues.get(key);
   }
@@ -322,7 +327,7 @@ public abstract class DatasetInjector {
           } else {
            String[] orgName =  orgProps.get("organismFullName").split(" ");
             String orgAbbrevDisplay = String.valueOf(orgName[0].charAt(0));
-	    orgAbbrevDisplay += "." + String.valueOf(orgName[1].substring(0,3) ) + "."; 
+	    orgAbbrevDisplay += "." + orgName[1];
             return orgAbbrevDisplay;
           }
         } 

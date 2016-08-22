@@ -6,13 +6,13 @@ public class MicroarrayCortesStrains extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CortesTransVar::TimeSeries"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "CortesTransVar::CrossStrain"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantomeHB3"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantome3D7"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantomeD10"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantome7G8"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesCGH"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCortesCGHCrossStrain"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "CortesTransVar::TimeSeries"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "CortesTransVar::CrossStrain"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantomeHB3"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantome3D7"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantomeD10"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCortesTranscriptVariantome7G8"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCortesCGH"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCortesCGHCrossStrain"); 
   } 
 }

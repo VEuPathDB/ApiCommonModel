@@ -181,6 +181,10 @@ public class DatasetPresenterSetLoader {
         String type = rs.getString(3);
         String subtype = rs.getString(4);
         Boolean isSpeciesScope = rs.getBoolean(5);
+
+        // track all dataset names for presenter
+        datasetPresenter.addDatasetNameToList(name);
+
         if (datasetPresenter.getOverride() == null) {
           if (datasetNamesFoundInDb.contains(name))
             throw new UserException(
@@ -282,6 +286,7 @@ public class DatasetPresenterSetLoader {
       PreparedStatement linkStmt = getLinkStmt();
       PreparedStatement historyStmt = getHistoryStmt();
       PreparedStatement nameTaxonStmt = getNameTaxonStmt();
+      PreparedStatement injectorPropertiesStmt = getInjectorPropertiesStmt() ;
 
       Map<String, Map<String, String>> defaultDatasetInjectorClasses = DatasetPresenterParser.parseDefaultInjectorsFile(defaultInjectorsFileName);
 
@@ -293,6 +298,20 @@ public class DatasetPresenterSetLoader {
 	String datasetPresenterId = datasetPresenter.getId();
 
         loadDatasetPresenter(datasetPresenterId, datasetPresenter, presenterStmt);
+
+        DatasetInjector datasetInjector = datasetPresenter.getDatasetInjector();
+
+        if(datasetInjector != null) {
+            Map<String, String> injectorPropValues =  datasetInjector.getPropValues();
+            for (Map.Entry<String, String> pv : injectorPropValues.entrySet()) {
+
+		String dataValue = pv.getValue();
+		if (dataValue.length() > 4000) {
+		    dataValue = dataValue.substring(0,4000);
+		}
+                loadInjectorPropValue(datasetPresenterId, pv.getKey(), dataValue, injectorPropertiesStmt);
+            }
+        }
 
         String type = datasetPresenter.getType();
         String subtype = datasetPresenter.getSubtype();
@@ -356,8 +375,9 @@ public class DatasetPresenterSetLoader {
         " (dataset_presenter_id, name, dataset_name_pattern, " +
         "display_name, short_display_name, short_attribution, summary, " +
         "protocol, usage, description, caveat, acknowledgement, release_policy, " +
-        "display_category, type, subtype, is_species_scope, build_number_introduced)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        "display_category, type, subtype, is_species_scope, build_number_introduced, " +
+        "category)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
 
@@ -393,6 +413,10 @@ public class DatasetPresenterSetLoader {
     }
 
     stmt.setInt(i++, buildNumberIntroduced.intValue());
+
+    String datasetClassCategory = datasetPresenter.getPropValue("datasetClassCategory");
+    stmt.setString(i++, datasetClassCategory);
+
     stmt.execute();
   }
 
@@ -404,6 +428,23 @@ public class DatasetPresenterSetLoader {
         + " VALUES (" + table + "_sq.nextval, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     return dbConnection.prepareStatement(sql);
   }
+
+  PreparedStatement getInjectorPropertiesStmt() throws SQLException {
+    String table = config.getUsername() + ".DatasetProperty" + suffix;
+    String sql = "INSERT INTO "
+        + table
+        + " (dataset_property_id, dataset_presenter_id, property, value)"
+        + " VALUES (" + table + "_sq.nextval, ?, ?, ?)";
+    return dbConnection.prepareStatement(sql);
+  }
+
+
+    private void loadInjectorPropValue(String datasetPresenterId, String property, String value, PreparedStatement stmt) throws SQLException {
+        stmt.setString(1, datasetPresenterId);
+        stmt.setString(2, property);
+        stmt.setString(3, value);
+        stmt.execute();
+    }
 
   private void loadContact(String datasetPresenterId, Contact contact,
       PreparedStatement stmt) throws SQLException {
@@ -457,10 +498,6 @@ public class DatasetPresenterSetLoader {
     } catch (SQLException e) {
 	// if that fails, get it from the NCBI web service
         // System.out.println("fail: " + e.toString() + "; had to hit NCBI");
-	citation = null;
-    }
-
-    if (citation == null || citation.equals("")) {
 	citation = publication.getCitation();
     }
 
@@ -634,10 +671,16 @@ public class DatasetPresenterSetLoader {
 
     System.err.println("Parsing and validating DatasetPresenters XML files found in directory "
         + presentersDir);
+
+    // ADDS PROPS HERE
     DatasetPresenterSet datasetPresenterSet = DatasetPresenterSet.createFromPresentersDir(presentersDir, globalPresentersFile);
     DatasetPresenterSetLoader dpsl = new DatasetPresenterSetLoader(propFile, contactsFile, defaultInjectorsFile, defaultLinksFile, instance, suffix);
     dpsl.setDatasetPresenterSet(datasetPresenterSet);
+
+    // RUNS SQL HERE
     Set<String> namesFromDbNotFound = dpsl.syncPresenterSetWithDatasetTable();
+    datasetPresenterSet.addCategoriesForPattern();
+
     if (namesFromDbNotFound.size() != 0)
       throw new UserException(
           "The following Dataset names in Apidb.Datasource are not mentioned or matched by the input DatasetPresenters:"

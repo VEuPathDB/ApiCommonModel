@@ -6,7 +6,7 @@ public class AnnotatedGenomeTelomereWithNonNuclear extends AnnotatedGenomeWithNo
   public void addModelReferences() {
       // add all references from AnnotatedGenome first
       super.addModelReferences();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByTelomereProximity");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTelomereProximity");
   }
 
 }

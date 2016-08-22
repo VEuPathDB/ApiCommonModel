@@ -61,7 +61,7 @@ foreach(@{$apiCommonModel->{constant}}) {
 }
 
 # Get valid project ids
-my $sh = $dbh->prepare("select distinct project_id from ApidbTuning.SequenceAttributes");
+my $sh = $dbh->prepare("select distinct project_id from ApidbTuning.GenomicSeqAttributes");
 $sh->execute();
 
 while(my ($projectId) = $sh->fetchrow_array()) {

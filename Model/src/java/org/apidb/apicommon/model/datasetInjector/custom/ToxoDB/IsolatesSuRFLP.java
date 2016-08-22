@@ -10,8 +10,8 @@ public class IsolatesSuRFLP extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "IsolateQuestions.IsolateByRFLPGenotype"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "IsolateQuestions.IsolateByGenotypeNumber"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "IsolateQuestions.IsolateByRFLPGenotype"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "IsolateQuestions.IsolateByGenotypeNumber"); 
   }
 
   // second column is for documentation

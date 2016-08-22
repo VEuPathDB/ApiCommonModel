@@ -1,16 +1,13 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.MicroarrayTwoChannelReferenceDesign;
 
-public class MicroarrayDeRisiTimeSeries extends CusomGenePageExpressionGraphs {
+public class MicroarrayDeRisiTimeSeries extends MicroarrayTwoChannelReferenceDesign {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "OverlayIRBC::Ver2"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "DeRisi::Combined"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExpressionTiming"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByProfileSimilarity"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMicroarrayPercentileDerisi"); 
+      super.addModelReferences();
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProfileSimilarity"); 
   }
 
 

@@ -10,8 +10,8 @@ public class SAGETags extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySageTag");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesBySageTagRStat");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySageTag");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySageTagRStat");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SageTags");
       addWdkReference("SageTagRecordClasses.SageTagRecordClass", "question", "SageTagQuestions.SageTagByRStat");
       addWdkReference("SageTagRecordClasses.SageTagRecordClass", "question", "SageTagQuestions.SageTagByLocation");

@@ -232,13 +232,30 @@ SELECT   -- trying to find genes by product description ( at least 7 chars)
        ga.na_sequence_id parent_id,
        ga.start_min startm,
        ga.end_max end,
-       decode (ga.strand, 'forward', '+1', 'reverse', '-1', '.') strand,
+       decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'Note=' || ga.product as atts
 FROM
        ApidbTuning.GeneAttributes ga
 WHERE
        length('$name') >= 3 and
        upper(ga.product) like upper('%$name%')
+UNION
+SELECT -- find transcripts by ID
+       sequence_id ctg_name, 
+       na_feature_id feature_id, 
+       'transcript' type, 
+       'annotation' source, 
+       source_id name, 
+       '' phase, 
+       na_sequence_id parent_id, 
+       coding_start startm, 
+       coding_end end, 
+       decode (is_reversed, 0, '+1', 1, '-1', '.') strand,
+       '' as atts
+FROM   
+       ApidbTuning.TranscriptAttributes
+WHERE  
+       lower(source_id) like lower('%$name%') 
 --UNION
 --SELECT -- match a sequence source_id
 --       gs.source_id ctg_name,
@@ -250,7 +267,7 @@ WHERE
 --       null parent_id, 
 --       1 startm, gs.length end, '.' strand,
 --       '' as atts
---FROM ApidbTuning.GenomicSequence gs, sres.SequenceOntology so,
+--FROM ApidbTuning.GenomicSeqAttributes gs, sres.SequenceOntology so,
 --     sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
 --     dots.NASequence nas
 --WHERE gs.lowercase_source_id
@@ -279,7 +296,7 @@ SELECT etn.na_sequence_id srcfeature_id,
        etn.source_id name, 
        'Sequence' type, 
        ' ' atts
-FROM   ApidbTuning.SequenceAttributes etn, ApidbTuning.SequenceId si
+FROM   ApidbTuning.GenomicSeqAttributes etn, ApidbTuning.GenomicSequenceId si
 WHERE  etn.source_id = si.id 
  and lower(si.id) = lower('$name') 
 ]]>
@@ -301,34 +318,36 @@ WHERE  ens.na_sequence_id = $srcfeature_id
      <sql>
 <![CDATA[
  SELECT
-       ga.na_feature_id feature_id,
+       ta.na_feature_id feature_id,
        'gene' type,
        'annotation' source,
-       ga.source_id name,
+       ta.source_id name,
        '1' phase, 
        '.' score,
-       ga.na_sequence_id parent_id,
+       ta.na_sequence_id parent_id,
        fl.start_min startm,
        fl.end_max end,
        decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'Note=' || ga.product  || '$dlm' ||
-       'soTerm=' || ga.so_term_name || '$dlm' ||
-       'gName=' || ga.name || '$dlm' ||
-       'Contig=' || ga.sequence_id || '$dlm' ||
-       'product=' || replace(ga.product,'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
-       'taxon=' || ga.organism || '$dlm' ||
-       'isDeprecated=' || ga.is_deprecated || '$dlm' ||
-       'orthomcl_name=' || ga.orthomcl_name || '$dlm' ||
-       'isPseudo=' || ga.is_pseudo
+       'Note=' || ta.gene_product  || '$dlm' ||
+       'soTerm=' || ta.so_term_name || '$dlm' ||
+       'geneId=' || ta.gene_source_id || '$dlm' ||
+       'gName=' || ta.gene_name || '$dlm' ||
+       'Contig=' || ta.sequence_id || '$dlm' ||
+       'product=' || replace(ta.gene_product,'''','&#146;') || decode(ta.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'taxon=' || ta.organism || '$dlm' ||
+       'isDeprecated=' || ta.is_deprecated || '$dlm' ||
+       'orthomcl_name=' || ta.orthomcl_name || '$dlm' ||
+       'isPseudo=' || ta.is_pseudo
          as atts
 FROM
-       ApidbTuning.GeneAttributes ga,
+       ApidbTuning.TranscriptAttributes ta,
        ApidbTuning.FeatureLocation fl
 WHERE  fl.na_sequence_id = $srcfeature_id
-  AND  fl.feature_type = 'GeneFeature'
-  AND  fl.na_feature_id = ga.na_feature_id
+  AND  fl.feature_type = 'Transcript'
+  AND  fl.na_feature_id = ta.na_feature_id
   AND  fl.start_min <= $rend
   AND  fl.end_max >= $base_start
+  AND  fl.is_top_level = 1
 ORDER BY 
        fl.start_min
 ]]>
@@ -365,48 +384,42 @@ ORDER BY
     </sql>
   </sqlQuery>
 
-  <sqlQuery name="rum:intron">
+  <sqlQuery name="gsnap:intron">
      <sql>
      <![CDATA[
-SELECT feature_id, type, source, 'Score=' || total_unique  as name, parent_id, startm, end,score,
+SELECT feature_id, type, source, 'Score=' || unique_reads as name, parent_id, startm, end,score,
 'Sample=' || sample || '$dlm' ||
 'Exp=' || db_name || '$dlm' ||
-'LOUR=' || lours || '$dlm' ||
-'SOUR=' || sours || '$dlm' ||
-'LONR=' || lonrs || '$dlm' ||
-'SONR=' || sonrs || '$dlm' ||
-'Canonical=' || Canonical || '$dlm' ||
-'KnownIntron=' || known  atts
+'URS=' || unique_reads || '$dlm' ||
+'NRS=' || nu_reads  atts
 FROM (
-  SELECT rif.sample_name || '_' || rif.mapping_start || '_' || rif.mapping_end as feature_id,
-         'rum' type, 
+  SELECT rif.sample_name || '_' || rif.segment_start || '_' || rif.segment_end as feature_id,
+         'gsnap' type, 
          '$source' source, 
          na_sequence_id parent_id, 
-         mapping_start startm, 
-         mapping_end end, 
+         segment_start startm, 
+         segment_end end, 
          score,
          edb.name as db_name, 
          rif.sample_name as sample,
-         rif.long_overlap_unique_reads as lours,
-         rif.short_overlap_unique_reads as sours,
-         rif.long_overlap_nu_reads as lonrs,
-         decode(rif.signal_not_canonical,0,1,1,0) as Canonical,
-         rif.short_overlap_nu_reads as sonrs,
-         rif.known_intron known,
-         rif.long_overlap_unique_reads + rif.short_overlap_unique_reads as total_unique
-  FROM   apidb.RUMIntronFeature rif, 
+         rif.unique_reads,
+         rif.nu_reads
+  FROM   apidb.IntronJunction rif, 
+         study.studylink sl,
+         study.study s,
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr 
-  WHERE  rif.mapping_start <= $rend 
-     AND rif.mapping_end >= $base_start 
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start 
      AND rif.na_sequence_id = $srcfeature_id
-     AND mapping_end - mapping_start < $$intronSizeLimit$$
-     AND
-     score > 1
-     AND rif.external_database_release_id = edbr.external_database_release_id 
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND  score > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
      AND edb.external_database_id = edbr.external_database_id 
      AND edb.name  $$edname$$
---  GROUP BY rif.mapping_start, mapping_end, edb.name, na_sequence_id
+--  GROUP BY rif.segment_start, segment_end, edb.name, na_sequence_id
 )
 --GROUP BY feature_id, name type, source, parent_id,startm, end, atts
 ORDER BY startm
@@ -414,56 +427,337 @@ ORDER BY startm
     </sql>
   </sqlQuery>
 
-  <sqlQuery name="rum:intronunified">
+  <sqlQuery name="gsnap:intronunified">
      <sql>
      <![CDATA[
-SELECT feature_id, type, source, 'Score=' || sum(total_unique)  as name, parent_id, startm, end,
+SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end,
 'Samples=' || listagg(samples, '|') within group (order by db_name) || '$dlm' ||
 'Exps=' || listagg(display_name, '|') within group (order by db_name) || '$dlm' ||
-'LOURS=' || listagg(lours, '|') within group (order by db_name) || '$dlm' ||
-'SOURS=' || listagg(sours, '|') within group (order by db_name) || '$dlm' ||
-'LONRS=' || listagg(lonrs, '|') within group (order by db_name) || '$dlm' ||
-'SONRS=' || listagg(sonrs, '|') within group (order by db_name) || '$dlm' ||
-'NOTCAN=' || listagg(notCanonicals, '|') within group (order by db_name) || '$dlm' ||
+'URS=' || listagg(unique_reads, '|') within group (order by db_name) || '$dlm' ||
+'NRS=' || listagg(nu_reads, '|') within group (order by db_name) || '$dlm' ||
 'Scores=' || listagg(scores, '|') within group (order by db_name) atts
 FROM (
-  SELECT rif.mapping_start || '_' || rif.mapping_end as feature_id,
-         'rum' type, 
+  SELECT rif.segment_start || '_' || rif.segment_end as feature_id,
+         'gsnap' type, 
          '$source' source, 
          na_sequence_id parent_id, 
-         mapping_start startm, 
-         mapping_end end, 
-         sum(score) as sum_exp_score,
+         segment_start startm, 
+         segment_end end, 
+         sum(rif.unique_reads) as sum_exp_score,
          edb.name as db_name, 
          dsp.display_name,
          listagg(rif.sample_name, ',') within group (order by rif.sample_name) as samples,
-         listagg(score, ',') within group (order by rif.sample_name) scores,
-         listagg(rif.long_overlap_unique_reads, ',') within group (order by rif.sample_name) as lours,
-         listagg(rif.short_overlap_unique_reads, ',') within group (order by rif.sample_name) as sours,
-         listagg(rif.long_overlap_nu_reads, ',') within group (order by rif.sample_name) as lonrs,
-         listagg(rif.signal_not_canonical, ',') within group (order by rif.sample_name) as notCanonicals,
-         listagg(rif.short_overlap_nu_reads, ',') within group (order by rif.sample_name) as sonrs,
-         sum(rif.long_overlap_unique_reads) + sum(rif.short_overlap_unique_reads) as total_unique
-  FROM   apidb.RUMIntronFeature rif, 
+         listagg(rif.unique_reads, ',') within group (order by rif.sample_name) scores,
+         listagg(rif.unique_reads, ',') within group (order by rif.sample_name) as unique_reads,
+         listagg(rif.nu_reads, ',') within group (order by rif.sample_name) as nu_reads,
+         sum(rif.unique_reads) as total_reads
+  FROM   apidb.IntronJunction rif, 
+         study.studylink sl,
+         study.study s,
          sres.externaldatabase edb,
          sres.externaldatabaserelease edbr,
          apidbtuning.datasetpresenter dsp
-  WHERE  rif.mapping_start <= $rend 
-     AND rif.mapping_end >= $base_start 
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start 
      AND rif.na_sequence_id = $srcfeature_id
-     AND mapping_end - mapping_start < $$intronSizeLimit$$
-     AND score > 1
-     AND rif.external_database_release_id = edbr.external_database_release_id 
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND rif.unique_reads > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
      AND edb.external_database_id = edbr.external_database_id 
+     AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
      and edb.name = dsp.name
-  GROUP BY rif.mapping_start, mapping_end, edb.name, dsp.display_name, na_sequence_id
+  GROUP BY rif.segment_start, segment_end, edb.name, dsp.display_name, na_sequence_id
 )
 GROUP BY feature_id, type, source, parent_id,startm, end
+having sum(total_reads) > 3 
 ORDER BY startm
     ]]>
     </sql>
   </sqlQuery>
 
+<sqlQuery name="gsnap:intronunifiedpercent">
+     <sql>
+     <![CDATA[
+select * from (
+SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, 
+intron_percent,sum(total_reads) as score,score_exp_ratio,
+'Samples=' || listagg(samples, '|') within group (order by db_name) || '$dlm' ||
+'Exps=' || listagg(display_name, '|') within group (order by db_name) || '$dlm' ||
+'URS=' || listagg(unique_reads, '|') within group (order by db_name) || '$dlm' ||
+'NRS=' || listagg(nu_reads, '|') within group (order by db_name) || '$dlm' ||
+'IntronPercent=' || intron_percent || '$dlm' ||
+'IntronRatio=' || score_exp_ratio || '$dlm' ||
+'Scores=' || listagg(scores, '|') within group (order by db_name) atts
+FROM (
+  SELECT rif.segment_start || '_' || rif.segment_end as feature_id,
+         'gsnap' type, 
+         '$source' source, 
+         na_sequence_id parent_id, 
+         segment_start startm, 
+         segment_end end, 
+         sum(rif.unique_reads) as sum_exp_score,
+         edb.name as db_name, 
+         dsp.display_name,
+         listagg(regexp_replace(pan.name,'( \(RNASeq\))',''), ',') within group (order by pan.name) as samples,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) scores,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) as unique_reads,
+         listagg(rif.nu_reads, ',') within group (order by pan.name) as nu_reads,
+         sum(rif.unique_reads) as total_reads
+  FROM   apidb.IntronJunction rif, 
+         sres.externaldatabase edb,
+         sres.externaldatabaserelease edbr,
+         study.studylink sl,
+         study.study s,
+         apidbtuning.datasetpresenter dsp,
+         study.input inp,
+         study.output oup, 
+         study.protocolappnode pan
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start
+     AND rif.na_sequence_id = $srcfeature_id
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND rif.unique_reads > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
+     AND edb.external_database_id = edbr.external_database_id 
+     AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
+     AND edb.name = dsp.name
+     AND rif.protocol_app_node_id = oup.protocol_app_node_id
+     AND oup.protocol_app_id = inp.protocol_app_id
+     AND inp.protocol_app_node_id = pan.protocol_app_node_id
+  GROUP BY rif.segment_start, rif.segment_end, edb.name, dsp.display_name, na_sequence_id
+) details, ApidbTuning.GeneIntronPercent gip
+   where details.parent_id = gip.na_sequence_id(+)
+     AND details.startm = gip.mapping_start(+) 
+     AND details.end = gip.mapping_end(+)
+GROUP BY details.feature_id, details.type, details.source, details.parent_id,details.startm, details.end,gip.intron_percent,gip.score_exp_ratio)
+where (intron_percent >= $$minIntronPercent$$
+and score_exp_ratio >= $$minIntronRatio$$)
+or (intron_percent is null and score >= $$minScore$$)
+ORDER BY startm
+    ]]>
+    </sql>
+  </sqlQuery>
+
+<sqlQuery name="gsnap:intronunifiedperccont">
+     <sql>
+     <![CDATA[
+select * from (
+SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, 
+intron_percent,sum(total_reads) as score,score_exp_ratio,
+'Exps=' || listagg(display_name, '|') within group (order by db_name) || '$dlm' ||
+'Samples=' || listagg(samples, '|') within group (order by db_name) || '$dlm' ||
+'Scores=' || listagg(scores, '|') within group (order by db_name) || '$dlm' ||
+'URS=' || listagg(details.unique_reads, '|') within group (order by db_name) || '$dlm' ||
+'NRS=' || listagg(nu_reads, '|') within group (order by db_name) || '$dlm' ||
+'IntronPercent=' || intron_percent || '$dlm' ||
+'IntronRatio=' || score_exp_ratio atts
+FROM (
+  SELECT rif.segment_start || '_' || rif.segment_end as feature_id,
+         'gsnap' type, 
+         '$source' source, 
+         na_sequence_id parent_id, 
+         segment_start startm, 
+         segment_end end, 
+         sum(rif.unique_reads) as sum_exp_score,
+         edb.name as db_name, 
+         dsp.display_name,
+         listagg(regexp_replace(pan.name,'( \(RNASeq\))',''), ',') within group (order by pan.name) as samples,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) scores,
+         listagg(rif.unique_reads, ',') within group (order by pan.name) as unique_reads,
+         listagg(rif.nu_reads, ',') within group (order by pan.name) as nu_reads,
+         sum(rif.unique_reads) as total_reads
+  FROM   apidb.IntronJunction rif, 
+         sres.externaldatabase edb,
+         sres.externaldatabaserelease edbr,
+         study.studylink sl,
+         study.study s,
+         apidbtuning.datasetpresenter dsp,
+         study.input inp,
+         study.output oup, 
+         study.protocolappnode pan
+  WHERE  rif.segment_start <= $rend 
+     AND rif.segment_end >= $base_start
+     AND rif.na_sequence_id = $srcfeature_id
+     AND segment_end - segment_start < $$intronSizeLimit$$
+     AND rif.unique_reads > 1
+     AND rif.protocol_app_node_id = sl.protocol_app_node_id
+     AND sl.study_id = s.study_id
+     AND s.external_database_release_id = edbr.external_database_release_id
+     AND edb.external_database_id = edbr.external_database_id 
+     AND edb.name != 'pfal3D7_Bunnik_Asexual_Cell_Cycle_rnaSeq_RSRC'
+     AND edb.name = dsp.name
+     AND rif.protocol_app_node_id = oup.protocol_app_node_id
+     AND oup.protocol_app_id = inp.protocol_app_id
+     AND inp.protocol_app_node_id = pan.protocol_app_node_id
+  GROUP BY rif.segment_start, rif.segment_end, edb.name, dsp.display_name, na_sequence_id
+) details, ApidbTuning.GeneIntronPercCont gip
+   where details.parent_id = gip.na_sequence_id(+)
+     AND details.startm = gip.mapping_start(+) 
+     AND details.end = gip.mapping_end(+)
+GROUP BY details.feature_id, details.type, details.source, details.parent_id,details.startm, details.end,gip.intron_percent,gip.score_exp_ratio)
+where (intron_percent >= $$minIntronPercent$$
+and score_exp_ratio >= $$minIntronRatio$$)
+or (intron_percent is null and score >= $$minScore$$)
+ORDER BY startm
+    ]]>
+    </sql>
+  </sqlQuery>
+
+  <sqlQuery name="gsnap:unifiedintronjunction">
+     <sql>
+       <![CDATA[
+select * from (
+SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained,
+sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,sum(percent_max_exp) as percent_max,
+'Exps=' || listagg(display_name, '|') within group (order by display_name) || '$dlm' ||
+'Samples=' || listagg(samples, '|') within group (order by display_name) || '$dlm' ||
+'AvgExpRatio=' || listagg(intron_sample_avgexp_ratios, '|') within group (order by display_name) || '$dlm' ||
+'ExpRatio=' || listagg(intron_exp_ratios, '|') within group (order by display_name) || '$dlm' ||
+'PerMaxSamp=' || listagg(percent_max_samples, '|') within group (order by display_name) || '$dlm' ||
+'PerMaxTot=' || listagg(percent_max_totals, '|') within group (order by display_name) || '$dlm' ||
+'URS=' || listagg(unique_reads, '|') within group (order by display_name) || '$dlm' ||
+'NRS=' || listagg(nu_reads, '|') within group (order by display_name) || '$dlm' ||
+'TotalScore=' || sum(total_reads) || '$dlm' ||
+--'MatchesGeneStrand=' || matches_gene_strand || '$dlm' ||
+'IntronPercent=' || sum(percent_max_exp) || '$dlm' ||
+'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
+FROM (
+  SELECT segment_start || '_' || segment_end as feature_id,
+         'gsnap' type, 
+         '$source' source, 
+         na_sequence_id parent_id, 
+         segment_start startm, 
+         segment_end end, 
+         sum(unique_reads) as sum_exp_score, 
+         exp_name as display_name,decode(percent_max_sample,-1,0,1) as contained,
+--         matches_gene_strand,
+         listagg(sample_name, ',') within group (order by sample_name) as samples,
+         listagg(unique_reads, ',') within group (order by sample_name) unique_reads,
+         listagg(intron_sample_avgexp_ratio, ',') within group (order by sample_name) as intron_sample_avgexp_ratios,
+         listagg(intron_exp_ratio, ',') within group (order by sample_name) as intron_exp_ratios, 
+         listagg(percent_max_sample, ',') within group (order by sample_name) as percent_max_samples,
+         listagg(percent_max_total, ',') within group (order by sample_name) as percent_max_totals,
+         listagg(nu_reads, ',') within group (order by sample_name) as nu_reads,
+         sum(unique_reads) as total_reads, sum(percent_max_total) as percent_max_exp, avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp
+  FROM   apidbtuning.geneintronjunction
+  WHERE  segment_start <= $rend
+     AND segment_end >= $base_start
+     AND na_sequence_id = $srcfeature_id
+     AND segment_end - segment_start <= $$intronSizeLimit$$
+     AND unique_reads >= $$minIntronRatio$$  
+     AND intron_sample_avgexp_ratio >= .01
+  GROUP BY na_sequence_id, segment_start, segment_end, exp_name,/* matches_gene_strand,*/ decode(percent_max_sample,-1,0,1))
+  GROUP BY feature_id, type, source, parent_id,startm, end, contained/*,matches_gene_strand*/)
+  WHERE (contained = 1
+  AND percent_max >= 1
+  AND score >= 3)
+  OR (contained = 0
+      AND score >= $$minScore$$)
+  order by startm
+       ]]>
+    </sql>
+  </sqlQuery>
+
+    <sqlQuery name="gsnap:unifiedintronjunctiontest">
+     <sql>
+       <![CDATA[
+with inwindow as (
+SELECT *
+FROM apidbtuning.geneintronjunction
+  WHERE  segment_end <= $rend
+     AND segment_start >= $base_start
+     AND na_sequence_id = $srcfeature_id 
+     AND segment_end - segment_start <= $$intronSizeLimit$$
+     AND unique_reads >= 1
+     AND ((is_contained = 1
+         AND isrpm_exp_ratio >= $$minContainedRatio$$)
+         OR (is_contained = 0
+         AND isrpm_sample_avgexp_ratio >= $$minNonContainedRatio$$))
+     AND sample_multiplier <= $$maxIsrpmMult$$
+     AND total_cons_mult_ratio >= $$isrpmRatio$$
+)
+, distids as (
+select distinct gene_source_id from inwindow
+)
+, genesample as (
+SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_unique,max(ij.isrpm) as sample_isrpm
+  FROM apidbtuning.geneintronjunction ij, distids
+  WHERE ij.gene_source_id = distids.gene_source_id
+  AND ij.matches_gene_strand = 1
+  GROUP By ij.protocol_app_node_id,ij.gene_source_id)
+, genetotal as (
+SELECT gene_source_id,max(tot_unique) as max_gene_unique,max(tot_isrpm) as max_gene_isrpm
+FROM (
+SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot_isrpm
+  FROM apidbtuning.geneintronjunction ij, distids
+  WHERE ij.gene_source_id = distids.gene_source_id
+  AND ij.matches_gene_strand = 1
+  GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
+  GROUP by gene_source_id
+)
+SELECT * from (
+SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
+CASE WHEN max_gene_unique is not null THEN round(sum(total_reads) / max_gene_unique * 100,1) ELSE null END as percent_max,
+sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
+--'Exps=' || apidb.tab_to_clob(set(CAST(COLLECT(display_name order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'Exps=' || listagg(display_name, '|') within group (order by display_name) || '$dlm' ||
+--'Samples=' || apidb.tab_to_clob(set(CAST(COLLECT(samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'Samples=' || listagg(samples, '|') within group (order by display_name) || '$dlm' ||
+--'IsrpmAvgExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm_sample_avgexp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'IsrpmAvgExpRatio=' || listagg(isrpm_sample_avgexp_ratios, '|') within group (order by display_name) || '$dlm' ||
+--'IsrpmExpRatio=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm_exp_ratios order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'IsrpmExpRatio=' || listagg(isrpm_exp_ratios, '|') within group (order by display_name) || '$dlm' ||
+--'PerMaxSample=' || apidb.tab_to_clob(set(CAST(COLLECT(percent_max_samples order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'PerMaxSample=' || listagg(percent_max_samples, '|') within group (order by display_name) || '$dlm' ||
+--'URS=' || apidb.tab_to_clob(set(CAST(COLLECT(unique_reads order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'URS=' || listagg(unique_reads, '|') within group (order by display_name) || '$dlm' ||
+--'ISRPM=' || apidb.tab_to_clob(set(CAST(COLLECT(isrpm order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'ISRPM=' || listagg(isrpm, '|') within group (order by display_name) || '$dlm' ||
+--'NRS=' || apidb.tab_to_clob(set(CAST(COLLECT(nu_reads order by display_name) AS apidb.varchartab)),'|') || '$dlm' ||
+'NRS=' || listagg(nu_reads, '|') within group (order by display_name) || '$dlm' ||
+'TotalScore=' || sum(total_reads) || '$dlm' ||
+'MatchesGeneStrand=' || matches_gene_strand || '$dlm' ||
+'IsReversed=' || is_reversed || '$dlm' ||
+'AnnotatedIntron=' || annotated_intron || '$dlm' ||
+'IntronPercent=' || CASE WHEN max_gene_unique is not null THEN round(sum(total_reads) / max_gene_unique * 100,1) ELSE null END || '$dlm' ||
+'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
+FROM (
+SELECT segment_start || '_' || segment_end as feature_id,
+         'gsnap' type, 
+         '$source' source, 
+         na_sequence_id parent_id, 
+         segment_start startm, 
+         segment_end end, 
+         sum(unique_reads) as sum_exp_score, 
+         exp_name as display_name, is_contained as contained,
+         matches_gene_strand, is_reversed, annotated_intron,
+         listagg(sample_name, ',') within group (order by sample_name) as samples,
+         listagg(unique_reads, ',') within group (order by sample_name) unique_reads,
+         listagg(isrpm, ',') within group (order by sample_name) isrpm,
+         listagg(isrpm_sample_avgexp_ratio, ',') within group (order by sample_name) as isrpm_sample_avgexp_ratios,
+         listagg(isrpm_exp_ratio, ',') within group (order by sample_name) as isrpm_exp_ratios,  
+         listagg(round(unique_reads / nvl(gs.sample_unique,-1) * 100,1), ',') within group (order by sample_name) as percent_max_samples,
+         listagg(nu_reads, ',') within group (order by sample_name) as nu_reads,
+         sum(unique_reads) as total_reads, avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp,gt.max_gene_unique
+FROM inwindow iw, genesample gs, genetotal gt
+WHERE iw.gene_source_id = gt.gene_source_id(+)
+AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
+and iw.gene_source_id = gs.gene_source_id(+)
+GROUP BY iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_unique, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron)
+GROUP BY feature_id, type, source, parent_id,startm, end, contained,max_gene_unique,matches_gene_strand, is_reversed,annotated_intron)
+  WHERE (contained = 1
+  AND percent_max >= $$minIntronPercent$$
+  AND score >= $$minContainedScore$$)
+  OR (contained = 0
+      AND score >= $$minNonContainedScore$$)
+  order by startm
+       ]]>
+    </sql>
+  </sqlQuery>
 
   <sqlQuery name="alignment:ORFlength">
      <sql>
@@ -636,14 +930,20 @@ select
        'Truncated=' || CASE WHEN fl.end_max > syn.b_end THEN syn.b_end 
                            WHEN fl.start_min < syn.b_start THEN syn.b_start 
                            END || '$dlm' ||
-       'SynType=' || 'genes' ||  '$dlm' || 
+       'SynType=' || 'genes' ||  '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||  
+       'Phylum=' || ostr.phylum ||  '$dlm' ||  
+       'Genus=' || ostr.genus ||  '$dlm' ||  
+       'Species=' || ostr.species ||  '$dlm' || 
        'Taxon=' || gattr.organism atts
 FROM 
        apidb.synteny syn,
        apidb.syntenyAnchor anch_left,
        apidb.syntenyAnchor anch_right,
        ApidbTuning.GeneAttributes gattr,
-       ApidbTuning.FeatureLocation fl
+       ApidbTuning.FeatureLocation fl,
+       apidbtuning.OrganismSelectTaxonRank ostr
 WHERE syn.a_na_sequence_id = $srcfeature_id
   AND syn.a_start <= $rend 
   AND syn.a_end >= $base_start 
@@ -654,9 +954,10 @@ WHERE syn.a_na_sequence_id = $srcfeature_id
   AND anch_left.ref_loc != anch_right.ref_loc
   AND anch_right.ref_loc < $rend
   AND anch_right.next_ref_loc >= $rend
-  AND fl.na_sequence_id = syn.b_na_sequence_id 
+  AND fl.na_sequence_id = syn.b_na_sequence_id
   AND fl.feature_type = 'GeneFeature'
   AND gattr.na_feature_id = fl.na_feature_id
+  AND gattr.organism = ostr.organism
   AND (
        (syn.is_reversed = 0
         -- test that the divisor used in synteny scaling is nonzero. It's odd
@@ -718,13 +1019,18 @@ SELECT
        'ContigLength=' || b.length || '$dlm' ||
        'Contig=' || b.source_id || '$dlm' ||
        'Chromosome=' || b.chromosome || '$dlm' ||
-        (CASE WHEN (b.chromosome is NOT NULL) 
+/*        (CASE WHEN (b.chromosome is NOT NULL) 
              THEN (SELECT 'ChrColor=' || rcc.value || '$dlm' 
                   FROM apidb.rodentChrColors rcc 
                    WHERE b.chromosome = rcc.chromosome) 
              ELSE ''
-             END) || 
+             END) || */
        'ExtDBName=' || ed.name || '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||  
+       'Phylum=' || ostr.phylum ||  '$dlm' ||  
+       'Genus=' || ostr.genus ||  '$dlm' ||  
+       'Species=' || ostr.species ||  '$dlm' || 
        'Taxon=' || b.organism || '$dlm' ||
        'SynType=' || 'contig' ||  '$dlm' ||
        'LeftAnchSyntenicLoc=' || anch_left.syntenic_loc ||  '$dlm' ||
@@ -740,10 +1046,11 @@ FROM
       apidb.synteny syn,
       apidb.syntenyAnchor anch_left,
       apidb.syntenyAnchor anch_right,
-      ApidbTuning.SequenceAttributes a,
-      ApidbTuning.SequenceAttributes b,
+      ApidbTuning.GenomicSeqAttributes a,
+      ApidbTuning.GenomicSeqAttributes b,
       sres.externaldatabaserelease edr,
-      sres.externaldatabase ed
+      sres.externaldatabase ed,
+      apidbtuning.OrganismSelectTaxonRank ostr
 WHERE edr.external_database_id = ed.external_database_id
   AND syn.external_database_release_id = edr.external_database_release_id
   AND syn.a_start <= $rend 
@@ -757,6 +1064,7 @@ WHERE edr.external_database_id = ed.external_database_id
   AND anch_right.synteny_id = syn.synteny_id
   AND anch_right.ref_loc < $rend
   AND anch_right.next_ref_loc >= $rend
+  AND b.organism = ostr.organism
   AND abs(anch_right.syntenic_loc - anch_left.syntenic_loc) > 1 
 UNION
 -- for: reference organism - gene
@@ -780,12 +1088,19 @@ SELECT
        'isReversed=' || gattr.is_reversed || '$dlm' ||
        'SynType=' || 'genes' ||  '$dlm' || 
        'orthomcl_name=' || gattr.orthomcl_name || '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||  
+       'Phylum=' || ostr.phylum ||  '$dlm' ||  
+       'Genus=' || ostr.genus ||  '$dlm' ||  
+       'Species=' || ostr.species ||  '$dlm' || 
        'Taxon=' || gattr.organism atts
 FROM 
-       ApidbTuning.GeneAttributes gattr
+       ApidbTuning.GeneAttributes gattr,
+       apidbtuning.OrganismSelectTaxonRank ostr
 WHERE gattr.na_sequence_id = $srcfeature_id
   AND start_min <= $rend
   AND end_max >= $base_start
+  AND gattr.organism = ostr.organism
 UNION
 -- for: reference organism - span
 SELECT
@@ -806,12 +1121,12 @@ SELECT
        'ContigLength=' || length || '$dlm' ||
         'Contig=' || source_id || '$dlm' ||
         'Chromosome=' || chromosome || '$dlm' ||
-         (CASE WHEN (chromosome is NOT NULL) 
+  /*       (CASE WHEN (chromosome is NOT NULL) 
               THEN (SELECT 'ChrColor=' || rcc.value || ';;' 
                    FROM apidb.rodentChrColors rcc 
                     WHERE sa.chromosome = rcc.chromosome) 
               ELSE ''
-              END) || 
+              END) ||  */
         'ExtDBName=' || database_name || '$dlm' ||
         'LeftAnchSyntenicLoc=' || $base_start ||  '$dlm' ||
         'RightAnchSyntenicLoc=' || $rend ||  '$dlm' ||
@@ -819,10 +1134,17 @@ SELECT
         'RightAnchRefLoc=' || $rend ||  '$dlm' ||
         'SynType=' || 'contig' ||  '$dlm' ||
   'Scale=1' ||  '$dlm' ||
-        'Taxon=' || organism atts
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||  
+       'Phylum=' || ostr.phylum ||  '$dlm' ||  
+       'Genus=' || ostr.genus ||  '$dlm' ||  
+       'Species=' || ostr.species ||  '$dlm' || 
+       'Taxon=' || sa.organism atts
  FROM 
-       ApidbTuning.SequenceAttributes sa
- WHERE  na_sequence_id = $srcfeature_id
+       ApidbTuning.GenomicSeqAttributes sa,
+       apidbtuning.OrganismSelectTaxonRank ostr
+ WHERE  na_sequence_id = $srcfeature_id 
+ AND sa.organism=ostr.organism
 ]]>
     </sql>
   </sqlQuery>
@@ -903,67 +1225,6 @@ ORDER BY
   </sqlQuery>
   
   
-  <sqlQuery name="SAGE:3-5prime" excludeProjects="CryptoDB,TrichDB,TriTrypDB">
-     <sql>
-<![CDATA[
-SELECT distinct * from
-(
-SELECT fl.na_feature_id as feature_id,
-       'SAGE' type, 
-       '3-5prime' source, 
-       sta.source_id name, 
-       fl.na_sequence_id parent_id, 
-       fl.start_min startm, 
-       fl.end_max end, 
-       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'SourceID=' || sta.feature_source_id || '$dlm' ||
-       'Sequence=CATG' || staa.sequence || '$dlm' ||
-       'Occurrence=' || staa.occurrence atts
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SageTagAnalysisAttributes staa,
-       ApidbTuning.SageTagAttributes sta
-WHERE  fl.feature_type ='SAGETagFeature'
-  AND  fl.na_sequence_id = $srcfeature_id 
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = sta.na_feature_id
-  AND  to_number(fl.feature_source_id) = staa.composite_element_id
-)
-]]>
-    </sql>
-  </sqlQuery>
-
-  <sqlQuery name="SAGE:3-5prime" includeProjects="TriTrypDB">
-     <sql>
-<![CDATA[
-SELECT distinct * from
-(
-SELECT fl.na_feature_id as feature_id,
-       'SAGE' type, 
-       '3-5prime' source, 
-       sta.source_id name, 
-       fl.na_sequence_id parent_id, 
-       fl.start_min startm, 
-       fl.end_max end, 
-       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'SourceID=' || sta.feature_source_id || '$dlm' ||
-       'Sequence=CATG' || staa.sequence || '$dlm' ||
-       'Occurrence=' || staa.occurrence atts
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SageTagAnalysisAttributes staa,
-       ApidbTuning.SageTagAttributes sta
-WHERE  fl.feature_type ='SAGETagFeature'
-  AND  fl.na_sequence_id = $srcfeature_id 
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = sta.na_feature_id
-  AND  staa.library_name in ('procyclic_gambiense', 'bloodstream_gambiense') 
-  AND  to_number(fl.feature_source_id) = staa.composite_element_id
-)
-]]>
-    </sql>
-  </sqlQuery>
-
   <sqlQuery name="MicroArrayProbes:expressionH"  includeProjects="PlasmoDB">
      <sql>
        <![CDATA[
@@ -996,6 +1257,37 @@ WHERE p.protocol_id = a.protocol_id
     </sql>
   </sqlQuery> 
 
+  <sqlQuery name="MicroArrayProbes:expressionProbes" includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
+    <testParamValues project="PlasmoDB">
+      <param name="srcfeature_id" value="$$na_seq_id_Pf3D7_06$$"/>
+      <param name="base_start" value="469864"/> 
+      <param name="rend" value="470011"/> 
+    </testParamValues>
+    <sql>   
+<![CDATA[
+SELECT rl.reporter_location_id as feature_id,
+       'MicroArrayProbes' type, 
+       '$source' source, 
+       rl.na_sequence_id parent_id, 
+       rl.reporter_start startm, 
+       rl.reporter_end end, 
+       decode (rl.on_reverse_strand, 0, '+1', 1, '-1', '.') strand,
+       'SourceId='   || r.source_id || '$dlm'
+        AS atts
+FROM   platform.reporter r, PLATFORM.reporterLocation rl, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+WHERE  edr.external_database_id = ed.external_database_id
+  AND  edr.external_database_release_id=r.external_database_release_id
+  and r.reporter_id = rl.reporter_id
+  AND  ed.NAME $$edname$$
+  AND  rl.reporter_start <= $rend
+  AND  rl.reporter_end >= $base_start
+  AND  rl.na_sequence_id = $srcfeature_id
+
+
+       ]]>
+    </sql>
+  </sqlQuery> 
+
   <sqlQuery name="MicroArrayProbes:expressionD" includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
     <testParamValues project="PlasmoDB">
       <param name="srcfeature_id" value="$$na_seq_id_Pf3D7_06$$"/>
@@ -1024,32 +1316,6 @@ WHERE  edr.external_database_id = ed.external_database_id
      </sql>
   </sqlQuery>
   
-  <sqlQuery name="DGE:coverage"  includeProjects="TriTrypDB">
-     <sql>
-       <![CDATA[
-    SELECT $$sample$$  as feature_id,
-          'DGE'        as type, 
-          '$source'    as source,
-           $base_start as startm,
-           $rend       as end 
-    FROM   dual 
-       ]]>
-    </sql>
-  </sqlQuery>
-
-  <sqlQuery name="DGE:coverageSubtracks" includeProjects="TriTrypDB">
-     <sql>
-       <![CDATA[
-    SELECT a.name  as feature_id,
-          'DGE'        as type, 
-          '$source'    as source,
-           $base_start as startm,
-           $rend       as end,
-           'library=' || a.name as atts
-    FROM rad.assay a
-       ]]>
-    </sql>
-  </sqlQuery>
 
       <sqlQuery name="splice:curated" includeProjects="TriTrypDB">
      <sql>
@@ -1259,13 +1525,13 @@ FROM (
   <sqlQuery name="domain:MassSpecPeptide">
     <sql>
 <![CDATA[
-select distinct msf.na_feature_id as feature_id,
+select distinct msps.protocol_app_node_id as feature_id,
        'domain' type,
        '$source' source,
        fl.na_sequence_id as Parent_Id, 
        fl.start_min as startm, 
        fl.end_max as end,
-       mss.sample_file||'_'||msps.aa_sequence_id||'_'||msps.aa_start_min||'_'||msps.aa_end_max  as name, 
+       msps.sample||'_'||msps.aa_sequence_id||'_'||msps.aa_start_min||'_'||msps.aa_end_max  as name, 
        decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'Count=' || msps.spectrum_count || '$dlm' ||
        'ExtDbName=' || msps.external_database_name || '$dlm' ||
@@ -1273,16 +1539,14 @@ select distinct msf.na_feature_id as feature_id,
        'Sample=' || msps.sample  || '$dlm' ||
        'PepSeq=' || msps.peptide_sequence || '$dlm' ||
        'Color=' || html_Color Atts
-from APIDB.massspecsummary mss, dots.massspecfeature msf, 
+from dots.massspecfeature msf, 
      dots.aalocation l, apidbtuning.featurelocation fl,
      apidbtuning.mspeptidesummary msps
-where mss.mass_spec_summary_id = msf.source_id
-and msf.aa_feature_id = l.aa_feature_id
+where msf.aa_feature_id = l.aa_feature_id
 and fl.na_feature_id = msf.na_feature_id
-and msps.aa_sequence_id = mss.aa_sequence_id
+and msps.aa_sequence_id = msf.aa_sequence_id
 and msps.aa_start_min = l.start_min
 and msps.aa_end_max = l.end_max
-and (msps.sample_file is null or msps.sample_file = mss.sample_file)
 and msps.external_database_name $$edName$$
 and fl.na_sequence_id = $srcfeature_id
 and fl.start_min >= $base_start
@@ -1305,7 +1569,7 @@ and fl.end_max <= $rend
         'SCount=' || count  || '$dlm' ||
         'Key=' || experiment_key ||'|'|| sample_key || '$dlm' ||
         'Experiment=' || experiment  || '$dlm' ||
-        'Sample=' ||  sample  || '$dlm' ||
+        'Sample=' ||  sample_display_name  || '$dlm' ||
         'PepSeq=' || substr(aas.sequence, aal.start_min, aal.end_max - aal.start_min + 1) atts
 FROM  (
       select count (*) as count,
@@ -1315,21 +1579,22 @@ FROM  (
              nal.start_min startm,
              nal.end_max end,
              decode (nal.is_reversed, 0, '+1', 1, '-1', '.') as strand,
-             mss.sample_file as sample_key,
+             mst.sample as sample_key,
              ed.name as experiment_key,
              dsp.display_name as experiment,
-             mst.sample
-      from
-      dots.massSpecFeature msf,
+             mst.sample_display_name
+     from dots.massSpecFeature msf,
       ApidbTuning.FeatureLocation nal,
       dots.naSequence enas,
-      apidb.massspecsummary mss,
+      apidb.massSpecSummary mss,
       sres.externalDatabaseRelease edr,
       sres.externalDatabase ed,
       dots.translatedAaFeature taaf,
-      APIDBTUNING.massspecterms mst,
+      ApidbTuning.SampleDisplayInfo mst,
+--      APIDBTUNING.massspecterms mst,
       dots.aaSequence aas,
       dots.aaLocation aal,
+      study.protocolappnode pan,
       ApidbTuning.DatasetPresenter dsp
 WHERE msf.na_feature_id = nal.na_feature_id
  AND  nal.na_sequence_id = $srcfeature_id
@@ -1342,12 +1607,15 @@ WHERE msf.na_feature_id = nal.na_feature_id
  and  msf.source_id = mss.mass_spec_summary_id
  AND  msf.external_database_release_id = edr.external_database_release_id
  AND  edr.external_database_id = ed.external_database_id
- and  mst.internal_id = ed.name||'|'||mss.sample_file
- AND  (ed.name like dsp.dataset_name_pattern or ed.name = dsp.name)
+ AND ed.name = mst.dataset_name
+ AND mss.protocol_app_node_id = pan.protocol_app_node_id
+ AND mst.sample = replace (pan.name, '(MS Summary)', '')
+-- and  mst.internal_id = ed.name||'|'||mss.sample_file
+-- AND  (ed.name like dsp.dataset_name_pattern or ed.name = dsp.name)
 Group by     ed.name,
              dsp.display_name,
-             mss.sample_file,
              mst.sample,
+             mst.sample_display_name,
              enas.na_sequence_id,
              msf.source_id,
              nal.start_min,
@@ -1398,7 +1666,7 @@ FROM
        dots.Est est, 
        dots.ExternalNASequence estseq,
        dots.Library l,
-       sres.SequenceOntology so
+       sres.OntologyTerm ot
 WHERE  
        blat.query_na_sequence_id = est.na_sequence_id and 
        blat.target_start <= $rend and 
@@ -1407,8 +1675,8 @@ WHERE
        blat.is_best_alignment = 1 and
        est.library_id = l.library_id and
        estseq.na_sequence_id = est.na_sequence_id and
-       so.sequence_ontology_id = estseq.sequence_ontology_id and
-       so.term_name = 'EST' and
+       ot.ontology_term_id = estseq.sequence_ontology_id and
+       ot.name = 'EST' and
        blat.target_na_sequence_id = $srcfeature_id
 ORDER BY 
        blat.target_start
@@ -1581,10 +1849,10 @@ SELECT fl.na_sequence_id feature_id,
        'overview' source,
        start_min startm,
        end_max end
-FROM  ApidbTuning.FeatureLocation fl, sres.sequenceOntology so  
+FROM  ApidbTuning.FeatureLocation fl, sres.ontologyTerm ot  
 WHERE fl.na_sequence_id = $srcfeature_id
-  AND so.sequence_ontology_id = fl.sequence_ontology_id 
-  AND so.term_name='centromere'    
+  AND ot.ontology_term_id = fl.sequence_ontology_id 
+  AND ot.name='centromere'    
 ]]> 
     </sql> 
   </sqlQuery>
@@ -1744,7 +2012,7 @@ FROM
        dots.Est est, 
        dots.ExternalNASequence estseq,
        dots.Library l,
-       sres.SequenceOntology so
+       sres.OntologyTerm ot
 WHERE  
        blat.query_na_sequence_id = est.na_sequence_id and 
        blat.target_start <= $rend and 
@@ -1753,8 +2021,8 @@ WHERE
        blat.is_best_alignment = 1 and
        est.library_id = l.library_id and
        estseq.na_sequence_id = est.na_sequence_id and
-       so.sequence_ontology_id = estseq.sequence_ontology_id and
-       so.term_name = 'EST' and
+       ot.ontology_term_id = estseq.sequence_ontology_id and
+       ot.name = 'EST' and
        blat.target_na_sequence_id = $srcfeature_id
 ORDER BY 
        blat.target_start
@@ -1812,15 +2080,15 @@ ORDER BY
        l.end_max end, 
        decode (l.is_reversed, 0, '+1', 1, '-1', '.') strand,
              'Name=' || s.name  || '$dlm' || 'SequenceId=' || nas.source_id  atts
-      FROM   DoTS.STS s, SRes.sequenceontology so,
+      FROM   DoTS.STS s, SRes.ontologyTerm ot,
              ApidbTuning.FeatureLocation l, DOTS.NASequence nas
       WHERE  s.na_sequence_id = $srcfeature_id 
         AND  l.start_min <= $rend
         AND  l.end_max >= $base_start
         AND  s.na_feature_id = l.na_feature_id 
         AND  nas.na_sequence_id = s.na_sequence_id
-        AND  s.sequence_ontology_id = so.sequence_ontology_id
-        AND so.term_name = 'microsatellite'
+        AND  s.sequence_ontology_id = ot.ontology_term_id
+        AND ot.name = 'microsatellite'
 ]]>
     </sql>
   </sqlQuery>
@@ -1877,11 +2145,12 @@ SELECT distinct sim.similarity_id feature_id,
        decode (sim.is_reversed, 0, '+1', 1, '-1', '.') strand, 
        'Expect=' || (sim.pvalue_mant || 'e' ||sim.pvalue_exp)||'$dlm'|| 
        'MatchLen=' || sim.total_match_length || '$dlm' ||
-       'Note=' || extq.description atts
+       'Note=' || pan.description atts
 FROM   
        dots.Similarity sim, 
        dots.ExternalNASequence extt, dots.NASequence extq,
-       sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+       sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
+       results.segmentResult sr, study.protocolAppNode pan
 WHERE  
        extq.external_database_release_id = edr.external_database_release_id and
        ed.external_database_id = edr.external_database_id and
@@ -1893,8 +2162,10 @@ WHERE
        sim.pvalue_exp is not null and
        to_number(sim.pvalue_mant || 'e' || sim.pvalue_exp) < 1e-20 and 
        sim.min_subject_start >= $base_start and 
-       sim.max_subject_end <= $rend 
-       AND extt.na_sequence_id = $srcfeature_id 
+       sim.max_subject_end <= $rend and
+       extt.na_sequence_id = $srcfeature_id and
+       extq.source_id = pan.source_id and
+       pan.protocol_app_node_id = sr.protocol_app_node_id
 ORDER BY 
        sim.min_subject_start asc, 
        sim.max_subject_end asc, 
@@ -2105,8 +2376,6 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
 ]]>
       </sql>
   </sqlQuery>
-
-
   
   <sqlQuery name="SNP:density"  includeProjects="ToxoDB">
      <sql>
@@ -2120,36 +2389,62 @@ WHERE  etn.na_sequence_id = $srcfeature_id
     </sql>
   </sqlQuery>
 
-  <sqlQuery name="ChIP_peaks:peaks"  includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
+  <sqlQuery name="ChIP:ChIPchip_peaks"  includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
      <sql>
-<![CDATA[
- SELECT ee.na_feature_id   as feature_id,
-       'ChIP_peaks'         as type,
-       '$source'  as source,
-       ee.feature_source_id as name,
-       ee.score      as score,
-       ee.na_sequence_id   as parent_id,
-       ee.start_min         as startm,
-       ee.end_max           as end,
-      'Treatment=' || cpp.treatment ||  '$dlm' || 
-      'Analysis=' || a.name ||  '$dlm' ||
-      'Genotype=' || cpp.genotype ||'$dlm' || 
-      'Antibody=' || cpp.antibody || '$dlm' || 
-      'Strain=' || cpp.strain || '$dlm' || 
-      'Rep=' || cpp.replicate as atts 
-FROM   rad.protocol p,rad.analysis a,
-       ApidbTuning.ExpressionElement ee,
-       ApidbTuning.ChIPProtocolParams cpp
-WHERE  ee.analysis_id =   cpp.analysis_id
-AND    cpp.protocol_id =  p.protocol_id
-AND    cpp.analysis_id = a.analysis_id
-AND    p.name = $$protocol$$
-AND    cpp.experiment_name = $$exp$$
-AND    ee.na_sequence_id = $srcfeature_id
-AND    ee.start_min <= $rend
-AND    ee.end_max >= $base_start
-AND    cpp.protocol_type = 'called_peaks'
-]]>
+        <![CDATA[
+            SELECT feature_id
+            , type
+            , source
+            , score
+            --, parent_id || '_' || nvl(max(subtrack), ' ') as parent_id
+            , parent_id
+            , name
+            , startm
+            , end
+            , listagg (attr, '$dlm') within group (order by attr) as atts
+            FROM (
+                WITH data AS (
+                    SELECT DISTINCT sr.segment_result_id as feature_id
+                    , 'ChIP' as type
+                    , '$source' as source
+                    , sr.score1 as score
+                    , $srcfeature_id as parent_id
+                    , sr.segment_result_id as name
+                    , sr.segment_start as startm
+                    , sr.segment_end as end
+                    , '$$exp$$' as dataset_name
+                    , pan.protocol_app_node_id as pan
+                    FROM
+                    study.study s
+                    , study.studylink sl
+                    , study.protocolappnode pan
+                    , results.segmentresult sr
+                    WHERE s.name = '$$exp$$ - peaks'
+                    AND sl.study_id = s.study_id
+                    AND pan.protocol_app_node_id = sl.protocol_app_node_id
+                    AND sr.protocol_app_node_id = pan.protocol_app_node_id
+                    AND sr.na_sequence_id = $srcfeature_id
+                    AND sr.segment_start <= $rend
+                    AND sr.segment_end >= $base_start
+                    )
+                SELECT d.*
+                , ppm.term || '=' || ppm.value as attr
+                , CASE WHEN ppm.term = '$$sub$$' THEN ppm.value END as subtrack
+                FROM data d
+                LEFT OUTER JOIN apidbtuning.panprotocolmetadata ppm ON
+                    (ppm.dataset_name = d.dataset_name
+                    AND ppm.protocol_app_node_id = d.pan)
+                UNION
+                SELECT d.*
+                , pcm.term || '=' || pcm.value as attr
+                , CASE WHEN pcm.term = '$$sub$$' THEN pcm.value END as subtrack
+                FROM data d
+                LEFT OUTER JOIN apidbtuning.pancharacteristicmetadata pcm ON
+                    (pcm.dataset_name = d.dataset_name
+                    AND pcm.protocol_app_node_id = d.pan)
+                )
+                GROUP BY feature_id, type, source, score, parent_id, startm, end, name
+            ]]>
     </sql>
   </sqlQuery>
  
@@ -2277,6 +2572,59 @@ WHERE  a.analysis_id = cpp.analysis_id
   AND  a.name $$op2$$ $$analysis$$
   AND  cpp.protocol_type = 'raw'
 ]]>
+    </sql>
+  </sqlQuery>
+
+  <sqlQuery name="ChIP:ChIPchip_smoothed" includeProjects = "PlasmoDB,ToxoDB">
+    <sql>
+        <![CDATA[
+        SELECT DISTINCT 
+        CASE WHEN term = '$$sub$$' THEN feature_id || '_' || value 
+        ELSE feature_id || '_ ' END as feature_id
+        , type
+        , source
+        , CASE WHEN term = '$$sub$$' THEN value
+        ELSE ' ' END as name
+        , parent_id
+        , startm
+        , end
+        , CASE WHEN term = '$$sub$$' THEN term || '=' || value 
+            ELSE ' ' END as atts
+        FROM (
+            WITH data as (
+                SELECT DISTINCT s.name as feature_id
+                , 'ChIP' as type
+                , '$source' as source
+                , '$srcfeature_id' as parent_id
+                , $base_start as startm
+                , $rend as end
+                , '$$exp$$' as dataset_name
+                , pan.protocol_app_node_id as pan
+                FROM study.study s
+                , study.studylink sl
+                , study.protocolappnode pan
+                WHERE s.name = '$$exp$$ - smoothed'
+                AND sl.study_id = s.study_id
+                AND pan.protocol_app_node_id = sl.protocol_app_node_id
+                )
+            SELECT d.*
+            , ppm.term
+            , ppm.value
+            FROM data d
+            LEFT OUTER JOIN apidbtuning.panprotocolmetadata ppm ON
+                (ppm.dataset_name = d.dataset_name
+                AND ppm.protocol_app_node_id = d.pan)
+        UNION
+            SELECT d.*
+            , pcm.term
+            , pcm.value
+            FROM data d
+            LEFT OUTER JOIN apidbtuning.pancharacteristicmetadata pcm ON
+                (pcm.dataset_name = d.dataset_name
+                AND pcm.protocol_app_node_id = d.pan)
+        )
+        WHERE term = '$$sub$$' OR 'no_sub' = '$$sub$$'
+        ]]>
     </sql>
   </sqlQuery>
  
@@ -2641,21 +2989,32 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - Expression-NuclearNonCoding'
        sa.seq_source_id          as parent_id, 
        sa.location               as startm, 
        sa.location               as end, 
-       decode(sa.gene_strand, 'forward', '+1', 'reverse', '-1', '.') as strand,
+       decode(ga.strand_plus_minus, '+', '+1', '-', '-1', '.') as strand,
        'base_start='   || '$base_start' || '$dlm' ||
        'rend='   || '$rend' || '$dlm' ||
        'NonSyn='   || sa.has_nonsynonymous_allele || '$dlm'||
+       'Nonsense='   || sa.has_stop_codon || '$dlm'||
        'IsCoding=' || sa.is_coding || '$dlm' ||
        'Gene=' || sa.gene_source_id || '$dlm' ||
+       'type=' || 'snp' || '$dlm' ||
        'position_in_CDS=' || sa.position_in_CDS || '$dlm' ||
        'position_in_protein=' || sa.position_in_protein || '$dlm' ||
+       'gene_strand=' || decode(ga.strand_plus_minus, '+', '+1', '-', '-1', '.') || '$dlm' ||
        'reference_strain=' || sa.reference_strain || '$dlm' ||
        'reference_aa=' || sa.reference_aa || '$dlm' ||
-       'gene_strand=' || sa.gene_strand || '$dlm' ||
        'reference_na=' || sa.reference_na || '$dlm' ||
+       'major_allele=' || sa.major_allele || '$dlm' ||
+       'minor_allele=' || sa.minor_allele || '$dlm' ||
+       'major_product=' || sa.major_product || '$dlm' ||
+       'minor_product=' || sa.minor_product || '$dlm' ||
+       'major_allele_count=' || sa.major_allele_count || '$dlm' ||
+       'minor_allele_count=' || sa.minor_allele_count || '$dlm' ||
+       'major_allele_freq=' || sa.major_allele_frequency || '$dlm' ||
+       'minor_allele_freq=' || sa.minor_allele_frequency || '$dlm' ||
        'source_id=' || sa.source_id as atts
-FROM   ApidbTuning.SnpAttributes sa
+FROM   ApidbTuning.SnpAttributes sa, apidbtuning.geneattributes ga
 WHERE  sa.na_sequence_id = $srcfeature_id
+  AND sa.gene_source_id = ga.source_id (+)
   AND  sa.location <= $rend
   AND  sa.location >= $base_start
 ]]>
@@ -2676,15 +3035,25 @@ SELECT
        decode(sa.gene_strand, 'forward', '+1', 'reverse', '-1', '.') as strand,
        'base_start='   || '$base_start' || '$dlm' ||
        'rend='   || '$rend' || '$dlm' ||
-       'SNPChipType='   || 
-         CASE WHEN sa.TYPE='Broad_hd_array' THEN 'Broad_75K_Chip'
-         WHEN sa.TYPE='Broad_3k_chip' THEN 'Broad_3K_Chip'
-         ELSE sa.type END || '$dlm' ||
-       'SnpId='   || sa.source_id || '$dlm' ||
-       'MajorAllele=' || sa.major_allele || '$dlm' ||
-       'MajorAlleleFreq=' || sa.major_allele_frequency || '$dlm' ||
-       'MinorAlleleFreq=' || sa.minor_allele_frequency || '$dlm' ||
-       'MajorProduct=' || sa.major_product as atts
+       'SNPChipType='   || replace (replace (sa.dataset,'pfal3D7_SNPChip_'), '_RSRC')  || '$dlm' ||
+       'type=' || 'snp-chip' || '$dlm' ||
+       'source_id='   || sa.source_id || '$dlm' ||
+       'major_allele_freq=' || sa.major_allele_frequency || '$dlm' ||
+       'minor_allele_freq=' || sa.minor_allele_frequency || '$dlm' ||
+       'NonSyn='   || decode(sa.has_nonsynonymous_allele,'yes',1,'no',0) || '$dlm'||
+       'Nonsense='   || CASE WHEN sa.major_product = '*' or sa.minor_product = '*' THEN 1 ELSE 0 END || '$dlm'||
+       'IsCoding=' || sa.is_coding || '$dlm' ||
+       'position_in_CDS=' || sa.position_in_CDS || '$dlm' ||
+       'position_in_protein=' || sa.position_in_protein || '$dlm' ||
+       'reference_strain=' || sa.reference_strain || '$dlm' ||
+       'reference_aa=' || sa.reference_aa || '$dlm' ||
+       'reference_na=' || sa.reference_na || '$dlm' ||
+       'major_allele=' || sa.major_allele || '$dlm' ||
+       'minor_allele=' || sa.minor_allele || '$dlm' ||
+       'major_product=' || sa.major_product || '$dlm' ||
+       'minor_product=' || sa.minor_product || '$dlm' ||
+       'major_allele_count=' || sa.major_allele_count || '$dlm' ||
+       'minor_allele_count=' || sa.minor_allele_count as atts
 FROM   ApidbTuning.SnpChipAttributes sa
 WHERE  sa.na_sequence_id = $srcfeature_id
   AND  sa.start_min <= $rend
@@ -2965,65 +3334,50 @@ from dual
      <sql>
 <![CDATA[
 select * from (
-SELECT 
-       exon_loc.na_feature_id feature_id, 
+SELECT distinct exon_loc.na_feature_id feature_id, 
        'exon' type, 
        'annotation' source, 
        exon_loc.na_feature_id name,
        '1' phase, 
-       exon_loc.parent_id parent_id,
+       rfe.rna_feature_id parent_id,
        CASE WHEN exon_loc.is_reversed = 0 THEN
-       nvl(exon_loc.coding_start, exon_loc.start_min) ELSE nvl(exon_loc.coding_end, exon_loc.start_min) END as startm,
+       exon_loc.start_min ELSE exon_loc.end_max END as startm,
        CASE WHEN exon_loc.is_reversed = 0 THEN
-       nvl(exon_loc.coding_end, exon_loc.end_max) ELSE nvl(exon_loc.coding_start, exon_loc.end_max) END as end,
+       exon_loc.end_max ELSE exon_loc.start_min END as end,
        decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'isDeprecated=' ||  ga.is_deprecated atts 
+       'isDeprecated=' ||  ta.is_deprecated atts 
 FROM   
-       ApidbTuning.FeatureLocation exon_loc, ApidbTuning.GeneAttributes ga
-WHERE  exon_loc.na_sequence_id = $srcfeature_id
-  and  exon_loc.feature_type = 'ExonFeature'
-  AND  (( exon_loc.is_reversed = 0 AND nvl(ga.coding_start, ga.start_min) <= $rend+1000 AND  nvl(ga.coding_end, ga.end_max) >= $base_start-1000)
-    OR   (exon_loc.is_reversed = 1 AND nvl(ga.coding_end, ga.start_min) <= $rend+1000 AND  nvl(ga.coding_start, ga.end_max) >= $base_start-1000))
-  AND ga.na_feature_id = exon_loc.parent_id
-UNION
-SELECT 
-       exon_loc.na_feature_id feature_id, 
-       'CDS' type, 
-       'annotation' source, 
-       exon_loc.na_feature_id name,
-       '1' phase, 
-       exon_loc.parent_id parent_id,
-       CASE WHEN exon_loc.is_reversed = 0 THEN
-       exon_loc.coding_start ELSE exon_loc.coding_end END as startm,
-       CASE WHEN exon_loc.is_reversed = 0 THEN
-       exon_loc.coding_end ELSE exon_loc.coding_start END as end,
-       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'isDeprecated=' ||  ga.is_deprecated atts 
-FROM   
-       ApidbTuning.FeatureLocation exon_loc, ApidbTuning.GeneAttributes ga
+       ApidbTuning.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
 WHERE  exon_loc.na_sequence_id = $srcfeature_id
   AND  exon_loc.feature_type = 'ExonFeature'
-  AND  (exon_loc.coding_start is not null and exon_loc.coding_end is not null)
-  AND  (( exon_loc.is_reversed = 0 AND ga.coding_start <= $rend+1000 AND  ga.coding_end >= $base_start-1000)
+  AND  (( exon_loc.is_reversed = 0 AND exon_loc.start_min <= $rend+1000 AND  exon_loc.end_max >= $base_start-1000)
         OR  
-        (exon_loc.is_reversed = 1 AND ga.coding_end <= $rend+1000 AND  ga.coding_start >= $base_start-1000)) 
-  AND ga.na_feature_id = exon_loc.parent_id
+        (exon_loc.is_reversed = 1 AND exon_loc.end_max <= $rend+1000 AND  exon_loc.start_min >= $base_start-1000)) 
+  AND rfe.exon_feature_id = exon_loc.na_feature_id
+  AND ta.na_feature_id = rfe.rna_feature_id
+  AND ta.gene_type != 'protein coding'
 UNION
-SELECT 
-       na_feature_id feature_id, 
-       'UTR' type, 
+SELECT distinct ta.na_feature_id feature_id, 
+       exon_loc.feature_type type, 
        'annotation' source, 
-       na_feature_id name,
+       ta.na_feature_id name,
        '1' phase, 
-       parent_id,
-       start_min startm,
-       end_max end,
-       decode (is_reversed, 0, '+1', 1, '-1', '.') strand,
-       '' atts 
-FROM   ApidbTuning.UTR 
-WHERE  na_sequence_id = $srcfeature_id
-  AND  start_min <= $rend+1000
-  AND  end_max >= $base_start-1000
+       exon_loc.parent_id parent_id,
+       CASE WHEN exon_loc.is_reversed = 0 THEN
+       exon_loc.start_min ELSE exon_loc.end_max END as startm,
+       CASE WHEN exon_loc.is_reversed = 0 THEN
+       exon_loc.end_max ELSE exon_loc.start_min END as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts 
+FROM   
+       ApidbTuning.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  (exon_loc.feature_type = 'CDS'
+     OR exon_loc.feature_type = 'UTR')
+  AND  (( exon_loc.is_reversed = 0 AND exon_loc.start_min <= $rend+1000 AND  exon_loc.end_max >= $base_start-1000)
+        OR  
+        (exon_loc.is_reversed = 1 AND exon_loc.end_max <= $rend+1000 AND  exon_loc.start_min >= $base_start-1000)) 
+  AND ta.na_feature_id = exon_loc.parent_id
 ) order by startm
 ]]>
     </sql>
@@ -3356,6 +3710,7 @@ WHERE  blat.query_aa_sequence_id = eaas.aa_sequence_id and
      <sql>
 <![CDATA[
 SELECT interval feature_id, 
+       $parent_id as parent_id,
       'annotation' type, 
       'density' source, 
       count(interval) score, 
@@ -3443,15 +3798,13 @@ SELECT
                           anch_left.syntenic_loc, anch_right.syntenic_loc,
                           syn.b_start, syn.b_end) end,
        CASE WHEN (exfloc.is_reversed = syn.is_reversed) THEN 1 ELSE -1 END strand,
-       'isDeprecated=' ||  ga.is_deprecated atts 
+       'isDeprecated=' atts 
 FROM 
        apidb.synteny syn,
        apidb.syntenyAnchor anch_left,
        apidb.syntenyAnchor anch_right,
-       ApidbTuning.FeatureLocation exfloc,
-       ApidbTuning.GeneAttributes ga
-WHERE ga.na_feature_id = exfloc.parent_id
-  AND syn.a_na_sequence_id = $srcfeature_id
+       ApidbTuning.FeatureLocation exfloc
+WHERE syn.a_na_sequence_id = $srcfeature_id
   AND syn.a_start <= $rend 
   AND syn.a_end >= $base_start 
   AND anch_left.synteny_id = syn.synteny_id 
@@ -3462,74 +3815,6 @@ WHERE ga.na_feature_id = exfloc.parent_id
   AND anch_right.next_ref_loc >= $rend
   AND anch_left.ref_loc != anch_right.ref_loc
   AND exfloc.feature_type = 'ExonFeature'
-  AND exfloc.na_sequence_id = syn.b_na_sequence_id 
-  AND (
-       (syn.is_reversed = 0
-        -- test that the divisor used in synteny scaling is nonzero. It's odd
-        -- that this varies with is_reversed. But any changes must happen both
-        -- here and in the PL/SQL
-        AND abs(anch_right.syntenic_loc - anch_left.syntenic_loc + 1)>0
-        AND apidb.compute_startm (syn.is_reversed, exfloc.start_min, exfloc.end_max,
-                                  anch_left.ref_loc, anch_right.ref_loc,
-                                  anch_left.syntenic_loc, anch_right.syntenic_loc,
-                                  syn.b_start, syn.b_end) <= $rend
-        AND apidb.compute_end (syn.is_reversed, exfloc.start_min, exfloc.end_max,
-                               anch_left.ref_loc, anch_right.ref_loc,
-                               anch_left.syntenic_loc, anch_right.syntenic_loc,
-                               syn.b_start, syn.b_end) >= $base_start
-       ) 
-       OR
-       (syn.is_reversed = 1 
-        -- test that the divisor used in synteny scaling is nonzero. It's odd
-        -- that this varies with is_reversed. But any changes must happen both
-        -- here and in the PL/SQL
-        AND abs(anch_right.syntenic_loc - anch_left.syntenic_loc - 1)>0
-        AND apidb.compute_startm (syn.is_reversed, exfloc.start_min, exfloc.end_max,
-                                  anch_left.ref_loc, anch_right.ref_loc,
-                                  anch_left.syntenic_loc, anch_right.syntenic_loc,
-                                  syn.b_start, syn.b_end) <= $rend
-        AND apidb.compute_end (syn.is_reversed, exfloc.start_min, exfloc.end_max,
-                               anch_left.ref_loc, anch_right.ref_loc,
-                               anch_left.syntenic_loc, anch_right.syntenic_loc,
-                               syn.b_start, syn.b_end) >= $base_start
-        )
-  )
-  AND exfloc.start_min <= syn.b_end
-  AND exfloc.end_max >= syn.b_start
-UNION ALL
-SELECT
-       exfloc.na_feature_id feature_id,
-       'UTR' type, 
-       'syntenyMC' source, 
-       exfloc.na_feature_id as name,
-       exfloc.parent_id,
-       apidb.compute_startm (syn.is_reversed, exfloc.start_min, exfloc.end_max,
-                             anch_left.ref_loc, anch_right.ref_loc,
-                             anch_left.syntenic_loc, anch_right.syntenic_loc,
-                             syn.b_start, syn.b_end) startm,
-       apidb.compute_end (syn.is_reversed, exfloc.start_min, exfloc.end_max,
-                          anch_left.ref_loc, anch_right.ref_loc,
-                          anch_left.syntenic_loc, anch_right.syntenic_loc,
-                          syn.b_start, syn.b_end) end,
-       CASE WHEN (exfloc.is_reversed = syn.is_reversed) THEN 1 ELSE -1 END strand,
-       'isDeprecated=' ||  ga.is_deprecated atts 
-FROM 
-       apidb.synteny syn,
-       apidb.syntenyAnchor anch_left,
-       apidb.syntenyAnchor anch_right,
-       ApidbTuning.UTR exfloc,
-       ApidbTuning.GeneAttributes ga
-WHERE ga.na_feature_id = exfloc.parent_id
-  AND syn.a_na_sequence_id = $srcfeature_id
-  AND syn.a_start <= $rend 
-  AND syn.a_end >= $base_start 
-  AND anch_left.synteny_id = syn.synteny_id 
-  AND anch_left.prev_ref_loc < $base_start 
-  AND anch_left.ref_loc >= $base_start
-  AND anch_right.synteny_id = syn.synteny_id
-  AND anch_right.ref_loc < $rend
-  AND anch_right.next_ref_loc >= $rend
-  AND anch_left.ref_loc != anch_right.ref_loc
   AND exfloc.na_sequence_id = syn.b_na_sequence_id 
   AND (
        (syn.is_reversed = 0
@@ -3573,40 +3858,21 @@ SELECT
        exfloc.na_feature_id as name,
        exfloc.parent_id,
        CASE WHEN exfloc.is_reversed = 0 THEN
-         exfloc.coding_start ELSE exfloc.coding_end END as startm,
+         exfloc.start_min ELSE exfloc.end_max END as startm,
        CASE WHEN exfloc.is_reversed = 0 THEN
-         exfloc.coding_end ELSE exfloc.coding_start END as end,
+         exfloc.end_max ELSE exfloc.start_min END as end,
        decode (exfloc.is_reversed, 0, +1, 1, -1,+1) strand,
-       'isDeprecated=' ||  ga.is_deprecated atts 
+       'isDeprecated=' atts 
 FROM 
-       ApidbTuning.FeatureLocation exfloc,
-       ApidbTuning.GeneAttributes ga
-WHERE ga.na_sequence_id = $srcfeature_id
-  AND ga.start_min <= $rend
-  AND ga.end_max >= $base_start
-  AND ga.na_feature_id = exfloc.parent_id
-  AND exfloc.na_sequence_id = ga.na_sequence_id  
+       ApidbTuning.FeatureLocation exfloc
+WHERE exfloc.na_sequence_id = $srcfeature_id
+  AND exfloc.start_min <= $rend
+  AND exfloc.end_max >= $base_start
   AND exfloc.feature_type = 'ExonFeature'
-UNION ALL
--- for: reference organism - gene
-SELECT
-       na_feature_id feature_id,
-       'UTR' type, 
-       'syntenyMC' source, 
-       na_feature_id as name,
-       parent_id,
-       start_min startm,
-       end_max end,
-       decode (is_reversed, 0, +1, 1, -1,+1) strand,
-       '' atts 
-FROM 
-       ApidbTuning.UTR
-WHERE na_sequence_id = $srcfeature_id
-  AND start_min <= $rend
-  AND end_max >= $base_start
 )
 WHERE startm <= $rend
   AND end >= $base_start
+
 ]]>
     </sql>
   </sqlQuery>
@@ -3669,54 +3935,6 @@ ORDER BY
   </sqlQuery>
   
   
-  <sqlQuery name="SAGE:3-5prime:bulkAttribute" excludeProjects="CryptoDB,TrichDB,TriTrypDB">
-     <sql>
-<![CDATA[
- SELECT fl.na_feature_id as feature_id,
-       staa.library_name,
-       staa.raw_count,
-       staa.library_tag_percentage
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SageTagAnalysisAttributes staa,
-       ApidbTuning.SageTagAttributes sta,
-       rad.assay a
-WHERE  fl.feature_type ='SAGETagFeature'
-  AND  fl.na_sequence_id = $srcfeature_id 
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = sta.na_feature_id
-  AND  staa.library_name = a.name
-  AND  to_number(fl.feature_source_id) = staa.composite_element_id
-ORDER BY feature_id, a.assay_id
-]]>
-    </sql>
-  </sqlQuery>
-
-  <sqlQuery name="SAGE:3-5prime:bulkAttribute" includeProjects="TriTrypDB">
-     <sql>
-<![CDATA[
- SELECT fl.na_feature_id as feature_id,
-       staa.library_name,
-       staa.raw_count,
-       staa.library_tag_percentage
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SageTagAnalysisAttributes staa,
-       ApidbTuning.SageTagAttributes sta,
-       rad.assay a
-WHERE  fl.feature_type ='SAGETagFeature'
-  AND  fl.na_sequence_id = $srcfeature_id 
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = sta.na_feature_id
-  AND  staa.library_name = a.name
-  AND  staa.library_name in ('procyclic_gambiense', 'bloodstream_gambiense') 
-  AND  to_number(fl.feature_source_id) = staa.composite_element_id
-ORDER BY feature_id, a.assay_id
-]]>
-    </sql>
-  </sqlQuery>
-  
-  
   <sqlQuery name="alignment:BLAT:seq" excludeProjects="PlasmoDB,TriTrypDB,ToxoDB">
      <sql>
 <![CDATA[
@@ -3774,7 +3992,7 @@ SELECT sg.na_feature_id as feature_id,
        'Type=sgap' as atts
 FROM   DoTS.ScaffoldGapFeature sg,
        DoTS.NaLocation fl,
-       ApidbTuning.SequenceAttributes vs
+       ApidbTuning.GenomicSeqAttributes vs
        --DoTS.SequencePiece sp
 WHERE  fl.na_feature_id = sg.na_feature_id
    AND vs.na_sequence_id = sg.na_sequence_id
@@ -3979,6 +4197,64 @@ AND    p.name = $$protocol$$
 AND    a.name $$op2$$ $$analysis$$
 AND    cpp.protocol_type = 'raw'
    ]]>
+    </sql>
+  </sqlQuery>
+
+  <sqlQuery name="ChIP:ChIPchip_smoothed:bulksubfeatures" includeProjects="PlasmoDB">
+    <sql>
+        <![CDATA[
+        SELECT
+        feature_id
+        , type
+        , source
+        , score
+        , parent_id || '_' || nvl(max(subtrack), ' ') as parent_id
+        , startm
+        , end
+        , listagg (attr, '$dlm') within group (order by attr) as atts
+        FROM (
+            WITH data AS (    
+                SELECT DISTINCT
+                pan.name as feature_id
+                , 'ChIP' as type
+                , '$source' as source
+                , sr.score1 as score
+                , s.name as parent_id
+                , sr.segment_start as startm
+                , sr.segment_end as end
+                , '$$exp$$' as dataset_name
+                , pan.protocol_app_node_id as pan
+                FROM
+                study.study s
+                , study.studylink sl
+                , study.protocolappnode pan
+                , results.segmentresult sr
+                WHERE s.name =  '$$exp$$ - smoothed'
+                AND sl.study_id = s.study_id
+                AND pan.protocol_app_node_id = sl.protocol_app_node_id
+                AND sr.protocol_app_node_id = pan.protocol_app_node_id
+                AND sr.na_sequence_id = $srcfeature_id
+                AND sr.segment_start <= $rend
+                AND sr.segment_end >= $base_start
+                )
+            SELECT d.*
+            , ppm.term || '=' || ppm.value as attr
+            , CASE WHEN ppm.term = '$$sub$$' THEN ppm.value END as subtrack
+            FROM data d
+            LEFT OUTER JOIN apidbtuning.panprotocolmetadata ppm on 
+                (ppm.dataset_name = d.dataset_name
+                AND ppm.protocol_app_node_id = d.pan)
+            UNION
+            SELECT d.*
+            , pcm.term || '=' || pcm.value as attr
+            , CASE WHEN pcm.term = '$$sub$$' THEN pcm.value END as subtrack
+            FROM data d
+            LEFT OUTER JOIN apidbtuning.pancharacteristicmetadata pcm on
+                (pcm.dataset_name = d.dataset_name
+                AND pcm.protocol_app_node_id = d.pan)
+            )
+        GROUP BY feature_id, type, source, score, parent_id, startm, end
+        ]]>
     </sql>
   </sqlQuery>
 
@@ -4340,67 +4616,6 @@ ORDER BY var.strain
   </sqlQuery>
   
 
-   <sqlQuery name="DGE:coverage:bulksubfeatures"  includeProjects="TriTrypDB">
-     <sql>
-<![CDATA[
-SELECT fl.na_feature_id as feature_id,
-       'DGE' type, 
-       '$source' source, 
-       sta.source_id name, 
-       $$sample$$ parent_id, 
-       CASE WHEN staa.occurrence > 1 
-            THEN decode(log(2,staa.raw_count),0,-0.5,-(log(2,staa.raw_count)))
-            ELSE decode(log(2,staa.raw_count),0,0.5,log(2,staa.raw_count))
-       END score,
-       fl.start_min startm, 
-       fl.end_max end, 
-       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'binaryColor='||CASE WHEN staa.occurrence > 1 THEN 1 ELSE 0 END atts
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SageTagAnalysisAttributes staa,
-       ApidbTuning.SageTagAttributes sta
-WHERE  fl.feature_type ='SAGETagFeature'
-  AND  fl.na_sequence_id = $srcfeature_id 
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = sta.na_feature_id
-  AND  staa.library_name = $$libName$$
-  AND  to_number(fl.feature_source_id) = staa.composite_element_id
-]]>
-    </sql>
-  </sqlQuery>
-
-   <sqlQuery name="DGE:coverageSubtracks:bulksubfeatures"  includeProjects="TriTrypDB">
-     <sql>
-<![CDATA[
-SELECT fl.na_feature_id as feature_id,
-       'DGE' type, 
-       '$source' source, 
-       sta.source_id name, 
-       --$$sample$$ parent_id, 
-       staa.library_name parent_id,
-       CASE WHEN staa.occurrence > 1 
-            THEN decode(log(2,staa.raw_count),0,-0.5,-(round(log(2,staa.raw_count),2)))
-            ELSE decode(log(2,staa.raw_count),0,0.5,round(log(2,staa.raw_count),2))
-       END score,
-       fl.start_min startm, 
-       fl.end_max end, 
-       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       --'library=' || $$libName$$ || '$dlm' ||
-       'binaryColor='||CASE WHEN staa.occurrence > 1 THEN 1 ELSE 0 END as atts
-FROM   ApidbTuning.FeatureLocation fl,
-       ApidbTuning.SageTagAnalysisAttributes staa,
-       ApidbTuning.SageTagAttributes sta
-WHERE  fl.feature_type ='SAGETagFeature'
-  AND  fl.na_sequence_id = $srcfeature_id 
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = sta.na_feature_id
-  --AND  staa.library_name = $$libName$$
-  AND  to_number(fl.feature_source_id) = staa.composite_element_id
-]]>
-    </sql>
-  </sqlQuery>
 
    <sqlQuery name="MicroArrayProbes:expressionH:bulksubfeatures"  includeProjects="PlasmoDB">
      <sql>

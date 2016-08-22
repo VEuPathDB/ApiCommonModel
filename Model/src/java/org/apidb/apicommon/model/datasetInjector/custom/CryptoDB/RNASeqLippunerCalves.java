@@ -6,9 +6,9 @@ public class RNASeqLippunerCalves extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Lippuner::CpSimpleRNASeq"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByFoldChangeCparvumLippuner"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExprPercentileCpLippuner"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Lippuner::CpSimpleRNASeq"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByFoldChangeCparvumLippuner"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByExprPercentileCpLippuner"); 
   }
 
 }

@@ -1,6 +1,5 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.gusdb.wdk.model.WdkRuntimeException;
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
 public class ChIPSeq extends DatasetInjector {
@@ -10,21 +9,9 @@ public class ChIPSeq extends DatasetInjector {
       setShortAttribution();
       setOrganismAbbrevFromDatasetName();
 
-      String scale = getPropValue("scale");
-
-      if(scale.toLowerCase().equals("log")) {
-          injectTemplate("chipSeqCoverageTrack");
-      } 
-      else if(scale.toLowerCase().equals("linear")) {
-          injectTemplate("chipSeqCoverageTrackUnlogged");
-      } 
-      else if(scale.toLowerCase().equals("both")) {
-          injectTemplate("chipSeqCoverageTrack");
-          injectTemplate("chipSeqCoverageTrackUnlogged");
-      } 
-      else {
-          throw new WdkRuntimeException("property [scale] should be one of [log,linear,both]");
-      }
+      injectTemplate("chipSeqCoverageTrackUnlogged");
+      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+      injectTemplate("gbrowseTrackCategory");
 
   }
 
@@ -32,12 +19,10 @@ public class ChIPSeq extends DatasetInjector {
   public void addModelReferences() { }
 
 
-  @Override
-  public String[][] getPropertiesDeclaration() {
-      String [][] declaration = { 
-                      {"scale", "log, linear or both"}, 
-                                };
-      return declaration;
-  }
+    @Override
+	public String[][] getPropertiesDeclaration() {
+        String[][] propertiesDeclaration = {};
+        return propertiesDeclaration;
+    }
 
 }

@@ -34,6 +34,9 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
 
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
+      setPropValue("gbrowseTrackName", "MassSpecPeptides_" + getDatasetName());
+      injectTemplate("gbrowseTrackCategory");
+      injectTemplate("pbrowseTrackCategory");
 
       if(getPropValueAsBoolean("isPhosphoProteomics")) {
           injectTemplate("proteinExpressionMassSpecPhosphoPBrowseTrack");
@@ -45,7 +48,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByMassSpec");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMassSpec");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecMod");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecDownload");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpec");

@@ -30,8 +30,8 @@ public class AntibodyArray extends DatasetInjector {
     @Override
     public void addModelReferences() {
         //  setGraphModule();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByAntibodyArray"  + getDatasetName() );
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByAntibodyArray"  + getDatasetName() );
     }
 
     @Override
@@ -58,7 +58,9 @@ public class AntibodyArray extends DatasetInjector {
 
         injectTemplate("antibodyArrayGraphAttributesExpression");
 
-
+        if(getPropValue("isGraphCustom").equals("true")) {
+            setPropValue("isGraphCustom", "true");
+        }
 
         injectTemplate("pathwayGraphs");
 
@@ -97,18 +99,19 @@ public class AntibodyArray extends DatasetInjector {
         setFunctionProperties() ;
 
         String help = getPropValue("function_help");
-        System.out.println(help);
 
         String fn_display = getPropValue("function_display");
-        System.out.println(fn_display);
 
         injectTemplate("antibodyArrayProfileSetParamQuery");
 
         injectTemplate("antibodyArrayQuestion");
 
-        injectTemplate("antibodyArrayCategories");
+        //        injectTemplate("antibodyArrayCategories");
+        setPropValue("searchCategory", "searchCategory-T-test-2-sample-unequal-variance");
+        setPropValue("questionName", "GeneQuestions.GenesByAntibodyArray" + getDatasetName());
+        injectTemplate("internalGeneSearchCategory");
 
-        injectTemplate("antibodyArrayAttributeCategory");
+
         injectTemplate("antibodyArrayGraphDescriptions");
 
         injectTemplate("datasetExampleGraphDescriptions");
@@ -125,6 +128,8 @@ public class AntibodyArray extends DatasetInjector {
                                    {"graphModule", ""},
                                    {"defaultGraphCategory"},
                                    {"function", ""},
+                                   {"isGraphCustom", ""},
+                    
         };
 
         

@@ -24,7 +24,7 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
 
     @Override
     protected void setGraphModule() {
-        setPropValue("graphModule", "Microarray::TwoChannel");
+        setPropValue("graphModule", "ExpressionTwoChannel");
     }
 
 
@@ -45,8 +45,8 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
         String[][] exprDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {{"hasPercentileData", ""},
-                                   {"redPctSampleMap", "The ProfileElementName will be Like 'A vs B' ... Need to say whether A or B maps to this channel"},
-                                   {"greenPctSampleMap", "The ProfileElementName will be Like 'A vs B' ... Need to say whether A or B maps to this channel"},
+                                   {"channelOnePctSampleMap", "The ProfileElementName will be Like 'A vs B' ... Need to say whether A or B maps to this channel"},
+                                   {"channelTwoPctSampleMap", "The ProfileElementName will be Like 'A vs B' ... Need to say whether A or B maps to this channel"},
    
         };
 

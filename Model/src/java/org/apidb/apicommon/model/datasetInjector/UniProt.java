@@ -10,7 +10,7 @@ public class UniProt extends DBXRefs {
   @Override
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEcNumber");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEcNumber");
   }
 
   // second column is for documentation

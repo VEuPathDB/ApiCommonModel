@@ -49,129 +49,116 @@
             <column name="source_id" />
             <column name="project_id" />
             <column name="strain"/>
-            <column name="strain_link"/>
             <column name="allele"/>
             <column name="allele_gene_strand"/>
             <column name="product"/>
             <column name="coverage"/>
             <column name="read_frequency"/>
+            <column name="geographic_location"/>
             <column name="view_align"/>
             <column name="has_align"/>
-            <column name="isolate_source_id"/>
-            <column name="haplogroup" includeProjects="ToxoDB"/>
-            <sql includeProjects="PiroplasmaDB,GiardiaDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB">
+            <column name="sampleId"/>
+<!--            <column name="haplogroup" includeProjects="ToxoDB"/> -->
+            <sql>
             <![CDATA[
-SELECT distinct snp.source_id, '@PROJECT_ID@' AS project_id,
-       b.source_id as isolate_source_id,
-       var.strain as strain,
-       '<a href=showRecord.do?name=IsolateRecordClasses.IsolateRecordClass&' ||'project_id=@PROJECT_ID@&'|| 'primary_key='||ia.source_id||'>'|| var.strain ||'</a>' AS strain_link,
+SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+       CASE WHEN var.strain = snp.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
        var.allele,
-       CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN snp.gene_source_id is null THEN ''
+       CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
+            WHEN sa.gene_source_id is null THEN ''
             ELSE var.allele 
        END as allele_gene_strand,
-       decode(var.strain, snp.reference_strain, 1, 2) as strain_order,
        var.product,
        var.coverage, 
        var.read_percent as read_frequency,
-       CASE WHEN b.source_id is null THEN ''
-            ELSE lower(snp.project_id) || 
-              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+       CASE WHEN snp.gene_na_feature_id is null THEN ''
+            ELSE lower(sa.project_id) || 
+              '/?name=' || seq.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
               ';l=' || d.name  || 
-              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
+              ';h_region=' || seq.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
        END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
-       d.name 
-FROM   apidbtuning.SnpAttributes snp, 
-      apidb.SequenceVariation var, 
-      -- study.study s, 
-      rad.studybiomaterial sb, 
-      study.biomaterial b, 
-      apidbtuning.isolateAttributes ia, 
-      dots.nasequence nas,
-      SRES.externaldatabase d,
-      sres.externaldatabaserelease r
+       CASE WHEN var.coverage is null THEN '' ELSE 'view alignment' END as has_align,
+        loc.value as geographic_location,
+       so.name as sampleId
+FROM   apidb.SequenceVariation var, apidb.snp snp,apidbtuning.snpattributes sa,apidbtuning.genomicseqattributes seq,
+       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc,
+      (select name, output_protocol_app_node_id from apidbtuning.sampledownstream sd ) so ,
+       sres.externaldatabase d, sres.externaldatabaserelease rel
 WHERE snp.na_sequence_id = var.ref_na_sequence_id
-  AND snp.location = var.location
-  AND nas.na_sequence_id = snp.na_sequence_id
-  AND var.external_database_release_id = b.external_database_release_id(+)
-  AND b.bio_material_id = sb.bio_material_id(+)
-  --AND sb.study_id = s.study_id(+)
-  --and s.external_database_release_id = r.external_database_release_id
-  and ia.external_db_name = d.name
-  AND r.external_database_id = d.external_database_id
-  AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-ORDER BY strain_order, var.strain
-             ]]>
-           </sql>
-           <sql includeProjects="ToxoDB">
-            <![CDATA[
-SELECT distinct snp.source_id, '@PROJECT_ID@' AS project_id,
-       b.source_id as isolate_source_id,
-       var.strain as strain,
-       CASE WHEN b.source_id  in (select source_id from apidbtuning.isolateattributes)
-         THEN  '<a href=showRecord.do?name=IsolateRecordClasses.IsolateRecordClass&' ||'project_id=@PROJECT_ID@&'|| 'primary_key='||b.source_id||'>'|| var.strain ||'</>'
-         ELSE  var.strain END AS strain_link,
-       var.allele,
-       CASE WHEN snp.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN snp.gene_source_id is null THEN ''
-            ELSE var.allele 
-       END as allele_gene_strand,
-       decode(var.strain, snp.reference_strain, 1, 2) as strain_order,
-       var.product,
-       var.coverage, 
-       nvl(h.haplogroup,'unknown') as haplogroup,
-       nvl(h.order_num, 0) as order_num,
-       var.read_percent as read_frequency,
-       CASE WHEN b.source_id is null THEN ''
-            ELSE lower(snp.project_id) || 
-              '/?name=' || nas.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
-              ';l=' || d.name  || 
-              ';h_region=' || nas.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
-       END as view_align,
-       CASE WHEN b.source_id is null THEN '' ELSE 'view alignment' END as has_align,
-       d.name 
-FROM   apidbtuning.SnpAttributes snp, 
-      apidb.SequenceVariation var,
-      (  SELECT distinct b.name as strain,
-                     bmc.value as haplogroup,
-                     CASE WHEN bmc.value = '6a' THEN 6
-                              WHEN bmc.value = '6b' THEN 6
-                              WHEN bmc.value = 'unknown' THEN 0
-                              ELSE to_number(bmc.value)
-                     END as order_num
-             FROM    Study.Ontologyentry oe,
-                         Study.Biomaterialcharacteristic Bmc,
-                         study.biosample b,
-                         SRES.externaldatabase d,
-                         sres.externaldatabaserelease r
-          WHERE  b.external_database_release_id = r.external_database_release_id
-               AND r.external_database_id = d.external_database_id
-               AND d.name like '%SNPSample%'
-               AND b.Bio_Material_Id = Bmc.Bio_Material_Id
-               AND Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
-               AND oe.category ='BioMaterialCharacteristics'
-               AND oe.value ='Haplogroup'
-           UNION
-            select  'ME49' as strain, '2' as haplogroup, 2 as order_num from dual   
-      ) h,
-      rad.studybiomaterial sb, 
-      study.biomaterial b, 
-      dots.nasequence nas,
-      SRES.externaldatabase d,
-      sres.externaldatabaserelease r
-WHERE snp.na_sequence_id = var.ref_na_sequence_id
-  AND snp.location = var.location
-  AND var.strain = h.strain(+)
-  AND nas.na_sequence_id = snp.na_sequence_id
-  AND var.external_database_release_id = b.external_database_release_id(+)
-  AND b.bio_material_id = sb.bio_material_id(+)
-  AND r.external_database_id = d.external_database_id
-  AND r.EXTERNAL_DATABASE_RELEASE_ID = var.EXTERNAL_DATABASE_RELEASE_ID
-ORDER BY strain_order,order_num, strain
+and var.location = snp.location
+and snp.source_id = sa.source_id
+and snp.na_sequence_id = seq.na_sequence_id
+and var.external_database_release_id = rel.external_database_release_id
+and rel.external_database_id = d.external_database_id
+and var.protocol_app_node_id = loc.protocol_app_node_id(+)
+and so.output_protocol_app_node_id = var.protocol_app_node_id
              ]]>
            </sql>
         </sqlQuery>
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- country summary -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="CountrySummary" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="geographic_location"/>
+            <column name="total_strains"/>
+            <column name="major_allele"/>
+            <column name="minor_allele"/>
+            <column name="other_allele"/>
+            <sql>
+                <![CDATA[
+select source_id,'PlasmoDB' AS project_id,geographic_location, total_strains,
+major_allele || ' ('||maj_freq||')' as major_allele,
+CASE WHEN minor_allele is not null THEN 
+   CASE WHEN other_allele is not null THEN minor_allele || ' ('||other_freq||')' ELSE minor_allele || ' ('||min_freq||')' END 
+ELSE null END as minor_allele,
+CASE WHEN other_allele is not null THEN other_allele || ' ('||min_freq||')' ELSE null END as other_allele
+from (
+select source_id,geographic_location,
+substr(listagg(allele, ', ') within group (order by count_strains desc),1,1) as major_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),4,1) as minor_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),7,1) as other_allele,
+sum(count_strains) as total_strains,
+round((max(count_strains) / sum(count_strains)),2) as maj_freq,
+round((min(count_strains) / sum(count_strains)),2) as min_freq,
+round((median(count_strains) / sum(count_strains)),2) as other_freq
+from (
+select source_id,geographic_location,allele,product,count(*) as count_strains,
+round(avg(coverage),2) as avg_cov,round(avg(read_frequency),2) as avg_freq
+from (
+SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+       CASE WHEN var.strain = snp.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
+       var.allele,
+       var.product,
+       var.coverage, 
+       var.read_percent as read_frequency,
+       CASE WHEN snp.gene_na_feature_id is null THEN ''
+            ELSE lower(sa.project_id) || 
+              '/?name=' || seq.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || 
+              ';h_region=' || seq.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
+       END as view_align,
+       CASE WHEN var.coverage is null THEN '' ELSE 'view alignment' END as has_align,
+        nvl(loc.value,'unknown') as geographic_location
+FROM   apidb.SequenceVariation var, apidb.snp snp,apidbtuning.snpattributes sa,apidbtuning.genomicseqattributes seq,
+       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc,
+       sres.externaldatabase d, sres.externaldatabaserelease rel
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+and var.location = snp.location
+and snp.source_id = sa.source_id
+and snp.na_sequence_id = seq.na_sequence_id
+and var.external_database_release_id = rel.external_database_release_id
+and rel.external_database_id = d.external_database_id
+and var.protocol_app_node_id = loc.protocol_app_node_id(+) )
+group by source_id,geographic_location,allele,product )
+group by source_id,geographic_location)
+                ]]>
+            </sql>
+       </sqlQuery>       
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Allele count -->  
@@ -182,40 +169,20 @@ ORDER BY strain_order,order_num, strain
             <column name="project_id"/>
             <column name="allele_count"/>
             <column name="allele"/>
-            <sql>
-                <![CDATA[
-           SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
-                  count(*) as allele_count, var.allele
-           FROM   apidbtuning.SnpAttributes snp, 
-                  apidb.sequencevariation var
-           WHERE  snp.na_sequence_id = var.ref_na_sequence_id
-              AND snp.location = var.location
-           GROUP BY snp.source_id, var.allele
-           ORDER BY var.allele
-                ]]>
-            </sql>
-       </sqlQuery>
-
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Product count -->  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-       <sqlQuery name="ProductCount" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB" isCacheable="false">
-            <column name="source_id"/>
-            <column name="project_id"/>
-            <column name="product_count"/>
             <column name="product"/>
+            <column name="avg_coverage"/>
+            <column name="avg_frequency"/>
             <sql>
                 <![CDATA[
-           SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
-                  count(*) as product_count, var.product
-           FROM   apidbtuning.SnpAttributes snp, 
-                  apidb.sequencevariation var
-           WHERE  snp.na_sequence_id = var.ref_na_sequence_id
-              AND snp.location = var.location
-              AND var.product is not null
-           GROUP BY snp.source_id, var.product
-           ORDER BY var.product
+                         SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+                         count(*) as allele_count,
+                         var.allele||' ('||round(count(*) / snp.distinct_strain_count,2)||')' as allele, var.product,
+                         round(avg(var.read_percent),1) as avg_frequency, round(avg(var.coverage),1) as avg_coverage
+                         FROM   apidbtuning.SnpAttributes snp, 
+                         apidb.sequencevariation var
+                         WHERE  snp.na_sequence_id = var.ref_na_sequence_id
+                         AND snp.location = var.location
+                         GROUP BY snp.source_id, var.allele,var.product,snp.distinct_strain_count
                 ]]>
             </sql>
        </sqlQuery>

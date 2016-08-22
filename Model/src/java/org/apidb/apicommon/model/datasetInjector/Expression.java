@@ -22,6 +22,14 @@ public abstract class Expression extends DatasetInjector {
 
     protected abstract void setGraphYAxisDescription();
 
+    protected String getSearchCategoryType() {
+	String lcDatasetClassCategory=getPropValue("datasetClassCategory").toLowerCase();
+	if (lcDatasetClassCategory.equals("proteomics")) {
+	    return lcDatasetClassCategory;
+	}
+	return "transcriptomics";
+    }
+	
     protected void setProfileSetFilterPattern() {
         setPropValue("profileSetFilterPattern", "%");
     }
@@ -46,9 +54,6 @@ public abstract class Expression extends DatasetInjector {
         setPropValue("isLogged", "1"); 
     }
 
-    protected void setGraphsVisibleParts(String visibleParts) {
-        setPropValue("graphVisibleParts", visibleParts); 
-    }
 
     /***
      *   list of key value pairs
@@ -77,7 +82,7 @@ public abstract class Expression extends DatasetInjector {
     @Override
     public void addModelReferences() {
       setGraphModule();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
     }
 
     @Override
@@ -85,7 +90,7 @@ public abstract class Expression extends DatasetInjector {
 
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
-
+	setShortAttribution();
         setOrganismAbbrevFromDatasetName();
 
         String projectName = getPropValue("projectName");
@@ -101,7 +106,7 @@ public abstract class Expression extends DatasetInjector {
         setDataType();
         setExprGraphVisiblePart();
         setGraphModule();
-        setCleanGraphModule(); 
+        setCleanGraphModule();
         setExprPlotPartModule();
         setGraphYAxisDescription();
         setProteinCodingProps();
@@ -109,25 +114,29 @@ public abstract class Expression extends DatasetInjector {
 
         String lcDataType = getPropValue("dataType").toLowerCase();
 
-        injectTemplate(lcDataType + "AttributeCategory");
+        injectTemplate("datasetCategory");
+
+        setPropValue("graphTextAttrName", "exprGraphAttr" + getDatasetName() + "_expr_graph");
 
         injectTemplate("expressionGraphAttributesExpression");
-
+        injectTemplate("graphTextAttributeCategory");
 
 
         if(getPropValueAsBoolean("hasPercentileData")) {
+            setPropValue("graphTextAttrName", "pctGraphAttr" + getDatasetName() + "_pct_graph");
             injectTemplate("expressionGraphAttributesPercentile");
+            injectTemplate("graphTextAttributeCategory");
         }
 
         String exprGraphVp = getPropValue("exprGraphVisiblePart");
 
         setPropValue("graphVisibleParts", exprGraphVp);
         injectTemplate("pathwayGraphs");
- 
+
         if(getPropValueAsBoolean("hasPercentileData")) {        
-           setGraphsVisibleParts(exprGraphVp + ",percentile");
+            setPropValue("graphVisibleParts", exprGraphVp + ",percentile");
         } else {
-            setGraphsVisibleParts(exprGraphVp);
+            setPropValue("graphVisibleParts", exprGraphVp);
         }
 
         // these are universal for injected expression experiments
@@ -175,7 +184,8 @@ public abstract class Expression extends DatasetInjector {
                                    {"optionalQuestionDescription", "This text will be appended to fold change and percentile questions"},
                                    {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
                                    {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
-                                   {"linePlotXAxisLabel", "Sets the x-axis label for line graphs that don't override the xaxis tick mark labels."}
+                                   {"linePlotXAxisLabel", "Sets the x-axis label for line graphs that don't override the xaxis tick mark labels."},
+                                   {"profileSetNameMap", "Optionally replace profileset names"}
         };
 
         

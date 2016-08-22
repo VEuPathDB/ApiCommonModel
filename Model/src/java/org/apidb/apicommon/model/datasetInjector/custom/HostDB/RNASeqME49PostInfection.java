@@ -7,9 +7,9 @@ public class RNASeqME49PostInfection extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Gregory::TgME49RnaSeqHuman"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqTgME49HumanFoldChange"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqTgME49HumanPercentile"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Gregory::TgME49RnaSeqHuman"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqTgME49HumanFoldChange"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqTgME49HumanPercentile"); 
   }
 
 

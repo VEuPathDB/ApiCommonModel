@@ -6,9 +6,9 @@ public class RTPcrKissinger extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRtPcrFoldChange"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCryptoRtpcrProfileSimilarity"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Kissinger::KissingerRtPcrProfiles"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRtPcrFoldChange"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCryptoRtpcrProfileSimilarity"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Kissinger::KissingerRtPcrProfiles"); 
   }
 
 

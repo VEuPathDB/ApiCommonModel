@@ -44,6 +44,19 @@ sub run{
 
   &usage() if($help);
 
+  my @warningsAbbrev;
+#creating a hash from apidb.organism to check public abbreviations
+  my $abbrevSql = "select distinct public_abbrev from apidb.organism";
+  my $abbrevStmt = $dbh->prepare($abbrevSql);
+  $abbrevStmt->execute();
+  my %pubAbbrevHash;
+  while (my $pubAbbrev = $abbrevStmt->fetchrow_arrayref()) {
+      $pubAbbrevHash{$pubAbbrev->[0]} = 1;
+  }
+ # foreach my $ab (keys %pubAbbrevHash) {
+#      print $ab."\n";
+ # }
+
   my $xml = XMLin($xmlFile, KeyAttr => [], ForceArray => 1, SuppressEmpty => undef);
 
   my $subtrackSets = {};
@@ -69,8 +82,45 @@ sub run{
   my $insertRow = $dbh->prepare($insertStatement);
   &createEmptyTable($dbh,$suffix);
 
+  ## the synteny tracks defined in gbrewseImageUrls.xml are only from reference strains.  When the users
+  ## is viewing a non-reference genome, we want to show that track at the top followed by the reference for that
+  ## species followed by the rest of the subtracks.
+  my $orgSql = "select distinct ga.organism,o.IS_REFERENCE_STRAIN
+from apidb.organism o, apidbtuning.geneattributes ga
+where ga.taxon_id = o.taxon_id";
+  my $orgStmt = $dbh->prepare($orgSql);
+  $orgStmt->execute();
+  my $orgRef; ##value is reference 0|1
+  while (my $ref = $orgStmt->fetchrow_arrayref()) {
+    $orgRef->{$ref->[0]} = $ref->[1];
+#    print STDERR "$ref->[0] = $ref->[1]\n";
+  }
+  my $orgToRef = &getOrgToRef($orgRef);  ##value is hash {reference}=reference_org and {abbrev}
+  ###next get list of all organisms used for gbrowse tracks and add abbrev.
   foreach my $urlSpec (@{$xml->{url}}) {
-    my $organisms = $urlSpec->{org};
+      my $organisms = $urlSpec->{org};
+      foreach my $orgHash (@$organisms) {
+	  my $organism = $orgHash->{organism};
+	  next unless $orgToRef->{$organism};
+	  $orgToRef->{$organism}->{abbrev} = $orgHash->{abbrev};
+
+#####JP note: want to check that these abbrevs exist in the db as public abbrev. use sql query to make hash
+      }
+  }
+  foreach my $org (keys%$orgToRef) {
+#    print STDERR "$org: reference=$orgToRef->{$org}->{reference}, abbrev=$orgToRef->{$org}->{abbrev}\n";
+      my $ab_to_check = $orgToRef->{$org}->{abbrev};
+      if (exists $pubAbbrevHash{$ab_to_check} ) {
+	  #print "$org has the abbreviation $ab_to_check which is a public abbreviation in apidb.organism\n";
+      }
+      else {
+	  #print "ERROR $org has the abbreviation \"$ab_to_check\" which is a not public abbreviation in apidb.organism please change this\n";
+	  push @warningsAbbrev, $org;
+      }
+  }
+
+  foreach my $urlSpec (@{$xml->{url}}) {
+      my $organisms = $urlSpec->{org};
     my $tracks = $urlSpec->{track};
     my $project = $urlSpec->{project};
     my $type = $urlSpec->{type};
@@ -80,15 +130,18 @@ sub run{
     foreach my $orgHash (@$organisms) {
       my $organism = $orgHash->{organism};
       my $abbrev = $orgHash->{abbrev};
+      next unless $orgToRef->{$organism};
 
 
       my @fTracks;
       foreach my $track (@$tracks) {
         my $name = $track->{name};
+
         my $abbrevFirst = $track->{abbrevFirst};
         my $subtracks = $track->{subtrack};
 
         if($subtracks) {
+          my %syntenyNames;
           my @subtracks;
           foreach my $subtrack (@$subtracks) {
             my $setName = $subtrack->{set};
@@ -99,13 +152,28 @@ sub run{
               die "Could not map subtrack set $subtrackName to a subtrackSet" unless($names);
 
               push @subtracks, @$names;
+              foreach my $n (@$names){
+                if($n =~ /(_gene|_span)$/){
+                  $syntenyNames{$1} = 1;
+                }
+              }
             }
             else {
               push @subtracks, $subtrackName;
+              if($subtrackName =~ /(_gene|_span)$/){
+                $syntenyNames{$1} = 1;
+              }
             }
           }
+          ##need to change the abbrev to the reference strain for this organism then unshift the subtracks for this org to beginning of array
+          my $sabbrev = $orgRef->{$organism} == 1 ? $abbrev : $orgToRef->{$orgToRef->{$organism}->{reference}}->{abbrev};
 
-          my @sortedSubtracks = sort {$b =~ /$abbrev/ <=> $a =~ /$abbrev/} @subtracks;
+          my @sortedSubtracks = sort {$b =~ /$sabbrev/ <=> $a =~ /$sabbrev/} @subtracks;
+          if($orgRef->{$organism} == 0){
+            foreach my $key (keys%syntenyNames){
+              unshift(@sortedSubtracks,$abbrev.$key); 
+            }
+          }
           push @fTracks, $name . "/" . join('+', @sortedSubtracks);
         }
         else {
@@ -114,13 +182,42 @@ sub run{
       }
       my $gtracks = join('%1E', @fTracks);
       $insertRow->execute($organism, $type, $gtracks);
+
+      print "$organism:$type: $gtracks\n";
     }
   }
 
-  &createIndex($dbh,$suffix);
+  if (@warningsAbbrev) {
+      print "Error: the following organisms do not have the public abbreviation from apidb.organism as their abbrev in gbrowseImageUrls.xml please change these in the xml and re do\n";
+      print join("\n", @warningsAbbrev);
+      die;
+  }
+  else {
 
-  $dbh->commit();
-  $dbh->disconnect();
+      &createIndex($dbh,$suffix);
+
+      $dbh->commit();
+      $dbh->disconnect();
+  }
+}
+sub getOrgToRef{
+  my $orgRef = shift;
+  my %gs;
+  foreach my $org (keys%{$orgRef}){
+    next unless $orgRef->{$org} == 1;
+    if($org =~ /^(\w+\s+\w+)/){
+#      print STDERR "getOrgToRef: $org ==> $1 = $orgRef->{$org}\n";
+      $gs{$1} = $org;
+    }
+  }
+  my $orgToRef = {};
+  foreach my $org (keys%{$orgRef}){
+    if($org =~ /^(\w+\s+\w+)/){
+      $orgToRef->{$org}->{reference} = $gs{$1};
+#      print STDERR "  $org ==> reference:$gs{$1}\n";
+    }
+  }
+  return $orgToRef;
 }
 
 sub createEmptyTable {
@@ -130,7 +227,7 @@ sub createEmptyTable {
      create table GbrowseTracksOrganism$suffix (
 	organism     varchar2(80),
         type         varchar2(20),
-	gtracks      varchar2(800)
+	gtracks      varchar2(1400)
   ) nologging
 SQL
 $dbh->{PrintError} = 0;

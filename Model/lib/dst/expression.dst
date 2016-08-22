@@ -15,18 +15,13 @@ prop=dataType
              <column name="term"/>
           <sql>
            <![CDATA[
-          select ps.profile_set_id as internal, ps.name as term, 
-                 decode(ps.name, '', '', ${decodeProfileSet}
-                 case when ps.name like '% - %' then
-                 '${datasetDisplayName}' || SUBSTR(ps.name, INSTR(ps.name,'- ', -1, 1)+1)
-                 else '${datasetDisplayName}' end) as display
-          from apidb.profileset ps, SRES.externaldatabase d, SRES.externaldatabaserelease r
-          where ps.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and (d.name = '${datasetName}' or d.name like '${datasetNamePattern}')
-            and lower(ps.name) not like '%percentile%'
-            and ps.name not like 'standard error%'
-            and ps.name not in ( ${excludedProfileSetsList})
+SELECT DISTINCT profile_study_id AS internal, profile_set_name AS term,
+                 decode(profile_set_name, '', '', ${decodeProfileSet}  '${datasetDisplayName}') as display
+FROM apidbtuning.profileType
+WHERE dataset_name = '${datasetName}'
+AND profile_set_name not in ( ${excludedProfileSetsList})
+AND profile_type = 'values'
+AND profile_set_name not like '%PaGE'
             ]]>
           </sql>
         </sqlQuery>
@@ -46,7 +41,6 @@ prop=datasetNamePattern
 prop=datasetDisplayName 
 prop=projectName
 prop=decodeProfileSet
-prop=percentileProfileSetPattern
 prop=excludedProfileSetsList
 prop=dataType
 >templateTextStart<
@@ -56,22 +50,12 @@ prop=dataType
              <column name="term"/>
           <sql>
            <![CDATA[
-         select ps.profile_set_id as internal,
-                 ps.name as term, 
-                 case when ps.name like 'red%' then 'CH01: '
-                      when ps.name like 'green%' then 'CH02: '
-                      else ''
-                  end
-                  || decode(ps.name, '', '', ${decodeProfileSet}
-                                     '${datasetDisplayName}')
-                  as display
-          from apidb.profileset ps, SRES.externaldatabase d, SRES.externaldatabaserelease r
-          where ps.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and (d.name = '${datasetName}' or d.name like '${datasetNamePattern}')
-            and lower(ps.name) like '%percentile%'
-            and ps.name like '${percentileProfileSetPattern}'
-            and ps.name not in ( ${excludedProfileSetsList})
+SELECT DISTINCT profile_study_id AS internal, profile_set_name AS term,
+                 decode(ps.name, '', '', ${decodeProfileSet}  '${datasetDisplayName}') as display
+FROM apidbtuning.profileType
+WHERE dataset_name = '${datasetName}'
+AND profile_set_name not in ( ${excludedProfileSetsList})
+AND profile_type like '%percentile%'
             ]]>
           </sql>
         </sqlQuery>
@@ -107,19 +91,18 @@ prop=defaultFoldDifference
          shortDisplayName="${datasetShortDisplayName} (fc)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericFoldChange"
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
         <paramRef ref="geneParams.profileset_generic" groupRef="paramGroups.dynamicParams" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
-        <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.global_min_max" visible="${hasTimeSeries}"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change" default="${defaultFoldDifference}"/>
 
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 	<attributesList includeProjects="${projectName}"
-	   summary="organism,product,fold_change_chosen,chose_group_two,chose_group_one,exprGraphAttr${datasetName}_expr_graph"
+	   summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one,exprGraphAttr${datasetName}_expr_graph"
 	   sorting="fold_change_avg desc" /> 
         
         <attributesList includeProjects="EuPathDB"
-         summary="organism,product,fold_change_chosen,chose_group_two,chose_group_one"
+         summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one"
          sorting="fold_change_avg desc"  /> 
 
          <summary>
@@ -152,8 +135,6 @@ ${optionalQuestionDescription}
            <columnAttribute name="max_group_two" displayName="Max Ref (log2)" align="center"/>
            <columnAttribute name="chose_group_one" displayName="Chosen Comp (log2)" align="center"/>
            <columnAttribute name="chose_group_two" displayName="Chosen Ref (log2)" align="center"/>
-           <columnAttribute name="time_of_min_expr" displayName="Time of Min Expression" align="center"/>
-           <columnAttribute name="time_of_max_expr" displayName="Time of Max Expression" align="center"/>
         </dynamicAttributes>
 
 
@@ -187,17 +168,17 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (%ile)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericPercentile" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
-        <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}PctProfiles"/>
+        <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
 
         <attributesList includeProjects="${projectName}"
-              summary="product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
               sorting="percentile desc"
         /> 
         <attributesList includeProjects="EuPathDB"
-              summary="product,min_percentile_chosen,max_percentile_chosen"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
               sorting="percentile desc"
         /> 
 
@@ -255,7 +236,7 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (fc w/ conf)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericFoldChangeWithConfidence"
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
         <!-- params we are overriding -->
 
 
@@ -266,11 +247,12 @@ prop=proteinCodingParamVisible
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 
         <attributesList includeProjects="${projectName}"
-         summary="organism,product,fold_change,confidence,exprGraphAttr${datasetName}_expr_graph"
+         summary="organism,gene_product,fold_change,confidence,exprGraphAttr${datasetName}_expr_graph"
          sorting="fold_change_avg asc"         
          /> 
+
          <attributesList includeProjects="EuPathDB"
-          summary="organism,product,fold_change,confidence"
+          summary="organism,gene_product,fold_change,confidence"
           sorting="fold_change_avg asc"         
          /> 
 
@@ -311,24 +293,23 @@ ${optionalQuestionDescription}
 
 [templateStart]
 name=expressionGraphAttributesExpression
-anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/geneRecord.xml
+anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/transcriptRecord.xml
 prop=datasetName
+prop=presenterId
 prop=datasetShortDisplayName
 prop=projectName
-prop=exprGraphVisiblePart
 prop=graphModule
-prop=cleanGraphModule
-prop=dataType
+prop=exprGraphVisiblePart
+prop=graphTextAttrName
 >templateTextStart<
-	   <textAttribute name="exprGraphAttr${datasetName}_expr_graph"
+	   <textAttribute name="${graphTextAttrName}"
 			  displayName="${datasetShortDisplayName} - Expr Graph"
-			  attributeCategory="${datasetName}AttributeCategory"
 			  inReportMaker="false" truncateTo="100000" sortable="false"
 			  includeProjects="${projectName}">
               <text>
                 <![CDATA[
-				<a href="showRecord.do?name=GeneRecordClasses.GeneRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${cleanGraphModule}${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=${graphModule}&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=${exprGraphVisiblePart}&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=${graphModule}&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=${exprGraphVisiblePart}&vpAreFuzzy=1&thumb=1"/>
 				</a>
                 ]]>
               </text>
@@ -337,23 +318,23 @@ prop=dataType
 
 [templateStart]
 name=expressionGraphAttributesPercentile
-anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/geneRecord.xml
+anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/transcriptRecord.xml
 prop=datasetName
+prop=presenterId
 prop=datasetShortDisplayName
 prop=projectName
-prop=graphModule
-prop=cleanGraphModule
 prop=dataType
+prop=graphModule
+prop=graphTextAttrName
 >templateTextStart<
 	   <textAttribute name="pctGraphAttr${datasetName}_pct_graph"
 			  displayName="${datasetShortDisplayName} - %ile Graph"
-			  attributeCategory="${datasetName}AttributeCategory"
 			  inReportMaker="false" truncateTo="100000" sortable="false"
 			  includeProjects="${projectName}">
               <text>
                 <![CDATA[
-				<a href="showRecord.do?name=GeneRecordClasses.GeneRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${cleanGraphModule}${datasetName}ShowHide">
-                <img src="/cgi-bin/dataPlotter.pl?type=${graphModule}&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&dataset=${datasetName}&vp=percentile&thumb=1"/>
+				<a href="showRecord.do?name=TranscriptRecordClasses.TranscriptRecordClass&amp;source_id=$$source_id$$&amp;project_id=@PROJECT_ID@#${datasetName}ShowHide">
+                <img src="/cgi-bin/dataPlotter.pl?type=${graphModule}&project_id=${projectName}&template=1&fmt=png&id=$$primary_key$$&datasetId=${presenterId}&vp=percentile&vpAreFuzzy=1&thumb=1"/>
                 </a>
 				]]>
               </text>
@@ -372,28 +353,23 @@ prop=excludedProfileSetsList
 prop=dataType
 >templateTextStart<
       <sqlQuery name="${datasetName}${dataType}Samples" includeProjects="${projectName}">
+             <paramRef ref="geneParams.profileset_generic"/>
              <column name="display"/>
              <column name="internal"/>
              <column name="term"/>
           <sql>
            <![CDATA[
-         SELECT pen.name as term,
-                pen.profile_element_name_id as internal, 
-                pen.name as display
-          FROM apidb.profileelementname pen,apidb.profileset ps,
-               sres.externaldatabase d, SRES.externaldatabaserelease r
-          WHERE r.external_database_release_id = ps.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and pen.profile_set_id =  ps.profile_set_id
-          and (d.name = '${datasetName}' or d.name like '${datasetNamePattern}')
-          and lower(ps.name) not like '%percentile%'
-          and ps.name not like 'standard error%'
-          and ps.name not in ( ${excludedProfileSetsList})
-          order by pen.element_order
+	      SELECT  ps.protocol_app_node_id as internal, ps.protocol_app_node_name as display, 
+	         ps.protocol_app_node_name as term
+	      FROM apidbtuning.ProfileSamples ps
+	      WHERE ps.study_id = $$profileset_generic$$
+	      AND profile_type='values'
+	      ORDER BY ps.node_order_num
             ]]>
           </sql>
         </sqlQuery>
         <processQuery name="${datasetName}${dataType}Samples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
+             <paramRef ref="geneParams.profileset_generic"/> 
             <wsColumn name="display" width="200"/>
             <wsColumn name="internal" width="200"/>
             <wsColumn name="term" width="200"/>
@@ -447,50 +423,35 @@ anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/questions/params/genePar
 prop=datasetName
 prop=datasetDisplayName 
 prop=projectName
-prop=redPctSampleDecode
-prop=greenPctSampleDecode
+prop=channelOnePctSampleDecode
+prop=channelTwoPctSampleDecode
 prop=percentileProfileSetPattern
-prop=excludedProfileSetsList
 prop=dataType
 >templateTextStart<
       <sqlQuery name="${datasetName}${dataType}PctSamples" includeProjects="${projectName}">
              <paramRef ref="geneParams.profileset_generic"/>    
+             <paramRef ref="geneParams.channel"/>    
              <column name="internal"/>
              <column name="term"/>
           <sql>
            <![CDATA[
-select * from (
-          SELECT pen.profile_element_name_id as internal, 
-                pen.name || ':  CH01 ' ||
-                decode(pen.name, '', '', ${redPctSampleDecode}
-                       pen.name) as term
-          FROM apidb.profileelementname pen,apidb.profileset ps,
-               sres.externaldatabase d, SRES.externaldatabaserelease r
-          WHERE r.external_database_release_id = ps.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and pen.profile_set_id =  ps.profile_set_id
-          and d.name = '${datasetName}'
-          and lower(ps.name) like 'red percentile%'
-          and ps.name not in ( ${excludedProfileSetsList})
-UNION
-          SELECT pen.profile_element_name_id as internal, 
-                 pen.name || ':  CH02 ' ||
-                 decode(pen.name, '', '', ${greenPctSampleDecode}
-                        pen.name) as term
-          FROM apidb.profileelementname pen,apidb.profileset ps,
-               sres.externaldatabase d, SRES.externaldatabaserelease r
-          WHERE r.external_database_release_id = ps.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and pen.profile_set_id =  ps.profile_set_id
-          and d.name = '${datasetName}'
-          and lower(ps.name) like 'green percentile%'
-          and ps.name not in ( ${excludedProfileSetsList})
-          ) order by term
+	      SELECT  protocol_app_node_id as internal,
+	      CASE WHEN  ($$channel$$ ='channel1') THEN
+                decode(protocol_app_node_name, '', '', ${channelOnePctSampleDecode}
+                       protocol_app_node_name)
+		ELSE decode(protocol_app_node_name, '', '', ${channelTwoPctSampleDecode}
+                       protocol_app_node_name)
+		    END as term
+	      FROM apidbtuning.ProfileSamples ps
+	      WHERE ps.study_id = $$profileset_generic$$	
+	      AND profile_type like '%' || $$channel$$ || '%'
+	      ORDER BY ps.node_order_num
             ]]>
           </sql>
         </sqlQuery>
         <processQuery name="${datasetName}${dataType}PctSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
             <paramRef ref="geneParams.profileset_generic"/>    
+             <paramRef ref="geneParams.channel"/>    
             <wsColumn name="internal" width="200"/>
             <wsColumn name="term" width="200"/>
         </processQuery>
@@ -520,17 +481,18 @@ prop=defaultFoldDifference
          shortDisplayName="${datasetShortDisplayName} (dc)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGeneric" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
-        <paramRef ref="geneParams.samples_direct_comp_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
+        <paramRef ref="geneParams.profileset_generic" groupRef="paramGroups.dynamicParams" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
+        <paramRef ref="geneParams.samples_fc_ref_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef ref="geneParams.fold_difference" default="${defaultFoldDifference}"/>
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 
 	<attributesList includeProjects="${projectName}"
-            summary="organism,product,fold_difference,exprGraphAttr${datasetName}_expr_graph"
+            summary="organism,gene_product,fold_difference,exprGraphAttr${datasetName}_expr_graph"
             sorting="fold_difference desc"/>
         <attributesList includeProjects="EuPathDB"
-           summary="organism,product,fold_difference"
+           summary="organism,gene_product,fold_difference"
            sorting="fold_difference desc"  /> 
 
 
@@ -585,15 +547,15 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (dc)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGenericPage" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
         <paramRef ref="geneParams.samples_direct_comp_generic" queryRef="GeneVQ.${datasetName}${dataType}Samples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
 	<attributesList includeProjects="${projectName}"
-            summary="organism,product,fold_change,exprGraphAttr${datasetName}_expr_graph"
+            summary="organism,gene_product,fold_change,exprGraphAttr${datasetName}_expr_graph"
             sorting="fold_change desc"/>
         <attributesList includeProjects="EuPathDB"
-           summary="organism,product,fold_change"
+           summary="organism,gene_product,fold_change"
            sorting="fold_change desc"  /> 
 
 
@@ -649,17 +611,17 @@ prop=defaultFoldDifference
          shortDisplayName="${datasetShortDisplayName} (dc w/ fdr)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByDirectComparisonGenericFDR" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
          
         <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
         <paramRef ref="geneParams.samples_direct_comp_fdr_generic" queryRef="GeneVQ.${datasetName}${dataType}DirectFDRSamples" />
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef ref="geneParams.fold_difference" default="${defaultFoldDifference}"/>
 	<attributesList includeProjects="${projectName}"
-            summary="organism,product,fold_change,false_discovery_rate,exprGraphAttr${datasetName}_expr_graph"
+            summary="organism,gene_product,fold_change,false_discovery_rate,exprGraphAttr${datasetName}_expr_graph"
             sorting="fold_change desc"/>
         <attributesList includeProjects="EuPathDB"
-           summary="organism,product,fold_change"
+           summary="organism,gene_product,fold_change"
            sorting="fold_change desc"  /> 
 
 
@@ -717,17 +679,18 @@ prop=proteinCodingParamVisible
          shortDisplayName="${datasetShortDisplayName} (%ile)"
          searchCategory="Transcript Expression"
          queryRef="GeneId.GenesByGenericPercentile" 
-         recordClassRef="GeneRecordClasses.GeneRecordClass">
+         recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
-        <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}PctProfiles" visible="false"/>
+        <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}${dataType}Profiles" visible="false"/>
         <paramRef ref="geneParams.samples_percentile_generic" queryRef="GeneVQ.${datasetName}${dataType}PctSamples"/>
         <paramRef ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
+        <paramRef ref="geneParams.channel" visible="true"/>
         <attributesList includeProjects="${projectName}"
-              summary="product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen,pctGraphAttr${datasetName}_pct_graph"
               sorting="percentile desc"
         /> 
         <attributesList includeProjects="EuPathDB"
-              summary="product,min_percentile_chosen,max_percentile_chosen"
+              summary="gene_product,min_percentile_chosen,max_percentile_chosen"
               sorting="percentile desc"
         /> 
 

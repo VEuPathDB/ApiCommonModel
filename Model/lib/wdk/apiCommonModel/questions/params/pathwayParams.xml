@@ -2,11 +2,51 @@
 
   <paramSet name="pathwayParams">
 
+    <datasetParam name="ds_pathway_id"
+		  recordClassRef="PathwayRecordClasses.PathwayRecordClass"
+		  prompt="Pathway Identifier ID">
+
+      <help>
+	Enter Pathway, Compound, Enzyme, Gene and/or Reaction IDs.
+      </help>
+      <suggest
+	  default="C00993 CHEBI:58681 2.3.2.1 PF3D7_0919700 ec01057 RXN-9655"/>
+    </datasetParam>
+
+    <enumParam name="exact_match_only"
+               prompt="EC Exact Match Only"
+               multiPick="false"
+               quote="false">
+        <noTranslation value="true" includeProjects="EuPathDB" />
+        <help>
+            <![CDATA[Choose whether or not to only use exact EC Number matches in this query. Choosing No will match 2.7.1.1 with incomplete partial matches such as 2.7.-.-.  Yes will ONLY match 2.7.1.1 with itself.]]>
+        </help>
+        <enumList>
+            <enumValue>
+                <term>No</term>
+                <internal>0</internal>
+            </enumValue>
+            <enumValue>
+                <term>Yes</term>
+                <internal>1</internal>
+            </enumValue>
+        </enumList>
+    </enumParam>
+
+        <flatVocabParam name="pathways_source" 
+                     queryRef="PathwayVQ.PathwaysSource"
+                     prompt="Pathway Source"
+                     quote="true">
+            <help>Use only pathways from the selected source in this query.</help>
+            <suggest selectMode="none" />
+        </flatVocabParam>
+
         <flatVocabParam name="metabolic_pathway_id" 
                      queryRef="PathwayVQ.MetbPathwaysList"
                      prompt="Pathway Name or ID"
                      quote="true"
-                     displayType="typeAhead">
+                     displayType="typeAhead"
+                     dependedParamRef="pathwayParams.pathways_source">
             <help>Enter a Pathway ID (e.g. "ec00061") or Pathway name (e.g. "Fatty acid biosynthesis").</help>
             <suggest selectMode="none" />
         </flatVocabParam>
@@ -25,7 +65,8 @@
                      queryRef="PathwayVQ.MetbPathwaysWithGenesList"
                      prompt="Pathway Name or ID"
                      quote="true"
-                     displayType="typeAhead">
+                     displayType="typeAhead"
+                     dependedParamRef="pathwayParams.pathways_source">
             <help>Enter a Pathway ID (e.g. "ec00061") or Pathway name (e.g. "Fatty acid biosynthesis").</help>
             <suggest selectMode="none" />
         </flatVocabParam>
@@ -36,6 +77,16 @@
 	  <help>Asterisks can be used as wildcard characters in a Pathway (e.g. "ec001* or glyco*")</help>
         </stringParam>
 
+        <stringParam name="single_identifier_id"
+                     prompt="Identifier (pathway/compound/enzyme/reaction)"
+                     number="false">
+            <help><![CDATA[Enter any pathway or compound or enzyme or reaction ID (or its name). ]]></help>
+            <regex>
+                <![CDATA[
+                   ^[^\\]*$
+                ]]>
+            </regex>
+        </stringParam>
 
 
     <answerParam name="pathway_result"
@@ -49,20 +100,43 @@
 
     <querySet name="PathwayVQ" queryType="vocab" isCacheable="true">
 
-        <sqlQuery name="MetbPathwaysList"  doNotTest="1" excludeProjects="EuPathDB">
+        <sqlQuery name="PathwaysSource"  doNotTest="1" excludeProjects="EuPathDB">
             <column name="internal" />
             <column name="term" />
             <column name="display" />
             <sql>
-            select distinct n.description ||' ('|| n.name||')' as display,
-                            n.description ||' ('|| n.name||')' as term,
-                            n.network_context_id as internal
-            from apidb.networkContext n
-            where n.network_context_id in (select network_context_id from apidb.networkRelContext)
-            and n.name not in ('ec01100','ec01110','ec01120')
-	    UNION
-	    SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
-	    FROM dual
+            select distinct pa.pathway_source as display
+           , pa.pathway_source as term
+           , edr.external_database_release_id as internal
+           from apidbtuning.pathwayattributes pa
+           , sres.externaldatabase ed
+           , sres.externaldatabaserelease edr
+           where pa.EXTERNAL_DB_NAME = ed.NAME
+           and edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+           UNION
+           select 'Any' as display, 'Any' as term, 1 as internal
+           from dual
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="MetbPathwaysList"  doNotTest="1" excludeProjects="EuPathDB">
+            <paramRef ref="pathwayParams.pathways_source"/>
+            <column name="internal" />
+            <column name="term" />
+            <column name="display" />
+            <sql>
+            SELECT pa.name ||' ('|| pa.source_id||') (' || pa.pathway_source || ')' as display
+            , '('|| pa.source_id||') (' || pa.pathway_source || ')' as term
+            , pa.pathway_id as internal
+            FROM apidbtuning.pathwayattributes pa
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE pa.external_db_name = ed.name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$=1)
+	        UNION
+	        SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
+	        FROM dual
             </sql>
         </sqlQuery>
 
@@ -78,11 +152,10 @@
             <column name="term" />
             <column name="display" />
             <sql>
-            SELECT DISTINCT n.description ||' ('|| n.name||')' as display,
-                            n.description ||' ('|| n.name||')' as term,
-                            n.network_context_id as internal
-            FROM apidb.networkContext n, apidbtuning.PathwayCompounds pc
-            WHERE pc.network_context_id = n.network_context_id
+            SELECT name ||' ('|| source_id ||')' as display,
+                            name ||' ('|| source_id ||')' as term,
+                            pathway_id as internal
+            FROM sres.pathway
 	    UNION
 	    SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
 	    FROM dual
@@ -97,28 +170,25 @@
 
 
         <sqlQuery name="MetbPathwaysWithGenesList"  doNotTest="1" excludeProjects="EuPathDB">
+            <paramRef ref="pathwayParams.pathways_source"/>
             <column name="internal" />
             <column name="term" />
             <column name="display" />
             <sql>
-            SELECT DISTINCT n.description ||' ('|| n.name||')' as display,
-                            n.description ||' ('|| n.name||')' as term,
-                            n.network_context_id as internal
-            FROM apidb.NetworkContext n, 
-               sres.enzymeClass ec, dots.aaSequenceEnzymeClass asec, ApidbTuning.GeneAttributes ga, 
-               apidb.networkrelationship nr, apidb.networkrelationshiptype nrt, ApiDB.NetworkRelContext nrc, 
-               ApiDB.NetworkRelContextLink nrl, apidb.networknode nn
-            WHERE ga.aa_sequence_id = asec.aa_sequence_id
-            AND asec.enzyme_class_id = ec.enzyme_class_id
-            AND nn.display_label = ec.ec_number
-            AND nr.associated_node_id = nn.network_node_id
-            AND nrc.network_relationship_id = nr.network_relationship_id
-            AND nrt.network_relationship_type_id = nrc.network_relationship_type_id
-            AND nrl.network_rel_context_id = nrc.network_rel_context_id
-            AND nrc.network_context_id = n.network_context_id
-	    UNION
-	    SELECT 'N/A' AS display, 'N/A' AS term, 0 AS internal
-	    FROM dual
+            SELECT DISTINCT pa.name ||' ('|| pa.source_id||') (' || pa.pathway_source || ')' as display
+            , '('|| pa.source_id||') (' || pa.pathway_source || ')' as term
+            , pa.pathway_id as internal
+            FROM apidbtuning.pathwayattributes pa
+            , apidbtuning.transcriptpathway tp
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            WHERE tp.pathway_id = pa.pathway_id
+            AND pa.external_db_name = ed.name
+            AND edr.external_database_id = ed.external_database_id
+            AND (edr.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$=1)
+            UNION
+            SELECT 'N/A' as display, 'N/A' as term, 0 as internal
+            FROM dual
             </sql>
         </sqlQuery>
 
@@ -130,6 +200,7 @@
 
 
         <sqlQuery name="MetbPathwayIDsWithGenesList"  doNotTest="1" excludeProjects="EuPathDB">
+            <paramRef ref="pathwayParams.pathways_source"/>
             <column name="internal" />
             <column name="term" />
             <column name="display" />

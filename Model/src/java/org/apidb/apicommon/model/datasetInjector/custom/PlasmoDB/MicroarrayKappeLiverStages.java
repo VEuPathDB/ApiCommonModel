@@ -7,9 +7,9 @@ public class MicroarrayKappeLiverStages extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Kappe::ReplicatesAveraged");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByKappeFoldChange");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByKappePercentile");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Kappe::ReplicatesAveraged");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByKappeFoldChange");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByKappePercentile");
   }
 
 

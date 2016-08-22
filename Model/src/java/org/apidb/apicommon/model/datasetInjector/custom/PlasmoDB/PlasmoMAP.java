@@ -10,7 +10,7 @@ public class PlasmoMAP extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByFunctionalInteraction"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByFunctionalInteraction"); 
   }
 
   // second column is for documentation

@@ -6,9 +6,9 @@ public class RNASeqSvard3Strains extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqSvard3StagesFC"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByRNASeqSvard3StagesPercentile"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Svard::RNASeqThreeStrains"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqSvard3StagesFC"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqSvard3StagesPercentile"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Svard::RNASeqThreeStrains"); 
   }
 
 

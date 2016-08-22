@@ -83,7 +83,7 @@
             <column name="edge_level" />
             <sql>
             <![CDATA[
-           select  vs.source_id as source_id, '@PROJECT_ID@' AS project_id,
+             select  vs.source_id as source_id, '@PROJECT_ID@' AS project_id,
                    sp.distance_from_left + 1 as start_min, 
                    sp.end_position - sp.start_position + sp.distance_from_left + 1 as end_max,
                    case when es.source_id is null then '(N)-' || es.length else es.source_id end as piece_source_id,
@@ -91,15 +91,15 @@
                    sp.end_position as piece_max,
                    sp.strand_orientation as piece_strand,
                    sp.sequence_order, sp.edge_level,
-                   eso.term_name as piece_so,
-                   vso.term_name as so
+                   eso.name as piece_so,
+                   vso.name as so
             from apidbtuning.SEQUENCEPIECEclosure sp, 
-                 Dots.NASEQUENCE vs, sres.sequenceontology vso,
-                 Dots.NASEQUENCE es, sres.sequenceontology eso
+                 Dots.NASEQUENCE vs, sres.OntologyTerm vso,
+                 Dots.NASEQUENCE es, sres.OntologyTerm eso
             where vs.na_sequence_id = sp.virtual_na_sequence_id
             and es.na_sequence_id = sp.piece_na_sequence_id
-            and es.sequence_ontology_id = eso.sequence_ontology_id
-            and vs.sequence_ontology_id = vso.sequence_ontology_id
+            and es.sequence_ontology_id = eso.ontology_term_id
+            and vs.sequence_ontology_id = vso.ontology_term_id
             and vs.source_id is not null
             and es.source_id is not null
             order by sp.edge_level, sp.sequence_order
@@ -107,6 +107,57 @@
            </sql>
         </sqlQuery>
 
+                 <sqlQuery name="Taxonomy" isCacheable="false" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="name"/>
+            <column name="ncbi_tax_id"/>
+            <column name="rank"/>
+            <sql>
+            <![CDATA[
+SELECT
+  sa.source_id
+, sa.project_id
+, taxonomy.name
+, taxonomy.ncbi_tax_id
+, taxonomy.rank
+FROM
+  apidbtuning.genomicseqattributes sa
+,(SELECT
+    tax.*
+  , CONNECT_BY_ROOT name AS organism
+  , rownum orderNum
+  FROM
+    (SELECT
+      t.taxon_id
+    , t.parent_id
+    , t.rank
+    , tn.name
+    , t.ncbi_tax_id
+    FROM
+      sres.taxon t
+    , sres.taxonname tn
+    WHERE
+      t.taxon_id = tn.taxon_id
+      AND tn.name_class = 'scientific name'
+    ) tax
+  WHERE
+    tax.name != 'root'
+    START WITH name IN
+    (SELECT DISTINCT
+      organism
+    FROM
+      apidbtuning.geneattributes
+    )
+    CONNECT BY prior parent_id = taxon_id
+  ) taxonomy
+WHERE
+  sa.organism = taxonomy.organism
+ORDER BY
+  taxonomy.ordernum DESC
+             ]]>
+            </sql>
+          </sqlQuery> 
 
         <sqlQuery name="Aliases"
                isCacheable="false">
@@ -130,9 +181,9 @@
 
             <sql>
             <![CDATA[
-            SELECT sa.source_id, '@PROJECT_ID@' AS project_id, si.id as seq_id
-            FROM ApidbTuning.SequenceAttributes sa, ApidbTuning.SequenceId si
-            WHERE si.sequence = sa.source_id AND LOWER(si.sequence) != LOWER(si.id)
+            select si.sequence as source_id, '@PROJECT_ID@' as project_id, si.id as seq_id
+            from ApidbTuning.GenomicSequenceId si
+            where lower(si.sequence) != lower(si.id)
              ]]>
            </sql>
         </sqlQuery>
@@ -148,11 +199,11 @@
             <column name="end_max" />
             <sql>
             <![CDATA[
-            select fl.sequence_source_id as source_id, '@PROJECT_ID@' AS project_id, fl.start_min, fl.end_max
-            from apidbtuning.featurelocation fl, Sres.SequenceOntology so
-            where fl.feature_type = 'Miscellaneous'
-            and so.sequence_ontology_id = fl.sequence_ontology_id
-            and so.term_name = 'centromere'
+                     select fl.sequence_source_id as source_id, 'PlasmoDB' AS project_id, fl.start_min, fl.end_max
+                     from apidbtuning.featurelocation fl, Sres.OntologyTerm so
+                     where fl.feature_type = 'Miscellaneous'
+                     and so.ontology_term_id = fl.sequence_ontology_id
+                     and so.name = 'centromere'
              ]]>
            </sql>
         </sqlQuery>
@@ -178,9 +229,9 @@
             FROM dots.NaSequence ens, sres.Taxon t
             WHERE ens.taxon_id = t.taxon_id
 /*           UNION
-            SELECT ens.source_id, '@PROJECT_ID@' AS project_id, so.so_id AS gff_dbxref
-            FROM dots.NaSequence ens, sres.SequenceOntology so
-            WHERE ens.sequence_ontology_id = so.sequence_ontology_id
+            SELECT ens.source_id, '@PROJECT_ID@' AS project_id, so.name AS gff_dbxref
+            FROM dots.NaSequence ens, sres.OntologyTerm so
+            WHERE ens.sequence_ontology_id = so.ontology_term_id
 */           UNION
             SELECT ens.source_id,  '@PROJECT_ID@' AS project_id,
                    'GenBank:' || dr.primary_identifier AS gff_dbxref
@@ -201,39 +252,6 @@
         </sql>
     </sqlQuery>
 
-
-      <sqlQuery name="GenomeSequencingAndAnnotation">
-            <column name="source_id"/>
-            <column name="project_id"/>
-            <column name="description"/>
-            <sql>
-            <![CDATA[
-select nvl(specific.source_id, generic.source_id) as source_id,
-       nvl(specific.project_id, generic.project_id) as project_id,
-       nvl(specific.description, generic.description) as description
-from (SELECT sa.source_id, sa.project_id, dp.name, dp.description
-FROM apidbtuning.sequenceattributes sa,
-  apidbtuning.datasetnametaxon dnt,
-  apidbtuning.datasetpresenter dp
-WHERE sa.database_name    = dnt.name
-AND dnt.dataset_presenter_id = dp.dataset_presenter_id
-) specific,
-(SELECT sa.source_id,
-       sa.project_id,
-       p.description AS description
-FROM APIDBTUNING.datasetnametaxon dt,
-     apidbtuning.sequenceattributes sa,
-     apidb.datasource ds,
-     apidbtuning.datasetpresenter p
-WHERE sa.taxon_id           = dt.taxon_id
- AND dt.name                 = ds.name
- AND ds.type                 = 'genome'
- AND dt.dataset_presenter_id = p.dataset_presenter_id
-) generic
-where generic.source_id = specific.source_id (+)
-          ]]>
-           </sql>
-        </sqlQuery>
 
       <sqlQuery name="Repeats" excludeProjects="EuPathDB">
 	    <testParamValues includeProjects="TriTrypDB">
@@ -260,9 +278,9 @@ where generic.source_id = specific.source_id (+)
                    fl.end_max,
                    'rpt_type' as qualifier_key,
                    'dispersed' as qualifier_value
-            from ApidbTuning.FeatureLocation fl, sres.sequenceontology so, dots.nafeaturecomment c
+            from ApidbTuning.FeatureLocation fl, sres.ontologyTerm so, dots.nafeaturecomment c
             where feature_type = 'Repeats'
-            and so.sequence_ontology_id = fl.sequence_ontology_id
+            and so.ontology_term_id = fl.sequence_ontology_id
             and fl.na_feature_id = c.na_feature_id (+)
            </sql>
         </sqlQuery>
@@ -325,15 +343,15 @@ SELECT sa.source_id,'@PROJECT_ID@' as project_id, a.organism, a.abbrev
 FROM
 (
 SELECT distinct ga.organism, o.abbrev
-FROM APIDBTUNING.geneattributes ga, 
-     APIDBTUNING.sequenceattributes sa, 
+FROM APIDBTUNING.transcriptattributes ga, 
+     ApidbTuning.GenomicSeqAttributes sa, 
      APIDB.organism o, 
-     SRES.sequenceontology so
+     SRES.ontologyTerm so
 WHERE o.taxon_id = ga.taxon_id 
   AND ga.na_sequence_id = sa.na_sequence_id
-  AND sa.so_id = so.so_id --order by ga.organism
-  AND so.term_name not in ('mitochondrial_chromosome','apicoplast_chromosome')
-) a, apidbtuning.sequenceattributes sa 
+  AND sa.so_id = so.source_id --order by ga.organism
+  AND so.name not in ('mitochondrial_chromosome','apicoplast_chromosome')
+) a, ApidbTuning.GenomicSeqAttributes sa 
             ]]>
             </sql>
         </sqlQuery> 

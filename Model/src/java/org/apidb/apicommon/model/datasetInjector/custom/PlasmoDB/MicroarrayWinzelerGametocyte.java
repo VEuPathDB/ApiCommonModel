@@ -7,9 +7,9 @@ public class MicroarrayWinzelerGametocyte extends CusomGenePageExpressionGraphs 
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "WbcGametocytes::Ver2"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByGametocyteExpression"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByGametocyteExprFoldChange"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "WbcGametocytes::Ver2"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGametocyteExpression"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGametocyteExprFoldChange"); 
   }
 
 

@@ -31,8 +31,18 @@
        
       <enumList>   
         <enumValue default="true">
-          <term>80%</term>
-          <internal>80</internal>
+          <term>0%</term>
+          <internal>0</internal>
+        </enumValue>
+      </enumList>
+    </enumParam>
+
+    <enumParam name="ReadFrequencyPercentTwo" includeProjects="PlasmoDB"
+               prompt="Read frequency threshold" quote="false" visible="false">
+      <enumList>
+        <enumValue default="true">
+          <term>0%</term>
+          <internal>0</internal>
         </enumValue>
       </enumList>
     </enumParam>
@@ -125,7 +135,7 @@
         </stringParam>
 
         <datasetParam name="isolate_set_a"
-                      recordClassRef="IsolateRecordClasses.IsolateRecordClass"
+                      recordClassRef="PopsetRecordClasses.PopsetRecordClass"
                       prompt="Set A isolate identifiers" excludeProjects="AmoebaDB,TriTrypDB">
             <help>input a comma delimited set of isolate ids, or upload a file.</help>
            <suggest includeProjects="PlasmoDB,EuPathDB"
@@ -133,7 +143,7 @@
         </datasetParam>
 
         <datasetParam name="isolate_set_b"
-                      recordClassRef="IsolateRecordClasses.IsolateRecordClass"
+                      recordClassRef="PopsetRecordClasses.PopsetRecordClass"
                       prompt="Set B isolate identifiers" excludeProjects="AmoebaDB,TriTrypDB">
             <help>input a comma delimited set of isolate ids, or upload a file.</help>
            <suggest includeProjects="PlasmoDB,EuPathDB"
@@ -142,10 +152,10 @@
 
     
     <flatVocabParam name="snp_assay_type" includeProjects="PlasmoDB,EuPathDB"
-          queryRef="snpChipVQ.snps_only"
+          queryRef="snpChipVQ.type_from_organism"
           prompt="Isolate assay type"
           multiPick="false"
-           dependedParamRef="organismParams.organism"
+          dependedParamRef="organismParams.organismSinglePick"
           quote="true"> 
       <help>
         Choose the isolate type you want to query
@@ -159,11 +169,38 @@
         <recordClass ref="SnpRecordClasses.SnpRecordClass" />
     </answerParam>
 
+       <filterParam name="ref_samples_filter_metadata" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="SharedVQ.SamplesByOrganismArray"
+                      metadataQueryRef="SharedVQ.SamplesMetadataByOrganismArray"
+                      metadataSpecQueryRef="SharedVQ.MetadataSpecByOrganismAndArray"
+                      prompt="Reference Samples"
+                      multiPick="true"
+                      dependedParamRef="organismParams.organismSinglePick,sharedParams.snp_assay_type"
+                      quote="true"
+                      trimMetadataTerms="false">
+         <help>
+              Select reference samples. 
+         </help>
+       </filterParam>
+
+       <filterParam name="comp_samples_filter_metadata" includeProjects="PlasmoDB,EuPathDB" 
+                      queryRef="SharedVQ.SamplesByOrganismArray"
+                      metadataQueryRef="SharedVQ.SamplesMetadataByOrganismArray"
+                      metadataSpecQueryRef="SharedVQ.MetadataSpecByOrganismAndArray"
+                      prompt="Set B Isolates"
+                      multiPick="true"
+                      dependedParamRef="organismParams.organismSinglePick,sharedParams.snp_assay_type"
+                      quote="true"
+                      trimMetadataTerms="false">
+         <help>
+              Select reference samples. 
+         </help>
+       </filterParam>
+
   </paramSet>
 
    <querySet name="snpChipVQ" queryType="vocab" isCacheable="true">
      <sqlQuery name="snps_only" includeProjects="PlasmoDB,EuPathDB">
-       <paramRef ref="organismParams.organism" quote="true" queryRef="organismVQ.withSNPs"/> 
         <column name="internal"/>
         <column name="term"/>
         <column name="display"/>
@@ -175,13 +212,51 @@
              src.type AS term,
              src.type AS internal
         FROM ApidbTuning.SnpChipAttributes src,ApidbTuning.IsolateAttributes iso
-      WHERE src.organism = ($$organism$$)
-           AND src.dataset = iso.external_db_name
+      WHERE src.dataset = iso.external_db_name
       
       ORDER BY src.type
        ]]>
         </sql>
      </sqlQuery>
+
+     <sqlQuery name="type_from_organism" includeProjects="PlasmoDB,EuPathDB">
+        <paramRef ref="organismParams.organismSinglePick"/>
+        <column name="internal"/>
+        <column name="term"/>
+        <column name="display"/>
+        <sql>
+        <![CDATA[
+           SELECT DISTINCT subtype as term, subtype as internal, subtype as display
+           FROM apidbTuning.MetadataSpec
+           WHERE subtype IN ('Broad_3k_array', 'Broad_75K_array', 'NIH_10k', 'Broad_barcode')
+             AND organism = $$organismSinglePick$$
+       ]]>
+        </sql>
+     </sqlQuery>
+
+    <!--================-->
+    <!-- with chip SNPs -->
+    <!--================-->
+
+    <sqlQuery name="withChipSNPs"
+              includeProjects="PiroplasmaDB,GiardiaDB,AmoebaDB,CryptoDB,FungiDB,PlasmoDB,ToxoDB,TriTrypDB,TrichDB">
+      <column name="internal"/>
+      <column name="term"/>
+      <sql>
+        <![CDATA[
+          select distinct organism as term, organism as internal
+          from apidbTuning.MetadataSpec
+          where subtype in ('Broad_barcode', 'Broad_3k_array', 'NIH_10k', 'Broad_75K_array')
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <processQuery name="withChipSNPs" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"
+                  sorting="term ASC" includeProjects="EuPathDB">
+      <wsColumn name="internal" width="255" wsName="internal"/>
+      <wsColumn name="term" width="255" wsName="term"/>
+    </processQuery>
+
    </querySet>
 
 </wdkModel>

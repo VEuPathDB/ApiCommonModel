@@ -81,16 +81,16 @@ public class RnaSeqInjector extends  DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                     "GenesByRNASeq" + getDatasetName());
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                     "GenesByRNASeq" + getDatasetName() + "Percentile");
 
     // TODO: Add reference for Graph
 
     String hasFishersExactTest = getPropValue("hasFishersExactTestData");
     if(Boolean.parseBoolean(hasFishersExactTest)) {
-        addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+        addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                         "GenesByRNASeq" + getDatasetName() + "PValue");
     }
 

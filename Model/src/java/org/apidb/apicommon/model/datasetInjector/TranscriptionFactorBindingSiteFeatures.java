@@ -10,7 +10,7 @@ public class TranscriptionFactorBindingSiteFeatures extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByBindingSiteFeature");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByBindingSiteFeature");
   }
 
   // second column is for documentation

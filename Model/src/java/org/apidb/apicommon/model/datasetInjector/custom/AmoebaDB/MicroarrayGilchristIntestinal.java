@@ -6,9 +6,9 @@ public class MicroarrayGilchristIntestinal extends CusomGenePageExpressionGraphs
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExpressionTimingPercentileGilchrist"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByEHistolyticaExpressionTiming"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Gilchrist::GilchristEhTimeSeries"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByExpressionTimingPercentileGilchrist"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEHistolyticaExpressionTiming"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Gilchrist::GilchristEhTimeSeries"); 
   }
 
 

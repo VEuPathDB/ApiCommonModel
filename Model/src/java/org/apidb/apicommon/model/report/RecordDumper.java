@@ -107,7 +107,7 @@ public class RecordDumper {
                     + type.substring(1).toLowerCase();
             question = (Question) wdkModel.resolveReference(camelRecordType
                     + "DumpQuestions." + camelRecordType + "DumpQuestion");
-            if (type.equalsIgnoreCase("isolate")) {
+            if (type.equalsIgnoreCase("popset")) {
                 reporterName = "fullRecordDump";
             } else {
                 reporterName = "fullRecord";

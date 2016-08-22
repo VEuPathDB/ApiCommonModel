@@ -2,6 +2,7 @@ package org.apidb.apicommon.datasetPresenter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A set of DatasetInjector subclasses. This set has the information needed to
@@ -39,7 +40,20 @@ public class DatasetInjectorSet {
     if (templateInstanceSet == null) {
       templateInstanceSet = new TemplateInstanceSet();
       for (DatasetInjector datasetInjector : datasetInjectors) {
-        datasetInjector.injectTemplates();
+
+          // TODO:  This needs to be taken out.  Only in place until all projects have their presenter files in order for the GUS4 Migration.  Skips injection if the organism dataset class is not found 
+          Map<String, Map<String, String>> globalProps = datasetInjector.getGlobalDatasetProperties();
+          String projectName = datasetInjector.getPropValue("projectName");
+          String organismAbbrev = datasetInjector.getPropValue("organismAbbrev");
+          //          String datasetName = datasetInjector.getDatasetName();
+          String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+          Map<String, String> orgProps = globalProps.get(orgPropsKey);
+
+          if(orgProps == null && !datasetInjector.getDatasetName().equals("taxonomy_RSRC")) {
+              continue;
+          }
+          
+          datasetInjector.injectTemplates();
       }
     }
     return templateInstanceSet;

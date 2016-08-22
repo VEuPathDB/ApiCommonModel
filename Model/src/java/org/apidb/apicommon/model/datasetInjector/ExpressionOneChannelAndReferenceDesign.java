@@ -24,16 +24,29 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
             if(getPropValueAsBoolean("hasPageData")) {
                 injectTemplate("expressionFoldChangeWithConfidenceQuestion");
-                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
+                //                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
+
+                setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change-with-confidence");
+                setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Confidence");
+                injectTemplate("internalGeneSearchCategory");
+
             }
 
             injectTemplate("expressionFoldChangeQuestion");
-            injectTemplate(lcDataType + "FoldChangeCategories");
+            //            injectTemplate(lcDataType + "FoldChangeCategories");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName());
+            injectTemplate("internalGeneSearchCategory");
+
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPercentileQuestion");
-            injectTemplate(lcDataType + "PercentileCategories");
+            //            injectTemplate(lcDataType + "PercentileCategories");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-percentile");
+            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Percentile");
+            injectTemplate("internalGeneSearchCategory");
+
         }
 
         if(getPropValueAsBoolean("hasSimilarityData")) {
@@ -44,7 +57,7 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
     }
 
     protected void setPercentileProfileFilter() {
-        setPropValue("percentileProfileSetPattern", "%");
+        setPropValue("percentileChannelPattern", "%");
     }
 
     @Override
@@ -58,16 +71,16 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
 
             if(getPropValueAsBoolean("hasPageData")) {
-                addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+                addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                                 "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Confidence");
             }
 
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + getDatasetName());
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
         }
 
@@ -82,7 +95,6 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         String[][] exprDeclaration = super.getPropertiesDeclaration();
         
         String [][] declaration = {
-                                   {"profileSetNameMap", "Optionally replace profileset names"},
                                    {"hasMultipleSamples", ""},
                                    //                                   {"hasSimilarityData", ""},
         };

@@ -10,8 +10,8 @@ public class SequenceOntology extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByGeneType"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "overview"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGeneType"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview"); 
   }
 
   // second column is for documentation

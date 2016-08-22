@@ -22,9 +22,14 @@ public class CopyNumberVariations extends  DatasetInjector {
       List<String> sampleNames = getSampleList();
       
       for (int i=0; i<sampleNames.size(); i++){
-          setPropValue("sampleName", sampleNames.get(i).replace("_CNV", ""));
+          String sampleName = sampleNames.get(i).replace("_CNV", "");
+
+          setPropValue("sampleName", sampleName);
           injectTemplate("copyNumberVariationsDatabase");
           injectTemplate("copyNumberVariationsTrack");
+
+          setPropValue("gbrowseTrackName", getDatasetName() + sampleName);
+          injectTemplate("gbrowseTrackCategory");
       }
 
   }
@@ -33,8 +38,8 @@ public class CopyNumberVariations extends  DatasetInjector {
   @Override
   public void addModelReferences() {
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
   }
   
   // declare properties required beyond those inherited from the datasetPresenter

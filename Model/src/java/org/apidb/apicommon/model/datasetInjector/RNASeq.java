@@ -19,14 +19,16 @@ public class RNASeq extends  DatasetInjector {
   public void injectTemplates() {
       setShortAttribution();
 
+
+
       String projectName = getPropValue("projectName");
-
+      //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
+      
+      Boolean switchStrands = getPropValueAsBoolean("switchStrands");
 
+      setPropValue("metadataFileSuffix","");
       setOrganismAbbrevFromDatasetName();
-
-      // perl packages disallow some characters in the package name... use this to name the graphs
-      setGraphDatasetName();
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB");
@@ -35,79 +37,131 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("includeProjects", projectName);
       }
 
+      setPropValue("graphModule", "RNASeq");
+
       String datasetShortDisplayName = getPropValue("datasetShortDisplayName");
       if (datasetShortDisplayName == null || datasetShortDisplayName.equals("")) {
         throw new RuntimeException(datasetName + " datasetShortDisplayName cannot be null");
       }
+
+      injectTemplate("datasetCategory");
+
+      if(getPropValueAsBoolean("isDESeq")) {
+	    injectTemplate("DESeqProfileSetParamQuery");
+      }
       
-      setPropValue("graphGenePageSection", "expression");
-
-
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-          if(getPropValueAsBoolean("hasPairedEnds")) {
+	  // plas-rbld has NO '%rpkm%' name entries in the study.study table. Are all fpkm then?
+          //if(getPropValueAsBoolean("hasPairedEnds")) {
               setPropValue("exprMetric", "fpkm");
               setPropValue("graphYAxisDescription", "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
-          } else {
-              setPropValue("exprMetric", "rpkm");
-              setPropValue("graphYAxisDescription", "Transcript levels of reads per kilobase of exon model per million mapped reads (RPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
-          }
+	      //} else {
+              //setPropValue("exprMetric", "rpkm");
+              //setPropValue("graphYAxisDescription", "Transcript levels of reads per kilobase of exon model per million mapped reads (RPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
+	      //}
 
           String exprMetric = getPropValue("exprMetric");
 
-          injectTemplate("rnaSeqAttributeCategory");
 
-          // Strand Specific Could be factored into subclasses
           if(getPropValueAsBoolean("isStrandSpecific")) {
 
-              setPropValue("graphModule", "RNASeq::StrandSpecific");
-
+	      if (switchStrands) {
+		  setPropValue("antisense","firststrand") ;
+		  setPropValue("sense","secondstrand") ;
+		  setPropValue("metadataFileSuffix","_alt");
+	      } else {
+		  setPropValue("sense","firststrand") ;
+		  setPropValue("antisense","secondstrand") ;
+	      }
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
-              setPropValue("graphVisibleParts", exprMetric + "_sense," + exprMetric + "_antisense,percentile_sense,percentile_antisense");
-              setPropValue("exprGraphAttr", datasetName + 
-                           "_sense_expr_graph," + datasetName + "_antisense_expr_graph");
-              setPropValue("pctGraphAttr", datasetName + 
-                           "_sense_pct_graph," + datasetName + "_antisense_pct_graph");
+
+              String senseExprGraphAttr = datasetName + "_sense_expr_graph";
+              String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
+
+              String sensePctGraphAttr = datasetName + "_sense_pct_graph";
+              String antisensePctGraphAttr = datasetName + "_antisense_pct_graph";
+
+
+              // These are used for the question
+              setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr);
+              setPropValue("pctGraphAttr", sensePctGraphAttr + "," + antisensePctGraphAttr);
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
-              injectTemplate("rnaSeqSsProfileSetParamQuery");
-              injectTemplate("rnaSeqSsPctProfileSetParamQuery");
-              injectTemplate("rnaSeqStrandSpecificGraph");
-      
-          } else {
 
-              setPropValue("graphModule", "RNASeq::StrandNonSpecific");
+              // Inject the text attributes into the ontology for the results summary page
+              setPropValue("graphTextAttrName", senseExprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+              setPropValue("graphTextAttrName", antisenseExprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+
+              setPropValue("graphTextAttrName", sensePctGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+
+              setPropValue("graphTextAttrName", antisensePctGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+
+              injectTemplate("rnaSeqProfileSetParamQuery");
+
+	      injectTemplate("rnaSeqGraph");
+          } else {
+	      setPropValue("sense","unstranded") ;
 
               setPropValue("graphVisibleParts", exprMetric);
               injectTemplate("pathwayGraphs");
 
               setPropValue("graphVisibleParts", exprMetric + ",percentile");
 
-              setPropValue("exprGraphAttr", datasetName + "_expr_graph");
-              setPropValue("pctGraphAttr", datasetName + "_pct_graph");
+
+              String exprGraphAttr = datasetName + "_expr_graph";
+              String pctGraphAttr = datasetName + "_pct_graph";
+
+              setPropValue("exprGraphAttr", exprGraphAttr);
+              setPropValue("pctGraphAttr", pctGraphAttr);
 
               injectTemplate("rnaSeqExpressionGraphAttributes");
               injectTemplate("rnaSeqProfileSetParamQuery");
-              injectTemplate("rnaSeqPctProfileSetParamQuery");
-              injectTemplate("rnaSeqStrandNonSpecificGraph");
+
+
+              // Add text attribute to the categories ontology
+              setPropValue("graphTextAttrName", exprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+              setPropValue("graphTextAttrName", pctGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+
+              injectTemplate("rnaSeqGraph");
           }
 
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               injectTemplate("rnaSeqFoldChangeQuestion");
-              injectTemplate("rnaSeqFoldChangeCategories");
+              //              injectTemplate("rnaSeqFoldChangeCategories");
+              setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
+              setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
+              injectTemplate("internalGeneSearchCategory");
 
-              if(getPropValueAsBoolean("hasFishersExactTestData")) {
-                  injectTemplate("rnaSeqFoldChangeWithPValueQuestion");
-                  injectTemplate("rnaSeqFoldChangeWithPValueCategories");
-              }
+
           }
 
           injectTemplate("rnaSeqPercentileQuestion");
-          injectTemplate("rnaSeqPercentileCategories");
+          //          injectTemplate("rnaSeqPercentileCategories");
+          setPropValue("searchCategory", "searchCategory-transcriptomics-percentile");
+          setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+          injectTemplate("internalGeneSearchCategory");
 
+	  if(getPropValueAsBoolean("isDESeq")) {
+	      injectTemplate("rnaSeqDESeqQuestion");
+	      setPropValue("searchCategory", "searchCategory-transcriptomics-differential-expression");
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DESeq");
+	      injectTemplate("internalGeneSearchCategory");
+	  }
 
           if(getPropValue("graphPriorityOrderGrouping").equals("")) {
               setPropValue("graphPriorityOrderGrouping", "1");
@@ -129,7 +183,15 @@ public class RNASeq extends  DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("rnaSeqCoverageTrack");
+      setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
+      injectTemplate("gbrowseTrackCategory");
+
       injectTemplate("rnaSeqCoverageTrackUnlogged");
+      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+      injectTemplate("gbrowseTrackCategory");
+
+
+
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
       if(Boolean.parseBoolean(showIntronJunctions)) {
@@ -165,6 +227,8 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("subtracks", subtracks);
 
           injectTemplate("rnaSeqJunctionsTrack");
+          setPropValue("gbrowseTrackName", getDatasetName() + "Junctions");
+          injectTemplate("gbrowseTrackCategory");
       }
 
   }
@@ -174,25 +238,26 @@ public class RNASeq extends  DatasetInjector {
   public void addModelReferences() {
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
-          if(getPropValueAsBoolean("isStrandSpecific")) {
+	  setPropValue("graphModule", "RNASeq");
+	  /*  if(getPropValueAsBoolean("isStrandSpecific")) {
               setPropValue("graphModule", "RNASeq::StrandSpecific");
           } else {
               setPropValue("graphModule", "RNASeq::StrandNonSpecific");
-          }
-              addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+	      } */
+              addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
 
-              if(getPropValueAsBoolean("hasFishersExactTestData")) {
-                  addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
-                                  "GeneQuestions.GenesByRNASeq" + getDatasetName() + "PValue");
-              }
-
-              addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+              addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
 
           }
-          addWdkReference("GeneRecordClasses.GeneRecordClass", "question",
+	  
+	  if (getPropValueAsBoolean("isDESeq")) {
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DESeq");
+	  }
+
+          addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
       }
   }
@@ -202,8 +267,8 @@ public class RNASeq extends  DatasetInjector {
   @Override
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
-                                 {"hasFishersExactTestData", ""},
                                  {"isEuPathDBSite", ""},
+                                 {"switchStrands", ""},
                                  {"graphColor", ""},
                                  {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
@@ -214,6 +279,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphPriorityOrderGrouping", "numeric grouping / ordering of graphs on the gene record page"},
                                  {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
                                  {"graphForceXLabelsHorizontal", "should the x axis labels be always horiz"},
+				 {"isDESeq", ""},
       };
 
     return declaration;

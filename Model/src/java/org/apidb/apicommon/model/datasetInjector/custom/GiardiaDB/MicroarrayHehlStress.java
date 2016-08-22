@@ -6,10 +6,10 @@ public class MicroarrayHehlStress extends CusomGenePageExpressionGraphs {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GiardiaGenesByDifferentialExpression"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GiardiaGenesByExpressionPercentileProfile"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Hehl::Stress1"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Hehl::Stress2"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GiardiaGenesByDifferentialExpression"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GiardiaGenesByExpressionPercentileProfile"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Hehl::Stress1"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Hehl::Stress2"); 
   }
 
 }

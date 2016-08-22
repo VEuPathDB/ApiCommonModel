@@ -24,6 +24,12 @@ public class DatasetPresenterSet {
   private Map<String, InternalDataset> internalDatasets = new LinkedHashMap<String, InternalDataset>();
   private Set<String> namePatterns = new HashSet<String>();
 
+    private Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
+    private Set<String> duplicateDatasetNames = new HashSet<String>();
+
+    
+
+
   /**
    * Add a DatasetPresenter to this set.
    * 
@@ -145,11 +151,21 @@ public class DatasetPresenterSet {
     }
   }
 
+    void addCategoriesForPattern() {
+        for (DatasetPresenter datasetPresenter : presenters.values()) {
+            if(datasetPresenter.getDatasetNamePattern() != null && !datasetPresenter.getDatasetNamePattern().equals("")) {
+                datasetPresenter.addCategoriesForPattern(propertiesFromFiles, duplicateDatasetNames);
+            }
+        }
+    }
+
   void addIdentifierProperty() {
     for (DatasetPresenter datasetPresenter : presenters.values()) {
         datasetPresenter.addIdentityProperty();
     }
   }
+
+
 
   // //////////////////// Static methods //////////////////
 
@@ -164,11 +180,10 @@ public class DatasetPresenterSet {
     DatasetPresenterSet dps = dpp.parseDir(presentersDir, globalXmlFile);
     
     // add properties from dataset prop files to presenters
-    Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
-    Set<String> duplicateDatasetNames = new HashSet<String>();
+
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
-    propParser.parseAllPropertyFiles(propertiesFromFiles, duplicateDatasetNames);
-    dps.addPropertiesFromFiles(propertiesFromFiles, duplicateDatasetNames);
+    propParser.parseAllPropertyFiles(dps.propertiesFromFiles, dps.duplicateDatasetNames);
+    dps.addPropertiesFromFiles(dps.propertiesFromFiles, dps.duplicateDatasetNames);
 
     // add presenterId
     dps.addIdentifierProperty();    

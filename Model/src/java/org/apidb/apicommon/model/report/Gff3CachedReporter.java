@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -33,6 +34,11 @@ import org.json.JSONObject;
 public class Gff3CachedReporter extends Reporter {
 
   private static Logger logger = Logger.getLogger(Gff3Reporter.class);
+
+  private static final String[] SUPPORTED_RECORD_CLASS_NAMES = {
+      "GeneRecordClasses.GeneRecordClass",
+      "TranscriptRecordClasses.TranscriptRecordClass"
+  };
 
   public static final String PROPERTY_TABLE_CACHE = "table_cache";
   public static final String PROPERTY_RECORD_ID_COLUMN = "record_id_column";
@@ -182,7 +188,7 @@ public class Gff3CachedReporter extends Reporter {
 
     // this reporter only works for GeneRecordClasses.GeneRecordClass
     String rcName = getQuestion().getRecordClass().getFullName();
-    if (!rcName.equals("GeneRecordClasses.GeneRecordClass"))
+    if (!Arrays.asList(SUPPORTED_RECORD_CLASS_NAMES).contains(rcName))
       throw new WdkModelException("Unsupported record type: " + rcName);
 
     // write header
@@ -245,11 +251,9 @@ public class Gff3CachedReporter extends Reporter {
     String idSql = baseAnswer.getSortedIdSql();
 
     StringBuffer sql = new StringBuffer("SELECT tc." + COLUMN_CONTENT);
-    sql.append(" FROM " + tableCache + " tc, (" + idSql + ") ac");
-    sql.append(" WHERE tc.table_name = '" + recordName + "' ");
-    for (String column : pkColumns) {
-      sql.append(" AND tc." + column + " = ac." + column);
-    }
+    sql.append(" FROM " + tableCache + " tC WHERE tc.source_id in (select gene_source_id from (" + idSql + ") ac)");
+    sql.append(" AND tc.table_name = '" + recordName + "' ");
+
 
     DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
@@ -268,7 +272,7 @@ public class Gff3CachedReporter extends Reporter {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsTable);
+      SqlUtils.closeResultSetAndStatement(rsTable, null);
     }
   }
 
@@ -292,12 +296,7 @@ public class Gff3CachedReporter extends Reporter {
 
     StringBuffer sql = new StringBuffer("SELECT ");
     sql.append("tc.").append(COLUMN_CONTENT).append(" FROM ");
-    sql.append(tableCache).append(" tc, (").append(idSql).append(") ac");
-    sql.append(" WHERE tc.table_name IN (").append(sqlIn).append(")");
-    for (String column : pkColumns) {
-      sql.append(" AND tc.").append(column).append(" = ac.").append(column);
-    }
-    // sql.append(" ORDER BY tc.table_name ASC");
+    sql.append(tableCache).append(" tc where tc.source_id in (select gene_source_id from (").append(idSql).append(") aC)");
 
     DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
@@ -318,7 +317,7 @@ public class Gff3CachedReporter extends Reporter {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsTable);
+      SqlUtils.closeResultSetAndStatement(rsTable, null);
     }
   }
 

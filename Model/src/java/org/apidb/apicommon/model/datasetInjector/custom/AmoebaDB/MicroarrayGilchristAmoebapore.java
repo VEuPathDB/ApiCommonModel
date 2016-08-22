@@ -6,10 +6,10 @@ public class MicroarrayGilchristAmoebapore extends CusomGenePageExpressionGraphs
 
   @Override
   public void addModelReferences() {
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByExpressionPercentileGilchrist"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByAmoebaFoldChangeGilchrist"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByAmoebaFoldChangePageGilchrist"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "profile_graph", "Gilchrist::EhG3Hm1Imss"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByExpressionPercentileGilchrist"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByAmoebaFoldChangeGilchrist"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByAmoebaFoldChangePageGilchrist"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Gilchrist::EhG3Hm1Imss"); 
   }
 
 

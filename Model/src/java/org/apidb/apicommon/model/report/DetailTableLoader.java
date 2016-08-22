@@ -120,7 +120,7 @@ public class DetailTableLoader extends BaseCLI {
         + " should match the directory name under $GUS_HOME, where " + "model-config.xml is stored.");
 
     addSingleValueOption(ARG_SQL_FILE, true, null, "The file that contains"
-        + " a sql that returns the primary key columns of the records");
+       + " a sql that returns the primary key columns of the records");
 
     addSingleValueOption(ARG_RECORD, true, null, "The full name of the " + "record class to be dumped.");
 
@@ -224,7 +224,7 @@ public class DetailTableLoader extends BaseCLI {
     String pkNames;
     String pkBind;
 
-    // So far (November 2012) WDK data types all have one- or two-column primary key.
+    // So far (November 2015) WDK data types all at most a 3 col primary key.
     switch (pkColumns.length) {
       case 1:
         pkNames = pkColumns[0];
@@ -234,9 +234,13 @@ public class DetailTableLoader extends BaseCLI {
         pkNames = pkColumns[0] + ", " + pkColumns[1];
         pkBind = "?,?";
         break;
+      case 3:
+        pkNames = pkColumns[0] + ", " + pkColumns[1] + ", " + pkColumns[2];
+        pkBind = "?,?,?";
+        break;
       default:
         throw new WdkModelException(
-            "DetailTableLoader assumes that a primary key comprises no more than 2 columns");
+            "DetailTableLoader assumes that a primary key comprises no more than 3 columns");
     }
 
     String insertSql = "insert into " + detailTable + " (" + pkNames +
@@ -312,8 +316,10 @@ public class DetailTableLoader extends BaseCLI {
           "__api-report-detail-aggregate", 2000);
       String pk0 = "";
       String pk1 = "";
+      String pk2 = "";
       String prevPk0 = "";
       String prevPk1 = "";
+      String prevPk2 = "";
       StringBuilder aggregatedContent = new StringBuilder();
       int insertCount = 0;
       int detailCount = 0;
@@ -324,17 +330,21 @@ public class DetailTableLoader extends BaseCLI {
         pk0 = resultSet.getString(pkColumns[0]);
         if (pkColumns.length > 1) {
           pk1 = resultSet.getString(pkColumns[1]);
+	  if (pkColumns.length > 2) {
+	      pk2 = resultSet.getString(pkColumns[2]);
+	  }
         }
-        if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1))) {
+        if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1) || !pk2.equals(prevPk2))) {
           insertCount++;
           insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-              prevPk1, title, pkColumns.length, insertCount, false);
+					prevPk1, prevPk2, title, pkColumns.length, insertCount, false);
           aggregatedContent = new StringBuilder();
           rowCount = 0;
         }
         first = false;
         prevPk0 = pk0;
         prevPk1 = pk1;
+        prevPk2 = pk2;
   
         // aggregate the columns of one row
         String formattedValues[] = formatAttributeValues(resultSet, table);
@@ -353,7 +363,7 @@ public class DetailTableLoader extends BaseCLI {
       if (aggregatedContent.length() != 0) {
         insertCount++;
         insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-            prevPk1, title, pkColumns.length, insertCount, true);
+				      prevPk1, prevPk2, title, pkColumns.length, insertCount, true);
       }
       else {
         // add any remaining rows to DB
@@ -363,7 +373,7 @@ public class DetailTableLoader extends BaseCLI {
       return counts;
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(resultSet);
+      SqlUtils.closeResultSetAndStatement(resultSet, null);
     }
   }
 
@@ -473,7 +483,7 @@ public class DetailTableLoader extends BaseCLI {
    * @param idSql
    */
   private long insertDetailRow(PreparedStatement insertStmt, String insertSql, StringBuilder contentBuf,
-      int rowCount, TableField table, String pk0, String pk1, String title, int pkCount,
+			       int rowCount, TableField table, String pk0, String pk1, String pk2, String title, int pkCount,
       int insertCount, boolean forceBatchUpdate) throws SQLException {
 
     long start = System.currentTimeMillis();
@@ -487,6 +497,9 @@ public class DetailTableLoader extends BaseCLI {
     insertStmt.setString(1, pk0);
     if (pkCount > 1) {
       insertStmt.setString(2, pk1);
+      if (pkCount > 2) {
+	  insertStmt.setString(3, pk2);
+      }
     }
     insertStmt.setString(pkCount + 1, table.getName());
     insertStmt.setString(pkCount + 2, title);
