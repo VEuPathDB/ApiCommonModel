@@ -10,6 +10,11 @@ public class ChIPChip extends DatasetInjector {
     setPropValue ("organismAbbrevDisplay", getOrganismAbbrevDisplayFromDatasetName());
     String featureName = getPropValue("datasetDisplayName").replace(' ', '_');
     setPropValue ("featureName", featureName);
+
+    String key = getPropValue("key");
+    if (key.length() != 0) {
+        setPropValue ("key", " - " + key);
+    }
     injectTemplate("chipChipSmoothed");
     injectTemplate("chipChipPeaks");
 
