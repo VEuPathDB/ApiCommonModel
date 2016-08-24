@@ -7305,4 +7305,94 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     </sql>
   </tuningTable>
 
+  <tuningTable name="ExpressionGraphsData">
+    <comment>
+       for gene-page expression graphs
+    </comment>
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ProfileSetDisplayInfo"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.Studylink"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE ExpressionGraphsData&1 NOLOGGING  as
+          select ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                 substr(regexp_replace(pan.name, ' \(.*\)', ''), 1, 200) AS sample_name,
+                 round(nfe.value, 2) as value,
+                 round(nfe.standard_error, 2) as standard_error,
+                 round(nfe.percentile_channel1, 2) as percentile_channel1,
+                 round(nfe.percentile_channel2, 2) as percentile_channel2
+          from results.NaFeatureExpression nfe, GeneAttributes ga,
+               study.ProtocolAppNode pan, study.Studylink sl, study.Study ps,
+               study.Study i, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+               ProfileSetDisplayInfo psdi, DatasetNameTaxon dnt, DatasetProperty dp
+          where ga.na_feature_id = nfe.na_feature_id
+          and nfe.protocol_app_node_id = pan.protocol_app_node_id
+          and pan.protocol_app_node_id = sl.protocol_app_node_id
+          and sl.study_id = ps.study_id
+          and ps.investigation_id = i.study_id
+          and i.external_database_release_id = r.external_database_release_id
+          and r.external_database_id = d.external_database_id
+          and ps.name = psdi.profile_set_name (+)
+          and d.name = dnt.name
+          and dnt.dataset_presenter_id=dp.dataset_presenter_id
+          and dp.property='datasetClassCategory'
+          and NOT dp.value='RNASeq'
+        UNION
+          select ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                 CASE
+                   WHEN (dp.value > 0)
+                     THEN  -- i.e. switchstrands =1  
+                       substr(REPLACE(REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(pan.name, ' \- \S+\] \S+', ''),
+                                                                            '\[cuff', 'Cufflinks' ), '\[htseq', 'HTSeq'),
+                                             'firststrand', 'antisense'),
+                                     'secondstrand','sense'),
+                              1, 200)
+                   ELSE 
+                     substr(REPLACE(REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(pan.name, ' \- \S+\] \S+', ''),
+                                                                          '\[cuff', 'Cufflinks' ),
+                                                           '\[htseq', 'HTSeq'),
+                                            'firststrand', 'sense'),
+                                    'secondstrand','antisense'),
+                            1, 200)
+                 END as sample_name,
+                 round(nfe.value, 2) as value,
+                 round(nfe.standard_error, 2) as standard_error,
+                 round(nfe.percentile_channel1, 2) as percentile_channel1,
+                 round(nfe.percentile_channel2, 2) as percentile_channel2
+          from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
+               study.StudyLink sl, study.Study ps, study.Study i,
+               sres.ExternalDatabaseRelease r, sres.ExternalDatabase d, ProfileSetDisplayInfo psdi,
+               DatasetNameTaxon dnt, DatasetProperty dp
+          where ga.na_feature_id = nfe.na_feature_id
+            and nfe.protocol_app_node_id = pan.protocol_app_node_id
+            and pan.protocol_app_node_id = sl.protocol_app_node_id
+            and sl.study_id = ps.study_id
+            and ps.investigation_id = i.study_id
+            and i.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            and ps.name = psdi.profile_set_name (+)
+            and d.name = dnt.name
+            and dnt.dataset_presenter_id=dp.dataset_presenter_id
+            and dp.property = 'switchStrands'
+            and ps.name not like '%cuff%'
+            and ps.name not like '%htseq-intersection-nonempty%'
+            and ps.name not like '%htseq-intersection-strict%'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index edg_ix&1
+          on ExpressionGraphsData&1
+            (source_id, dataset_id, sample_name, value, standard_error, percentile_channel1, percentile_channel2)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
 </tuningConfig>
