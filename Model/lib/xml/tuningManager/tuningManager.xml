@@ -7416,4 +7416,39 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     </sql>
   </tuningTable>
 
+  <tuningTable name="Taxonomy">
+    <comment>
+       For each distinct organism in GeneAttributes, all ancestors in the taxon tree. For the gene page.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <externalDependency name="sres.Taxon"/>
+    <externalDependency name="sres.TaxonName"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE Taxonomy&1 NOLOGGING as
+          SELECT tax.*, 
+                   CONNECT_BY_ROOT name AS organism,
+                   rownum orderNum
+            FROM (SELECT t.taxon_id, t.parent_id, t.ncbi_tax_id,
+                         cast(tn.name as varchar2(80)) as name,
+                         cast(t.rank as varchar2(24)) as rank
+                  FROM sres.Taxon t, sres.TaxonName tn
+                  WHERE t.taxon_id = tn.taxon_id
+                    AND tn.name_class = 'scientific name'
+                 ) tax
+            WHERE tax.name != 'root'
+            START WITH name IN (SELECT DISTINCT organism FROM GeneAttributes)
+            CONNECT BY prior parent_id = taxon_id
+       ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index tax_ix&1
+          on Taxonomy&1
+            (organism, ordernum, taxon_id, parent_id, ncbi_tax_id, name, rank)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
 </tuningConfig>
