@@ -273,6 +273,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"showIntronJunctions", ""},
+                                 {"includeInUnifiedJunctions", ""},
                                  {"isAlignedToAnnotatedGenome", ""},
                                  {"hasMultipleSamples", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
