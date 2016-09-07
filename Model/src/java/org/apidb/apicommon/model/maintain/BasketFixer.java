@@ -286,7 +286,7 @@ public class BasketFixer extends BaseCLI {
     String insertTranscriptsSql = "INSERT into " +  userSchema + "user_baskets" + dblink 
       + "(BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, "
       + "PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
-      + " SELECT distinct b.BASKET_ID, b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
+      + " SELECT "  +  userSchema + "user_baskets_pkseq.nextval" + dblink + ", b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
       + "t.source_id as PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
       + " FROM " +  WDKMAINT + "basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
       + "   WHERE b.pk_column_1 = t.gene_source_id ";
