@@ -1414,33 +1414,35 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
     <sqlQuery name="GenesByMassSpec" includeProjects="PlasmoDB,ToxoDB,CryptoDB,GiardiaDB,TriTrypDB,TrichDB,AmoebaDB,PiroplasmaDB,HostDB" >
 
         <paramRef ref="geneParams.ms_assay"/>
-        <paramRef ref="sharedParams.min_sequence_count"/>
         <paramRef ref="sharedParams.min_spectrum_count"/>
+        <paramRef ref="sharedParams.min_sequence_count"/>
         <column name="source_id" />
         <column name="gene_source_id" />
         <column name="matched_result"/>
         <column name="project_id" />
-        <column name="sample_count"/>
         <column name="sum_sequence_count" />
         <column name="unique_sequence_count"/>
         <column name="sum_spectrum_count" columnType="number" width="12" />
         <sql>
             <![CDATA[
-select '@PROJECT_ID@' as project_id, 'Y' as matched_result, source_id, gene_source_id,sample_count, 
+select '@PROJECT_ID@' as project_id, 'Y' as matched_result, source_id, gene_source_id,  
       sum_sequence_count, unique_sequence_count, sum_spectrum_count 
 from 
         (
-            select mps.source_id,mps.gene_source_id,
-                   count(mps.peptide_sequence) as sum_sequence_count, 
-                   count(distinct mps.peptide_sequence) as unique_sequence_count,
-                   sum(mps.spectrum_count) as sum_spectrum_count,
-                   count(distinct pan.PROTOCOL_APP_NODE_ID) as sample_count
-              from apidbtuning.mspeptidesummary mps,STUDY.PROTOCOLAPPNODE pan
-             where pan.name in ( $$ms_assay$$ ) 
-             and   pan.PROTOCOL_APP_NODE_ID = mps.PROTOCOL_APP_NODE_ID
-             group by mps.source_id,mps.gene_source_id)
-         where unique_sequence_count >= $$min_sequence_count$$
-         and sum_spectrum_count >= $$min_spectrum_count$$
+            select source_id,gene_source_id,
+                   sum(peptide_sample_count) as sum_sequence_count, 
+                   count(*) as unique_sequence_count,
+                   sum(spectrum_count) as sum_spectrum_count
+              from (
+              select source_id,gene_source_id,peptide_sequence,
+              count(*) as peptide_sample_count,
+              sum(spectrum_count) as spectrum_count
+              from apidbtuning.mspeptidesummary
+             where sample in ( $$ms_assay$$ ) 
+             group by source_id,gene_source_id,peptide_sequence
+             having sum(spectrum_count) >= $$min_spectrum_count$$)
+             group by source_id,gene_source_id)
+         where unique_sequence_count >= $$min_sequence_count$$ 
             ]]>
        </sql>
  
