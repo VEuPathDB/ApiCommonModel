@@ -1380,42 +1380,42 @@ GROUP BY parent_id,strand,startm
   <sqlQuery name="domain:spliceSites" includeProjects="TriTrypDB">
     <sql>
 <![CDATA[
-SELECT  ssf.location as  feature_id, 'domain' type,   '$source' as source,  
-       ssf.location as startm, ssf.location as end, ssf.strand,
-       CASE WHEN source_id is null THEN  ssf.location || '(' || count(ssf.sample_name)  || ')'
-            WHEN (NOT dist_to_cds = utr_len) 
-               THEN  source_id || '-' ||  utr_len ||  '*(' ||  count(ssf.sample_name) || ') Alternate CDS Start'
-            WHEN (dist_to_cds = utr_len AND within_cds=0) 
-	       THEN  source_id || '-' || utr_len  || '(' || count(ssf.sample_name)  || ')'
-            ELSE  source_id || '-' ||  'within gene'  || '(' || count(ssf.sample_name)  || ')' END AS name, 
-        gtable.source_id as gene_id, gtable.utr_len as utr_length, 
-        gtable.dist_to_cds, gtable.within_cds,
-       'sample_name=' || listagg(ssf.sample_name, ',') within group (order by ssf.sample_name) || '$dlm' ||
-       'count_per_mill=' || listagg(ssf.count_per_million, ',') within group (order by ssf.count_per_million) || '$dlm' ||
-       'is_unique=' || listagg(ssf.is_unique, ',') within group (order by ssf.is_unique)  || '$dlm' ||
+SELECT distinct ssf.segment_start as  feature_id, 'domain' type,   '$source' as source,  
+       ssf.segment_start as startm, ssf.segment_start as end, ssf.strand,
+       CASE WHEN gtable.source_id is null THEN  ssf.segment_start || '(' || count(pan.name)  || ')'
+            ELSE  gtable.source_id || '(' || count(pan.name)  || ')' END AS name,  
+        gtable.source_id as gene_id, gtable.utr_len as utr_length, gtable.dist_to_first_atg,
+       'sample_name=' || listagg( replace(pan.name, ' [feature_loc] (SpliceSites)') , ',') within group (order by pan.name) || '$dlm' ||
+       'count_per_mill=' || listagg(ssf.count_per_million, ',') within group (order by pan.name) || '$dlm' ||
+       'is_unique=' || listagg(ssf.is_unique, ',') within group (order by pan.name)  || '$dlm' ||
        'avg_mismatches=' || listagg(ssf.avg_mismatches, ',') within group (order by ssf.avg_mismatches)  || '$dlm' ||
        'gene_id=' || gtable.source_id || '$dlm' ||
-       'utr_length=' || gtable.utr_len || '$dlm' ||
-       'dist_to_cds=' || gtable.dist_to_cds || '$dlm' ||
-       'within_cds=' || gtable.within_cds atts
- FROM  sres.externalDatabaseRelease edr, sres.externalDatabase ed, apidb.spliceSiteFeature ssf
- JOIN (SELECT source_id , sample_name, location, strand, count,
-          dist_to_first_atg  AS utr_len, dist_to_cds, within_cds
-   FROM Apidb.SpliceSiteGenes 
+       'utr_length=' || gtable.utr_len    atts
+ FROM 
+   study.study i, study.study s, study.studylink sl,
+   study.protocolAppNode pan, apidb.spliceSiteFeature ssf
+ JOIN (SELECT gene_source_id as source_id , na_sequence_id, type, location, strand, -- count,, sample_name
+          dist_to_first_atg , dist_to_cds AS utr_len
+   FROM apidbtuning.splicesitetranscripts -- Apidb.SpliceSiteGenes 
    WHERE na_sequence_id = $srcfeature_id
    AND location >= $base_start
    AND location <= $rend
    ) gtable
-  ON (ssf.sample_name = gtable.sample_name AND ssf.location = gtable.location AND ssf.strand=gtable.strand)
- WHERE ssf.na_sequence_id = $srcfeature_id
-   AND ssf.location >= $base_start
-   AND ssf.location <= $rend
+  ON (ssf.NA_SEQUENCE_ID = gtable.NA_SEQUENCE_ID AND ssf.type = gtable.type AND ssf.strand=gtable.strand and gtable.location=ssf.segment_start)
+   --ON (--ssf.sample_name = gtable.sample_name AND ssf.location = gtable.location 
+  
+ WHERE ssf.na_sequence_id =  $srcfeature_id
+   AND ssf.segment_start >=  $base_start
+   AND ssf.segment_end <= $rend
    AND ssf.type = 'Splice Site'
-   AND ssf.external_database_release_id = edr.external_database_release_id
-   AND edr.external_database_id = ed.external_database_id
-   AND ed.name = $$edName$$
-   AND NOT gtable.count=1 
-  GROUP BY  ssf.location, ssf.strand, gtable.source_id,gtable.utr_len, gtable.dist_to_cds, gtable.within_cds
+   AND pan.protocol_app_NODE_ID = ssf.protocol_app_node_id
+   AND pan.protocol_app_node_id = sl.protocol_app_node_id
+   and sl.study_id = s.study_id
+   and s.name like '%[feature_loc]'
+   and s.investigation_id = i.study_id
+   and i.name =  $$edName$$
+  GROUP BY  ssf.segment_start, ssf.strand, gtable.source_id,gtable.utr_len, gtable.dist_to_first_atg
+  order by  ssf.segment_start
 ]]>
     </sql>
   </sqlQuery>
