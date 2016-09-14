@@ -4,7 +4,9 @@ use strict;
 require LWP::UserAgent;
 use XML::LibXML;
 use XML::XPath;
-use XML::XPath::XMLParser;use Data::Dumper;
+use XML::XPath::XMLParser;
+use Data::Dumper;
+use Time::HiRes qw(usleep);
 
 sub new {
   my ($class, $pmidList) = @_;
@@ -23,6 +25,9 @@ sub new {
   if (!($response->is_success)) {
     die $response->status_line;
   }
+
+  # nap for a third of a second to observe NCBI's three-request-per-second limit
+  usleep(333333);
 
   # print $response->decoded_content;
 
