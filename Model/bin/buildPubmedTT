@@ -39,6 +39,7 @@ SQL
 
 # try getting wanted PMIDs from an existing version of the table
 $dbh->{PrintError} = 0;
+$dbh->{RaiseError} = 0;
 my $rtn = $dbh->do(<<SQL);
   insert into Pubmed$suffix (pubmed_id, title, authors, doi)
   select pubmed_id, title, authors, doi
@@ -51,17 +52,11 @@ my $rtn = $dbh->do(<<SQL);
                                          from ExternalDbDatasetPresenter edd
                                            where lower(edd.dataset_presenter_display_name) like '%pubmed%'))
 SQL
-  print STDERR "dbh->do returned $rtn on attempt to copy PMIDs from existing Pubmed table\n";
-  $dbh->{PrintError} = 1;
+$dbh->{PrintError} = 1;
+$dbh->{RaiseError} = 1;
 
-# log starting state
-my $countStmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
-  select count(*) from Pubmed$suffix
-SQL
-
-$countStmt->execute();
-my ($startingCount) = $countStmt->fetchrow_array();
-print STDERR "Already have citations for $startingCount PMIDs\n";
+my $recycled = ($rtn eq "0E0" || $rtn eq "") ? 0 : $rtn;
+print STDERR "Already have citations for $recycled PMIDs\n";
 
 # prepare insert
 my $insertStmt = $dbh->prepare(<<SQL);
@@ -86,7 +81,7 @@ SQL
 
 $stmt->execute();
 my @pmids;
-my $pmidCount;
+my $pmidCount = 0;
 while (my ($pmid) = $stmt->fetchrow_array()) {
   my $fetchedPmid = $pmid;
   $pmid =~ s/\D//g; # strip out non-digits
@@ -95,6 +90,7 @@ while (my ($pmid) = $stmt->fetchrow_array()) {
     if $pmid ne $fetchedPmid;
   $pmidCount++;
 }
+$stmt->finish();
 
 print STDERR "Need citations for $pmidCount PMIDs\n";
 
@@ -123,7 +119,7 @@ while (@pmids) {
       or die "inserting record for PubMed ID \"$pmid\"";
     $insertCount++;
   }
-  print STDERR "Inserted $insertCount PubMed records so far\n";
+  print STDERR "Inserted $insertCount PubMed records\n";
 }
 
 # create index
