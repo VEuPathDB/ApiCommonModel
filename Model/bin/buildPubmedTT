@@ -37,6 +37,32 @@ $dbh->do(<<SQL) or die "creating table";
    ) nologging
 SQL
 
+# try getting wanted PMIDs from an existing version of the table
+$dbh->{PrintError} = 0;
+my $rtn = $dbh->do(<<SQL);
+  insert into Pubmed$suffix (pubmed_id, title, authors, doi)
+  select pubmed_id, title, authors, doi
+  from Pubmed
+  where to_char(pubmed_id) in (select primary_identifier
+                               from sres.DbRef
+                               where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
+                                 and external_database_release_id
+                                     in (select edd.external_database_release_id
+                                         from ExternalDbDatasetPresenter edd
+                                           where lower(edd.dataset_presenter_display_name) like '%pubmed%'))
+SQL
+  print STDERR "dbh->do returned $rtn on attempt to copy PMIDs from existing Pubmed table\n";
+  $dbh->{PrintError} = 1;
+
+# log starting state
+my $countStmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
+  select count(*) from Pubmed$suffix
+SQL
+
+$countStmt->execute();
+my ($startingCount) = $countStmt->fetchrow_array();
+print STDERR "Already have citations for $startingCount PMIDs\n";
+
 # prepare insert
 my $insertStmt = $dbh->prepare(<<SQL);
    insert into Pubmed$suffix
@@ -46,39 +72,58 @@ SQL
 
 # get PubMed IDs
 my $stmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
-   select distinct primary_identifier as pubmed_id
-   from sres.DbRef
-   where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
-     and external_database_release_id
-         in (select edd.external_database_release_id
-             from ExternalDbDatasetPresenter edd
-               where lower(edd.dataset_presenter_display_name) like '%pubmed%')
-   order by primary_identifier
+     select distinct primary_identifier as pubmed_id
+     from sres.DbRef
+     where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
+       and external_database_release_id
+           in (select edd.external_database_release_id
+               from ExternalDbDatasetPresenter edd
+                 where lower(edd.dataset_presenter_display_name) like '%pubmed%')
+   minus
+     select to_char(pubmed_id) from Pubmed$suffix
+   order by pubmed_id
 SQL
 
 $stmt->execute();
 my @pmids;
+my $pmidCount;
 while (my ($pmid) = $stmt->fetchrow_array()) {
   my $fetchedPmid = $pmid;
   $pmid =~ s/\D//g; # strip out non-digits
   push(@pmids, $pmid);
   print STDERR "PubMed ID \"$fetchedPmid\" changed to \"$pmid\"\n"
     if $pmid ne $fetchedPmid;
+  $pmidCount++;
 }
 
-# create Pubmed object (and query NCBI for data)
-print STDERR "getting PubMed data from NCBI\n";
-my $pubmed = ApiCommonShared::Model::Pubmed->new(\@pmids);
+print STDERR "Need citations for $pmidCount PMIDs\n";
 
-print STDERR "processing PubMed data\n";
-# iterate through list, match up PubMed data, and insert
-foreach my $pmid (@pmids) {
-  my $doi = $pubmed->getDoi($pmid);
-  my $title = $pubmed->getTitle($pmid);
-  my $authors = $pubmed->getAuthors($pmid);
+# process PMIDs in chunks, so resulting XML is wieldy
+my $CHUNKSIZE = 100;
+my $insertCount;
 
-  $insertStmt->execute($pmid, $doi, $title, $authors)
-    or die "inserting record for PubMed ID \"$pmid\"";
+while (@pmids) {
+  my @chunkOfPmids;
+  for (my $i=0; ($i < $CHUNKSIZE) && @pmids; $i++) {
+    push(@chunkOfPmids, pop(@pmids));
+  }
+
+  # create Pubmed object (and query NCBI for data)
+  print STDERR "getting PubMed data from NCBI\n";
+  my $pubmed = ApiCommonShared::Model::Pubmed->new(\@chunkOfPmids);
+
+  print STDERR "processing PubMed data\n";
+  # iterate through list, match up PubMed data, and insert
+  foreach my $pmid (@chunkOfPmids) {
+    my $doi = $pubmed->getDoi($pmid);
+    my $title = $pubmed->getTitle($pmid);
+    my $authors = $pubmed->getAuthors($pmid);
+
+    $insertStmt->execute($pmid, $doi, $title, $authors)
+      or die "inserting record for PubMed ID \"$pmid\"";
+    $insertCount++;
+  }
+  print STDERR "Inserted $insertCount PubMed records so far\n";
 }
 
 # create index
