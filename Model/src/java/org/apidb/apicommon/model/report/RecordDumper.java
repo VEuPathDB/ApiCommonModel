@@ -19,6 +19,7 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.answer.report.ReporterFactory;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
@@ -148,7 +149,7 @@ public class RecordDumper {
 
         // output the result
         OutputStream out = new FileOutputStream(file);
-        Reporter seqReport = sqlAnswer.createReport(reporterName, config);
+        Reporter seqReport = ReporterFactory.getReporter(sqlAnswer, reporterName, config);
         seqReport.report(out);
         out.close();
 

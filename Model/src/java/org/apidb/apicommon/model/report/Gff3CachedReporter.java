@@ -124,7 +124,7 @@ public class Gff3CachedReporter extends Reporter {
   }
 
   @Override
-  public void configure(JSONObject newConfig) {
+  public void configure(JSONObject newConfig) throws WdkModelException {
     super.configure(newConfig);
 
     if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON))
