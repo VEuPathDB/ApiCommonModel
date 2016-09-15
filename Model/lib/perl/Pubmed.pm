@@ -17,7 +17,7 @@ sub new {
 
   my $pubmedUrl = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
   my @formdata;
-  push(@formdata, "email", "support\@eupathdb.org");
+  push(@formdata, "email", "help\@eupathdb.org");
   push(@formdata, "tool", "pubmedTool");
   push(@formdata, "db", "pubmed");
   push(@formdata, "id", join(',', @$pmidList));
