@@ -20,6 +20,7 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.answer.report.ReporterFactory;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.StandardReporter;
@@ -159,13 +160,13 @@ public class Gff3Dumper {
     User user = wdkModel.getSystemUser();
     Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
     AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, true, 0);
-    Gff3Reporter seqReport = (Gff3Reporter) sqlAnswer.createReport("gff3", config);
+    Gff3Reporter seqReport = (Gff3Reporter) ReporterFactory.getReporter(sqlAnswer, "gff3", config);
 
     Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
     AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, true, 0);
 
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
-    Gff3Reporter geneReport = (Gff3Reporter) geneAnswer.createReport("gff3Dump", config);
+    Gff3Reporter geneReport = (Gff3Reporter) ReporterFactory.getReporter(geneAnswer, "gff3Dump", config);
 
     seqReport.initialize();
     geneReport.initialize();
