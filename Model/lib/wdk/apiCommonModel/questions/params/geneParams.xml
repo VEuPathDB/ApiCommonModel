@@ -4105,19 +4105,32 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
             <suggest default="-1"/>
         </stringParam>
 
+        <flatVocabParam name="phenotypeQualifier" includeProjects="TriTrypDB,FungiDB,EuPathDB"
+             queryRef="GeneVQ.phenotypeQualifier"
+             prompt="Phenotype Qualifier"
+             multiPick="false"
+             quote="true"
+             dependedParamRef="organismParams.organismwithPhenotype">
+             
+             <help>
+             Choose a phenotype qualifier to see all available phenotypes for choosen organism with this qualifier. 
+        </help>
+        </flatVocabParam>
 
-        <flatVocabParam name="phenotype" includeProjects="TriTrypDB,EuPathDB"
+        <flatVocabParam name="phenotype" includeProjects="TriTrypDB,FungiDB,EuPathDB"
              queryRef="GeneVQ.phenotype"
              prompt="Phenotype"
-             multiPick="true"
+             multiPick="false"
              quote="true"
-             displayType="treeBox">
+             dependedParamRef="organismParams.organismwithPhenotype,geneParams.phenotypeQualifier">
              
              <help>
              Choose one or more phenotypes. Genes returned by this search were interrupted (e.g. by RNAi) and the  
              resulting modified parasite exhibited this phenotype.
         </help>
         </flatVocabParam>
+
+
 
       <flatVocabParam name="reagent_type" includeProjects="PlasmoDB,EuPathDB,CryptoDB,ToxoDB"
                      queryRef="GeneVQ.Reagents"
@@ -6925,13 +6938,47 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
             <wsColumn name="display" width="100"/>
        </processQuery>
 
-    <sqlQuery name="phenotype" includeProjects="TriTrypDB">
+    <sqlQuery name="phenotypeQualifier" includeProjects="TriTrypDB, FungiDB">
+    <paramRef ref="organismParams.organismwithPhenotype" quote = "true"/>
     <column name="display"/>
     <column name="internal"/>
     <column name="term"/>
-    <column name="parentTerm"/>
     <sql>
-select display,term,internal,parentTerm from (
+ <![CDATA[    select display,term,internal from (
+       select
+       case  when opq.name is null then 'HAS' else opq.name end as display
+       ,case  when opq.name is null then 'HAS' else opq.name end as term
+       ,case  when opq.name is null then 'HAS' else opq.name end as internal
+       ,count(distinct pm.na_feature_id) as order_num
+       from APIDB.PHENOTYPERESULT pr
+       , ApidbTuning.TranscriptAttributes ta
+       , apidb.phenotypemodel pm
+       , sres.ontologyterm opq
+       where ta.gene_na_feature_id = pm.na_feature_id
+       and pr.phenotype_quality_term_id = opq.ontology_term_id (+)
+       and ta.organism = '$$organismwithPhenotype$$'
+       group by opq.name)
+       order by order_num desc
+      ]]>
+      
+    </sql>
+    </sqlQuery>
+
+    <processQuery name="phenotypeQualifier" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+      <wsColumn name="display" width="100" wsName="display"/>
+      <wsColumn name="internal" width="100" wsName="internal"/>
+      <wsColumn name="term" width="100" wsName="term"/>
+     </processQuery>
+  
+
+  <sqlQuery name="phenotype" includeProjects="TriTrypDB, FungiDB">
+    <paramRef ref="organismParams.organismwithPhenotype" quote = "true"/>
+    <paramRef ref="geneParams.phenotypeQualifier" quote = "true"/>
+    <column name="display"/>
+    <column name="internal"/>
+    <column name="term"/>
+    <sql>
+<!--select display,term,internal,parentTerm from (
        select go_term || ' (' || count(distinct gene) || ')' as display, replace(go_term, ',', '-')  as term, go_term as internal,
                   '' as parentTerm,count(distinct gene) as order_num
        from apidb.SIRNA, ApidbTuning.GeneAttributes ga where gene = ga.source_id group by go_term
@@ -6940,7 +6987,28 @@ select display,term,internal,parentTerm from (
                  replace(go_term, ',', '-')  as parentTerm, count(distinct gene) as order_num 
        from apidb.SIRNA, ApidbTuning.GeneAttributes ga where gene = ga.source_id
        group by pato_term, go_term)
-       order by order_num desc
+       order by order_num desc-->
+ <![CDATA[
+ select display,term,internal from (
+       select
+       oen.name as display
+       ,oen.name as term
+       ,oen.name  as internal
+       ,count(distinct pm.na_feature_id) as order_num
+       from APIDB.PHENOTYPERESULT pr
+       , ApidbTuning.TranscriptAttributes ta
+       , apidb.phenotypemodel pm
+       , sres.ontologyterm oen
+       , sres.ontologyterm opq
+       where ta.gene_na_feature_id = pm.na_feature_id
+        and pr.PHENOTYPE_ENTITY_TERM_ID = oen.ontology_term_id (+)
+       and pr.phenotype_quality_term_id = opq.ontology_term_id (+)
+       and oen.name is not null
+       and (opq.name = $$phenotypeQualifier$$ or opq.name is null)
+       --and ta.organism = '$$organismwithPhenotype$$'
+       group by oen.name)
+       order by order_num desc      ]]>
+      
     </sql>
     </sqlQuery>
 
