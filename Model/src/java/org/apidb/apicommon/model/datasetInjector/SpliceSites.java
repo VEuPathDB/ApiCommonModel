@@ -45,7 +45,6 @@ public class SpliceSites extends  DatasetInjector {
 
   
       if(getPropValueAsBoolean("hasMultipleSamples")) {
-        injectTemplate("spliceSitesProfileSetParamQuery");
         injectTemplate("spliceSitesFoldChangeQuestion");
         //        injectTemplate("spliceSitesFoldChangeCategories");
 
@@ -62,8 +61,7 @@ public class SpliceSites extends  DatasetInjector {
         injectTemplate("internalGeneSearchCategory");
 
       }
-
-      injectTemplate("spliceSitesPctProfileSetParamQuery");
+      injectTemplate("spliceSitesProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
       //      injectTemplate("spliceSitesPercentileCategories");
       setPropValue("searchCategory", "searchCategory-percentile");
