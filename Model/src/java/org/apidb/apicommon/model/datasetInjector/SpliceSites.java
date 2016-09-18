@@ -46,9 +46,9 @@ public class SpliceSites extends  DatasetInjector {
   
       if(getPropValueAsBoolean("hasMultipleSamples")) {
         injectTemplate("spliceSitesFoldChangeQuestion");
-        //        injectTemplate("spliceSitesFoldChangeCategories");
+	injectTemplate("spliceSitesFoldChangeCategories");
 
-        setPropValue("searchCategory", "searchCategory-fold-change");
+	setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
         setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName());
         injectTemplate("internalGeneSearchCategory");
 
@@ -63,8 +63,8 @@ public class SpliceSites extends  DatasetInjector {
       }
       injectTemplate("spliceSitesProfileSetParamQuery");
       injectTemplate("spliceSitesPercentileQuestion");
-      //      injectTemplate("spliceSitesPercentileCategories");
-      setPropValue("searchCategory", "searchCategory-percentile");
+      injectTemplate("spliceSitesPercentileCategories");
+      setPropValue("searchCategory", "searchCategory-transcriptomics-percentile");
       setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName() + "Percentile");
       injectTemplate("internalGeneSearchCategory");
 
