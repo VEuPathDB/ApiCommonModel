@@ -54,11 +54,11 @@ public class SpliceSites extends  DatasetInjector {
 
 
         injectTemplate("spliceSitesProfileSetsQuery");
-        injectTemplate("spliceSitesDifferentialQuestion");
+	//        injectTemplate("spliceSitesDifferentialQuestion");
         //        injectTemplate("spliceSitesDifferentialCategories");
-        setPropValue("searchCategory", "searchCategory-splice-site-loc");
-        setPropValue("questionName", "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
-        injectTemplate("internalGeneSearchCategory");
+	//        setPropValue("searchCategory", "searchCategory-splice-site-loc");
+	//        setPropValue("questionName", "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
+	//        injectTemplate("internalGeneSearchCategory");
 
       }
       injectTemplate("spliceSitesProfileSetParamQuery");
@@ -101,8 +101,8 @@ public class SpliceSites extends  DatasetInjector {
         "GeneQuestions.GenesBySpliceSites" + getDatasetName() );
 
 
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-        "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
+    //    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+    //        "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
       }
 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
