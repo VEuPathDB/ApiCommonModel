@@ -15,9 +15,9 @@ public class AnnotatedGenome extends DatasetInjector {
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
     // hack until we have filters reading from datatabase (instead of relying on dataset xml files)
-    // key value pairs obtained by running SQLs below in a EUPA database (ee.g.: eupabn)
+    // key value pairs obtained by running SQLs below in a EUPA database (e.g.: eupa-inc)
 
-    //copy/paste from this SQL:
+    //copy/paste from this SQL, run in eupa-inc:
     //
     //select 'kingdom.put("' || term || '","Fungi");'
     //from (select distinct term from (
@@ -45,7 +45,7 @@ public class AnnotatedGenome extends DatasetInjector {
       kingdom.put("Zygomycetes","Fungi");
     }
 
-    //copy/paste from this SQL:
+    //copy/paste from this SQL, run in eupa-inc:
     //    
     //    select 'phylum.put("' || term || '","' || parentterm || '");'
     //    from ApidbTuning.OrganismTree
@@ -57,82 +57,81 @@ public class AnnotatedGenome extends DatasetInjector {
 
     Map<String,String> phylum = new LinkedHashMap<String, String>();
     {
-      phylum.put("Acanthamoeba","Amoebozoa");
-      phylum.put("Ajellomyces","Eurotiomycetes");
-      phylum.put("Albugo","Oomycetes");
-      phylum.put("Allomyces","Blastocladiomycetes");
-      phylum.put("Anncaliia","Microsporidia");
-      phylum.put("Aphanomyces","Oomycetes");
-      phylum.put("Aspergillus","Eurotiomycetes");
-      phylum.put("Babesia","Apicomplexa");
-      phylum.put("Batrachochytrium","Chytridiomycetes");
-      phylum.put("Botryotinia","Leotiomycetes");
-      phylum.put("Candida","Saccharomycetes");
-      phylum.put("Chromera","Chromerida");
-      phylum.put("Coccidioides","Eurotiomycetes");
-      phylum.put("Coprinopsis","Agaricomycetes");
-      phylum.put("Crithidia","Kinetoplastida");
-      phylum.put("Cryptococcus","Tremellomycetes");
-      phylum.put("Cryptosporidium","Apicomplexa");
-      phylum.put("Cyclospora","Apicomplexa");
-      phylum.put("Cytauxzoon","Apicomplexa");
-      phylum.put("Edhazardia","Microsporidia");
-      phylum.put("Eimeria","Apicomplexa");
-      phylum.put("Encephalitozoon","Microsporidia");
-      phylum.put("Endotrypanum","Kinetoplastida");
-      phylum.put("Entamoeba","Amoebozoa");
-      phylum.put("Enterocytozoon","Microsporidia");
-      phylum.put("Fusarium","Sordariomycetes");
-      phylum.put("Giardia","Diplomonadida");
-      phylum.put("Gregarina","Apicomplexa");
-      phylum.put("Hamiltosporidium","Microsporidia");
-      phylum.put("Hammondia","Apicomplexa");
-      phylum.put("Hyaloperonospora","Oomycetes");
-      phylum.put("Leishmania","Kinetoplastida");
-      phylum.put("Leptomonas","Kinetoplastida");
-      phylum.put("Magnaporthe","Sordariomycetes");
-      phylum.put("Malassezia","Ustilaginomycetes");
-      phylum.put("Melampsora","Pucciniomycetes");
-      phylum.put("Mitosporidium","Microsporidia");
-      phylum.put("Mucor","Zygomycetes");
-      phylum.put("Naegleria","Amoebozoa");
-      phylum.put("Nematocida","Microsporidia");
-      phylum.put("Neosartorya","Eurotiomycetes");
-      phylum.put("Neospora","Apicomplexa");
-      phylum.put("Neurospora","Sordariomycetes");
-      phylum.put("Nosema","Microsporidia");
-      phylum.put("Ordospora","Microsporidia");
-      phylum.put("Phanerochaete","Agaricomycetes");
-      phylum.put("Phycomyces","Zygomycetes");
-      phylum.put("Phytophthora","Oomycetes");
-      phylum.put("Plasmodium","Apicomplexa");
-      phylum.put("Pneumocystis","Pneumocystidomycetes");
-      phylum.put("Puccinia","Pucciniomycetes");
-      phylum.put("Pythium","Oomycetes");
-      phylum.put("Rhizopus","Zygomycetes");
-      phylum.put("Saccharomyces","Saccharomycetes");
-      phylum.put("Saprolegnia","Oomycetes");
-      phylum.put("Sarcocystis","Apicomplexa");
-      phylum.put("Schizosaccharomyces","Schizosaccharomycetes");
-      phylum.put("Sclerotinia","Leotiomycetes");
-      phylum.put("Sordaria","Sordariomycetes");
-      phylum.put("Spironucleus","Diplomonadida");
-      phylum.put("Spizellomyces","Chytridiomycetes");
-      phylum.put("Sporisorium","Ustilaginomycetes");
-      phylum.put("Spraguea","Microsporidia");
-      phylum.put("Talaromyces","Eurotiomycetes");
-      phylum.put("Theileria","Apicomplexa");
-      phylum.put("Toxoplasma","Apicomplexa");
-      phylum.put("Trachipleistophora","Microsporidia");
-      phylum.put("Tremella","Tremellomycetes");
-      phylum.put("Trichoderma","Sordariomycetes");
-      phylum.put("Trichomonas","Trichomonadida");
-      phylum.put("Trypanosoma","Kinetoplastida");
-      phylum.put("Ustilago","Ustilaginomycetes");
-      phylum.put("Vavraia","Microsporidia");
-      phylum.put("Vitrella","Chromerida");
-      phylum.put("Vittaforma","Microsporidia");
-      phylum.put("Yarrowia","Saccharomycetes");
+			phylum.put("Acanthamoeba","Amoebozoa");
+			phylum.put("Albugo","Oomycetes");
+			phylum.put("Allomyces","Blastocladiomycetes");
+			phylum.put("Anncaliia","Microsporidia");
+			phylum.put("Aphanomyces","Oomycetes");
+			phylum.put("Aspergillus","Eurotiomycetes");
+			phylum.put("Babesia","Apicomplexa");
+			phylum.put("Batrachochytrium","Chytridiomycetes");
+			phylum.put("Botrytis","Leotiomycetes");
+			phylum.put("Candida","Saccharomycetes");
+			phylum.put("Chromera","Chromerida");
+			phylum.put("Coccidioides","Eurotiomycetes");
+			phylum.put("Coprinopsis","Agaricomycetes");
+			phylum.put("Crithidia","Kinetoplastida");
+			phylum.put("Cryptococcus","Tremellomycetes");
+			phylum.put("Cryptosporidium","Apicomplexa");
+			phylum.put("Cyclospora","Apicomplexa");
+			phylum.put("Cytauxzoon","Apicomplexa");
+			phylum.put("Edhazardia","Microsporidia");
+			phylum.put("Eimeria","Apicomplexa");
+			phylum.put("Encephalitozoon","Microsporidia");
+			phylum.put("Endotrypanum","Kinetoplastida");
+			phylum.put("Entamoeba","Amoebozoa");
+			phylum.put("Enterocytozoon","Microsporidia");
+			phylum.put("Fusarium","Sordariomycetes");
+			phylum.put("Giardia","Diplomonadida");
+			phylum.put("Gregarina","Apicomplexa");
+			phylum.put("Hamiltosporidium","Microsporidia");
+			phylum.put("Hammondia","Apicomplexa");
+			phylum.put("Histoplasma","Eurotiomycetes");
+			phylum.put("Hyaloperonospora","Oomycetes");
+			phylum.put("Leishmania","Kinetoplastida");
+			phylum.put("Leptomonas","Kinetoplastida");
+			phylum.put("Magnaporthe","Sordariomycetes");
+			phylum.put("Malassezia","Ustilaginomycetes");
+			phylum.put("Melampsora","Pucciniomycetes");
+			phylum.put("Mitosporidium","Microsporidia");
+			phylum.put("Mucor","Zygomycetes");
+			phylum.put("Naegleria","Amoebozoa");
+			phylum.put("Nematocida","Microsporidia");
+			phylum.put("Neospora","Apicomplexa");
+			phylum.put("Neurospora","Sordariomycetes");
+			phylum.put("Nosema","Microsporidia");
+			phylum.put("Ordospora","Microsporidia");
+			phylum.put("Phanerochaete","Agaricomycetes");
+			phylum.put("Phycomyces","Zygomycetes");
+			phylum.put("Phytophthora","Oomycetes");
+			phylum.put("Plasmodium","Apicomplexa");
+			phylum.put("Pneumocystis","Pneumocystidomycetes");
+			phylum.put("Puccinia","Pucciniomycetes");
+			phylum.put("Pythium","Oomycetes");
+			phylum.put("Rhizopus","Zygomycetes");
+			phylum.put("Saccharomyces","Saccharomycetes");
+			phylum.put("Saprolegnia","Oomycetes");
+			phylum.put("Sarcocystis","Apicomplexa");
+			phylum.put("Schizosaccharomyces","Schizosaccharomycetes");
+			phylum.put("Sclerotinia","Leotiomycetes");
+			phylum.put("Sordaria","Sordariomycetes");
+			phylum.put("Spironucleus","Diplomonadida");
+			phylum.put("Spizellomyces","Chytridiomycetes");
+			phylum.put("Sporisorium","Ustilaginomycetes");
+			phylum.put("Spraguea","Microsporidia");
+			phylum.put("Talaromyces","Eurotiomycetes");
+			phylum.put("Theileria","Apicomplexa");
+			phylum.put("Toxoplasma","Apicomplexa");
+			phylum.put("Trachipleistophora","Microsporidia");
+			phylum.put("Tremella","Tremellomycetes");
+			phylum.put("Trichoderma","Sordariomycetes");
+			phylum.put("Trichomonas","Trichomonadida");
+			phylum.put("Trypanosoma","Kinetoplastida");
+			phylum.put("Ustilago","Ustilaginomycetes");
+			phylum.put("Vavraia","Microsporidia");
+			phylum.put("Vitrella","Chromerida");
+			phylum.put("Vittaforma","Microsporidia");
+			phylum.put("Yarrowia","Saccharomycetes");
     }
 
     // getting properties defined in .prop file
@@ -151,7 +150,7 @@ public class AnnotatedGenome extends DatasetInjector {
     String speciesWithSpaces, species, familySpecies;
     // Strings "species" and "familySpecies" should be called: "genusSpeciesDisplayName" and "orgFilterName" respectively
     //    "species" MAY contain spaces (eg: "sp. 1")
-    //    "familySpecies" CANNOT contain spaces (eg: "sp.=1")
+    //    "familySpecies" CANNOT contain spaces so we replace space by = (eg: "sp.=1")
     //
     // The templates below will generate filter names in the model based on these Strings.
     //   These will be used by WDK (AnswerFilterLayout.java) 
