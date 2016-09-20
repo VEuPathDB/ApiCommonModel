@@ -83,7 +83,7 @@ public class DetailTableLoader extends BaseCLI {
   // private static final String FUNCTION_CHAR_CLOB_AGG = "apidb.char_clob_agg";
   // private static final String FUNCTION_CLOB_CLOB_AGG = "apidb.clob_clob_agg";
 
-  private static final String PROP_EXCLUDE_FROM_DUMPER = "excludeFromDumper";
+  private static final String PROP_INCLUDE_IN_DUMPER = "includeInDumper";
 
   private static final Logger logger = Logger.getLogger(DetailTableLoader.class);
 
@@ -173,8 +173,8 @@ public class DetailTableLoader extends BaseCLI {
     }
     else { // no table specified, only dump tables with a specific flag
       for (TableField table : tables.values()) {
-        String[] props = table.getPropertyList(PROP_EXCLUDE_FROM_DUMPER);
-        if (props.length > 0 && props[0].equalsIgnoreCase("true"))
+        String[] props = table.getPropertyList(PROP_INCLUDE_IN_DUMPER);
+        if (props.length == 0 || !props[0].equalsIgnoreCase("true"))
           continue;
         executor.execute(new DumpTableTask(this, idSql, table));
       }
