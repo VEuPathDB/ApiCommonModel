@@ -44,7 +44,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         } else if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"fold-change-with-confidence");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change-with-confidence");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithConfidence" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
 
