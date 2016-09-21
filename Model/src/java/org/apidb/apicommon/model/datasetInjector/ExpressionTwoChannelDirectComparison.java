@@ -25,37 +25,41 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
             setPropValue("defaultFoldDifference","1.5");
                 
         }
-        if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
-            injectTemplate("expressionSamplesParamQueryDirectFDR");
-        } else {
+        //        if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
+        //            injectTemplate("expressionSamplesParamQueryDirectFDR");
+        //        } 
+        //        else {
             injectTemplate("expressionSamplesParamQueryDirect");
-        }
+            //        }
 
+            /**
         if(getPropValueAsBoolean("hasPageData") && lcDataType.equals("proteomics")) {
             injectTemplate("expressionFoldChangeWithFDRQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithFDRCategoriesDirect");
             setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change-with-fdr");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithFDR" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
+        } 
 
-
-
-
-        } else if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
+        else if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-fold-change-with-confidence");
+            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-direct-comparison");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "DirectWithConfidence" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
 
-        } else {
+        } 
+
+        else {
+
+            **/
             injectTemplate("expressionFoldChangeQuestionDirect");
 
             //injectTemplate(lcDataType + "FoldChangeCategoriesDirect");
             setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-direct-comparison");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
-        }
+            //        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPctSamplesParamQueryDirect");
@@ -83,7 +87,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         String myDataType = getDataType();
 
-
+        /**
         if(getPropValueAsBoolean("hasPageData") && myDataType.equals("Proteomics")) {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithFDR" + getDatasetName());
@@ -91,9 +95,10 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithConfidence" + getDatasetName());
         } else {
+        **/
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName());
-        }
+            //        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",

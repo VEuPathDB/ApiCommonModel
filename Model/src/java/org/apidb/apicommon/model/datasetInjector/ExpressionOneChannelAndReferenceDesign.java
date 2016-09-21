@@ -22,6 +22,8 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
         injectTemplate("expressionPctProfileSetParamQuery");
 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
+
+            /**
             if(getPropValueAsBoolean("hasPageData")) {
                 injectTemplate("expressionFoldChangeWithConfidenceQuestion");
                 //                injectTemplate(lcDataType + "FoldChangeWithConfidenceCategories");
@@ -31,6 +33,8 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
                 injectTemplate("internalGeneSearchCategory");
 
             }
+            **/
+
 
             injectTemplate("expressionFoldChangeQuestion");
             //            injectTemplate(lcDataType + "FoldChangeCategories");
@@ -70,10 +74,12 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 
         if(getPropValueAsBoolean("hasMultipleSamples")) {
 
+            /**
             if(getPropValueAsBoolean("hasPageData")) {
                 addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                                 "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Confidence");
             }
+            **/
 
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + getDatasetName());
