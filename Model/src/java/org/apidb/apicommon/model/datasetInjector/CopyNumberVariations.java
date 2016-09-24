@@ -3,6 +3,8 @@ package org.apidb.apicommon.model.datasetInjector;
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import java.util.List;
 
+//TODO: obsolete - remove when old presenters are gone
+
 public class CopyNumberVariations extends  DatasetInjector {
   
   /*
