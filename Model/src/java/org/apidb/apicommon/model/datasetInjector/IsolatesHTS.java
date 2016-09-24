@@ -46,20 +46,22 @@ public class IsolatesHTS extends DatasetInjector {
 
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
-      }       
-
-      /** commented out by Haiming Wang - use getSampleList method. refer to - https://redmine.apidb.org/issues/16510 
-      String sampleList = getPropValue("sampleList");
-      String[] samples = sampleList.split(" ");
-      for(int i = 0; i < samples.length; i++) {
-          setPropValue("sampleName", samples[i]);
-
-          injectTemplate("htsSnpSampleDatabase");
-          injectTemplate("htsSnpSampleCoverageXYTrack");
-          injectTemplate("htsSnpSampleCoverageDensityTracks");
-          injectTemplate("htsSnpSampleAlignmentTrack");
       }
-      */
+
+      if(getPropValueAsBoolean("hasCNVData")) {
+
+          setPropValue("datasetName", datasetName.replaceFirst("_HTS_SNP_", "_copyNumberVariations_"));
+          
+          for (int i=0; i<sampleNames.size(); i++) {
+              setPropValue("sampleName", sampleNames.get(i));
+              injectTemplate("copyNumberVariationsDatabase");
+              injectTemplate("copyNumberVariationsTrack");
+
+              setPropValue("gbrowseTrackName", getPropValue("datasetName") + getPropValue("sampleName"));
+              injectTemplate("gbrowseTrackCategory");
+          }       
+
+      }
 
   }
 
@@ -72,12 +74,6 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpsByGeneIds");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.NgsSnpsByTwoIsolateGroups");
 
-      /**
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpBySourceId");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByAlleleFrequency");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByIsolatePattern");
-      addWdkReference("SnpRecordClasses.SnpRecordClass", "question", "SnpQuestions.SnpsByIsolatesGroup");
-      */ 
 
       addWdkReference("SnpRecordClasses.SnpRecordClass", "attribute", "snp_overview");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "attribute", "gene_context");
@@ -106,6 +102,10 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "table", "HtsContacts");
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "attribute", "overview");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SNPsAlignment");
+
+      addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
   }
 
 
@@ -115,7 +115,10 @@ public class IsolatesHTS extends DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       //String [][] declaration = {{"sampleList", "space del list of sample (sample name = directory name in webservices)"}
       //};
-      String[][] declaration = {};
+      String[][] declaration = {
+         {"hasCNVData", ""},
+      };
+
 
     return declaration;
   }
