@@ -852,29 +852,20 @@ FROM
           <sql>
              <![CDATA[
                 update ##WDK_CACHE_TABLE##
-                set gene_source_id = (select gene_source_id
+                set source_id = (select min(source_id)
                                       from apidbTuning.transcriptAttributes
-                                      where source_id = ##WDK_CACHE_TABLE##.source_id)
+                                      where gene_source_id = ##WDK_CACHE_TABLE##.gene_source_id)
                 where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
-                  and gene_source_id is null
+                  and source_id is null
              ]]>
           </sql>
        </postCacheUpdateSql>
-       <postCacheUpdateSql>
-          <sql>
-             <![CDATA[
-                update ##WDK_CACHE_TABLE##
-                set project_id = '@PROJECT_ID@'
-                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
-                  and project_id is null
-             ]]>
-          </sql>
-       </postCacheUpdateSql>
+
        <postCacheUpdateSql>
           <sql>
           <![CDATA[
                 insert into ##WDK_CACHE_TABLE## -- query-specific version
-                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result, max_score, fields_matched)
                 with matches
                      as (select *
                          from ##WDK_CACHE_TABLE##
@@ -882,14 +873,14 @@ FROM
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
-                           from apidbTuning.transcriptAttributes
-                           where gene_source_id in (select gene_source_id from matches)
+                     as (  select ta.source_id, ta.gene_source_id, max_score, fields_matched
+                           from apidbTuning.transcriptAttributes ta, matches
+                           where ta.gene_source_id = matches.gene_source_id
                          minus
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, max_score, fields_matched
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'Y', max_score, fields_matched
                 from row_offset, mismatches
              ]]>
           </sql>
