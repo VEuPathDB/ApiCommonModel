@@ -4552,7 +4552,7 @@ AND t2.count_per_million >=$$min_norm_count$$
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="GenesByCopyNumber" includeProjects="TriTrypDB, PlasmoDB" >
+    <sqlQuery name="GenesByCopyNumber" includeProjects="TriTrypDB, PlasmoDB, ToxoDB" >
         <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.CNV"/>
         <paramRef ref="sharedParams.CNV_investigation"/>
         <paramRef ref="sharedParams.CNV_strain"/>
@@ -4572,44 +4572,46 @@ AND t2.count_per_million >=$$min_norm_count$$
         <column name="gene_dose"/>
         <sql>
             <![CDATA[
-            select
+            SELECT
             project_id
             , source_id
             , gene_source_id
             , 10 as wdk_weight
             , 'Y' as matched_result
             , strain
-            , cast(raw_estimate as decimal(10,2)) as raw_estimate
-            ,ref_cn
+            , CAST(raw_estimate as decimal(10,2)) AS raw_estimate
+            , ref_cn
             , haploid_number
             , ploidy
             , haploid_number * ploidy as gene_dose
-            from (
-                select
-                ta.PROJECT_ID
-                , ta.SOURCE_ID
-                , ta.GENE_SOURCE_ID
-                , regexp_replace(pan.NAME, '_[A-Za-z0-9]+ (.+)$', '') as strain
-                , gcn.HAPLOID_NUMBER as raw_estimate
-                , gcn.REF_COPY_NUMBER as ref_cn
+            FROM (
+                SELECT
+                ta.project_id
+                , ta.source_id
+                , ta.gene_source_id
+                , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+                , gcn.haploid_number AS raw_estimate
+                , gcn.ref_copy_number AS ref_cn
                 , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                     WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
-                    ELSE round (gcn.haploid_number) END as haploid_number
-                , ccn.CHR_COPY_NUMBER as ploidy
-                from
-                APIDB.GENECOPYNUMBER gcn
-                , DOTS.GENEFEATURE gf
+                    ELSE round (gcn.haploid_number) END AS haploid_number
+                , ccn.chr_copy_number AS ploidy
+                FROM
+                apidb.genecopynumber gcn
+                , apidbtuning.genomicseqattributes gsa
                 , apidbtuning.transcriptattributes ta
-                , STUDY.PROTOCOLAPPNODE pan
-                , APIDB.CHRCOPYNUMBER ccn
-                where gcn.PROTOCOL_APP_NODE_ID in ($$CNV_strain$$)
-                and gcn.PROTOCOL_APP_NODE_ID = pan.PROTOCOL_APP_NODE_ID
-                and gf.NA_FEATURE_ID = gcn.NA_FEATURE_ID
-                and gf.SOURCE_ID = ta.gene_source_id
-                and ccn.PROTOCOL_APP_NODE_ID in ($$CNV_strain$$)
-                and ccn.NA_SEQUENCE_ID = gf.NA_SEQUENCE_ID
-                and ta.GENE_TYPE = 'protein coding'
-                and ta.CHROMOSOME is not null
+                , study.protocolappnode pan
+                , apidb.chrcopynumber ccn
+                , apidbtuning.featurelocation fl
+                WHERE gcn.protocol_app_node_id in ($$CNV_strain$$)
+                AND gcn.protocol_app_node_id = pan.protocol_app_node_id
+                AND gcn.na_feature_id = fl.na_feature_id
+                AND ccn.na_sequence_id = fl.na_sequence_id
+                AND gsa.na_sequence_id = fl.na_sequence_id
+                AND ta.gene_source_id = fl.feature_source_id
+                AND ccn.protocol_app_node_id IN ($$CNV_strain$$)
+                AND ta.gene_type = 'protein coding'
+                AND gsa.chromosome IS NOT NULL
             )   
             WHERE $$CNV_type$$ $$operator$$ $$copyNumber$$
             ORDER BY gene_source_id
@@ -4617,7 +4619,7 @@ AND t2.count_per_million >=$$min_norm_count$$
           </sql>
     </sqlQuery>
     
-    <sqlQuery name="GenesByCopyNumberComparison" includeProjects="TriTrypDB, PlasmoDB" >
+    <sqlQuery name="GenesByCopyNumberComparison" includeProjects="TriTrypDB, PlasmoDB, ToxoDB" >
         <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.CNV"/>
         <paramRef ref="sharedParams.CNV_investigation"/>
         <paramRef ref="sharedParams.CNV_strain"/>
@@ -4635,45 +4637,47 @@ AND t2.count_per_million >=$$min_norm_count$$
         <column name="gene_dose"/>
         <sql>
             <![CDATA[
-            select
+            SELECT
             project_id
             , source_id
             , gene_source_id
             , 10 as wdk_weight
             , 'Y' as matched_result
             , strain
-            , cast(raw_estimate as decimal(10,2)) as raw_estimate
-            ,ref_cn
+            , CAST(raw_estimate as decimal(10,2)) AS raw_estimate
+            , ref_cn
             , haploid_number
             , ploidy
             , haploid_number * ploidy as gene_dose
-            from (
-                select
-                ta.PROJECT_ID
-                , ta.SOURCE_ID
-                , ta.GENE_SOURCE_ID
-                , regexp_replace(pan.NAME, '_[A-Za-z0-9]+ (.+)$', '') as strain
-                , gcn.HAPLOID_NUMBER as raw_estimate
-                , gcn.REF_COPY_NUMBER as ref_cn
+            FROM (
+                SELECT
+                ta.project_id
+                , ta.source_id
+                , ta.gene_source_id
+                , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+                , gcn.haploid_number AS raw_estimate
+                , gcn.ref_copy_number AS ref_cn
                 , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                     WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
-                    ELSE round (gcn.haploid_number) END as haploid_number
-                , ccn.CHR_COPY_NUMBER as ploidy
-                from
-                APIDB.GENECOPYNUMBER gcn
-                , DOTS.GENEFEATURE gf
+                    ELSE round (gcn.haploid_number) END AS haploid_number
+                , ccn.chr_copy_number AS ploidy
+                FROM
+                apidb.genecopynumber gcn
+                , apidbtuning.genomicseqattributes gsa
                 , apidbtuning.transcriptattributes ta
-                , STUDY.PROTOCOLAPPNODE pan
-                , APIDB.CHRCOPYNUMBER ccn
-                where gcn.PROTOCOL_APP_NODE_ID in ($$CNV_strain$$)
-                and gcn.PROTOCOL_APP_NODE_ID = pan.PROTOCOL_APP_NODE_ID
-                and gf.NA_FEATURE_ID = gcn.NA_FEATURE_ID
-                and gf.SOURCE_ID = ta.gene_source_id
-                and ccn.PROTOCOL_APP_NODE_ID in ($$CNV_strain$$)
-                and ccn.NA_SEQUENCE_ID = gf.NA_SEQUENCE_ID
-                and ta.GENE_TYPE = 'protein coding'
-                and ta.CHROMOSOME is not null
-            )
+                , study.protocolappnode pan
+                , apidb.chrcopynumber ccn
+                , apidbtuning.featurelocation fl
+                WHERE gcn.protocol_app_node_id in ($$CNV_strain$$)
+                AND gcn.protocol_app_node_id = pan.protocol_app_node_id
+                AND gcn.na_feature_id = fl.na_feature_id
+                AND ccn.na_sequence_id = fl.na_sequence_id
+                AND gsa.na_sequence_id = fl.na_sequence_id
+                AND ta.gene_source_id = fl.feature_source_id
+                AND ccn.protocol_app_node_id IN ($$CNV_strain$$)
+                AND ta.gene_type = 'protein coding'
+                AND gsa.chromosome IS NOT NULL
+            ) 
             WHERE haploid_number $$comparisonOperator$$ ref_cn
             ORDER BY gene_source_id
             ]]>
