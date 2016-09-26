@@ -1463,23 +1463,16 @@
     <!-- Strain selection for genes by CNV and genomic segment by ploidy -->
     <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <flatVocabParam name="CNV_investigation" includeProjects="TriTrypDB, PlasmoDB, ToxoDB"
-        queryRef="SharedVQ.CNV_investigation"
-        prompt="Experiment"
-        multiPick="false"
-        quote="false"
-        dependedParamRef="organismParams.organismSinglePick">
-        <help>Choose an experiment</help>
-    </flatVocabParam>
-
-    <flatVocabParam name="CNV_strain" includeProjects="TriTrypDB, PlasmoDB, ToxoDB"
-        queryRef="SharedVQ.CNV_strain"
+    <filterParam name="CNV_strain" includeProjects="TriTrypDB, PlasmoDB, ToxoDB"
+        queryRef="SharedVQ.CnvSamplesByOrganism"
+        metadataQueryRef="SharedVQ.CnvSamplesMetadataByOrganism"
+        metadataSpecQueryRef="SharedVQ.CnvMetadataSpecByOrganism"
         prompt="Strain/Sample"
-        multiPick="false"
+        multiPick="true"
         quote="false"
-        dependedParamRef="sharedParams.CNV_investigation,organismParams.organismSinglePick">
+        dependedParamRef="organismParams.organismSinglePickCnv">
         <help>Choose a resequenced strain or sample that has been mapped against the organism's reference genome. Genomic sequences returned by this search will be part of this strain's genome.</help>
-    </flatVocabParam>
+    </filterParam>
 
 
        <flatVocabParam name="metadata_datasets"
@@ -2614,50 +2607,6 @@ GROUP BY a.question_name
             </sql>
         </sqlQuery>
 
-        <sqlQuery name="CNV_investigation" includeProjects="TriTrypDB, PlasmoDB, ToxoDB">
-            <paramRef ref="organismParams.organismSinglePick"/>
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-                select distinct term
-                , listagg(STUDY_ID, ',') within group (order by STUDY_ID) over (partition by term) as internal
-                from (
-                    select 
-                    regexp_replace (s2.NAME, '\s-\s.+', '') as term
-                    , s2.STUDY_ID
-                    from
-                    STUDY.STUDY s1
-                    , STUDY.STUDY s2
-                    where s1.STUDY_ID in ($$organismSinglePick$$)
-                    and s2.INVESTIGATION_ID = s1.STUDY_ID
-                )
-            </sql>
-        </sqlQuery>
-
-        <sqlQuery name="CNV_strain" includeProjects="TriTrypDB, PlasmoDB, ToxoDB">
-            <paramRef ref="organismParams.organismSinglePick"/>
-            <paramRef ref="sharedParams.CNV_investigation"/>
-            <column name="internal"/>
-            <column name="term"/>
-            <sql>
-                SELECT DISTINCT term
-                , listagg (panid, ',') within group (order by panid) over (partition by term) as internal
-                FROM (
-                  select regexp_replace(pan.NAME, '_[A-Za-z0-9]+ (.+)$', '') as term
-                  , pan.protocol_app_node_id as panid
-                  from study.protocolappnode pan
-                  , study.studylink sl
-                  , study.study s
-                  , sres.ontologyterm ot
-                  WHERE s.STUDY_ID in ($$CNV_investigation$$)
-                  AND sl.STUDY_ID = s.STUDY_ID
-                  AND pan.PROTOCOL_APP_NODE_ID = sl.PROTOCOL_APP_NODE_ID
-                  AND ot.name = 'data item'
-                  AND pan.type_id = ot.ontology_term_id
-                )
-            </sql>
-        </sqlQuery>
-
         <sqlQuery name="MetadataSpec" doNotTest="1" includeProjects="PlasmoDB"> 
             <paramRef groupRef="paramGroups.dynamicParams" ref="sharedParams.metadata_datasets"/>
             <column name="property" />
@@ -3043,6 +2992,77 @@ GROUP BY a.question_name
 	<wsColumn name="internal" width="100" wsName="internal"/>
 	<wsColumn name="term" width="100" wsName="term"/>
       </processQuery>
+
+      <sqlQuery name="CnvSamplesByOrganism" excludeProjects="EuPathDB">
+        <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- noTranslation="true"/ -->
+        <column name="term"/>
+        <column name="display"/>
+        <column name="internal"/>
+        <sql>
+          <![CDATA[
+            select regexp_replace(pan_name, '_[A-Za-z0-9]+ (.+)$', '') as display,
+                   protocol_app_node_id as internal, pan_name as term
+            from apidbTuning.panCharacteristicMetadata
+            where subtype = 'copyNumberVariation'
+              and organism = '$$organismSinglePickCnv$$'
+              and pan_name like '%_ploidy (CNV)'
+          union
+            select regexp_replace(pan_name, '_[A-Za-z0-9]+ (.+)$', '') as display,
+                   protocol_app_node_id as internal, pan_name as term
+            from apidbTuning.panProtocolMetadata
+            where subtype = 'copyNumberVariation'
+              and organism = '$$organismSinglePickCnv$$'
+              and pan_name like '%_ploidy (CNV)'
+          union
+            select regexp_replace(pan_name, '_[A-Za-z0-9]+ (.+)$', '') as display,
+                   protocol_app_node_id as internal, pan_name as term
+            from apidbTuning.FallbackMetadata
+            where subtype = 'copyNumberVariation'
+              and organism = '$$organismSinglePickCnv$$'
+              and pan_name like '%_ploidy (CNV)'
+	  ]]>
+        </sql>
+      </sqlQuery>
+
+      <sqlQuery name="CnvSamplesMetadataByOrganism" doNotTest="1">
+        <paramRef ref="organismParams.organismSinglePickCnv"/> <!--  noTranslation="true"/ -->
+        <column name="term" />
+        <column name="value"/>
+        <column name="property" />
+        <sql>
+          <![CDATA[
+              select pan_name as term, term as property, value
+              from apidbTuning.panCharacteristicMetadata
+              where subtype = 'copyNumberVariation'
+                and organism = '$$organismSinglePickCnv$$'
+            union
+              select pan_name as term, term as property, value
+              from apidbTuning.panProtocolMetadata
+              where subtype = 'copyNumberVariation'
+                and organism = '$$organismSinglePickCnv$$'
+            union
+              select pan_name as term, term_name as property, pan_name as value
+              from apidbTuning.FallbackMetadata
+              where subtype = 'copyNumberVariation'
+                and organism = '$$organismSinglePickCnv$$'
+          ]]>
+        </sql>
+      </sqlQuery>
+
+      <sqlQuery name="CnvMetadataSpecByOrganism" doNotTest="1"> 
+        <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- noTranslation="true"/  -->
+        <column name="property" />
+        <column name="spec_property"/>
+        <column name="spec_value" />
+        <sql>
+          <![CDATA[
+            select distinct property, spec_property, spec_value
+            from apidbTuning.MetadataSpec
+            where subtype = 'copyNumberVariation'
+              and organism = '$$organismSinglePickCnv$$'
+          ]]>
+        </sql>
+      </sqlQuery>
 
   </querySet>
 
