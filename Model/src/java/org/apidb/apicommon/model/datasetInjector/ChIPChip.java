@@ -16,13 +16,22 @@ public class ChIPChip extends DatasetInjector {
         setPropValue ("key", " - " + key);
     }
     injectTemplate("chipChipSmoothed");
-    injectTemplate("chipChipPeaks");
-
     setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipSmoothed");
     injectTemplate("gbrowseTrackCategory");
 
-    setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipPeaks");
-    injectTemplate("gbrowseTrackCategory");
+    if (getPropValueAsBoolean("hasCalledPeaks")) {
+        if (getPropValue("cutoff") == null) {
+            setPropValue("cutoff", "0");
+            injectTemplate("chipChipPeaks");
+        }
+        else {
+        injectTemplate("chipChipPeaksColorByScore");
+        }
+
+
+        setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipPeaks");
+        injectTemplate("gbrowseTrackCategory");
+    }
 
   }
 
