@@ -486,7 +486,7 @@ public class DatasetPresenterSetLoader {
   private void loadPublication(String datasetPresenterId, Publication publication,
 			       PreparedStatement insertStmt, PreparedStatement pubmedQuery) throws SQLException {
 
-    String citation;
+      String citation = new String("nothing");
 
     try {
 	// try to get it from an existing DatasetPublication record
@@ -496,8 +496,12 @@ public class DatasetPresenterSetLoader {
         rs.next();
         citation = rs.getString(1);
     } catch (SQLException e) {
-	// if that fails, get it from the NCBI web service
-        // System.out.println("fail: " + e.toString() + "; had to hit NCBI");
+    }
+
+    // System.out.println("now have citation \"" + citation + "\"");
+    // if that fails, get it from the NCBI web service
+    if (citation == null || citation.equals("") || citation.equals("nothing")) {
+	// System.out.println("fail; had to hit NCBI");
 	citation = publication.getCitation();
     }
 
