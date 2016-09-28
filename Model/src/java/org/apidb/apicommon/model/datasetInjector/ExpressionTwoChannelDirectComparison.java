@@ -41,7 +41,9 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
             injectTemplate("internalGeneSearchCategory");
         } 
 
-        else if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
+            **/
+
+        if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
             setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-direct-comparison");
@@ -52,14 +54,14 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         else {
 
-            **/
+
             injectTemplate("expressionFoldChangeQuestionDirect");
 
             //injectTemplate(lcDataType + "FoldChangeCategoriesDirect");
             setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-direct-comparison");
             setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName());
             injectTemplate("internalGeneSearchCategory");
-            //        }
+        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             injectTemplate("expressionPctSamplesParamQueryDirect");
@@ -91,14 +93,16 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         if(getPropValueAsBoolean("hasPageData") && myDataType.equals("Proteomics")) {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithFDR" + getDatasetName());
-        } else if(getPropValueAsBoolean("hasPageData") && !(myDataType.equals("Proteomics"))) {
+        } 
+        **/
+        if(getPropValueAsBoolean("hasPageData") && !(myDataType.equals("Proteomics"))) {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithConfidence" + getDatasetName());
         } else {
-        **/
+
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName());
-            //        }
+        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
