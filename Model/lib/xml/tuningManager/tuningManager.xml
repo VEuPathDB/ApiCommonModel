@@ -6139,18 +6139,16 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   </tuningTable>
 
 
-  <tuningTable name="CompoundAttributes"  prefixEnabled="true" alwaysUpdate="true">
-    <comment> The BFMV for the compound WDK record type. Used by the model for the
-         compound record and queries, as well as in the creation of the
-         PathwayCompounds tuning table. Propagated to portal instances.
-      </comment>
-    <!-- externalDependency name="chebi.Compounds"/ -->
+  <tuningTable name="CompoundProperties"  prefixEnabled="true" alwaysUpdate="true">
+    <comment> Properties table for ChEBI Compounds.
+    </comment>
+    <!-- externalDependency name="chebi.compounds"/ -->
     <!-- externalDependency name="chebi.names"/ -->
     <!-- externalDependency name="chebi.chemical_data"/ -->
     <sql>
       <![CDATA[
-CREATE TABLE &prefixCompoundAttributes&1 NOLOGGING AS
-SELECT c.ID, c.chebi_accession AS source_id,
+CREATE TABLE CompoundProperties&1 NOLOGGING AS
+SELECT c.ID, c.chebi_accession AS source_id, c.parent_id,
     c.name AS compound_name,
     substr(apidb.tab_to_string(set(cast(COLLECT(to_char(cn.name)) AS apidb.varchartab)), ', '), 1, 1000) AS other_names,
     substr(apidb.tab_to_string(set(cast(COLLECT(to_char(ciup.iupac_name)) AS apidb.varchartab)), ', '), 1, 1000) AS iupac_name,
@@ -6173,20 +6171,35 @@ AND c.ID = formu.compound_id (+)
 AND c.ID = m.compound_id (+)
 AND c.ID = sec.parent_id (+)
 GROUP BY c.ID, c.chebi_accession, c.parent_id, c.name, c.definition, m.mass
-      ]]>
     </sql>
+  </tuningTable>
+
+
+  <tuningTable name="CompoundAttributes"  prefixEnabled="true" alwaysUpdate="true">
+    <comment> The BFMV for the compound WDK record type. Used by the model for the
+         compound record and queries, as well as in the creation of the
+         PathwayCompounds tuning table. Propagated to portal instances.
+         Note: children of ChEBI compounds are excluded, but data of these is gathered in the (parent) entries.
+      </comment>
+    <internalDependency name="CompoundProperties"/>
     <sql>
       <![CDATA[
-update &prefixCompoundAttributes&1
-set compound_name = iupac_name
-where compound_name is NULL
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-update &prefixCompoundAttributes&1
-set compound_name = syn
-where compound_name is NULL
+CREATE TABLE &prefixCompoundAttributes&1 NOLOGGING AS
+SELECT p.ID
+, p.source_id
+, p.compound_name
+, apidb.tab_to_string(SET(CAST(COLLECT(childc.other_names ORDER BY childc.other_names) AS apidb.varchartab)), ', ') AS other_names
+, apidb.tab_to_string(SET(CAST(COLLECT(childc.iupac_name ORDER BY childc.iupac_name) AS apidb.varchartab)), ', ') AS iupac_name
+, apidb.tab_to_string(SET(CAST(COLLECT(childc.syn ORDER BY childc.syn) AS apidb.varchartab)), ', ') AS syn
+, p.definition  
+, p.secondary_ids
+, apidb.tab_to_string(SET(CAST(COLLECT(childc.formula ORDER BY childc.formula) AS apidb.varchartab)), ', ') AS formula
+, (avg(childc.mass)) AS mass
+FROM compprops p
+, (SELECT id, parent_id, other_names, iupac_name, syn, mass, formula FROM compprops ) childc
+WHERE p.parent_id IS NULL
+AND  (p.ID = childc.parent_id OR p.ID =childc.ID )
+GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_idsqq
       ]]>
     </sql>
   </tuningTable>
@@ -6204,6 +6217,10 @@ where compound_name is NULL
         CREATE TABLE &prefixCompoundId&1 NOLOGGING AS
       SELECT source_id AS id, source_id AS compound, 'same ID' AS type, '' as source 
       FROM &prefixCompoundAttributes
+      UNION
+      SELECT p.source_id AS id, ca.source_id AS compound, 'child ID' AS type, '' as source 
+      FROM &prefixCompoundAttributes ca, CompoundProperties p
+      WHERE ca.id = p.parent_id
       UNION
       SELECT da.accession_number AS id,  p.source_id AS compound, 'KEGG'  AS type, '' as source 
       FROM chebi.database_accession da, &prefixCompoundAttributes p
