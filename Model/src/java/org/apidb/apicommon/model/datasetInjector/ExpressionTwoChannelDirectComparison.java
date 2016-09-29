@@ -44,6 +44,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
             **/
 
         if (getPropValueAsBoolean("hasPageData") && !(lcDataType.equals("proteomics"))) {
+            injectTemplate("PageProfileSetParamQuery");
             injectTemplate("expressionFoldChangeWithConfidenceQuestionDirect");
             //            injectTemplate(lcDataType + "FoldChangeWithConfidenceCategoriesDirect");
             setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-direct-comparison");
