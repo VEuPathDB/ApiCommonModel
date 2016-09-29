@@ -37,6 +37,15 @@ public class MicroarrayOneChannelRma extends ExpressionOneChannelAndReferenceDes
         setDataType("Microarray");
     }
 
+
+
+  @Override
+  public void addModelReferences() {
+      super.addModelReferences();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
+  }
+
+
     @Override
     public String[][] getPropertiesDeclaration() {
         String[][] exprDeclaration = super.getPropertiesDeclaration();

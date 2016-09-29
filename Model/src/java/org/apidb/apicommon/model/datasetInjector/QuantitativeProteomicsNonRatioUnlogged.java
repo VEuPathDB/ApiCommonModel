@@ -21,6 +21,11 @@ public class QuantitativeProteomicsNonRatioUnlogged extends QuantitativeProteomi
         setPropValue("isLogged", "0"); 
     }
 
+  @Override
+  public void addModelReferences() {
+      super.addModelReferences();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
+  }
 
 }
 

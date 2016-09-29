@@ -50,6 +50,13 @@ public class QuantitativeProteomicsReferenceDesign extends ExpressionOneChannelA
      */
     protected void setIsLogged() {}
 
+
+  @Override
+  public void addModelReferences() {
+      super.addModelReferences();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
+  }
+
     @Override
     public String[][] getPropertiesDeclaration() {
         String[][] exprDeclaration = super.getPropertiesDeclaration();

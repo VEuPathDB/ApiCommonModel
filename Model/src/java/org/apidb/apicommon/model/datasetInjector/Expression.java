@@ -82,6 +82,9 @@ public abstract class Expression extends DatasetInjector {
     @Override
     public void addModelReferences() {
       setGraphModule();
+
+
+
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
     }
 

@@ -55,6 +55,14 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
      */
     protected void setIsLogged() {}
 
+
+  @Override
+  public void addModelReferences() {
+      super.addModelReferences();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
+  }
+
+
     @Override
     public String[][] getPropertiesDeclaration() {
         String[][] exprDeclaration = super.getPropertiesDeclaration();

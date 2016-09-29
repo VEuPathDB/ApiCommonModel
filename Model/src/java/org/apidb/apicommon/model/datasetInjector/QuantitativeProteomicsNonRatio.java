@@ -47,7 +47,13 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
     }
 
        
-    
+
+  @Override
+  public void addModelReferences() {
+      super.addModelReferences();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
+  }
+
 
     @Override
     public String[][] getPropertiesDeclaration() {
