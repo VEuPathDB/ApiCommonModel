@@ -11,7 +11,7 @@ public class RNASeqHornRNAi extends DatasetInjector {
   @Override
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Horn::TbRNAiRNASeq"); 
-	
+        addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PhenotypeGraphs");	
       // addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByHighTroughputPhenotyping"); 
   }
 

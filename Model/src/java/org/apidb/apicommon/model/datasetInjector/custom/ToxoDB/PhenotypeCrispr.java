@@ -10,6 +10,7 @@ public class PhenotypeCrispr extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CrisprPhenotypeGraphs");
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_tgonGT1_crisprPhenotype_CrisprScreen_RSRC"); 
   }
 

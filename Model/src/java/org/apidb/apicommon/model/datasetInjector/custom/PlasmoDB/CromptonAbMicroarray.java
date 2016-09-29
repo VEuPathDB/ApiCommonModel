@@ -10,6 +10,7 @@ public class CromptonAbMicroarray extends AntibodyArray {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCromptonAbFoldChange");
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Crompton::AbMicroarray");
+        addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "HostResponseGraphs");
   }
 
   // second column is for documentation

@@ -245,7 +245,8 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphModule", "RNASeq::StrandNonSpecific");
 	      } */
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
-
+              addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
+      
           if(getPropValueAsBoolean("hasMultipleSamples")) {
 
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",

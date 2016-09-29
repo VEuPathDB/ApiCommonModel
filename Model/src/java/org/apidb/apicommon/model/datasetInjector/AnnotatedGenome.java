@@ -217,8 +217,14 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithSignalPeptide");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTransmembraneDomains");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview");
+
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
+
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionPBrowse");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinProperties");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Sequences");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneTranscripts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AlternateProducts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");

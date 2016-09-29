@@ -36,6 +36,14 @@ public class MicroarrayTwoChannelReferenceDesign extends ExpressionOneChannelAnd
         setPropValue("exprPlotPartModule", "LogRatio");
     }
 
+
+
+  @Override
+  public void addModelReferences() {
+      super.addModelReferences();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
+  }
+
     @Override
     public String[][] getPropertiesDeclaration() {
         String[][] microarrayDeclaration = super.getPropertiesDeclaration();

@@ -14,6 +14,7 @@ public class InterPro extends DatasetInjector {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByInterproDomain"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearch"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GoTerms"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterPro"); 
   }
 
   // second column is for documentation

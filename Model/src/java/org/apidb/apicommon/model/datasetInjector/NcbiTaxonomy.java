@@ -204,6 +204,8 @@ public class NcbiTaxonomy extends DatasetInjector {
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon"); 
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByTaxon"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview"); 
+
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Taxonomy");
   }
 
   // second column is for documentation
