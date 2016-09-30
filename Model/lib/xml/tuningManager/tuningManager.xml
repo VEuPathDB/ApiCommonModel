@@ -72,6 +72,60 @@ and organisms.organism = class.organism (+)
     </sql>
   </tuningTable>
 
+  <tuningTable name="ExternalSeqeunceTaxonRank" prefixEnabled="false">
+    <comment>Taxon ranks for 16S reference organisms                                                                                                     
+    </comment>
+    <externalDependency name="dots.ExternalNASequence"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="sres.Taxon"/>
+    <sql>
+      <![CDATA[
+create table ExternalSeqeunceTaxonRank&1 nologging as
+with organism_rank as (
+select tn1.taxon_id as organism, tn2.name as parent_organism, 
+r.rank
+
+from (
+select CONNECT_BY_ROOT taxon_id as input, taxon_id, rank
+from sres.taxon
+start with taxon_id in (select taxon_id from DOTS.EXTERNALNASEQUENCE)
+connect by prior parent_id = taxon_id) r
+, sres.taxonname tn1
+, sres.taxonname tn2
+where r.input = tn1.taxon_id
+and r.taxon_id = tn2.taxon_id
+and tn1.name_class = 'scientific name'
+and tn2.name_class = 'scientific name'
+and r.rank in ('phylum', 'genus', 'species', 'superkingdom','kingdom', 'class', 'order')
+)
+
+select organisms.organism, 
+       nvl(superkingdom.parent_organism, 'N/A') as superkingdom, 
+       nvl(kingdom.parent_organism, 'N/A') as kingdom, 
+       nvl (phylum.parent_organism, 'N/A') as phylum,
+       nvl (class.parent_organism, 'N/A') as class,
+       nvl (rank_order.parent_organism, 'N/A') as rank_order,
+       nvl ( genus.parent_organism, 'N/A') as genus, 
+       nvl(species.parent_organism, 'N/A') as species
+from 
+(select distinct organism from organism_rank) organisms,
+(select * from organism_rank where rank= 'phylum') phylum,
+(select * from organism_rank where rank= 'genus') genus,
+(select * from organism_rank where rank= 'species') species,
+(select * from organism_rank where rank= 'kingdom') kingdom,
+(select * from organism_rank where rank= 'superkingdom') superkingdom,
+(select * from organism_rank where rank= 'class') class,
+(select * from organism_rank where rank= 'order') rank_order
+where organisms.organism = phylum.organism (+)
+and organisms.organism = genus.organism (+)
+and organisms.organism = species.organism (+)
+and organisms.organism = kingdom.organism (+)
+and organisms.organism = class.organism (+)
+and organisms.organism = rank_order.organism (+)
+and organisms.organism = superkingdom.organism (+)
+ ]]>
+    </sql>
+  </tuningTable>
 
 
   <tuningTable name="PathwayAttributes" prefixEnabled="false">
@@ -307,10 +361,14 @@ WHERE
             connect by prior input_node_id = output_node_id
            )
         select node_inputs.protocol_app_node_id, ds.name as dataset_name,
+
                case
-                  when lower(ds.name) like '%icemr%' then 1
-                  else 0
-                end as is_icemr,
+                       when lower(ds.name) like '%microarrayantibody%'
+                            then 'Ontology_icemr_RSRC'
+                       when lower(ds.name) like 'otu%'
+                            then 'Ontology_microbiomeHierarchy_RSRC'
+                       else null
+                       end as hierarchy_dataset_name,
                p.name as category, pan.name as pan_name, pp.name as term,
                pap.value, pap.protocol_app_param_id, ds.type, ds.subtype, tn.name as organism,
                study_release.study_name, study_release.investigation_name
@@ -354,9 +412,12 @@ WHERE
                attribute_term.ontology_term_id as term_id, nvl(c.value, value_term.name) as value, c.characteristic_id,
                ds.name as dataset_name, sample_pan.name as pan_name, ds.type,
                case
-                  when lower(ds.name) like '%icemr%' then 1
-                  else 0
-                end as is_icemr,
+                       when lower(ds.name) like '%microarrayantibody%'
+                            then 'Ontology_icemr_RSRC'
+                       when lower(ds.name) like 'otu%'
+                            then 'Ontology_microbiomeHierarchy_RSRC'
+                       else null
+                       end as hierarchy_dataset_name,
                ds.subtype, tn.name as organism,
                study_release.study_name, study_release.investigation_name
         from node_inputs, study.ProtocolAppNode pan, study.Characteristic c, sres.OntologyTerm value_term,
@@ -559,11 +620,14 @@ WHERE
       <![CDATA[
         create table FallbackMetadata&1 nologging as
         -- regular query for most datasets
-        select ds.name as dataset_name, ds.subtype, tn.name as organism,
-               case
-                  when lower(ds.name) like '%icemr%' then 1
-                  else 0
-                end as is_icemr,
+        select ds.name as dataset_name, ds.type, ds.subtype, tn.name as organism,
+              case
+                       when lower(ds.name) like '%microarrayantibody%'
+                            then 'Ontology_icemr_RSRC'
+                       when lower(ds.name) like 'otu%'
+                            then 'Ontology_microbiomeHierarchy_RSRC'
+                       else null
+                       end as hierarchy_dataset_name,
                pan.name as pan_name, pan.protocol_app_node_id, 'name' as term_name,
                study_release.study_name, study_release.investigation_name
         from study.ProtocolAppNode pan, apidb.Datasource ds, study.StudyLink sl,
@@ -590,8 +654,8 @@ WHERE
           and (tn.name_class = 'scientific name' or tn.name_class is null)
 UNION
         -- special query for reference strain
-        select ed.name as dataset_name, 'HTS_SNP' as subtype, tn.name as organism,
-               0 as is_icemr,
+        select ed.name as dataset_name, 'SNP' as type, 'HTS_SNP' as subtype, tn.name as organism,
+               null as hierarchy_dataset_name,
                o.strain_abbrev as pan_name, pan.protocol_app_node_id, 'name' as term_name,
                study_release.study_name, study_release.investigation_name
         from study.ProtocolAppNode pan, study.StudyLink sl,
@@ -630,12 +694,16 @@ UNION
       <![CDATA[
         create table MetadataSpec&1 nologging as
         select * from (
-        with icemr_mapping
+        with hierarchy_mapping
         as (select dataset_name,
                    case
-                     when lower(dataset_name) like '%icemr%' then 1
-                     else 0
-                   end as is_icemr
+                       when lower(dataset_name) like '%microarrayantibody%'
+                            then 'Ontology_icemr_RSRC'
+                       when lower(dataset_name) like 'otu%'
+                            then 'Ontology_microbiomeHierarchy_RSRC'
+                       else null
+                       end as hierarchy_dataset_name
+                  
             from (  select dataset_name
                     from FallbackMetadata
                   union
@@ -645,10 +713,10 @@ UNION
                     select dataset_name
                     from panProtocolMetadata)),
         protocol_metadata
-        as (select distinct organism, subtype, dataset_name, category, term, value
+        as (select distinct organism, type, subtype, dataset_name, category, term, value
             from panProtocolMetadata),
         characteristic_metadata
-        as (select distinct organism, subtype, dataset_name, category, term, value
+        as (select distinct organism, type, subtype, dataset_name, category, term, value
             from panCharacteristicMetadata),
         metadata
         as (  select *
@@ -657,172 +725,187 @@ UNION
               select *
               from characteristic_metadata),
         ontology_tree_metadata
-        as (select distinct term_id, dataset_name, organism, subtype,
+        as (select distinct term_id, dataset_name, organism, type,subtype,
                             case
-                              when lower(dataset_name) like '%icemr%' then 1
-                              else 0
-                            end as is_icemr
+                              when lower(dataset_name) like '%microarrayantibody%'
+                                   then 'Ontology_icemr_RSRC'
+                              when lower(dataset_name) like 'otu%'
+                                   then 'Ontology_microbiomeHierarchy_RSRC'
+                              else null
+                            end as hierarchy_dataset_name
             from PANCharacteristicMetadata
-            where lower(dataset_name) like '%icemr$' or dataset_name like '%Crompton%'
            ),
         leaf_term
-        as (select distinct term_id
+        as (select distinct term_id, hierarchy_dataset_name
             from ontology_tree_metadata
            ),
         graph_edge
-        as (select subject_term_id as child_term_id, object_term_id as parent_term_id
-            from sres.OntologyRelationship
+        as (select ed.name as dataset_name, tree.* from (
+            select subject_term_id as child_term_id, object_term_id as parent_term_id, external_database_release_id
+            from sres.OntologyRelationship orel
             where external_database_release_id in (select edr.external_database_release_id
                                                    from sres.externaldatabase ed, sres.externaldatabaserelease edr
-                                                   where ed.external_database_id = edr.external_database_id
-                                                     and ed.name = 'Ontology_icemr_RSRC')
+                                                   where ed.external_database_id = edr.external_database_id)
             start with subject_term_id in (select term_id from leaf_term)
-            connect by subject_term_id = prior object_term_id),
+            connect by subject_term_id = prior object_term_id) tree,
+            sres.externaldatabase ed, 
+            sres.externaldatabaserelease edr
+            where tree.external_database_release_id = edr.external_database_release_id
+            and ed.external_database_id = edr.external_database_id),
         unparented_term
-        as (select parent_term_id as term_id from graph_edge
+        as (select parent_term_id as term_id, dataset_name from graph_edge
             minus
-            select child_term_id as term_id from graph_edge),
+            select child_term_id as term_id, dataset_name from graph_edge),
         distinct_term
-        as (select parent_term_id as term_id from graph_edge
+        as (select parent_term_id as term_id, dataset_name from graph_edge
             union
-            select child_term_id as term_id from graph_edge),
-        leaf_ancestor_pair
-        as (  select ancestor.term_id as ancestor_term_id, descendent.term_id as leaf_term_id
-              from distinct_term ancestor, distinct_term descendent
+            select child_term_id as term_id, dataset_name from graph_edge),
+        leaf_ancestor_pair 
+        as (
+        select ancestor.term_id as ancestor_term_id, descendent.term_id as leaf_term_id, ancestor.dataset_name
+              from distinct_term ancestor, distinct_term descendent, leaf_term lt
               where descendent.term_id
                     in (select child_term_id
                         from graph_edge
                         start with parent_term_id = ancestor.term_id
                         connect by prior child_term_id = parent_term_id)
-                and descendent.term_id in (select term_id from leaf_term)
+                and descendent.term_id = lt.term_id
+                and decode(descendent.dataset_name, lt.hierarchy_dataset_name, 1 ,0) = 1 
+                and descendent.dataset_name = ancestor.dataset_name
             union
-              select term_id as ancestor_term_id, term_id as leaf_term_id
+              select term_id as ancestor_term_id, term_id as leaf_term_id, hierarchy_dataset_name as dataset_name
               from leaf_term
             ),
         fallback
-        as (select distinct dataset_name, subtype, organism, is_icemr, term_name as property
+        as (select distinct dataset_name, type, subtype, organism, hierarchy_dataset_name, term_name as property
             from FallbackMetadata
            )
         -- END OF WITH CLAUSES (whew!)
         -- parent
-          select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'parent' as spec_property, category as spec_value
-          from metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
-        -- leaf
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'parent' as spec_property, category as spec_value
+          from metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and hierarchy_dataset_name is null 
+   
+   -- leaf
         union
-          select organism, m.dataset_name, subtype, is_icemr, term as property, 'leaf' as spec_property, 'true' as spec_value
-          from metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
+          select organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'leaf' as spec_property, 'true' as spec_value
+          from metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
         -- filter
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'filter' as spec_property,
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'filter' as spec_property,
                  case
                     when term in ('Time To Onset', 'age') then 'range'
                     else 'membership'
                  end as spec_value
-          from metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
+          from metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
         -- display
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, term as property, 'display' as spec_property, initcap(term) as spec_value
-          from metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'display' as spec_property, initcap(term) as spec_value
+          from metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
         -- type
         union
-          select organism, m.dataset_name, subtype, is_icemr, term as property, 'type' as spec_property,
+          select organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'type' as spec_property,
                  case
                    when is_string = 1 then 'string'
                    else 'number'
                  end as spec_value
-          from (select organism, dataset_name, term, subtype,
+          from (select organism, dataset_name, term, type, subtype,
                        max(case when regexp_like (nvl(value,0),'^[[:digit:]]*[.]?[[:digit:]]*$') or value is null
                                   then 0
                                 else 1
                            end) as is_string
                 from metadata
-                group by organism, dataset_name, term, subtype
+                group by organism, dataset_name, term, type, subtype
                ) m,
-               icemr_mapping im
-          where m.dataset_name = im.dataset_name
+               hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
         -- parents: parent
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, category as property, 'parent' as spec_property, 'protocol' as spec_value
-          from protocol_metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, category as property, 'parent' as spec_property, 'protocol' as spec_value
+          from protocol_metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, category as property, 'parent' as spec_property, 'characteristic' as spec_value
-          from characteristic_metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, category as property, 'parent' as spec_property, 'characteristic' as spec_value
+          from characteristic_metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         -- parents: display
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, category as property, 'display' as spec_property, category as spec_value
-          from metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, category as property, 'display' as spec_property, category as spec_value
+          from metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         -- grandparents: parent
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, 'protocol' as property, 'parent' as spec_property, '' as spec_value
-          from protocol_metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, 'protocol' as property, 'parent' as spec_property, '' as spec_value
+          from protocol_metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, 'characteristic' as property, 'parent' as spec_property, '' as spec_value
-          from characteristic_metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, 'characteristic' as property, 'parent' as spec_property, '' as spec_value
+          from characteristic_metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         -- grandparents: display
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, 'protocol' as property, 'display' as spec_property, 'Protocol' as spec_value
-          from protocol_metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, 'protocol' as property, 'display' as spec_property, 'Protocol' as spec_value
+          from protocol_metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         union
-          select distinct organism, m.dataset_name, subtype, is_icemr, 'characteristic' as property, 'display' as spec_property, 'Characteristic' as spec_value
-          from characteristic_metadata m, icemr_mapping im
-          where m.dataset_name = im.dataset_name
-            and (is_icemr = 0 and m.dataset_name not like '%Crompton%')
+          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, 'characteristic' as property, 'display' as spec_property, 'Characteristic' as spec_value
+          from characteristic_metadata m, hierarchy_mapping hm
+          where m.dataset_name = hm.dataset_name
+            and (hierarchy_dataset_name is null)
         union
-          select otm.organism, otm.dataset_name, otm.subtype, otm.is_icemr,
-                 child.name as property, 'parent' as spec_property, parent.name as spec_value
+          select otm.organism, otm.dataset_name, otm.type, subtype, otm.hierarchy_dataset_name,
+                child.name as property, 'parent' as spec_property, parent.name as spec_value
           from ontology_tree_metadata otm, leaf_ancestor_pair lap,
-               (select child_term_id, parent_term_id from graph_edge
+               (select child_term_id, parent_term_id, dataset_name from graph_edge
                 union
-                select term_id as child_term_id, null as parent_term_id from unparented_term) edge,
+                select term_id as child_term_id, null as parent_term_id, dataset_name from unparented_term) edge,
                sres.OntologyTerm child, sres.OntologyTerm parent
           where edge.child_term_id = lap.ancestor_term_id
             and lap.leaf_term_id = otm.term_id
+            and decode(lap.dataset_name, otm.hierarchy_dataset_name, 1 ,0) = 1
             and edge.child_term_id = child.ontology_term_id
             and edge.parent_term_id = parent.ontology_term_id(+)
+            and decode(edge.dataset_name, otm.hierarchy_dataset_name, 1 ,0) = 1
+            
         -- fallback: parent
         union
-          select organism, dataset_name, subtype, is_icemr, property, 'parent' as spec_property, '' as spec_value
+          select organism, dataset_name, type, subtype, hierarchy_dataset_name, property, 'parent' as spec_property, '' as spec_value
           from fallback
         -- fallback: display
         union
-          select organism, dataset_name, subtype, is_icemr, property, 'display' as spec_property, initcap(property) as spec_value
+          select organism, dataset_name, type, subtype, hierarchy_dataset_name, property, 'display' as spec_property, initcap(property) as spec_value
           from fallback
         -- fallback: filter
         union
-          select organism, dataset_name, subtype, is_icemr, property, 'filter' as spec_property, 'membership' as spec_value
+          select organism, dataset_name, type, subtype, hierarchy_dataset_name, property, 'filter' as spec_property, 'membership' as spec_value
           from fallback
         -- fallback: leaf
         union
-          select organism, dataset_name, subtype, is_icemr, property, 'leaf' as spec_property, 'true' as spec_value
+          select organism, dataset_name, type, subtype, hierarchy_dataset_name, property, 'leaf' as spec_property, 'true' as spec_value
           from fallback
         -- fallback: type
         union
-          select organism, dataset_name, subtype, is_icemr, property, 'type' as spec_property, 'string' as spec_value
+          select organism, dataset_name, type, subtype, hierarchy_dataset_name, property, 'type' as spec_property, 'string' as spec_value
           from fallback
-        ) order by organism, dataset_name, property, spec_property, spec_value
+        ) 
+        where dataset_name not in ('ISASimple_RSRC','ISA_RSRC')
+        order by organism, dataset_name, property, spec_property, spec_value
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create index msix1&1
-        on MetadataSpec&1 (dataset_name, organism, is_icemr, property, spec_property, spec_value)
+        on MetadataSpec&1 (dataset_name, organism, hierarchy_dataset_name, property, spec_property, spec_value)
         tablespace indx
       ]]>
     </sql>
