@@ -1,15 +1,13 @@
 package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
+import org.apidb.apicommon.model.datasetInjector.MicroarrayOneChannelRma;
 
-public class MicroarrayWhiteCellCycle extends CusomGenePageExpressionGraphs {
+public class MicroarrayWhiteCellCycle extends MicroarrayOneChannelRma {
 
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "White::CellCycle"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByToxoCellCycleFoldChange"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByToxoCellCyclePercentile"); 
+      super.addModelReferences();
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByToxoProfileSimilarity"); 
   }
 
