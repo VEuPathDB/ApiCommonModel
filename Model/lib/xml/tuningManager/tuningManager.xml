@@ -7458,6 +7458,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     </comment>
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ProfileSamples"/>
     <internalDependency name="ProfileSetDisplayInfo"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="sres.ExternalDatabase"/>
@@ -7472,8 +7473,8 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
           select ga.source_id, dnt.dataset_presenter_id as dataset_id,
                  cast(regexp_replace(pan.name, ' \(.*\)', '') ||
                       case
-                         when display_name like '% - %'
-                           then regexp_replace(dsp.display_name, '^.* - ', ' - ')
+                         when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
+                           then regexp_replace(regexp_replace(ps.study_name, '\[[^]]*\]', ''), '^.* - ', ' - ')
                          else null
                        end 
                       as varchar2(200)) AS sample_name,
@@ -7481,92 +7482,54 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                  round(nfe.standard_error, 2) as standard_error,
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
                  round(nfe.percentile_channel2, 2) as percentile_channel2
-          from results.NaFeatureExpression nfe, GeneAttributes ga,
-               study.ProtocolAppNode pan, study.Studylink sl, study.Study ps,
-               study.Study i, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-               DatasetNameTaxon dnt, DatasetProperty dp, DatasetPresenter dsp
-          where ga.na_feature_id = nfe.na_feature_id
-          and nfe.protocol_app_node_id = pan.protocol_app_node_id
-          and pan.protocol_app_node_id = sl.protocol_app_node_id
-          and sl.study_id = ps.study_id
-          and ps.investigation_id = i.study_id
-          and i.external_database_release_id = r.external_database_release_id
-          and r.external_database_id = d.external_database_id
-          and d.name = dnt.name
-          and dnt.dataset_presenter_id = dp.dataset_presenter_id
-          and dnt.dataset_presenter_id = dsp.dataset_presenter_id
-          and dp.property='datasetClassCategory'
-          and NOT dp.value='RNASeq'
-        UNION
-          -- RNASeq
-          select ga.source_id, dnt.dataset_presenter_id as dataset_id,
-                 cast (CASE
-                         WHEN (dp.value > 0)
-                           THEN  -- i.e. switchstrands =1  
-                             REPLACE(REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(pan.name, ' \- \S+\] \S+', ''),
-                                                                                  '\[cuff', 'Cufflinks' ), ' \[htseq-union', ''),
-                                                   'firststrand', 'antisense'),
-                                           'secondstrand','sense')
-                         ELSE 
-                           REPLACE(REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(pan.name, ' \- \S+\] \S+', ''),
-                                                                                '\[cuff', 'Cufflinks' ),
-                                                                 ' \[htseq-union', ''),
-                                                  'firststrand', 'sense'),
-                                          'secondstrand','antisense')
-                       END ||
-                       case
-                         when display_name like '% - %'
-                           then ' ' || regexp_replace(dsp.display_name, '^.* - ', '')
-                         else null
-                       end as varchar2(200))
-                   as sample_name,
-                 round(nfe.value, 2) as value,
-                 round(nfe.standard_error, 2) as standard_error,
-                 round(nfe.percentile_channel1, 2) as percentile_channel1,
-                 round(nfe.percentile_channel2, 2) as percentile_channel2
           from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
-               study.StudyLink sl, study.Study ps, study.Study i,
+               ApidbTuning.ProfileSamples ps, study.Study s, study.Study i,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
                DatasetNameTaxon dnt, DatasetProperty dp, DatasetPresenter dsp
           where ga.na_feature_id = nfe.na_feature_id
             and nfe.protocol_app_node_id = pan.protocol_app_node_id
-            and pan.protocol_app_node_id = sl.protocol_app_node_id
-            and sl.study_id = ps.study_id
-            and ps.investigation_id = i.study_id
+            and pan.protocol_app_node_id = ps.protocol_app_node_id
+            and ps.study_id = s.study_id
+            and s.investigation_id = i.study_id
             and i.external_database_release_id = r.external_database_release_id
             and r.external_database_id = d.external_database_id
             and d.name = dnt.name
             and dnt.dataset_presenter_id = dp.dataset_presenter_id
             and dnt.dataset_presenter_id = dsp.dataset_presenter_id
             and dp.property = 'switchStrands'
-            and ps.name not like '%cuff%'
-            and ps.name not like '%htseq-intersection-nonempty%'
-            and ps.name not like '%htseq-intersection-strict%'
+            and ps.study_name not like '%cuff%'
+            and ps.study_name not like '%htseq-intersection-nonempty%'
+            and ps.study_name not like '%htseq-intersection-strict%'
         UNION
           -- Splice Site data
           select ga.source_id, dsp.dataset_presenter_id as dataset_id,
-                 pan.name  as sample_name,
+                 cast(regexp_replace(pan.name, ' \(.*\)', '') ||
+                      case
+                         when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
+                           then regexp_replace(regexp_replace(ps.study_name, '\[[^]]*\]', ''), '^.* - ', ' - ')
+                         else null
+                       end 
+                      as varchar2(200)) AS sample_name,
                  round(nfe.value, 2) as value,
                  round(nfe.standard_error, 2) as standard_error,
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
                  round(nfe.percentile_channel2, 2) as percentile_channel2
           from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
-               study.StudyLink sl, study.Study ps, study.Study i,
+               ApidbTuning.ProfileSamples ps, study.Study s, study.Study i,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
                DatasetNameTaxon dnt,DatasetProperty dp, 
                DatasetPresenter dsp
           where ga.na_feature_id = nfe.na_feature_id
             and nfe.protocol_app_node_id = pan.protocol_app_node_id
-            and pan.protocol_app_node_id = sl.protocol_app_node_id
-            and sl.study_id = ps.study_id
-            and ps.investigation_id = i.study_id
+            and pan.protocol_app_node_id = ps.protocol_app_node_id
+            and ps.study_id = s.study_id
+            and s.investigation_id = i.study_id
             and i.external_database_release_id = r.external_database_release_id
             and r.external_database_id = d.external_database_id
             and d.name = dnt.name
             and dnt.dataset_presenter_id = dsp.dataset_presenter_id
             and dsp.dataset_presenter_id = dp.dataset_presenter_id
             and dp.property ='type' and dp.value='Splice Site'
-
       ]]>
     </sql>
     <sql>
