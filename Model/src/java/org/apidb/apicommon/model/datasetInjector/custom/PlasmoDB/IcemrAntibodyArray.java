@@ -10,7 +10,7 @@ public class IcemrAntibodyArray extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "question", "GeneQuestions.GenesByICEMRHostResponse");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByICEMRHostResponse");
         addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "HostResponseGraphs");
   }
 
