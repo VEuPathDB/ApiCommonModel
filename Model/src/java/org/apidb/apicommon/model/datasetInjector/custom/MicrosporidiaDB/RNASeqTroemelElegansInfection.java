@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.MicrosporidiaDB;
 
-import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphsAndCoverage;
+import org.apidb.apicommon.model.datasetInjector.RNASeq;
 
-public class RNASeqTroemelElegansInfection extends CusomGenePageExpressionGraphsAndCoverage {
+public class RNASeqTroemelElegansInfection extends RNASeq {
 
 
   @Override
