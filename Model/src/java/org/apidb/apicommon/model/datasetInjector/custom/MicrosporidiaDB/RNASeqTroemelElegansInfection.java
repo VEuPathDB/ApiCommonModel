@@ -7,6 +7,7 @@ public class RNASeqTroemelElegansInfection extends RNASeq {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Troemel::CelegansInfectionTimeSeries");
+      super.addModelReferences();
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Troemel::CelegansInfectionTimeSeries");
   }
 }
