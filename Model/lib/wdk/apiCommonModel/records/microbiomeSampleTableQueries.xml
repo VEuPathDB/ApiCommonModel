@@ -62,25 +62,40 @@ from
 
     <sqlQuery name="TaxaRelativeAbundance">
             <column name="name"/>
-            <column name="taxon_id"  />
+            <column name="taxon_id"/>
+             <column name="kingdom"/>
+             <column name="phylum"/>
+             <column name="class"/>
+             <column name="rank_order"/>
+             <column name="genus"/>
+             <column name="species"/>
             <column name="relative abundance"  />
            <sql>
             <![CDATA[
-select * from (
-select ds.name,
-  oa.protocol_app_node_id,
-  seq.TAXON_ID,
-  round(sum(oa.RELATIVE_ABUNDANCE),4) as relative_abundance
-from RESULTS.OTUABUNDANCE oa,
-  DOTS.EXTERNALNASEQUENCE seq,
-  apidbtuning.sampledownstream ds
-where oa.PROTOCOL_APP_NODE_ID = ds.OUTPUT_PROTOCOL_APP_NODE_ID
-and ds.OUTPUT_ISA_TYPE = 'Data'
-and oa.NA_SEQUENCE_ID = seq.NA_SEQUENCE_ID
-
-group by  ds.name,  oa.protocol_app_node_id, seq.TAXON_ID 
-)
-order by relative_abundance desc, taxon_id
+                     select ta.*,
+                               replace(decode(superkingdom, 'N/A',kingdom,superkingdom),'N/A', '') as kingdom,
+                               replace(phylum,'N/A', '') as phylum,
+                               replace(class,'N/A', '') as class,
+                               replace(rank_order,'N/A', '') as rank_order,
+                               replace(genus,'N/A', '') as genus,
+                               replace(species,'N/A', '') as species
+                     from (
+                                select ds.name,
+                                          oa.protocol_app_node_id,
+                                          seq.TAXON_ID,
+                                          round(sum(nvl(oa.RELATIVE_ABUNDANCE,0)),4) as relative_abundance
+                                          from RESULTS.OTUABUNDANCE oa,
+                                                  DOTS.EXTERNALNASEQUENCE seq,   
+                                                  apidbtuning.sampledownstream ds
+                                           where oa.PROTOCOL_APP_NODE_ID = ds.OUTPUT_PROTOCOL_APP_NODE_ID
+                                           and ds.OUTPUT_ISA_TYPE = 'Data'
+                                           and oa.NA_SEQUENCE_ID = seq.NA_SEQUENCE_ID
+                                           group by  ds.name,  oa.protocol_app_node_id, seq.TAXON_ID
+                                  ) ta,
+                                  apidbtuning.EXTERNALSEQEUNCETAXONRANK estr
+                        where ta.taxon_id = estr.organism
+                        and ta.relative_abundance > 0
+                        order by name,relative_abundance desc, superkingdom, kingdom, phylum, class, rank_order, genus, species
             ]]>
             </sql>
     </sqlQuery>
@@ -93,11 +108,11 @@ order by relative_abundance desc, taxon_id
             <column name="summary"/>
            <sql>
             <![CDATA[
-select sd.name
+select distinct  sd.name
  , edp.dataset_presenter_id
  , dsp.display_name
  , dsp.category
- , dsp.summary
+ , dbms_lob.substr( dsp.summary, 4000, 1 ) as summary
 from apidbtuning.sampledownstream sd
    , apidbtuning.protocolappnoderesults panr
    , study.study s
