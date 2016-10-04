@@ -10,7 +10,7 @@ public class IsolatesMenezesRFLP extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "IsolateQuestions.IsolateByRFLPGenotype"); 
+      addWdkReference("RflpIsolateRecordClasses.RflpIsolateRecordClass", "question", "RflpIsolateQuestions.IsolateByRFLPGenotype"); 
   }
 
   // second column is for documentation
