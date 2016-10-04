@@ -1551,47 +1551,63 @@ ORDER BY
             <sql>
             <![CDATA[
                 SELECT DISTINCT
-                ta.source_id as transcript_source_id
-                , ta.gene_source_id as source_id
-                , '@PROJECT_ID@' as project_id
-                , REPLACE(pan.name, ' [feature_loc] (SpliceSites)', '') as sample_name
-                , sst.location
-                , ssf.count_per_million
-                , ssf.avg_mismatches
-                , decode (sst.is_unique, 1, 'yes', 0, '') as is_unique
-                , decode (sst.is_dominant, 1, 'yes', 0, '') as is_dominant
-                , CASE WHEN (sst.location >= ta.coding_start AND sst.location <= coding_end AND sst.dist_to_cds = sst.dist_to_first_atg)
-                    THEN (-1) * sst.dist_to_cds
-                    ELSE sst.dist_to_first_atg END as utr_len
-                , CASE WHEN NOT (sst.dist_to_cds = sst.dist_to_first_atg)
-                    THEN 'yes' ELSE '' END as alt_cds_start
-                , CASE WHEN (ta.is_reversed = 0 )
-                    THEN (sst.location - ta.coding_start)
-                    ELSE (ta.coding_end - sst.location) END as rel_pos
-                , REGEXP_REPLACE (dp.display_name, '\(.+\)', '') as display_name
-                , CASE WHEN (dp.short_display_name like '%Myler%')
-                    THEN 'Myler lab' ELSE dp.short_attribution END as attribution
-                , dp.dataset_presenter_id
-                FROM apidbtuning.splicesitetranscripts sst
-                , apidb.splicesitefeature ssf
-                , study.protocolappnode pan
-                , study.studylink sl
-                , study.study s
-                , study.study i
-                , apidbtuning.datasetpresenter dp
-                , apidbtuning.transcriptattributes ta
-                WHERE ssf.na_sequence_id = sst.na_sequence_id
-                AND ssf.type = sst.type
-                AND ssf.strand = sst.strand
-                AND ssf.segment_start = sst.location
-                AND pan.protocol_app_node_id = ssf.protocol_app_node_id
-                AND sl.protocol_app_node_id = pan.protocol_app_node_id
-                AND s.study_id = sl.study_id
-                AND i.study_id = s.investigation_id
-                AND dp.name = replace(i.name, '_PolyA_', '_Spliced_Leader_')
-                AND ta.gene_source_id = sst.gene_source_id
-                AND ssf.type = 'Splice Site'
-                ORDER BY is_dominant, rel_pos, utr_len desc, sample_name, location
+                transcript_source_id
+                , source_id
+                , project_id
+                , sample_name
+                , location
+                , count_per_million
+                , avg_mismatches
+                , is_unique
+                , is_dominant
+                , utr_len
+                , rel_pos
+                , display_name
+                , attribution
+                , dataset_presenter_id
+                , CASE WHEN (rel_pos >= 0) THEN 'yes' ELSE '' END AS alt_cds_start
+                FROM (
+                    SELECT DISTINCT
+                    ta.source_id as transcript_source_id
+                    , ta.gene_source_id as source_id
+                    , '@PROJECT_ID@' as project_id
+                    , REPLACE(pan.name, ' [feature_loc] (SpliceSites)', '') as sample_name
+                    , sst.location
+                    , ssf.count_per_million
+                    , ssf.avg_mismatches
+                    , decode (sst.is_unique, 1, 'yes', 0, '') as is_unique
+                    , decode (sst.is_dominant, 1, 'yes', 0, '') as is_dominant
+                    , CASE WHEN (sst.location >= ta.coding_start AND sst.location <= coding_end AND sst.dist_to_cds = sst.dist_to_first_atg)
+                        THEN (-1) * sst.dist_to_cds
+                        ELSE sst.dist_to_first_atg END as utr_len
+                    , CASE WHEN (ta.is_reversed = 0 )
+                        THEN (sst.location - ta.coding_start)
+                        ELSE (ta.coding_end - sst.location) END as rel_pos
+                    , REGEXP_REPLACE (dp.display_name, '\(.+\)', '') as display_name
+                    , CASE WHEN (dp.short_display_name like '%Myler%')
+                        THEN 'Myler lab' ELSE dp.short_attribution END as attribution
+                    , dp.dataset_presenter_id
+                    FROM apidbtuning.splicesitetranscripts sst
+                    , apidb.splicesitefeature ssf
+                    , study.protocolappnode pan
+                    , study.studylink sl
+                    , study.study s
+                    , study.study i
+                    , apidbtuning.datasetpresenter dp
+                    , apidbtuning.transcriptattributes ta
+                    WHERE ssf.na_sequence_id = sst.na_sequence_id
+                    AND ssf.type = sst.type
+                    AND ssf.strand = sst.strand
+                    AND ssf.segment_start = sst.location
+                    AND pan.protocol_app_node_id = ssf.protocol_app_node_id
+                    AND sl.protocol_app_node_id = pan.protocol_app_node_id
+                    AND s.study_id = sl.study_id
+                    AND i.study_id = s.investigation_id
+                    AND dp.name = replace(i.name, '_PolyA_', '_Spliced_Leader_')
+                    AND ta.gene_source_id = sst.gene_source_id
+                    AND ssf.type = 'Splice Site'
+                    ORDER BY is_dominant, rel_pos, utr_len desc, sample_name, location
+                )
             ]]>
 	    </sql>
        </sqlQuery>
@@ -1615,7 +1631,6 @@ ORDER BY
             <column name="is_unique"/>
             <column name="avg_mismatches"/>
             <column name="is_dominant"/>
-            <column name="utr_len"/>
             <column name="rel_pos"/>
             <column name="display_name"/>
             <column name="attribution"/>
@@ -1632,12 +1647,9 @@ ORDER BY
                 , ssf.avg_mismatches
                 , decode (sst.is_unique, 1, 'yes', 0, '') as is_unique
                 , decode (sst.is_dominant, 1, 'yes', 0, '') as is_dominant
-                , CASE WHEN (sst.location >= ta.coding_start AND sst.location <= coding_end)
-                    THEN 'N/A (within gene)'
-                    ELSE to_char(sst.dist_to_cds) END as utr_len
-                , CASE WHEN (ta.is_reversed = 0 )
-                    THEN (sst.location - ta.coding_start)
-                    ELSE (ta.coding_end - sst.location) END as rel_pos
+                , CASE WHEN (ta.is_reversed = 1 )
+                    THEN (-1 * (sst.location - ta.coding_start))
+                    ELSE (-1 * (ta.coding_end - sst.location)) END as rel_pos
                 , REGEXP_REPLACE (dp.display_name, '\(.+\)', '') as display_name
                 , CASE WHEN (dp.short_display_name like '%Myler%')
                     THEN 'Myler lab' ELSE dp.short_attribution END as attribution
@@ -1658,10 +1670,14 @@ ORDER BY
                 AND sl.protocol_app_node_id = pan.protocol_app_node_id
                 AND s.study_id = sl.study_id
                 AND i.study_id = s.investigation_id
-                AND dp.name = replace(i.name, '_PolyA_', '_Spliced_Leader_')
+                --TODO Fix this!
+                AND (((i.name = 'lmajFriedlin_sbri_myler_PolyA_rnaSeqSplicedLeaderAndPolyASites_RSRC' OR i.name = 'ldonBPK282A1_sbri_myler_rnaSeqSplicedLeaderAndPolyASites_RSRC')
+                        AND dp.name = replace(i.name, '_PolyA_', '_Spliced_Leader_') )
+                    OR (i.name = 'tbruTREU927_George_Cross_PolyA_rnaSeqSplicedLeaderAndPolyASites_RSRC' AND dp.name = replace(i.name, '_PolyA_', '_Splice_Leader_'))
+                    OR (i.name = 'tbruTREU927_Tschudi_Transcriptome_PolyA_rnaSeqSplicedLeaderAndPolyASites_RSRC' AND dp.name = replace(i.name, '_PolyA_', '_Spliced_Leaders_')))
                 AND ta.gene_source_id = sst.gene_source_id
                 AND ssf.type = 'Poly A'
-                ORDER BY is_dominant, rel_pos, utr_len desc, sample_name, location
+                ORDER BY is_dominant, rel_pos desc, sample_name, location
             ]]>
 	    </sql>
        </sqlQuery>
