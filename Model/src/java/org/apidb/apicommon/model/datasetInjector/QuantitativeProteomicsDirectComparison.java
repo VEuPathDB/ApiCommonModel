@@ -11,9 +11,20 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
     }
 
     @Override
+    protected String getSearchCategoryType() {
+	return "proteomics";
+    }
+
+
+
+    @Override
     public void injectTemplates() {
         // hasPageData required by Expression class but not applicable to Proteomics;  Ensure it is always false
-        //   setPropValue("hasPageData", "false");
+           setPropValue("hasPageData", "false");
+
+      // TODO:  How else can we get this??
+      setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_0108");
+
 
         super.injectTemplates();
 
