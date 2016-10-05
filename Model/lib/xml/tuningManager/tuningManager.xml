@@ -7472,8 +7472,8 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
         select distinct other_gene.source_id, p.dataset_name,
              this_gene.source_id as profile_graph_id
         from dots.geneinstance this_gi, dots.geneinstance other_gi,
-             apidbtuning.geneattributes this_gene, apidbtuning.geneattributes other_gene,
-             apidbtuning.profile p
+             geneattributes this_gene, geneattributes other_gene,
+             profile p
         where this_gi.gene_id = other_gi.gene_id
           and this_gi.na_feature_id = this_gene.na_feature_id
           and other_gi.na_feature_id = other_gene.na_feature_id
@@ -7481,7 +7481,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
           and this_gene.orthomcl_name = other_gene.orthomcl_name
         union
 	select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
-	from apidbtuning.profile p, apidbtuning.geneattributes ga
+	from profile p, geneattributes ga
 	where p.source_id = ga.source_id
     ]]>
     </sql>
@@ -7556,7 +7556,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     <sql>
       <![CDATA[
         CREATE TABLE ExpressionGraphsData&1 NOLOGGING  as
-          -- Microarray data
+          -- RNASeq
           select ga.source_id, dnt.dataset_presenter_id as dataset_id,
                  cast(regexp_replace(pan.name, ' \(.*\)', '') ||
                       case
@@ -7570,9 +7570,9 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
                  round(nfe.percentile_channel2, 2) as percentile_channel2
           from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
-               ApidbTuning.ProfileSamples ps, study.Study s, study.Study i,
+               ProfileSamples ps, study.Study s, study.Study i,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-               DatasetNameTaxon dnt, DatasetProperty dp, DatasetPresenter dsp
+               DatasetNameTaxon dnt, DatasetProperty dp
           where ga.na_feature_id = nfe.na_feature_id
             and nfe.protocol_app_node_id = pan.protocol_app_node_id
             and pan.protocol_app_node_id = ps.protocol_app_node_id
@@ -7582,14 +7582,13 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
             and r.external_database_id = d.external_database_id
             and d.name = dnt.name
             and dnt.dataset_presenter_id = dp.dataset_presenter_id
-            and dnt.dataset_presenter_id = dsp.dataset_presenter_id
             and dp.property = 'switchStrands'
             and ps.study_name not like '%cuff%'
             and ps.study_name not like '%htseq-intersection-nonempty%'
             and ps.study_name not like '%htseq-intersection-strict%'
         UNION
           -- Splice Site data
-          select ga.source_id, dsp.dataset_presenter_id as dataset_id,
+          select ga.source_id, dnt.dataset_presenter_id as dataset_id,
                  cast(regexp_replace(pan.name, ' \(.*\)', '') ||
                       case
                          when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
@@ -7602,10 +7601,37 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
                  round(nfe.percentile_channel2, 2) as percentile_channel2
           from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
-               ApidbTuning.ProfileSamples ps, study.Study s, study.Study i,
+               ProfileSamples ps, study.Study s, study.Study i,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-               DatasetNameTaxon dnt,DatasetProperty dp, 
-               DatasetPresenter dsp
+               DatasetNameTaxon dnt,DatasetProperty dp
+          where ga.na_feature_id = nfe.na_feature_id
+            and nfe.protocol_app_node_id = pan.protocol_app_node_id
+            and pan.protocol_app_node_id = ps.protocol_app_node_id
+            and ps.study_id = s.study_id
+            and s.investigation_id = i.study_id
+            and i.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            and d.name = dnt.name
+            and dnt.dataset_presenter_id = dp.dataset_presenter_id
+            and dp.property ='type' and dp.value='Splice Site'
+        UNION
+          -- microarray expression, quantitative proteomics, and eQTL
+          select ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                 cast(regexp_replace(pan.name, ' \(.*\)', '') ||
+                      case
+                         when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
+                           then regexp_replace(regexp_replace(ps.study_name, '\[[^]]*\]', ''), '^.* - ', ' - ')
+                         else null
+                       end 
+                      as varchar2(200)) AS sample_name,
+                 round(nfe.value, 2) as value,
+                 round(nfe.standard_error, 2) as standard_error,
+                 round(nfe.percentile_channel1, 2) as percentile_channel1,
+                 round(nfe.percentile_channel2, 2) as percentile_channel2
+          from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
+               ProfileSamples ps, study.Study s, study.Study i,
+               sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+               DatasetNameTaxon dnt, DatasetPresenter dsp
           where ga.na_feature_id = nfe.na_feature_id
             and nfe.protocol_app_node_id = pan.protocol_app_node_id
             and pan.protocol_app_node_id = ps.protocol_app_node_id
@@ -7615,8 +7641,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
             and r.external_database_id = d.external_database_id
             and d.name = dnt.name
             and dnt.dataset_presenter_id = dsp.dataset_presenter_id
-            and dsp.dataset_presenter_id = dp.dataset_presenter_id
-            and dp.property ='type' and dp.value='Splice Site'
+            and dsp.subtype != 'rnaseq'
       ]]>
     </sql>
     <sql>
