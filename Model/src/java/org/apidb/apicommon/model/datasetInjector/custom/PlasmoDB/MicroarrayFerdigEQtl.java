@@ -4,6 +4,16 @@ import org.apidb.apicommon.model.datasetInjector.MicroarrayTwoChannelReferenceDe
 
 public class MicroarrayFerdigEQtl extends MicroarrayTwoChannelReferenceDesign {
 
+
+
+    @Override
+    public void injectTemplates() {
+        
+      // TODO:  How else can we get this??
+      setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_3298");
+      super.injectTemplates();
+    }
+
   @Override
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Ferdig::Dd2Hb3Similarity"); 
