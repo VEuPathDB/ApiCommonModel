@@ -15,6 +15,8 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         setPropValue("defaultFoldDifference","2.0"); 
 
         String lcDataType = getPropValue("dataType").toLowerCase();
+
+
         if(!lcDataType.equals("proteomics")) { 
                 String channelOnePctSampleDecode = makeDecodeMappingStrings(getPropValue("channelOnePctSampleMap"));
                 String channelTwoPctSampleDecode = makeDecodeMappingStrings(getPropValue("channelTwoPctSampleMap"));
@@ -54,7 +56,6 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         } 
 
         else {
-
 
             injectTemplate("expressionFoldChangeQuestionDirect");
 

@@ -8,6 +8,9 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
   public void injectTemplates() {
       setShortAttribution();
 
+      // TODO:  How else can we get this??
+      setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_0108");
+
       setOrganismAbbrevFromDatasetName();
       String optionalOrganismAbbrev  = getPropValue("optionalOrganismAbbrev");
 
@@ -29,8 +32,6 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       else {
           setPropValue("edNameParamValue",datasetNamePattern);
       }
-
-
 
 
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
