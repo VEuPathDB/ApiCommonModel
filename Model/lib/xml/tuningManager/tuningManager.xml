@@ -7114,6 +7114,10 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
       , profile.source_id
       , profile.study_id AS profile_study_id
       , ps.name AS profile_set_name
+      , case when regexp_replace(ps.name, '\[.+\]', '') like '% - %' 
+                  then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), '.+ - ', '')
+                  else null
+                  end as profile_set_suffix
       , profile.profile_as_string
       , profile.max_value
       , profile.min_value
@@ -7358,7 +7362,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     <sql>
       <![CDATA[
         CREATE TABLE ProfileType&1 nologging AS
-	SELECT DISTINCT dataset_name, profile_study_id, profile_set_name, profile_type, 
+	SELECT DISTINCT dataset_name, profile_study_id, profile_set_name, profile_set_suffix, profile_type, 
 	       dataset_type, dataset_subtype
 	FROM profile
 	WHERE profile_as_string IS NOT NULL
@@ -7383,19 +7387,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                          ' \(.+\)', '')AS protocol_app_node_name,
 	  pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
 	  pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
-          CASE
-            WHEN s.name LIKE '% firststrand %'
-            THEN 'firststrand'
-            WHEN s.name LIKE '% secondstrand %'
-            THEN 'secondstrand'
-            ELSE NULL
-          END 
-          || ' ' ||
-          CASE
-            WHEN regexp_replace(s.name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
-            THEN regexp_replace(regexp_replace(s.name, '\[[^]]*\]', ''), '^.* - ', ' - ')
-            ELSE NULL
-          END AS suffix
+          pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, results.nafeatureexpression r
 	WHERE pt.profile_set_name =  s.name
@@ -7408,7 +7400,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                          ' \(.+\)', '')AS protocol_app_node_name,
 	  pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
 	  pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
-          NULL AS suffix
+          pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, results.compoundMassSpec r
 	WHERE pt.profile_set_name =  s.name
@@ -7421,7 +7413,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                          ' \(.+\)', '')AS protocol_app_node_name,
 	  pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
 	  pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
-          NULL AS suffix
+          pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, apidb.ontologytermresult r
 	WHERE pt.profile_set_name =  s.name
@@ -7434,7 +7426,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                          ' \(.+\)', '')AS protocol_app_node_name,
 	  pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
 	  pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
-          NULL AS suffix
+          pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, results.nafeaturehostresponse r
 	WHERE pt.profile_set_name =  s.name
@@ -7447,7 +7439,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
                          ' \(.+\)', '')AS protocol_app_node_name,
 	  pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
 	  pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
-          NULL AS suffix
+          pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, apidb.crisprphenotype r
 	WHERE pt.profile_set_name =  s.name
@@ -7558,13 +7550,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
         CREATE TABLE ExpressionGraphsData&1 NOLOGGING  as
           -- RNASeq
           select ga.source_id, dnt.dataset_presenter_id as dataset_id,
-                 cast(regexp_replace(pan.name, ' \(.*\)', '') ||
-                      case
-                         when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
-                           then regexp_replace(regexp_replace(ps.study_name, '\[[^]]*\]', ''), '^.* - ', ' - ')
-                         else null
-                       end 
-                      as varchar2(200)) AS sample_name,
+                 case when ps.profile_set_suffix is null then ps.protocol_app_node_name else ps.protocol_app_node_name || ' ' || ps.profile_set_suffx end AS sample_name,
                  round(nfe.value, 2) as value,
                  round(nfe.standard_error, 2) as standard_error,
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
@@ -7589,13 +7575,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
         UNION
           -- Splice Site data
           select ga.source_id, dnt.dataset_presenter_id as dataset_id,
-                 cast(regexp_replace(pan.name, ' \(.*\)', '') ||
-                      case
-                         when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
-                           then regexp_replace(regexp_replace(ps.study_name, '\[[^]]*\]', ''), '^.* - ', ' - ')
-                         else null
-                       end 
-                      as varchar2(200)) AS sample_name,
+                 case when ps.profile_set_suffix is null then ps.protocol_app_node_name else ps.protocol_app_node_name || ' ' || ps.profile_set_suffx end AS sample_name,
                  round(nfe.value, 2) as value,
                  round(nfe.standard_error, 2) as standard_error,
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
@@ -7617,13 +7597,7 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
         UNION
           -- microarray expression, quantitative proteomics, and eQTL
           select ga.source_id, dnt.dataset_presenter_id as dataset_id,
-                 cast(regexp_replace(pan.name, ' \(.*\)', '') ||
-                      case
-                         when regexp_replace(ps.study_name,'\[[^]]*\]', '')  like '% - %' -- strip any backets, find "<space><hyphen><space> "
-                           then regexp_replace(regexp_replace(ps.study_name, '\[[^]]*\]', ''), '^.* - ', ' - ')
-                         else null
-                       end 
-                      as varchar2(200)) AS sample_name,
+                 case when ps.profile_set_suffix is null then ps.protocol_app_node_name else ps.protocol_app_node_name || ' ' || ps.profile_set_suffx end AS sample_name,
                  round(nfe.value, 2) as value,
                  round(nfe.standard_error, 2) as standard_error,
                  round(nfe.percentile_channel1, 2) as percentile_channel1,
