@@ -4246,39 +4246,79 @@ ORDER BY hl1.source_id
         <paramRef ref="geneParams.splice_site_generic"/>
         <paramRef ref="geneParams.splice_site_sample_one"/>
         <paramRef ref="geneParams.splice_site_sample_two"/>
-        <!--paramRef ref="geneParams.percent_diff"/-->
+        <paramRef ref="geneParams.percent_diff"/>
         <paramRef ref="geneParams.min_norm_count"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="matched_result"/>
-        <!--column name="sample_one"/-->
-        <!--column name="sample_two"/-->
-        <column name="utr_len_one"/>
-        <column name="utr_len_two"/>
-        <column name="diff_cds_start"/>
+        <column name="one_loc"/>
+        <column name="one_transcript_id"/>
+        <column name="one_dist_to_cds"/>
+        <column name="one_dist_to_first_atg"/>
+        <column name="two_loc"/>
+        <column name="two_transcript_id"/>
+        <column name="two_dist_to_cds"/>
+        <column name="two_dist_to_first_atg"/>
       <sql>
           <![CDATA[
-SELECT DISTINCT sst1.gene_source_id, sst1.transcript_source_id as source_id,'Y' AS matched_result, 
-   -- t1.sample_name AS sample_one,t2.sample_name AS sample_two,
-   sst1.dist_to_cds AS utr_len_one, sst2.dist_to_cds AS utr_len_two,
-   CASE WHEN (sst1.dist_to_cds = sst2.dist_to_cds) THEN 'no' ELSE 'yes' END AS diff_cds_start,
-   '@PROJECT_ID@' as project_id
-FROM apidbtuning.splicesitetranscripts sst1, apidb.splicesitefeature ssf1,
-     apidbtuning.splicesitetranscripts sst2, apidb.splicesitefeature ssf2
-WHERE sst1.transcript_source_id = sst2.transcript_source_id 
---AND ssf1.TYPE ='Splice Site' AND ssf2.TYPE ='Splice Site' 
-AND sst1.is_dominant = 1 AND sst2.is_dominant = 1
-AND sst1.LOCATION = ssf1.segment_start AND sst1.na_sequence_id = ssf1.na_sequence_id
-AND sst2.LOCATION = ssf2.segment_start AND sst2.na_sequence_id = ssf2.na_sequence_id
-AND sst1.LOCATION != sst2.LOCATION AND sst1.na_sequence_id = sst2.na_sequence_id
-AND ssf1.protocol_app_node_id = $$splice_site_sample_one$$ --37263 -- 'SRR058969' 
-AND ssf2.protocol_app_node_id = $$splice_site_sample_two$$ --37249 -- 'SRR058975'
-AND ssf1.protocol_app_node_id != ssf2.protocol_app_node_id
---AND sst1.percent_fraction >=  $$percent_diff$$
---AND sst2.percent_fraction >= $$percent_diff$$
-AND ssf1.count_per_million >= $$min_norm_count$$
-AND ssf2.count_per_million >= $$min_norm_count$$
+with loc_counts as (
+select g.source_id, f.protocol_app_node_id, f.na_sequence_id, f.segment_start as location, sum(f.count_per_million) as sum_cpm
+from apidb.splicesitegenes g
+   , apidb.splicesitefeature f
+where g.splice_site_feature_id = f.splice_site_feature_id
+group by f.segment_start, f.na_sequence_id, f.protocol_app_node_id, g.source_id
+),
+stats as (
+select source_id, protocol_app_node_id, max(sum_cpm) as max_cpm, round(max(sum_cpm) / sum(sum_cpm), 2) * 100 as pct_max
+from loc_counts
+group by source_id, protocol_app_node_id
+),
+gene_loc_stats as (
+select this.*, stats.pct_max  from (
+select g.source_id, f.na_sequence_id, f.segment_start as location, sum(f.count_per_million) as sum_cpm, f.protocol_app_node_id
+from apidb.splicesitegenes g
+   , apidb.splicesitefeature f
+where g.splice_site_feature_id = f.splice_site_feature_id
+group by g.source_id, f.segment_start, f.protocol_app_node_id, f.na_sequence_id
+) this, stats
+where this.sum_cpm = stats.max_cpm
+and this.source_id = stats.source_id
+and this.protocol_app_node_id = stats.protocol_app_node_id
+)
+-- MAIN START
+select ta.gene_source_id 
+     , ta.source_id
+     , '@PROJECT_ID@' as project_id
+     , 'Y' as matched_result
+     , one.location as one_loc
+     , t1.transcript_source_id as one_transcript_id
+     , t1.dist_to_cds as one_dist_to_cds
+     , t1.dist_to_first_atg as one_dist_to_first_atg
+     , two.location as two_loc
+     , t2.transcript_source_id as two_transcript_id
+     , t2.dist_to_cds as two_dist_to_cds
+     , t2.dist_to_first_atg as two_dist_to_first_atg
+from gene_loc_stats one
+   , gene_loc_stats two
+   , apidbtuning.splicesitetranscripts t1
+   , apidbtuning.splicesitetranscripts t2
+   , apidbtuning.transcriptattributes ta
+where one.source_id = two.source_id
+and one.protocol_app_node_id = $$splice_site_sample_one$$ --37263 -- 'SRR058969' 
+and two.protocol_app_node_id = $$splice_site_sample_two$$ --37249 -- 'SRR058975'
+and one.pct_max > $$percent_diff$$
+and two.pct_max > $$percent_diff$$
+and one.sum_cpm > $$min_norm_count$$
+and two.sum_cpm > $$min_norm_count$$
+and one.location != two.location
+and one.na_sequence_id = t1.na_sequence_id
+and one.location = t1.location
+and two.na_sequence_id = t2.na_sequence_id
+and two.location = t2.location
+and t1.type = 'Splice Site'
+and t2.type = 'Splice Site'
+and ta.gene_source_id = one.source_id
           ]]>
       </sql>
     </sqlQuery>
