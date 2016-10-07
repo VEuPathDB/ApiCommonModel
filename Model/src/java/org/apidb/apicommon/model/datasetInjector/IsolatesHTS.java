@@ -112,7 +112,7 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
  
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Datasets");
-      addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Characteristics")
+      addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Characteristics");
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "ProcessedSample");
       
 
