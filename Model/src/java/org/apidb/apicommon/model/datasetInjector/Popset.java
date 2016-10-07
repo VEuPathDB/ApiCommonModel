@@ -35,7 +35,6 @@ public class Popset extends DatasetInjector {
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "table", "Reference");
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "attribute", "overview");
 
-
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Datasets");
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Characteristics");
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "ProcessedSample");
