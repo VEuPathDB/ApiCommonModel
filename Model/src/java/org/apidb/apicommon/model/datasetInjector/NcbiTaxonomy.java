@@ -133,10 +133,12 @@ public class NcbiTaxonomy extends DatasetInjector {
     // All Annotated Reference Organisms
     for (Map.Entry<String, String> refOrg : refOrgsAnnot.entrySet()) {
         setPropValue("projectName", refOrg.getKey());
-        setPropValue("referenceOrganisms", refOrg.getValue());
 
-        injectTemplate("referenceOrganisms");
-        //        System.out.println("Injecting annot ref orgs:  "  + refOrg.getKey() + "\t" + refOrg.getValue());
+        if(!refOrg.getKey().equals("EuPathDB")) {
+            setPropValue("referenceOrganisms", refOrg.getValue());
+            injectTemplate("referenceOrganisms");
+            //        System.out.println("Injecting annot ref orgs:  "  + refOrg.getKey() + "\t" + refOrg.getValue());
+        }
     }
 
     // All Reference Organisms
@@ -147,7 +149,7 @@ public class NcbiTaxonomy extends DatasetInjector {
         //        System.out.println("Injecting ref orgs:  "  + refOrg.getKey() + "\t" + refOrg.getValue());
 
         if(refOrg.getKey().equals("EuPathDB")) {
-            injectTemplate("genomicOrganismOverridePortal");
+            //            injectTemplate("genomicOrganismOverridePortal");
         }
         else {
             injectTemplate("genomicOrganismOverride");
@@ -159,7 +161,7 @@ public class NcbiTaxonomy extends DatasetInjector {
         setPropValue("referenceOrganisms", refOrg.getValue());
 
         if(refOrg.getKey().equals("EuPathDB")) {
-            injectTemplate("geneTfbsOrganismOverridePortal");
+            //            injectTemplate("geneTfbsOrganismOverridePortal");
         }
         else {
             injectTemplate("geneTfbsOrganismOverride");
@@ -172,7 +174,7 @@ public class NcbiTaxonomy extends DatasetInjector {
         setPropValue("referenceOrganisms", refOrg.getValue());
 
         if(refOrg.getKey().equals("EuPathDB")) {
-            injectTemplate("geneEcOrganismOverridePortal");
+            //            injectTemplate("geneEcOrganismOverridePortal");
         }
         else {
             injectTemplate("geneEcOrganismOverride");
@@ -187,7 +189,7 @@ public class NcbiTaxonomy extends DatasetInjector {
         setPropValue("referenceOrganisms", refOrg.getValue());
 
         if(refOrg.getKey().equals("EuPathDB")) {
-            injectTemplate("geneEpitopeOrganismOverridePortal");
+            //            injectTemplate("geneEpitopeOrganismOverridePortal");
         }
         else {
             injectTemplate("geneEpitopeOrganismOverride");
