@@ -80,6 +80,10 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "Strains");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "Providers_other_SNPs");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "HTSStrains");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "AlleleCount");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "CountrySummary");
+      addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "StrainsSamples");
+
 
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_hts_snps");
@@ -106,7 +110,13 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
-  }
+ 
+      addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Datasets");
+      addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Characteristics")
+      addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "ProcessedSample");
+      
+
+ }
 
 
 
