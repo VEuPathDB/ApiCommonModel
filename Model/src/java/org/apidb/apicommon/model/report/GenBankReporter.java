@@ -3,8 +3,6 @@ package org.apidb.apicommon.model.report;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.security.NoSuchAlgorithmException;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,14 +13,15 @@ import java.util.regex.Pattern;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.answer.stream.PagedAnswerRecordStream;
+import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.Reporter;
-import org.json.JSONException;
+import org.gusdb.wdk.model.report.PagedReporter;
 
-public class GenBankReporter extends Reporter {
+public class GenBankReporter extends PagedReporter {
 
     private static final String PROPERTY_GENE_QUESTION = "gene_question";
     private static final String PROPERTY_SEQUENCE_ID_PARAM = "sequence_param";
@@ -36,30 +35,17 @@ public class GenBankReporter extends Reporter {
     private static final String DB_XREF_QUALIFIER_GI = "GI";
     private static final String DB_XREF_QUALIFIER_UNIPROTKB = "UniProtKB/TrEMBL";
 
-    public GenBankReporter(AnswerValue answerValue, int startIndex, int endIndex) {
-        super(answerValue, startIndex, endIndex);
+    public GenBankReporter(AnswerValue answerValue) {
+        super(answerValue);
     }
 
-    // Take a sequence question, collect the sequence ids
-    // For each page of sequence ids, pass the list of
-    // ids to some other question
-    // Go through the pages of gene records, writing as
-    // genbank table format
-
+    /**
+     * Take a sequence question, collect the sequence ids
+     * For each page of sequence ids, pass the list of ids to some other question
+     * Go through the pages of gene records, writing as genbank table format
+     */
     @Override
-    public void configure(Map<String, String> newConfig) {
-        super.configure(newConfig);
-    }
-
-    @Override
-    public String getConfigInfo() {
-        return "This reporter does not have config info yet.";
-    }
-
-    @Override
-    public void write(OutputStream out) throws WdkModelException,
-            NoSuchAlgorithmException, SQLException, JSONException,
-            WdkUserException {
+    public void write(OutputStream out) throws WdkModelException {
         String rcName = getQuestion().getRecordClass().getFullName();
         if (!rcName.equals("SequenceRecordClasses.SequenceRecordClass"))
             throw new WdkModelException("Unsupported record type: " + rcName);
@@ -69,45 +55,40 @@ public class GenBankReporter extends Reporter {
         writer.flush();
     }
 
-    private void pageSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
+    private void pageSequences(PrintWriter writer) throws WdkModelException {
+      try (RecordStream records = getRecords()) {
+        for (RecordInstance record : records) {
+            String sequenceId = record.getAttributeValue("source_id").toString();
 
-        for (AnswerValue answerValue : this) {
-            for (RecordInstance record : answerValue.getRecordInstances()) {
-                String sequenceId = record.getAttributeValue("source_id").toString();
+            Map<String, String> params = new LinkedHashMap<String, String>();
 
-                Map<String, String> params = new LinkedHashMap<String, String>();
+            params.put(_properties.get(PROPERTY_SEQUENCE_ID_PARAM), sequenceId);
 
-                params.put(properties.get(PROPERTY_SEQUENCE_ID_PARAM), sequenceId);
+            Map<String, Boolean> sorting = new LinkedHashMap<String, Boolean>();
+            sorting.put(_properties.get(PROPERTY_SEQUENCE_ID_COLUMN), true);
 
-                Map<String, Boolean> sorting = new LinkedHashMap<String, Boolean>();
-                sorting.put(properties.get(PROPERTY_SEQUENCE_ID_COLUMN), true);
+            String geneQuestionName = _properties.get(PROPERTY_GENE_QUESTION);
+            Question geneQuestion = (Question) _wdkModel.resolveReference(geneQuestionName);
+            AnswerValue geneAnswer = geneQuestion.makeAnswerValue(_baseAnswer.getUser(), params, 0,
+                                                                  _pageSize, sorting, null, true, 0);
 
-                String geneQuestionName = properties.get(PROPERTY_GENE_QUESTION);
-                Question geneQuestion = (Question) wdkModel.resolveReference(geneQuestionName);
-                AnswerValue geneAnswer = geneQuestion.makeAnswerValue(answerValue.getUser(), params, 0,
-                                                                      maxPageSize, sorting,  null, true, 0);
+            // write non gene sequence features
+            writeSequenceFeatures(record, writer);
 
-                // write non gene sequence features
-                writeSequenceFeatures(record, writer);
+            // write gene features
+            writeTableFormat(geneAnswer, writer, sequenceId);
 
-                // write gene features
-                writeTableFormat(geneAnswer, writer, sequenceId);
-
-            }
         }
+      }
+      catch (WdkUserException e) {
+        throw new WdkModelException("Unable to write GenBank report", e);
+      }
     }
 
     private void writeTableFormat(AnswerValue geneAnswer, PrintWriter writer, String sequenceId)
             throws WdkModelException, WdkUserException {
-
-        PageAnswerIterator pagedGenes = new PageAnswerIterator(geneAnswer, 1,
-                geneAnswer.getResultSize(), maxPageSize);
-        while (pagedGenes.hasNext()) {
-            AnswerValue answerValue = pagedGenes.next();
-
-            for (RecordInstance record : answerValue.getRecordInstances()) {
-                writeGeneFeature(record, writer, sequenceId);
-            }
+        for (RecordInstance record : new PagedAnswerRecordStream(geneAnswer, _pageSize)) {
+          writeGeneFeature(record, writer, sequenceId);
         }
     }
 
@@ -260,7 +241,7 @@ public class GenBankReporter extends Reporter {
             throws WdkModelException, WdkUserException {
 
         // Exclude Deprecated Genes? or flag them?
-        if (!(wdkModel.getProjectId().equals("GiardiaDB")
+        if (!(_wdkModel.getProjectId().equals("GiardiaDB")
               && record.getAttributeValue("is_deprecated").toString().equals("Yes"))) {
 
             String product = record.getAttributeValue("product").toString();
@@ -356,14 +337,4 @@ public class GenBankReporter extends Reporter {
             //}
         }
     }
-
-       @Override
-           protected void complete() {
-           // do nothing
-       }
-
-@Override
-    protected void initialize() throws WdkModelException {
-    // do nothing
-}
 }

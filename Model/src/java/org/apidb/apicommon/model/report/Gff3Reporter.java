@@ -1,11 +1,12 @@
 package org.apidb.apicommon.model.report;
 
+import static org.gusdb.fgputil.FormatUtil.NL;
+
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.security.NoSuchAlgorithmException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,15 +24,15 @@ import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValueMap;
-import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.StandardReporter;
-import org.json.JSONException;
+import org.gusdb.wdk.model.report.PagedReporter;
+import org.gusdb.wdk.model.report.StandardConfig;
 import org.json.JSONObject;
 
 /**
@@ -41,11 +42,9 @@ import org.json.JSONObject;
  * @author xingao
  * 
  */
-public class Gff3Reporter extends Reporter {
+public class Gff3Reporter extends PagedReporter {
 
   private static Logger logger = Logger.getLogger(Gff3Reporter.class);
-
-  private static final String NEW_LINE = System.getProperty("line.separator");
 
   public static final String PROPERTY_TABLE_CACHE = "table_cache";
   public static final String PROPERTY_PROJECT_ID_COLUMN = "project_id_column";
@@ -89,13 +88,8 @@ public class Gff3Reporter extends Reporter {
 
   private PreparedStatement psQuery;
 
-  public Gff3Reporter(AnswerValue answerValue, int startIndex, int endIndex) {
-    super(answerValue, startIndex, endIndex);
-  }
-
-  @Override
-  public String getConfigInfo() {
-    return "This reporter does not have config info yet.";
+  public Gff3Reporter(AnswerValue answerValue) {
+    super(answerValue);
   }
 
   /*
@@ -136,32 +130,36 @@ public class Gff3Reporter extends Reporter {
    * @see org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
    */
   @Override
-  public void write(OutputStream out) throws WdkModelException, NumberFormatException,
-      NoSuchAlgorithmException, SQLException, JSONException, WdkUserException {
-    PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
-
-    // write header
-    writeHeader(writer);
-
-    // write records
-    writeRecords(writer);
-
-    // write sequences
-    writer.println("##FASTA");
-    writeSequences(writer);
+  public void write(OutputStream out) throws WdkModelException {
+    try {
+      PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
+  
+      // write header
+      writeHeader(writer);
+  
+      // write records
+      writeRecords(writer);
+  
+      // write sequences
+      writer.println("##FASTA");
+      writeSequences(writer);
+    }
+    catch (WdkUserException | SQLException e) {
+      throw new WdkModelException("Unable to write Gff3 report", e);
+    }
   }
 
   @Override
   protected void initialize() throws WdkModelException {
     // check required properties
-    tableCache = properties.get(PROPERTY_TABLE_CACHE);
-    recordName = properties.get(PROPERTY_GFF_RECORD_NAME);
-    proteinName = properties.get(PROPERTY_GFF_PROTEIN_NAME);
-    transcriptName = properties.get(PROPERTY_GFF_TRANSCRIPT_NAME);
+    tableCache = _properties.get(PROPERTY_TABLE_CACHE);
+    recordName = _properties.get(PROPERTY_GFF_RECORD_NAME);
+    proteinName = _properties.get(PROPERTY_GFF_PROTEIN_NAME);
+    transcriptName = _properties.get(PROPERTY_GFF_TRANSCRIPT_NAME);
 
     if (psQuery == null) {
       // prepare the table query
-      RecordClass recordClass = this.baseAnswer.getQuestion().getRecordClass();
+      RecordClass recordClass = _baseAnswer.getQuestion().getRecordClass();
       String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
       StringBuffer sqlQuery = new StringBuffer("SELECT ");
       sqlQuery.append("count(*) AS cache_count FROM ").append(tableCache);
@@ -169,7 +167,7 @@ public class Gff3Reporter extends Reporter {
       for (String column : pkColumns) {
         sqlQuery.append(" AND ").append(column).append(" = ?");
       }
-      DataSource dataSource = wdkModel.getAppDb().getDataSource();
+      DataSource dataSource = _wdkModel.getAppDb().getDataSource();
       try {
         psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
       }
@@ -185,11 +183,11 @@ public class Gff3Reporter extends Reporter {
    * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
    */
   @Override
-  public void configure(Map<String, String> newConfig) {
+  public void configure(Map<String, String> newConfig) throws WdkUserException {
     super.configure(newConfig);
 
-    if (newConfig.containsKey(StandardReporter.Configuration.ATTACHMENT_TYPE))
-      fileType = newConfig.get(StandardReporter.Configuration.ATTACHMENT_TYPE);
+    if (newConfig.containsKey(StandardConfig.ATTACHMENT_TYPE))
+      fileType = newConfig.get(StandardConfig.ATTACHMENT_TYPE);
 
     // include transcript
     if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
@@ -205,11 +203,11 @@ public class Gff3Reporter extends Reporter {
   }
 
   @Override
-  public void configure(JSONObject newConfig) throws WdkModelException {
+  public void configure(JSONObject newConfig) throws WdkUserException {
     super.configure(newConfig);
 
-    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON))
-      fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON);
+    if (newConfig.has(StandardConfig.ATTACHMENT_TYPE_JSON))
+      fileType = newConfig.getString(StandardConfig.ATTACHMENT_TYPE_JSON);
 
     // include transcript
     if (newConfig.has(FIELD_HAS_TRANSCRIPT))
@@ -247,10 +245,8 @@ public class Gff3Reporter extends Reporter {
     // get the sequence regions
     Map<String, int[]> regions = new LinkedHashMap<String, int[]>();
 
-    // get page based answers with a maximum size (defined in
-    // PageAnswerIterator)
-    for (AnswerValue answerValue : this) {
-      for (RecordInstance record : answerValue.getRecordInstances()) {
+    try (RecordStream records = getRecords()) {
+      for (RecordInstance record : records) {
         String seqId = getValue(record.getAttributeValue("gff_seqid"));
         int start = Integer.parseInt(getValue(record.getAttributeValue("gff_fstart")));
         int stop = Integer.parseInt(getValue(record.getAttributeValue("gff_fend")));
@@ -285,7 +281,7 @@ public class Gff3Reporter extends Reporter {
   void writeRecords(PrintWriter writer) throws WdkModelException, SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
-    DatabaseInstance appDb = wdkModel.getAppDb();
+    DatabaseInstance appDb = _wdkModel.getAppDb();
 
     RecordClass recordClass = question.getRecordClass();
     String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
@@ -302,7 +298,7 @@ public class Gff3Reporter extends Reporter {
       sqlInsert.append(", ").append(column);
     }
     sqlInsert.append(") VALUES (");
-    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
+    sqlInsert.append(_wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
     sqlInsert.append(", ");
     sqlInsert.append("?, ?, ?");
     for (int i = 0; i < pkColumns.length; i++) {
@@ -312,51 +308,47 @@ public class Gff3Reporter extends Reporter {
 
     // check if we need to insert into cache
     PreparedStatement psInsert = null;
-    try {
+    try (RecordStream records = getRecords()) {
       // want to cache the table content
       DataSource dataSource = appDb.getDataSource();
       psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString());
 
-      // get page based answers with a maximum size (defined in
-      // PageAnswerIterator)
-      for (AnswerValue answerValue : this) {
-        for (RecordInstance record : answerValue.getRecordInstances()) {
+      for (RecordInstance record : records) {
 
-          StringBuffer recordBuffer = new StringBuffer();
+        StringBuffer recordBuffer = new StringBuffer();
 
-          // read and format record content
-          if (rcName.equals("SequenceRecordClasses.SequenceRecordClass")) {
-            formatSequenceRecord(record, recordBuffer);
-          }
-          else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
-            formatGeneRecord(record, recordBuffer);
-          }
-          else {
-            SqlUtils.closeStatement(psInsert);
-            throw new WdkModelException("Unsupported record type: " + rcName);
-          }
-          String content = recordBuffer.toString();
-
-          // check if needs to insert into cache table
-          if (tableCache != null) {
-            boolean hasCached = checkCache(record, recordName);
-            if (!hasCached) {
-              psInsert.setString(1, recordName);
-              psInsert.setInt(2, 1);
-              appDb.getPlatform().setClobData(psInsert, 3, content, false);
-              Map<String, String> pkValues = record.getPrimaryKey().getValues();
-              for (int index = 0; index < pkColumns.length; index++) {
-                Object value = pkValues.get(pkColumns[index]);
-                psInsert.setObject(index + 4, value);
-              }
-              psInsert.executeUpdate();
-            }
-          }
-
-          // output the result
-          writer.print(content);
-          writer.flush();
+        // read and format record content
+        if (rcName.equals("SequenceRecordClasses.SequenceRecordClass")) {
+          formatSequenceRecord(record, recordBuffer);
         }
+        else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
+          formatGeneRecord(record, recordBuffer);
+        }
+        else {
+          SqlUtils.closeStatement(psInsert);
+          throw new WdkModelException("Unsupported record type: " + rcName);
+        }
+        String content = recordBuffer.toString();
+
+        // check if needs to insert into cache table
+        if (tableCache != null) {
+          boolean hasCached = checkCache(record, recordName);
+          if (!hasCached) {
+            psInsert.setString(1, recordName);
+            psInsert.setInt(2, 1);
+            appDb.getPlatform().setClobData(psInsert, 3, content, false);
+            Map<String, String> pkValues = record.getPrimaryKey().getValues();
+            for (int index = 0; index < pkColumns.length; index++) {
+              Object value = pkValues.get(pkColumns[index]);
+              psInsert.setObject(index + 4, value);
+            }
+            psInsert.executeUpdate();
+          }
+        }
+
+        // output the result
+        writer.print(content);
+        writer.flush();
       }
     }
     finally {
@@ -392,7 +384,7 @@ public class Gff3Reporter extends Reporter {
     if (sbAlias.length() > 0)
       recordBuffer.append(";Alias=" + sbAlias.toString());
 
-    recordBuffer.append(NEW_LINE);
+    recordBuffer.append(NL);
 
     // get GO terms
     TableValue goTerms = record.getTableValue("GeneGffGoTerms");
@@ -438,7 +430,7 @@ public class Gff3Reporter extends Reporter {
       if (sbDbxrefs.length() > 0)
         recordBuffer.append(";Dbxref=" + sbDbxrefs.toString());
 
-      recordBuffer.append(NEW_LINE);
+      recordBuffer.append(NL);
     }
 
     // print CDSs
@@ -453,7 +445,7 @@ public class Gff3Reporter extends Reporter {
       // read other fields
       recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
 
-      recordBuffer.append(NEW_LINE);
+      recordBuffer.append(NL);
     }
 
     // print EXONs
@@ -468,7 +460,7 @@ public class Gff3Reporter extends Reporter {
       // read other fields
       recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
 
-      recordBuffer.append(NEW_LINE);
+      recordBuffer.append(NL);
     }
   }
 
@@ -499,7 +491,7 @@ public class Gff3Reporter extends Reporter {
     if (sbDbxrefs.length() > 0)
       recordBuffer.append(";Dbxref=" + sbDbxrefs.toString());
 
-    recordBuffer.append(NEW_LINE);
+    recordBuffer.append(NL);
   }
 
   /**
@@ -510,7 +502,7 @@ public class Gff3Reporter extends Reporter {
   void writeSequences(PrintWriter writer) throws WdkModelException, SQLException, WdkUserException {
     Question question = getQuestion();
     String rcName = question.getRecordClass().getFullName();
-    DatabaseInstance appDb = wdkModel.getAppDb();
+    DatabaseInstance appDb = _wdkModel.getAppDb();
     RecordClass recordClass = question.getRecordClass();
     String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
 
@@ -526,7 +518,7 @@ public class Gff3Reporter extends Reporter {
       sqlInsert.append(", ").append(column);
     }
     sqlInsert.append(") VALUES (");
-    sqlInsert.append(wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
+    sqlInsert.append(_wdkModel.getUserDb().getPlatform().getNextIdSqlExpression(schema, table));
     sqlInsert.append(", ");
     sqlInsert.append("?, ?, ?");
     for (int i = 0; i < pkColumns.length; i++) {
@@ -536,42 +528,71 @@ public class Gff3Reporter extends Reporter {
 
     // check if we need to insert into cache
     PreparedStatement psInsert = null;
-    try {
+    try (RecordStream records = getRecords()) {
       // want to cache the table content
       DataSource dataSource = appDb.getDataSource();
       psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString());
 
-      // get page based answers with a maximum size (defined in
-      // PageAnswerIterator)
-      for (AnswerValue answerValue : this) {
-        for (RecordInstance record : answerValue.getRecordInstances()) {
-          Map<String, String> pkValues = record.getPrimaryKey().getValues();
-          // HACK
-          String recordId = pkValues.get("source_id");
+      for (RecordInstance record : records) {
+        Map<String, String> pkValues = record.getPrimaryKey().getValues();
+        // HACK
+        String recordId = pkValues.get("source_id");
 
-          // read and format record content
-          if (rcName.equals("SequenceRecordClasses.SequenceRecordClass")) {
-            // get genome sequence
-            String sequence = getValue(record.getAttributeValue("gff_sequence"));
+        // read and format record content
+        if (rcName.equals("SequenceRecordClasses.SequenceRecordClass")) {
+          // get genome sequence
+          String sequence = getValue(record.getAttributeValue("gff_sequence"));
+          if (sequence != null && sequence.length() > 0) {
+            // output the sequence
+            sequence = formatSequence(recordId, sequence);
+            writer.print(sequence);
+            writer.flush();
+          }
+        }
+        else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
+          // get transcript, if needed
+          if (hasTranscript) {
+            String sequence = getValue(record.getAttributeValue("gff_transcript_sequence"));
             if (sequence != null && sequence.length() > 0) {
-              // output the sequence
               sequence = formatSequence(recordId, sequence);
+
+              // check if needs to insert into cache table
+              if (tableCache != null) {
+                boolean hasCached = checkCache(record, transcriptName);
+                if (!hasCached) {
+                  psInsert.setString(1, transcriptName);
+                  psInsert.setInt(2, 1);
+                  appDb.getPlatform().setClobData(psInsert, 3, sequence, false);
+                  for (int index = 0; index < pkColumns.length; index++) {
+                    Object value = pkValues.get(pkColumns[index]);
+                    psInsert.setObject(index + 4, value);
+                  }
+                  psInsert.executeUpdate();
+                }
+              }
+
+              // output the sequence
               writer.print(sequence);
               writer.flush();
             }
           }
-          else if (rcName.equals("GeneRecordClasses.GeneRecordClass")) {
-            // get transcript, if needed
-            if (hasTranscript) {
-              String sequence = getValue(record.getAttributeValue("gff_transcript_sequence"));
-              if (sequence != null && sequence.length() > 0) {
-                sequence = formatSequence(recordId, sequence);
+
+          // get protein sequence, if needed
+          if (hasProtein) {
+            // output protein sequence with RNA id
+            TableValue rnas = record.getTableValue("GeneGffRnas");
+            for (Map<String, AttributeValue> row : rnas) {
+              String rnaId = getValue(row.get("gff_attr_id"));
+              String sequence = getValue(row.get("gff_protein_sequence"));
+              if (rnaId != null && sequence != null && sequence.length() > 0) {
+                sequence = formatSequence(rnaId, sequence);
 
                 // check if needs to insert into cache table
                 if (tableCache != null) {
-                  boolean hasCached = checkCache(record, transcriptName);
+                  boolean hasCached = checkCache(record, proteinName);
                   if (!hasCached) {
-                    psInsert.setString(1, transcriptName);
+                    // save into table cache
+                    psInsert.setString(1, proteinName);
                     psInsert.setInt(2, 1);
                     appDb.getPlatform().setClobData(psInsert, 3, sequence, false);
                     for (int index = 0; index < pkColumns.length; index++) {
@@ -587,44 +608,11 @@ public class Gff3Reporter extends Reporter {
                 writer.flush();
               }
             }
-
-            // get protein sequence, if needed
-            if (hasProtein) {
-              // output protein sequence with RNA id
-              TableValue rnas = record.getTableValue("GeneGffRnas");
-              for (Map<String, AttributeValue> row : rnas) {
-                String rnaId = getValue(row.get("gff_attr_id"));
-                String sequence = getValue(row.get("gff_protein_sequence"));
-                if (rnaId != null && sequence != null && sequence.length() > 0) {
-                  sequence = formatSequence(rnaId, sequence);
-
-                  // check if needs to insert into cache table
-                  if (tableCache != null) {
-                    boolean hasCached = checkCache(record, proteinName);
-                    if (!hasCached) {
-                      // save into table cache
-                      psInsert.setString(1, proteinName);
-                      psInsert.setInt(2, 1);
-                      appDb.getPlatform().setClobData(psInsert, 3, sequence, false);
-                      for (int index = 0; index < pkColumns.length; index++) {
-                        Object value = pkValues.get(pkColumns[index]);
-                        psInsert.setObject(index + 4, value);
-                      }
-                      psInsert.executeUpdate();
-                    }
-                  }
-
-                  // output the sequence
-                  writer.print(sequence);
-                  writer.flush();
-                }
-              }
-            }
           }
-          else {
-            SqlUtils.closeStatement(psInsert);
-            throw new WdkModelException("Unsupported record type: " + rcName);
-          }
+        }
+        else {
+          SqlUtils.closeStatement(psInsert);
+          throw new WdkModelException("Unsupported record type: " + rcName);
         }
       }
     }
@@ -696,11 +684,11 @@ public class Gff3Reporter extends Reporter {
       return null;
 
     StringBuffer buffer = new StringBuffer();
-    buffer.append(">" + id + NEW_LINE);
+    buffer.append(">" + id + NL);
     int offset = 0;
     while (offset < sequence.length()) {
       int endp = offset + Math.min(60, sequence.length() - offset);
-      buffer.append(sequence.substring(offset, endp) + NEW_LINE);
+      buffer.append(sequence.substring(offset, endp) + NL);
       offset = endp;
     }
     return buffer.toString();

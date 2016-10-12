@@ -3,7 +3,6 @@ package org.apidb.apicommon.model.report;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -16,12 +15,11 @@ import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.record.RecordClass;
+import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.StandardReporter;
-import org.json.JSONException;
+import org.gusdb.wdk.model.report.PagedReporter;
+import org.gusdb.wdk.model.report.StandardConfig;
 import org.json.JSONObject;
 
 /**
@@ -31,7 +29,7 @@ import org.json.JSONObject;
  * @author xingao
  * 
  */
-public class Gff3CachedReporter extends Reporter {
+public class Gff3CachedReporter extends PagedReporter {
 
   private static Logger logger = Logger.getLogger(Gff3Reporter.class);
 
@@ -62,8 +60,8 @@ public class Gff3CachedReporter extends Reporter {
   private boolean hasProtein = false;
   private String fileType = null;
 
-  public Gff3CachedReporter(AnswerValue answerValue, int startIndex, int endIndex) {
-    super(answerValue, startIndex, endIndex);
+  public Gff3CachedReporter(AnswerValue answerValue) {
+    super(answerValue);
   }
 
   /**
@@ -105,10 +103,10 @@ public class Gff3CachedReporter extends Reporter {
    * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
    */
   @Override
-  public void configure(Map<String, String> newConfig) {
+  public void configure(Map<String, String> newConfig) throws WdkUserException {
     super.configure(newConfig);
 
-    if (newConfig.containsKey(StandardReporter.Configuration.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardReporter.Configuration.ATTACHMENT_TYPE);
+    if (newConfig.containsKey(StandardConfig.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardConfig.ATTACHMENT_TYPE);
 
     // include transcript
     if (newConfig.containsKey(FIELD_HAS_TRANSCRIPT)) {
@@ -124,11 +122,11 @@ public class Gff3CachedReporter extends Reporter {
   }
 
   @Override
-  public void configure(JSONObject newConfig) throws WdkModelException {
+  public void configure(JSONObject newConfig) throws WdkUserException {
     super.configure(newConfig);
 
-    if (newConfig.has(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON))
-      fileType = newConfig.getString(StandardReporter.Configuration.ATTACHMENT_TYPE_JSON);
+    if (newConfig.has(StandardConfig.ATTACHMENT_TYPE_JSON))
+      fileType = newConfig.getString(StandardConfig.ATTACHMENT_TYPE_JSON);
 
     // include transcript
     if (newConfig.has(FIELD_HAS_TRANSCRIPT))
@@ -139,31 +137,6 @@ public class Gff3CachedReporter extends Reporter {
       hasProtein = newConfig.getBoolean(FIELD_HAS_PROTEIN);
   }
 
-  @Override
-  public String getConfigInfo() {
-    return "This reporter does not have config info yet.";
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.Reporter#getHttpContentType()
-   */
-  @Override
-  public String getHttpContentType() {
-    if (fileType.equalsIgnoreCase("text")) {
-      return "text/plain";
-    }
-    else { // use the default content type defined in the parent class
-      return super.getHttpContentType();
-    }
-  }
-
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.Reporter#getDownloadFileName()
-   */
   @Override
   public String getDownloadFileName() {
     logger.info("Internal format: " + fileType);
@@ -176,30 +149,30 @@ public class Gff3CachedReporter extends Reporter {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
-   */
   @Override
-  public void write(OutputStream out) throws WdkModelException, NoSuchAlgorithmException, SQLException,
-      JSONException, WdkUserException {
-    PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
-
-    // this reporter only works for GeneRecordClasses.GeneRecordClass
-    String rcName = getQuestion().getRecordClass().getFullName();
-    if (!Arrays.asList(SUPPORTED_RECORD_CLASS_NAMES).contains(rcName))
-      throw new WdkModelException("Unsupported record type: " + rcName);
-
-    // write header
-    writeHeader(writer);
-
-    // write record
-    writeRecords(writer);
-
-    // write sequence
-    if (hasTranscript || hasProtein)
-      writeSequences(writer);
+  public void write(OutputStream out) throws WdkModelException {
+    try {
+      PrintWriter writer = new PrintWriter(new OutputStreamWriter(out));
+  
+      // this reporter only works for GeneRecordClasses.GeneRecordClass
+      String rcName = getQuestion().getRecordClass().getFullName();
+      if (!Arrays.asList(SUPPORTED_RECORD_CLASS_NAMES).contains(rcName))
+        throw new WdkModelException("Unsupported record type: " + rcName);
+  
+      // write header
+      writeHeader(writer);
+  
+      // write record
+      writeRecords(writer);
+  
+      // write sequence
+      if (hasTranscript || hasProtein) {
+        writeSequences(writer);
+      }
+    }
+    catch (NumberFormatException | WdkUserException e) {
+      throw new WdkModelException("Unable to write Gff3 Cached report", e);
+    }
   }
 
   private void writeHeader(PrintWriter writer) throws WdkModelException, NumberFormatException,
@@ -212,10 +185,8 @@ public class Gff3CachedReporter extends Reporter {
     // get the sequence regions
     Map<String, int[]> regions = new LinkedHashMap<String, int[]>();
 
-    // get page based answers with a maximum size (defined in
-    // PageAnswerIterator)
-    for (AnswerValue answerValue : this) {
-      for (RecordInstance record : answerValue.getRecordInstances()) {
+    try (RecordStream records = getRecords()) {
+      for (RecordInstance record : records) {
         String seqId = getValue(record.getAttributeValue("gff_seqid"));
         int start = Integer.parseInt(getValue(record.getAttributeValue("gff_fstart")));
         int stop = Integer.parseInt(getValue(record.getAttributeValue("gff_fend")));
@@ -244,11 +215,11 @@ public class Gff3CachedReporter extends Reporter {
 
   private void writeRecords(PrintWriter writer) throws WdkModelException, WdkUserException {
     // get primary key columns
-    RecordClass recordClass = getQuestion().getRecordClass();
-    String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+    //RecordClass recordClass = getQuestion().getRecordClass();
+    //String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
 
     // get id sql, then combine with the gff cache.
-    String idSql = baseAnswer.getSortedIdSql();
+    String idSql = _baseAnswer.getSortedIdSql();
 
     StringBuffer sql = new StringBuffer("SELECT tc." + COLUMN_CONTENT);
     sql.append(" FROM " + tableCache + " tC WHERE tc.source_id in (select gene_source_id from (" + idSql + ") ac)");
@@ -278,11 +249,11 @@ public class Gff3CachedReporter extends Reporter {
 
   private void writeSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
     // get primary key columns
-    RecordClass recordClass = getQuestion().getRecordClass();
-    String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+    //RecordClass recordClass = getQuestion().getRecordClass();
+    //String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
 
     // get id sql
-    String idSql = baseAnswer.getSortedIdSql();
+    String idSql = _baseAnswer.getSortedIdSql();
 
     // construct in clause
     StringBuffer sqlIn = new StringBuffer();
@@ -321,7 +292,7 @@ public class Gff3CachedReporter extends Reporter {
     }
   }
 
-  private String getValue(AttributeValue attrVal) throws WdkModelException, WdkUserException {
+  private static String getValue(AttributeValue attrVal) throws WdkModelException, WdkUserException {
     String value;
     if (attrVal == null) {
       return null;
@@ -333,15 +304,5 @@ public class Gff3CachedReporter extends Reporter {
     if (value.length() == 0)
       return null;
     return value;
-  }
-
-  @Override
-  protected void complete() {
-    // do nothing
-  }
-
-  @Override
-  protected void initialize() throws WdkModelException {
-    // do nothing
   }
 }
