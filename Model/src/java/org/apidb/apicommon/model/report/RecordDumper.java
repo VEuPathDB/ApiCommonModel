@@ -7,8 +7,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.security.NoSuchAlgorithmException;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,14 +17,13 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.answer.report.ReporterFactory;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.StandardReporter;
+import org.gusdb.wdk.model.report.ReporterFactory;
+import org.gusdb.wdk.model.report.StandardConfig;
 import org.gusdb.wdk.model.user.User;
-import org.json.JSONException;
 
 /**
  * @author xingao
@@ -40,9 +37,7 @@ public class RecordDumper {
     /**
      * @param args
      */
-    public static void main(String[] args) throws WdkModelException,
-            WdkUserException, IOException, NoSuchAlgorithmException,
-            SQLException, JSONException {
+    public static void main(String[] args) throws Exception {
         if (args.length != 6 && args.length != 8) {
             System.err.println("Invalid parameters.");
             printUsage();
@@ -85,9 +80,7 @@ public class RecordDumper {
     }
 
     private static void dumpOrganism(WdkModel wdkModel, String organism,
-            String type, String baseDir) throws WdkUserException,
-            WdkModelException, IOException, NoSuchAlgorithmException,
-            SQLException, JSONException {
+            String type, String baseDir) throws WdkUserException, WdkModelException, IOException {
         long start = System.currentTimeMillis();
 
         // TEST
@@ -125,10 +118,10 @@ public class RecordDumper {
 
         // make the configuration for the reporter
         Map<String, String> config = new LinkedHashMap<String, String>();
-        config.put(StandardReporter.Configuration.ATTACHMENT_TYPE, "text");
-        config.put(StandardReporter.Configuration.SELECTED_ATTRS,
+        config.put(StandardConfig.ATTACHMENT_TYPE, "text");
+        config.put(StandardConfig.SELECTED_ATTRS,
                 sbFields.toString());
-        config.put(StandardReporter.Configuration.INCLUDE_EMPTY_TABLES, "yes");
+        config.put(StandardConfig.INCLUDE_EMPTY_TABLES, "yes");
 
         // ask the question
         User user = wdkModel.getSystemUser();

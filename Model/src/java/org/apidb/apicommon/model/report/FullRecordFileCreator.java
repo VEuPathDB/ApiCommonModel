@@ -28,8 +28,10 @@ import org.gusdb.wdk.model.question.QuestionSet;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.record.RecordClass;
+import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.StandardReporter;
+import org.gusdb.wdk.model.report.StandardConfig;
+import org.gusdb.wdk.model.report.TableCache;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -199,24 +201,21 @@ public class FullRecordFileCreator extends BaseCLI {
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();
         for (String fieldName : fields.keySet()) {
-            if (sbFields.length() > 0)
-                sbFields.append(",");
+            if (sbFields.length() > 0) {
+              sbFields.append(",");
+            }
             sbFields.append(fieldName);
         }
 
         Map<String, String> properties = new LinkedHashMap<String, String>();
-        properties.put(FullRecordCachedReporter.PROPERTY_TABLE_CACHE,
-                cacheTable);
+        properties.put(TableCache.PROPERTY_TABLE_CACHE, cacheTable);
 
         Map<String, String> config = new LinkedHashMap<String, String>();
-        config.put(StandardReporter.Configuration.ATTACHMENT_TYPE, "text");
-        config.put(StandardReporter.Configuration.SELECTED_FIELDS,
-                sbFields.toString());
-        config.put(StandardReporter.Configuration.INCLUDE_EMPTY_TABLES, "yes");
+        config.put(StandardConfig.ATTACHMENT_TYPE, "text");
+        config.put(StandardConfig.SELECTED_FIELDS, sbFields.toString());
+        config.put(StandardConfig.INCLUDE_EMPTY_TABLES, "yes");
 
-        int resultSize = answerValue.getResultSize();
-        FullRecordCachedReporter reporter = new FullRecordCachedReporter(
-                answerValue, 1, resultSize);
+        FullRecordReporter reporter = new FullRecordReporter(answerValue);
         reporter.setProperties(properties);
         reporter.configure(config);
         return reporter;

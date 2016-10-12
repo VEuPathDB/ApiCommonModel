@@ -20,10 +20,10 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.answer.report.ReporterFactory;
 import org.gusdb.wdk.model.question.Question;
-import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.StandardReporter;
+import org.gusdb.wdk.model.report.PagedReporter;
+import org.gusdb.wdk.model.report.ReporterFactory;
+import org.gusdb.wdk.model.report.StandardConfig;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -108,8 +108,8 @@ public class Gff3Dumper {
 
     // load config
     Map<String, String> config = new LinkedHashMap<String, String>();
-    config.put(StandardReporter.Configuration.ATTACHMENT_TYPE, "text");
-    config.put(Reporter.PROPERTY_PAGE_SIZE, Integer.toString(PAGE_SIZE));
+    config.put(StandardConfig.ATTACHMENT_TYPE, "text");
+    config.put(PagedReporter.PROPERTY_PAGE_SIZE, Integer.toString(PAGE_SIZE));
     config.put(Gff3Reporter.FIELD_HAS_TRANSCRIPT, "true");
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "true");
 
