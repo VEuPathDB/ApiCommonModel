@@ -662,6 +662,49 @@ FROM
     <processQuery name="GenesBySimilarity" 
              processName="org.apidb.apicomplexa.wsfplugin.blast.GeneBlastPlugin">
 
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+               -- map any protein IDs to their transcript ID
+               update ##WDK_CACHE_TABLE## qr
+               set source_id = (select transcript_source_id
+                                from ApidbTuning.ProteinAttributes
+                                where source_id = qr.source_id)
+               where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                 and source_id in (select source_id
+                                   from ApidbTuning.ProteinAttributes)
+                 and source_id not in (select source_id
+                                       from ApidbTuning.TranscriptAttributes)
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                -- insert missing transcripts of included genes
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select source_id, gene_source_id
+                           from apidbTuning.transcriptAttributes
+                           where gene_source_id in (select gene_source_id from matches)
+AND 1=0
+                         minus
+                           select source_id, gene_source_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+
         <testParamValues includeProjects="CryptoDB">
             <paramValue name="BlastQuerySequence">AACCCTAATCATTCCAACTTTGTTTCCAATTCCA</paramValue>
         </testParamValues>
