@@ -104,7 +104,6 @@ public class Gff3CachedReporter extends PagedReporter {
    */
   @Override
   public void configure(Map<String, String> newConfig) throws WdkUserException {
-    super.configure(newConfig);
 
     if (newConfig.containsKey(StandardConfig.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardConfig.ATTACHMENT_TYPE);
 
@@ -123,7 +122,6 @@ public class Gff3CachedReporter extends PagedReporter {
 
   @Override
   public void configure(JSONObject newConfig) throws WdkUserException {
-    super.configure(newConfig);
 
     if (newConfig.has(StandardConfig.ATTACHMENT_TYPE_JSON))
       fileType = newConfig.getString(StandardConfig.ATTACHMENT_TYPE_JSON);

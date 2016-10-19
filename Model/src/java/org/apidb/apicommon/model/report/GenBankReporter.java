@@ -20,6 +20,7 @@ import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.PagedReporter;
+import org.json.JSONObject;
 
 public class GenBankReporter extends PagedReporter {
 
@@ -37,6 +38,16 @@ public class GenBankReporter extends PagedReporter {
 
     public GenBankReporter(AnswerValue answerValue) {
         super(answerValue);
+    }
+
+    @Override
+    public void configure(Map<String, String> config) {
+      // no configuration for this reporter
+    }
+
+    @Override
+    public void configure(JSONObject config) {
+      // no configuration for this reporter
     }
 
     /**
