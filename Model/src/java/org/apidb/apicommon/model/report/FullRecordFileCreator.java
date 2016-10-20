@@ -63,8 +63,6 @@ public class FullRecordFileCreator extends BaseCLI {
         }
     }
 
-    private WdkModel wdkModel;
-
     /**
      * @param command
      * @param description
@@ -115,30 +113,31 @@ public class FullRecordFileCreator extends BaseCLI {
         String dumpFile = (String) getOptionValue(ARG_DUMP_FILE);
 
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
-        wdkModel = WdkModel.construct(projectId, gusHome);
+        try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
-        String idSql = loadIdSql(sqlFile);
-        RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
-
-        if (cacheTable == null)
-            cacheTable = "wdk" + recordClass.getDisplayName() + "Dump";
-        if (dumpFile == null)
-            dumpFile = cacheTable + ".txt";
-
-        Question question = createQuestion(projectId, recordClass, idSql);
-        User user = wdkModel.getSystemUser();
-        Map<String, String> paramValues = new LinkedHashMap<String, String>();
-        AnswerValue answerValue = question
-                .makeAnswerValue(user, paramValues, true, 0);
-
-        OutputStream out = new FileOutputStream(dumpFile);
-        Reporter reporter = createReporter(answerValue, cacheTable);
-        reporter.report(out);
-        out.close();
-
-        long end = System.currentTimeMillis();
-        logger.info("full record dump took " + ((end - start) / 1000.0)
-                + " seconds");
+          String idSql = loadIdSql(sqlFile);
+          RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
+  
+          if (cacheTable == null)
+              cacheTable = "wdk" + recordClass.getDisplayName() + "Dump";
+          if (dumpFile == null)
+              dumpFile = cacheTable + ".txt";
+  
+          Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
+          User user = wdkModel.getSystemUser();
+          Map<String, String> paramValues = new LinkedHashMap<String, String>();
+          AnswerValue answerValue = question
+                  .makeAnswerValue(user, paramValues, true, 0);
+  
+          OutputStream out = new FileOutputStream(dumpFile);
+          Reporter reporter = createReporter(answerValue, cacheTable);
+          reporter.report(out);
+          out.close();
+  
+          long end = System.currentTimeMillis();
+          logger.info("full record dump took " + ((end - start) / 1000.0)
+                  + " seconds");
+        }
     }
 
     private String loadIdSql(String sqlFile) throws IOException {
@@ -156,12 +155,12 @@ public class FullRecordFileCreator extends BaseCLI {
         return idSql;
     }
 
-    private Question createQuestion(String projectId, RecordClass recordClass,
+    private Question createQuestion(WdkModel wdkModel, String projectId, RecordClass recordClass,
             String idSql) throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
         QuestionSet questionSet = wdkModel
                 .getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
-        Query query = createQuery(recordClass, idSql);
+        Query query = createQuery(wdkModel, recordClass, idSql);
         Question question = new Question();
         question.setName(name + "_dump");
         question.setRecordClass(recordClass);
@@ -173,7 +172,7 @@ public class FullRecordFileCreator extends BaseCLI {
         return question;
     }
 
-    private SqlQuery createQuery(RecordClass recordClass, String idSql)
+    private SqlQuery createQuery(WdkModel wdkModel, RecordClass recordClass, String idSql)
             throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
         QuerySet querySet = wdkModel.getQuerySet(Utilities.INTERNAL_QUERY_SET);

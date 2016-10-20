@@ -86,36 +86,38 @@ public class MigrateUsers5Fungi extends BaseCLI {
     Date cutoffDate = getCutoffDate();
     logger.info("Migrating user into new userlogins5 schema... cutoffDate = " + cutoffDate);
 
-    WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
-    SqlSessionFactory sessionFactory = getSessionFactory(wdkModel);
+    try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
-    for (int i = 0; i < TASK_QUEUE.length; i++) {
-      long start = System.currentTimeMillis();
-      MigrationTask task = TASK_QUEUE[i];
-      String display = "Task " + (i + 1) + "/" + TASK_QUEUE.length + ": " + task.getDisplay();
-      logger.info("Executing " + display + "...");
+      SqlSessionFactory sessionFactory = getSessionFactory(wdkModel);
 
-      // set cutoff date if needed
-      if (task instanceof CutoffDateAware) {
-        ((CutoffDateAware) task).setCutoffDate(cutoffDate);
-      }
-
-      // determine executorType
-      ExecutorType executorType = task.isBatchEnabled() ? ExecutorType.BATCH : ExecutorType.REUSE;
-      SqlSession session = sessionFactory.openSession(executorType);
-      try {
-        task.execute(session);
-        session.commit();
-        logger.info(display + " finished successfully in " + ((System.currentTimeMillis() - start) / 1000D) +
-            " seconds.");
-      }
-      catch (Exception ex) {
-        session.rollback();
-        logger.error(display + " failed with error: " + ex.getMessage());
-        throw ex;
-      }
-      finally {
-        session.close();
+      for (int i = 0; i < TASK_QUEUE.length; i++) {
+        long start = System.currentTimeMillis();
+        MigrationTask task = TASK_QUEUE[i];
+        String display = "Task " + (i + 1) + "/" + TASK_QUEUE.length + ": " + task.getDisplay();
+        logger.info("Executing " + display + "...");
+  
+        // set cutoff date if needed
+        if (task instanceof CutoffDateAware) {
+          ((CutoffDateAware) task).setCutoffDate(cutoffDate);
+        }
+  
+        // determine executorType
+        ExecutorType executorType = task.isBatchEnabled() ? ExecutorType.BATCH : ExecutorType.REUSE;
+        SqlSession session = sessionFactory.openSession(executorType);
+        try {
+          task.execute(session);
+          session.commit();
+          logger.info(display + " finished successfully in " + ((System.currentTimeMillis() - start) / 1000D) +
+              " seconds.");
+        }
+        catch (Exception ex) {
+          session.rollback();
+          logger.error(display + " failed with error: " + ex.getMessage());
+          throw ex;
+        }
+        finally {
+          session.close();
+        }
       }
     }
   }

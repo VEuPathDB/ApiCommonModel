@@ -21,6 +21,7 @@ import org.apache.log4j.Logger;
 import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.platform.DBPlatform;
+import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -49,17 +50,19 @@ public class DetailTableLoader extends BaseCLI {
     private final DetailTableLoader loader;
     private final String idSql;
     private final TableField table;
+    private final DatabaseInstance appDb;
     
-    public DumpTableTask(DetailTableLoader loader, String idSql, TableField table) {
+    public DumpTableTask(DetailTableLoader loader, String idSql, TableField table, DatabaseInstance appDb) {
       this.loader = loader;
       this.idSql = idSql;
       this.table = table;
+      this.appDb = appDb;
     }
 
     @Override
     public void run() {
       try {
-        loader.dumpTable(table, idSql);
+        loader.dumpTable(appDb, table, idSql);
       }
       catch (WdkModelException | WdkUserException | SQLException ex) {
         throw new WdkRuntimeException(ex);
@@ -102,7 +105,6 @@ public class DetailTableLoader extends BaseCLI {
     }
   }
 
-  private WdkModel wdkModel;
   private DataSource queryDataSource;
   private String detailTable;
 
@@ -148,43 +150,46 @@ public class DetailTableLoader extends BaseCLI {
 
     String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
     logger.debug("loading model...");
-    wdkModel = WdkModel.construct(projectId, gusHome);
-    queryDataSource = wdkModel.getAppDb().getDataSource();
+    try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
-    logger.debug("loading id sql...");
-    String idSql = loadIdSql(sqlFile);
-
-    logger.debug("getting tables...");
-    RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
-    Map<String, TableField> tables = recordClass.getTableFieldMap();
-    
-    // dump tables in parallel
-    ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-    if (fieldNames != null) { // dump individual table
-      // all tables are available in this context
-      String[] names = fieldNames.split(",");
-      for (String fieldName : names) {
-        fieldName = fieldName.trim();
-        TableField table = tables.get(fieldName);
-        if (table == null)
-          throw new WdkModelException("The table field doesn't exist: " + fieldName);
-        executor.execute(new DumpTableTask(this, idSql, table));
+      queryDataSource = wdkModel.getAppDb().getDataSource();
+  
+      logger.debug("loading id sql...");
+      String idSql = loadIdSql(sqlFile);
+  
+      logger.debug("getting tables...");
+      RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
+      Map<String, TableField> tables = recordClass.getTableFieldMap();
+      
+      // dump tables in parallel
+      DatabaseInstance appDb = wdkModel.getAppDb();
+      ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+      if (fieldNames != null) { // dump individual table
+        // all tables are available in this context
+        String[] names = fieldNames.split(",");
+        for (String fieldName : names) {
+          fieldName = fieldName.trim();
+          TableField table = tables.get(fieldName);
+          if (table == null)
+            throw new WdkModelException("The table field doesn't exist: " + fieldName);
+          executor.execute(new DumpTableTask(this, idSql, table, appDb));
+        }
       }
-    }
-    else { // no table specified, only dump tables with a specific flag
-      for (TableField table : tables.values()) {
-        String[] props = table.getPropertyList(PROP_INCLUDE_IN_DUMPER);
-        if (props.length == 0 || !props[0].equalsIgnoreCase("true"))
-          continue;
-        executor.execute(new DumpTableTask(this, idSql, table));
+      else { // no table specified, only dump tables with a specific flag
+        for (TableField table : tables.values()) {
+          String[] props = table.getPropertyList(PROP_INCLUDE_IN_DUMPER);
+          if (props.length == 0 || !props[0].equalsIgnoreCase("true"))
+            continue;
+          executor.execute(new DumpTableTask(this, idSql, table, appDb));
+        }
       }
+      executor.shutdown();
+      // no need of timeout here, just wait till the end of the world; or when you CTRL+C...
+      while (!executor.isTerminated()){}
+  
+      long end = System.currentTimeMillis();
+      logger.info("Total time: " + ((end - start) / 1000.0) + " seconds");
     }
-    executor.shutdown();
-    // no need of timeout here, just wait till the end of the world; or when you CTRL+C...
-    while (!executor.isTerminated()){}
-
-    long end = System.currentTimeMillis();
-    logger.info("Total time: " + ((end - start) / 1000.0) + " seconds");
   }
 
   private String loadIdSql(String sqlFile) throws IOException {
@@ -209,7 +214,7 @@ public class DetailTableLoader extends BaseCLI {
    * @param table
    * @param idSql
    */
-  private void dumpTable(TableField table, String idSql) throws WdkModelException, SQLException,
+  private void dumpTable(DatabaseInstance updateDb, TableField table, String idSql) throws WdkModelException, SQLException,
       WdkUserException {
     logger.debug("Dumping table [" + table.getName() + "]...");
     long start = System.currentTimeMillis();
@@ -249,10 +254,8 @@ public class DetailTableLoader extends BaseCLI {
     Connection updateConnection = null;
     PreparedStatement insertStmt = null;
     try {
-      logger.debug("getting data source...");
-      DataSource updateDataSource = wdkModel.getAppDb().getDataSource();
       logger.debug("getting connection...");
-      updateConnection = updateDataSource.getConnection();
+      updateConnection = updateDb.getDataSource().getConnection();
       logger.debug("Connection obtained...");
 
       logger.debug("disabling auto commit...");
@@ -264,7 +267,7 @@ public class DetailTableLoader extends BaseCLI {
       logger.info("Dumping table [" + table.getName() + "]");
 
       logger.debug("aggregating data...");
-      int[] counts = aggregateLocally(table, idSql, insertStmt, insertSql, pkColumns);
+      int[] counts = aggregateLocally(table, idSql, insertStmt, updateDb.getPlatform(), insertSql, pkColumns);
 
       long startCommit = System.currentTimeMillis();
       updateConnection.commit();
@@ -302,7 +305,7 @@ public class DetailTableLoader extends BaseCLI {
         " seconds");
   }
 
-  private int[] aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt,
+  private int[] aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, DBPlatform platform,
       String insertSql, String[] pkColumns) throws WdkModelException, SQLException, WdkUserException {
 
     String title = getTableTitle(table);
@@ -336,8 +339,8 @@ public class DetailTableLoader extends BaseCLI {
         }
         if (!first && (!pk0.equals(prevPk0) || !pk1.equals(prevPk1) || !pk2.equals(prevPk2))) {
           insertCount++;
-          insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-					prevPk1, prevPk2, title, pkColumns.length, insertCount, false);
+          insertTime += insertDetailRow(insertStmt, platform, insertSql, aggregatedContent, rowCount, table, prevPk0,
+              prevPk1, prevPk2, title, pkColumns.length, insertCount, false);
           aggregatedContent = new StringBuilder();
           rowCount = 0;
         }
@@ -362,8 +365,8 @@ public class DetailTableLoader extends BaseCLI {
       }
       if (aggregatedContent.length() != 0) {
         insertCount++;
-        insertTime += insertDetailRow(insertStmt, insertSql, aggregatedContent, rowCount, table, prevPk0,
-				      prevPk1, prevPk2, title, pkColumns.length, insertCount, true);
+        insertTime += insertDetailRow(insertStmt, platform, insertSql, aggregatedContent, rowCount, table, prevPk0,
+            prevPk1, prevPk2, title, pkColumns.length, insertCount, true);
       }
       else {
         // add any remaining rows to DB
@@ -391,10 +394,9 @@ public class DetailTableLoader extends BaseCLI {
     return title.toString();
   }
 
-  private String getWrappedSql(TableField table, String idSql, String[] pkColumns) throws WdkModelException {
+  private String getWrappedSql(TableField table, String idSql, String[] pkColumns) {
 
-    String queryName = table.getQuery().getFullName();
-    String tableSql = ((SqlQuery) wdkModel.resolveReference(queryName)).getSql();
+    String tableSql = ((SqlQuery)table.getQuery()).getSql();
     String pkPredicates = "idq." + pkColumns[0] + " = tq." + pkColumns[0] + "\n";
     String pkList = "tq." + pkColumns[0];
 
@@ -482,7 +484,7 @@ public class DetailTableLoader extends BaseCLI {
    * @param table
    * @param idSql
    */
-  private long insertDetailRow(PreparedStatement insertStmt, String insertSql, StringBuilder contentBuf,
+  private long insertDetailRow(PreparedStatement insertStmt, DBPlatform platform, String insertSql, StringBuilder contentBuf,
 			       int rowCount, TableField table, String pk0, String pk1, String pk2, String title, int pkCount,
       int insertCount, boolean forceBatchUpdate) throws SQLException {
 
@@ -490,7 +492,6 @@ public class DetailTableLoader extends BaseCLI {
 
     // trim trailing newline (but not leading white space)
     String content = contentBuf.toString();
-    DBPlatform platform = wdkModel.getAppDb().getPlatform();
 
     // (<primary keys>, field_name, field_title, row_count, content,
     // modification_date)

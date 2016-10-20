@@ -15,7 +15,7 @@ import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.db.SqlUtils;
-import org.gusdb.wdk.model.Utilities;
+import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
@@ -33,15 +33,12 @@ import org.gusdb.wdk.model.user.User;
  * @author xingao
  */
 public class Gff3Dumper {
-  static final int PAGE_SIZE = 1000;
+
+  private static final int PAGE_SIZE = 1000;
 
   private static final Logger logger = Logger.getLogger(Gff3Dumper.class);
 
-  /**
-   * @param args
-   */
-  public static void main(String[] args) throws WdkModelException, WdkUserException, IOException,
-      SQLException {
+  public static void main(String[] args) throws Exception {
     if (args.length != 4 && args.length != 6) {
       System.err.println("Invalid parameters.");
       printUsage();
@@ -52,9 +49,26 @@ public class Gff3Dumper {
       cmdArgs.put(args[i].trim().toLowerCase(), args[i + 1].trim());
     }
 
-    Gff3Dumper dumper = new Gff3Dumper(cmdArgs);
-    dumper.dump();
-    dumper.close();
+    // get params and validate
+    String projectId = cmdArgs.get("-model");
+    String organismArg = cmdArgs.get("-organism");
+    String baseDir = cmdArgs.get("-dir");
+
+    if (baseDir == null || baseDir.length() == 0) {
+      baseDir = ".";
+    }
+
+    if (projectId == null || organismArg == null) {
+      System.err.println("Missing parameters.");
+      Gff3Dumper.printUsage();
+      System.exit(-1);
+    }
+
+    String[] organisms = organismArg.split(",");
+
+    try (WdkModel wdkModel = WdkModel.construct(projectId, GusHome.getGusHome())) {
+      new Gff3Dumper(wdkModel, organisms, baseDir).dump();
+    }
 
     System.out.println("Finished.");
   }
@@ -70,36 +84,16 @@ public class Gff3Dumper {
     System.out.println();
   }
 
-  private String baseDir;
-  private WdkModel wdkModel;
-  private String[] organisms;
+  private final WdkModel wdkModel;
+  private final String[] organisms;
+  private final String baseDir;
 
-  private PreparedStatement psOrganism;
-
-  public Gff3Dumper(Map<String, String> cmdArgs) throws WdkModelException {
-    // get params
-    String modelName = cmdArgs.get("-model");
-    String organismArg = cmdArgs.get("-organism");
-    this.baseDir = cmdArgs.get("-dir");
-
-    if (modelName == null || organismArg == null) {
-      System.err.println("Missing parameters.");
-      Gff3Dumper.printUsage();
-      System.exit(-1);
-    }
-    if (baseDir == null || baseDir.length() == 0)
-      baseDir = ".";
-
-    // construct wdkModel
-    String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
-    this.wdkModel = WdkModel.construct(modelName, gusHome);
-
-    this.organisms = organismArg.split(",");
+  public Gff3Dumper(WdkModel wdkModel, String[] organisms, String baseDir) {
+    this.wdkModel = wdkModel;
+    this.organisms = organisms;
+    this.baseDir = baseDir;
   }
 
-  public void close() {
-    wdkModel.releaseResources();
-  }
 
   public void dump() throws WdkUserException, WdkModelException, IOException, SQLException {
 
@@ -120,11 +114,11 @@ public class Gff3Dumper {
         + "   AND ga.source_id = gf.source_id " + "   AND ns.taxon_id = o.taxon_id "
         + "   AND ga.project_id = ? AND ga.organism = ?";
     DataSource dataSource = wdkModel.getAppDb().getDataSource();
-    psOrganism = SqlUtils.getPreparedStatement(dataSource, sql);
-
+    PreparedStatement psOrganism = null;
     try {
+      psOrganism = SqlUtils.getPreparedStatement(dataSource, sql);
       for (String organism : organisms) {
-        dumpOrganism(organism.trim(), config);
+        dumpOrganism(psOrganism, organism.trim(), config);
       }
     }
     finally {
@@ -132,7 +126,7 @@ public class Gff3Dumper {
     }
   }
 
-  private void dumpOrganism(String organism, Map<String, String> config) throws WdkUserException,
+  private void dumpOrganism(PreparedStatement psOrganism, String organism, Map<String, String> config) throws WdkUserException,
       WdkModelException, IOException, SQLException {
     long start = System.currentTimeMillis();
 
@@ -145,7 +139,7 @@ public class Gff3Dumper {
     // String prefix = wdkModel.getProjectId() + "-" + wdkModel.getVersion() +
     // "_";
     String prefix = wdkModel.getProjectId() + "-CURRENT_";
-    String organismFile = getOrganismFileName(organism);
+    String organismFile = getOrganismFileName(psOrganism, organism);
     String fileName = prefix + organismFile + ".gff";
 
     File gffFile = new File(baseDir, fileName);
@@ -218,15 +212,19 @@ public class Gff3Dumper {
     SqlUtils.executeUpdate(dataSource, sql, "gff-dump-delete-rows");
   }
 
-  private String getOrganismFileName(String organism) throws WdkModelException, SQLException {
+  private String getOrganismFileName(PreparedStatement psOrganism, String organism) throws WdkModelException, SQLException {
     psOrganism.setString(1, wdkModel.getProjectId());
     psOrganism.setString(2, organism);
-    ResultSet resultSet = psOrganism.executeQuery();
-    if (!resultSet.next()) {
-      throw new WdkModelException("The organism '" + organism + "' cannot be recognized.");
+    ResultSet resultSet = null;
+    try {
+      resultSet = psOrganism.executeQuery();
+      if (!resultSet.next()) {
+        throw new WdkModelException("The organism '" + organism + "' cannot be recognized.");
+      }
+      return resultSet.getString(1);
     }
-    String fileName = resultSet.getString(1);
-    resultSet.close();
-    return fileName;
+    finally {
+      SqlUtils.closeQuietly(resultSet);
+    }
   }
 }

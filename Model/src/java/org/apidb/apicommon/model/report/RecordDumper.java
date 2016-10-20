@@ -65,18 +65,19 @@ public class RecordDumper {
 
         // construct wdkModel
         String gusHome = System.getProperty(Utilities.SYSTEM_PROPERTY_GUS_HOME);
-        WdkModel model = WdkModel.construct(modelName, gusHome);
+        try (WdkModel model = WdkModel.construct(modelName, gusHome)) {
 
-        // get type list
-        String[] types = typeArg.split(",");
-
-        String[] organisms = organismArg.split(",");
-        for (String organism : organisms) {
-            for (String type : types) {
-                dumpOrganism(model, organism.trim(), type.trim(), baseDir);
-            }
+          // get type list
+          String[] types = typeArg.split(",");
+  
+          String[] organisms = organismArg.split(",");
+          for (String organism : organisms) {
+              for (String type : types) {
+                  dumpOrganism(model, organism.trim(), type.trim(), baseDir);
+              }
+          }
+          System.out.println("Finished.");
         }
-        System.out.println("Finished.");
     }
 
     private static void dumpOrganism(WdkModel wdkModel, String organism,

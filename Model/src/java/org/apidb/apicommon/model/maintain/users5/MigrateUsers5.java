@@ -104,50 +104,52 @@ public class MigrateUsers5 extends BaseCLI {
 
     LOG.info("Migrating user into new userlogins5 schema... cutoffDate = " + cutoffDate);
 
-    WdkModel wdkModel = WdkModel.construct(projectId, gusHome);
-    SqlSessionFactory sessionFactory = getSessionFactory(wdkModel);
+    try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
-    MigrationTask[] tasks = null;
-    if (stage.equals(STAGE_PRE_RELEASE)) {
-      tasks = PRE_RELEASE_TASKS;
-    }
-    else if (stage.equals(STAGE_RELEASE)) {
-      tasks = RELEASE_TASKS;
-    }
-    for (int i = 0; i < tasks.length; i++) {
-      long start = System.currentTimeMillis();
-      MigrationTask task = tasks[i];
-      String display = "Task " + (i + 1) + "/" + tasks.length + ": " + task.getDisplay();
-      LOG.info("Executing " + display + "...");
-
-      // set wdkModel if needed
-      if (task instanceof ModelAware) {
-        ((ModelAware) task).setModel(wdkModel);
+      SqlSessionFactory sessionFactory = getSessionFactory(wdkModel);
+  
+      MigrationTask[] tasks = null;
+      if (stage.equals(STAGE_PRE_RELEASE)) {
+        tasks = PRE_RELEASE_TASKS;
       }
-      // set cutoff date if needed
-      if (task instanceof CutoffDateAware) {
-        ((CutoffDateAware) task).setCutoffDate(cutoffDate);
+      else if (stage.equals(STAGE_RELEASE)) {
+        tasks = RELEASE_TASKS;
       }
-
-      // determine executorType
-      ExecutorType executorType = task.isBatchEnabled() ? ExecutorType.BATCH : ExecutorType.REUSE;
-      SqlSession session = sessionFactory.openSession(executorType);
-      try {
-        task.execute(session);
-        if (!task.validate(session))
-          throw new Exception(display + " validation failed.");
-
-        session.commit();
-        LOG.info(display + " finished successfully in " + ((System.currentTimeMillis() - start) / 1000D) +
-            " seconds.");
-      }
-      catch (Exception ex) {
-        session.rollback();
-        LOG.error(display + " failed with error: " + ex.getMessage());
-        throw ex;
-      }
-      finally {
-        session.close();
+      for (int i = 0; i < tasks.length; i++) {
+        long start = System.currentTimeMillis();
+        MigrationTask task = tasks[i];
+        String display = "Task " + (i + 1) + "/" + tasks.length + ": " + task.getDisplay();
+        LOG.info("Executing " + display + "...");
+  
+        // set wdkModel if needed
+        if (task instanceof ModelAware) {
+          ((ModelAware) task).setModel(wdkModel);
+        }
+        // set cutoff date if needed
+        if (task instanceof CutoffDateAware) {
+          ((CutoffDateAware) task).setCutoffDate(cutoffDate);
+        }
+  
+        // determine executorType
+        ExecutorType executorType = task.isBatchEnabled() ? ExecutorType.BATCH : ExecutorType.REUSE;
+        SqlSession session = sessionFactory.openSession(executorType);
+        try {
+          task.execute(session);
+          if (!task.validate(session))
+            throw new Exception(display + " validation failed.");
+  
+          session.commit();
+          LOG.info(display + " finished successfully in " + ((System.currentTimeMillis() - start) / 1000D) +
+              " seconds.");
+        }
+        catch (Exception ex) {
+          session.rollback();
+          LOG.error(display + " failed with error: " + ex.getMessage());
+          throw ex;
+        }
+        finally {
+          session.close();
+        }
       }
     }
   }
