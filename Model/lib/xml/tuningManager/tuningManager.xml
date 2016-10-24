@@ -684,6 +684,51 @@ UNION
     </sql>
   </tuningTable>
 
+  <tuningTable name="FallbackOrganism">
+    <comment>
+      Taxon metadata for reference SNPs
+    </comment>
+    <internalDependency name="ProtocolAppNodeResults"/>
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <sql>
+      <![CDATA[
+        create table FallbackOrganism&1 nologging as
+        select ed.name as dataset_name, 'SNP' as type, 'HTS_SNP' as subtype, tn.name as organism,
+               o.strain_abbrev as pan_name, pan.protocol_app_node_id, 'name' as term_name,
+               study_release.study_name, study_release.investigation_name
+        from study.ProtocolAppNode pan, study.StudyLink sl,
+             sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
+             sres.TaxonName tn, apidb.Organism o,
+             (  select s.study_id, i.external_database_release_id,
+                       s.name as study_name, i.name as investigation_name
+                from study.Study s, study.Study i
+                where s.investigation_id = i.study_id
+              union
+                select s.study_id, s.external_database_release_id,
+                       s.name as study_name, null as investigation_name
+                from study.Study s) study_release
+        where pan.protocol_app_node_id in (select protocol_app_node_id
+                                           from ProtocolAppNodeResults)
+--        and ed.name not in (select dataset_name from PANProtocolMetadata)
+--        and ed.name not in (select dataset_name from PANCharacteristicMetadata)
+          and pan.protocol_app_node_id = sl.protocol_app_node_id
+          and sl.study_id = study_release.study_id
+          and study_release.external_database_release_id = edr.external_database_release_id
+          and edr.external_database_id = ed.external_database_id
+          and ed.name like '%_NGS_SNPsAndVariations'
+          and o.abbrev = replace(ed.name, '_NGS_SNPsAndVariations', '')
+          and o.taxon_id = tn.taxon_id(+)
+          and (tn.name_class = 'scientific name' or tn.name_class is null)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="MetadataSpec">
     <comment>
     </comment>
