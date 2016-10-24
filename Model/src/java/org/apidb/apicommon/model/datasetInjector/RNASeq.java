@@ -50,6 +50,9 @@ public class RNASeq extends  DatasetInjector {
 	    injectTemplate("DESeqProfileSetParamQuery");
       }
       
+      if(getPropValueAsBoolean("isDEGseq")) {
+	  injectTemplate("DEGseqProfileSetParamQuery");
+      }
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
 	  // plas-rbld has NO '%rpkm%' name entries in the study.study table. Are all fpkm then?
@@ -162,6 +165,12 @@ public class RNASeq extends  DatasetInjector {
 	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DESeq");
 	      injectTemplate("internalGeneSearchCategory");
 	  }
+	  if(getPropValueAsBoolean("isDEGseq")) {
+	      injectTemplate("rnaSeqDEGseqQuestion");
+	      setPropValue("searchCategory", "searchCategory-transcriptomics-differential-expression-degseq");
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DEGseq");
+	      injectTemplate("internalGeneSearchCategory");
+	  }
 
           if(getPropValue("graphPriorityOrderGrouping").equals("")) {
               setPropValue("graphPriorityOrderGrouping", "1");
@@ -257,6 +266,9 @@ public class RNASeq extends  DatasetInjector {
 	  if (getPropValueAsBoolean("isDESeq")) {
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DESeq");
 	  }
+	  if (getPropValueAsBoolean("isDEGseq")) {
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DEGseq");
+	  }
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
@@ -282,6 +294,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"optionalQuestionDescription", "html text to be appended to the descriptions of all questions"},
                                  {"graphForceXLabelsHorizontal", "should the x axis labels be always horiz"},
 				 {"isDESeq", ""},
+				 {"isDEGseq",""},
       };
 
     return declaration;
