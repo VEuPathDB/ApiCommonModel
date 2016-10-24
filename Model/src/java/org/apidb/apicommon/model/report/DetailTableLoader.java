@@ -1,7 +1,6 @@
 package org.apidb.apicommon.model.report;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.Connection;
@@ -156,11 +155,11 @@ public class DetailTableLoader extends BaseCLI {
   
       logger.debug("loading id sql...");
       String idSql = loadIdSql(sqlFile);
-  
+
       logger.debug("getting tables...");
       RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
       Map<String, TableField> tables = recordClass.getTableFieldMap();
-      
+
       // dump tables in parallel
       DatabaseInstance appDb = wdkModel.getAppDb();
       ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
@@ -192,15 +191,14 @@ public class DetailTableLoader extends BaseCLI {
     }
   }
 
-  private String loadIdSql(String sqlFile) throws IOException {
-    File file = new File(sqlFile);
-    StringBuffer sql = new StringBuffer();
-    BufferedReader reader = new BufferedReader(new FileReader(file));
-    String line;
-    while ((line = reader.readLine()) != null) {
-      sql.append(line).append("\n");
+  private static String loadIdSql(String sqlFile) throws IOException {
+    StringBuilder sql = new StringBuilder();
+    try (BufferedReader reader = new BufferedReader(new FileReader(sqlFile))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        sql.append(line).append("\n");
+      }
     }
-    reader.close();
     String idSql = sql.toString().trim();
     if (idSql.endsWith(";"))
       idSql = idSql.substring(0, idSql.length() - 1);
@@ -396,7 +394,7 @@ public class DetailTableLoader extends BaseCLI {
 
   private String getWrappedSql(TableField table, String idSql, String[] pkColumns) {
 
-    String tableSql = ((SqlQuery)table.getQuery()).getSql();
+    String tableSql = ((SqlQuery)table.getUnpreparedQuery()).getSql();
     String pkPredicates = "idq." + pkColumns[0] + " = tq." + pkColumns[0] + "\n";
     String pkList = "tq." + pkColumns[0];
 
@@ -405,8 +403,11 @@ public class DetailTableLoader extends BaseCLI {
       pkList += ", " + "tq." + pkColumns[1];
     }
 
-    String sql = "select tq.*" + "\n" + "FROM (ID_QUERY) idq," + "\n" +
-        "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq" + "\n" + "WHERE\n" + pkPredicates +
+    String sql =
+        "SELECT tq.*" + "\n" +
+        "FROM (ID_QUERY) idq," + "\n" +
+        "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq" + "\n" +
+        "WHERE\n" + pkPredicates +
         "ORDER BY " + pkList + ", tq.row_num";
     sql = sql.replace("ID_QUERY", idSql);
     sql = sql.replace("TABLE_QUERY", tableSql);
