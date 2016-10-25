@@ -19,10 +19,10 @@ import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.PagedReporter;
+import org.gusdb.wdk.model.report.PagedAnswerReporter;
 import org.json.JSONObject;
 
-public class GenBankReporter extends PagedReporter {
+public class GenBankReporter extends PagedAnswerReporter {
 
     private static final String PROPERTY_GENE_QUESTION = "gene_question";
     private static final String PROPERTY_SEQUENCE_ID_PARAM = "sequence_param";
@@ -41,13 +41,15 @@ public class GenBankReporter extends PagedReporter {
     }
 
     @Override
-    public void configure(Map<String, String> config) {
+    public GenBankReporter configure(Map<String, String> config) {
       // no configuration for this reporter
+      return this;
     }
 
     @Override
-    public void configure(JSONObject config) {
+    public GenBankReporter configure(JSONObject config) {
       // no configuration for this reporter
+      return this;
     }
 
     /**
