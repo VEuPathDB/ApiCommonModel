@@ -31,7 +31,7 @@ import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValueMap;
-import org.gusdb.wdk.model.report.PagedReporter;
+import org.gusdb.wdk.model.report.PagedAnswerReporter;
 import org.gusdb.wdk.model.report.StandardConfig;
 import org.json.JSONObject;
 
@@ -42,7 +42,7 @@ import org.json.JSONObject;
  * @author xingao
  * 
  */
-public class Gff3Reporter extends PagedReporter {
+public class Gff3Reporter extends PagedAnswerReporter {
 
   private static Logger logger = Logger.getLogger(Gff3Reporter.class);
 
@@ -183,7 +183,7 @@ public class Gff3Reporter extends PagedReporter {
    * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
    */
   @Override
-  public void configure(Map<String, String> newConfig) throws WdkUserException {
+  public Gff3Reporter configure(Map<String, String> newConfig) throws WdkUserException {
 
     if (newConfig.containsKey(StandardConfig.ATTACHMENT_TYPE))
       fileType = newConfig.get(StandardConfig.ATTACHMENT_TYPE);
@@ -199,10 +199,12 @@ public class Gff3Reporter extends PagedReporter {
       String value = newConfig.get(FIELD_HAS_PROTEIN);
       hasProtein = (value.equalsIgnoreCase("yes") || value.equalsIgnoreCase("true")) ? true : false;
     }
+
+    return this;
   }
 
   @Override
-  public void configure(JSONObject newConfig) throws WdkUserException {
+  public Gff3Reporter configure(JSONObject newConfig) throws WdkUserException {
 
     if (newConfig.has(StandardConfig.ATTACHMENT_TYPE_JSON))
       fileType = newConfig.getString(StandardConfig.ATTACHMENT_TYPE_JSON);
@@ -214,6 +216,8 @@ public class Gff3Reporter extends PagedReporter {
     // include protein
     if (newConfig.has(FIELD_HAS_PROTEIN))
       hasProtein = newConfig.getBoolean(FIELD_HAS_PROTEIN);
+
+    return this;
   }
 
   @Override
