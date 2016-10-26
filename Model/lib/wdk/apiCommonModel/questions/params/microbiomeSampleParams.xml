@@ -38,7 +38,7 @@
                       multiPick="true"
                       dependedParamRef="sampleParams.metadata_datasets"
                       quote="true"
-                      trimMetadataTerms="false">
+                      suppressNode="true">
          <help>
               Select reference samples. 
          </help>
@@ -92,6 +92,7 @@
           <column name="property" />
           <sql>
             <![CDATA[
+                     select * from (
                 select pan_name as term, term as property, value
                 from apidbTuning.panCharacteristicMetadata
                 where dataset_name in ($$metadata_datasets$$)
@@ -99,10 +100,14 @@
                 select pan_name as term, term as property, value
                 from apidbTuning.panProtocolMetadata
                 where dataset_name in ($$metadata_datasets$$)
-              union
-                select pan_name as term, term_name as property, pan_name as value
-                from apidbTuning.FallbackMetadata
-                where dataset_name in ($$metadata_datasets$$)
+                ) 
+                where property in ( select distinct property
+                                                  from apidbTuning.MetadataSpec
+                                                where dataset_name in ($$metadata_datasets$$)
+                                                    and spec_property = 'parent'
+                                                    and lower(property) not in ( 'name')
+                                                            )
+                                                     
             ]]>
             </sql>
         </sqlQuery>
@@ -114,24 +119,18 @@
             <column name="spec_value" />
             <sql>
               <![CDATA[
+                 select property,
+                            spec_property,
+                            decode(spec_value,'Thing',null,spec_value) as spec_value
+                            from (
                 select distinct property, spec_property, spec_value
                 from apidbTuning.MetadataSpec
-                where dataset_name in ($$metadata_datasets$$)
-                union
-                select property, 'parent' as spec_property, 'Uncategorized' as spec_value
-                from apidbTuning.MetadataSpec 
-                where property in ( select distinct property 
-                                      from apidbTuning.MetadataSpec
-                                     where spec_property = 'leaf'
-                                     and dataset_name in ($$metadata_datasets$$)
-                                       minus
-                                    select distinct property 
-                                      from apidbTuning.MetadataSpec
-                                     where spec_property = 'parent'
+                where dataset_name in ($$metadata_datasets$$))
+                 where property in ( select distinct property
+                                                  from apidbTuning.MetadataSpec
+                                                  where dataset_name in ($$metadata_datasets$$)
+                                                    and spec_property = 'parent'
                 )
-                union 
-                select 'Uncategorized' as property, 'parent' as spec_property, null as spec_value
-                from dual
                
               ]]>
             </sql>
