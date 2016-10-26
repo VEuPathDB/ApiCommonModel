@@ -313,7 +313,7 @@ public class DetailTableLoader extends BaseCLI {
     logger.debug("wrapped sql:\n" + wrappedSql);
     ResultSet resultSet = null;
     try {
-      resultSet = SqlUtils.executeQuery(queryDataSource, wrappedSql, table.getQuery().getFullName() +
+      resultSet = SqlUtils.executeQuery(queryDataSource, wrappedSql, table.getWrappedQuery().getFullName() +
           "__api-report-detail-aggregate", 2000);
       String pk0 = "";
       String pk1 = "";
@@ -394,7 +394,7 @@ public class DetailTableLoader extends BaseCLI {
 
   private String getWrappedSql(TableField table, String idSql, String[] pkColumns) {
 
-    String tableSql = ((SqlQuery)table.getUnpreparedQuery()).getSql();
+    String tableSql = ((SqlQuery)table.getUnwrappedQuery()).getSql();
     String pkPredicates = "idq." + pkColumns[0] + " = tq." + pkColumns[0] + "\n";
     String pkList = "tq." + pkColumns[0];
 
@@ -442,7 +442,7 @@ public class DetailTableLoader extends BaseCLI {
     if (attribute instanceof ColumnAttributeField) {
       String value = resultSet.getString(attribute.getName().toUpperCase());
       if (value == null) {
-        String errorMessage = "Table Query [" + table.getQuery().getFullName() + "] returns null " +
+        String errorMessage = "Table Query [" + table.getWrappedQuery().getFullName() + "] returns null " +
             "value on attribute [" + attribute.getName() + "]. The value will be treated as empty string," +
             " but please investigate.";
         // print out more error about the cause;
@@ -523,7 +523,7 @@ public class DetailTableLoader extends BaseCLI {
   }
 
   private void executeRowBatch(PreparedStatement insertStmt, String insertSql, TableField table) throws SQLException {
-    SqlUtils.executePreparedStatementBatch(insertStmt, insertSql, table.getQuery().getFullName() +
+    SqlUtils.executePreparedStatementBatch(insertStmt, insertSql, table.getWrappedQuery().getFullName() +
         "__api-report-detail-batch-insert");
   }
 
