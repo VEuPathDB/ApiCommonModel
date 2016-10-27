@@ -7839,4 +7839,59 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     </sql>
   </tuningTable>
 
+  <tuningTable name="MetadataType">
+    <comment>
+       Data type and filter method for metadata properties.
+    </comment>
+    <internalDependency name="PANProtocolMetadata"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE MetadataType&1 NOLOGGING AS
+        WITH override
+        AS (  SELECT 'time_to_onset' AS property, 'number' AS type, 'membership' AS filter FROM dual
+            UNION
+              SELECT 'age' AS property, 'number' AS type, 'range' AS filter FROM dual
+            UNION
+              SELECT 'name' AS property, 'string' AS type, 'membership' AS filter FROM dual
+           ),
+        metadata
+        AS (  SELECT term, value
+              FROM panProtocolMetadata
+              WHERE term NOT IN (SELECT property FROM override)
+            UNION
+              SELECT term, value
+              FROM panCharacteristicMetadata
+              WHERE term NOT IN (SELECT property FROM override)
+           ),
+        term_attributes
+        AS (SELECT term,
+                   MAX(CASE
+                         WHEN REGEXP_LIKE (NVL(value,0),'^[[:digit:]]*[.]?[[:digit:]]*$') OR value IS NULL
+                           THEN 0
+                         ELSE 1
+                       END) AS is_string
+            FROM metadata
+            GROUP BY term
+           )
+     SELECT * FROM override
+ UNION ALL
+   SELECT term AS property,
+          CASE is_string
+            WHEN 1
+              THEN 'string'
+            ELSE 'number'
+          END AS type,
+          'membership' AS filter
+   FROM term_attributes
+       ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX mtdttyp_ix&1
+          ON MetadataType&1 (property, type, filter)
+        TABLESPACE indx
+      ]]>
+    </sql>
+  </tuningTable>
+
 </tuningConfig>
