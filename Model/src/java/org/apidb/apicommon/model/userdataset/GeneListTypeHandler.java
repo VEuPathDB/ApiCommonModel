@@ -10,6 +10,7 @@ import javax.sql.DataSource;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
 import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
+import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
 
 public class GeneListTypeHandler extends UserDatasetTypeHandler {
@@ -23,7 +24,7 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   @Override
   public UserDatasetType getUserDatasetType() {
     // TODO Auto-generated method stub
-    return new UserDatasetType("GeneList", "1.0");
+    return UserDatasetTypeFactory.getUserDatasetType("GeneList", "1.0");
   }
 
   @Override
@@ -40,8 +41,8 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getUninstallInAppDbCommand(UserDataset userDataset) {
-    String[] cmd = {"installGeneListUserDataset", userDataset.getUserDatasetId().toString()};
+  public String[] getUninstallInAppDbCommand(Integer userDatasetId) {
+    String[] cmd = {"installGeneListUserDataset", userDatasetId.toString()};
     return cmd;
   }
 
