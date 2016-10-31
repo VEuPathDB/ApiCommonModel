@@ -38,6 +38,7 @@ public class RNASeq extends  DatasetInjector {
       }
 
       setPropValue("graphModule", "RNASeq");
+      setPropValue("stranded", "");
 
       String datasetShortDisplayName = getPropValue("datasetShortDisplayName");
       if (datasetShortDisplayName == null || datasetShortDisplayName.equals("")) {
@@ -68,7 +69,7 @@ public class RNASeq extends  DatasetInjector {
 
 
           if(getPropValueAsBoolean("isStrandSpecific")) {
-
+	      setPropValue("stranded", "Strand Specific ");
 	      if (switchStrands) {
 		  setPropValue("antisense","firststrand") ;
 		  setPropValue("sense","secondstrand") ;
