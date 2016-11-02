@@ -278,6 +278,7 @@ where pa.pathway_id = rel.pathway_id
             <column name="project_id"/>
             <column name="pathway_source"/> 
             <column name="id"/>
+            <column name="node_identifier"/>
             <column name="display_label"/>
             <column name="url"/>
             <column name="name"/>
@@ -296,6 +297,7 @@ WITH
   , pa.name as display_label
   , pa.url
   , pa.name as name
+  , pa.source_id as node_identifier
   , to_char(pn.pathway_node_id) as pathway_node_id
   , pn.x
   , pn.y
@@ -315,7 +317,8 @@ WITH
   select pn.pathway_id
   , pn.display_label
   , null as url
-  , ec.description as name
+  , nvl(ec.description, pn.display_label) as name
+  , ec.ec_number as node_identifier
   , to_char(pn.pathway_node_id) as pathway_node_id
   , pn.x
   , pn.y
@@ -330,12 +333,13 @@ WITH
   WHERE
     pn.pathway_node_type_id = ot.ontology_term_id
     and ot.name = 'enzyme'
-    and pn.row_id = ec.enzyme_class_id
+    and pn.row_id = ec.enzyme_class_id (+)
   UNION
   select pn.pathway_id
   , pn.display_label
   , null as url
   , c.name as name
+  , c.chebi_accession as node_identifier
   , to_char(pn.pathway_node_id) as pathway_node_id
   , pn.x
   , pn.y
@@ -370,7 +374,7 @@ WITH
     AND o.associated_node_id = nodes_with_types.pathway_node_id
     AND nodes_with_types.type = 'enzyme'
   )
-, parents AS
+, parents as
   (select
     m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 AS io
  , listagg(e_id, '-') within group (order by e_id) as parent
@@ -386,6 +390,20 @@ WITH
   HAVING
     COUNT( *) > 1
   )
+, node_parents as
+ (select
+  e_id AS pathway_node_id
+, parents.parent
+, type as node_type
+, enzyme_edges.pathway_id
+FROM
+  enzyme_edges
+, parents
+where
+  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io
+)
+
+  
 select
 pa.source_id
 , pa.pathway_source
@@ -398,26 +416,27 @@ pa.source_id
 , pn.cellular_location
 , pn.url
 , pn.name
+, pn.node_identifier
 , nodes_with_parents.pathway_node_id as id
 , nodes_with_parents.parent
 , nodes_with_parents.node_type
 from
   (  
 select
-  e_id AS pathway_node_id
-, parents.parent
+  e_id as pathway_node_id
+, node_parents.parent
 , type as node_type
 , enzyme_edges.pathway_id
 FROM
   enzyme_edges
-, parents
+, node_parents
 where
-  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io (+)
+  enzyme_edges.e_id = node_parents.pathway_node_id (+)
 UNION
 SELECT
   parents.parent
 , null
-, 'compoundNode' -- this is a node of nodes not a metabolite
+, 'nodeOfNOdes'
 , pathway_id
 FROM
   parents
