@@ -1,12 +1,25 @@
 <wdkModel>
     <querySet name="GeneSummaries" queryType="summary" isCacheable="false">
 
-     <!-- notes
-
-       - all projects need a gene alias query (or, we have to break that out of the 
-         <recordClass> element
-
-     -->
+     <!-- HACK: for certain answer filters, get the counts as a bulk query.  this is used by CustomShowResultSizeAction -->
+     <sqlQuery name="bulkAnswerFilterCounts" isCacheable="false">
+            <column name="filter_name"/>
+            <column name="size"/>
+            <sql>
+                <![CDATA[
+                   WITH idsql as $$WDK_ID_SQL$$
+                   SELECT ta.organism as filter_name, count(distinct ta.gene_source_id) as size
+                      FROM idsql, ApidbTuning.TranscriptAttributes ta
+                      WHERE ta.source_id = idsql.source_id
+		               group by organism 
+                   UNION
+                    SELECT ta.species as filter_name, count(distinct ta.gene_source_id) as size
+                      FROM idsql, ApidbTuning.TranscriptAttributes ta
+                      WHERE ta.source_id = ca.source_id
+		               group by species
+                ]]>
+            </sql>
+        </sqlQuery>
 
        <sqlQuery name="countOfGenes" isCacheable="false" >
             <paramRef ref="geneSummaryParams.WDK_ID_SQL"/>
@@ -40,11 +53,15 @@
                 ]]>
             </sql>
         </sqlQuery>
+    </querySet>
 
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Gene strains summary-->  
+       <!-- Gene Answer Filters-->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+
+    <querySet name="GeneAnswerFilters" queryType="summary" isCacheable="false">
 
         <sqlQuery name="AllResults" isCacheable="false" >
             <paramRef ref="recordParams.gene_answer"/>
@@ -88,7 +105,25 @@
             </sql>
         </sqlQuery>
 
+        <!-- CAUTION: the counts for this filter are provided by the bulk query in the GeneSummaries set -->
+        <sqlQuery name="OrganismGeneInstances" isCacheable="false">
+            <paramRef ref="recordParams.organism"/>
+            <paramRef ref="recordParams.gene_answer"/>
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="wdk_weight"/>
+            <column name="project_id"/>
+            <sql>
+                <![CDATA[
+                    SELECT ta.source_id, ta.gene_source_id, ta.project_id, ca.wdk_weight
+                      FROM $$gene_answer$$ ca, ApidbTuning.TranscriptAttributes ta
+                      WHERE ta.source_id = ca.source_id
+                      AND ta.organism like $$organism$$
+                ]]>
+            </sql>
+        </sqlQuery>
 
+        <!-- CAUTION: the counts for this filter are provided by the bulk query in the GeneSummaries set -->
         <sqlQuery name="DistinctGenes" isCacheable="false">
             <paramRef ref="recordParams.species"/>
             <paramRef ref="recordParams.gene_answer"/>
@@ -110,8 +145,6 @@
             </sql>
         </sqlQuery>
 
-
-
         <sqlQuery name="DeprecatedGenes" isCacheable="false" includeProjects="GiardiaDB,EuPathDB">
             <paramRef ref="recordParams.deprecated_genes"/>
             <paramRef ref="recordParams.gene_answer"/>
@@ -130,47 +163,6 @@
             </sql>
         </sqlQuery>
 
-
-        <sqlQuery name="Genes" isCacheable="false" includeProjects="GiardiaDB">
-            <paramRef ref="recordParams.deprecated_genes"/>
-            <paramRef ref="recordParams.gene_answer"/>
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <column name="wdk_weight"/>
-            <sql>
-                <![CDATA[
-                    SELECT c.source_id, c.gene_source_id, c.project_id, c.wdk_weight
-                    FROM $$gene_answer$$ c, ApidbTuning.TranscriptAttributes ta
-                    where ta.source_id = c.source_id
-                    and ta.is_deprecated = $$deprecated_genes$$
-                ]]>
-            </sql>
-        </sqlQuery>
-
-
-<!--    deprecated....now using a subset of filters provided in comp sites for easier maintenance
-        ....  still needed for those componet sites that do not hvave filters       -->
-
- <sqlQuery name="ApiGenes" isCacheable="false" includeProjects="EuPathDB">
-            <paramRef ref="recordParams.organism"/>
-            <paramRef ref="recordParams.gene_answer"/>
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <column name="wdk_weight"/>
-            <sql>
-                <![CDATA[
-                    SELECT c.source_id, c.gene_source_id, c.project_id, c.wdk_weight
-                    FROM $$gene_answer$$ c, ApidbTuning.TranscriptAttributes ta
-                    where ta.source_id = c.source_id
-                    and ta.organism like $$organism$$
-                ]]>
-            </sql>
-        </sqlQuery>
-
-
-
       <sqlQuery name="ApiProjectInstances" isCacheable="false" includeProjects="EuPathDB">
             <paramRef ref="recordParams.Project"/>
             <paramRef ref="recordParams.gene_answer"/>
@@ -187,26 +179,6 @@
             </sql>
         </sqlQuery>
 
-
- <sqlQuery name="ApiGiardiaGenes" isCacheable="false" includeProjects="EuPathDB">
-            <paramRef ref="recordParams.deprecated_genes"/>
-            <paramRef ref="recordParams.gene_answer"/>
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <column name="wdk_weight"/>
-            <sql>
-                <![CDATA[
-                    SELECT c.source_id, c.gene_source_id, c.project_id, c.wdk_weight
-                    FROM $$gene_answer$$ c, ApidbTuning.TranscriptAttributes ta
-                    where ta.source_id = c.source_id 
-                    and c.project_id = 'GiardiaDB' 
-                    and ta.is_deprecated = $$deprecated_genes$$
-                ]]>
-            </sql>
-        </sqlQuery>
-
-
         <sqlQuery name="BooleanExpansion" isCacheable="false" includeProjects="ToxoDB">
             <paramRef ref="recordParams.gene_answer"/>
             <column name="source_id"/>
@@ -222,62 +194,6 @@
                 ]]>
             </sql>
         </sqlQuery>
-
-
-
-   <sqlQuery name="OrganismGeneInstances" isCacheable="false">
-            <paramRef ref="recordParams.organism"/>
-            <paramRef ref="recordParams.gene_answer"/>
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="wdk_weight"/>
-            <column name="project_id"/>
-            <sql>
-                <![CDATA[
-                    SELECT ta.source_id, ta.gene_source_id, ta.project_id, ca.wdk_weight
-                      FROM $$gene_answer$$ ca, ApidbTuning.TranscriptAttributes ta
-                      WHERE ta.source_id = ca.source_id
-                      AND ta.organism like $$organism$$
-                ]]>
-            </sql>
-        </sqlQuery>
-
-        <sqlQuery name="TriTrypGenes" isCacheable="false" includeProjects="TriTrypDB,EuPathDB">
-            <paramRef ref="recordParams.organism"/>
-            <paramRef ref="recordParams.gene_answer"/>
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <column name="wdk_weight"/>
-            <sql>
-                <![CDATA[
-                    SELECT ta.source_id, ta.gene_source_id, ta.project_id, ca.wdk_weight
-                      FROM $$gene_answer$$ ca, ApidbTuning.TranscriptAttributes ta
-                      WHERE ta.source_id = ca.source_id
-                      AND ta.organism like $$organism$$
-                ]]>
-            </sql>
-        </sqlQuery>
-
-
-        <sqlQuery name="ToxoGenes" isCacheable="false" includeProjects="ToxoDB,EuPathDB">
-            <paramRef ref="recordParams.organism"/>
-            <paramRef ref="recordParams.gene_answer"/>
-            <column name="source_id"/>
-            <column name="project_id"/>
-            <column name="wdk_weight"/>
-            <sql>
-                <![CDATA[
-                    SELECT ta.source_id, ta.project_id, ca.wdk_weight
-                      FROM $$gene_answer$$ ca, ApidbTuning.TranscriptAttributes ta
-                      WHERE ta.source_id = ca.source_id
-                      AND ta.organism like $$organism$$
-                ]]>
-            </sql>
-        </sqlQuery>
-
-
-
 
 <!-- These are the organism names in ApidbTuning.TranscriptAttributes -->
 <!-- This cannot be used until all component sites have the orthomcl group info in ApidbTuning.TranscriptAttributes -->
@@ -335,7 +251,9 @@
             </sql>
         </sqlQuery>
 
-
+       <!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+       <!-- Advanced toxo-specific answer filters.  To be removed for build 30 -->
+       <!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
 
         <sqlQuery name="AllTgResults" isCacheable="false" includeProjects="ToxoDB,EuPathDB">
             <paramRef ref="recordParams.gene_answer"/>
@@ -352,9 +270,6 @@
                 ]]>
             </sql>
         </sqlQuery>
-
-
-
         <sqlQuery name="TgStrainGenes" isCacheable="false" includeProjects="ToxoDB">
             <paramRef ref="recordParams.organism"/>
             <paramRef ref="recordParams.gene_answer"/>
@@ -379,7 +294,6 @@
                 ]]>
             </sql>
         </sqlQuery>
-
         <sqlQuery name="DetailsTgStrainIntersect" isCacheable="false" includeProjects="ToxoDB">
             <paramRef ref="recordParams.organism"/>
             <paramRef ref="recordParams.organism_b"/>
@@ -414,7 +328,6 @@
                 ]]>
             </sql>
         </sqlQuery>
-
         <sqlQuery name="DetailsTgStrainMinus" isCacheable="false" includeProjects="ToxoDB">
             <paramRef ref="recordParams.organism"/>
             <paramRef ref="recordParams.organism_b"/>
@@ -454,7 +367,6 @@
                 ]]>
             </sql>
         </sqlQuery>
-
         <sqlQuery name="DetailsTgAllMinus" isCacheable="false" includeProjects="ToxoDB">
             <paramRef ref="recordParams.organism"/>
             <paramRef ref="recordParams.gene_answer"/>
@@ -490,7 +402,6 @@
                 ]]>
             </sql>
         </sqlQuery>
-
         <sqlQuery name="DetailsTgAllIntersect" isCacheable="false" includeProjects="ToxoDB">
             <paramRef ref="recordParams.organism"/>
             <paramRef ref="recordParams.gene_answer"/>
@@ -521,20 +432,6 @@
                   ($$gene_answer$$) ca
                 WHERE t.source_id = ca.source_id
                   AND t.project_id = ca.project_id
-                ]]>
-            </sql>
-        </sqlQuery>
-
-
-        <!-- this is not a filter query, it is the query used for basket function -->
-        <sqlQuery name="AllGeneRecords" isCacheable="false">
-            <column name="source_id"/>
-            <column name="gene_source_id"/>
-            <column name="project_id"/>
-            <sql>
-                <![CDATA[ 
-                SELECT ta.source_id, ta.gene_source_id, ta.project_id
-                FROM ApidbTuning.TranscriptAttributes ta
                 ]]>
             </sql>
         </sqlQuery>
