@@ -15,7 +15,7 @@ sub new {
   $ua->timeout(10);
   $ua->env_proxy;
 
-  my $pubmedUrl = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
+  my $pubmedUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi";
   my @formdata;
   push(@formdata, "email", "help\@eupathdb.org");
   push(@formdata, "tool", "pubmedTool");
