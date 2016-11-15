@@ -67,27 +67,25 @@ SQL
 
 # get PubMed IDs
 my $stmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
-     select distinct primary_identifier as pubmed_id
+     select distinct regexp_replace(primary_identifier, '[^0-9]', '') as pubmed_id
      from sres.DbRef
      where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
        and external_database_release_id
            in (select edd.external_database_release_id
                from ExternalDbDatasetPresenter edd
                  where lower(edd.dataset_presenter_display_name) like '%pubmed%')
-   minus
-     select to_char(pubmed_id) from Pubmed$suffix
-   order by pubmed_id
+       and primary_identifier in (  select primary_identifier from sres.DbRef
+                                  minus
+                                    select to_char(pubmed_id) from Pubmed$suffix)
+       and regexp_replace(primary_identifier, '[^0-9]', '') is not null
+     order by pubmed_id
 SQL
 
 $stmt->execute();
 my @pmids;
 my $pmidCount = 0;
 while (my ($pmid) = $stmt->fetchrow_array()) {
-  my $fetchedPmid = $pmid;
-  $pmid =~ s/\D//g; # strip out non-digits
   push(@pmids, $pmid);
-  print STDERR "PubMed ID \"$fetchedPmid\" changed to \"$pmid\"\n"
-    if $pmid ne $fetchedPmid;
   $pmidCount++;
 }
 $stmt->finish();
