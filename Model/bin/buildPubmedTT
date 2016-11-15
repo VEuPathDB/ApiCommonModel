@@ -44,13 +44,15 @@ my $rtn = $dbh->do(<<SQL);
   insert into Pubmed$suffix (pubmed_id, title, authors, doi)
   select pubmed_id, title, authors, doi
   from Pubmed
-  where to_char(pubmed_id) in (select primary_identifier
+  where to_char(pubmed_id) in (select regexp_replace(primary_identifier, '[^0-9]', '')
                                from sres.DbRef
                                where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
                                  and external_database_release_id
                                      in (select edd.external_database_release_id
                                          from ExternalDbDatasetPresenter edd
                                            where lower(edd.dataset_presenter_display_name) like '%pubmed%'))
+    -- skip PubMed IDs that are duplicated (because, for instance, author list has changed); we'll get the latest
+    and pubmed_id in (select pubmed_id from Pubmed group by pubmed_id having count(*) = 1)
 SQL
 $dbh->{PrintError} = 1;
 $dbh->{RaiseError} = 1;
@@ -67,17 +69,16 @@ SQL
 
 # get PubMed IDs
 my $stmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
-     select distinct regexp_replace(primary_identifier, '[^0-9]', '') as pubmed_id
-     from sres.DbRef
-     where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
-       and external_database_release_id
-           in (select edd.external_database_release_id
-               from ExternalDbDatasetPresenter edd
-                 where lower(edd.dataset_presenter_display_name) like '%pubmed%')
-       and primary_identifier in (  select primary_identifier from sres.DbRef
-                                  minus
-                                    select to_char(pubmed_id) from Pubmed$suffix)
-       and regexp_replace(primary_identifier, '[^0-9]', '') is not null
+     select pubmed_id
+     from (select distinct regexp_replace(primary_identifier, '[^0-9]', '') as pubmed_id
+           from sres.DbRef
+           where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
+             and external_database_release_id
+                 in (select edd.external_database_release_id
+                     from ExternalDbDatasetPresenter edd
+                       where lower(edd.dataset_presenter_display_name) like '%pubmed%')
+             and regexp_replace(primary_identifier, '[^0-9]', '') is not null)
+     where pubmed_id not in (select to_char(pubmed_id) from Pubmed$suffix)
      order by pubmed_id
 SQL
 
