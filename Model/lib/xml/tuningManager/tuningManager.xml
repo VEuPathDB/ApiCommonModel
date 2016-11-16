@@ -735,6 +735,7 @@ UNION
     </comment>
     <internalDependency name="FallbackMetadata"/>
     <internalDependency name="PANProtocolMetadata"/>
+    <internalDependency name="MetadataType"/>
     <sql>
       <![CDATA[
         create table MetadataSpec&1 nologging as
@@ -834,20 +835,18 @@ UNION
           from metadata m, hierarchy_mapping hm
           where m.dataset_name = hm.dataset_name
             and hierarchy_dataset_name is null 
-   -- leaf
+        -- leaf
         union
           select organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'leaf' as spec_property, 'true' as spec_value
           from metadata m, hierarchy_mapping hm
           where m.dataset_name = hm.dataset_name
         -- filter
         union
-          select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'filter' as spec_property,
-                 case
-                    when term in ('Time To Onset', 'age') then 'range'
-                    else 'membership'
-                 end as spec_value
-          from metadata m, hierarchy_mapping hm
+          select m.organism, m.dataset_name, m.type, m.subtype, hm.hierarchy_dataset_name,
+                 m.term as property, 'filter' as spec_property, mt.filter as spec_value
+          from metadata m, hierarchy_mapping hm, MetadataType mt
           where m.dataset_name = hm.dataset_name
+            and m.term = mt.property
         -- display
         union
           select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'display' as spec_property, initcap(term) as spec_value
@@ -855,21 +854,11 @@ UNION
           where m.dataset_name = hm.dataset_name
         -- type
         union
-          select organism, m.dataset_name, type, subtype, hierarchy_dataset_name, term as property, 'type' as spec_property,
-                 case
-                   when is_string = 1 then 'string'
-                   else 'number'
-                 end as spec_value
-          from (select organism, dataset_name, term, type, subtype,
-                       max(case when regexp_like (nvl(value,0),'^[[:digit:]]*[.]?[[:digit:]]*$') or value is null
-                                  then 0
-                                else 1
-                           end) as is_string
-                from metadata
-                group by organism, dataset_name, term, type, subtype
-               ) m,
-               hierarchy_mapping hm
+          select m.organism, m.dataset_name, m.type, m.subtype, hm.hierarchy_dataset_name,
+                 m.term as property, 'type' as spec_property, mt.type as spec_value
+          from metadata m, hierarchy_mapping hm, MetadataType mt
           where m.dataset_name = hm.dataset_name
+            and m.term = mt.property
         -- parents: parent
         union
           select distinct organism, m.dataset_name, type, subtype, hierarchy_dataset_name, category as property, 'parent' as spec_property, 'protocol' as spec_value
@@ -7917,6 +7906,13 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
           'membership' AS filter
    FROM term_attributes
        ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNIQUE INDEX mtdprop_ix&1
+          ON MetadataType&1 (property)
+        TABLESPACE indx
+      ]]>
     </sql>
     <sql>
       <![CDATA[
