@@ -291,6 +291,7 @@ where pa.pathway_id = rel.pathway_id
             <column name="cellular_location"/>
             <column name="image"/>
             <column name="gene_count"/>
+            <column name="default_structure"/>
             <sql>
             <![CDATA[
 WITH
@@ -308,6 +309,7 @@ WITH
   , pn.cellular_location 
   , ot.name as type
   , null as gene_count
+  , null as default_structure
   FROM
     sres.pathwaynode pn
   , sres.ontologyterm ot
@@ -316,7 +318,7 @@ WITH
     pn.pathway_node_type_id = ot.ontology_term_id
     and pn.display_label = pa.source_id
     and ot.name = 'metabolic process'
-  UNION
+  UNION ALL
   select pn.pathway_id
   , pn.display_label
   , null as url
@@ -330,6 +332,7 @@ WITH
   , pn.cellular_location 
   , ot.name as type
   , count(tp.gene_source_id) as gene_count
+  , null as default_structure
   FROM
     sres.pathwaynode pn
   , sres.ontologyterm ot
@@ -351,7 +354,7 @@ WITH
   , pn.height
   , pn.cellular_location 
   , ot.name 
-  UNION
+  UNION ALL
   select pn.pathway_id
   , pn.display_label
   , null as url
@@ -365,14 +368,26 @@ WITH
   , pn.cellular_location 
   , ot.name as type
   , null as gene_count
+  , st.default_structure
   FROM
     sres.pathwaynode pn
   , sres.ontologyterm ot
   , chebi.compounds c
+  , (select s.compound_id
+          , s.structure as default_structure
+     FROM chebi.structures s
+        , chebi.default_structures ds
+        , (select id, compound from apidbtuning.compoundid
+           WHERE type IN ('same ID', 'child ID') )  n
+     WHERE n.id = 'CHEBI:'|| s.COMPOUND_ID
+       and s.id = ds.structure_id
+       and s.type='mol' and s.dimension='2D'
+    ) st
   WHERE
     pn.pathway_node_type_id = ot.ontology_term_id
     and ot.name = 'molecular entity'
     and pn.row_id = c.id
+    and pn.row_id = st.compound_id (+)
   )
 , enzyme_edges AS
   (SELECT
@@ -440,6 +455,7 @@ pa.source_id
 , nodes_with_parents.node_type
 , null as image
 , pn.gene_count
+, pn.default_structure
 from
   (  
 select
