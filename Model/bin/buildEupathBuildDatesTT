@@ -24,9 +24,44 @@ GetOptions("propfile=s" => \$propfile,
 
 die "required parameter missing" unless ($propfile && $instance && $suffix);
 
+my $PROJECT_HOME = $ENV{PROJECT_HOME};
+
 my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
-my $yamlFile = "$ENV{PROJECT_HOME}/EuPathPresenters/Model/lib/yaml/eupathBuildDates.yaml";
+$|=1;
+
+
+my $sql;
+if ($PROJECT_HOME =~ /\/eupa/ ){
+  $sql = <<SQL;
+    select project_id, lower(project_id) as lower_project_id
+      from (select distinct project_id from ApidbTuning.GenomicSeqAttributes)
+SQL
+} else {
+  $sql = <<SQL;
+    select project_id, lower(project_id) as lower_project_id
+      from (select distinct pi.name as project_id from Core.ProjectInfo pi, SRes.ExternalDatabase ed
+    where ed.row_project_id = pi.project_id)
+SQL
+}
+my $projectQuery = $dbh->prepare($sql);
+
+my $presentersProjectBase ="EuPathPresenters"; 
+
+$projectQuery->execute() or die "getting a list of project IDs";
+my @presenterFiles;
+
+while (my ($project, $lowerProject) = $projectQuery->fetchrow_array()) {
+
+  
+  if ($lowerProject =~/microbiomedb/) {
+    $presentersProjectBase = "MicrobiomeDBPresenters";
+    last;
+  }
+}
+my $dbh = ApiCommonShared::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+my $yamlFile = "$ENV{PROJECT_HOME}/$presentersProjectBase/Model/lib/yaml/eupathBuildDates.yaml";
 my $build_number;
 my $release_date;
 my $project;
