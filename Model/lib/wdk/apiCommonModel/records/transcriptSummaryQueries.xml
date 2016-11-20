@@ -2,28 +2,41 @@
     <querySet name="GeneSummaries" queryType="summary" isCacheable="false">
 
      <!-- HACK: for certain answer filters, get the counts as a bulk query.  this is used by CustomShowResultSizeAction -->
+     <!-- the filter_name column is either the name of the filter, or the value of the filter's first param (eg, organism name) -->
      <sqlQuery name="bulkAnswerFilterCounts" isCacheable="false">
             <column name="filter_name"/>
             <column name="size"/>
             <sql>
                 <![CDATA[
-WITH idsql AS ##WDK_ID_SQL##,
-      countoff_sql
-        AS (SELECT DISTINCT 1 AS counter, source_id
-            FROM apidbTuning.GeneAttributes
-            WHERE source_id IN (SELECT gene_source_id FROM idsql))
- SELECT organism AS filter_name, nvl(sum(counter), 0) AS count
- FROM apidbTuning.GeneAttributes ga, countoff_sql
- WHERE ga.source_id = countoff_sql.source_id(+)
- GROUP BY organism
-UNION
- SELECT species AS filter_name, nvl(sum(counter), 0) AS count
- FROM apidbTuning.GeneAttributes ga, countoff_sql
- WHERE ga.source_id = countoff_sql.source_id(+)
- GROUP BY species
-UNION
- SELECT 'all_results' AS filter_name,  count(*) AS count
- FROM countoff_sql
+WITH countoff_sql
+        AS (SELECT DISTINCT 1 AS counter, gene_source_id AS source_id
+            FROM ##WDK_ID_SQL##)
+ SELECT filter_name, max(count) AS count
+ FROM (  
+         -- sum organism counts in result
+         SELECT organism AS filter_name, nvl(sum(counter), 0) AS count
+         FROM apidbTuning.GeneAttributes ga, countoff_sql
+         WHERE ga.source_id = countoff_sql.source_id
+         GROUP BY organism
+       UNION
+         -- 0 for each organism that exists
+         SELECT organism_name AS filter_name, 0 as count
+         FROM apidbtuning.Organismattributes
+       UNION
+         -- sum species counts in result
+         SELECT species AS filter_name, nvl(sum(counter), 0) AS count
+         FROM apidbTuning.GeneAttributes ga, countoff_sql
+         WHERE ga.source_id = countoff_sql.source_id
+         GROUP BY species
+       UNION
+         -- 0 for each species that exists
+         SELECT species AS filter_name, 0 as count
+         FROM apidbTuning.SpeciesWithGenes
+       UNION
+         SELECT 'all_results' AS filter_name,  count(*) AS count
+         FROM countoff_sql
+      )
+ GROUP BY filter_name
                 ]]>
             </sql>
         </sqlQuery>
