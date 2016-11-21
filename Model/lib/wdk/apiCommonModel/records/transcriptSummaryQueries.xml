@@ -3,45 +3,42 @@
 
      <!-- HACK: for certain answer filters, get the counts as a bulk query.  this is used by CustomShowResultSizeAction -->
      <!-- the filter_name column is either the name of the filter, or the value of the filter's first param (eg, organism name) -->
-     <sqlQuery name="bulkAnswerFilterCounts" isCacheable="false">
+        <sqlQuery name="bulkAnswerFilterCounts" isCacheable="false">
             <column name="filter_name"/>
             <column name="size"/>
             <sql>
                 <![CDATA[
-WITH countoff_sql
-        AS (SELECT DISTINCT 1 AS counter, gene_source_id AS source_id
-            FROM ##WDK_ID_SQL##)
- SELECT filter_name, max(count) AS count
- FROM (  
-         -- sum organism counts in result
-         SELECT organism AS filter_name, nvl(sum(counter), 0) AS count
-         FROM apidbTuning.GeneAttributes ga, countoff_sql
-         WHERE ga.source_id = countoff_sql.source_id
-         GROUP BY organism
-       UNION
-         -- 0 for each organism that exists
-         SELECT organism_name AS filter_name, 0 as count
-         FROM apidbtuning.Organismattributes
-       UNION
-         -- sum species counts in result
-         SELECT species AS filter_name, nvl(sum(counter), 0) AS count
-         FROM apidbTuning.GeneAttributes ga, countoff_sql
-         WHERE ga.source_id = countoff_sql.source_id
-         GROUP BY species
-       UNION
-         -- 0 for each species that exists
-         SELECT species AS filter_name, 0 as count
-         FROM apidbTuning.SpeciesWithGenes
-       UNION
-         SELECT 'all_results' AS filter_name,  count(*) AS count
-         FROM countoff_sql
-      )
- GROUP BY filter_name
+WITH geneList -- list of (distinct) genes in the current ID query
+     AS (SELECT DISTINCT 1 AS counter, gene_source_id AS source_id
+         FROM ##WDK_ID_SQL##)
+SELECT filter_name, max(count) AS count
+FROM (  
+        -- count genes in geneList by organism
+        SELECT organism AS filter_name, sum(counter) AS count
+        FROM apidbTuning.GeneAttributes ga, geneList
+        WHERE ga.source_id = geneList.source_id
+        GROUP BY organism
+      UNION
+        -- count genes in geneList by species
+        SELECT species AS filter_name, sum(counter) AS count
+        FROM apidbTuning.GeneAttributes ga, geneList
+        WHERE ga.source_id = geneList.source_id
+        GROUP BY species
+      UNION
+        -- zero-count rows for above filters
+        SELECT filter_name, 0 as count
+        FROM apidbTuning.GeneSummaryFilter
+      UNION
+        -- overall gene count (simply the cardinality of geneList)
+        SELECT 'all_results' AS filter_name,  count(*) AS count
+        FROM geneList
+     )
+GROUP BY filter_name
                 ]]>
             </sql>
         </sqlQuery>
 
-       <sqlQuery name="countOfGenes" isCacheable="false" >
+        <sqlQuery name="countOfGenes" isCacheable="false" >
             <paramRef ref="geneSummaryParams.WDK_ID_SQL"/>
             <column name="count"/>
             <sql>
@@ -53,7 +50,7 @@ WITH countoff_sql
         </sqlQuery>
 
      <!-- the parameter used here is hard-coded in the java plugin  .../model/record/SqlQueryResultPropertyPlugin.java -->
-       <sqlQuery name="countOfGenesWithMissingTranscripts" isCacheable="false" >
+        <sqlQuery name="countOfGenesWithMissingTranscripts" isCacheable="false" >
             <paramRef ref="geneSummaryParams.WDK_ID_SQL"/>
             <column name="propertyValue"/>
             <sql>
@@ -183,7 +180,7 @@ WITH countoff_sql
             </sql>
         </sqlQuery>
 
-      <sqlQuery name="ApiProjectInstances" isCacheable="false" includeProjects="EuPathDB">
+        <sqlQuery name="ApiProjectInstances" isCacheable="false" includeProjects="EuPathDB">
             <paramRef ref="recordParams.Project"/>
             <paramRef ref="recordParams.gene_answer"/>
             <column name="source_id"/>
@@ -204,7 +201,7 @@ WITH countoff_sql
 <!-- This cannot be used until all component sites have the orthomcl group info in ApidbTuning.TranscriptAttributes -->
 <!-- I think grouping by project_id works for a component site but does not work for the portal -->
 
- <sqlQuery name="PortalDistinctGenes" isCacheable="false" includeProjects="EuPathDB">
+        <sqlQuery name="PortalDistinctGenes" isCacheable="false" includeProjects="EuPathDB">
             <paramRef ref="recordParams.gene_answer"/>
             <column name="source_id"/>
             <column name="gene_source_id"/>
