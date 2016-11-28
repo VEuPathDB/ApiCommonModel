@@ -25,7 +25,8 @@ public class RNASeq extends  DatasetInjector {
       //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
       
-      Boolean switchStrands = getPropValueAsBoolean("switchStrands");
+      Boolean switchStrandsGBrowse = getPropValueAsBoolean("switchStrandsGBrowse");
+      Boolean switchStrandsProfiles = getPropValueAsBoolean("switchStrandsProfiles");
 
       setPropValue("metadataFileSuffix","");
       setOrganismAbbrevFromDatasetName();
@@ -70,14 +71,19 @@ public class RNASeq extends  DatasetInjector {
 
           if(getPropValueAsBoolean("isStrandSpecific")) {
 	      setPropValue("stranded", "Strand Specific ");
-	      if (switchStrands) {
+	      if (switchStrandsGBrowse) {
+		  setPropValue("metadataFileSuffix","_alt");
+	      } 
+
+	      if (switchStrandsProfiles) {
 		  setPropValue("antisense","firststrand") ;
 		  setPropValue("sense","secondstrand") ;
-		  setPropValue("metadataFileSuffix","_alt");
-	      } else {
+	      } 
+              else {
 		  setPropValue("sense","firststrand") ;
 		  setPropValue("antisense","secondstrand") ;
 	      }
+
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
@@ -282,7 +288,8 @@ public class RNASeq extends  DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},
-                                 {"switchStrands", ""},
+                                 {"switchStrandsProfiles", ""},
+                                 {"switchStrandsGBrowse", ""},
                                  {"graphColor", ""},
                                  {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
