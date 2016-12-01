@@ -181,8 +181,7 @@ public class FullRecordFileCreator extends BaseCLI {
         query.setIsCacheable(false);
         query.setSql(idSql);
         querySet.addQuery(query);
-        String[] columnNames = recordClass.getPrimaryKeyAttributeField()
-                .getColumnRefs();
+        String[] columnNames = recordClass.getPrimaryKeyDefinition().getColumnRefs();
         Column[] columns = new Column[columnNames.length];
         for (int i = 0; i < columns.length; i++) {
             Column column = new Column();
