@@ -183,67 +183,66 @@ ORDER BY source_id
         <column name="ec_gene"/>
         <sql>
             <![CDATA[
-            SELECT DISTINCT '@PROJECT_ID@' as project_id
+            SELECT '@PROJECT_ID@' as project_id
             , source_id
             , pathway_source
-            , apidb.tab_to_string(SET(CAST(COLLECT(genes) AS apidb.varchartab))) as genes
-            , gene_count
-            , listagg (ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
-            , listagg (ec_gene, ', ') within group (order by ec_pathway) as ec_gene
-            FROM ( 
-                SELECT DISTINCT source_id
+            , count (distinct gene_source_id) as gene_count
+            , rtrim(xmlagg(xmlelement(e, gene_source_id, ' | ').extract('//text()') order by gene_source_id).getClobVal(), ' | ') as genes
+            , rtrim(xmlagg(xmlelement(e, ec_gene, ' | ').extract('//text()') order by gene_source_id).getClobVal(), ' | ') as ec_gene
+            , rtrim(xmlagg(xmlelement(e, ec_pathway, ' | ').extract('//text()') order by gene_source_id).getClobVal(), ' | ') as ec_pathway
+            FROM (
+                SELECT source_id
                 , pathway_source
-                , genes
-                , gene_count
-                , ec_gene
-                , listagg (ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
+                , gene_source_id
+                , ec_pathway
+                , rtrim(xmlagg(xmlelement(e, ec_gene, ', ').extract('//text()') order by ec_gene), ', ') as ec_gene
                 FROM (
-                    SELECT DISTINCT source_id
-                    , pathway_source
-                    , apidb.tab_to_string(SET(CAST(COLLECT(gene_source_id) AS apidb.varchartab))) as genes
-                    , gene_count
-                    , listagg (ec_gene, ', ') within group (order by ec_gene) as ec_gene
-                    , ec_pathway
-                    FROM (
-                        SELECT DISTINCT pa.SOURCE_ID
-                        , pa.PATHWAY_SOURCE
-                        , tp.gene_source_id
-                        , count(DISTINCT tp.gene_source_id) AS gene_count
-                        , tp.EC_NUMBER as ec_gene
-                        , pr.ENZYME as ec_pathway
-                        FROM apidbtuning.pathwayattributes pa
-                        , apidbtuning.transcriptpathway tp
-                        , apidbtuning.pathwaycompounds pc
-                        , apidbtuning.pathwayreactions pr
+                  SELECT source_id
+                  , pathway_source
+                  , gene_source_id
+                  , ec_gene
+                  , rtrim(xmlagg(xmlelement(e, ec_pathway, ', ').extract('//text()') order by ec_pathway), ', ') as ec_pathway
+                  FROM (
+                    SELECT DISTINCT pa.SOURCE_ID
+                    , pa.PATHWAY_SOURCE
+                    , tp.gene_source_id
+                    , tp.EC_NUMBER as ec_gene
+                    , pr.ENZYME as ec_pathway
+                    FROM apidbtuning.pathwayattributes pa
+                    , apidbtuning.transcriptpathway tp
+                    , apidbtuning.pathwaycompounds pc
+                    , apidbtuning.pathwayreactions pr
+                    , apidbtuning.GeneId gi
+                    , SRES.EXTERNALDATABASE ed
+                    , SRES.EXTERNALDATABASERELEASE edr
+                    , ($$ds_gene_ids$$) ds
+                    WHERE lower(gi.id) = lower(ds.gene_source_id)
+                    AND tp.GENE_SOURCE_ID = gi.gene
+                    AND tp.PATHWAY_ID = pa.PATHWAY_ID
+                    AND pc.PATHWAY_ID = pa.PATHWAY_ID
+                    AND pr.REACTION_ID = pc.REACTION_ID
+                    AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+                    AND ((pr.enzyme like replace (tp.ec_number, '-', '%') AND $$exact_match_only$$ = 0) OR (pr.enzyme = tp.ec_number AND $$exact_match_only$$ = 1))
+                    AND pa.EXTERNAL_DB_NAME = ed.NAME
+                    AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+                    AND (edr.EXTERNAL_DATABASE_RELEASE_ID = $$pathways_source$$ or $$pathways_source$$ = 1)
+                    GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE, tp.EC_NUMBER, pr.ENZYME, tp.gene_source_id
+                    HAVING (('$$any_or_all_pathway$$' = 'any' )
+                      OR (count(*) <= (SELECT count (*)
+                        FROM APIDBTUNING.TRANSCRIPTPATHWAY tp
                         , apidbtuning.GeneId gi
-                        , SRES.EXTERNALDATABASE ed
-                        , SRES.EXTERNALDATABASERELEASE edr
                         , ($$ds_gene_ids$$) ds
                         WHERE lower(gi.id) = lower(ds.gene_source_id)
-                        AND tp.GENE_SOURCE_ID = gi.gene
-                        AND tp.PATHWAY_ID = pa.PATHWAY_ID
-                        AND pc.PATHWAY_ID = pa.PATHWAY_ID
-                        AND pr.REACTION_ID = pc.REACTION_ID
-                        AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
-                        AND ((pr.enzyme like replace (tp.ec_number, '-', '%') AND $$exact_match_only$$ = 0) OR (pr.enzyme = tp.ec_number AND $$exact_match_only$$ = 1))
-                        AND pa.EXTERNAL_DB_NAME = ed.NAME
-                        AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
-                        AND (edr.EXTERNAL_DATABASE_RELEASE_ID = $$pathways_source$$ or $$pathways_source$$ = 1)
-                        GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE, tp.EC_NUMBER, pr.ENZYME, tp.gene_source_id
-                        HAVING (('$$any_or_all_pathway$$' = 'any' )
-                          OR (count(*) <= (SELECT count (*)
-                            FROM APIDBTUNING.TRANSCRIPTPATHWAY tp
-                            , apidbtuning.GeneId gi
-                            , ($$ds_gene_ids$$) ds
-                            WHERE lower(gi.id) = lower(ds.gene_source_id)
-                             AND tp.GENE_SOURCE_ID = gi.gene
-                            )))
-                    )
-                    GROUP BY source_id, pathway_source, gene_count, ec_pathway
+                         AND tp.GENE_SOURCE_ID = gi.gene
+                        )))
+                  )
+                  GROUP BY source_id, pathway_source, gene_source_id, ec_gene
+                  order by gene_source_id
                 )
-                GROUP BY source_id, pathway_source, genes, gene_count, ec_gene
-            )
-            GROUP BY source_id, pathway_source, gene_count
+                GROUP BY source_id, pathway_source, gene_source_id, ec_pathway
+                order by pathway_source
+              )
+              GROUP BY source_id, pathway_source
 	    ]]>
         </sql>
     </sqlQuery>
