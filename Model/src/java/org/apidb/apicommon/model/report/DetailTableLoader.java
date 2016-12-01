@@ -33,7 +33,7 @@ import org.gusdb.wdk.model.record.TableField;
 import org.gusdb.wdk.model.record.attribute.AttributeField;
 import org.gusdb.wdk.model.record.attribute.ColumnAttributeField;
 import org.gusdb.wdk.model.record.attribute.LinkAttributeField;
-import org.gusdb.wdk.model.record.attribute.PrimaryKeyAttributeField;
+import org.gusdb.wdk.model.record.attribute.IdAttributeField;
 import org.gusdb.wdk.model.record.attribute.TextAttributeField;
 
 /**
@@ -50,18 +50,20 @@ public class DetailTableLoader extends BaseCLI {
     private final String idSql;
     private final TableField table;
     private final DatabaseInstance appDb;
+    private final RecordClass recordClass;
     
-    public DumpTableTask(DetailTableLoader loader, String idSql, TableField table, DatabaseInstance appDb) {
+    public DumpTableTask(DetailTableLoader loader, String idSql, TableField table, DatabaseInstance appDb, RecordClass recordClass) {
       this.loader = loader;
       this.idSql = idSql;
       this.table = table;
       this.appDb = appDb;
+      this.recordClass = recordClass;
     }
 
     @Override
     public void run() {
       try {
-        loader.dumpTable(appDb, table, idSql);
+        loader.dumpTable(appDb, table, idSql, recordClass);
       }
       catch (WdkModelException | WdkUserException | SQLException ex) {
         throw new WdkRuntimeException(ex);
@@ -171,7 +173,7 @@ public class DetailTableLoader extends BaseCLI {
           TableField table = tables.get(fieldName);
           if (table == null)
             throw new WdkModelException("The table field doesn't exist: " + fieldName);
-          executor.execute(new DumpTableTask(this, idSql, table, appDb));
+          executor.execute(new DumpTableTask(this, idSql, table, appDb, recordClass));
         }
       }
       else { // no table specified, only dump tables with a specific flag
@@ -179,7 +181,7 @@ public class DetailTableLoader extends BaseCLI {
           String[] props = table.getPropertyList(PROP_INCLUDE_IN_DUMPER);
           if (props.length == 0 || !props[0].equalsIgnoreCase("true"))
             continue;
-          executor.execute(new DumpTableTask(this, idSql, table, appDb));
+          executor.execute(new DumpTableTask(this, idSql, table, appDb, recordClass));
         }
       }
       executor.shutdown();
@@ -212,7 +214,8 @@ public class DetailTableLoader extends BaseCLI {
    * @param table
    * @param idSql
    */
-  private void dumpTable(DatabaseInstance updateDb, TableField table, String idSql) throws WdkModelException, SQLException,
+  private void dumpTable(DatabaseInstance updateDb, TableField table, String idSql, RecordClass recordClass)
+      throws WdkModelException, SQLException,
       WdkUserException {
     logger.debug("Dumping table [" + table.getName() + "]...");
     long start = System.currentTimeMillis();
@@ -223,7 +226,7 @@ public class DetailTableLoader extends BaseCLI {
       return;
     }
 
-    String[] pkColumns = table.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
+    String[] pkColumns = recordClass.getPrimaryKeyDefinition().getColumnRefs();
     String pkNames;
     String pkBind;
 
@@ -455,8 +458,8 @@ public class DetailTableLoader extends BaseCLI {
     }
 
     String text = null;
-    if (attribute instanceof PrimaryKeyAttributeField) {
-      text = ((PrimaryKeyAttributeField) attribute).getText();
+    if (attribute instanceof IdAttributeField) {
+      text = ((IdAttributeField) attribute).getText();
     }
     else if (attribute instanceof TextAttributeField) {
       text = ((TextAttributeField) attribute).getText();

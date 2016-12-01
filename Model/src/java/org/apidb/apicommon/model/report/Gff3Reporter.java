@@ -30,7 +30,6 @@ import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.record.attribute.AttributeValueMap;
 import org.gusdb.wdk.model.report.PagedAnswerReporter;
 import org.gusdb.wdk.model.report.StandardConfig;
 import org.json.JSONObject;
@@ -56,26 +55,6 @@ public class Gff3Reporter extends PagedAnswerReporter {
 
   public final static String FIELD_HAS_TRANSCRIPT = "hasTranscript";
   public final static String FIELD_HAS_PROTEIN = "hasProtein";
-
-  private class AttribMapImpl implements AttributeValueMap {
-
-    private Map<String, AttributeValue> _map;
-
-    public AttribMapImpl(Map<String, AttributeValue> map) {
-      _map = map;
-    }
-
-    @Override
-    public void addAttributeValue(AttributeValue value) {
-      _map.put(value.getAttributeField().getName(), value);
-    }
-
-    @Override
-    public AttributeValue getAttributeValue(String key) throws WdkModelException, WdkUserException {
-      return _map.get(key);
-    }
-
-  }
 
   private String tableCache;
   private String recordName;
@@ -160,8 +139,8 @@ public class Gff3Reporter extends PagedAnswerReporter {
     if (psQuery == null) {
       // prepare the table query
       RecordClass recordClass = _baseAnswer.getQuestion().getRecordClass();
-      String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
-      StringBuffer sqlQuery = new StringBuffer("SELECT ");
+      String[] pkColumns = recordClass.getPrimaryKeyDefinition().getColumnRefs();
+      StringBuilder sqlQuery = new StringBuilder("SELECT ");
       sqlQuery.append("count(*) AS cache_count FROM ").append(tableCache);
       sqlQuery.append(" WHERE table_name = ?");
       for (String column : pkColumns) {
@@ -286,14 +265,14 @@ public class Gff3Reporter extends PagedAnswerReporter {
     DatabaseInstance appDb = _wdkModel.getAppDb();
 
     RecordClass recordClass = question.getRecordClass();
-    String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+    String[] pkColumns = recordClass.getPrimaryKeyDefinition().getColumnRefs();
 
     int idx = tableCache.indexOf('.');
     String schema = (idx < 0) ? null : tableCache.substring(0, idx);
     String table = (idx < 0) ? tableCache : tableCache.substring(idx + 1);
 
     // construct insert sql
-    StringBuffer sqlInsert = new StringBuffer("INSERT INTO ");
+    StringBuilder sqlInsert = new StringBuilder("INSERT INTO ");
     sqlInsert.append(tableCache).append(" (wdk_table_id, ");
     sqlInsert.append("table_name, row_count, content");
     for (String column : pkColumns) {
@@ -317,7 +296,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
 
       for (RecordInstance record : records) {
 
-        StringBuffer recordBuffer = new StringBuffer();
+        StringBuilder recordBuffer = new StringBuilder();
 
         // read and format record content
         if (rcName.equals("SequenceRecordClasses.SequenceRecordClass")) {
@@ -358,25 +337,25 @@ public class Gff3Reporter extends PagedAnswerReporter {
     }
   }
 
-  private void formatGeneRecord(RecordInstance record, StringBuffer recordBuffer) throws WdkModelException,
+  private void formatGeneRecord(RecordInstance record, StringBuilder recordBuffer) throws WdkModelException,
       WdkUserException {
     // get common fields from the record
     readCommonFields(record, recordBuffer);
 
     // get the rest of the attributes
-    String webId = readField(record, "gff_attr_web_id");
+    String webId = getValue(record.get("gff_attr_web_id"));
     if (webId != null)
       recordBuffer.append(";web_id=" + webId);
-    String locusTag = readField(record, "gff_attr_locus_tag");
+    String locusTag = getValue(record.get("gff_attr_locus_tag"));
     if (locusTag != null)
       recordBuffer.append(";locus_tag=" + locusTag);
-    String size = readField(record, "gff_attr_size");
+    String size = getValue(record.get("gff_attr_size"));
     if (size != null)
       recordBuffer.append(";size=" + size);
 
     // get aliases
     TableValue alias = record.getTableValue("GeneGffAliases");
-    StringBuffer sbAlias = new StringBuffer();
+    StringBuilder sbAlias = new StringBuilder();
     for (Map<String, AttributeValue> row : alias) {
       String alias_value = getValue(row.get("gff_alias")).trim();
       if (sbAlias.length() > 0)
@@ -395,7 +374,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
       String goTerm = getValue(row.get("gff_go_id")).trim();
       termSet.add(goTerm);
     }
-    StringBuffer sbGoTerms = new StringBuffer();
+    StringBuilder sbGoTerms = new StringBuilder();
     for (String termName : termSet) {
       if (sbGoTerms.length() > 0)
         sbGoTerms.append(",");
@@ -404,7 +383,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
 
     // get dbxref terms
     TableValue dbxrefs = record.getTableValue("GeneGffDbxrefs");
-    StringBuffer sbDbxrefs = new StringBuffer();
+    StringBuilder sbDbxrefs = new StringBuilder();
     for (Map<String, AttributeValue> row : dbxrefs) {
       String dbxref_value = getValue(row.get("gff_dbxref")).trim();
       if (sbDbxrefs.length() > 0)
@@ -415,14 +394,12 @@ public class Gff3Reporter extends PagedAnswerReporter {
     // print RNAs
     TableValue rnas = record.getTableValue("GeneGffRnas");
     for (Map<String, AttributeValue> row : rnas) {
-      // convert to attribute map
-      AttribMapImpl map = new AttribMapImpl(row);
 
       // read common fields
-      readCommonFields(map, recordBuffer);
+      readCommonFields(row, recordBuffer);
 
       // read other fields
-      recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
+      recordBuffer.append(";Parent=" + getValue(row.get("gff_attr_parent")));
 
       // add GO terms in mRNA
       if (sbGoTerms.length() > 0)
@@ -438,14 +415,12 @@ public class Gff3Reporter extends PagedAnswerReporter {
     // print CDSs
     TableValue cdss = record.getTableValue("GeneGffCdss");
     for (Map<String, AttributeValue> row : cdss) {
-      // convert to attribute map
-      AttribMapImpl map = new AttribMapImpl(row);
 
       // read common fields
-      readCommonFields(map, recordBuffer);
+      readCommonFields(row, recordBuffer);
 
       // read other fields
-      recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
+      recordBuffer.append(";Parent=" + getValue(row.get("gff_attr_parent")));
 
       recordBuffer.append(NL);
     }
@@ -453,37 +428,35 @@ public class Gff3Reporter extends PagedAnswerReporter {
     // print EXONs
     TableValue exons = record.getTableValue("GeneGffExons");
     for (Map<String, AttributeValue> row : exons) {
-      // convert to attribute map
-      AttribMapImpl map = new AttribMapImpl(row);
 
       // read common fields
-      readCommonFields(map, recordBuffer);
+      readCommonFields(row, recordBuffer);
 
       // read other fields
-      recordBuffer.append(";Parent=" + readField(map, "gff_attr_parent"));
+      recordBuffer.append(";Parent=" + getValue(row.get("gff_attr_parent")));
 
       recordBuffer.append(NL);
     }
   }
 
-  private void formatSequenceRecord(RecordInstance record, StringBuffer recordBuffer)
+  private void formatSequenceRecord(RecordInstance record, StringBuilder recordBuffer)
       throws WdkModelException, WdkUserException {
     // get common fields from the record
     readCommonFields(record, recordBuffer);
 
     // read other fields
-    String webId = readField(record, "gff_attr_web_id");
+    String webId = getValue(record.get("gff_attr_web_id"));
     if (webId != null)
       recordBuffer.append(";web_id=" + webId);
-    recordBuffer.append(";molecule_type=" + readField(record, "gff_attr_molecule_type"));
-    recordBuffer.append(";organism_name=" + readField(record, "gff_attr_organism_name"));
-    recordBuffer.append(";translation_table=" + readField(record, "gff_attr_translation_table"));
-    recordBuffer.append(";topology=" + readField(record, "gff_attr_topology"));
-    recordBuffer.append(";localization=" + readField(record, "gff_attr_localization"));
+    recordBuffer.append(";molecule_type=" + getValue(record.get("gff_attr_molecule_type")));
+    recordBuffer.append(";organism_name=" + getValue(record.get("gff_attr_organism_name")));
+    recordBuffer.append(";translation_table=" + getValue(record.get("gff_attr_translation_table")));
+    recordBuffer.append(";topology=" + getValue(record.get("gff_attr_topology")));
+    recordBuffer.append(";localization=" + getValue(record.get("gff_attr_localization")));
 
     // get dbxref terms
     TableValue dbxrefs = record.getTableValue("SequenceGffDbxrefs");
-    StringBuffer sbDbxrefs = new StringBuffer();
+    StringBuilder sbDbxrefs = new StringBuilder();
     for (Map<String, AttributeValue> row : dbxrefs) {
       String dbxref_value = getValue(row.get("gff_dbxref")).trim();
       if (sbDbxrefs.length() > 0)
@@ -506,14 +479,14 @@ public class Gff3Reporter extends PagedAnswerReporter {
     String rcName = question.getRecordClass().getFullName();
     DatabaseInstance appDb = _wdkModel.getAppDb();
     RecordClass recordClass = question.getRecordClass();
-    String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
+    String[] pkColumns = recordClass.getPrimaryKeyDefinition().getColumnRefs();
 
     int idx = tableCache.indexOf('.');
     String schema = (idx < 0) ? null : tableCache.substring(0, idx);
     String table = (idx < 0) ? tableCache : tableCache.substring(idx + 1);
 
     // construct insert sql
-    StringBuffer sqlInsert = new StringBuffer("INSERT INTO ");
+    StringBuilder sqlInsert = new StringBuilder("INSERT INTO ");
     sqlInsert.append(tableCache).append(" (wdk_table_id, ");
     sqlInsert.append("table_name, row_count, content");
     for (String column : pkColumns) {
@@ -623,20 +596,20 @@ public class Gff3Reporter extends PagedAnswerReporter {
     }
   }
 
-  private void readCommonFields(AttributeValueMap object, StringBuffer buffer) throws WdkModelException,
+  private void readCommonFields(Map<String, AttributeValue> record, StringBuilder buffer) throws WdkModelException,
       WdkUserException {
-    buffer.append(readField(object, "gff_seqid") + "\t");
-    buffer.append(readField(object, "gff_source") + "\t");
-    buffer.append(readField(object, "gff_type") + "\t");
-    buffer.append(readField(object, "gff_fstart") + "\t");
-    buffer.append(readField(object, "gff_fend") + "\t");
-    buffer.append(readField(object, "gff_score") + "\t");
-    buffer.append(readField(object, "gff_strand") + "\t");
-    buffer.append(readField(object, "gff_phase") + "\t");
-    String id = readField(object, "gff_attr_id");
+    buffer.append(getValue(record.get("gff_seqid")) + "\t");
+    buffer.append(getValue(record.get("gff_source")) + "\t");
+    buffer.append(getValue(record.get("gff_type")) + "\t");
+    buffer.append(getValue(record.get("gff_fstart")) + "\t");
+    buffer.append(getValue(record.get("gff_fend")) + "\t");
+    buffer.append(getValue(record.get("gff_score")) + "\t");
+    buffer.append(getValue(record.get("gff_strand")) + "\t");
+    buffer.append(getValue(record.get("gff_phase")) + "\t");
+    String id = getValue(record.get("gff_attr_id"));
     buffer.append("ID=" + id);
 
-    String name = readField(object, "gff_attr_name");
+    String name = getValue(record.get("gff_attr_name"));
     if (name == null)
       name = id;
     try {
@@ -646,7 +619,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
       ex.printStackTrace();
     }
 
-    String description = readField(object, "gff_attr_description");
+    String description = getValue(record.get("gff_attr_description"));
     if (description == null)
       description = name;
     try {
@@ -656,12 +629,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
       ex.printStackTrace();
     }
 
-    buffer.append(";size=" + readField(object, "gff_attr_size"));
-  }
-
-  private String readField(AttributeValueMap attributeMap, String field) throws WdkModelException,
-      WdkUserException {
-    return getValue(attributeMap.getAttributeValue(field));
+    buffer.append(";size=" + getValue(record.get("gff_attr_size")));
   }
 
   private String getValue(AttributeValue attrVal) throws WdkModelException, WdkUserException {
@@ -685,7 +653,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
     if (sequence == null)
       return null;
 
-    StringBuffer buffer = new StringBuffer();
+    StringBuilder buffer = new StringBuilder();
     buffer.append(">" + id + NL);
     int offset = 0;
     while (offset < sequence.length()) {
@@ -697,7 +665,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
   }
 
   private boolean checkCache(RecordInstance record, String tableName) throws SQLException {
-    String[] pkColumns = record.getRecordClass().getPrimaryKeyAttributeField().getColumnRefs();
+    String[] pkColumns = record.getRecordClass().getPrimaryKeyDefinition().getColumnRefs();
     Map<String, String> pkValues = record.getPrimaryKey().getValues();
     psQuery.setString(1, tableName);
     for (int index = 0; index < pkColumns.length; index++) {
