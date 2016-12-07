@@ -1,9 +1,10 @@
 package org.apidb.apicommon.model.datasetInjector.custom.GiardiaDB;
 
-import org.apidb.apicommon.model.datasetInjector.SAGETags;
+import org.apidb.apicommon.model.datasetInjector.CusomGenePageExpressionGraphs;
 
-public class SAGETagsWithGraph extends SAGETags {
+public class SAGETagsWithGraph extends CusomGenePageExpressionGraphs {
 
+    /**
   @Override
   public void injectTemplates() {
       String description = getPropValue("datasetDescrip");
@@ -29,24 +30,12 @@ public class SAGETagsWithGraph extends SAGETags {
       injectTemplate("pathwayGraphs");
   }
 
+    **/
   @Override
   public void addModelReferences() {
-      // add all references from SAGETags first
-      super.addModelReferences();
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Sage::McArthur");
   }
 
-  // second column is for documentation
-  @Override
-  public String[][] getPropertiesDeclaration() {
-      String[][] propertiesDeclaration = {    {"graphModule", ""},
-                                              {"graphXAxisSamplesDescription", ""},
-                                              {"graphYAxisDescription", ""},
-                                              {"graphVisibleParts", ""},
-                                              {"graphPriorityOrderGrouping", ""},
-      };
-    return propertiesDeclaration;
-  }
 
 
 }
