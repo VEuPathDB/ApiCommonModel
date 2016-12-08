@@ -173,6 +173,7 @@ ORDER BY source_id
         <paramRef ref="sharedParams.ds_gene_ids" default="%%defaultGeneList%%"/>
         <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="pathwayParams.exact_match_only"/>
+        <paramRef ref="pathwayParams.exclude_incomplete_ec"/>
         <paramRef ref="geneParams.any_or_all_pathway"/>
         <column name="project_id"/>
         <column name="source_id"/>
@@ -222,6 +223,7 @@ ORDER BY source_id
                     AND pc.PATHWAY_ID = pa.PATHWAY_ID
                     AND pr.REACTION_ID = pc.REACTION_ID
                     AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+                    AND (tp.ec_number NOT LIKE '%-' OR $$exclude_incomplete_ec$$ = 0)
                     AND ((pr.enzyme like replace (tp.ec_number, '-', '%') AND $$exact_match_only$$ = 0) OR (pr.enzyme = tp.ec_number AND $$exact_match_only$$ = 1))
                     AND pa.EXTERNAL_DB_NAME = ed.NAME
                     AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
@@ -251,12 +253,17 @@ ORDER BY source_id
           doNotTest="true"
           processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
         <paramRef ref="sharedParams.ds_gene_ids"  noTranslation="true"/>
+        <paramRef ref="pathwayParams.pathway_source" quote="false"/>
+        <paramRef ref="pathwayParams.exact_match_only" quote="false"/>
+        <paramRef ref="pathwayParams.exclude_incomplete_ec" quote="false"/>
         <paramRef ref="geneParams.any_or_all_pathway" quote="false"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="project_id" width="32" wsName="project_id"/>
         <wsColumn name="pathway_source" width="32" wsName="pathway_source"/>
         <wsColumn name="genes" width="100" wsName="genes"/>
         <wsColumn name="gene_count" width="20" wsName="gene_count"/>
+        <wsColumn name="ec_pathway" width="100" wsName="ec_pathway"/>
+        <wsColumn name="ec_gene" width="100" wsName="ec_gene"/>
     </processQuery>   
 
 
@@ -338,45 +345,109 @@ ORDER BY source_id
         <paramRef ref="geneParams.gene_result"/>
         <paramRef ref="pathwayParams.pathways_source"/>
         <paramRef ref="geneParams.any_or_all_pathway"/>
-        <paramRef ref="geneParams.use_ec_wildcard"/>
+        <paramRef ref="pathwayParams.exact_match_only"/>
+        <paramRef ref="pathwayParams.exclude_incomplete_ec"/>
         <column name="project_id"/>
         <column name="pathway_source"/>
         <column name="source_id"/>
+        <column name="gene_count"/>
         <column name="genes"/>
+        <column name="ec_gene"/>
+        <column name="ec_pathway"/>
         <column name="ecNums"/>
-        <column name="enzyme_count"/>
         <column name="wdk_weight" />
 
         <sql>
             <![CDATA[
-            SELECT DISTINCT 
-            pa.source_id
-            , '@PROJECT_ID@' as project_id
-            , pa.PATHWAY_SOURCE
-            , count(distinct tp.ec_number) as enzyme_count
-            , apidb.tab_to_string(set(cast(COLLECT(tp.gene_source_id) AS apidb.varchartab))) as genes
-            , apidb.tab_to_string(set(cast(COLLECT(pr.ENZYME) AS apidb.varchartab))) as ecNums
-            , max(ds.wdk_weight) as wdk_weight
-            FROM 
-            apidbtuning.pathwayattributes pa
-            , apidbtuning.transcriptpathway tp
-            , apidbtuning.pathwaycompounds pc
-            , apidbtuning.pathwayreactions pr
-            , sres.externaldatabase ed
-            , sres.externaldatabaserelease edr
-            , ($$gene_result$$) ds
-            WHERE tp.GENE_SOURCE_ID = ds.gene_source_id
-            AND (pr.enzyme like replace (tp.ec_number, '-', '%')
-                $$use_ec_wildcard$$ tp.EC_NUMBER = pr.ENZYME)
-            AND pr.REACTION_ID = pc.REACTION_ID
-            AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
-            AND pc.EXT_DB_NAME = ed.NAME
-            AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
-            AND pc.PATHWAY_ID = pa.PATHWAY_ID
-            and tp.PATHWAY_ID = pa.PATHWAY_ID
-            AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
-            GROUP BY pa.SOURCE_ID, pa.PATHWAY_SOURCE, pa.PATHWAY_ID, tp.PATHWAY_ID
-            HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.transcriptpathway tp, ($$gene_result$$) ds where lower(tp.gene_source_id) = lower(ds.gene_source_id))
+            SELECT '@PROJECT_ID@' as project_id
+            , source_id
+            , pathway_source
+            , count (distinct gene_source_id) as gene_count
+            , rtrim(xmlagg(xmlelement(e, gene_source_id, ' | ').extract('//text()') order by gene_source_id).getClobVal(), ' | ') as genes
+            , rtrim(xmlagg(xmlelement(e, ec_gene, ' | ').extract('//text()') order by gene_source_id).getClobVal(), ' | ') as ec_gene
+            , rtrim(xmlagg(xmlelement(e, ec_pathway, ' | ').extract('//text()') order by gene_source_id).getClobVal(), ' | ') as ec_pathway
+            , ecNums
+            , max(wdk_weight) as wdk_weight
+            FROM (
+                SELECT source_id
+                , pathway_source
+                , gene_source_id
+                , ec_pathway
+                , rtrim(xmlagg(xmlelement(e, ec_gene, ', ').extract('//text()') order by ec_gene), ', ') as ec_gene
+                , ecNums
+                , wdk_weight
+                FROM (
+                  SELECT source_id
+                  , pathway_source
+                  , gene_source_id
+                  , ec_gene
+                  , rtrim(xmlagg(xmlelement(e, ec_pathway, ', ').extract('//text()') order by ec_pathway), ', ') as ec_pathway
+                  , ecNums
+                  , wdk_weight
+                  FROM (
+                    with ecNums as (
+                    SELECT DISTINCT
+                    tp.pathway_id
+                    , apidb.tab_to_string(set(cast(COLLECT(pr.ENZYME) AS apidb.varchartab))) as ecNums
+                    FROM 
+                    apidbtuning.transcriptpathway tp
+                    , apidbtuning.pathwaycompounds pc
+                    , apidbtuning.pathwayreactions pr
+                    , sres.externaldatabase ed
+                    , sres.externaldatabaserelease edr
+                    , ($$gene_result$$) ds
+                    WHERE tp.GENE_SOURCE_ID = ds.gene_source_id
+                    AND (tp.ec_number NOT LIKE '%-' OR $$exclude_incomplete_ec$$ = 0)
+                    AND ((pr.enzyme like replace (tp.ec_number, '-', '%') AND $$exact_match_only$$ = 0) OR (pr.enzyme = tp.ec_number AND $$exact_match_only$$ = 1))
+                    AND pr.REACTION_ID = pc.REACTION_ID
+                    AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+                    AND pc.EXT_DB_NAME = ed.NAME
+                    AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+                    and tp.pathway_id = pc.pathway_id
+                    AND (edr.EXTERNAL_DATABASE_RELEASE_ID  = $$pathways_source$$ or $$pathways_source$$ = 1)
+                    GROUP BY tp.pathway_id
+                    HAVING '$$any_or_all_pathway$$' = 'any' or count(*) = (select count(*) from apidbtuning.transcriptpathway tp, ($$gene_result$$) ds where lower(tp.gene_source_id) = lower(ds.gene_source_id))
+                    )
+                    SELECT DISTINCT 
+                    tp.pathway_source_id as source_id
+                    , tp.pathway_source
+                    , tp.gene_source_id
+                    , tp.EC_NUMBER as ec_gene
+                    , pr.ENZYME as ec_pathway
+                    , e.ecNums as ecNums
+                    , ds.wdk_weight
+                    FROM apidbtuning.transcriptpathway tp
+                    , apidbtuning.pathwaycompounds pc
+                    , apidbtuning.pathwayreactions pr
+                    , SRES.EXTERNALDATABASE ed
+                    , SRES.EXTERNALDATABASERELEASE edr
+                    , ecNums e
+                    , ($$gene_result$$) ds
+                    WHERE ds.gene_source_id = tp.gene_source_id
+                    AND pc.pathway_id = tp.pathway_id
+                    AND pr.REACTION_ID = pc.REACTION_ID
+                    AND pr.EXT_DB_NAME = pc.EXT_DB_NAME
+                    AND (tp.ec_number NOT LIKE '%-' OR $$exclude_incomplete_ec$$ = 0)
+                    AND ((pr.enzyme like replace (tp.ec_number, '-', '%') AND $$exact_match_only$$ = 0) OR (pr.enzyme = tp.ec_number AND $$exact_match_only$$ = 1))
+                    AND pc.ext_db_name = ed.name
+                    AND edr.EXTERNAL_DATABASE_ID = ed.EXTERNAL_DATABASE_ID
+                    AND (edr.EXTERNAL_DATABASE_RELEASE_ID = $$pathways_source$$ or $$pathways_source$$ = 1)
+                    and e.pathway_id = tp.pathway_id
+                    GROUP BY tp.pathway_source_id, tp.pathway_source, tp.gene_source_id, tp.ec_number, pr.enzyme, e.ecNums, ds.wdk_weight
+                    HAVING (('$$any_or_all_pathway$$' = 'any' )
+                      OR (count(*) <= (SELECT count (*)
+                        FROM APIDBTUNING.TRANSCRIPTPATHWAY tp
+                        , ($$gene_result$$) ds
+                        WHERE ds.gene_source_id = tp.gene_source_id
+                        )))
+                  )
+                  GROUP BY source_id, pathway_source, gene_source_id, ec_gene, wdk_weight, ecNums
+                  order by gene_source_id
+                )
+                GROUP BY source_id, pathway_source, gene_source_id, ec_pathway, wdk_weight, ecNums
+                order by pathway_source
+              )
+              GROUP BY source_id, pathway_source, ecNums
                ]]>
         </sql>
     </sqlQuery>
