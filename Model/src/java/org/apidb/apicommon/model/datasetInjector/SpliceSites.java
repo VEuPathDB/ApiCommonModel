@@ -40,7 +40,10 @@ public class SpliceSites extends  DatasetInjector {
       setPropValue("exprGraphAttr", datasetName + "_expr_graph");
       setPropValue("pctGraphAttr", datasetName + "_pct_graph");
 
+
       injectTemplate("spliceSitesExpressionGraphAttributes");
+      injectTemplate("spliceSitesExpressionGraphAttributesPathwayRecord");
+
       injectTemplate("spliceSitesGraph");
 
   

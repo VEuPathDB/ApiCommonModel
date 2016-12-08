@@ -124,12 +124,17 @@ public abstract class Expression extends DatasetInjector {
         injectTemplate("expressionGraphAttributesExpression");
         injectTemplate("graphTextAttributeCategory");
 
-
         if(getPropValueAsBoolean("hasPercentileData")) {
             setPropValue("graphTextAttrName", "pctGraphAttr" + getDatasetName() + "_pct_graph");
             injectTemplate("expressionGraphAttributesPercentile");
             injectTemplate("graphTextAttributeCategory");
         }
+
+
+        setPropValue("graphTextAttrName", "exprGraphAttr" + getDatasetName() + "_expr_graph_pr");
+        injectTemplate("expressionGraphAttributesPathwayRecord");
+        injectTemplate("graphTextAttributeCategoryPathwayRecord");
+
 
         String exprGraphVp = getPropValue("exprGraphVisiblePart");
 
