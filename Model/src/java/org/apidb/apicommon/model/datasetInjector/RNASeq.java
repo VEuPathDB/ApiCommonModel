@@ -94,12 +94,14 @@ public class RNASeq extends  DatasetInjector {
               String sensePctGraphAttr = datasetName + "_sense_pct_graph";
               String antisensePctGraphAttr = datasetName + "_antisense_pct_graph";
 
+              String pathwayGraphAttr = datasetName + "_ss_expr_graph_pr";
 
               // These are used for the question
               setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr);
               setPropValue("pctGraphAttr", sensePctGraphAttr + "," + antisensePctGraphAttr);
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
+              injectTemplate("rnaSeqSsExpressionGraphAttributesPathwayRecord");
 
               // Inject the text attributes into the ontology for the results summary page
               setPropValue("graphTextAttrName", senseExprGraphAttr);
@@ -115,6 +117,9 @@ public class RNASeq extends  DatasetInjector {
 
               setPropValue("graphTextAttrName", antisensePctGraphAttr);
               injectTemplate("graphTextAttributeCategory");
+
+              setPropValue("graphTextAttrName", pathwayGraphAttr);
+              injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
 
               injectTemplate("rnaSeqProfileSetParamQuery");
@@ -132,10 +137,13 @@ public class RNASeq extends  DatasetInjector {
               String exprGraphAttr = datasetName + "_expr_graph";
               String pctGraphAttr = datasetName + "_pct_graph";
 
+              String pathwayGraphAttr = datasetName + "_expr_graph_pr";
+
               setPropValue("exprGraphAttr", exprGraphAttr);
               setPropValue("pctGraphAttr", pctGraphAttr);
 
               injectTemplate("rnaSeqExpressionGraphAttributes");
+              injectTemplate("rnaSeqExpressionGraphAttributesPathwayRecord");
               injectTemplate("rnaSeqProfileSetParamQuery");
 
 
@@ -145,6 +153,9 @@ public class RNASeq extends  DatasetInjector {
 
               setPropValue("graphTextAttrName", pctGraphAttr);
               injectTemplate("graphTextAttributeCategory");
+
+              setPropValue("graphTextAttrName", pathwayGraphAttr);
+              injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
               injectTemplate("rnaSeqGraph");
           }
