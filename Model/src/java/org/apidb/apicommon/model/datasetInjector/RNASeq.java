@@ -123,10 +123,11 @@ public class RNASeq extends  DatasetInjector {
 
 
               injectTemplate("rnaSeqProfileSetParamQuery");
+	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
 	      injectTemplate("rnaSeqGraph");
           } else {
-	      setPropValue("sense","unstranded") ;
+	      //	      setPropValue("sense","unstranded") ;
 
               setPropValue("graphVisibleParts", exprMetric);
               injectTemplate("pathwayGraphs");
@@ -145,6 +146,7 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqExpressionGraphAttributes");
               injectTemplate("rnaSeqExpressionGraphAttributesPathwayRecord");
               injectTemplate("rnaSeqProfileSetParamQuery");
+	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
 
               // Add text attribute to the categories ontology
