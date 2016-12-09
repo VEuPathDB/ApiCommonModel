@@ -165,7 +165,7 @@ prop=organismAbbrevDisplay
          queryRef="GeneId.GenesByGenericPercentile" 
          recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
-        <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}RnaSeqProfiles"/>
+        <paramRef ref="geneParams.profileset_generic" queryRef="GeneVQ.${datasetName}RnaSeqPctProfiles"/>
 
         <attributesList includeProjects="${projectName}"
               summary="gene_product,min_percentile_chosen,max_percentile_chosen,${pctGraphAttr}"
@@ -280,11 +280,12 @@ SELECT DISTINCT profile_study_id
 , CASE  WHEN REGEXP_LIKE  (profile_set_name, 'cuff')  THEN  '' 
       WHEN REGEXP_LIKE  (profile_set_name, '${sense}')  THEN  '- Sense' 
       WHEN REGEXP_LIKE  (profile_set_name, ' ${antisense}')  THEN  '- Antisense' 
-       ELSE '' END AS sense
-FROM apidbtuning.profile
+       ELSE 'unstranded' END AS sense
+FROM apidbtuning.profiletype
 WHERE dataset_type = 'transcript_expression'
 AND dataset_subtype = 'rnaseq'
 AND dataset_name = '${datasetName}'
+AND profile_type like '%values%'
   -- allow ONLY 'HTSeq union'
 AND REGEXP_LIKE  (profile_set_name, 'htseq-union')
 )
@@ -293,6 +294,53 @@ ORDER BY term desc
           </sql>
         </sqlQuery>
         <processQuery name="${datasetName}RnaSeqProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
+            <wsColumn name="display" width="300"/>
+            <wsColumn name="internal" width="300"/>
+            <wsColumn name="term" width="300"/>
+        </processQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=rnaSeqPctProfileSetParamQuery
+anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/questions/params/geneParams.xml
+prop=datasetName
+prop=datasetDisplayName 
+prop=projectName
+prop=sense
+prop=antisense
+>templateTextStart<
+      <sqlQuery name="${datasetName}RnaSeqPctProfiles" includeProjects="${projectName}">
+             <column name="display"/>
+             <column name="internal"/>
+             <column name="term"/>
+          <sql>
+           <![CDATA[
+SELECT profile_study_id AS internal, ps_name || '- ' ||  anal || sense AS term,
+    CASE WHEN ps_name like '% - %' THEN 
+        '${datasetDisplayName}' || SUBSTR(ps_name, INSTR(ps_name,'- ', -1, 1) +1)  ||  anal || sense 
+    ELSE  '${datasetDisplayName}'   ||  anal || sense END AS display
+FROM (
+SELECT DISTINCT profile_study_id 
+, REGEXP_REPLACE (profile_set_name, '\[(.)+\]', '')  AS ps_name
+, REPLACE (REPLACE ( REPLACE ( REPLACE (  REGEXP_SUBSTR (profile_set_name, ' \[\S+ ') , 'htseq-union', '')  , 'cuff' , 'Cufflinks' ), '[', '') , '-', ' ' )  AS anal 
+, CASE  WHEN REGEXP_LIKE  (profile_set_name, 'cuff')  THEN  '' 
+      WHEN REGEXP_LIKE  (profile_set_name, '${sense}')  THEN  '- Sense' 
+      WHEN REGEXP_LIKE  (profile_set_name, ' ${antisense}')  THEN  '- Antisense' 
+       ELSE 'unstranded' END AS sense
+FROM apidbtuning.profiletype
+WHERE dataset_type = 'transcript_expression'
+AND dataset_subtype = 'rnaseq'
+AND dataset_name = '${datasetName}'
+AND profile_type like '%percentile%'
+  -- allow ONLY 'HTSeq union'
+AND REGEXP_LIKE  (profile_set_name, 'htseq-union')
+)
+ORDER BY term desc
+            ]]>
+          </sql>
+        </sqlQuery>
+        <processQuery name="${datasetName}RnaSeqPctProfiles" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"> 
             <wsColumn name="display" width="300"/>
             <wsColumn name="internal" width="300"/>
             <wsColumn name="term" width="300"/>
