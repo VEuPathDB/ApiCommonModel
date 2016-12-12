@@ -54,7 +54,7 @@ from apidbtuning.transcriptattributes ta
 where ss.source_id = ta.gene_source_id
  and  ta.cds_start is not null
 -- TODO remove
---and ta.gene_source_id in ( 'Tb927.10.3890', 'Tb927.10.3880', 'Tb927.10.3870', 'Tb06.3A7.270')
+--and ta.gene_source_id in ( 'Tb11.v5.0365')
 ";
 
   my $tsh = $dbh->prepare($transcriptLocSql);
@@ -78,7 +78,7 @@ from apidb.splicesitegenes ssg
  , apidb.splicesitefeature ssf
 where ssg.splice_site_feature_id = ssf.splice_site_feature_id
 --TODO Remove
---and ssg.source_id in ( 'Tb927.10.3890', 'Tb927.10.3880', 'Tb927.10.3870', 'Tb06.3A7.270')
+--and ssg.source_id in ( 'Tb11.v5.0365')
 group by ssg.source_id, ssf.segment_start, ssf.is_unique, ssg.dist_to_first_atg, ssf.type, ssf.na_sequence_id, ssf.strand
 union
 select ssg.source_id
@@ -93,7 +93,7 @@ from apidb.polyagenes ssg
  , apidb.splicesitefeature ssf
 where ssg.splice_site_feature_id = ssf.splice_site_feature_id
 --TODO Remove
---and ssg.source_id in ( 'Tb927.10.3890', 'Tb927.10.3880', 'Tb927.10.3870', 'Tb06.3A7.270')
+--and ssg.source_id in ( 'Tb11.v5.0365')
 group by ssg.source_id, ssf.segment_start, ssf.is_unique, ssf.type, ssf.na_sequence_id, ssf.strand
 ) 
 order by source_id";
@@ -105,35 +105,37 @@ order by source_id";
   my $insertSql = "INSERT INTO SpliceSiteTranscripts$suffix (location, type, na_sequence_id, is_unique, sum_cpm, dist_to_first_atg, transcript_source_id, dist_to_cds, is_dominant, gene_source_id, strand) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
   my $insertSh = $dbh->prepare($insertSql);
 
-  my (@splicedLeaderFeatures, @polyAFeatures, $minLoc, $maxLoc, $strand);
+  my (@splicedLeaderFeatures, @polyAFeatures, $minLoc, $maxLoc, $polyAStrand, $slStrand);
   while(my ($gene, $loc, $isUniq, $distToFirstAtg, $sumCpm, $type, $naSequenceId, $ssfStrand) = $sh->fetchrow_array()) {
     if($prevGene && $prevGene ne $gene) {
 
-      &makePolyAAndSplicedLeaderRows($insertSh, $geneTranscriptLocations{$prevGene}, \@polyAFeatures, \@splicedLeaderFeatures, $minLoc, $maxLoc, $strand, $prevGene);
+      &makePolyAAndSplicedLeaderRows($insertSh, $geneTranscriptLocations{$prevGene}, \@polyAFeatures, \@splicedLeaderFeatures, $minLoc, $maxLoc, $prevGene, $polyAStrand, $slStrand);
 
       @splicedLeaderFeatures = ();
       @polyAFeatures = ();
       $minLoc = undef;
       $maxLoc = undef;
-      $strand = undef;
+      $polyAStrand = undef;
+      $slStrand = undef;
     }
 
     $minLoc = $loc if(! defined($minLoc) || $loc < $minLoc);
     $maxLoc = $loc if(! defined($maxLoc) || $loc > $maxLoc);
-    $strand = $ssfStrand;
 
     my $feature = Bio::SeqFeature::Generic->new(-start => $loc, 
                                                 -end => $loc, 
                                                 -primary_tag => $type, 
                                                 -seq_id => $naSequenceId, 
-                                                -tag => { 'is_unique' => $isUniq,  'sum_cpm' => $sumCpm, 'gene' => $gene, 'dist_to_first_atg' => $distToFirstAtg, 'strand' => $strand}
+                                                -tag => { 'is_unique' => $isUniq,  'sum_cpm' => $sumCpm, 'gene' => $gene, 'dist_to_first_atg' => $distToFirstAtg, 'strand' => $ssfStrand}
         );
 
     if($type eq 'Poly A') {
       push @polyAFeatures, $feature;
+      $polyAStrand = $ssfStrand
     }
     else {
       push @splicedLeaderFeatures, $feature;
+      $slStrand = $ssfStrand
     }
 
 
@@ -141,7 +143,7 @@ order by source_id";
   }
 
   if($prevGene) {
-    &makePolyAAndSplicedLeaderRows($insertSh, $geneTranscriptLocations{$prevGene}, \@polyAFeatures, \@splicedLeaderFeatures, $minLoc, $maxLoc, $strand, $prevGene);
+    &makePolyAAndSplicedLeaderRows($insertSh, $geneTranscriptLocations{$prevGene}, \@polyAFeatures, \@splicedLeaderFeatures, $minLoc, $maxLoc, $prevGene, $polyAStrand, $slStrand);
   }
 
  # &createIndex($dbh,$suffix);
@@ -154,7 +156,7 @@ order by source_id";
 #--------------------------------------------------------------------------------
 
 sub makePolyAAndSplicedLeaderRows {
-  my ($insertSh, $transcriptLocations, $polyAFeatures, $splicedLeaderFeatures, $minLoc, $maxLoc, $strand, $gene) = @_;
+  my ($insertSh, $transcriptLocations, $polyAFeatures, $splicedLeaderFeatures, $minLoc, $maxLoc, $gene, $polyAStrand, $slStrand) = @_;
 
   return unless($transcriptLocations);
 
@@ -162,17 +164,17 @@ sub makePolyAAndSplicedLeaderRows {
 
   my $splicedLeaderCollection = Bio::SeqFeature::Collection->new();
   $splicedLeaderCollection->add_features($splicedLeaderFeatures);
-  &processSpliceSites($insertSh, \@sortedTranscriptLocations, $splicedLeaderCollection, $minLoc, $maxLoc, $strand, 'SL', $gene);
+  &processSpliceSites($insertSh, \@sortedTranscriptLocations, $splicedLeaderCollection, $minLoc, $maxLoc, 'SL', $gene, $slStrand);
 
   my $polyACollection = Bio::SeqFeature::Collection->new();
   $polyACollection->add_features($polyAFeatures);
-  &processSpliceSites($insertSh, \@sortedTranscriptLocations, $polyACollection, $minLoc, $maxLoc, $strand, 'PA', $gene);
+  &processSpliceSites($insertSh, \@sortedTranscriptLocations, $polyACollection, $minLoc, $maxLoc, 'PA', $gene, $polyAStrand);
 }
 
 #--------------------------------------------------------------------------------
 
 sub processSpliceSites {
-  my  ($insertSh, $transcriptLocations, $collection, $minLoc, $maxLoc, $strand, $typeAbbrev, $gene) = @_;
+  my  ($insertSh, $transcriptLocations, $collection, $minLoc, $maxLoc, $typeAbbrev, $gene, $strand) = @_;
 
   my ($start, $end, @locations, $swap, $index);
   if(($typeAbbrev eq 'SL' && $strand eq '+') || ($typeAbbrev eq 'PA' && $strand eq '+')) {
@@ -188,6 +190,7 @@ sub processSpliceSites {
     $swap = 1;
     @locations = reverse @$transcriptLocations;
   }
+
 
   my $prev = $start;
 
