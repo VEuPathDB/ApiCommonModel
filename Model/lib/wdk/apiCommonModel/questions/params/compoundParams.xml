@@ -160,30 +160,29 @@
 		    queryRef="CompoundVQ.LlinasMetabolitesProfiles"
 		    prompt="Experiment"
 		    quote="false"
-		    displayType="checkBox" 
 		    multiPick="false">
       <help>Choose an Experiment</help> 
     </flatVocabParam>
     
-    <flatVocabParam name="samples_fc_ref" includeProjects="PlasmoDB"
+    <flatVocabParam name="samples_fc_ref_generic" includeProjects="PlasmoDB"
 		    queryRef="CompoundVQ.LlinasMetabolitesSamples"
 		    prompt="Reference Samples"
 		    quote="false"
 		    displayType="checkBox"
-		    multiPick="false"
+		    multiPick="true"
 		    dependedParamRef="compoundParams.profileset">
-      <help>Choose a sample.</help>
+      <help>Choose reference samples</help>
       <suggest selectMode="none" />
     </flatVocabParam>
 
-    <flatVocabParam name="samples_fc_comp" includeProjects="PlasmoDB"
+    <flatVocabParam name="samples_fc_comp_generic" includeProjects="PlasmoDB"
 		    queryRef="CompoundVQ.LlinasMetabolitesSamples"
 		    prompt="Comparison Samples"
 		    quote="false"
 		    displayType="checkBox"
-		    multiPick="false"
+		    multiPick="true"
 		    dependedParamRef="compoundParams.profileset">
-      <help>Choose a sample. </help>
+      <help>Choose comparison samples</help>
       <suggest selectMode="none" />
     </flatVocabParam>
 
@@ -204,6 +203,30 @@ lower expression in the comparator as compared to the reference.</li>
 </ul>
       ]]></help>
       <suggest default="up or down regulated"/>
+    </flatVocabParam>
+
+    <flatVocabParam name="min_max_avg_comp"
+                     queryRef="CompoundVQ.MinMaxAvgComp"
+                     prompt="Operation Applied to Comparison Samples"
+                     quote="false"
+                     dependedParamRef="compoundParams.regulated_dir">
+      <help>
+          <![CDATA[
+            Choose the operation (min/max/mean/median) to be applied to the chosen sample(s).  This parameter only makes a difference if more than one sample/time point is chosen.
+          ]]>
+      </help>
+    </flatVocabParam>
+
+    <flatVocabParam name="min_max_avg_ref"
+                     queryRef="CompoundVQ.MinMaxAvgRef"
+                     prompt="Operation Applied to Comparison Samples"
+                     quote="false"
+                     dependedParamRef="compoundParams.regulated_dir">
+      <help>
+          <![CDATA[
+            Choose the operation (min/max/mean/median) to be applied to the chosen sample(s).  This parameter only makes a difference if more than one sample/time point is chosen.
+          ]]>
+      </help>
     </flatVocabParam>
 
 
@@ -274,6 +297,7 @@ lower expression in the comparator as compared to the reference.</li>
                  protocol_app_node_id AS internal
           FROM apidbtuning.profileSamples
           WHERE study_id = '$$profileset$$'
+          AND protocol_app_node_name not like '%blank%'
           ORDER BY node_order_num
           </sql>
         </sqlQuery>
@@ -299,6 +323,148 @@ lower expression in the comparator as compared to the reference.</li>
         <processQuery name="regulatedDirection" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB" doNotTest="1">
             <wsColumn name="internal" width="100" wsName="internal"/>
             <wsColumn name="term" width="200" wsName="term"/>
+        </processQuery>
+
+         <sqlQuery name="MinMaxAvgComp" includeProjects="PlasmoDB">
+             <paramRef ref="compoundParams.regulated_dir"/>
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>
+         <![CDATA[
+            select * from (
+              select term || p.so as term, internal,display, p.so
+              from ( select 'mean' as term, 
+                            'avg' as internal, 
+                            'mean' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = 'abs' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                     union
+                     select 'minimum' as term, 
+                            'min' as internal, 
+                            'minimum' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = '-' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                     union
+                     select 'maximum' as term, 
+                            'max' as internal, 
+                            'maximum' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = '+' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                     union
+                     select 'median' as term, 
+                            'median' as internal, 
+                            'median' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = '-' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                   ) p, 
+                   ( select 'abs' as type from dual
+                     union
+                     select '+' as type  from dual
+                     union
+                     select '-' as type from dual
+                   ) t, 
+                   ( select 1 as so  from dual 
+                     union 
+                     select 2 as so from dual 
+                     union 
+                     select 3 as so from dual
+                   ) o
+               where p.so = o.so and type = '$$regulated_dir$$'
+               order by p.so
+            ) where '$$regulated_dir$$' != 'abs' OR ('$$regulated_dir$$' = 'abs' AND term like 'me%')
+          ]]>
+          </sql>
+        </sqlQuery>
+
+       <processQuery name="MinMaxAvgComp" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="compoundParams.regulated_dir"/>
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
+        <sqlQuery name="MinMaxAvgRef" includeProjects="PlasmoDB">
+             <paramRef ref="compoundParams.regulated_dir"/>
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+          <sql>
+         <![CDATA[
+            select * from (
+              select term || p.so as term, internal,display, p.so
+              from ( select 'mean' as term, 
+                            'avg' as internal, 
+                            'mean' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = 'abs' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                     union
+                     select 'minimum' as term, 
+                            'min' as internal, 
+                            'minimum' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = '+' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                     union
+                     select 'maximum' as term, 
+                            'max' as internal, 
+                            'maximum' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = '-' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                     union
+                     select 'median' as term, 
+                            'median' as internal, 
+                            'median' as display, 
+                            CASE 
+                              WHEN  '$$regulated_dir$$' = '-' 
+                              THEN 1 
+                            ELSE 2 END as so 
+                     from dual
+                   ) p, 
+                   ( select 'abs' as type from dual
+                     union
+                     select '+' as type  from dual
+                     union
+                     select '-' as type from dual
+                   ) t, 
+                   ( select 1 as so  from dual 
+                     union 
+                     select 2 as so from dual 
+                     union 
+                     select 3 as so from dual
+                   ) o
+               where p.so = o.so and type = '$$regulated_dir$$'
+               order by p.so
+            ) where '$$regulated_dir$$' != 'abs' OR ('$$regulated_dir$$' = 'abs' AND term like 'me%')
+          ]]>
+          </sql>
+        </sqlQuery>
+
+          <processQuery name="MinMaxAvgRef" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="compoundParams.regulated_dir"/>
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
 
 
