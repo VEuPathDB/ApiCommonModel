@@ -1238,6 +1238,8 @@ create table &prefixGoTermSummary&1 nologging as
 CREATE TABLE DatasetExampleSourceId&1 NOLOGGING AS
 with profiles as (
 select p.source_id,
+       ga.project_id,
+       ga.sequence_id,
        d.name,
        row_number() over(partition by d.name
                          order by ga.chromosome_order_num, p.profile_as_string desc) as rn
@@ -1246,8 +1248,7 @@ where p.dataset_name = d.name
 and p.profile_as_string is not null
 and p.source_id = ga.source_id (+)
 )
-select p.source_id as example_source_id,
-       p.name as dataset
+select p.source_id as example_source_id, p.project_id, p.sequence_id, p.name as dataset
 from profiles p
 where p.rn = 1
       ]]>
@@ -6946,6 +6947,119 @@ where  pep.aa_sequence_id = seq.aa_sequence_id
     <ancillaryTable name="DatasetNameTaxon"/>
     <ancillaryTable name="DatasetHistory"/>
     <program commandLine="buildDatasetPresentersTT"/>
+  </tuningTable>
+
+
+  <tuningTable name="DatasetHyperLinks" alwaysUpdate="true">
+    <comment> Each row maps a dataset onto an ID for which the dataset contains data;
+         each dataset gets one such row.
+         Used in dataset record queries.
+      </comment>
+    <externalDependency name="apidb.MassSpecSummary"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <internalDependency name="DatasetExampleSourceId"/>
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="OrganismAttributes"/>
+
+    <sql>
+      <![CDATA[
+CREATE TABLE DatasetHyperLinks&1 NOLOGGING AS
+with sequences as (
+select sa.source_id, 
+       sa.taxon_id,
+       sa.project_id,
+       row_number() over(partition by sa.taxon_id
+                         order by sa.chromosome_order_num, sa.length desc) as rn
+from GenomicSeqAttributes sa
+where sa.is_top_level = 1),
+proteomicsgenes as (
+select ga.gene_source_id as source_id, 
+       d.name, 
+       ga.project_id,
+       row_number() over(partition by d.name
+                         order by mss.aa_seq_percent_covered desc) as rn
+from apidb.MassSpecSummary mss, TranscriptAttributes ga,
+     sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+where mss.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and mss.aa_sequence_id = ga.aa_sequence_id
+)
+-- MAIN QUERY STARTS HERE
+ -- first query handles genomes... replace needed macros
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
+       nvl(hl.text, hl.url) as text,
+       hl.description,
+       replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk) as url
+from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id
+      from DatasetPresenter dsp, DatasetNameTaxon nt, OrganismAttributes oa, sequences os
+      where dsp.dataset_presenter_id = nt.dataset_presenter_id
+      and nt.taxon_id = os.taxon_id
+      and nt.taxon_id = oa.component_taxon_id
+      and os.rn = 1 
+      ) def_seq,
+      DatasetPresenter dsp, DatasetHyperLink hl
+where dsp.dataset_presenter_id = def_seq.dataset_presenter_id (+)
+and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.type = 'genome'
+and hl.url is not null
+UNION
+ -- this query handles proteomics... replace needed macros
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
+       nvl(hl.text, hl.url) as text,
+       hl.description,
+       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id) as url
+from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id
+      from DatasetPresenter dsp, DatasetNameTaxon dsnt, proteomicsgenes pg
+      where pg.name = dsnt.name
+      and pg.rn = 1
+      and dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+      ) def_prot,
+      DatasetPresenter dsp, DatasetHyperLink hl
+where dsp.dataset_presenter_id = def_prot.dataset_presenter_id (+)
+and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.type = 'protein_expression'
+and dsp.subtype is null
+and hl.url is not null
+and ((hl.url like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is not null)
+     or (hl.url not like '%DEFAULT_PROTEOMICS_GENE%'))
+UNION
+-- Get the RNASeq Ones
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
+       nvl(hl.text, hl.url) as text,
+       hl.description,
+       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id) as url
+from DatasetExampleSourceId esi,
+      DatasetPresenter dsp, DatasetHyperLink hl,
+      DatasetNameTaxon dnt
+where dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.dataset_presenter_id = dnt.dataset_presenter_id (+)
+and esi.dataset = dnt.name
+and dsp.type = 'transcript_expression'
+and dsp.subtype = 'rnaseq'
+and hl.url is not null
+and ((hl.url like '%DEFAULT_RNASEQ_GENE%' and esi.example_source_id is not null)
+     or (hl.url not like '%DEFAULT_RNASEQ_GENE%'))
+UNION
+ -- Get the remaining ones
+select dataset_id, dataset_name, text, description, url 
+from (select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
+      from DatasetHyperLink ln, DatasetPresenter dsp
+      where dsp.dataset_presenter_id = ln.dataset_presenter_id
+      minus
+      select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
+      from DatasetHyperLink ln, DatasetPresenter dsp
+      where dsp.dataset_presenter_id = ln.dataset_presenter_id
+      and ((dsp.type = 'genome')
+        OR (dsp.type = 'protein_expression' and subtype is null)
+        OR (dsp.type = 'transcript_expression' and subtype = 'rnaseq')
+        )
+      )
+where url is not null
+      ]]>
+    </sql>
   </tuningTable>
 
 
