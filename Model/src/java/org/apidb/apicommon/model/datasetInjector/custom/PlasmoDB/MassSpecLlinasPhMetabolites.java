@@ -22,6 +22,8 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       setPropValue("isGraphCustom", "true");
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
+      injectTemplate("metabolomicsGraphAttributes");
+      injectTemplate("metaboliteGraphTextAttributeCategory");
   }
 
   @Override
