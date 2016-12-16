@@ -28,8 +28,8 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap) {
-    String[] cmd = {"installGeneListUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("genelist.txt").toString()};
+  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
+    String[] cmd = {"installGeneListUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("genelist.txt").toString(), projectId};
     return cmd;
   }
 
@@ -41,8 +41,8 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getUninstallInAppDbCommand(Integer userDatasetId) {
-    String[] cmd = {"uninstallGeneListUserDataset", userDatasetId.toString()};
+  public String[] getUninstallInAppDbCommand(Integer userDatasetId, String projectId) {
+    String[] cmd = {"uninstallGeneListUserDataset", userDatasetId.toString(), projectId};
     return cmd;
   }
 
