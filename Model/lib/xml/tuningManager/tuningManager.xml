@@ -83,8 +83,7 @@ and organisms.organism = class.organism (+)
 create table ExternalSequenceTaxonRank&1 nologging as
 with organism_rank as (
 select tn1.taxon_id as organism, tn2.name as parent_organism, 
-r.rank
-
+           tn2.taxon_id as parent_organism_id, r.rank
 from (
 select CONNECT_BY_ROOT taxon_id as input, taxon_id, rank
 from sres.taxon
@@ -100,14 +99,22 @@ and r.rank in ('phylum', 'family','genus', 'species', 'superkingdom','kingdom', 
 )
 
 select organisms.organism, 
-       nvl(superkingdom.parent_organism, 'N/A') as superkingdom, 
-       nvl(kingdom.parent_organism, 'N/A') as kingdom, 
-       nvl (phylum.parent_organism, 'N/A') as phylum,
-       nvl (class.parent_organism, 'N/A') as class,
-       nvl (family.parent_organism, 'N/A') as family,
-       nvl (rank_order.parent_organism, 'N/A') as rank_order,
-       nvl ( genus.parent_organism, 'N/A') as genus, 
-       nvl(species.parent_organism, 'N/A') as species
+        nvl(superkingdom.parent_organism, 'N/A') as superkingdom,
+        superkingdom.parent_organism_id as superkingdom_id,
+        nvl(kingdom.parent_organism, 'N/A') as kingdom,
+        kingdom.parent_organism_id as kingdom_id,
+        nvl (phylum.parent_organism, 'N/A') as phylum,
+        phylum.parent_organism_id as phylum_id,
+        nvl (class.parent_organism, 'N/A') as class,
+        class.parent_organism_id as class_id,
+        nvl (family.parent_organism, 'N/A') as family,
+        family.parent_organism_id as family_id,
+        nvl (rank_order.parent_organism, 'N/A') as rank_order,
+        rank_order.parent_organism_id as rank_order_id,
+        nvl ( genus.parent_organism, 'N/A') as genus,
+        genus.parent_organism_id as genus_id,
+        nvl(species.parent_organism, 'N/A') as species,
+        species.parent_organism_id as species_id
 from 
 (select distinct organism from organism_rank) organisms,
 (select * from organism_rank where rank= 'phylum') phylum,
@@ -129,6 +136,126 @@ and organisms.organism = superkingdom.organism (+)
  ]]>
     </sql>
   </tuningTable>
+
+  <tuningTable name="TaxonAbundance" prefixEnabled="false">
+    <comment>otu relative abundane values, aggegated at various taxonomic levels
+    </comment>
+    <externalDependency name="results.OtuAbundance"/>
+    <internalDependency name="ExternalSequenceTaxonRank"/>
+    <sql>
+      <![CDATA[
+create table TaxonAbundance&1 nologging as
+WITH LEAF_ABUNDANCE AS (
+select oa.PROTOCOL_APP_NODE_ID, oa.raw_count as raw_count, oa.RELATIVE_ABUNDANCE as relative_abundance, seq.taxon_id
+from results.otuabundance oa, DOTS.EXTERNALNASEQUENCE seq
+where oa.NA_SEQUENCE_ID = seq.NA_SEQUENCE_ID
+),
+
+taxa_string_map  as (
+select nvl(replace(estr.kingdom, 'N/A', 'unknown'),replace(estr.superkingdom,'N/A','unknown')) as taxon_string
+       , 'kingdom' as taxon_node
+       , kingdom_id as taxon_id
+       , 1 as taxon_level
+       , la.protocol_app_node_id, la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr, leaf_abundance la
+where estr.organism = la.taxon_id
+union
+select replace(estr.phylum, 'N/A', 'unknown') as taxon_string
+       , 'phylum' as taxon_node
+       , phylum_id as taxon_id
+       , 2 as taxon_level
+       , la.protocol_app_node_id,la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr
+       , leaf_abundance la
+where estr.organism = la.taxon_id
+union
+select replace(estr.class, 'N/A', 'unknown') as taxon_string
+       , 'class' as taxon_node
+       , class_id as taxon_id
+       , 3 as taxon_level
+       , la.protocol_app_node_id,la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr
+       , leaf_abundance la
+where estr.organism = la.taxon_id
+union
+select replace(estr.rank_order, 'N/A', 'unknown')as taxon_string
+       , 'order' as taxon_node
+       , rank_order_id as taxon_id
+       , 4 as taxon_level
+       , la.protocol_app_node_id,la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr
+       , leaf_abundance la
+where estr.organism = la.taxon_id
+union
+select replace(estr.family, 'N/A', 'unknown') as taxon_string
+       , 'family' as taxon_node
+       , family_id as taxon_id
+       , 5 as taxon_level
+       , la.protocol_app_node_id,la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr
+       , leaf_abundance la
+where estr.organism = la.taxon_id
+union
+select replace(estr.genus, 'N/A', 'unknown') as taxon_string
+       , 'genus' as taxon_node
+       , genus_id as taxon_id
+       , 6 as taxon_level
+       , la.protocol_app_node_id,la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr
+       , leaf_abundance la
+where estr.organism = la.taxon_id
+union
+select replace(estr.species, 'N/A', 'unknown') as taxon_string
+       , 'species' as taxon_node
+       , species_id as taxon_id
+       , 7 as taxon_level
+       , la.protocol_app_node_id,la.relative_abundance
+       , la.raw_count
+  from EXTERNALsequenceTAXONRANK estr
+       , leaf_abundance la
+where estr.organism = la.taxon_id
+)
+        select tsm.protocol_app_node_id, pan.name as pan_name, initcap(tsm.taxon_node) as category, tsm.taxon_string as term,
+               tsm.taxon_node || '|' || tsm.Taxon_id as term_id, ds.name as dataset_name, ds.type, ds.subtype,  study_release.study_name, study_release.investigation_name,
+               tsm.taxon_level, sum(tsm.raw_count) as agg_count,  sum(tsm.relative_abundance) as value
+
+        from taxa_string_map tsm,
+             study.ProtocolAppNode pan,
+             study.StudyLink sl,
+             sres.ExternalDatabaseRelease edr,
+             sres.ExternalDatabase ed,
+             apidb.Datasource ds,
+             (  select s.study_id, i.external_database_release_id,
+                       s.name as study_name, i.name as investigation_name
+                from study.Study s, study.Study i
+                where s.investigation_id = i.study_id
+                and s.name not like '%[%]%'
+                and i.name like 'OTU Profile%'
+              ) study_release
+        where tsm.protocol_app_node_id = pan.protocol_app_node_id
+          and tsm.protocol_app_node_id = sl.protocol_app_node_id
+          and sl.study_id = study_release.study_id
+          and study_release.external_database_release_id = edr.external_database_release_id
+          and edr.external_database_id = ed.external_database_id
+          and ed.name = ds.name
+        group by tsm.protocol_app_node_id, pan.name, initcap(tsm.taxon_node), tsm.taxon_string ,  tsm.taxon_level,
+               tsm.taxon_node || '|' || tsm.Taxon_id, ds.name, ds.type, ds.subtype,  study_release.study_name, study_release.investigation_name
+ ]]>
+    </sql>
+  </tuningTable>
+    <sql>
+      <![CDATA[
+        CREATE UNIQUE INDEX TaxonAbund_panId_Term&1
+          ON TaxonAbundance&1 (tsm.protocol_app_node_id, tsm.taxon_id,  category, term)
+          TABLESPACE INDX
+      ]]>
+    </sql>
 
 
   <tuningTable name="PathwayAttributes" prefixEnabled="false">
@@ -966,6 +1093,42 @@ UNION
       ]]>
     </sql>
   </tuningTable>
+
+  <tuningTable name="TaxonAbundanceSpec">
+    <internalDependency name="TaxonAbundance"/>
+    <sql>
+      <![CDATA[
+       create table TaxonAbundanceSpec&1 nologging as
+
+        -- parent
+          select  type, subtype, dataset_name, term as property, 'parent' as spec_property, category as spec_value
+          from apidbtuning.taxonabundance
+        --grandparent
+        union
+          select  type, subtype, dataset_name, category as property, 'parent' as spec_property, null as spec_value
+          from apidbtuning.taxonabundance
+        -- leaf
+        union
+          select type, subtype, dataset_name,   term as property, 'leaf' as spec_property, 'true' as spec_value
+          from apidbtuning.taxonabundance
+        -- filter
+        union
+          select type, subtype, dataset_name,
+                 term as property, 'filter' as spec_property, 'range' as spec_value
+          from apidbtuning.taxonabundance
+        -- display
+        union
+          select distinct type, subtype, dataset_name, term as property, 'display' as spec_property, term as spec_value
+          from apidbtuning.taxonabundance
+        -- type
+        union
+          select type, subtype, dataset_name,
+                 term as property, 'type' as spec_property, 'number' as spec_value
+          from apidbtuning.taxonabundance
+      ]]>
+    </sql>
+  </tuningTable>
+
 
   <tuningTable name="TranscriptPathway">
     <internalDependency name="TranscriptAttributes"/>
