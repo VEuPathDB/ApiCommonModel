@@ -150,13 +150,13 @@ select oa.PROTOCOL_APP_NODE_ID, oa.raw_count as raw_count, oa.RELATIVE_ABUNDANCE
 from results.otuabundance oa, DOTS.EXTERNALNASEQUENCE seq
 where oa.NA_SEQUENCE_ID = seq.NA_SEQUENCE_ID
 ),
-
 taxa_string_map  as (
-select nvl(replace(estr.kingdom, 'N/A', 'unknown'),replace(estr.superkingdom,'N/A','unknown')) as taxon_string
+select decode(replace(estr.kingdom, 'N/A', 'unknown'),'unknown',replace(estr.superkingdom,'N/A','unknown'),estr.kingdom) as taxon_string
        , 'kingdom' as taxon_node
-       , kingdom_id as taxon_id
+       , nvl(kingdom_id, superkingdom_id) as taxon_id
        , 1 as taxon_level
-       , la.protocol_app_node_id, la.relative_abundance
+       , la.protocol_app_node_id
+       , la.relative_abundance
        , la.raw_count
   from EXTERNALsequenceTAXONRANK estr, leaf_abundance la
 where estr.organism = la.taxon_id
@@ -220,12 +220,16 @@ select replace(estr.species, 'N/A', 'unknown') as taxon_string
   from EXTERNALsequenceTAXONRANK estr
        , leaf_abundance la
 where estr.organism = la.taxon_id
+),
+agg_taxon_string_map as (
+select taxon_string as taxon_name, taxon_node, taxon_node || '|' || taxon_id as taxon_id, taxon_level, protocol_app_node_id, sum(relative_abundance) as relative_abundance, sum(raw_count) as raw_count from taxa_string_map
+group by taxon_string , taxon_node, taxon_node || '|' || taxon_id, taxon_level, protocol_app_node_id
 )
-        select tsm.protocol_app_node_id, pan.name as pan_name, initcap(tsm.taxon_node) as category, tsm.taxon_string as term,
-               tsm.taxon_node || '|' || tsm.Taxon_id as term_id, ds.name as dataset_name, ds.type, ds.subtype,  study_release.study_name, study_release.investigation_name,
-               tsm.taxon_level, sum(tsm.raw_count) as agg_count,  sum(tsm.relative_abundance) as value
+        select tsm.protocol_app_node_id, pan.name as pan_name, initcap(tsm.taxon_node) as category, tsm.taxon_name as term,
+               tsm.Taxon_id as term_id, ds.name as dataset_name, ds.type, ds.subtype,  study_release.study_name, study_release.investigation_name,
+               tsm.taxon_level, tsm.raw_count as agg_count,  tsm.relative_abundance as value
 
-        from taxa_string_map tsm,
+        from agg_taxon_string_map tsm,
              study.ProtocolAppNode pan,
              study.StudyLink sl,
              sres.ExternalDatabaseRelease edr,
@@ -244,14 +248,12 @@ where estr.organism = la.taxon_id
           and study_release.external_database_release_id = edr.external_database_release_id
           and edr.external_database_id = ed.external_database_id
           and ed.name = ds.name
-        group by tsm.protocol_app_node_id, pan.name, initcap(tsm.taxon_node), tsm.taxon_string ,  tsm.taxon_level,
-               tsm.taxon_node || '|' || tsm.Taxon_id, ds.name, ds.type, ds.subtype,  study_release.study_name, study_release.investigation_name
  ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE UNIQUE INDEX TaxonAbund_panId_Term&1
-          ON TaxonAbundance&1 (tsm.protocol_app_node_id, tsm.taxon_id,  category, term)
+          ON TaxonAbundance&1 (protocol_app_node_id, term_id,  category, term)
           TABLESPACE INDX
       ]]>
     </sql>
@@ -1101,7 +1103,7 @@ UNION
        create table TaxonAbundanceSpec&1 nologging as
 
         -- parent
-          select  type, subtype, dataset_name, term as property, 'parent' as spec_property, category as spec_value
+          select  type, subtype, dataset_name,  term_id as property, 'parent' as spec_property, category as spec_value
           from apidbtuning.taxonabundance
         --grandparent
         union
@@ -1109,21 +1111,24 @@ UNION
           from apidbtuning.taxonabundance
         -- leaf
         union
-          select type, subtype, dataset_name,   term as property, 'leaf' as spec_property, 'true' as spec_value
+          select type, subtype, dataset_name,  term_id as property, 'leaf' as spec_property, 'true' as spec_value
           from apidbtuning.taxonabundance
         -- filter
         union
           select type, subtype, dataset_name,
-                 term as property, 'filter' as spec_property, 'range' as spec_value
+                 term_id as property, 'filter' as spec_property, 'range' as spec_value
           from apidbtuning.taxonabundance
         -- display
         union
-          select distinct type, subtype, dataset_name, term as property, 'display' as spec_property, term as spec_value
+          select distinct type, subtype, dataset_name, term_id as property, 'display' as spec_property, term as spec_value
+          from apidbtuning.taxonabundance
+        -- parent:display
+        union
+          select distinct type, subtype, dataset_name, category as property, 'display' as spec_property, category as spec_value
           from apidbtuning.taxonabundance
         -- type
         union
-          select type, subtype, dataset_name,
-                 term as property, 'type' as spec_property, 'number' as spec_value
+          select type, subtype, dataset_name, term_id as property, 'type' as spec_property, 'number' as spec_value
           from apidbtuning.taxonabundance
       ]]>
     </sql>
