@@ -64,78 +64,84 @@ my @blastExtns = qw/nhr nin nsq phr pin psq/;  # for NCBI Blast
 # for each specified project
 foreach my $p (@projects) {
     print "\nHandling PROJECT = $p\n"; #BB
-  die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
-
-  umask 002; # resulting files will have mode 0644, directories 0755
-
-  my $destDir = "$destRootDir$p/build-$buildNumber";
-
-  ## handle the case when destDir exists
-  if (-d $destDir) {
-    print "WARNING: existing $destDir is being deleted, and will be remade.\n";
-    rmtree ($destDir);
-    print "Deleted existing dir; now REMAKING it.\n";
-  }
-
-  if ($mode eq 'copy') {
-      local $File::Copy::Recursive::SkipFlop = 1;
-
-      ## do the copy from Staging
-      my $startDir = $stagingDir{$p};
-      # print "copy from $startDir into $destDir\n";
-      my($num_of_files_and_dirs,$num_of_dirs,$depth_traversed) = File::Copy::Recursive::dircopy($startDir,$destDir);
-      print "\n$p DONE: $num_of_files_and_dirs,$num_of_dirs,$depth_traversed \n";
-
-  } elsif ($mode eq 'link') {
-      print "Making LINKS \n";
-      if ($mercator eq "no") { # ignore mercator_pairwise directory while making links
-	  opendir my $dir, $stagingDir{$p} or die "Cannot open directory: $!";
-	  my @files = grep { $_ ne '.' && $_ ne '..' } readdir $dir;
-	  system ("mkdir $destDir");
-	  foreach my $f (@files) {
-	      if ( $f ne 'mercator_pairwise') {
-		  system("mkdir $destDir/$f");
-		  system("cp -ap -s $stagingDir{$p}/$f $destDir/");
-	      }
-	  }
-	  closedir $dir;
-      } else {
-	  print "Copy START\n cp -ap -s $stagingDir{$p} $destDir\n";
-	  system("cp -ap -s $stagingDir{$p} $destDir");
-	  print "Copy END\n";
-      }
-  }
-
-  ## fix Blast file names
-  #  print "fix Blast file names \n";
-  #  finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
-
-
-  ## fix permissions
-  print "Fixing file permissions \n";
-  find(\&fixPerm, $destDir);
-
-  print "\n$p - DONE\n";
+    die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
+    
+    umask 002; # resulting files will have mode 0644, directories 0755
+    
+    my $destDir = "$destRootDir$p/build-$buildNumber";
+    
+    ## handle the case when destDir exists
+    if (-d $destDir) {
+	print "WARNING: existing $destDir is being deleted, and will be remade.\n";
+	rmtree ($destDir);
+	print "Deleted existing dir; now REMAKING it.\n";
+    }
+    
+    if ($mode eq 'copy') {
+	local $File::Copy::Recursive::SkipFlop = 1;
+	
+	## do the copy from Staging
+	my $startDir = $stagingDir{$p};
+	# print "copy from $startDir into $destDir\n";
+	my($num_of_files_and_dirs,$num_of_dirs,$depth_traversed) = File::Copy::Recursive::dircopy($startDir,$destDir);
+	print "\n$p DONE: $num_of_files_and_dirs,$num_of_dirs,$depth_traversed \n";
+	
+    } elsif ($mode eq 'link') {
+	print "Making LINKS \n";
+#      if ($mercator eq "no") { # ignore mercator_pairwise directory while making links
+	opendir my $dir, $stagingDir{$p} or die "Cannot open directory: $!";
+	my @files = grep { $_ ne '.' && $_ ne '..' } readdir $dir;
+	system ("mkdir $destDir");
+	foreach my $f (@files) {
+	    if ( $f ne 'mercator_pairwise'){
+		system("mkdir $destDir/$f");
+		system("cp -ap -s $stagingDir{$p}/$f $destDir/");
+	    }
+	    else {
+		print "COPYING Mercator files\n";
+		system ("mkdir $destDir/$f");
+		system ("rsync -a --prune-empty-dirs --include '*/' --include 'map' --include '*.agp' --exclude '*' $stagingDir{$p}/$f $destDir;");
+		system("find $stagingDir{$p}/$f  -type f | grep -e '[.]mfa$' | while read ; do DN=`dirname \$REPLY | sed 's|$stagingDir{$p}||'`;FN=`basename \$REPLY`; mkdir -p $destDir/\$DN; gzip < \$REPLY > $destDir/\$DN/\$FN.gz; done;");
+	    }
+	}
+	closedir $dir;
+#      } else {
+#	  print "Copy START\n cp -ap -s $stagingDir{$p} $destDir\n";
+#	  system("cp -ap -s $stagingDir{$p} $destDir");
+#	  print "Copy END\n";
+#      }
+    }
+    
+    ## fix Blast file names
+    #  print "fix Blast file names \n";
+    #  finddepth { 'wanted' => \&process_file, 'no_chdir' => 0 }, $destDir;
+    
+    
+    ## fix permissions
+    print "Fixing file permissions \n";
+    find(\&fixPerm, $destDir);
+    
+    print "\n$p - DONE\n";
 }
 
 sub process_file {
-  my $dir_name = (File::Spec -> splitdir ($File::Find::dir)) [-2];
-  my $file_name = basename $_;
-  my $extension = ($file_name =~ m/([^.]+)$/)[0];
-
-  if ( -f $_ && /$extension/ ~~  @blastExtns )   {
-    print "RENAMED $file_name TO  $dir_name$file_name\n";
-    rename $_, "$dir_name$file_name";
-  }
+    my $dir_name = (File::Spec -> splitdir ($File::Find::dir)) [-2];
+    my $file_name = basename $_;
+    my $extension = ($file_name =~ m/([^.]+)$/)[0];
+    
+    if ( -f $_ && /$extension/ ~~  @blastExtns )   {
+	print "RENAMED $file_name TO  $dir_name$file_name\n";
+	rename $_, "$dir_name$file_name";
+    }
 }
 
 
 sub usage {
-  my $e = shift;
-
-  if($e) {
-    print STDERR $e . "\n";
-  }
+    my $e = shift;
+    
+    if($e) {
+	print STDERR $e . "\n";
+    }
   print STDERR "usage:  copyStagingFiles.pl --configFile <FILE>  --includeProjects <LIST|EuPath|ALL> --buildNumber <NUM> (--outputDir <DIR> --mode <copy|link> --mercator <no>)\n";
   exit;
 }
