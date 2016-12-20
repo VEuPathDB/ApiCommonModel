@@ -11,6 +11,7 @@ public class GeneImage extends DatasetInjector {
   @Override
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CellularLocalization");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGoTermCL");
   }
 
   // second column is for documentation
