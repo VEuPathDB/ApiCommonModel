@@ -89,7 +89,7 @@
     
 
        <attributeQueryRef ref="DatasetAttributes.Organisms">
-         <columnAttribute name="organism_prefix" displayName="Organism (source or reference)" 
+         <columnAttribute name="organism_prefix" displayName="Organism(s) (source or reference)" 
                           help="The 'source' is the organism used to generate the samples that were analyzed to produce this dataset. The 'reference' is the genome that the data were aligned to. For functional datasets, the source may differ from the reference."/>
        </attributeQueryRef>
 
@@ -591,25 +591,20 @@ OR if the linkName and or URL require access to other attributes....also how to 
 
             <sql excludeProjects="EuPathDB">
             <![CDATA[
-          select distinct dataset_id, 
-                  case when organism_count = 1 and tn.name is not null
-                       then '<i>' || substr(tn.name, 1, 1) || '.' ||
+select dataset_id, listagg(org, '<br>') within group (order by org) as organism_prefix
+from (
+select dsnt.dataset_presenter_id as dataset_id
+ , case when tn.name is null then null
+        else '<i>' || substr(tn.name, 1, 1) || '.' ||
                                      substr(tn.name, instr(tn.name, ' ', 1, 1), decode(instr(tn.name, ' ', 1, 2), 0, length(tn.name) + 1, instr(tn.name, ' ', 1, 2)) - instr(tn.name, ' ', 1, 1)) || '</i>' ||
                                      substr(tn.name, decode(instr(tn.name, ' ', 1, 2), 0, length(tn.name) + 1, instr(tn.name, ' ', 1, 2)))
-                       when organism_count > 1 and (regexp_count(tn.name, substr(tn.name, 0, instr(tn.name, ' ', 1, 2)))) = organism_count
-                       then '<i>' || substr(tn.name, 1, 1) || '.' ||
-                                     substr(tn.name, instr(tn.name, ' ', 1, 1), decode(instr(tn.name, ' ', 1, 2), 0, length(tn.name) + 1, instr(tn.name, ' ', 1, 2)) - instr(tn.name, ' ', 1, 1)) || '</i>'
-                       else '' end as organism_prefix
-           from (
-            select dsp.dataset_presenter_id as dataset_id, dsp.type,
-                     count(distinct dsnt.taxon_id) as organism_count
-            from ApidbTuning.DatasetPresenter dsp, ApidbTuning.DatasetNameTaxon dsnt
-            where dsp.dataset_presenter_id = dsnt.dataset_presenter_id (+)
-            group by dsp.type, dsp.dataset_presenter_id, dsp.dataset_name_pattern
-            )dsp ,ApidbTuning.DatasetNameTaxon dsnt, sres.TaxonName tn
-            where dsp.dataset_id = dsnt.dataset_presenter_id (+)
-            and dsnt.taxon_id = tn.taxon_id (+)
-            and tn.name_class (+) = 'scientific name'
+              end as org
+from apidbtuning.datasetnametaxon dsnt
+ , sres.taxonname tn
+ where dsnt.taxon_id = tn.taxon_id (+)
+ and tn.name_class (+) = 'scientific name'
+ )
+ group by dataset_id
             ]]>
             </sql>
 
