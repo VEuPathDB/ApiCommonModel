@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 import org.apidb.apicommon.comparator.NaturalOrderComparator;
 
@@ -391,34 +393,61 @@ public abstract class DatasetInjector {
 
 
   protected List<String> getSampleList() {
-    /** Alternative version that queries the global dataset props rather than relying on regex. */
+
     Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
-    String experimentName = getPropValue("experimentName");
-    String organismAbbrev = getPropValue("organismAbbrev");
     Iterator<String> globalPropsKeys = globalProps.keySet().iterator();
-    List<String> sampleNames = new ArrayList<String>();
+
+    Map<String, List<String>> exptSamples = new HashMap<String, List<String>>();
+
+    String organismAbbrev = getPropValue("organismAbbrev");
+
     while (globalPropsKeys.hasNext()) {
         String dataset = globalPropsKeys.next();
-        if (dataset.contains(experimentName)) {
-            Map<String, String> datasetProps = globalProps.get(dataset);
-            if (datasetProps.containsKey("experimentName") && datasetProps.get("organismAbbrev").equals(organismAbbrev)) {
-                if (datasetProps.get("experimentName").equals(experimentName)) {
-                    if (datasetProps.containsKey("sampleName")) {
-                        sampleNames.add(datasetProps.get("sampleName"));
-                    } else if (datasetProps.containsKey("snpStrainAbbrev")) {
-                        sampleNames.add(datasetProps.get("snpStrainAbbrev"));
-                    }
-                } else if (datasetProps.get("experimentName").equals(getPropValue("name"))) {
-                    if (datasetProps.containsKey("sampleName")) {
-                        sampleNames.add(datasetProps.get("sampleName"));
-                    }
-                }
+
+        if(!dataset.startsWith(organismAbbrev) || this.datasetName.equals(dataset)) {
+            continue;
+        }
+
+        Map<String, String> datasetProps = globalProps.get(dataset);
+
+        if (datasetProps.containsKey("experimentName")) {
+            String experimentName = datasetProps.get("experimentName");
+
+            if(!exptSamples.containsKey(experimentName)) {
+                exptSamples.put(experimentName, new ArrayList<String>());
+            }
+
+            List<String> samples = exptSamples.get(experimentName);
+
+            if (datasetProps.containsKey("sampleName")) {
+                samples.add(datasetProps.get("sampleName"));
+            } 
+            if (datasetProps.containsKey("snpStrainAbbrev")) {
+                samples.add(datasetProps.get("snpStrainAbbrev"));
             }
         }
     }
+
+    Map<String, String> exptProps = globalProps.get(this.datasetName);
+    String exptName = "";
+    if (exptProps.containsKey("experimentName")) {
+        exptName = exptProps.get("experimentName");
+    } 
+    if (exptProps.containsKey("name")) {
+        exptName = exptProps.get("name");
+    } 
+
+    List<String> sampleNames = exptSamples.get(exptName);
+
     if (sampleNames.isEmpty()) {
-        throw new UserException ("No sample names found for experiment " + experimentName);
+        throw new UserException ("No sample names found for dataset " + this.datasetName);
     }
+    // remove duplicates (NGS and CNV have dup experiment and samples)
+    Set<String> distinctSamples = new HashSet<>();
+    distinctSamples.addAll(sampleNames);
+    sampleNames.clear();
+    sampleNames.addAll(distinctSamples);
+
     Collections.sort(sampleNames, new NaturalOrderComparator());
     return sampleNames;
   }
