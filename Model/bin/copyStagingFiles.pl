@@ -63,11 +63,13 @@ foreach my $p (@projects) {
       else {
 	print "FOR Mercator files\n";
 	system ("mkdir $destDir/$f") unless(-e ($destDir ."/".$f));
+	print "dir is $stagingDir{$p}/$f\n\n\n\n";
 
 	system ("rsync -T /eupath/data/apiSiteFiles/.lsyncd_ignore -rvL -pt --delete --log-format='%i %M %f  %b' --prune-empty-dirs --include '*/' --include 'map' --include '*.agp' --exclude '*' $stagingDir{$p}/$f $destDir;");
 
 
-	system("find $stagingDir{$p}/$f  -type f | grep -e '[.]mfa$' | while read ; do DN=`dirname \$REPLY | sed 's|$stagingDir{$p}||'`;FN=`basename \$REPLY`; mkdir -p $destDir/\$DN; gzip < \$REPLY > $destDir/\$DN/\$FN.gz; done;");
+	system("find $stagingDir{$p}${f}  -type f | grep -e '[.]mfa\$' | while read ; do DN=`dirname \$REPLY | sed 's|$stagingDir{$p}||'`;FN=`basename \$REPLY`; mkdir -p $destDir/\$DN; gzip < \$REPLY > $destDir/\$DN/\$FN.gz; done;");
+
 	print "END\n";
       }
     }
