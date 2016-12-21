@@ -9,19 +9,11 @@ public class IsolatesHTS extends DatasetInjector {
   public void injectTemplates() {
       String datasetName = getDatasetName();
       String[] datasetWords = datasetName.split("_");
-
-
       setOrganismAbbrevFromDatasetName();
 
-      // trim off the prefix and suffix from the experiment name
-      // new workflow uses different naming convention for HTS isolates, need to handle both.
-      // pfal3D7_SNP_Conway_HTS_SNP_RSRC (build-18)
-      // pfal3D7_HTS_SNP_Conway_HTS_SNP_RSRC (build-19)
-      String experimentRsrc = datasetName.replaceFirst(datasetWords[0] + "_HTS_SNP_", "");
-      experimentRsrc = experimentRsrc.replaceFirst(datasetWords[0] + "_SNP_", "");
-
-      String experimentName = experimentRsrc.replaceFirst("_RSRC", "");
+      String experimentName = getPropValue("name");
       setPropValue("experimentName", experimentName);
+
 
       // use getSampleList method, refer to - https://redmine.apidb.org/issues/16510
       String organismAbbrev = getPropValue("organismAbbrev");
@@ -32,7 +24,6 @@ public class IsolatesHTS extends DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       for (int i=0; i<sampleNames.size(); i++){
-
           setPropValue("sampleName", sampleNames.get(i));
 
           String gbrowseDBName = organismAbbrev + "_" + experimentName + "_" + sampleNames.get(i) + sampleNameSuffix;
