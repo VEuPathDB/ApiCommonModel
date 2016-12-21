@@ -28,7 +28,7 @@ public class Publication {
 						+ pubmedId + "'  --  " + new String(err));
 		}
                 p.destroy();
-                citation = new String(bo).trim();
+                citation = new String(bo, "UTF-8").trim();
             } catch (Exception e) {
                 throw new UnexpectedException("Failed running: pubmedIdToCitation "
                                               + pubmedId, e);
