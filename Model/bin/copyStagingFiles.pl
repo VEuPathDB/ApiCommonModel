@@ -5,8 +5,9 @@ use File::Find;
 use File::Basename;
 use Getopt::Long;
 
-my ($help, $configFile, $outputDir, $includeProjects, $buildNumber);
+my ($help, $configFile, $outputDir, $includeProjects, $buildNumber, $mercator);
 &GetOptions('help|h' => \$help,
+	    'mercator=s' => \$mercator,
             'configFile=s' => \$configFile,
 	    'includeProjects=s' => \$includeProjects,
 	    'buildNumber=s' => \$buildNumber,
@@ -60,7 +61,7 @@ foreach my $p (@projects) {
 	#system("mkdir $destDir/$f");
 	system ("rsync -T /eupath/data/apiSiteFiles/.lsyncd_ignore -rvL -pt --delete --log-format='%i %M %f  %b'  $stagingDir{$p}/$f $destDir;");
       }
-      else {
+      elsif ($mercator ne "no") {
 	print "FOR Mercator files\n";
 	system ("mkdir $destDir/$f") unless(-e ($destDir ."/".$f));
 	print "dir is $stagingDir{$p}/$f\n\n\n\n";
