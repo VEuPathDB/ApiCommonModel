@@ -411,13 +411,17 @@ public abstract class DatasetInjector {
         Map<String, String> datasetProps = globalProps.get(dataset);
 
         if (datasetProps.containsKey("experimentName")) {
+            String sampleOrganismAbbrev = datasetProps.get("organismAbbrev");
+            String sampleDatasetClassCategory = datasetProps.get("datasetClassCategory");
             String experimentName = datasetProps.get("experimentName");
 
-            if(!exptSamples.containsKey(experimentName)) {
-                exptSamples.put(experimentName, new ArrayList<String>());
+            String sampleExptKey = sampleOrganismAbbrev + "_" + sampleDatasetClassCategory + "_" + experimentName;
+
+            if(!exptSamples.containsKey(sampleExptKey)) {
+                exptSamples.put(sampleExptKey, new ArrayList<String>());
             }
 
-            List<String> samples = exptSamples.get(experimentName);
+            List<String> samples = exptSamples.get(sampleExptKey);
 
             if (datasetProps.containsKey("sampleName")) {
                 samples.add(datasetProps.get("sampleName"));
@@ -437,7 +441,11 @@ public abstract class DatasetInjector {
         exptName = exptProps.get("name");
     } 
 
-    List<String> sampleNames = exptSamples.get(exptName);
+    String datasetClassCategory = datasetProps.get("datasetClassCategory");
+
+    String exptKey = organismAbbrev + "_" + datasetClassCategory + "_" + exptName;
+
+    List<String> sampleNames = exptSamples.get(exptKey);
 
     if (sampleNames.isEmpty()) {
         throw new UserException ("No sample names found for dataset " + this.datasetName);
