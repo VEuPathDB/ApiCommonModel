@@ -107,7 +107,13 @@ public abstract class DatasetInjector {
   }
 
   protected boolean getPropValueAsBoolean(String key) {
-    return Boolean.parseBoolean(propValues.get(key));
+      String pv = getPropValue(key);
+
+      if(pv != null && !pv.toLowerCase().equals("true") && !pv.toLowerCase().equals("false")) {
+          throw new UserException("Required true/false value for boolean prop " + key + " for dataset " + this.datasetName);
+      }
+
+    return Boolean.parseBoolean(pv);
   }
 
   protected String getDatasetName() {
@@ -441,7 +447,7 @@ public abstract class DatasetInjector {
         exptName = exptProps.get("name");
     } 
 
-    String datasetClassCategory = datasetProps.get("datasetClassCategory");
+    String datasetClassCategory = getPropValue("datasetClassCategory");
 
     String exptKey = organismAbbrev + "_" + datasetClassCategory + "_" + exptName;
 
