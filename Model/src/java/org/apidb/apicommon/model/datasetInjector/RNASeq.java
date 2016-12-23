@@ -233,7 +233,7 @@ public class RNASeq extends  DatasetInjector {
 
           // String organismAbbrev = getPropValue("organismAbbrev");
           
-
+          /** junctions now use unified track.  no need for sample list
           List<String> sampleNames = getSampleList();
           String subtracks = "";
           for (int i=0; i<sampleNames.size(); i++) {
@@ -246,6 +246,8 @@ public class RNASeq extends  DatasetInjector {
               }
           }
           setPropValue("subtracks", subtracks);
+          **/
+
 
           if(projectName.equals("HostDB")) {
               setPropValue("intronSizeLimit", "100000");
@@ -253,7 +255,6 @@ public class RNASeq extends  DatasetInjector {
           else {
               setPropValue("intronSizeLimit", "9000");
           }
-          setPropValue("subtracks", subtracks);
 
           injectTemplate("rnaSeqJunctionsTrack");
           setPropValue("gbrowseTrackName", getDatasetName() + "Junctions");
