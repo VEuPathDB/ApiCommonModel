@@ -5443,6 +5443,19 @@ group by nm.exp_name, nm.external_database_name, nm.sample_name,junc.intron_junc
          nm.show_intron_junctions, ms.read_length, ms.mapped_reads
 ),  
 --end of core
+ratiostats as (
+select protocol_app_node_id,exp_name,sample_name
+, round(avg(isrpm_exp_ratio),2) as avg_isrpm_fpkm_ratio
+, round(median(isrpm_exp_ratio),2) as median_isrpm_fpkm_ratio
+, round(avg(isr_coverage_ratio),2) as avg_isr_coverage_ratio
+, round(median(isr_coverage_ratio),2) as median_isr_coverage_ratio
+, count(*) as total_introns_averaged
+from core
+where annotated_intron = 'Yes'
+and isr_coverage_ratio != -1
+and unique_reads >= 3
+group by protocol_app_node_id,exp_name,sample_name
+), -- end of ratiostats
 isrmultcons as (
  select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions, sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
  from core
@@ -5461,12 +5474,13 @@ group by Nm.Junctions_Pan_Id
 select intron_junction_id,protocol_app_node_id,exp_name,external_database_name,sample_name,na_sequence_id,segment_start,segment_end,
 is_reversed, strand, unique_reads, isrpm, nu_reads,
 round(value,4) as exp_value,round(exp_ratio,4) as intron_exp_ratio,round(isrpm_exp_ratio,4) as isrpm_exp_ratio,
-avg_coverage, isr_coverage_ratio,
+avg_coverage, isr_coverage_ratio,norm_isr_coverage_ratio,
 round(100 * percent_max_sample,1) as percent_max_sample,
 round(100 * percent_max_total,1) as percent_max_total,
 round(total_ratio,4) as total_ratio,matches_gene_strand,annotated_intron,
 decode(percent_max_sample,-1,0,1) as is_contained, gene_source_id,
-intron_sample_avgexp_ratio, isrpm_sample_avgexp_ratio, intron_sample_medexp_ratio,isrpm_sample_medexp_ratio,isr_avgcoverage_ratio,
+intron_sample_avgexp_ratio, isrpm_sample_avgexp_ratio, intron_sample_medexp_ratio,isrpm_sample_medexp_ratio,
+isr_avgcoverage_ratio,norm_isr_avgcoverage_ratio,
 total_junctions as sample_total_junctions,multiplier as sample_multiplier, consistent_multiplier, 
 round(multiplier / consistent_multiplier,4) as total_cons_mult_ratio,
 include_unified_junctions, show_intron_junctions
@@ -5478,6 +5492,8 @@ CASE WHEN te.avg_expression > 0 THEN round(c.isrpm/te.avg_expression,4) ELSE 0 E
 CASE WHEN te.median_expression > 0 THEN round(c.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(c.isrpm/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
 CASE WHEN ms.avg_mapping_coverage > 0 THEN round(c.unique_reads/ms.avg_mapping_coverage,4) ELSE 0 END as isr_avgcoverage_ratio,
+CASE WHEN ms.avg_mapping_coverage > 0 THEN round(c.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio,4) ELSE 0 END as norm_isr_avgcoverage_ratio,
+CASE WHEN ms.avg_mapping_coverage > 0 THEN round(c.isr_coverage_ratio / nr.median_isr_coverage_ratio,4) ELSE 0 END as norm_isr_coverage_ratio,
 isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_multiplier
   from
   (select gene_source_id,max(unique_reads) as max_total_unique, max(isrpm) as max_isrpm_unique, sum(value) as total_exp, 
@@ -5488,7 +5504,7 @@ isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_
   (select protocol_app_node_id,gene_source_id,max(unique_reads) as max_sample_unique,max(isrpm) as max_sample_isrpm 
   from core
   group by protocol_app_node_id,gene_source_id) sample_tot,
-  core c, totalexpression te, isrmult, isrmultcons, mappingstats ms
+  core c, totalexpression te, isrmult, isrmultcons, mappingstats ms, ratiostats nr
   where gene_tot.gene_source_id = c.gene_source_id
   AND c.protocol_app_node_id = ms.junctions_pan_id
   AND sample_tot.protocol_app_node_id = c.protocol_app_node_id
@@ -5496,6 +5512,7 @@ isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_
   AND te.junctions_pan_id = c.protocol_app_node_id
   AND c.protocol_app_node_id = isrmult.protocol_app_node_id
   AND c.protocol_app_node_id = isrmultcons.protocol_app_node_id
+  AND c.protocol_app_node_id = nr.protocol_app_node_id
   UNION ALL
 -- union this with intronjunction that are not in core adding in exp_name,sample_name 
 -- first do minus to get missing junctions and join to names.
@@ -5518,20 +5535,22 @@ CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multipli
 CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
 CASE WHEN ms.avg_mapping_coverage > 0 THEN round(introns.unique_reads/ms.avg_mapping_coverage,4) ELSE 0 END as isr_avgcoverage_ratio,
+CASE WHEN ms.avg_mapping_coverage > 0 THEN round(introns.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio,4) ELSE 0 END as norm_isr_avgcoverage_ratio,
+-1 as norm_isr_coverage_ratio,
 isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_multiplier
 FROM (select intron_junction_id
 from apidb.intronjunction
 MINUS
 select intron_junction_id
 from core) mi,
-namemapping names, totalexpression te, isrmult,isrmultcons, apidb.intronjunction introns, mappingstats ms
+namemapping names, totalexpression te, isrmult,isrmultcons, apidb.intronjunction introns, mappingstats ms, ratiostats nr
 where introns.intron_junction_id = mi.intron_junction_id
 AND introns.protocol_app_node_id = names.junctions_pan_id
 AND te.junctions_pan_id = introns.protocol_app_node_id
 AND introns.protocol_app_node_id = isrmult.protocol_app_node_id
 AND introns.protocol_app_node_id = isrmultcons.protocol_app_node_id
-AND ms.junctions_pan_id = introns.protocol_app_node_id
-)
+AND introns.protocol_app_node_id = nr.protocol_app_node_id
+AND ms.junctions_pan_id = introns.protocol_app_node_id)
       ]]>
     </sql>
     <sql>
