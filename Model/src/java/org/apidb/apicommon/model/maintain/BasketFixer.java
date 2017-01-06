@@ -38,7 +38,7 @@ public class BasketFixer extends BaseCLI {
       cacher.invoke(args);
     } catch (Exception ex) {
       ex.printStackTrace();
-      throw ex;
+      System.exit(1);
     } finally {
       logger.info("basket fixer done.");
       System.exit(0);
