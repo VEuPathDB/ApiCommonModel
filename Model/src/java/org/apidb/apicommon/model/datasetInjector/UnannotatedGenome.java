@@ -18,6 +18,11 @@ public class UnannotatedGenome extends DatasetInjector {
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "attribute", "overview");
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansBySourceId");
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
+
+
+    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "SequenceCounts");
+    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
+    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GenomeSequencingAndAnnotationAttribution");
   }
 
   // second column is for documentation

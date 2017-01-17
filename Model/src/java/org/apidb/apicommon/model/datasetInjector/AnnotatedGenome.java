@@ -238,6 +238,10 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "attribute", "overview");
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansBySourceId");
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
+
+    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "SequenceCounts");
+    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
+    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GenomeSequencingAndAnnotationAttribution");
   }
 
   // declare properties required beyond those inherited from the datasetPresenter
