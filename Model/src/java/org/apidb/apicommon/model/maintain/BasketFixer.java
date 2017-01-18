@@ -302,7 +302,7 @@ public class BasketFixer extends BaseCLI {
       SqlUtils.executeUpdate(userDbDataSource, deleteBasketTranscriptsSql, "basket-maintenance-delete-transcripts");
 
       // join to appDb to insert new set of transcripts for each gene into basket
-      SqlUtils.executeUpdate(appDbDataSource, insertTranscriptsSql, "basket-maintenance-inesrt-transcripts");
+      SqlUtils.executeUpdate(appDbDataSource, insertTranscriptsSql, "basket-maintenance-insert-transcripts");
       
       // delete temp table
       //SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE basketTemp", "basket-maintenance-delete-temp-table");
