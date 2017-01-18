@@ -400,7 +400,7 @@ FROM apidbtuning.geneintronjunction
      AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
        OR (external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
      GROUP BY na_sequence_id,segment_start,segment_end,is_reversed,is_contained, annotated_intron
-     HAVING max(CASE WHEN is_contained = 1 THEN norm_isr_coverage_ratio ELSE norm_isr_avgcoverage_ratio END) keep (dense_rank first order by isrpm desc) >= 
+     HAVING max(CASE WHEN is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) keep (dense_rank first order by isrpm desc) >= 
                 CASE WHEN is_contained = 1 THEN $$minContainedRatio$$ ELSE $$minNonContainedRatio$$ END
           OR annotated_intron = 'Yes' /* this may be a bit dodgy but should show evidence for annotated intron if it exists even if ratio too low */
 ) -- end valid
@@ -469,6 +469,7 @@ sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
 'IsReversed=' || is_reversed || '$dlm' ||
 'AnnotatedIntron=' || annotated_intron || '$dlm' ||
 'IntronPercent=' || CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END || '$dlm' ||
+'GeneSourceId=' || gene_source_id || '$dlm' ||
 'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
 FROM (
 SELECT segment_start || '_' || segment_end || '_' || is_reversed as feature_id,
@@ -479,7 +480,7 @@ SELECT segment_start || '_' || segment_end || '_' || is_reversed as feature_id,
          segment_end end, 
          sum(unique_reads) as sum_exp_score, 
          exp_name as display_name, is_contained as contained,
-         matches_gene_strand, is_reversed, annotated_intron,
+         matches_gene_strand, is_reversed, annotated_intron, gt.gene_source_id,
          listagg(sample_name, ',') within group (order by sample_name) as samples,
          listagg(unique_reads, ',') within group (order by sample_name) unique_reads,
          listagg(isrpm, ',') within group (order by sample_name) isrpm,
@@ -497,8 +498,8 @@ FROM inwindow iw, genesample gs, genetotal gt
 WHERE iw.gene_source_id = gt.gene_source_id(+)
 AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
 and iw.gene_source_id = gs.gene_source_id(+)
-GROUP BY iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron )
-GROUP BY feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
+GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron )
+GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
   HAVING sum(total_isrpm) >=  CASE WHEN contained = 1 THEN $$minContainedScore$$ ELSE $$minNonContainedScore$$ END )
 WHERE (contained = 1
        AND percent_max >= $$minIntronPercent$$ )
