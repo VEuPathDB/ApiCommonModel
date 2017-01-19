@@ -808,40 +808,47 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
 	    <column name="mutation_description"/>
             <sql>
             <![CDATA[
-SELECT
-  ga.source_id
-, ga.project_id
-, pm.source_id AS rmgmid
-, pm.pubmed_id
-, pm.modification_type as mod_type
-, pm.is_successful as suc_of_gen_mod
-, apidb.tab_to_string(
-  SET(CAST(collect(DISTINCT ot.name) AS apidb.varchartab)), ',') AS life_cycle_stage
-, concat(to_clob(DBMS_LOB.SUBSTR(pr.phenotype_post_composition, 4000, 1)), DBMS_LOB.SUBSTR(pr.phenotype_post_composition, 4000, 4001)) AS phenotype
-, pm.mutation_description
-FROM
-  apidb.phenotyperesult pr
-, apidb.phenotypemodel pm
-, apidbtuning.geneattributes ga
-, sres.ontologyterm ot
-WHERE
-  pm.phenotype_model_id = pr.phenotype_model_id
-  AND pm.na_feature_id = ga.na_feature_id
-  AND pr.life_cycle_stage_term_id = ot.ontology_term_id
-GROUP BY
-  ga.source_id
-, ga.project_id
-, pm.source_id
-, pm.pubmed_id
-, pm.modification_type
-, pm.is_successful
-, dbms_lob.substr(pr.phenotype_post_composition, 4000, 1)
-, dbms_lob.substr(pr.phenotype_post_composition, 4000, 4001)
-, pm.mutation_description
-ORDER BY
-  pm.source_id
-, life_cycle_stage 
-            ]]>
+with mut as (
+  SELECT distinct ga.source_id
+  , ga.project_id
+  , pm.source_id as rmgmid
+  , pm.pubmed_id
+  , pm.modification_type as mod_type
+  , pm.is_successful as suc_of_gen_mod
+  , pm.mutation_description
+  , ot.name
+  , DBMS_LOB.SUBSTR(pr.phenotype_post_composition, 4000, 1) as phenotype1
+  , DBMS_LOB.SUBSTR(pr.phenotype_post_composition, 4000, 4001) as phenotype2
+  FROM APIDB.PHENOTYPERESULT pr LEFt OUTER JOIN SRES.ONTOLOGYTERM ot on pr.LIFE_CYCLE_STAGE_TERM_ID = ot.ONTOLOGY_TERM_ID
+  , apidb.phenotypemodel pm
+  , apidbtuning.geneattributes ga
+  WHERE pm.PHENOTYPE_MODEL_ID = pr.PHENOTYPE_MODEL_ID
+  AND pm.NA_FEATURE_ID = ga.NA_FEATURE_ID
+  --and ga.source_id = 'PF3D7_1030900'
+  )
+SELECT m.source_id
+, m.project_id
+, m.rmgmid
+, m.pubmed_id
+, m.mod_type
+,CASE
+when m.suc_of_gen_mod = 0 then 'NO' else 'YES' end as suc_of_gen_mod 
+, m.mutation_description
+, listagg(m.name, ', ') within group (order by m.name) as life_cycle_stage
+, concat(phenotype1, phenotype2) as phenotype
+FROM mut m
+group by m.source_id
+, m.project_id
+, m.rmgmid
+, m.pubmed_id
+, m.mod_type
+, m.suc_of_gen_mod
+, m.mutation_description 
+, m.phenotype1
+, m.phenotype2
+order by rmgmid
+
+             ]]>
             </sql>
         </sqlQuery>
 
