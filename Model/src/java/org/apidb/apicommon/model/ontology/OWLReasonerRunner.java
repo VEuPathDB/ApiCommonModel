@@ -23,8 +23,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Adapted from Matthew Horridge and Chris Mungall's OWL reasoner examples by Jie Zheng University of
- * Pennsylvania Date: Nov-8-2011
+ * Adapted from Matthew Horridge and Chris Mungall's OWL reasoner examples by Jie Zheng
+ * University of Pennsylvania
+ * Date: Nov-8-2011
  *
  * See:
  * http://geneontology.svn.sourceforge.net/viewvc/geneontology/OWLTools/src/owltools/OWLReasonerRunner.java?revision=3454&content-type=text%2Fplain
