@@ -335,7 +335,13 @@ public abstract class DatasetInjector {
           } else {
            String[] orgName =  orgProps.get("organismFullName").split(" ");
             String orgAbbrevDisplay = String.valueOf(orgName[0].charAt(0));
-	    orgAbbrevDisplay += "." + orgName[1];
+
+	    orgAbbrevDisplay += ".";
+
+            for(int j = 1; j < orgName.length; j++) {
+                orgAbbrevDisplay += " " + orgName[j];
+            }
+
             return orgAbbrevDisplay;
           }
         } 
