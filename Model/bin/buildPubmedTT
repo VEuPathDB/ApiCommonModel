@@ -37,23 +37,33 @@ $dbh->do(<<SQL) or die "creating table";
    ) nologging
 SQL
 
-# try getting wanted PMIDs from an existing version of the table
+# try getting wanted references from an existing version of the table
 $dbh->{PrintError} = 0;
 $dbh->{RaiseError} = 0;
 my $rtn = $dbh->do(<<SQL);
   insert into Pubmed$suffix (pubmed_id, title, authors, doi)
-  select pubmed_id, title, authors, doi
-  from Pubmed
-  where to_char(pubmed_id) in (select regexp_replace(primary_identifier, '[^0-9]', '')
-                               from sres.DbRef
-                               where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
-                                 and external_database_release_id
-                                     in (select edd.external_database_release_id
-                                         from ExternalDbDatasetPresenter edd
-                                           where lower(edd.dataset_presenter_display_name) like '%pubmed%'))
-    -- skip PubMed IDs that are duplicated (because, for instance, author list has changed); we'll get the latest
-    and pubmed_id in (select pubmed_id from Pubmed group by pubmed_id having count(*) = 1)
+  with wanted_pmids
+  as (select to_number(pubmed_id) as pubmed_id
+      from (  -- PMIDs in current Pubmed table
+              select to_char(pubmed_id) as pubmed_id
+              from (select pubmed_id
+                    from Pubmed
+                    group by pubmed_id
+                    having count(*) = 1) -- avoid duplicates
+            intersect
+              -- PMIDs in DbRef
+              select regexp_replace(primary_identifier, '[^0-9]', '')
+              from sres.DbRef
+              where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
+                and external_database_release_id
+                    in (select edd.external_database_release_id
+                        from ExternalDbDatasetPresenter edd
+                          where lower(edd.dataset_presenter_display_name) like '%pubmed%')))
+  select p.pubmed_id, p.title, p.authors, p.doi
+  from Pubmed p, wanted_pmids wp
+  where P.pubmed_id = wp.pubmed_id
 SQL
+
 $dbh->{PrintError} = 1;
 $dbh->{RaiseError} = 1;
 
