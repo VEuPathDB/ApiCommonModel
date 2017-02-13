@@ -3513,7 +3513,7 @@ WITH allele_total
      AS (SELECT DISTINCT ref_na_sequence_id, location, 1 as has_stop_codon
          FROM apidb.SequenceVariation
          WHERE product = '*')
-SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as project_id,
+SELECT chromosome_info.project_id,
        ed.name as dataset,
        sequence.na_sequence_id,
        sequence.source_id as seq_source_id,
@@ -3546,31 +3546,19 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        decode(fl.is_reversed,0,'forward',1,'reverse',null) as gene_strand,
        CAST(SUBSTR(sequence.sequence, snp.location - 30, 30) AS VARCHAR2(30)) AS lflank,
        CAST(SUBSTR(sequence.sequence, snp.location + 1, 30) AS VARCHAR2(30)) AS rflank,
-       SUBSTR(tn.name, 1, 100) AS organism,
-       taxon.ncbi_tax_id,
-       SUBSTR(chromosome_info.chromosome, 1, 20) AS chromosome,
+       chromosome_info.organism as organism,
+       chromosome_info.ncbi_tax_id,
+       chromosome_info.chromosome,
        chromosome_info.chromosome_order_num
 FROM apidb.Snp, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
-     sres.Taxon, sres.TaxonName tn, dots.NaSequence sequence, stop_codon_snps,
+     dots.NaSequence sequence, stop_codon_snps,
      allele_total,
      (SELECT feature_source_id, is_reversed, na_feature_id
       FROM &prefixFeatureLocation
-      WHERE is_top_level = 1) fl,
-     ( SELECT na_sequence_id, chromosome, chromosome_order_num
-       FROM dots.ExternalNaSequence
-      UNION
-       SELECT na_sequence_id, chromosome, chromosome_order_num
-       FROM dots.VirtualSequence
-      UNION
-       SELECT na_sequence_id, NULL AS chromosome, NULL AS chromosome_order_num
-       FROM dots.NaSequence
-       WHERE subclass_view NOT IN ('ExternalNASequence', 'VirtualSequence')
-     ) chromosome_info
+      WHERE is_top_level = 1 and feature_type = 'GeneFeature') fl,
+     GenomicSeqAttributes chromosome_info
 WHERE edr.external_database_release_id = snp.external_database_release_id
   AND ed.external_database_id = edr.external_database_id
-  AND sequence.taxon_id = taxon.taxon_id
-  AND sequence.taxon_id = tn.taxon_id
-  AND tn.name_class = 'scientific name'
   AND sequence.na_sequence_id = snp.na_sequence_id
   AND chromosome_info.na_sequence_id = snp.na_sequence_id
   AND fl.na_feature_id(+) = snp.gene_na_feature_id
