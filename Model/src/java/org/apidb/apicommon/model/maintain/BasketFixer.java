@@ -85,7 +85,7 @@ public class BasketFixer extends BaseCLI {
       logger.info("Fixing basket for project " + projectId);
       try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
         fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "ApidbTuning.GeneId",  "gene");
-        updateTranscripts(wdkModel);
+        updateTranscripts(wdkModel, projectId);
         fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "ApidbTuning.GenomicSequenceId",  "sequence");
         logger.info("=========================== done ============================");
       }
@@ -266,34 +266,44 @@ public class BasketFixer extends BaseCLI {
     }
   }
     
-  private void updateTranscripts(WdkModel wdkModel) throws WdkModelException {
+  private void updateTranscripts(WdkModel wdkModel, String projectId) throws WdkModelException {
       
     logger.info("Updating transcripts...");
     String userSchema = wdkModel.getModelConfig().getUserDB().getUserSchema();
     DataSource userDbDataSource = wdkModel.getUserDb().getDataSource();
     DataSource appDbDataSource = wdkModel.getAppDb().getDataSource();
     String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
+    
+    String tmpTable = "basketTemp_" + projectId;
       
     String allTranscriptRowsSql = " from " + userSchema + "user_baskets"
       + " WHERE project_id = '" + wdkModel.getProjectId() + "'"
       + " AND record_class = 'TranscriptRecordClasses.TranscriptRecordClass'";
 
-    String createTempTableSql = "CREATE TABLE basketTemp AS (select * " + allTranscriptRowsSql + ")";
+    String createTempTableSql = "CREATE TABLE " + tmpTable + " AS (select * " + allTranscriptRowsSql + ")";
     String deleteBasketTranscriptsSql = "DELETE " + allTranscriptRowsSql;
       
     // this SQL requires that an appDB is able to access a table with owner wdkmaint (account to access the user database) via dblink
     // apicommdev dblink allows that access from our appDBs, make sure the dblink to your test database includes this permission
-    String insertTranscriptsSql = "INSERT into " +  userSchema + "user_baskets" + dblink 
-      + "(BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, "
-      + "PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
-      + " SELECT "  +  userSchema + "user_baskets_pkseq.nextval" + dblink + ", b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
-      + "t.source_id as PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
-      + " FROM " +  WDKMAINT + "basketTemp" + dblink + " b, ApiDBTuning.TranscriptAttributes t "
-      + "   WHERE b.pk_column_1 = t.gene_source_id ";
+    String insertTranscriptsSql = 
+        "INSERT into " +  userSchema + "user_baskets" + dblink 
+      + "  (BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, "
+      + "  PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
+      + "SELECT "
+      +      userSchema + "user_baskets_pkseq.nextval" + dblink + ", b.USER_ID, b.BASKET_NAME, b.PROJECT_ID," 
+      + "    b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
+      + "    t.source_id as PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
+      + "FROM "
+      +     WDKMAINT + "basketTemp" + dblink + " b,"
+      + "   ApiDBTuning.TranscriptAttributes t, "
+      + "   (SELECT gene_source_id, max(source_id) as source_id " 
+      + "    FROM ApiDBTuning.TranscriptAttributes t group by gene_source_id) g"
+      + " WHERE b.pk_column_1 = t.gene_source_id "
+      + " AND g.source_id = t.source_id";
              
     try {
-      if (wdkModel.getUserDb().getPlatform().checkTableExists(userDbDataSource, wdkModel.getUserDb().getDefaultSchema(), "basketTemp"))
-        SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE basketTemp", "basket-maintenance-delete-temp-table");
+      if (wdkModel.getUserDb().getPlatform().checkTableExists(userDbDataSource, wdkModel.getUserDb().getDefaultSchema(), tmpTable))
+        SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE " + tmpTable, "basket-maintenance-delete-temp-table");
          
       // copy transcript baskets to temp table
       SqlUtils.executeUpdate(userDbDataSource, createTempTableSql, "basket-maintenance-create-temp-table");
