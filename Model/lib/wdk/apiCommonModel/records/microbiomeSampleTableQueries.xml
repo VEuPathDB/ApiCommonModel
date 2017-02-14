@@ -77,8 +77,9 @@ from
              <column name="family"/>
              <column name="genus"/>
              <column name="species"/>
-            <column name="relative_abundance"  />
-            <column name="absolute_abundance"  />
+            <column name="relative_abundance"/>
+            <column name="absolute_abundance"/>
+            <!-- column name="taxon_source"/ -->
            <sql>
             <![CDATA[
                      select ta.*, t.ncbi_tax_id,
@@ -89,21 +90,39 @@ from
                             replace(family, 'N/A', '') as family,
                             replace(genus, 'N/A', '') as genus,
                             replace(species, 'N/A', '') as species
-                     from (select ds.name, oa.protocol_app_node_id, seq.taxon_id,
+                     from (select ds.name, oa.protocol_app_node_id, taxonAssignment.taxon_id,
                                   sum(nvl(oa.relative_abundance, 0)) as relative_abundance,
-                                  sum(nvl(oa.raw_count, 0)) as absolute_abundance
-                           from results.OtuAbundance oa, dots.ExternalNaSequence seq,
-                                apidbTuning.SampleDownstream ds
+                                  sum(nvl(oa.raw_count, 0)) as absolute_abundance -- ,
+--                                regexp_replace( -- remove repeated source names
+--                                  listagg(taxonAssignment.source, ',')
+--                                            within group (order by taxonAssignment.source),
+--                                          '([^,]+)(,\1)*(,|$)', '\1\3')
+--                                  as taxon_source
+                           from results.OtuAbundance oa, apidbTuning.SampleDownstream ds,
+                                (select ens.na_sequence_id,
+                                        case
+                                          when st.taxon_id is not null
+                                            then st.taxon_id
+                                          else ens.taxon_id
+                                        end as taxon_id,
+                                        case
+                                          when st.taxon_id is not null
+                                            then 'Greengenes'
+                                          else 'Genbank'
+                                        end as source
+                                 from dots.ExternalNaSequence ens, apidb.SequenceTaxon st
+                                 where ens.na_sequence_id = st.na_sequence_id(+)
+                                 ) taxonAssignment
                            where oa.protocol_app_node_id = ds.output_protocol_app_node_id
                              and ds.output_isa_type = 'Data'
-                             and oa.na_sequence_id = seq.na_sequence_id
-                           group by ds.name, oa.protocol_app_node_id, seq.taxon_id
+                             and oa.na_sequence_id = taxonAssignment.na_sequence_id
+                           group by ds.name, oa.protocol_app_node_id, taxonAssignment.taxon_id
                           ) ta,
                           apidbTuning.ExternalSequenceTaxonRank estr, sres.Taxon t
                      where ta.taxon_id = estr.organism
                        and ta.relative_abundance > 0
                        and ta.taxon_id = t.taxon_id
-                     order by name, relative_abundance desc, superkingdom, kingdom,
+                     order by relative_abundance desc, name, superkingdom, kingdom,
                               phylum, class, rank_order, genus, species
             ]]>
             </sql>
