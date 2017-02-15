@@ -140,121 +140,130 @@ and organisms.organism = superkingdom.organism (+)
   </tuningTable>
 
   <tuningTable name="TaxonAbundance" prefixEnabled="false">
-    <comment>otu relative abundane values, aggegated at various taxonomic levels
+    <comment>otu relative abundance values, aggegated at various taxonomic levels
     </comment>
     <externalDependency name="results.OtuAbundance"/>
+    <externalDependency name="dots.ExternalNaSequence"/>
     <internalDependency name="ExternalSequenceTaxonRank"/>
     <sql>
       <![CDATA[
-create table TaxonAbundance&1 nologging as
-WITH LEAF_ABUNDANCE AS (
-select oa.PROTOCOL_APP_NODE_ID, oa.raw_count as raw_count, oa.RELATIVE_ABUNDANCE as relative_abundance, seq.taxon_id
-from results.otuabundance oa, DOTS.EXTERNALNASEQUENCE seq
-where oa.NA_SEQUENCE_ID = seq.NA_SEQUENCE_ID
-),
-taxa_string_map  as (
-select decode(replace(estr.kingdom, 'N/A', 'unknown'),'unknown',replace(estr.superkingdom,'N/A','unknown'),estr.kingdom) as taxon_string
-       , 'kingdom' as taxon_node
-       , nvl(kingdom_id, superkingdom_id) as taxon_id
-       , 1 as taxon_level
-       , la.protocol_app_node_id
-       , la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr, leaf_abundance la
-where estr.organism = la.taxon_id
-union
-select replace(estr.phylum, 'N/A', 'unknown') as taxon_string
-       , 'phylum' as taxon_node
-       , phylum_id as taxon_id
-       , 2 as taxon_level
-       , la.protocol_app_node_id,la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr
-       , leaf_abundance la
-where estr.organism = la.taxon_id
-union
-select replace(estr.class, 'N/A', 'unknown') as taxon_string
-       , 'class' as taxon_node
-       , class_id as taxon_id
-       , 3 as taxon_level
-       , la.protocol_app_node_id,la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr
-       , leaf_abundance la
-where estr.organism = la.taxon_id
-union
-select replace(estr.rank_order, 'N/A', 'unknown')as taxon_string
-       , 'order' as taxon_node
-       , rank_order_id as taxon_id
-       , 4 as taxon_level
-       , la.protocol_app_node_id,la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr
-       , leaf_abundance la
-where estr.organism = la.taxon_id
-union
-select replace(estr.family, 'N/A', 'unknown') as taxon_string
-       , 'family' as taxon_node
-       , family_id as taxon_id
-       , 5 as taxon_level
-       , la.protocol_app_node_id,la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr
-       , leaf_abundance la
-where estr.organism = la.taxon_id
-union
-select replace(estr.genus, 'N/A', 'unknown') as taxon_string
-       , 'genus' as taxon_node
-       , genus_id as taxon_id
-       , 6 as taxon_level
-       , la.protocol_app_node_id,la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr
-       , leaf_abundance la
-where estr.organism = la.taxon_id
-union
-select replace(estr.species, 'N/A', 'unknown') as taxon_string
-       , 'species' as taxon_node
-       , species_id as taxon_id
-       , 7 as taxon_level
-       , la.protocol_app_node_id,la.relative_abundance
-       , la.raw_count
-  from EXTERNALsequenceTAXONRANK estr
-       , leaf_abundance la
-where estr.organism = la.taxon_id
-),
-agg_taxon_string_map as (
-select taxon_string as taxon_name, taxon_node, taxon_node || '|' || taxon_id as taxon_id, taxon_level, protocol_app_node_id, sum(relative_abundance) as relative_abundance, sum(raw_count) as raw_count from taxa_string_map
-group by taxon_string , taxon_node, taxon_node || '|' || taxon_id, taxon_level, protocol_app_node_id
-)
-        select tsm.protocol_app_node_id, pan.name as pan_name, initcap(tsm.taxon_node) as category, tsm.taxon_name as term,
-               tsm.Taxon_id as term_id, ds.name as dataset_name, ds.type, ds.subtype,  study_release.study_name, study_release.investigation_name,
-               tsm.taxon_level, tsm.raw_count as agg_count,  tsm.relative_abundance as value
-
-        from agg_taxon_string_map tsm,
+        CREATE TABLE TaxonAbundance&1 NOLOGGING AS
+        WITH leaf_abundance
+        AS (SELECT oa.protocol_app_node_id, oa.raw_count AS raw_count,
+                   oa.relative_abundance AS relative_abundance,
+                   CASE
+                     WHEN st.taxon_id IS NOT NULL
+                       THEN st.taxon_id
+                     ELSE ens.taxon_id
+                   END AS taxon_id
+            FROM results.OtuAbundance oa, dots.ExternalNaSequence ens, apidb.SequenceTaxon st
+            WHERE oa.na_sequence_id = ens.na_sequence_id
+              AND ens.na_sequence_id = st.na_sequence_id(+)
+           ),
+        taxa_string_map
+        AS (  SELECT DECODE(REPLACE(estr.kingdom, 'N/A', 'unknown'), 'unknown',
+                            REPLACE(estr.superkingdom, 'N/A', 'unknown'), estr.kingdom) AS taxon_string
+                     , 'kingdom' AS taxon_node
+                     , nvl(kingdom_id, superkingdom_id) AS taxon_id
+                     , 1 AS taxon_level
+                     , la.protocol_app_node_id
+                     , la.relative_abundance
+                     , la.raw_count
+              FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+            UNION
+              SELECT REPLACE(estr.phylum, 'N/A', 'unknown') AS taxon_string
+                     , 'phylum' AS taxon_node
+                     , phylum_id AS taxon_id
+                     , 2 AS taxon_level
+                     , la.protocol_app_node_id,la.relative_abundance
+                     , la.raw_count
+              FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+            UNION
+              SELECT REPLACE(estr.class, 'N/A', 'unknown') AS taxon_string
+                     , 'class' AS taxon_node
+                     , class_id AS taxon_id
+                     , 3 AS taxon_level
+                     , la.protocol_app_node_id,la.relative_abundance
+                     , la.raw_count
+                FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+            UNION
+              SELECT replace(estr.rank_order, 'N/A', 'unknown')as taxon_string
+                     , 'order' AS taxon_node
+                     , rank_order_id AS taxon_id
+                     , 4 AS taxon_level
+                     , la.protocol_app_node_id,la.relative_abundance
+                     , la.raw_count
+                FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+            UNION
+              SELECT replace(estr.family, 'N/A', 'unknown') AS taxon_string
+                     , 'family' AS taxon_node
+                     , family_id AS taxon_id
+                     , 5 AS taxon_level
+                     , la.protocol_app_node_id,la.relative_abundance
+                     , la.raw_count
+                FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+            UNION
+              SELECT replace(estr.genus, 'N/A', 'unknown') AS taxon_string
+                     , 'genus' AS taxon_node
+                     , genus_id AS taxon_id
+                     , 6 AS taxon_level
+                     , la.protocol_app_node_id,la.relative_abundance
+                     , la.raw_count
+              FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+            UNION
+              SELECT replace(estr.species, 'N/A', 'unknown') AS taxon_string
+                     , 'species' AS taxon_node
+                     , species_id AS taxon_id
+                     , 7 AS taxon_level
+                     , la.protocol_app_node_id,la.relative_abundance
+                     , la.raw_count
+              FROM ExternalSequenceTaxonRank estr, leaf_abundance la
+              WHERE estr.organism = la.taxon_id
+           ),
+        agg_taxon_string_map
+        AS (SELECT taxon_string AS taxon_name, taxon_node,
+                   taxon_node || '|' || taxon_id AS taxon_id, taxon_level,
+                   protocol_app_node_id, SUM(relative_abundance) AS relative_abundance,
+                   SUM(raw_count) AS raw_count
+            FROM taxa_string_map
+            GROUP BY taxon_string, taxon_node, taxon_node || '|' || taxon_id,
+                     taxon_level, protocol_app_node_id
+           )
+        SELECT tsm.protocol_app_node_id, pan.name AS pan_name,
+               initcap(tsm.taxon_node) AS category, CAST(tsm.taxon_name AS VARCHAR2(200)) AS term,
+               tsm.taxon_id AS term_id, ds.name AS dataset_name, ds.type, ds.subtype,
+               study_release.study_name, study_release.investigation_name,
+               tsm.taxon_level, tsm.raw_count AS agg_count, tsm.relative_abundance AS value
+        FROM agg_taxon_string_map tsm,
              study.ProtocolAppNode pan,
              study.StudyLink sl,
              sres.ExternalDatabaseRelease edr,
              sres.ExternalDatabase ed,
              apidb.Datasource ds,
-             (  select s.study_id, i.external_database_release_id,
-                       s.name as study_name, i.name as investigation_name
-                from study.Study s, study.Study i
-                where s.investigation_id = i.study_id
-                and s.name not like '%[%]%'
-                and i.name like 'OTU Profile%'
+             (SELECT s.study_id, i.external_database_release_id,
+                     s.name AS study_name, i.name AS investigation_name
+              FROM study.Study s, study.Study i
+              WHERE s.investigation_id = i.study_id
+                AND s.name not like '%[%]%'
+                AND i.name like 'OTU Profile%'
               ) study_release
-        where tsm.protocol_app_node_id = pan.protocol_app_node_id
-          and tsm.protocol_app_node_id = sl.protocol_app_node_id
-          and sl.study_id = study_release.study_id
-          and study_release.external_database_release_id = edr.external_database_release_id
-          and edr.external_database_id = ed.external_database_id
-          and ed.name = ds.name
+        WHERE tsm.protocol_app_node_id = pan.protocol_app_node_id
+          AND tsm.protocol_app_node_id = sl.protocol_app_node_id
+          AND sl.study_id = study_release.study_id
+          AND study_release.external_database_release_id = edr.external_database_release_id
+          AND edr.external_database_id = ed.external_database_id
+          AND ed.name = ds.name
  ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE UNIQUE INDEX TaxonAbund_panId_Term&1
+        CREATE UNIQUE INDEX TaxAbund_panId_Term&1
           ON TaxonAbundance&1 (protocol_app_node_id, term_id,  category, term)
           TABLESPACE INDX
       ]]>
@@ -1106,32 +1115,32 @@ UNION
 
         -- parent
           select  type, subtype, dataset_name,  term_id as property, 'parent' as spec_property, category as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
         --grandparent
         union
           select  type, subtype, dataset_name, category as property, 'parent' as spec_property, null as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
         -- leaf
         union
           select type, subtype, dataset_name,  term_id as property, 'leaf' as spec_property, 'true' as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
         -- filter
         union
           select type, subtype, dataset_name,
                  term_id as property, 'filter' as spec_property, 'range' as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
         -- display
         union
           select distinct type, subtype, dataset_name, term_id as property, 'display' as spec_property, term as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
         -- parent:display
         union
           select distinct type, subtype, dataset_name, category as property, 'display' as spec_property, category as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
         -- type
         union
           select type, subtype, dataset_name, term_id as property, 'type' as spec_property, 'number' as spec_value
-          from apidbtuning.taxonabundance
+          from TaxonAbundance
       ]]>
     </sql>
   </tuningTable>
