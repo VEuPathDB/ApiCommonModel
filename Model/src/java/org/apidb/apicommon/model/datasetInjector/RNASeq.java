@@ -304,6 +304,7 @@ public class RNASeq extends  DatasetInjector {
                                  {"isEuPathDBSite", ""},
                                  {"switchStrandsProfiles", ""},
                                  {"switchStrandsGBrowse", ""},
+                                 {"graphType", "one of bar or line"},
                                  {"graphColor", ""},
                                  {"graphSampleLabels", ""},
                                  {"graphBottomMarginSize", ""},
