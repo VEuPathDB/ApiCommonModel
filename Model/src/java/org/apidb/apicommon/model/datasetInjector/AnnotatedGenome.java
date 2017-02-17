@@ -101,6 +101,7 @@ public class AnnotatedGenome extends DatasetInjector {
 			phylum.put("Neurospora","Sordariomycetes");
 			phylum.put("Nosema","Microsporidia");
 			phylum.put("Ordospora","Microsporidia");
+			phylum.put("Paracoccidioides","Eurotiomycetes");
 			phylum.put("Phanerochaete","Agaricomycetes");
 			phylum.put("Phycomyces","Zygomycetes");
 			phylum.put("Phytophthora","Oomycetes");
