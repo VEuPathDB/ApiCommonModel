@@ -169,8 +169,6 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
               setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
               injectTemplate("internalGeneSearchCategory");
-
-
           }
 
           injectTemplate("rnaSeqPercentileQuestion");
@@ -191,6 +189,20 @@ public class RNASeq extends  DatasetInjector {
 	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DEGseq");
 	      injectTemplate("internalGeneSearchCategory");
 	  }
+
+
+          if(getPropValueAsBoolean("includeProfileSimilarity")) {
+
+              injectTemplate("rnaSeqProfileSimilarityQuestion");
+              injectTemplate("rnaSeqProfileSimilarityParamQuery");
+              injectTemplate("rnaSeqProfileSimilarityTimeShiftParamQuery");
+
+	      setPropValue("searchCategory", "searchCategory-similarity");
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "ProfileSimilarity");
+
+              injectTemplate("internalGeneSearchCategory");
+          }
+
 
           if(getPropValue("graphPriorityOrderGrouping").equals("")) {
               setPropValue("graphPriorityOrderGrouping", "1");
@@ -284,6 +296,9 @@ public class RNASeq extends  DatasetInjector {
 
           }
 	  
+	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
+	  }
 	  if (getPropValueAsBoolean("isDESeq")) {
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DESeq");
 	  }
@@ -318,6 +333,8 @@ public class RNASeq extends  DatasetInjector {
                                  {"graphForceXLabelsHorizontal", "should the x axis labels be always horiz"},
 				 {"isDESeq", ""},
 				 {"isDEGseq",""},
+                                 {"includeProfileSimilarity", "inject Profile Similarity Question"},
+                                 {"profileTimeShift", "for Profile Similarity Question"},
       };
 
     return declaration;
