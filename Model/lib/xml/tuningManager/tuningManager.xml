@@ -8260,4 +8260,61 @@ where url is not null
     </sql>
   </tuningTable>
 
+  <tuningTable name="TaxonRelativeAbundance">
+    <comment>for the sample record taxon relative abundance table
+     </comment>
+    <externalDependency name="sres.Taxon"/>
+    <externalDependency name="dots.ExternalNaSequence"/>
+    <externalDependency name="apidb.SequenceTaxon"/>
+    <externalDependency name="results.OtuAbundance"/>
+    <internalDependency name="PANProtocolMetadata"/>
+    <internalDependency name="ExternalSequenceTaxonRank"/>
+    <sql>
+      <![CDATA[
+        create table TaxonRelativeAbundance&1
+            (name, protocol_app_node_id, taxon_id, relative_abundance, 
+             absolute_abundance, ncbi_tax_id, kingdom, phylum, class, 
+             rank_order, family, genus, species,
+             constraint taxRelAbund&1_pk primary key(name, taxon_id))
+        organization index
+        nologging
+        as select ta.*, t.ncbi_tax_id,
+                  replace(decode(superkingdom, 'N/A', kingdom, superkingdom), 'N/A', '') as kingdom,
+                  replace(phylum, 'N/A', '') as phylum,
+                  replace(class, 'N/A', '') as class,
+                  replace(rank_order, 'N/A', '') as rank_order,
+                  replace(family, 'N/A', '') as family,
+                  replace(genus, 'N/A', '') as genus,
+                  replace(species, 'N/A', '') as species
+           from (select ds.name, oa.protocol_app_node_id, taxonAssignment.taxon_id,
+                        sum(nvl(oa.relative_abundance, 0)) as relative_abundance,
+                        sum(nvl(oa.raw_count, 0)) as absolute_abundance
+                 from results.OtuAbundance oa, SampleDownstream ds,
+                      (select ens.na_sequence_id,
+                              case
+                                when st.taxon_id is not null
+                                  then st.taxon_id
+                                else ens.taxon_id
+                              end as taxon_id,
+                              case
+                                when st.taxon_id is not null
+                                  then 'Greengenes'
+                                else 'Genbank'
+                              end as source
+                       from dots.ExternalNaSequence ens, apidb.SequenceTaxon st
+                       where ens.na_sequence_id = st.na_sequence_id(+)
+                       ) taxonAssignment
+                 where oa.protocol_app_node_id = ds.output_protocol_app_node_id
+                   and ds.output_isa_type = 'Data'
+                   and oa.na_sequence_id = taxonAssignment.na_sequence_id
+                 group by ds.name, oa.protocol_app_node_id, taxonAssignment.taxon_id
+                ) ta,
+                ExternalSequenceTaxonRank estr, sres.Taxon t
+           where ta.taxon_id = estr.organism
+             and ta.relative_abundance > 0
+             and ta.taxon_id = t.taxon_id
+      ]]>
+    </sql>
+  </tuningTable>
+
 </tuningConfig>
