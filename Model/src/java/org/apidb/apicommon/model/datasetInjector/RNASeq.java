@@ -201,6 +201,7 @@ public class RNASeq extends  DatasetInjector {
 	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "ProfileSimilarity");
 
               injectTemplate("internalGeneSearchCategory");
+              injectTemplate("similarityGraph");
           }
 
 
