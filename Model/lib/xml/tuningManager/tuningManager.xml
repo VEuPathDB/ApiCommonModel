@@ -2834,8 +2834,8 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        transcript_exons.exon_count,
        sns.length AS length,
        SUBSTR(sequence.source_id, 1, 50) AS sequence_id,
-       SUBSTR(tn.name, 1, 100) AS organism,
-       SUBSTR(species_name.name, 1, 100) AS species,
+       SUBSTR(tn.name, 1, 80) AS organism,
+       SUBSTR(species_name.name, 1, 60) AS species,
        taxon.ncbi_tax_id,  tn.taxon_id, 
        so.source_id as so_id, SUBSTR(so.name, 1, 150) AS so_term_name,
        CAST(SUBSTR(so.definition, 1, 150) AS VARCHAR2(150)) AS so_term_definition,
@@ -8314,6 +8314,39 @@ where url is not null
              and ta.relative_abundance > 0
              and ta.taxon_id = t.taxon_id
       ]]>
+    </sql>
+  </tuningTable>
+
+<tuningTable name="OrthologousGenes">
+    <comment>
+       Materialization of the orthology transform. 
+    </comment>
+    <!-- internalDependency name="GeneAttributes"/ -->
+    <externalDependency name="apidb.Synteny"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE OrthologousGenes&1
+          (source_id, is_syntenic, ortho_source_id, ortho_product, ortho_organism,
+        CONSTRAINT ogenes&1_pk PRIMARY KEY(source_id, is_syntenic, ortho_source_id))
+        ORGANIZATION INDEX
+        NOLOGGING
+        AS
+        SELECT gene.source_id, ortho_gene.source_id AS ortho_source_id,
+               ortho_gene.product AS ortho_product, ortho_gene.organism AS ortho_organism,
+               CASE (SELECT COUNT(*)
+                     FROM apidb.Synteny
+                     WHERE a_na_sequence_id = gene.na_sequence_id
+                       AND a_start < gene.end_max
+                       AND a_end > gene.start_min
+                       AND b_na_sequence_id = ortho_gene.na_sequence_id
+                       AND b_start < ortho_gene.end_max
+                       AND b_end > ortho_gene.start_min)
+                 WHEN 0 THEN 0
+                 ELSE 1
+               END AS is_syntenic
+        FROM GeneAttributes gene, GeneAttributes ortho_gene
+        WHERE gene.orthomcl_name = ortho_gene.orthomcl_name
+       ]]>
     </sql>
   </tuningTable>
 
