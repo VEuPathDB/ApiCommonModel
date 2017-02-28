@@ -964,8 +964,7 @@ AND 1=0
         <paramRef ref="geneParams.gene_result"/>
         <paramRef ref="organismParams.organism" excludeProjects="EuPathDB"/>
         <paramRef ref="organismParams.organism" includeProjects="EuPathDB" noTranslation="true" quote="true"/>
-        <!-- skip is_syntenic. We aren't doing it right, and it forces us into a badly-performing query
-        <paramRef ref="geneParams.isSyntenic" excludeProjects="EuPathDB"/> -->
+        <paramRef ref="geneParams.isSyntenic" excludeProjects="EuPathDB"/>
         <column name="source_id" />
         <column name="gene_source_id"/>
         <column name="matched_result"/>
@@ -979,18 +978,16 @@ AND 1=0
                           AS (SELECT gene_source_id, max(wdk_weight) AS wdk_weight
                               FROM $$gene_result$$
                               GROUP BY gene_source_id),
-                          ortholog_groups
-                          AS (SELECT ga.orthomcl_name,
---                                   this way fails on fungiDB's big ortholog groups:
---                                   listagg(ga.source_id, ', ') within GROUP(ORDER BY ga.source_id) AS gene_list,
+                          output_gene
+                          AS (SELECT ogenes.ortho_source_id,
                                      to_char(
                                        dbms_lob.substr(rtrim(
                                          replace(
                                            replace(
                                              XmlAgg(
-                                               XmlElement("a", ga.source_id)
+                                               XmlElement("a", ogenes.source_id)
                                                order by
-                                               ga.source_id)
+                                               ogenes.source_id)
                                                .getClobVal(),
                                            '<a>', ''),
                                          '</a>',
@@ -998,13 +995,14 @@ AND 1=0
                                        ','),
                                       4000, 1)) AS gene_list,
                                      max(inputs.wdk_weight) AS wdk_weight
-                              FROM inputs, apidbTuning.GeneAttributes ga
-                              WHERE inputs.gene_source_id = ga.source_id
-                              GROUP BY ga.orthomcl_name)
+                              FROM inputs, apidbTuning.OrthologousGenes ogenes
+                              WHERE inputs.gene_source_id = ogenes.source_id
+                                AND (ogenes.is_syntenic = 1 OR $$isSyntenic$$ = 'no')
+                              GROUP BY ogenes.ortho_source_id)
                      SELECT ta.gene_source_id, ta.source_id, '@PROJECT_ID@' AS project_id, 'Y' AS matched_result,
                             og.wdk_weight, og.gene_list AS orthologs
-                     FROM ortholog_groups og, apidbTuning.TranscriptAttributes ta
-                     WHERE og.orthomcl_name = ta.orthomcl_name
+                     FROM output_gene og, apidbTuning.TranscriptAttributes ta
+                     WHERE og.ortho_source_id = ta.gene_source_id
                        AND ta.taxon_id IN ($$organism$$)
            ]]>
        </sql>
