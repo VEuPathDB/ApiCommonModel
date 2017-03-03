@@ -67,9 +67,6 @@ public class RNASeq extends  DatasetInjector {
 	      //}
 
           String exprMetric = getPropValue("exprMetric");
-          if(getPropValueAsBoolean("includeProfileSimilarity")) {
-	      setPropValue("exprMetric", "rpkm");
-	  }
 
           if(getPropValueAsBoolean("isStrandSpecific")) {
 	      setPropValue("stranded", "Strand Specific ");
