@@ -6,6 +6,7 @@ package org.apidb.apicommon.model.maintain;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -274,7 +275,8 @@ public class BasketFixer extends BaseCLI {
     DataSource appDbDataSource = wdkModel.getAppDb().getDataSource();
     String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
     
-    String tmpTable = "basketTemp_" + projectId;
+    long timestamp = new Date().getTime() / 10000;
+    String tmpTable = "bt_" + projectId + "_" + timestamp; // give each table a unique name, so we can restore from it, if insert fails.
       
     String allTranscriptRowsSql = " from " + userSchema + "user_baskets"
       + " WHERE project_id = '" + wdkModel.getProjectId() + "'"
@@ -299,7 +301,7 @@ public class BasketFixer extends BaseCLI {
       + "    " + WDKMAINT + tmpTable + dblink + " tmp"
       + "     WHERE geneAndMaxTrans.pk_column_1 = tmp.pk_column_1"
       + "       AND geneAndMaxTrans.pk_column_2 = tmp.pk_column_2"
-      + "   ) b, -- one row per gene, all basket columns, but excludes pk_column_2, ie, the trans id"
+      + "   ) b," // one row per gene, all basket columns, but excludes pk_column_2, ie, the trans id
       + "   apiDBTuning.TranscriptAttributes t"
       + " WHERE b.pk_column_1 = t.gene_source_id";
 
