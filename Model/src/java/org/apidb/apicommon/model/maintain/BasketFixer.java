@@ -289,20 +289,20 @@ public class BasketFixer extends BaseCLI {
         "INSERT into " +  userSchema + "user_baskets" + dblink 
       + "  (BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID, PK_COLUMN_2)"
       + " SELECT "
-      +      userSchema + "user_baskets_pkseq.nextval" + dblink + ", basketPerGeneNoTransCol.*, t.source_id as pk_column_2"
+      +      userSchema + "user_baskets_pkseq.nextval" + dblink + ", b.*, t.source_id as pk_column_2"
       + " FROM "
-      + "   (SELECT b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID"
+      + "   (SELECT USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID,  tmp.PK_COLUMN_1, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID"
       + "    FROM "
       + "     (SELECT pk_column_1, MAX(pk_column_2) AS pk_column_2"
       + "       FROM " + WDKMAINT + tmpTable + dblink
       + "       GROUP BY pk_column_1) geneAndMaxTrans,"
-      + "    " + WDKMAINT + tmpTable + dblink + " tmpTable"
-      + "     WHERE geneAndMaxTrans.pk_column_1 = tmpTable.pk_column_1"
-      + "       AND geneAndMaxTrans.pk_column_2 = tmpTable.pk_column_2"
-      + "   ) basketPerGeneNoTransCol,"
+      + "    " + WDKMAINT + tmpTable + dblink + " tmp"
+      + "     WHERE geneAndMaxTrans.pk_column_1 = tmp.pk_column_1"
+      + "       AND geneAndMaxTrans.pk_column_2 = tmp.pk_column_2"
+      + "   ) b, -- one row per gene, all basket columns, but excludes pk_column_2, ie, the trans id"
       + "   apiDBTuning.TranscriptAttributes t"
-      + " WHERE basket_genes.pk_column_1 = t.gene_source_id"
-      + " )";
+      + " WHERE b.pk_column_1 = t.gene_source_id";
+
 
     try {
       if (wdkModel.getUserDb().getPlatform().checkTableExists(userDbDataSource, wdkModel.getUserDb().getDefaultSchema(), tmpTable))
