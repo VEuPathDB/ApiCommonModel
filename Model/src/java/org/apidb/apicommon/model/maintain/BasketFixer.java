@@ -284,23 +284,26 @@ public class BasketFixer extends BaseCLI {
     String deleteBasketTranscriptsSql = "DELETE " + allTranscriptRowsSql;
       
     // this SQL requires that an appDB is able to access a table with owner wdkmaint (account to access the user database) via dblink
-    // apicommdev dblink allows that access from our appDBs, make sure the dblink to your test database includes this permission
+    // apicommdev dblink allows that access from our appDBs, make sure the dblink to your test database includes this permission 
     String insertTranscriptsSql = 
         "INSERT into " +  userSchema + "user_baskets" + dblink 
-      + "  (BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, "
-      + "  PK_COLUMN_2, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID)"
+      + "  (BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID, PK_COLUMN_2)"
       + " SELECT "
-      +      userSchema + "user_baskets_pkseq.nextval" + dblink + ", b.USER_ID, b.BASKET_NAME, b.PROJECT_ID," 
-      + "    b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, "
-      + "    t.source_id as PK_COLUMN_2, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID" 
+      +      userSchema + "user_baskets_pkseq.nextval" + dblink + ", basketPerGeneNoTransCol.*, t.source_id as pk_column_2"
       + " FROM "
-      +     WDKMAINT + tmpTable + dblink + " b,"
-      + "   ApiDBTuning.TranscriptAttributes t, "
-      + "   (SELECT gene_source_id, max(source_id) as source_id " 
-      + "    FROM ApiDBTuning.TranscriptAttributes t group by gene_source_id) g"
-      + " WHERE b.pk_column_1 = t.gene_source_id "
-      + " AND g.source_id = t.source_id";
-             
+      + "   (SELECT b.USER_ID, b.BASKET_NAME, b.PROJECT_ID, b.RECORD_CLASS, b.IS_DEFAULT, b.CATEGORY_ID,  b.PK_COLUMN_1, b.PK_COLUMN_3, b.PREV_BASKET_ID, b.MIGRATION_ID"
+      + "    FROM "
+      + "     (SELECT pk_column_1, MAX(pk_column_2) AS pk_column_2"
+      + "       FROM " + WDKMAINT + tmpTable + dblink
+      + "       GROUP BY pk_column_1) geneAndMaxTrans,"
+      + "    " + WDKMAINT + tmpTable + dblink + " tmpTable"
+      + "     WHERE geneAndMaxTrans.pk_column_1 = tmpTable.pk_column_1"
+      + "       AND geneAndMaxTrans.pk_column_2 = tmpTable.pk_column_2"
+      + "   ) basketPerGeneNoTransCol,"
+      + "   apiDBTuning.TranscriptAttributes t"
+      + " WHERE basket_genes.pk_column_1 = t.gene_source_id"
+      + " )";
+
     try {
       if (wdkModel.getUserDb().getPlatform().checkTableExists(userDbDataSource, wdkModel.getUserDb().getDefaultSchema(), tmpTable))
         SqlUtils.executeUpdate(userDbDataSource, "DROP TABLE " + tmpTable, "basket-maintenance-delete-temp-table");
