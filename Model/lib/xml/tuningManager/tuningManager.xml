@@ -2824,6 +2824,7 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        nvl(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio, 
        SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
        uniprot.gene_uniprot_id, uniprot.gene_uniprot_id_internal,
+       transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
        entrez_table.entrez_id AS gene_entrez_id, 
        --next the transcript attributes: 
        t.source_id AS transcript_source_id,
@@ -2969,6 +2970,24 @@ FROM dots.GeneFeature gf, &prefixFeatureLocation nl, sres.OntologyTerm so,
          or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
       group by g.source_id
      ) uniprot,
+     (select na_feature_id,
+             substr(listagg (uniprot_id, ',') within group (order by uniprot_id), 1, 240) as uniprot_id,
+             substr(listagg (uniprot_id, '+or+') within group (order by uniprot_id), 1, 240) as uniprot_id_internal
+      from (select distinct t.na_feature_id, dr.primary_identifier as uniprot_id
+            from sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+                 sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+            where dr.db_ref_id = x.DB_REF_ID
+            and (x.na_feature_id = t.na_feature_id -- 
+                 or x.na_feature_id = t.parent_id)
+            and dr.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            and (d.name like '%uniprot_dbxref_RSRC'
+                 or d.name like '%dbxref_gene2Uniprot_RSRC'
+                 or d.name = 'Links to Uniprot Genes'
+                 or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
+           )
+      group by na_feature_id
+    )  transcript_uniprot,
      (select dbna.na_feature_id,
              substr(listagg (db.primary_identifier, ',') within group (order by db.primary_identifier), 1, 300) as entrez_id
       from sres.ExternalDatabaseRelease edr, sres.DbRef db,
@@ -3044,6 +3063,7 @@ WHERE gf.source_id = gene.source_id
   AND (gf.is_predicted != 1 OR gf.is_predicted is null)
   AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
   AND gf.source_id = uniprot.source_id(+)
+  AND t.na_feature_id = transcript_uniprot.na_feature_id(+)
   AND gf.na_feature_id = entrez_table.na_feature_id(+)
   AND gf.na_feature_id = olds.na_feature_id(+)
   AND t.source_id = pa.transcript_source_id(+)
@@ -3353,8 +3373,8 @@ and ga.orthomcl_name is null
 		, gene_hts_synonymous_snps as hts_synonymous_snps
 		, gene_hts_nonsyn_syn_ratio as hts_nonsyn_syn_ratio
 		, comment_string
-		, gene_uniprot_id as uniprot_id
-		, gene_uniprot_id_internal as uniprot_id_internal
+		, uniprot.uniprot_id
+		, uniprot.uniprot_id_internal
 		, gene_entrez_id as entrez_id
 		, representative_transcript
                 , gene_zoom_context_start as zoom_context_start
@@ -3362,8 +3382,27 @@ and ga.orthomcl_name is null
             FROM &prefixTranscriptAttributes ta,
                  (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo
                   FROM &prefixTranscriptAttributes
-                  GROUP BY gene_source_id) aggregates
+                  GROUP BY gene_source_id) aggregates,
+                 (select na_feature_id,
+                         substr(listagg (uniprot_id, ',') within group (order by uniprot_id), 1, 240) as uniprot_id,
+                         substr(listagg (uniprot_id, '+or+') within group (order by uniprot_id), 1, 240) as uniprot_id_internal
+                  from (select distinct t.parent_id as na_feature_id, dr.primary_identifier as uniprot_id
+                        from sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+                             sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+                        where dr.db_ref_id = x.DB_REF_ID
+                        and (x.na_feature_id = t.na_feature_id -- 
+                             or x.na_feature_id = t.parent_id)
+                        and dr.external_database_release_id = r.external_database_release_id
+                        and r.external_database_id = d.external_database_id
+                        and (d.name like '%uniprot_dbxref_RSRC'
+                             or d.name like '%dbxref_gene2Uniprot_RSRC'
+                             or d.name = 'Links to Uniprot Genes'
+                             or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
+                       )
+                  group by na_feature_id
+                )  uniprot
             WHERE ta.gene_source_id = aggregates.gene_source_id
+              AND ta.gene_na_feature_id = uniprot.na_feature_id(+)
       ]]>
     </sql>
     <sql>
