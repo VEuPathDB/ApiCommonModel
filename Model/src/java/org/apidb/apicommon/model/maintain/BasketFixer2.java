@@ -278,12 +278,19 @@ public class BasketFixer2 extends BaseCLI {
   }
     
   /*
-   * read into temp table a batch of rows. they must not be marked with our migrationId.  
-   * We use only half the batch size, because each batch will do a big delete and insert within one transaction.
+   * Process transcripts by batch.  each batch processes (approximately) batchSize/2 transcripts
+   * (we divide by two because each batch does a bulk delete and then insert, ie, twice as many operations).
    * 
-   * in one transaction:
-   *   - delete rows in basket table with (user_id, pk_column_2) in temp table
-   *   - insert new rows for them, using new transcripts.
+   * We insert into the temp table a batch of rows, copied from basket table. 
+   * These are rows we find in the basket table that do not yet have our migrationId.  
+   * 
+   * We find all the user-gene pairs in the temp table, and for each, update all their transcripts.
+   * 
+   * For each batch, in one transaction:
+   *   - delete rows in basket table with (user_id, pk_column_2) found in temp table
+   *   - insert new rows for them, using new transcripts.  Mark these with our migrationId (typically build number)
+   *   
+   * Then, clear out temp table, and repeat till no more batches.
    */
   private void updateTranscripts(WdkModel wdkModel, String projectId) throws WdkModelException, SQLException {
       
@@ -297,7 +304,7 @@ public class BasketFixer2 extends BaseCLI {
     DataSource appDbDataSource = wdkModel.getAppDb().getDataSource();
     String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
     
-    // get a snapshot of largest basket id. any newer ids are added by users during this run. can ignore.
+    // get a snapshot of largest basket id. any newer ids are added by users during this run. we can ignore them.
     Object[] args = {};
     BasicResultSetHandler handler = new BasicResultSetHandler();
     new SQLRunner(userDbDataSource, "select max(basket_id) as max_basket_id from " + userSchema + "user_baskets", "invalid-step-report-summary").executeQuery(args, handler);
@@ -313,11 +320,14 @@ public class BasketFixer2 extends BaseCLI {
         + " AND record_class = 'TranscriptRecordClasses.TranscriptRecordClass'"
         + " AND basket_id <= " + maxBasketId
         + " AND migration_id !=  " + migrationId
-        + " AND rownum < " + batchSize + ")";
+        + " AND rownum < " + batchSize 
+        + " ORDER BY user_id, pk_column_2)";
     
     // need to go thru dblink, because this will be done on appdb connection, to be part of same transaction as insert
+    // delete all rows in basket table that have a (user_id, gene_id) found in temp table.  (this might delete
+    // more rows from basket table than are in temp table.
     String deleteBasketTranscriptsSql = "DELETE from " + userSchema + dblink + "user_baskets where basket_id IN (" 
-        + " select b.basket_id from " + userSchema + "user_baskets b, " + tmpTable + " t "
+        + " select b.basket_id from " + userSchema + "user_baskets" + dblink + " b, " + tmpTable + dblink + " t "
         + " where b.user_id = t.user_id AND b.pk_column_2 = t.pk_column_2)";
       
     // this SQL requires that an appDB is able to access a table with owner wdkmaint (account to access the user database) via dblink
@@ -352,7 +362,7 @@ public class BasketFixer2 extends BaseCLI {
         SqlUtils.executeUpdate(batchesConnection, deleteBasketTranscriptsSql,
             "basket-maintenance-delete-transcripts");
 
-        // join to appDb to insert new set of transcripts for each gene into basket
+        // insert new set of transcripts for each gene into basket
         SqlUtils.executeUpdate(batchesConnection, insertTranscriptsSql,
             "basket-maintenance-insert-transcripts");
         
@@ -360,6 +370,7 @@ public class BasketFixer2 extends BaseCLI {
       }
     }
     catch (SQLException e) {
+      if (batchesConnection != null) batchesConnection.rollback();
       throw new WdkModelException(e);
     } finally {
       if (batchesConnection != null) batchesConnection.setAutoCommit(true);
