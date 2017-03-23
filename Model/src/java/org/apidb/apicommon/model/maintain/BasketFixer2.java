@@ -334,7 +334,7 @@ public class BasketFixer2 extends BaseCLI {
     // apicommdev dblink allows that access from our appDBs, make sure the dblink to your test database includes this permission 
     String insertTranscriptsSql = 
         "INSERT into " +  userSchema + "user_baskets" + dblink 
-      + "  (BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, PK_COLUMN_3, PREV_BASKET_ID, MIGRATION_ID, PK_COLUMN_2)"
+      + "  (BASKET_ID, USER_ID, BASKET_NAME, PROJECT_ID, RECORD_CLASS, IS_DEFAULT, CATEGORY_ID, PK_COLUMN_1, PK_COLUMN_3, PREV_BASKET_ID, " + migrationId + " as MIGRATION_ID, PK_COLUMN_2)"
       + " SELECT "
       +      userSchema + "user_baskets_pkseq.nextval" + dblink + ", b.*, t.source_id as pk_column_2"
       + " FROM "
