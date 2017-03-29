@@ -8346,4 +8346,39 @@ where url is not null
     </sql>
   </tuningTable>
 
+  <tuningTable name="DatasetGeneList">
+    <comment>
+    For each RNASeq Dataset, compute the top 500 ratios of max/min gene expression.
+    </comment>
+    <internalDependency name="Profile"/>
+    <internalDependency name="DatasetPresenter"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE DatasetGeneList&1 AS
+        SELECT * FROM
+          (SELECT source_id, profile_study_id, dataset_name, fc,
+            row_number() OVER (PARTITION BY dataset_name order by fc DESC) AS myrow
+          FROM
+            (SELECT p.source_id, p.profile_study_id, p.dataset_name ,
+              ROUND (max_value/(min_value + 0.01),2) AS fc
+            FROM Profile p, DatasetPresenter dp, DatasetProperty dprop
+            WHERE p.dataset_type        = 'transcript_expression'
+            AND p.dataset_subtype       = 'rnaseq'
+            AND p.profile_type          = 'values'
+            AND p.dataset_name          = dp.NAME
+            AND dp.dataset_presenter_id = dprop.dataset_presenter_id
+            AND property                = 'switchStrandsProfiles'
+            AND ((dprop.value = 'false' AND p.min_timepoint LIKE '%firststrand%')
+              OR (dprop.value = 'true' AND p.min_timepoint LIKE '%secondstrand%')
+              OR (p.min_timepoint LIKE '%unstranded%'))
+            )
+          WHERE FC > 1.5
+          ORDER BY DATASET_NAME, profile_study_id, fc DESC
+          )
+        WHERE myrow<501
+        ORDER BY dataset_name
+       ]]>
+    </sql>
+  </tuningTable>
+
 </tuningConfig>
