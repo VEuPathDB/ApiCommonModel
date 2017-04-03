@@ -130,13 +130,16 @@ public class NcbiTaxonomy extends DatasetInjector {
         }
     }
 
+
+
+    /**  Reference Organism Defaults
     // All Annotated Reference Organisms
     for (Map.Entry<String, String> refOrg : refOrgsAnnot.entrySet()) {
         setPropValue("projectName", refOrg.getKey());
 
         if(!refOrg.getKey().equals("EuPathDB")) {
             setPropValue("referenceOrganisms", refOrg.getValue());
-            injectTemplate("referenceOrganisms");
+                        injectTemplate("referenceOrganisms");
             //        System.out.println("Injecting annot ref orgs:  "  + refOrg.getKey() + "\t" + refOrg.getValue());
         }
     }
@@ -195,7 +198,7 @@ public class NcbiTaxonomy extends DatasetInjector {
             injectTemplate("geneEpitopeOrganismOverride");
         }
     }
-
+    **/
 
 
   }
