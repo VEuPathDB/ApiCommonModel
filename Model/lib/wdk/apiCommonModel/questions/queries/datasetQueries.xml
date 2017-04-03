@@ -201,34 +201,36 @@ select distinct ref.dataset_presenter_id as dataset_id, ref.target_name, ref.rec
 
     <sqlQuery name="ByGeneList" excludeProjects="MicrobiomeDB">
         <paramRef ref="sharedParams.ds_gene_ids"/>
-        <paramRef ref="datasetParams.fold_difference"/>
+        <paramRef ref="datasetParams.threshold"/>
+        <paramRef ref="datasetParams.orthologyFlag"/>
 
         <column name="dataset_id"/>
         <column name="hit_count"/>
-        <column name="all_count"/>
+        <column name="percent_count"/>
         <sql>
           <![CDATA[
-       SELECT dsp.dataset_presenter_id  as dataset_id, 
-              r.hit_count, COUNT(*) AS all_count 
-       FROM  apidbtuning.DatasetPresenter dsp,
-             apidbtuning.DatasetGeneList l,
-             (SELECT  gl.dataset_name, COUNT(gl.source_id) AS hit_count
-              FROM apidbtuning.DatasetGeneList gl,
-               (SELECT DISTINCT ds.gene_source_id, gi.gene
-                FROM apidbtuning.GeneId gi,($$ds_gene_ids$$) ds
-                WHERE LOWER(gi.id) = LOWER(ds.gene_source_id )
-               ) T
-              WHERE t.gene = gl.source_id
-              AND gl.fdiff >= $$fold_difference$$
-             GROUP BY gl.dataset_name) R
-       WHERE dsp.name = r.dataset_name
-       AND l.dataset_name = r.dataset_name
-       AND l.fdiff >= $$fold_difference$$
-       GROUP BY dsp.dataset_presenter_id, r.hit_count
+       WITH inList as (
+         SELECT DISTINCT gi.gene
+         FROM apidbtuning.GeneId gi,($$ds_gene_ids$$) ds
+         WHERE LOWER(gi.id) = LOWER(ds.gene_source_id )
+         )
+       SELECT dataset_id, hit_count,  (hit_count/in_count)*100 as percent_count from 
+         (SELECT dsp.dataset_presenter_id  as dataset_id, 
+                 r.hit_count,
+                 inTable.in_count
+          FROM  apidbtuning.DatasetPresenter dsp,
+                (SELECT count(*) AS in_count from inList) inTable,
+                (SELECT  gl.dataset_name, COUNT(gl.source_id) AS hit_count
+                 FROM apidbtuning.DatasetGeneList gl, inList l
+                 WHERE l.gene = gl.source_id
+                GROUP BY gl.dataset_name) R
+          WHERE dsp.name = r.dataset_name
+          GROUP BY dsp.dataset_presenter_id, r.hit_count, inTable.in_count
+       ) WHERE (hit_count/in_count)*100 >= $$threshold$$
           ]]>
        </sql>
     </sqlQuery>
-                   
+
 
   </querySet>
 </wdkModel>
