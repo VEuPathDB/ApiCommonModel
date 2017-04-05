@@ -143,358 +143,54 @@ AND NOT g.internal LIKE '%MassSpec%'
         </sqlQuery>
 
 
-
-
-
-      <sqlQuery name="PathwayEdges" >
+        <sqlQuery name="PathwayEdges">
             <column name="source_id"/>
             <column name="project_id"/>
-            <column name="pathway_source"/> 
+            <column name="pathway_source"/>
             <column name="source"/>
             <column name="target"/>
             <column name="is_reversible"/>
+
             <sql>
-            <![CDATA[
-select pa.source_id
- , pa.pathway_source
- , '@PROJECT_ID@' as project_id
- , rel.*
-from 
-(
-WITH
-  nodes_with_types AS
-  (SELECT
-    pn.pathway_id
-  , pn.pathway_node_id
-  , ot.name AS type
-  FROM
-    sres.pathwaynode pn
-  , sres.ontologyterm ot
-  WHERE
-    pn.pathway_node_type_id = ot.ontology_term_id
-  )
-, enzyme_edges AS
-  (SELECT
-    nodes_with_types.pathway_id AS pathway_id
-  , nodes_with_types.pathway_node_id AS e_id
-  , nodes_with_types.type
-  , i.associated_node_id AS m1_id
-  , i.is_reversible AS ir1
-  , o.node_id AS m2_id
-  , o.is_reversible AS ir2
-  FROM
-    sres.pathwayrelationship i
-  , sres.pathwayrelationship o
-  , nodes_with_types
-  WHERE
-    i.node_id = nodes_with_types.pathway_node_id
-    AND o.associated_node_id = nodes_with_types.pathway_node_id
-    AND nodes_with_types.type = 'enzyme'
-  )
-, parents AS
-  (select
-   m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 as io
-   , listagg(e_id, '-') within group (order by e_id) as parent
-  , pathway_id
-  FROM
-    enzyme_edges
-  GROUP BY
-    pathway_id
-  , m1_id
-  , m2_id
-  , ir1
-  , ir2
-  HAVING
-    COUNT( *) > 1
-  )
-select distinct 
- enzyme_edges.pathway_id
- , parents.parent as source
- ,to_char(enzyme_edges.m1_id) as target
-, enzyme_edges.ir1 as is_reversible
-FROM
-  enzyme_edges
-, parents
-where
-  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io
-union
-select distinct 
-  enzyme_edges.pathway_id
- , to_char(enzyme_edges.m2_id) as source
- ,parents.parent as target
-, enzyme_edges.ir2 as is_reversible
-FROM
-  enzyme_edges
-, parents
-where
-  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io
-UNION
-select 
- enzyme_edges.pathway_id
- , to_char(e_id) as source
- ,to_char(enzyme_edges.m1_id) as target
-, enzyme_edges.ir1 as is_reversible
-FROM
-  enzyme_edges
-, parents
-where
-  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io (+)
-  and parents.io is null
-union
-select 
- enzyme_edges.pathway_id
- , to_char(enzyme_edges.m2_id) as source
- , to_char(e_id) as target
-, enzyme_edges.ir2 as is_reversible
-FROM
-  enzyme_edges
-, parents
-where
-  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io (+)
-  and parents.io is null
-UNION
-select pn1.pathway_id, to_char(pr.node_id), to_char(pr.associated_node_id), pr.is_reversible
-from sres.pathwayrelationship pr
-, sres.pathwaynode pn1
-, sres.pathwaynode pn2
-, sres.ontologyterm ot1
-, sres.ontologyterm ot2
-where pr.node_id = pn1.pathway_node_id
-and pr.associated_node_id = pn2.pathway_node_id
-and pn1.pathway_node_type_id = ot1.ontology_term_id
-and pn2.pathway_node_type_id = ot2.ontology_term_id
-and ot1.name != 'enzyme'
-and ot2.name != 'enzyme'
-) rel
-, apidbtuning.pathwayattributes pa
-where pa.pathway_id = rel.pathway_id
-            ]]>
-           </sql>
+                <![CDATA[
+                    SELECT '@PROJECT_ID@' AS project_id
+                    , pe.*
+                    FROM apidbtuning.pathwayedges pe
+                ]]>
+            </sql>
         </sqlQuery>
 
 
-      <sqlQuery name="PathwayNodes" >
-            <column name="source_id"/>
-            <column name="project_id"/>
-            <column name="pathway_source"/> 
-            <column name="id"/>
-            <column name="node_identifier"/>
-            <column name="display_label"/>
-            <column name="url"/>
-            <column name="name"/>
-            <column name="node_type"/>
-            <column name="x"/>
-            <column name="y"/>
-            <column name="width"/>
-            <column name="height"/>
-            <column name="parent"/>
-            <column name="cellular_location"/>
-            <column name="image"/>
-            <column name="gene_count"/>
-            <column name="default_structure"/>
-            <sql>
-            <![CDATA[
-WITH
-  nodes_with_types as
-  (select pn.pathway_id
-  , pa.name as display_label
-  , pa.url
-  , pa.name as name
-  , pa.source_id as node_identifier
-  , to_char(pn.pathway_node_id) as pathway_node_id
-  , pn.x
-  , pn.y
-  , pn.width
-  , pn.height
-  , pn.cellular_location 
-  , ot.name as type
-  , null as gene_count
-  , null as default_structure
-  FROM
-    sres.pathwaynode pn
-  , sres.ontologyterm ot
-  , apidbtuning.pathwayattributes pa
-  WHERE
-    pn.pathway_node_type_id = ot.ontology_term_id
-    and pn.display_label = pa.source_id
-    and ot.name = 'metabolic process'
-  UNION ALL
-  select pn.pathway_id
-  , pn.display_label
-  , null as url
-  , nvl(ec.description, pn.display_label) as name
-  , ec.ec_number as node_identifier
-  , to_char(pn.pathway_node_id) as pathway_node_id
-  , pn.x
-  , pn.y
-  , pn.width
-  , pn.height
-  , pn.cellular_location 
-  , ot.name as type
-  , count(tp.gene_source_id) as gene_count
-  , null as default_structure
-  FROM
-    sres.pathwaynode pn
-  , sres.ontologyterm ot
-  , sres.enzymeclass ec
-  , apidbtuning.pathwaynodegene tp
-  WHERE
-    pn.pathway_node_type_id = ot.ontology_term_id
-    and ot.name = 'enzyme'
-    and pn.row_id = ec.enzyme_class_id (+)
-    and pn.pathway_node_id = tp.pathway_node_id (+)
-    group by pn.pathway_id
-  , pn.display_label
-  , ec.description
-  , ec.ec_number
-  , to_char(pn.pathway_node_id)
-  , pn.x
-  , pn.y
-  , pn.width
-  , pn.height
-  , pn.cellular_location 
-  , ot.name 
-  UNION ALL
-  select pn.pathway_id
-  , pn.display_label
-  , null as url
-  , nvl(c.name, pn.display_label) as name
-  , c.chebi_accession as node_identifier
-  , to_char(pn.pathway_node_id) as pathway_node_id
-  , pn.x
-  , pn.y
-  , pn.width
-  , pn.height
-  , pn.cellular_location 
-  , ot.name as type
-  , null as gene_count
-  , st.default_structure
-  FROM
-    sres.pathwaynode pn
-  , sres.ontologyterm ot
-  , chebi.compounds c
-  , (select n.compound
-          , s.structure as default_structure
-     FROM chebi.structures s
-        , chebi.default_structures ds
-        , (select id, compound from apidbtuning.compoundid
-           WHERE type IN ('same ID', 'child ID') )  n
-     WHERE n.id = 'CHEBI:'|| s.COMPOUND_ID
-       and s.id = ds.structure_id
-       and s.type='mol' and s.dimension='2D'
-    ) st
-  WHERE
-    pn.pathway_node_type_id = ot.ontology_term_id
-    and ot.name = 'molecular entity'
-    and pn.row_id = c.id (+)
-    and c.chebi_accession = st.compound (+)
-  )
-, enzyme_edges AS
-  (SELECT
-    nodes_with_types.pathway_id AS pathway_id
-  , nodes_with_types.pathway_node_id AS e_id
-  , nodes_with_types.type
-  , i.associated_node_id AS m1_id
-  , i.is_reversible AS ir1
-  , o.node_id AS m2_id
-  , o.is_reversible AS ir2
-  FROM
-    sres.pathwayrelationship i
-  , sres.pathwayrelationship o
-  , nodes_with_types
-  WHERE
-    i.node_id = nodes_with_types.pathway_node_id
-    AND o.associated_node_id = nodes_with_types.pathway_node_id
-    AND nodes_with_types.type = 'enzyme'
-  )
-, parents as
-  (select
-    m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 AS io
- , listagg(e_id, '-') within group (order by e_id) as parent
-  , pathway_id
-  FROM
-    enzyme_edges
-  GROUP BY
-    pathway_id
-  , m1_id
-  , m2_id
-  , ir1
-  , ir2
-  HAVING
-    COUNT( *) > 1
-  )
-, node_parents as
- (select
-  e_id AS pathway_node_id
-, parents.parent
-, type as node_type
-, enzyme_edges.pathway_id
-FROM
-  enzyme_edges
-, parents
-where
-  m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io
-)
+    <sqlQuery name="PathwayNodes">
+        <!-- image was  in the original queries but always null - do we need it for something? -->
+        <column name="source_id"/>
+        <column name="project_id"/>
+        <column name="pathway_source"/>
+        <column name="id"/>
+        <column name="node_identifier"/>
+        <column name="display_label"/>
+        <column name="url"/>
+        <column name="name"/>
+        <column name="node_type"/>
+        <column name="x"/>
+        <column name="y"/>
+        <column name="width"/>
+        <column name="height"/>
+        <column name="parent"/>
+        <column name="cellular_location"/>
+        <column name="image"/>
+        <column name="gene_count"/>
+        <column name="default_structure"/>
 
-  
-select
-pa.source_id
-, pa.pathway_source
-, '@PROJECT_ID@' as project_id
-, pn.display_label
-, pn.x
-, pn.y
-, pn.width
-, pn.height
-, pn.cellular_location
-, pn.url
-, pn.name
-, pn.node_identifier
-, nodes_with_parents.pathway_node_id as id
-, nodes_with_parents.parent
-, nodes_with_parents.node_type
-, null as image
-, pn.gene_count
-, pn.default_structure
-from
-  (  
-select
-  e_id as pathway_node_id
-, node_parents.parent
-, type as node_type
-, enzyme_edges.pathway_id
-FROM
-  enzyme_edges
-, node_parents
-where
-  enzyme_edges.e_id = node_parents.pathway_node_id (+)
-UNION
-SELECT
-  parents.parent
-, null
-, 'nodeOfNodes'
-, pathway_id
-FROM
-  parents
-UNION
-SELECT
-  nodes_with_types.pathway_node_id AS pathway_node_id
-, NULL AS parent
-, nodes_with_types.type
-, nodes_with_types.pathway_id
-FROM
-  nodes_with_types
-WHERE
-  nodes_with_types.type != 'enzyme'
-  ) nodes_with_parents
-  , nodes_with_types pn
-  , apidbtuning.pathwayattributes pa
-where
-  nodes_with_parents.pathway_node_id = pn.pathway_node_id (+)
-  and nodes_with_parents.pathway_id = pa.pathway_id
+        <sql>
+            <![CDATA[
+                SELECT '@PROJECT_ID@' AS project_id
+                , NULL as image
+                , pn.*
+                from apidbtuning.pathwaynodes pn
             ]]>
-           </sql>
-        </sqlQuery>
+        </sql>
+    </sqlQuery>
 
 
  </querySet>
