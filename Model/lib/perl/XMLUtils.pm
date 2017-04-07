@@ -3,7 +3,7 @@
 # Author: Praveen Chakravarthula (praveenc@pcbi.upenn.edu)
 # Purpose: Quick and dirty collection of XML parsing functions.
 
-package ApiCommonShared::Model::XMLUtils;
+package ApiCommonModel::Model::XMLUtils;
 
 require Exporter;
 @ISA = qw (Exporter);

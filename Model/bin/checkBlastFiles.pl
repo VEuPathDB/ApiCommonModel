@@ -40,8 +40,8 @@ $dbh->{RaiseError} = 1;
 $dbh->{AutoCommit} = 0;
 
 # model Files we will read
-my $sharedParamsXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/apiCommonModel/questions/params/sharedParams.xml";
-my $apiCommonModelXml = $ENV{PROJECT_HOME} . "/ApiCommonShared/Model/lib/wdk/apiCommonModel.xml";
+my $sharedParamsXml = $ENV{PROJECT_HOME} . "/ApiCommonModel/Model/lib/wdk/apiCommonModel/questions/params/sharedParams.xml";
+my $apiCommonModelXml = $ENV{PROJECT_HOME} . "/ApiCommonModel/Model/lib/wdk/apiCommonModel.xml";
 
 my $sharedParams = XMLin($sharedParamsXml, ForceArray => 1);
 my $apiCommonModel = XMLin($apiCommonModelXml, keyattr=>[], ForceArray => 1);

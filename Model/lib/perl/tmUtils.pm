@@ -1,4 +1,4 @@
-package ApiCommonShared::Model::tmUtils;
+package ApiCommonModel::Model::tmUtils;
 
 use strict;
 use DBI;

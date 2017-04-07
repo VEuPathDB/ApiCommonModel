@@ -119,7 +119,7 @@ public class DatasetPresenterSet {
     ContactsFileParser parser = new ContactsFileParser();
     String project_home = System.getenv("PROJECT_HOME");
     Contacts contacts = parser.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
+        + "/ApiCommonModel/DatasetPresenter/testData/contacts.xml.test");
     for (DatasetPresenter presenter : presenters.values()) {
       presenter.getContacts(contacts);
     }

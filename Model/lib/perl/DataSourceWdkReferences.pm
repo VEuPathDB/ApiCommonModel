@@ -1,4 +1,4 @@
-package ApiCommonShared::Model::DataSourceWdkReferences;
+package ApiCommonModel::Model::DataSourceWdkReferences;
 
 use strict;
 use XML::Simple;
