@@ -8,10 +8,10 @@ use DBD::Oracle;
 use Getopt::Long;
 use CBIL::Util::PropertySet;
 
-use ApiCommonShared::Model::DataSourceAttributions;
-use ApiCommonShared::Model::DataSourceAttribution;
-use ApiCommonShared::Model::DataSourceWdkReferences;
-use ApiCommonShared::Model::DataSourceList;
+use ApiCommonModel::Model::DataSourceAttributions;
+use ApiCommonModel::Model::DataSourceAttribution;
+use ApiCommonModel::Model::DataSourceWdkReferences;
+use ApiCommonModel::Model::DataSourceList;
 
 use Data::Dumper;
 
@@ -60,20 +60,20 @@ $dbh->{RaiseError} = 1;
 $dbh->{AutoCommit} = 0;
 
 
-my $dsList = ApiCommonShared::Model::DataSourceList->new($dbh);
+my $dsList = ApiCommonModel::Model::DataSourceList->new($dbh);
 my $dataSourcesAsHash = $dsList->getDataSources();
 
 
 my $dsWdkRefXmlPath = $attributionsDirectory . "/dataSourceWdkReferences.xml";
-my $dataSourceWdkReferences = ApiCommonShared::Model::DataSourceWdkReferences->new($dsWdkRefXmlPath);
+my $dataSourceWdkReferences = ApiCommonModel::Model::DataSourceWdkReferences->new($dsWdkRefXmlPath);
 
 
-my $globalAttributions = ApiCommonShared::Model::DataSourceAttributions->new($globalXml, 
+my $globalAttributions = ApiCommonModel::Model::DataSourceAttributions->new($globalXml, 
                                                                              $dataSourceWdkReferences,
                                                                              $dsList
                                                                              );
 
-my $projectAttributions = ApiCommonShared::Model::DataSourceAttributions->new($projectXml, 
+my $projectAttributions = ApiCommonModel::Model::DataSourceAttributions->new($projectXml, 
                                                                               $dataSourceWdkReferences,
                                                                               $dsList
                                                                               );

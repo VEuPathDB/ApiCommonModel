@@ -1,4 +1,4 @@
-package ApiCommonShared::Model::Pubmed;
+package ApiCommonModel::Model::Pubmed;
 
 use strict;
 require LWP::UserAgent;

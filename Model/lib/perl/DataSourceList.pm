@@ -1,4 +1,4 @@
-package ApiCommonShared::Model::DataSourceList;
+package ApiCommonModel::Model::DataSourceList;
 
 use strict;
 
@@ -7,7 +7,7 @@ use strict;
 =head1 Usage
 
   my $dbh = $self->getQueryHandle($cgi);
-  my $dsList = ApiCommonShared::Model::DataSourceList->new($dbh);
+  my $dsList = ApiCommonModel::Model::DataSourceList->new($dbh);
 
   my $distinctSubtypeValues = $dsList->getDistinctValuesByField('subtype');
   my $dataSourceHashRef = $dsList->dataSourceHashByName('CalbSC5314_dbxref_unity_CGD_RSRC');
@@ -123,7 +123,7 @@ sub filter {
     }
   }
 
-  return ApiCommonShared::Model::DataSourceList->new($dbh, \%filtered);
+  return ApiCommonModel::Model::DataSourceList->new($dbh, \%filtered);
 }
 
 sub getDbDataSourceNames {

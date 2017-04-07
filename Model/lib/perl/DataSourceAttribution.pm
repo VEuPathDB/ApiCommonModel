@@ -1,4 +1,4 @@
-package ApiCommonShared::Model::DataSourceAttribution;
+package ApiCommonModel::Model::DataSourceAttribution;
 
 use strict;
 use Data::Dumper;

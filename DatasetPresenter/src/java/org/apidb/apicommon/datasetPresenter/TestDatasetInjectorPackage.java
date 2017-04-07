@@ -27,12 +27,12 @@ public class TestDatasetInjectorPackage {
   private static final String nl = System.getProperty("line.separator");
 
   private static final String validPrelude = "name=rnaSeqCoverageTrack" + nl
-      + "anchorFile=ApiCommonShared/Model/lib/gbrowse/WhateverDB.conf" + nl
+      + "anchorFile=ApiCommonModel/Model/lib/gbrowse/WhateverDB.conf" + nl
       + "prop=datasetName" + nl + "#a comment" + nl + nl
       + "prop=datasetDisplayName" + nl;
 
   private static final String validPreludeTrimmed = "name=rnaSeqCoverageTrack"
-      + nl + "anchorFile=ApiCommonShared/Model/lib/gbrowse/WhateverDB.conf"
+      + nl + "anchorFile=ApiCommonModel/Model/lib/gbrowse/WhateverDB.conf"
       + nl + "prop=datasetName" + nl + "prop=datasetDisplayName" + nl;
 
   private static final String validTemplateText = "[${datasetName}]" + nl
@@ -169,9 +169,9 @@ public class TestDatasetInjectorPackage {
   @Test
   public void test_Template_setAnchorFileName() {
     Template template = new Template("dontknow");
-    template.setAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/${projectName}.conf");
-    assertTrue(template.getAnchorFileProject("ApiCommonShared/DatasetPresenter/lib/test/PlasmoDB.conf").equals("PlasmoDB"));
-    assertTrue(template.getAnchorFileProject("ApiCommonShared/DatasetPresenter/lib/test/ToxoDB.conf").equals("ToxoDB"));
+    template.setAnchorFileName("ApiCommonModel/DatasetPresenter/lib/test/${projectName}.conf");
+    assertTrue(template.getAnchorFileProject("ApiCommonModel/DatasetPresenter/lib/test/PlasmoDB.conf").equals("PlasmoDB"));
+    assertTrue(template.getAnchorFileProject("ApiCommonModel/DatasetPresenter/lib/test/ToxoDB.conf").equals("ToxoDB"));
   }
   
   // test: parse of template prelude
@@ -181,7 +181,7 @@ public class TestDatasetInjectorPackage {
     TemplatesParser.parsePrelude(validPreludeTrimmed, template, "dontknow");
     assertTrue(template.getName().equals("rnaSeqCoverageTrack"));
     assertTrue(template.getRawAnchorFileName().equals(
-        "ApiCommonShared/Model/lib/gbrowse/WhateverDB.conf"));
+        "ApiCommonModel/Model/lib/gbrowse/WhateverDB.conf"));
     assertTrue(template.getFirstTargetFileName().equals(
         "lib/gbrowse/WhateverDB.conf"));
     assertTrue(template.getProps().size() == 2);
@@ -212,7 +212,7 @@ public class TestDatasetInjectorPackage {
     String proj_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesFile(templateSet, proj_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_templates.dst");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_templates.dst");
 
     assertTrue(templateSet.getTemplateByName("test3_template1") != null);
     assertTrue(templateSet.getTemplateByName("test3_template2") != null);
@@ -221,16 +221,16 @@ public class TestDatasetInjectorPackage {
     assertTrue(t1.getTemplateText().equals("12345" + nl + "${projectName}" + nl + "67890" + nl));
     assertTrue(t2.getTemplateText().equals(
         "Hello Everybody ${datasetShortDisplayName} Happy Birthday" + nl));
-    assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/test3_anchors.txt").contains(
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonModel/DatasetPresenter/lib/test/test3_anchors.txt").contains(
         "test3_template1"));
-    assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonShared/DatasetPresenter/lib/test/test3_anchors.txt").contains(
+    assertTrue(templateSet.getTemplateNamesByAnchorFileName("ApiCommonModel/DatasetPresenter/lib/test/test3_anchors.txt").contains(
         "test3_template2"));
   }
   
   @Test
   public void test_TemplatesParser_getTemplateFilesInDir() {
     String proj_home = System.getenv("PROJECT_HOME");
-    List<File> templateFiles = TemplatesParser.getTemplateFilesInDir(proj_home + "/ApiCommonShared/DatasetPresenter/testData");
+    List<File> templateFiles = TemplatesParser.getTemplateFilesInDir(proj_home + "/ApiCommonModel/DatasetPresenter/testData");
     assertTrue(templateFiles.size() >= 2);
     for (File file : templateFiles) {
       assertTrue(file.getName().endsWith(".dst"));
@@ -242,7 +242,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesDir(templateSet, project_home
-        + "/ApiCommonShared/DatasetPresenter/testData");
+        + "/ApiCommonModel/DatasetPresenter/testData");
     assertTrue(templateSet.getSize() >= 4);
   }
   
@@ -317,7 +317,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_presenterSet.xml");
     assertTrue(dps.getSize() == 2);
     DatasetPresenter dp1 = dps.getDatasetPresenters().get("Stunnenberg_RNA-Seq_RSRC");
     DatasetPresenter dp2 = dps.getDatasetPresenters().get("Very_Happy_RSRC");
@@ -362,7 +362,7 @@ public class TestDatasetInjectorPackage {
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     String project_home = System.getenv("PROJECT_HOME");
     dpp.validateXmlFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_presenterSet.xml");
   }
   
   @Test
@@ -371,7 +371,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parseDir(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData", null);
+        + "/ApiCommonModel/DatasetPresenter/testData", null);
     assertTrue(dps.getSize() >= 4);
   }
   
@@ -381,17 +381,17 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
     String gus_home = System.getenv("GUS_HOME");
     String templatesFilePath = project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_templates.dst";
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_templates.dst";
 
     DatasetPresenterParser dpp = new DatasetPresenterParser();
     DatasetPresenterSet dps = dpp.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_presenterSet.xml");
     TemplateSet templateSet = new TemplateSet();
     TemplatesParser.parseTemplatesFile(templateSet, templatesFilePath);
     
     TemplatesInjector templatesInjector = new TemplatesInjector(dps, templateSet);
     
-    File expected = new File(project_home + "/ApiCommonShared/DatasetPresenter/testData/test3_answer.txt");
+    File expected = new File(project_home + "/ApiCommonModel/DatasetPresenter/testData/test3_answer.txt");
     File got = new File(gus_home + "/lib/test/test3_anchors.txt");
     if (got.exists()) got.delete();
     
@@ -420,7 +420,7 @@ public class TestDatasetInjectorPackage {
     ConfigurationParser parser = new ConfigurationParser();
     String project_home = System.getenv("PROJECT_HOME");
     Configuration config = parser.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/tuningProps.xml.test");
+        + "/ApiCommonModel/DatasetPresenter/testData/tuningProps.xml.test");
     assertTrue(config.getPassword().equals("nonayerbusiness"));
     assertTrue(config.getUsername().equals("prince"));
   }
@@ -430,7 +430,7 @@ public class TestDatasetInjectorPackage {
     ContactsFileParser parser = new ContactsFileParser();
     String project_home = System.getenv("PROJECT_HOME");
     Contacts contacts = parser.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
+        + "/ApiCommonModel/DatasetPresenter/testData/contacts.xml.test");
     assertTrue(contacts.get("bugs.bunny").getName().equals("Bugs Bunny"));
   }
   
@@ -439,7 +439,7 @@ public class TestDatasetInjectorPackage {
     ContactsFileParser parser = new ContactsFileParser();
     String project_home = System.getenv("PROJECT_HOME");
     parser.validateXmlFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
+        + "/ApiCommonModel/DatasetPresenter/testData/contacts.xml.test");
   }
 
   // passes if there are no exceptions thrown
@@ -449,8 +449,8 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
-    dps.validateContactIds(project_home + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_presenterSet.xml");
+    dps.validateContactIds(project_home + "/ApiCommonModel/DatasetPresenter/testData/contacts.xml.test");
   }
   
   @Test
@@ -459,10 +459,10 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_presenterSet.xml");
     ContactsFileParser parser = new ContactsFileParser();
     Contacts allContacts = parser.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/contacts.xml.test");
+        + "/ApiCommonModel/DatasetPresenter/testData/contacts.xml.test");
     DatasetPresenter dp2 = dps.getDatasetPresenters().get("Very_Happy_RSRC");
     List<Contact> contacts = dp2.getContacts(allContacts);
     Contact contact1 = contacts.get(0);
@@ -479,7 +479,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     Map<String, Map<String, String>> map = DatasetPresenterParser.parseDefaultInjectorsFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/defaultInjectors.tab");
+        + "/ApiCommonModel/DatasetPresenter/testData/defaultInjectors.tab");
    assertTrue(map.size() == 2);
    assertTrue(map.get("rnaSeq").get("paired").equals("org.apidb.apicommon.datasetPresenter.RnaSeqInjector"));
    assertTrue(map.get("test").get("happy").equals("org.apidb.apicommon.datasetPresenter.TestInjector"));
@@ -490,7 +490,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     Map<String, Map<String, String>> map = DatasetPresenterParser.parseDefaultInjectorsFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/defaultInjectors.tab");
+        + "/ApiCommonModel/DatasetPresenter/testData/defaultInjectors.tab");
     DatasetPresenter dp = new DatasetPresenter();
     dp.setType("rnaSeq");
     dp.setSubtype("paired");
@@ -528,7 +528,7 @@ public class TestDatasetInjectorPackage {
     String project_home = System.getenv("PROJECT_HOME");
 
     DatasetPresenterSet dps = dpp.parseFile(project_home
-        + "/ApiCommonShared/DatasetPresenter/testData/test3_presenterSet.xml");
+        + "/ApiCommonModel/DatasetPresenter/testData/test3_presenterSet.xml");
     DatasetPropertiesParser propParser = new DatasetPropertiesParser();
     Map<String,Map<String,String>> propertiesFromFiles = new HashMap<String,Map<String,String>>();
     Set<String> duplicateDatasetNames = new HashSet<String>();

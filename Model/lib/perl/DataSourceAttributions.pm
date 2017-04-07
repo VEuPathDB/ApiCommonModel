@@ -1,8 +1,8 @@
-package ApiCommonShared::Model::DataSourceAttributions;
+package ApiCommonModel::Model::DataSourceAttributions;
 
 use strict;
 
-use ApiCommonShared::Model::DataSourceAttribution;
+use ApiCommonModel::Model::DataSourceAttribution;
 
 use XML::Simple;
 use Data::Dumper;
@@ -83,7 +83,7 @@ sub getDataSourceAttribution {
     die "can't find resourceInfo '$dataSourceName' in xml file $self->{dataAttributionsXmlFile}"
       unless $self->{data}->{dataSourceAttribution}->{$dataSourceName};
 
-    return ApiCommonShared::Model::DataSourceAttribution->new($dataSourceName, $self->{data}->{dataSourceAttribution}->{$dataSourceName}, $self);
+    return ApiCommonModel::Model::DataSourceAttribution->new($dataSourceName, $self->{data}->{dataSourceAttribution}->{$dataSourceName}, $self);
 }
 
 sub _parseXmlFile {

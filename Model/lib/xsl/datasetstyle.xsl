@@ -193,7 +193,7 @@
             $(this).accordion("refresh");
           } );
 
-        // var manualBaseUrl = location.href.replace("ApiCommonShared",
+        // var manualBaseUrl = location.href.replace("ApiCommonModel",
         //     "ManualDeliveryExample").replace(/Model.*/, "")
 
         // $(".manual-example").each(function(idx, node) {
