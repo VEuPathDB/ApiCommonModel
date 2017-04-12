@@ -1174,35 +1174,54 @@ UNION
     <sql>
       <![CDATA[
        create table TranscriptPathway&1 nologging as
-       with WildcardedPathwayNode
-             as (select pn.pathway_id, replace(ec.ec_number, '-', '%') as ec_number
-                 from sres.PathwayNode pn, sres.ontologyterm ot, SRES.ENZYMECLASS ec
-                 where pn.pathway_node_type_id = ot.ontology_term_id
-                 and pn.row_id = ec.enzyme_class_id
-                 and ot.name = 'enzyme'),
-             WildcardedEnzymeClass
-             as (select enzyme_class_id, replace(ec_number, '-', '%') as ec_number
-                 from sres.EnzymeClass)
-       select distinct ga.source_id, ga.gene_source_id, p.source_id as pathway_source_id,
-              p.name as pathway_name, replace(ec.ec_number, '%', '-') as ec_number,
-              CASE WHEN ec.ec_number not like '%-%'  
-                    AND pn.ec_number not like '%\%%' escape '\' 
-                   THEN 1
-                   ELSE 0 END as exact_match
-              , p.pathway_id, p.pathway_source
-        from PathwayAttributes p, WildcardedPathwaynode pn, WildcardedEnzymeClass ec,
-             dots.AaSequenceEnzymeClass asec, TranscriptAttributes ga
-        where p.pathway_id = pn.pathway_id
-          and (ec.ec_number like pn.ec_number
-               or pn.ec_number like ec.ec_number)
-          and asec.enzyme_class_id = ec.enzyme_class_id
-          and ga.aa_sequence_id  = asec.aa_sequence_id
+        with WildcardedPathwayNode
+            as (select pn.pathway_id
+                , replace(ec.ec_number, '-', '%') as ec_number_wc
+                , ec.ec_number
+                from sres.PathwayNode pn
+                , sres.ontologyterm ot
+                , SRES.ENZYMECLASS ec
+                where pn.pathway_node_type_id = ot.ontology_term_id
+                and pn.row_id = ec.enzyme_class_id
+                and ot.name = 'enzyme'),
+            WildcardedEnzymeClass
+            as (select enzyme_class_id
+                , ec_number
+                , replace(ec_number, '-', '%') as ec_number_wc
+                from sres.EnzymeClass)
+        select distinct ga.source_id
+        , ga.gene_source_id
+        , pa.source_id as pathway_source_id
+        , pa.name as pathway_name
+        , ec.ec_number as ec_number_gene
+        , pn.ec_number as ec_number_pathway
+        , CASE WHEN ec.ec_number = pn.ec_number
+            THEN 1
+            ELSE 0 END as exact_match
+        , CASE WHEN ec.ec_number not like '%-%' AND pn.ec_number not like '%-%'
+            THEN 1
+            ELSE 0  END as complete_ec 
+        , pa.pathway_id
+        , pa.pathway_source
+        , p.external_database_release_id
+        from PathwayAttributes pa
+        , sres.pathway p
+        , WildcardedPathwaynode pn
+        , WildcardedEnzymeClass ec
+        , dots.AaSequenceEnzymeClass asec
+        , TranscriptAttributes ga
+        where pa.pathway_id = pn.pathway_id
+        and p.pathway_id = pa.pathway_id
+        and (ec.ec_number_wc like pn.ec_number_wc
+           or pn.ec_number_wc like ec.ec_number_wc)
+        and asec.enzyme_class_id = ec.enzyme_class_id
+        and ga.aa_sequence_id  = asec.aa_sequence_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create index TranscriptPath_ix&1
-        on TranscriptPathway&1(gene_source_id, source_id, pathway_source_id, pathway_name, pathway_id, ec_number)
+        on TranscriptPathway&1(gene_source_id, source_id, pathway_source_id, pathway_name, pathway_id, ec_number_gene)
         tablespace indx
       ]]>
     </sql>
@@ -1220,7 +1239,7 @@ select distinct pn.pathway_node_id
 from transcriptpathway tp
    , sres.pathwaynode pn
 where tp.pathway_id = pn.pathway_id
-and tp.ec_number like replace(pn.display_label, '-', '%')
+and tp.ec_number_gene like replace(pn.display_label, '-', '%')
       ]]>
     </sql>
   </tuningTable>
