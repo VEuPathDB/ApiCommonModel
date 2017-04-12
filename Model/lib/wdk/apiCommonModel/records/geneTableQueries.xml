@@ -335,14 +335,19 @@ ORDER BY
             <column name="template"/>
             <sql>
             <![CDATA[
-select g.*, decode(lower(is_graph_custom), 'false', 1, 0) as template, regexp_substr(graph_ids, '[^,]*') as default_graph_id
-from (
-select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_species ,
-             graph_descrip.dataset as dataset_name, psgene.profile_graph_id as graph_ids,
-             case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
+SELECT g.*, decode(lower(is_graph_custom), 'false', 1, 0) as template
+    , regexp_substr(graph_ids, '[^,]*') as default_graph_id
+    , CASE WHEN graph_ids IS NULL THEN 0 ELSE 1 END AS has_graph_data
+    , dpr.SUMMARY, dpr.short_attribution, dpr.display_name, dpr.description
+    , '@PROJECT_ID@' AS project_id
+FROM apidbtuning.datasetpresenter dpr, 
+     ( SELECT ga.source_id, ga.organism as gene_organism, ga.genus_species,
+             graph_descrip.dataset as dataset_name, 
+             (apidb.tab_to_string( SET(CAST(COLLECT( psgene.profile_graph_id ORDER BY ga.source_id) AS apidb.varchartab)), ',')) AS graph_ids,
              tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
              'FALSE' has_meta_data, '' as meta_data_categories,
-             graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name, dp.description, decode(lower(dp.subtype), 'rnaseq', 'RNA-seq', 'array', 'array', 'sage', 'SAGE', 'rtpcr', 'RT-PCR','') as assay_type, dp.dataset_presenter_id as dataset_id
+             graph_descrip.*, dp.dataset_presenter_id as dataset_id,
+             decode(lower(dp.subtype), 'rnaseq', 'RNA-seq', 'array', 'array', 'sage', 'SAGE', 'rtpcr', 'RT-PCR','') as assay_type
       from apidbtuning.geneattributes ga, 
            APIDBTUNING.datasetnametaxon dsnt, 
            apidbtuning.datasetPresenter dp,
@@ -368,7 +373,10 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
           and sn.name_class = 'scientific name'
           and ga.genus_species = sn.name
           and (dp.type = 'transcript_expression' or lower(dp.subtype) in ('array','rnaseq','rtpcr'))
-) g
+        GROUP BY ga.source_id, ga.organism, ga.genus_species, graph_descrip.dataset, 
+           tn.name, dp.dataset_presenter_id, module,x_axis,y_axis, is_graph_custom,order_num, dp.subtype
+     ) g
+     WHERE g.dataset = dpr.name
      ORDER BY g.order_num
             ]]>
             </sql>
@@ -1501,7 +1509,7 @@ ORDER BY
                 , pr.REACTION_SOURCE_ID
                 , pr.ENZYME
                 , pr.EXPASY_URL
-                , pa.PATHWAY_SOURCE
+                , tp.PATHWAY_SOURCE
                 FROM
                 apidbtuning.transcriptpathway tp
                 , apidbtuning.pathwayattributes pa 
@@ -1511,7 +1519,8 @@ ORDER BY
                 and pc.PATHWAY_ID = pa.PATHWAY_ID
                 and pr.REACTION_ID = pc.REACTION_ID
                 and pr.ext_db_name = pc.ext_db_name
-                and tp.EC_NUMBER like replace(pr.enzyme, '-', '%')
+                --and tp.EC_NUMBER_GENE = pr.enzyme
+                and tp.EC_NUMBER_GENE like replace(pr.enzyme, '-', '%')
                 ORDER BY pathway_name
                 )
             group by source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source
@@ -3273,7 +3282,7 @@ GROUP BY
                 , apidbtuning.pathwayreactions pr
                 , apidbtuning.transcriptpathway tp
                 where ta.GENE_SOURCE_ID = tp.GENE_SOURCE_ID
-                and tp.EC_NUMBER like replace(pr.ENZYME, '-', '%')
+                and tp.EC_NUMBER_GENE like replace(pr.ENZYME, '-', '%')
                 and pr.REACTION_ID = pc.REACTION_ID
                 and pr.EXT_DB_NAME = pc.EXT_DB_NAME
                 and pr.EXT_DB_VERSION = pc.EXT_DB_VERSION
