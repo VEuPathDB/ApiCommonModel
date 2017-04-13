@@ -124,6 +124,12 @@ public abstract class Expression extends DatasetInjector {
         injectTemplate("expressionGraphAttributesExpression");
         injectTemplate("graphTextAttributeCategory");
 
+
+        //  JB: uncomment these to see error with dynamic columns
+        //injectTemplate("profileSampleAttributesCategory");
+        //injectTemplate("profileAttributeQueries");
+        //injectTemplate("profileAttributeRef");
+
         if(getPropValueAsBoolean("hasPercentileData")) {
             setPropValue("graphTextAttrName", "pctGraphAttr" + getDatasetName() + "_pct_graph");
             injectTemplate("expressionGraphAttributesPercentile");
