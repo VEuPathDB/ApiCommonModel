@@ -86,6 +86,13 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
+              if(!projectName.equals("EuPathDB")) {
+                  injectTemplate("profileSampleAttributesCategory");
+                  injectTemplate("profileAttributeQueriesStrandSpecificRNASeq");
+                  injectTemplate("profileAttributeRef");
+              }
+
+
 
               String senseExprGraphAttr = datasetName + "_sense_expr_graph";
               String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
@@ -159,8 +166,14 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
               injectTemplate("rnaSeqGraph");
-          }
 
+
+              if(!projectName.equals("EuPathDB")) {
+                  injectTemplate("profileSampleAttributesCategory");
+                  injectTemplate("profileAttributeQueries");
+                  injectTemplate("profileAttributeRef");
+              }
+          }
 
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               injectTemplate("rnaSeqFoldChangeQuestion");

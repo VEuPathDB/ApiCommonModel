@@ -29,6 +29,13 @@ public class MicroarrayTwoChannelDirectComparison extends ExpressionTwoChannelDi
 
 
     @Override
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "Expression Values for 2 channel microarray experiments are log ratios (M = log2 Cy5/Cy3).";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
+    @Override
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "Expression Values for 2 channel microarray experiments are log ratios (M = log2 Cy5/Cy3).  We also provide the fold difference in the right axis.  For any 2 points on the graph (M1, M2) the  fold difference is calculated by:  power(2, (M2-M1)).   or expression percentile value.";
 

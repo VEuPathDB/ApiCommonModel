@@ -21,6 +21,7 @@ public abstract class Expression extends DatasetInjector {
     protected abstract void setExprPlotPartModule();
 
     protected abstract void setGraphYAxisDescription();
+    protected abstract void setProfileSamplesHelp();
 
     protected String getSearchCategoryType() {
 	String lcDatasetClassCategory=getPropValue("datasetClassCategory").toLowerCase();
@@ -124,11 +125,13 @@ public abstract class Expression extends DatasetInjector {
         injectTemplate("expressionGraphAttributesExpression");
         injectTemplate("graphTextAttributeCategory");
 
-
-        //  JB: uncomment these to see error with dynamic columns
-        //injectTemplate("profileSampleAttributesCategory");
-        //injectTemplate("profileAttributeQueries");
-        //injectTemplate("profileAttributeRef");
+        setProfileSamplesHelp();
+        // These are not valid for the portal
+        if(!projectName.equals("EuPathDB")) {
+            injectTemplate("profileSampleAttributesCategory");
+            injectTemplate("profileAttributeQueries");
+            injectTemplate("profileAttributeRef");
+        }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             setPropValue("graphTextAttrName", "pctGraphAttr" + getDatasetName() + "_pct_graph");

@@ -34,6 +34,15 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
         setPropValue("graphModule", "Proteomics::NonRatio");
     }
 
+
+    @Override
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "Protein Abundance Values.";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
+
     @Override
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "Protein Abundance Values or abundance percentile values";

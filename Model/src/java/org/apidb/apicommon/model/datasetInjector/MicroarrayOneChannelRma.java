@@ -25,6 +25,14 @@ public class MicroarrayOneChannelRma extends ExpressionOneChannelAndReferenceDes
         setPropValue("graphModule", "Expression");
     }
 
+
+    @Override
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "RMA Normalized Values (log base 2).";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
     @Override
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "RMA Normalized Values (log base 2) or expression percentile value.";
