@@ -193,7 +193,7 @@ prop=projectName
               <![CDATA[
                        select ta.source_id, ta.project_id, ta.gene_source_id, p.*
                        from apidbtuning.transcriptattributes ta
-                       , (select * from table (pivot('SELect * from (SELECT ga.source_id as profile_source_id, ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node, to_number(round(nfe.value, 2)) as value FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, apidbtuning.geneattributes ga WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID and ps.DATASET_NAME = ''${datasetName}'' and ps.profile_type = ''values'' and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
+                       , (select * from table (apidb.pivot('SELect * from (SELECT ga.source_id as profile_source_id, ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node, to_number(round(nfe.value, 2)) as value FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, apidbtuning.geneattributes ga WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID and ps.DATASET_NAME = ''${datasetName}'' and ps.profile_type = ''values'' and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
                        where ta.gene_source_id = p.profile_source_id (+)
               ]]>
             </sql>
@@ -204,12 +204,72 @@ prop=projectName
           <column name="display_name" />
           <sql>
             <![CDATA[
-                     select 'pan_' || PROTOCOL_APP_NODE_ID as name
-                          , PROTOCOL_APP_NODE_NAME || ' ' || profile_set_suffix as display_name 
-                     from apidbtuning.profilesamples 
-                     where DATASET_NAME = '${datasetName}' 
-                      and profile_type = 'values' 
-                     order by NODE_ORDER_NUM
+           select 'pan_' || ps.PROTOCOL_APP_NODE_ID as name
+                , CASE WHEN ct.ct > 1
+                        THEN nvl(ps.profile_set_suffix, ps.study_name) || ' - ' || ps.protocol_app_node_name 
+                       WHEN ct.ct = 1 and ps.profile_set_suffix is not null
+                        THEN ps.profile_set_suffix || ' - ' || ps.protocol_app_node_name 
+                       ELSE ps.protocol_app_node_name 
+                  END as display_name
+                     from apidbtuning.profilesamples ps,
+                      (select DATASET_NAME, count(*) as ct from apidbtuning.profiletype where profile_type = 'values' group by dataset_name) ct
+                     where ps.DATASET_NAME = '${datasetName}'
+                      and ps.profile_type = 'values'
+                      and ps.dataset_name = ct.dataset_name
+                      ORDER BY ps.study_id, ps.NODE_ORDER_NUM
+            ]]>
+          </sql>  
+       </sqlQuery>
+>templateTextEnd<
+
+
+
+[templateStart] 
+name=profileAttributeQueriesStrandSpecificRNASeq
+anchorFile=ApiCommonShared/Model/lib/wdk/apiCommonModel/records/transcriptAttributeQueries.xml
+prop=datasetName
+prop=projectName
+prop=sense
+prop=antisense
+>templateTextStart<
+        <sqlQuery name="ProfileSamples${datasetName}" doNotTest="true" attributeMetaQueryRef="TranscriptAttributes.MetaProfileSamples${datasetName}"  includeProjects="${projectName}">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <sql>
+              <![CDATA[
+                       select ta.source_id, ta.project_id, ta.gene_source_id, p.*
+                       from apidbtuning.transcriptattributes ta
+                       , (select * from table (apidb.pivot('SELect * from (SELECT ga.source_id as profile_source_id, ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node, to_number(round(nfe.value, 2)) as value FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, apidbtuning.geneattributes ga WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID and ps.DATASET_NAME = ''${datasetName}'' and ps.profile_type = ''values'' and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
+                       where ta.gene_source_id = p.profile_source_id (+)
+              ]]>
+            </sql>
+        </sqlQuery>
+
+       <sqlQuery name="MetaProfileSamples${datasetName}">
+          <column name="name" />
+          <column name="display_name" />
+          <sql>
+            <![CDATA[
+SELECT 'pan_' || ps.PROTOCOL_APP_NODE_ID AS name, 
+  CASE
+    WHEN ps.profile_set_suffix IS NULL
+    THEN ''
+    ELSE ps.profile_set_suffix || ' '
+  END
+  ||
+  CASE
+    WHEN regexp_like(ps.study_name, '${sense}')
+    THEN 'sense'
+    WHEN regexp_like(ps.study_name, '${antisense}')
+    THEN 'antisense'
+    ELSE 'unstranded'
+  END
+  || ' - ' || ps.protocol_app_node_name AS display_name
+FROM apidbtuning.profilesamples ps
+WHERE ps.DATASET_NAME = '${datasetName}'
+AND ps.profile_type = 'values'
+ORDER BY ps.study_id, ps.NODE_ORDER_NUM
             ]]>
           </sql>  
        </sqlQuery>

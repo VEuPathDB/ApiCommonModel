@@ -25,6 +25,15 @@ public class MicroarrayOneChannelQuantile extends ExpressionOneChannelAndReferen
         setPropValue("graphModule", "Expression");
     }
 
+
+    @Override
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "Quantile Normalized Values (log base 2)";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
+
     @Override
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "Quantile Normalized Values (log base 2) or expression percentile value.";

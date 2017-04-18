@@ -3,6 +3,15 @@ package org.apidb.apicommon.model.datasetInjector;
 
 public class QuantitativeProteomicsNonRatioUnlogged extends QuantitativeProteomicsNonRatio {
 
+
+    @Override
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "Protein Abundance Values";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
+
     @Override
         protected void setGraphYAxisDescription() {
         String yAxisDescription = "Protein Abundance Values or abundance percentile values";

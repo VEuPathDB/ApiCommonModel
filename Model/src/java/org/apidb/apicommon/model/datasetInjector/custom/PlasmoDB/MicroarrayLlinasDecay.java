@@ -32,6 +32,13 @@ public class MicroarrayLlinasDecay extends ExpressionOneChannelAndReferenceDesig
     }
 
     @Override
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "Normalized Transcript Abundance Values";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
+    @Override
     protected void setGraphYAxisDescription() {
         String yAxisDescription = "Normalized Transcript Abundance Values";
 
