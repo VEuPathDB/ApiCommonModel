@@ -15,6 +15,14 @@ public class RNASeq extends  DatasetInjector {
    * is safe to pass all in, because unneeded ones will be ignored.
    */
 
+
+    protected void setProfileSamplesHelp() {
+        String profileSamplesHelp = "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM)";
+
+        setPropValue("profileSamplesHelp", profileSamplesHelp);
+    }
+
+
   @Override
   public void injectTemplates() {
       setShortAttribution();
@@ -86,13 +94,9 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphVisibleParts", exprMetric + "_sense");
               injectTemplate("pathwayGraphs");
 
-              if(!projectName.equals("EuPathDB")) {
-                  injectTemplate("profileSampleAttributesCategory");
-                  injectTemplate("profileAttributeQueriesStrandSpecificRNASeq");
-                  injectTemplate("profileAttributeRef");
-              }
-
-
+              injectTemplate("profileSampleAttributesCategory");
+              injectTemplate("profileAttributeQueriesStrandSpecificRNASeq");
+              injectTemplate("profileAttributeRef");
 
               String senseExprGraphAttr = datasetName + "_sense_expr_graph";
               String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
@@ -290,6 +294,8 @@ public class RNASeq extends  DatasetInjector {
 
   @Override
   public void addModelReferences() {
+      setProfileSamplesHelp();
+
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
 
 	  setPropValue("graphModule", "RNASeq");

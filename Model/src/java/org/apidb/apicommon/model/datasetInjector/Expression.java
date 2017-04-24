@@ -83,7 +83,7 @@ public abstract class Expression extends DatasetInjector {
     @Override
     public void addModelReferences() {
       setGraphModule();
-
+      setProfileSamplesHelp();
 
 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
@@ -126,12 +126,10 @@ public abstract class Expression extends DatasetInjector {
         injectTemplate("graphTextAttributeCategory");
 
         setProfileSamplesHelp();
-        // These are not valid for the portal
-        if(!projectName.equals("EuPathDB")) {
-            injectTemplate("profileSampleAttributesCategory");
-            injectTemplate("profileAttributeQueries");
-            injectTemplate("profileAttributeRef");
-        }
+        injectTemplate("profileSampleAttributesCategory");
+        injectTemplate("profileAttributeQueries");
+        injectTemplate("profileAttributeRef");
+
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             setPropValue("graphTextAttrName", "pctGraphAttr" + getDatasetName() + "_pct_graph");
