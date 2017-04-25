@@ -1,0 +1,210 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+use FgpUtil::Util::CommandHelper;
+use IO::File;
+use Cwd;
+
+use WDK::Model::ModelConfig;
+use Bio::SeqIO;
+use Bio::Seq;
+
+use Getopt::Long;
+use DBI;
+use DBD::Oracle;
+
+use lib $ENV{CGILIB};
+
+my $CGIBIN = $ENV{CGIBIN};
+my $GUS_HOME = $ENV{GUS_HOME};
+
+my $CLASSPATH = &FgpUtil::Util::CommandHelper::getJavaClasspath($GUS_HOME);
+my $sysProps = &FgpUtil::Util::CommandHelper::getSystemProps($GUS_HOME, 'createGenBankFiles');
+my $args = &FgpUtil::Util::CommandHelper::getJavaArgs(@ARGV);
+my $tempFileName = "genbank.tmp";
+my $reporter = "genbank";
+my $baseDir;
+my $model;
+
+my @sequences;
+
+my $params;
+
+# get the model and dir (will pass other params directly)
+&GetOptions('dir=s' => \$baseDir,
+            'model=s' => \$model,
+            'question=s', 
+            'params=s',
+            );
+
+$baseDir = &Cwd::abs_path() unless($baseDir);
+
+my $modelConfig = WDK::Model::ModelConfig->new($model);
+
+
+my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                        $modelConfig->getAppDbLogin(),
+                        $modelConfig->getAppDbPassword()
+                      )
+  || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+# solve oracle clob problem; not that we're liable to need it...
+$dbh->{LongTruncOk} = 0;
+$dbh->{LongReadLen} = 10000000;
+
+
+my $sequenceIdToGenbankFile = &lookupOriginalGenbankFiles($dbh);
+
+# write tbl files
+my $cmd = "java $sysProps -classpath $CLASSPATH org.gusdb.wdk.model.report.Dumper -reporter $reporter -fileName $tempFileName $args";
+system($cmd);
+
+opendir(DIR, $baseDir) or die "Cannot open directory $baseDir for reading: $!";
+
+while (my $tblFile = readdir(DIR)) { 
+  next unless $tblFile =~ /$tempFileName/;
+
+
+  open(TBL, "$baseDir/$tblFile") or die "Cannot open file $tblFile for reading: $!";
+
+
+  my ($sequenceId, $newTblFile);
+
+  my %distinctFiles;
+  my %distinctSeqIds;
+
+  while(<TBL>) {
+    chomp;
+    if(/\>Feature/) {
+      my @a = split(/\t/, $_);
+      $sequenceId = $a[1];
+
+      $distinctFiles{$sequenceIdToGenbankFile->{$sequenceId}}++;
+      $distinctSeqIds{$sequenceId}++;
+
+      $newTblFile = $sequenceId . ".tbl";
+
+      open(OUT, ">$baseDir/$newTblFile") or die "Cannot open $newTblFile for writing:$!";
+    }
+    print OUT "$_\n";
+
+  }
+
+  close TBL;
+
+  foreach my $sid (keys %distinctSeqIds) {
+
+    my $seqSources =  &getSequenceSources($dbh, $sid);
+    open(FASTA, ">$baseDir/$sid.fsa");
+
+    my $seq = $seqSources->{sequence};
+    my $organism = $seqSources->{organism};
+    my $chromosome = $seqSources->{chromosome};
+    my $taxon = $seqSources->{ncbi_tax_id};
+    my $molType = "genomic";
+
+    my $header = ">$sid ";
+    $header .= "[organism=$organism] " if $organism;
+    $header .= "[chromosome=$chromosome] " if $chromosome;
+    $header .= "[moltype=$molType] " if $molType;
+    $header .= "[db_xref=taxon:$taxon] " if $taxon;
+
+    print FASTA "$header\n$seq\n";
+    close FASTA;
+  }
+
+=comment out
+  foreach my $gbFile (keys %distinctFiles) {
+    my $seqio  = Bio::SeqIO->new(-file => $gbFile , '-format' => 'embl');
+
+    while(my $seq = $seqio->next_seq()) {
+      my $fasta = $seq->id . ".fsa";
+
+
+      my @seqFeatures = $seq->top_SeqFeatures();
+
+      my $first = $seqFeatures[0];
+
+      my @tags = $first->get_all_tags();
+
+      my ($chromosome) = $first->get_tag_values('chromosome');
+      my ($organism) = $first->get_tag_values('organism');
+      my ($molType) = $first->get_tag_values('mol_type');
+
+
+      $seq->display_id($seq->id() . " [organism=$organism] [chromosome=$chromosome] [moltype=$molType]");
+
+      my $seqioFsa = Bio::SeqIO->new(-format => 'Fasta', -file => "> $fasta");
+      $seqioFsa->write_seq($seq);
+    }
+  }
+=cut
+
+}
+
+close DIR;
+
+
+# Run tbl2asn with validation flag
+$cmd = "tbl2asn -p $baseDir -t $baseDir/template.sbt  -V vb -Z $baseDir/discrep";
+system($cmd);
+
+$dbh->disconnect();
+
+sub getSequenceSources {
+  my ($dbh, $seqid) = @_;
+
+  my %rv;
+
+  my $sql = "select sa.organism, sa.chromosome, sa.ncbi_tax_id, etn.sequence
+from ApidbTuning.GenomicSeqAttributes sa,  dots.externalnasequence etn
+where sa.na_sequence_id = etn.na_sequence_id and sa.source_id = '$seqid' ";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($organism, $chromosome, $ncbi_tax_id, $sequence) = $sh->fetchrow_array()) {
+    $rv{organism}    = $organism;
+    $rv{chromosome}  = $chromosome;
+    $rv{ncbi_tax_id} = $ncbi_tax_id;
+    $rv{sequence}    = $sequence;
+  }
+
+  $sh->finish();
+
+  return \%rv;
+}
+
+sub lookupOriginalGenbankFiles {
+  my ($dbh) = @_;
+
+  my %rv;
+
+  my $sql = "select distinct ga.sequence_id, ap.string_value
+from core.algorithmparam ap, core.algorithmparamkey apk,
+     ApidbTuning.GeneAttributes ga, dots.genefeature gf
+where apk.algorithm_param_key = 'inputFileOrDir'
+and ap.algorithm_param_key_id = apk.algorithm_param_key_id
+and ga.na_feature_id = gf.na_feature_id
+and gf.row_alg_invocation_id = ap.algorithm_invocation_id";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($sequence, $file) = $sh->fetchrow_array()) {
+#    $file =~ s/^\/files\/cbil\/data\/cbil/\/eupath\/data/;
+    $rv{$sequence} = $file;
+
+
+  }
+
+
+
+  $sh->finish();
+
+  return \%rv;
+}
+
+
+1;

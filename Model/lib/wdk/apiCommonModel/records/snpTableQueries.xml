@@ -1,0 +1,263 @@
+<wdkModel>
+    <querySet name="SnpTables" queryType="table" isCacheable="false" includeProjects="ToxoDB,PlasmoDB,CryptoDB,EuPathDB,AmoebaDB,TriTrypDB,FungiDB,PiroplasmaDB">
+
+      <defaultTestParamValues includeProjects="PlasmoDB">
+         <paramValue name="source_id">NGS_SNP.Pf3D7_11_v3.1293957</paramValue>
+         <paramValue name="project_id">PlasmoDB</paramValue>
+      </defaultTestParamValues>
+
+      <defaultTestParamValues includeProjects="ToxoDB">
+         <paramValue name="source_id">NGS_SNP.tgme49_asmbl.1154.490</paramValue>
+         <paramValue name="project_id">ToxoDB</paramValue>
+      </defaultTestParamValues>
+
+      <defaultTestParamValues includeProjects="CryptoDB">
+         <paramValue name="source_id">chr3-2_66329</paramValue>
+         <paramValue name="project_id">CryptoDB</paramValue>
+      </defaultTestParamValues>
+
+      <defaultTestParamValues includeProjects="TriTrypDB">
+         <paramValue name="source_id">NGS_SNP.Tb927_01_v4.36382</paramValue>
+         <paramValue name="project_id">TriTrypDB</paramValue>
+      </defaultTestParamValues>
+
+      <defaultTestParamValues includeProjects="FungiDB">
+         <paramValue name="source_id">NGS_SNP.AfumAf293_Chr1.120</paramValue>
+         <paramValue name="project_id">FungiDB</paramValue>
+      </defaultTestParamValues>
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Strains for HTS SNPs -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+       <sqlQuery name="HTSStrainsTable" excludeProjects="TrichDB,GiardiaDB,EuPathDB"
+                 isCacheable="false" doNotTest="1">
+
+           <testParamValues includeProjects="CryptoDB">
+               <paramValue name="source_id">NGS_SNP.AAEE01000002.1096761</paramValue>
+            </testParamValues>
+           <testParamValues includeProjects="PlasmoDB">
+               <paramValue name="source_id">NGS_SNP.Pf3D7_05_v3.694493</paramValue>
+            </testParamValues>
+           <testParamValues includeProjects="ToxoDB">
+               <paramValue name="source_id">NGS_SNP.TGME49_chrIb.1890502</paramValue>
+            </testParamValues>
+           <testParamValues includeProjects="FungiDB">
+               <paramValue name="source_id">NGS_SNP.AfumAf293_Chr1.120</paramValue>
+            </testParamValues>
+
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="strain"/>
+            <column name="allele"/>
+            <column name="allele_gene_strand"/>
+            <column name="product"/>
+            <column name="coverage"/>
+            <column name="read_frequency"/>
+            <column name="geographic_location"/>
+            <column name="view_align"/>
+            <column name="has_align"/>
+            <column name="sampleId"/>
+<!--            <column name="haplogroup" includeProjects="ToxoDB"/> -->
+            <sql>
+            <![CDATA[
+SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+       CASE WHEN var.strain = snp.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
+       CASE WHEN var.strain = snp.reference_strain THEN 1 ELSE 0 END AS is_reference,
+       var.allele,
+       CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
+            WHEN sa.gene_source_id is null THEN ''
+            ELSE var.allele 
+       END as allele_gene_strand,
+       var.product,
+       var.coverage, 
+       var.read_percent as read_frequency,
+       CASE WHEN snp.gene_na_feature_id is null THEN ''
+            ELSE lower(sa.project_id) || 
+              '/?name=' || seq.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || 
+              ';h_region=' || seq.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
+       END as view_align,
+       CASE WHEN var.coverage is null THEN '' ELSE 'view alignment' END as has_align,
+        loc.value as geographic_location,
+       so.name as sampleId
+FROM   apidb.SequenceVariation var, apidb.snp snp,apidbtuning.snpattributes sa,apidbtuning.genomicseqattributes seq,
+       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc,
+      (select name, output_protocol_app_node_id from apidbtuning.sampledownstream sd ) so ,
+       sres.externaldatabase d, sres.externaldatabaserelease rel
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+and var.location = snp.location
+and snp.source_id = sa.source_id
+and snp.na_sequence_id = seq.na_sequence_id
+and var.external_database_release_id = rel.external_database_release_id
+and rel.external_database_id = d.external_database_id
+and var.protocol_app_node_id = loc.protocol_app_node_id(+)
+and var.protocol_app_node_id = so.output_protocol_app_node_id(+)
+ORDER BY is_reference DESC, geographic_location, strain
+             ]]>
+           </sql>
+        </sqlQuery>
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- country summary -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="CountrySummary" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="geographic_location"/>
+            <column name="total_strains"/>
+            <column name="major_allele"/>
+            <column name="minor_allele"/>
+            <column name="other_allele"/>
+            <sql>
+                <![CDATA[
+select source_id,'PlasmoDB' AS project_id,geographic_location, total_strains,
+major_allele || ' ('||maj_freq||')' as major_allele,
+CASE WHEN minor_allele is not null THEN 
+   CASE WHEN other_allele is not null THEN minor_allele || ' ('||other_freq||')' ELSE minor_allele || ' ('||min_freq||')' END 
+ELSE null END as minor_allele,
+CASE WHEN other_allele is not null THEN other_allele || ' ('||min_freq||')' ELSE null END as other_allele
+from (
+select source_id,geographic_location,
+substr(listagg(allele, ', ') within group (order by count_strains desc),1,1) as major_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),4,1) as minor_allele,
+substr(listagg(allele, ', ') within group (order by count_strains desc),7,1) as other_allele,
+sum(count_strains) as total_strains,
+round((max(count_strains) / sum(count_strains)),2) as maj_freq,
+round((min(count_strains) / sum(count_strains)),2) as min_freq,
+round((median(count_strains) / sum(count_strains)),2) as other_freq
+from (
+select source_id,geographic_location,allele,product,count(*) as count_strains,
+round(avg(coverage),2) as avg_cov,round(avg(read_frequency),2) as avg_freq
+from (
+SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+       CASE WHEN var.strain = snp.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
+       var.allele,
+       var.product,
+       var.coverage, 
+       var.read_percent as read_frequency,
+       CASE WHEN snp.gene_na_feature_id is null THEN ''
+            ELSE lower(sa.project_id) || 
+              '/?name=' || seq.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
+              ';l=' || d.name  || 
+              ';h_region=' || seq.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
+       END as view_align,
+       CASE WHEN var.coverage is null THEN '' ELSE 'view alignment' END as has_align,
+        nvl(loc.value,'unknown') as geographic_location
+FROM   apidb.SequenceVariation var, apidb.snp snp,apidbtuning.snpattributes sa,apidbtuning.genomicseqattributes seq,
+       (select Protocol_App_Node_Id,value from apidbtuning.Pancharacteristicmetadata where term = 'geographic location') loc,
+       sres.externaldatabase d, sres.externaldatabaserelease rel
+WHERE snp.na_sequence_id = var.ref_na_sequence_id
+and var.location = snp.location
+and snp.source_id = sa.source_id
+and snp.na_sequence_id = seq.na_sequence_id
+and var.external_database_release_id = rel.external_database_release_id
+and rel.external_database_id = d.external_database_id
+and var.protocol_app_node_id = loc.protocol_app_node_id(+) )
+group by source_id,geographic_location,allele,product )
+group by source_id,geographic_location)
+                ]]>
+            </sql>
+       </sqlQuery>       
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Allele count -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+       <sqlQuery name="AlleleCount" includeProjects="PiroplasmaDB,GiardiaDB,ToxoDB,PlasmoDB,CryptoDB,AmoebaDB,TriTrypDB,FungiDB" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="allele_count"/>
+            <column name="allele"/>
+            <column name="product"/>
+            <column name="avg_coverage"/>
+            <column name="avg_frequency"/>
+            <sql>
+                <![CDATA[
+                         SELECT snp.source_id, '@PROJECT_ID@' AS project_id,
+                         count(*) as allele_count,
+                         var.allele||' ('||round(count(*) / snp.distinct_strain_count,2)||')' as allele, var.product,
+                         round(avg(var.read_percent),1) as avg_frequency, round(avg(var.coverage),1) as avg_coverage
+                         FROM   apidbtuning.SnpAttributes snp, 
+                         apidb.sequencevariation var
+                         WHERE  snp.na_sequence_id = var.ref_na_sequence_id
+                         AND snp.location = var.location
+                         GROUP BY snp.source_id, var.allele,var.product,snp.distinct_strain_count
+                ]]>
+            </sql>
+       </sqlQuery>
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Providers -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="Providers" includeProjects="PlasmoDB" 
+               isCacheable="false">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="snpchip_source_id"/>
+            <column name="name"/>
+
+            <sql>
+            <![CDATA[
+SELECT sb.source_id, '@PROJECT_ID@' AS project_id,
+       sa.source_id as snpchip_source_id, sa.dataset as name
+FROM   apidbtuning.SnpChipAttributes sa, 
+       apidbtuning.snpattributes sb
+WHERE  sa.na_sequence_id = sb.na_sequence_id
+   and sa.start_min = sb.location
+   and sb.source_id != sa.source_id
+   and sa.type in ('Broad_barcode','Broad_3k_chip','Broad_hd_array')
+             ]]>
+           </sql>
+
+        </sqlQuery>
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Isolates -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+      <sqlQuery name="AllResults" isCacheable="false" includeProjects="EuPathDB">
+            <paramRef ref="recordParams.snps_answer"/>
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="wdk_weight"/>
+            <sql>
+                <![CDATA[
+                    SELECT  c.source_id, c.project_id, c.wdk_weight 
+                    FROM $$snps_answer$$ c
+                ]]>
+            </sql>
+        </sqlQuery>
+      <sqlQuery name="ApiProjectSnps" isCacheable="false" includeProjects="EuPathDB">
+            <paramRef ref="recordParams.Project"/>
+            <paramRef ref="recordParams.snps_answer"/>
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="wdk_weight"/>
+            <sql>
+                <![CDATA[
+                    SELECT c.source_id, c.project_id, c.wdk_weight 
+                    FROM $$snps_answer$$ c, ApidbTuning.SnpAttributes sa
+                    where sa.source_id = c.source_id
+                    and sa.project_id = $$Project$$
+                ]]>
+            </sql>
+     </sqlQuery>
+
+        <!-- this is not a filter query, it is the query used for basket function -->
+        <sqlQuery name="AllSnpRecords" isCacheable="false" doNotTest="true">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <sql>
+                <![CDATA[ 
+                SELECT sa.source_id, sa.project_id
+                FROM ApidbTuning.SnpAttributes sa
+                ]]>
+            </sql>
+        </sqlQuery>
+    </querySet>
+
+</wdkModel>

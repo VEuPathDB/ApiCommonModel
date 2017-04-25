@@ -1,0 +1,111 @@
+<wdkModel>
+  <querySet name="CompoundAttributes" queryType="attribute" isCacheable="false" excludeProjects="EuPathDB">
+
+      <defaultTestParamValues includeProjects="@PROJECT_ID@">
+          <paramValue name="source_id">CID:93072</paramValue>
+          <paramValue name="project_id">@PROJECT_ID@</paramValue>
+      </defaultTestParamValues>
+
+       <testRowCountSql>
+	 SELECT count(*) FROM ApidbTuning.CompoundAttributes
+       </testRowCountSql>
+       
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!--Compound alias -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="CompoundAlias" doNotTest="true">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="old_source_id"/>
+            <column name="old_project_id"/>
+            <sql>
+              <![CDATA[
+                SELECT source_id, 
+                       '@PROJECT_ID@' AS project_id,
+                       source_id as old_source_id,
+                       '@PROJECT_ID@' AS old_project_id
+                FROM ApidbTuning.CompoundAttributes 
+              ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="Bfmv">
+            <column name="project_id"/>
+            <column name="source_id"  />
+	    <column name="compound_name"/>
+	    <column name="other_names"/>
+            <column name="compound_link"  />
+            <column name="definition" />
+            <column name="formula" />
+            <column name="secondary_ids"/>
+           <sql>
+            <![CDATA[
+	         SELECT '@PROJECT_ID@' AS project_id, source_id,
+		    compound_name, definition, secondary_ids, other_names,
+		    CASE WHEN source_id IS NULL THEN '-' 
+	            ELSE '<a href="https://www.ebi.ac.uk/chebi/searchId.do?chebiId=' || source_id || '">' ||  source_id || '</a>' 
+	            END AS compound_link,
+		    formula
+                FROM ApidbTuning.CompoundAttributes
+	    ]]>
+           </sql>
+	</sqlQuery>
+
+	<sqlQuery name="Synonyms">
+	  <column name="project_id"/>
+	  <column name="source_id"/>
+	  <column name="synonyms"/>
+	  <sql>
+	    <![CDATA[
+              SELECT ca.source_id, '@PROJECT_ID@' AS project_id, 
+                   apidb.tab_to_string(set(CAST(COLLECT(n.name) AS apidb.varchartab)),', ') as synonyms
+               FROM ApidbTuning.CompoundAttributes ca, chebi.names n
+               WHERE ca.ID = n.compound_id(+)
+               GROUP BY ca.source_id
+	    ]]>
+	  </sql>
+	</sqlQuery>
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Number of associated metabolic pathways -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+        <sqlQuery name="PathwaysCount" doNotTest="true">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="pathway_count"/>
+            <sql>
+            <![CDATA[
+        SELECT count (DISTINCT pc.pathway_id) AS pathway_count, '@PROJECT_ID@' AS project_id, 
+           pc.chebi_accession AS source_id
+        FROM   ApiDBTuning.PathwayCompounds pc 
+        GROUP BY chebi_accession
+            ]]>
+            </sql>
+        </sqlQuery>
+
+
+    <sqlQuery name="DefaultStructure">
+            <column name="project_id"/>
+            <column name="source_id" />
+            <column name="default_structure" />
+           <sql>
+            <![CDATA[
+            WITH nodes AS (
+            SELECT id, compound FROM apidbtuning.compoundId 
+            WHERE type IN ('same ID', 'child ID') )
+            SELECT ca.source_id,'@PROJECT_ID@' AS project_id
+              , s.STRUCTURE AS default_structure
+            FROM apidbtuning.compoundattributes ca, chebi.structures s, 
+              chebi.default_structures ds, nodes n
+            WHERE ca.source_id = n.compound
+            AND n.id = 'CHEBI:'|| s.COMPOUND_ID
+            AND s.id = ds.STRUCTURE_ID
+            AND s.TYPE='mol' AND s.DIMENSION='2D' 
+            ORDER BY ds.structure_id
+            ]]>
+            </sql>
+    </sqlQuery>
+
+
+  </querySet>
+</wdkModel>

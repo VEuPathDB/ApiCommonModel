@@ -1,0 +1,178 @@
+#!/usr/bin/perl
+
+# Updates the portalTuningManager dblinks in portal databases.
+#
+# Lookup the database used for each w1 component site (see %component_dblinks), 
+# and then create dblinks to those databases in the portal database used by 
+# w1.eupathdb.org . Repeat for w2, q1, q2, etc (see @hosts array). 
+#
+# This script only drop/adds dblinks if a change is needed, to minimize 
+# disrupting any existing use of the links.
+#
+# NOTE: this script does not manage the dblink to the orphan databases
+# since there are no websites to query for the appropriate one.
+# 
+
+use strict;
+use XML::Simple;
+use LWP::Simple;
+use Tie::IxHash;
+use DBI;
+
+my $euparc = "$ENV{HOME}/.euparc";
+my %component_dblinks;
+tie (%component_dblinks, "Tie::IxHash");
+
+##############################################################################
+### CONFIGURATIONS ###########################################################
+
+# account with CREATE DBLINK grant
+my $portal_db_user = 'apidb';
+# account in component databases used for database link connection
+my $dblink_user = 'uga_fed';
+
+my @hosts = ( 'w1', 'w2', 'q1', 'q2');
+
+# keys must be the second-level domain name - they're used to 
+# construct hostnames by flanking with @hosts elements and '.org'.
+%component_dblinks = (
+#   'component'       => 'dblink',
+    'amoebadb'        => 'amoeba.tuning',
+    'cryptodb'        => 'crypto.tuning',
+    'giardiadb'       => 'giardia.tuning',
+    'hostdb'          => 'host.tuning',
+    'microsporidiadb' => 'micro.tuning',
+    'piroplasmadb'    => 'piro.tuning',
+    'plasmodb'        => 'plasmo.tuning',
+    'toxodb'          => 'toxo.tuning',
+    'trichdb'         => 'trich.tuning',
+    'tritrypdb'       => 'tritryp.tuning',
+    'fungidb'         => 'fungi.tuning',
+);
+
+#############
+#################################################################
+##############################################################################
+
+# url path that returns name of app database
+my $dbinfo_path = '/dashboard/xml/wdk/modelconfig/appdb/connectionurl/value';
+
+for my $host ( @hosts) {
+
+  my %dblink_def_cache;
+
+  my $portal_url = 'http://' . $host . '.eupathdb.org' . $dbinfo_path;
+  my $portal_connection_url = trim(get($portal_url));
+  if ($portal_connection_url ne '' ){
+
+    # e.g. given $portal_connection_url jdbc:oracle:oci:@eupaAn
+    # set $portal_db to eupaAn
+    my ($portal_db) = $portal_connection_url =~ m/[^\@]+\@(.+)/;
+
+    warn "=" x 30 . ' ' . $host . ' / ' . $portal_db . ' ' . "=" x 30 . "\n";
+
+    my $portal_db_passwd = std_password($portal_db_user, $portal_db);
+
+    warn  "Connecting to $portal_db\n";
+    my $dbh = DBI->connect(
+			   "dbi:Oracle:$portal_db", 
+			   $portal_db_user, $portal_db_passwd, 
+			   { PrintError => 1, RaiseError => 0 }
+			  ) or die "Can't connect to $portal_db: $DBI::errstr\n";
+
+    # record existing dblink hosts so we can skip updating if there is no change
+    %dblink_def_cache = existing_dblink_defs($dbh, $portal_db_user, $portal_db_passwd);
+
+
+    for my $site (keys %component_dblinks) {
+
+      my $db_link = $component_dblinks{$site};
+
+      my $component_url = 'http://' . $host . '.' . $site . '.org' . $dbinfo_path;
+      my $connection_url = trim(get($component_url));
+
+      if ($connection_url !~ m/^jdbc:/) {
+	warn "ERROR: could not determine database used by $host.$site.org\n";
+	warn "To debug, check the output of\n'curl $component_url'\n";
+	next;
+      }
+
+      # e.g., given $connection_url jdbc:oracle:oci:@plas100
+      # set $component_host to plas100s
+      my ($component_host) = $connection_url =~ m/[^\@]+\@(.+)/;
+
+      my $dblink_passwd = std_password($dblink_user, $component_host);
+
+      if (lc($component_host) eq lc($dblink_def_cache{$db_link})) {
+	warn "No change needed for dblink $db_link using $component_host\n";
+	next;
+        }
+
+      warn "dblink '$db_link' was using '$dblink_def_cache{$db_link}'\n";
+
+      my $drop_sql = "DROP public DATABASE LINK $db_link";
+      my $create_sql = "CREATE public DATABASE LINK $db_link CONNECT TO $dblink_user identified by $dblink_passwd USING '$component_host'";
+
+      if ($dblink_def_cache{$db_link} ne '') {
+	warn "$drop_sql\n";
+	my $sth = $dbh->prepare($drop_sql) or die "preparing DROP statement: $DBI::errstr\n";
+	$sth->execute() or die "executing DROP statement: $DBI::errstr\n";
+	$sth->finish();
+      }
+
+      warn "$create_sql\n";
+      my $sth = $dbh->prepare($create_sql) or die "preparing CREATE statement: $DBI::errstr\n";
+      $sth->execute() or die "executing CREATE statement: $DBI::errstr\n";
+      $sth->finish();
+    }
+    $dbh->disconnect();
+  } else {
+    warn "\nERROR: could not determine db for $host.eupathdb.org' \n\n";
+  }
+
+}
+
+# return hash of existing database links
+sub existing_dblink_defs {
+  my ($dbh, $portal_db_user, $portal_db_passwd) = @_;
+  my %dblink_def_cache;
+
+  my $sql = "select lower(host) host from  all_db_links where lower(db_link) = lower(?)";
+
+  for my $site (keys %component_dblinks) {
+    my $db_link = $component_dblinks{$site};
+
+    my $sth = $dbh->prepare($sql);
+    $sth->execute($db_link) or die "executing db link query: $DBI::errstr\n";
+
+    my ($host) = $sth->fetchrow_array();
+
+    $dblink_def_cache{$db_link} = $host;
+
+    $sth->finish();
+    }
+
+  return %dblink_def_cache;
+}
+
+# return password from users ~/.euparc
+sub std_password {
+  my ($login, $database) = map{ lc } @_;
+
+  my $rc = XMLin($euparc,
+        ForceArray => ['user'],
+        ForceContent => 1,
+        KeyAttr => [ user => "login"],
+        ContentKey => '-content',
+    );
+
+  return $rc->{database}->{$database}->{user}->{$login}->{password} ||
+    $rc->{database}->{user}->{$login}->{password};
+}
+
+sub trim {
+  my ($str) = @_;
+  $str =~ s/^\s+//;
+  $str =~ s/\s+$//;
+  return $str;
+}

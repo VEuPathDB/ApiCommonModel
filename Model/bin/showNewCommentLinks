@@ -1,0 +1,48 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use Data::Dumper;
+use Getopt::Long qw(GetOptions);
+use ApiCommonData::Load::TuningConfig::Utils;
+
+my ($propfile, $instance, $schema, $password, $suffix, $prefix, $dblink, $subversionDir, $debug);
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "password=s" => \$password,
+           "suffix=s" => \$suffix,
+           "prefix=s" => \$prefix,
+           "dblink=s" => \$dblink,
+           "subversionDir=s" => \$subversionDir,
+           "debug!" => \$debug,
+	  );
+
+($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propfile, $schema, $password);
+my $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+
+my $csiTable = $prefix . "NewCsi";
+my $stmt = $dbh->prepare(<<SQL) or die "preparing new-CommentStableId query";
+     select nc.comment_stable_id, nc.stable_id, nc.comment_id, c.headline
+     from $csiTable nc, userlogins5.Comments\@$dblink c
+     where nc.comment_id = c.comment_id
+SQL
+
+$stmt->execute() or die "executing new-CommentStableId query";
+
+my $printedHeader;
+while (my ($commentStableId, $stableId, $commentId, $headline) = $stmt->fetchrow_array()) {
+  if (! $printedHeader) {
+    print STDERR "\nRecords added to CommentStableId to link old comments to new IDs:\n\n";
+    printf STDERR "%12s %12s %-48s %-100s\n", "cmnt_stbl_id", "comment_id", "stable_id", "headline";
+    printf STDERR "%12s %12s %-48s %-100s\n", "------------", "------------", "------------------------------------------------", "----------------------------------------------------------------------------------------------------";
+    $printedHeader = 1;
+  }
+
+  printf STDERR "%12d %12d %-48s %-100s\n", $commentStableId, $commentId, $stableId, $headline;
+}
+
+print STDERR "\n" if $printedHeader;

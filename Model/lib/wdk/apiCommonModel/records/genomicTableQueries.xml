@@ -1,0 +1,361 @@
+<wdkModel>
+    <querySet name="SequenceTables" queryType="table" isCacheable="false">
+
+            <defaultTestParamValues includeProjects="PlasmoDB">
+               <paramValue name="source_id">Pf3D7_11_v3</paramValue>
+               <paramValue name="project_id">PlasmoDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="ToxoDB">
+               <paramValue name="source_id">TGME49_chrIII</paramValue>
+               <paramValue name="project_id">ToxoDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="CryptoDB">
+               <paramValue name="source_id">DS989728</paramValue>
+               <paramValue name="project_id">CryptoDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="GiardiaDB">
+               <paramValue name="source_id">GLCHR05</paramValue>
+               <paramValue name="project_id">GiardiaDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="TrichDB">
+               <paramValue name="source_id">DS113177</paramValue>
+               <paramValue name="project_id">TrichDB</paramValue>
+            </defaultTestParamValues>
+            <!-- TODO revisit source_id --> 
+            <defaultTestParamValues includeProjects="TriTrypDB">
+               <paramValue name="source_id">LmjF.36</paramValue>
+               <paramValue name="project_id">TriTrypDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="AmoebaDB">
+               <paramValue name="source_id">DS571186</paramValue>
+               <paramValue name="project_id">AmoebaDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="MicrosporidiaDB">
+               <paramValue name="source_id">ECIII_CH04</paramValue>
+               <paramValue name="project_id">MicrosporidiaDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="PiroplasmaDB">
+               <paramValue name="source_id">AAXT01000006</paramValue>
+               <paramValue name="project_id">PiroplasmaDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="HostDB">
+               <paramValue name="source_id">chr1</paramValue>
+               <paramValue name="project_id">HostDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="FungiDB">
+               <paramValue name="source_id">NcraOR74A_LGV</paramValue>
+               <paramValue name="project_id">FungiDB</paramValue>
+            </defaultTestParamValues>
+
+            <defaultTestParamValues includeProjects="SchistoDB,InitDB">
+               <paramValue name="source_id"></paramValue>
+               <paramValue name="project_id"></paramValue>
+            </defaultTestParamValues>
+
+
+        <sqlQuery name="SequencePieces"
+               isCacheable="false">
+
+            <testParamValues minRows="0" includeProjects="TrichDB,CryptoDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,PiroplasmaDB"/>
+            <testParamValues includeProjects="PlasmoDB">
+                <paramValue name="source_id">PviS_CM000442</paramValue>
+            </testParamValues>
+
+            <column name="source_id" />
+            <column name="so" />
+            <column name="project_id" />
+            <column name="start_min" />
+            <column name="end_max" />
+            <column name="piece_source_id" />
+            <column name="piece_min" />
+            <column name="piece_max" />
+            <column name="piece_strand" />
+            <column name="piece_so" />
+            <column name="edge_level" />
+            <sql>
+            <![CDATA[
+             select  vs.source_id as source_id, '@PROJECT_ID@' AS project_id,
+                   sp.distance_from_left + 1 as start_min, 
+                   sp.end_position - sp.start_position + sp.distance_from_left + 1 as end_max,
+                   case when es.source_id is null then '(N)-' || es.length else es.source_id end as piece_source_id,
+                   sp.start_position as piece_min,
+                   sp.end_position as piece_max,
+                   sp.strand_orientation as piece_strand,
+                   sp.sequence_order, sp.edge_level,
+                   eso.name as piece_so,
+                   vso.name as so
+            from apidbtuning.SEQUENCEPIECEclosure sp, 
+                 Dots.NASEQUENCE vs, sres.OntologyTerm vso,
+                 Dots.NASEQUENCE es, sres.OntologyTerm eso
+            where vs.na_sequence_id = sp.virtual_na_sequence_id
+            and es.na_sequence_id = sp.piece_na_sequence_id
+            and es.sequence_ontology_id = eso.ontology_term_id
+            and vs.sequence_ontology_id = vso.ontology_term_id
+            and vs.source_id is not null
+            and es.source_id is not null
+            order by sp.edge_level, sp.sequence_order
+             ]]>
+           </sql>
+        </sqlQuery>
+
+                 <sqlQuery name="Taxonomy" isCacheable="false" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="name"/>
+            <column name="ncbi_tax_id"/>
+            <column name="rank"/>
+            <sql>
+            <![CDATA[
+SELECT
+  sa.source_id
+, sa.project_id
+, taxonomy.name
+, taxonomy.ncbi_tax_id
+, taxonomy.rank
+FROM
+  apidbtuning.genomicseqattributes sa
+,(SELECT
+    tax.*
+  , CONNECT_BY_ROOT name AS organism
+  , rownum orderNum
+  FROM
+    (SELECT
+      t.taxon_id
+    , t.parent_id
+    , t.rank
+    , tn.name
+    , t.ncbi_tax_id
+    FROM
+      sres.taxon t
+    , sres.taxonname tn
+    WHERE
+      t.taxon_id = tn.taxon_id
+      AND tn.name_class = 'scientific name'
+    ) tax
+  WHERE
+    tax.name != 'root'
+    START WITH name IN
+    (SELECT DISTINCT
+      organism
+    FROM
+      apidbtuning.geneattributes
+    )
+    CONNECT BY prior parent_id = taxon_id
+  ) taxonomy
+WHERE
+  sa.organism = taxonomy.organism
+ORDER BY
+  taxonomy.ordernum DESC
+             ]]>
+            </sql>
+          </sqlQuery> 
+
+        <sqlQuery name="Aliases"
+               isCacheable="false">
+
+            <testParamValues minRows="0" includeProjects="MicrosporidiaDB,AmoebaDB,CryptoDB,TrichDB,PiroplasmaDB,ToxoDB"/>
+	    <testParamValues includeProjects="PlasmoDB">
+	      <paramValue name="source_id">AAKM01000127</paramValue>
+	    </testParamValues>
+	    <testParamValues includeProjects="TriTrypDB">
+	      <paramValue name="source_id">Tcruzi_12139</paramValue>
+	    </testParamValues>
+	    <testParamValues includeProjects="CryptoDB">
+	      <paramValue name="source_id">DS989741</paramValue>
+	    </testParamValues>
+	    <testParamValues includeProjects="GiardiaDB">
+	      <paramValue name="source_id">AACB02000001</paramValue>
+	    </testParamValues>
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="seq_id" />
+
+            <sql>
+            <![CDATA[
+            select si.sequence as source_id, '@PROJECT_ID@' as project_id, si.id as seq_id
+            from ApidbTuning.GenomicSequenceId si
+            where lower(si.sequence) != lower(si.id)
+             ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="Centromere"
+               isCacheable="false">
+
+            <testParamValues minRows="0" includeProjects="ToxoDB,TrichDB,GiardiaDB,CryptoDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,PiroplasmaDB"/>
+
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="start_min" />
+            <column name="end_max" />
+            <sql>
+            <![CDATA[
+                     select fl.sequence_source_id as source_id, 'PlasmoDB' AS project_id, fl.start_min, fl.end_max
+                     from apidbtuning.featurelocation fl, Sres.OntologyTerm so
+                     where fl.feature_type = 'Miscellaneous'
+                     and so.ontology_term_id = fl.sequence_ontology_id
+                     and so.name = 'centromere'
+             ]]>
+           </sql>
+        </sqlQuery>
+
+    <sqlQuery name="SequenceGffDbxrefs"  excludeProjects="EuPathDB" 
+            isCacheable="false">
+            <testParamValues includeProjects="ToxoDB">
+               <paramValue name="source_id">TGME49_chrIa</paramValue>
+            </testParamValues>
+
+        <column name="source_id" />
+        <column name="project_id" />
+        <column name="gff_dbxref"/>
+        <sqlParamValue name="brcName" includeProjects="PlasmoDB">ApiDB_PlasmoDB</sqlParamValue>
+        <sqlParamValue name="brcName" includeProjects="CryptoDB">ApiDB_CryptoDB</sqlParamValue>
+        <sqlParamValue name="brcName" includeProjects="ToxoDB">ApiDB_ToxoDB</sqlParamValue>
+        <sqlParamValue name="brcName" includeProjects="FungiDB">FungiDB</sqlParamValue>
+        <sqlParamValue name="brcName" includeProjects="GiardiaDB,TrichDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,HostDB,SchistoDB,InitDB,PiroplasmaDB">ApiDB</sqlParamValue>
+        <sql>
+          <![CDATA[
+            SELECT ens.source_id, '@PROJECT_ID@' AS project_id,
+                   'taxon:' || t.ncbi_tax_id AS gff_dbxref
+            FROM dots.NaSequence ens, sres.Taxon t
+            WHERE ens.taxon_id = t.taxon_id
+/*           UNION
+            SELECT ens.source_id, '@PROJECT_ID@' AS project_id, so.name AS gff_dbxref
+            FROM dots.NaSequence ens, sres.OntologyTerm so
+            WHERE ens.sequence_ontology_id = so.ontology_term_id
+*/           UNION
+            SELECT ens.source_id,  '@PROJECT_ID@' AS project_id,
+                   'GenBank:' || dr.primary_identifier AS gff_dbxref
+            FROM dots.NaSequence ens, dots.dbrefNaSequence drns,
+                 sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                 sres.ExternalDatabase ed
+            WHERE ens.na_sequence_id = drns.na_sequence_id
+              AND drns.db_ref_id = dr.db_ref_id
+              AND dr.external_database_release_id
+                  = edr.external_database_release_id
+              AND edr.external_database_id = ed.external_database_id
+              AND ed.name = 'GenBank'
+           UNION
+            SELECT ens.source_id, '@PROJECT_ID@' AS project_id,
+                   '&&brcName&&:' || ens.source_id AS gff_dbxref
+            FROM dots.NaSequence ens
+          ]]>
+        </sql>
+    </sqlQuery>
+
+
+      <sqlQuery name="Repeats" excludeProjects="EuPathDB">
+	    <testParamValues includeProjects="TriTrypDB">
+	      <paramValue name="source_id">Tb927_11_01_v4</paramValue>
+	    </testParamValues>
+            <testParamValues includeProjects="PiroplasmaDB">
+	      <paramValue name="source_id">AAXT01000009</paramValue>
+	    </testParamValues>
+
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="note"/>
+            <column name="feature_key"/>
+            <column name="start_min"/>
+            <column name="end_max"/>
+            <column name="qualifier_key"/>
+            <column name="qualifier_value"/>
+            <sql>
+            select fl.sequence_source_id as source_id,
+                   fl.project_id,
+                   c.comment_string as note,
+                   'repeat_region' as feature_key, 
+                   fl.start_min, 
+                   fl.end_max,
+                   'rpt_type' as qualifier_key,
+                   'dispersed' as qualifier_value
+            from ApidbTuning.FeatureLocation fl, sres.ontologyTerm so, dots.nafeaturecomment c
+            where feature_type = 'Repeats'
+            and so.ontology_term_id = fl.sequence_ontology_id
+            and fl.na_feature_id = c.na_feature_id (+)
+           </sql>
+        </sqlQuery>
+
+
+      <sqlQuery name="TandemRepeats" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="feature_key"/>
+            <column name="start_min"/>
+            <column name="end_max"/>
+            <column name="qualifier_key"/>
+            <column name="qualifier_value"/>
+            <sql>
+            select distinct fl.sequence_source_id as source_id,
+                   fl.project_id,
+                   'repeat_region' as feature_key, 
+                   fl.start_min, 
+                   fl.end_max,
+                   'rpt_type' as qualifier_key,
+                   'tandem' as qualifier_value
+            from ApidbTuning.FeatureLocation fl, DOTS.tandemrepeatfeature tr
+            where feature_type = 'TandemRepeatFeature'
+            and tr.na_feature_id = fl.na_feature_id
+           </sql>
+        </sqlQuery>
+
+
+      <sqlQuery name="LowComplexity" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="note"/>
+            <column name="feature_key"/>
+            <column name="start_min"/>
+            <column name="end_max"/>
+            <sql>
+            select fl.sequence_source_id as source_id,
+                   fl.project_id,
+                   'misc_feature' as feature_key, 
+                   fl.start_min, 
+                   fl.end_max,
+                  'low complexity region:  ' || upper(lc.name) as note
+            from ApidbTuning.FeatureLocation fl, DOTS.LOWCOMPLEXITYNAFEATURE lc
+            where fl.feature_type = 'LowComplexityNAFeature'
+            and lc.na_feature_id = fl.na_feature_id
+           </sql>
+        </sqlQuery>
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Mercator Alignment                                           -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="MercatorAlignment" isCacheable="false">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="abbrev"/>
+            <column name="organism"/>
+            <sql>
+            <![CDATA[
+SELECT sa.source_id,'@PROJECT_ID@' as project_id, a.organism, a.abbrev
+FROM
+(
+SELECT distinct ga.organism, o.abbrev
+FROM APIDBTUNING.transcriptattributes ga, 
+     ApidbTuning.GenomicSeqAttributes sa, 
+     APIDB.organism o, 
+     SRES.ontologyTerm so
+WHERE o.taxon_id = ga.taxon_id 
+  AND ga.na_sequence_id = sa.na_sequence_id
+  AND sa.so_id = so.source_id --order by ga.organism
+  AND so.name not in ('mitochondrial_chromosome','apicoplast_chromosome')
+) a, ApidbTuning.GenomicSeqAttributes sa 
+            ]]>
+            </sql>
+        </sqlQuery> 
+
+  </querySet>
+
+</wdkModel>
