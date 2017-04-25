@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.apidb.apicommon.model.maintain.users5.mapper.FungiStrategyMapper">
+  
+  <!-- delete guest strategies in userlogins4 that has conflict ids with fungi strategies of registered users -->
+  <delete id="deleteGuestStrategies">
+    DELETE FROM userlogins4.strategies WHERE strategy_id IN 
+      (SELECT s4.strategy_id 
+       FROM userlogins4.strategies s4, userlogins4.users u4, 
+            userlogins3.strategies s3, userlogins3.users u3
+       WHERE s4.user_id = u4.user_id AND u4.is_guest = 1 AND s4.strategy_id = s3.strategy_id
+         AND s3.user_id = u3.user_id AND u3.is_guest = 0 AND s3.project_id = 'FungiDB' AND s3.is_deleted = 0)
+  </delete>
+  
+  <!-- delete guest strategies in userlogins4 that has conflict root steps with fungi strategies of registered users -->
+  <delete id="deleteGuestStrategiesByRoot">
+    DELETE FROM userlogins4.strategies WHERE root_step_id IN 
+      (SELECT s4.step_id 
+       FROM userlogins4.steps s4, userlogins4.users u4, 
+            userlogins3.steps s3, userlogins3.users u3, wdkengine.answers a
+       WHERE s4.user_id = u4.user_id AND u4.is_guest = 1 AND s4.step_id = s3.step_id
+         AND s3.user_id = u3.user_id AND u3.is_guest = 0 
+         AND s3.answer_id = a.answer_id AND a.project_id = 'FungiDB')
+  </delete>
+  
+  <delete id="deleteOldStrategies">
+    DELETE FROM userlogins4.strategies WHERE project_id = 'FungiDB'
+  </delete>
+  
+  <insert id="insertConflictStrategies">
+    INSERT INTO userlogins4.strategies (strategy_id, user_id, root_step_id,
+           project_id, version, is_saved, create_time, last_view_time, 
+           last_modify_time, description, signature, name, saved_name, 
+           is_deleted, is_public, prev_strategy_id)
+    SELECT userlogins4.strategies_pkseq.nextval AS strategy_id, sr.user_id, sp.step_id,
+           sr.project_id, sr.version, sr.is_saved, sr.create_time, sr.last_view_time, 
+           sr.last_modify_time, sr.description, sr.signature, sr.name, sr.saved_name, 
+           sr.is_deleted, 0, sr.strategy_id AS prev_strategy_id
+    FROM userlogins3.users u, userlogins3.strategies sr, userlogins3.steps sp
+    WHERE u.is_guest = 0 AND u.user_id = sr.user_id AND sr.project_id = 'FungiDB' AND sr.is_deleted = 0
+      AND sr.user_id = sp.user_id AND sr.root_step_id = sp.display_id
+      AND u.user_id NOT IN (SELECT old_id FROM user_map)
+      AND sr.strategy_id IN (SELECT strategy_id FROM userlogins4.strategies)
+  </insert>
+  
+  <insert id="insertNewStrategies">
+    INSERT INTO userlogins4.strategies (strategy_id, user_id, root_step_id,
+           project_id, version, is_saved, create_time, last_view_time, 
+           last_modify_time, description, signature, name, saved_name, 
+           is_deleted, is_public)
+    SELECT sr.strategy_id, sr.user_id, sp.step_id,
+           sr.project_id, sr.version, sr.is_saved, sr.create_time, sr.last_view_time, 
+           sr.last_modify_time, sr.description, sr.signature, sr.name, sr.saved_name, 
+           sr.is_deleted, 0
+    FROM userlogins3.users u, userlogins3.strategies sr, userlogins3.steps sp
+    WHERE u.is_guest = 0 AND u.user_id = sr.user_id AND sr.project_id = 'FungiDB' AND sr.is_deleted = 0
+      AND sr.user_id = sp.user_id AND sr.root_step_id = sp.display_id
+      AND u.user_id NOT IN (SELECT old_id FROM user_map)
+      AND sr.strategy_id NOT IN (SELECT strategy_id FROM userlogins4.strategies)
+  </insert>
+  
+  <insert id="insertDuplicateUsersConflictStrategies">
+    INSERT INTO userlogins4.strategies (strategy_id, user_id, root_step_id,
+           project_id, version, is_saved, create_time, last_view_time, 
+           last_modify_time, description, signature, name, saved_name, 
+           is_deleted, is_public, prev_strategy_id)
+    SELECT userlogins4.strategies_pkseq.nextval AS strategy_id, u.new_id, sp.step_id,
+           sr.project_id, sr.version, sr.is_saved, sr.create_time, sr.last_view_time, 
+           sr.last_modify_time, sr.description, sr.signature, sr.name, sr.saved_name, 
+           sr.is_deleted, 0, sr.strategy_id AS prev_strategy_id
+    FROM user_map u, userlogins3.strategies sr, userlogins3.steps sp
+    WHERE u.old_id = sr.user_id AND sr.project_id = 'FungiDB' AND sr.is_deleted = 0
+      AND sr.user_id = sp.user_id AND sr.root_step_id = sp.display_id
+      AND sr.strategy_id IN (SELECT strategy_id FROM userlogins4.strategies)
+  </insert>
+  
+  <insert id="insertDuplicateUsersNewStrategies">
+    INSERT INTO userlogins4.strategies (strategy_id, user_id, root_step_id,
+           project_id, version, is_saved, create_time, last_view_time, 
+           last_modify_time, description, signature, name, saved_name, 
+           is_deleted, is_public)
+    SELECT sr.strategy_id, u.new_id, sp.step_id,
+           sr.project_id, sr.version, sr.is_saved, sr.create_time, sr.last_view_time, 
+           sr.last_modify_time, sr.description, sr.signature, sr.name, sr.saved_name, 
+           sr.is_deleted, 0
+    FROM user_map u, userlogins3.strategies sr, userlogins3.steps sp
+    WHERE u.old_id = sr.user_id AND sr.project_id = 'FungiDB' AND sr.is_deleted = 0
+      AND sr.user_id = sp.user_id AND sr.root_step_id = sp.display_id
+      AND sr.strategy_id NOT IN (SELECT strategy_id FROM userlogins4.strategies)
+  </insert>
+  
+  <insert id="updateRootSteps">
+    UPDATE userlogins4.strategies sr 
+    SET root_step_id = (SELECT st.step_id FROM userlogins4.steps st
+                        WHERE st.prev_step_id = sr.root_step_id AND st.project_id = 'FungiDB')
+    WHERE sr.project_id = 'FungiDB'
+      AND sr.root_step_id IN (SELECT prev_step_id FROM userlogins4.steps WHERE project_id = 'FungiDB')
+  </insert>
+  
+</mapper>

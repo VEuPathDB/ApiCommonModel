@@ -1,0 +1,211 @@
+<wdkModel>
+
+  
+  <paramSet name="genomicSimilarityParams">
+
+       <flatVocabParam name="motif_organism"
+                      queryRef="SimilarityVQ.GenomicMotifFiles"
+                      displayType="treeBox"
+                      suppressNode="true"  
+                      prompt="Organism"
+                      multiPick="true">
+      <noTranslation value="true" includeProjects="EuPathDB" />
+      <noTranslation value="false" excludeProjects="EuPathDB" />
+
+         <help>
+             Choose one or more organisms to search with the given motif
+         </help>
+          <suggest selectMode="all" />
+       </flatVocabParam>
+
+  </paramSet>
+
+  <paramSet name="orfSimilarityParams">
+
+       <flatVocabParam name="motif_organism"
+                      queryRef="SimilarityVQ.OrfMotifFiles"
+                      displayType="treeBox"  
+                      suppressNode="true"
+                      prompt="Organism"
+                      multiPick="true">
+      <noTranslation value="true" includeProjects="EuPathDB" />
+      <noTranslation value="false" excludeProjects="EuPathDB" />
+
+         <help>
+             Choose one or more organisms to search with the given motif
+         </help>
+          <suggest selectMode="all" />
+       </flatVocabParam>
+
+
+  </paramSet>
+  
+
+  <paramSet name="geneSimilarityParams">
+  
+
+       <flatVocabParam name="motif_organism"
+                      queryRef="SimilarityVQ.AnnotatedProteinMotifFiles"
+                      displayType="treeBox"
+                      suppressNode="true" 
+                      prompt="Organism"
+                      multiPick="true">
+      <noTranslation value="true" includeProjects="EuPathDB" />
+      <noTranslation value="false" excludeProjects="EuPathDB" />
+
+         <help>
+             Choose one or more organisms to search with the given motif
+         </help>
+          <suggest selectMode="all" />
+       </flatVocabParam>
+     
+  </paramSet>
+
+  <querySet name="SimilarityVQ" queryType="vocab" isCacheable="true">
+
+
+        <sqlQuery name="OrfMotifFiles">
+            <column name="internal" />
+            <column name="parentTerm"/>
+            <column name="term" />
+            <sql>
+                <![CDATA[ 
+                WITH orgs as (select distinct organism, project_id
+                      from ApidbTuning.GenomicSeqAttributes
+  UNION
+  -- GiardiaDB uses species for everything  
+  select distinct species, project_id
+  from ApidbTuning.TranscriptAttributes
+  where project_id = 'GiardiaDB'
+  UNION
+  -- Mitochondrial GENES and GENOME
+  select distinct organism || ' mitochondrial', project_id
+  from ApidbTuning.GenomicSeqAttributes
+  where so_id = 'SO:0000819'
+  UNION
+  -- Plastid GENES and GENOME
+  select distinct organism || ' plastid' as organism, project_id
+  from ApidbTuning.GenomicSeqAttributes
+  where so_id = 'SO:0001259'
+  )   
+     select distinct nvl(ot.term, files.term) as term,
+       case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+       case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term)) 
+            then '@WEBSERVICEMIRROR@' || '/' || ot.project_id || '/build-%%buildNumber%%/' || files.abbreviation  || '/motif/ORFs_AA.fasta' 
+       else '-1'
+       end as internal
+from apidbtuning.organismtree ot,
+    (select abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            abbrev.abbreviation 
+     from orgs, apidbtuning.organismabbreviationws abbrev
+     where orgs.organism = abbrev.organism
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+     ) files
+where files.term = ot.organism (+)
+                ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="GenomicMotifFiles">
+            <column name="internal" />
+            <column name="parentTerm" />
+            <column name="term" />
+            <sql>
+                <![CDATA[ 
+                with orgs as  (select distinct organism, project_id
+                      from ApidbTuning.GenomicSeqAttributes
+  UNION
+  select distinct species, project_id
+  from ApidbTuning.TranscriptAttributes
+  where project_id = 'GiardiaDB'
+  UNION
+  -- Mitochondrial GENES and GENOME
+  select distinct organism || ' mitochondrial', project_id
+  from ApidbTuning.GenomicSeqAttributes
+  where so_id = 'SO:0000819'
+  UNION
+  -- Plastid GENES and GENOME
+  select distinct organism || ' plastid' as organism, project_id
+  from ApidbTuning.GenomicSeqAttributes
+  where so_id = 'SO:0001259'
+                      )
+     select distinct nvl(ot.term, files.term) as term,
+       case when ot.organism is null 
+            then files.parentterm else ot.parentterm end as parentterm,
+       case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term)) 
+            then '@WEBSERVICEMIRROR@' || '/' || ot.project_id  || '/build-%%buildNumber%%/' || files.abbreviation  || '/motif/GenomeDoubleStrand.fasta' 
+       else '-1'
+       end as internal
+from apidbtuning.organismtree ot,
+    (select abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            abbrev.abbreviation 
+     from orgs, apidbtuning.organismabbreviationws abbrev
+     where orgs.organism = abbrev.organism
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+     ) files
+where files.term = ot.organism (+)
+order by parentterm,term
+                ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="AnnotatedProteinMotifFiles">
+            <column name="internal" />
+            <column name="parentTerm" />
+            <column name="term" />
+            <sql>
+                <![CDATA[ 
+with orgs as (
+  select distinct organism, project_id
+  from ApidbTuning.TranscriptAttributes 
+  where ( gene_type = 'protein coding' and organism not in ('Toxoplasma gondii RH') )
+  UNION
+  -- TrichDB Repeat Genes
+  select distinct organism || ' (Repeated Genes)', project_id
+  from ApidbTuning.TranscriptAttributes
+  where project_id = 'TrichDB'
+  UNION
+  -- GiardiaDB uses species for everything  
+  select distinct species, project_id
+  from ApidbTuning.TranscriptAttributes
+  where project_id = 'GiardiaDB'
+  UNION  
+  -- Mitochondrial GENES
+  select distinct organism || ' mitochondrial', project_id
+  from ApidbTuning.GenomicSeqAttributes
+  where so_id = 'SO:0000819'
+  UNION
+  -- Plastid GENES
+  select distinct organism || ' plastid' as organism, project_id
+  from ApidbTuning.GenomicSeqAttributes
+  where so_id = 'SO:0001259'
+                      )
+     select distinct nvl(ot.term, files.term) as term,
+       case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+       case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term)) 
+            then '@WEBSERVICEMIRROR@' || '/' || files.project_id  || '/build-%%buildNumber%%/' || files.abbreviation  || '/motif/AnnotatedProteins.fasta' 
+       else '-1'
+       end as internal
+from apidbtuning.organismtree ot,
+    (select abbrev.organism as term,
+            abbrev.parent as parentTerm,
+            abbrev.abbreviation ,
+            orgs.project_id
+     from orgs, apidbtuning.organismabbreviationws abbrev
+     where orgs.organism = abbrev.organism
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@')
+     ) files
+where files.term = ot.organism (+)
+order by parentTerm,Term
+                ]]>
+            </sql>
+        </sqlQuery>
+       
+       
+ </querySet>
+
+
+</wdkModel>
+

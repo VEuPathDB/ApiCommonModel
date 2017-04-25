@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.apidb.apicommon.model.maintain.users5.mapper.MigrateUsers5Mapper">
+
+  <insert id="insertUsers">
+    INSERT INTO userlogins5.users 
+          (user_id, email, passwd, is_guest, signature, register_time, last_active, last_name, first_name,
+           middle_name, title, organization, department, address, city, state, zip_code, phone_number, 
+           country)
+    SELECT user_id, email, passwd, is_guest, signature, register_time, last_active, last_name, first_name, 
+           middle_name, title, organization, department, address, city, state, zip_code, phone_number, 
+           country
+    FROM userlogins4.users
+    WHERE is_guest = 0
+  </insert>
+    
+  <insert id="insertUserRoles">
+    INSERT INTO userlogins5.user_roles (user_id, user_role)
+    SELECT u.user_id, user_role 
+    FROM userlogins4.user_roles ur, userlogins5.users u
+    WHERE ur.user_id = u.user_id
+  </insert>
+    
+  <insert id="insertPreferences">
+    INSERT INTO userlogins5.preferences (user_id, project_id, preference_name, preference_value)
+    SELECT p.user_id, project_id, preference_name, preference_value
+    FROM userlogins4.preferences p, userlogins5.users u
+    WHERE p.user_id = u.user_id
+  </insert>
+    
+  <!-- the display_params will need to be fixed later. -->
+  <insert id="insertSteps">
+    INSERT INTO userlogins5.steps 
+          (step_id, user_id, left_child_id, right_child_id, create_time, last_run_time, estimate_size, 
+           answer_filter, custom_name, is_deleted, is_valid, collapsed_name, is_collapsible, assigned_weight, 
+           project_id, project_version, question_name, strategy_id, display_params, result_message)
+    SELECT step_id, s.user_id, left_child_id, right_child_id, create_time, last_run_time, estimate_size, 
+           answer_filter, custom_name, is_deleted, is_valid, collapsed_name, is_collapsible, assigned_weight, 
+           project_id, project_version, question_name, strategy_id, display_params, result_message
+    FROM userlogins4.steps s, userlogins5.users u
+    WHERE s.user_id = u.user_id
+  </insert>
+    
+  <insert id="insertStrategies">
+    INSERT INTO userlogins5.strategies
+          (strategy_id, user_id, root_step_id, project_id, version, is_saved, create_time, last_view_time, 
+           last_modify_time, description, signature, name, saved_name, is_deleted, is_public)
+    SELECT strategy_id, s.user_id, root_step_id, project_id, version, is_saved, create_time, last_view_time, 
+           last_modify_time, description, s.signature, name, saved_name, is_deleted, is_public
+    FROM userlogins4.strategies s, userlogins5.users u
+    WHERE s.user_id = u.user_id AND s.is_deleted = 0
+  </insert>
+      
+  <insert id="insertBaskets">
+    INSERT INTO userlogins5.user_baskets
+          (basket_id, user_id, basket_name, project_id, record_class, is_default,
+           category_id, pk_column_1, pk_column_2, pk_column_3)
+    SELECT basket_id, b.user_id, null AS basket_name, project_id, record_class, null AS is_default, 
+           null AS category_id, pk_column_1, pk_column_2, pk_column_3
+    FROM userlogins4.user_baskets b, userlogins5.users u
+    WHERE b.user_id = u.user_id
+  </insert>
+  
+  <insert id="insertFavorite">
+    INSERT INTO userlogins5.favorites
+          (favorite_id, user_id, project_id, record_class, pk_column_1, pk_column_2, pk_column_3, 
+           record_note, record_group)
+    SELECT favorite_id, f.user_id, project_id, record_class, pk_column_1, pk_column_2, pk_column_3, 
+           record_note, record_group
+    FROM userlogins4.favorites f, userlogins5.users u
+    WHERE f.user_id = u.user_id
+  </insert>
+  
+  <delete id="deleteUnusedSteps">
+    DELETE FROM userlogins5.steps 
+    WHERE step_id IN (SELECT s.step_id FROM userlogins5.steps s
+                      LEFT JOIN userlogins5.steps sl ON s.step_id = sl.left_child_id
+                      LEFT JOIN userlogins5.steps sr ON s.step_id = sr.right_child_id
+                      LEFT JOIN userlogins5.strategies str ON s.step_id = str.root_step_id
+                      WHERE sl.step_id IS NULL AND sr.step_id IS NULL AND str.strategy_id IS NULL)
+  </delete>
+
+  <!-- the content checksum will need to be recomputed, and content will need to be generated then. -->
+  <insert id="insertDatasets">
+    INSERT INTO userlogins5.datasets 
+          (dataset_id, user_id, dataset_name, dataset_size, content_checksum, created_time, upload_file, 
+           parser)
+    SELECT DISTINCT ud.user_dataset_id AS dataset_id, ud.user_id, 'dataset#' || ud.user_dataset_id AS dataset_name, 
+           di.dataset_size, 'stub'|| ud.user_dataset_id AS content_checksum, ud.create_time AS created_time, 
+           ud.upload_file, 'list' AS parser
+    FROM userlogins4.user_datasets2 ud, wdkengine.dataset_indices di, userlogins5.users u, userlogins5.steps s
+    WHERE ud.user_id = u.user_id  AND ud.dataset_id = di.dataset_id
+      AND u.user_id = s.user_id AND instr(s.display_params, '"' || ud.user_dataset_id || '"') > 0
+  </insert>
+    
+  <insert id="insertDatasetValues">
+    INSERT INTO userlogins5.dataset_values (dataset_value_id, dataset_id, data1, data2, data3)
+    SELECT userlogins5.dataset_values_pkseq.nextval AS dataset_value_id, d.dataset_id,
+           dv.pk_column_1 AS data1, dv.pk_column_2 AS data2, dv.pk_column_2 AS data3
+    FROM userlogins5.datasets d, userlogins4.user_datasets2 ud, wdkengine.dataset_values dv
+    WHERE d.dataset_id= ud.user_dataset_id AND ud.dataset_id = dv.dataset_id
+      AND dv.pk_column_1 IS NOT NULL
+  </insert>
+
+</mapper>

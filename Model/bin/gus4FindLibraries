@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+
+use strict;
+use Switch;
+use FileHandle;
+
+usage() unless scalar(@ARGV) >= 1;
+
+my @runnables = @ARGV;
+
+my $libraries;
+
+foreach my $runnable (@runnables) {
+  $libraries->{$runnable} = {};
+  findLibraries($runnable, $libraries->{$runnable}, 0);
+}
+
+foreach my $runnable (keys(%$libraries)) {
+  print STDOUT "$runnable\n";
+  foreach my $lib (keys(%{$libraries->{$runnable}})) {
+    print STDOUT "  $lib\n";
+  }
+}
+
+sub findLibraries {
+  my ($runnable, $hash, $useOnly) = @_;
+
+  # get path to file
+  my $pathStr;
+  if ($runnable =~ /\:/) {
+    my @pieces = split(/\:\:/, $runnable);
+    my @path = ("$ENV{GUS_HOME}/lib/perl", @pieces);
+    $pathStr = join('/', @path) . '.pm';
+  } else {
+    return if $useOnly;
+    $pathStr = "$ENV{GUS_HOME}/bin/$runnable";
+  }
+
+  my $fh = FileHandle->new;
+  $fh->open("< $pathStr") || die "can't open file '$pathStr'\n";
+  while(<$fh>) {
+    if (/^\s*use\s+(\S*);/) {
+      my $library = $1;
+      next unless $library =~ /GUS::Supported|ApiCommonData::Load|GUS::Community/;
+      $hash->{$library}++;
+      findLibraries($library, $hash, 1) if $hash->{$library} == 1;
+    }
+  }
+  close($fh);
+}
+
+
+
+####################################################################
+
+sub usage {
+
+die "
+Find the libary files called by one or more runnble program
+
+Usage:  gus4FindLibraries runnables
+
+Where:
+  runnables:  either the name of an executable or the name of a plugin
+
+Output to stdout. Looks like this:
+
+apiFindOntology
+ ApiCommonData/Load/lib/perl/HooHa.pm
+ GUS/Supported/lib/perl/TooToo.pm
+ApiCommonData::Load::Plugin::InsertYourUndies
+ ApiCommonData/Load/lib/perl/FunnyBone.pm
+
+";
+
+}
