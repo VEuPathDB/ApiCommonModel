@@ -210,23 +210,46 @@ select distinct ref.dataset_presenter_id as dataset_id, ref.target_name, ref.rec
         <sql>
           <![CDATA[
        WITH inList as (
-         SELECT DISTINCT gi.gene
-         FROM apidbtuning.GeneId gi,($$ds_gene_ids$$) ds
-         WHERE LOWER(gi.id) = LOWER(ds.gene_source_id )
+         SELECT DISTINCT gi.gene,ga.organism,ga.orthomcl_name
+         FROM apidbtuning.GeneId gi, apidbtuning.geneattributes ga,
+         ($$ds_gene_ids$$) ds
+         WHERE LOWER(gi.id) = LOWER(ds.gene_source_id)
+         AND ga.source_id = gi.gene
          )
-       SELECT dataset_id, hit_count,  (hit_count/in_count)*100 as percent_count from 
-         (SELECT dsp.dataset_presenter_id  as dataset_id, 
+         SELECT dsp.dataset_presenter_id  as dataset_id, 
                  r.hit_count,
-                 inTable.in_count
-          FROM  apidbtuning.DatasetPresenter dsp,
-                (SELECT count(*) AS in_count from inList) inTable,
-                (SELECT  gl.dataset_name, COUNT(gl.source_id) AS hit_count
-                 FROM apidbtuning.DatasetGeneList gl, inList l
+                 (r.hit_count/inTable.in_count)*100 as percent_count
+          FROM  apidbtuning.DatasetPresenter dsp,(SELECT organism,count(*) AS in_count from inList group by organism) inTable,                
+                (SELECT  ga.organism, gl.dataset_name, COUNT(distinct gl.source_id) AS hit_count
+                 FROM apidbtuning.DatasetGeneList gl, inList l,apidbtuning.geneattributes ga
                  WHERE l.gene = gl.source_id
-                GROUP BY gl.dataset_name) R
+                 AND gl.source_id = ga.source_id                 
+                GROUP BY ga.organism,gl.dataset_name) R
           WHERE dsp.name = r.dataset_name
+          AND R.organism = inTable.organism
           GROUP BY dsp.dataset_presenter_id, r.hit_count, inTable.in_count
-       ) WHERE (hit_count/in_count)*100 >= $$threshold$$
+          HAVING (r.hit_count/inTable.in_count)*100 >= $$threshold$$
+          UNION
+          SELECT dsp.dataset_presenter_id  as dataset_id, 
+                 r.hit_count,
+                 (r.hit_count/orTable.in_count)*100 as percent_count
+          FROM  apidbtuning.DatasetPresenter dsp,
+                (SELECT gac.organism,count(*) AS in_count from inList lc, apidbtuning.geneattributes gac 
+                WHERE lc.orthomcl_name = gac.orthomcl_name
+                 AND lc.organism != gac.organism
+                 group by gac.organism
+                ) orTable,               
+                (SELECT  ga.organism, gl.dataset_name, COUNT(distinct gl.source_id) AS hit_count
+                 FROM apidbtuning.DatasetGeneList gl, inList l,apidbtuning.geneattributes ga
+                 WHERE l.orthomcl_name = ga.orthomcl_name
+                 AND l.organism != ga.organism
+                 AND ga.source_id = gl.source_id                 
+                GROUP BY ga.organism,gl.dataset_name) R
+          WHERE  $$orthologyFlag$$ = 'yes'
+          AND dsp.name = r.dataset_name
+          AND R.organism = orTable.organism
+          GROUP BY dsp.dataset_presenter_id, r.hit_count, orTable.in_count
+          HAVING (r.hit_count/orTable.in_count)*100 >= $$threshold$$
           ]]>
        </sql>
     </sqlQuery>
