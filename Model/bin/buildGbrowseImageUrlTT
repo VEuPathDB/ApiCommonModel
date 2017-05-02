@@ -96,20 +96,22 @@ where ga.taxon_id = o.taxon_id";
 #    print STDERR "$ref->[0] = $ref->[1]\n";
   }
   my $orgToRef = &getOrgToRef($orgRef);  ##value is hash {reference}=reference_org and {abbrev}
-  ###next get list of all organisms used for gbrowse tracks and add abbrev.
+ ###next get list of all organisms used for gbrowse tracks and add abbrev.
   foreach my $urlSpec (@{$xml->{url}}) {
       my $organisms = $urlSpec->{org};
       foreach my $orgHash (@$organisms) {
 	  my $organism = $orgHash->{organism};
 	  next unless $orgToRef->{$organism};
 	  $orgToRef->{$organism}->{abbrev} = $orgHash->{abbrev};
-
+          $orgToRef->{$organism}->{type} = $orgHash->{type};
 #####JP note: want to check that these abbrevs exist in the db as public abbrev. use sql query to make hash
       }
   }
   foreach my $org (keys%$orgToRef) {
 #    print STDERR "$org: reference=$orgToRef->{$org}->{reference}, abbrev=$orgToRef->{$org}->{abbrev}\n";
       my $ab_to_check = $orgToRef->{$org}->{abbrev};
+      my $type = $orgToRef->{$org}->{type};
+      next if ($type ne "synteny");
       if (exists $pubAbbrevHash{$ab_to_check} ) {
 	  #print "$org has the abbreviation $ab_to_check which is a public abbreviation in apidb.organism\n";
       }
@@ -166,6 +168,8 @@ where ga.taxon_id = o.taxon_id";
             }
           }
           ##need to change the abbrev to the reference strain for this organism then unshift the subtracks for this org to beginning of array
+
+          if($name eq 'Synteny') {
           my $sabbrev = $orgRef->{$organism} == 1 ? $abbrev : $orgToRef->{$orgToRef->{$organism}->{reference}}->{abbrev};
 
           my @sortedSubtracks = sort {$b =~ /$sabbrev/ <=> $a =~ /$sabbrev/} @subtracks;
@@ -176,13 +180,15 @@ where ga.taxon_id = o.taxon_id";
           }
 
           # remove "." and "-" from organism abbrev in subtrack key
-          if($name eq 'Synteny') {
             @sortedSubtracks = map { s/[\.-]//g; $_; } @sortedSubtracks;
-          }
 
           push @fTracks, $name . "/" . join('+', @sortedSubtracks);
         }
-        else {
+	else {
+          push @fTracks, $name . "/" . join('+', @subtracks);
+       	 }
+	} 
+	else {
           push @fTracks, $name;
         }
       }
