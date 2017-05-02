@@ -2875,6 +2875,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <column name="matched_result"/>
         <column name="fold_change_avg"/>
         <column name="fold_change_chosen"/>
+        <column name="fold_change_chosen_display" sortingColumn="fold_change_chosen"/>
         <column name="avg_group_one"/>
         <column name="avg_group_two"/>
         <column name="max_group_one"/>
@@ -2895,14 +2896,20 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
       <![CDATA[
       select ga.source_id, ga.gene_source_id, 'Y' as matched_result,
              '@PROJECT_ID@' as project_id,
-             round((CASE WHEN one.average / (two.average + &&shift&&) >= 1
-                         THEN one.average / (two.average + &&shift&&)
-                         ELSE -1 * (two.average  / (one.average + &&shift&&))
+             round((CASE WHEN one.average / CASE WHEN two.average < &&shift&& THEN &&shift&& ELSE two.average END >= 1
+                         THEN one.average / CASE WHEN two.average < &&shift&& THEN &&shift&& ELSE two.average END
+                         ELSE -1 * (two.average / CASE WHEN one.average < &&shift&& THEN &&shift&& ELSE one.average END)
                      END), 1) as fold_change_avg,
-             round((CASE WHEN one.chosen / (two.chosen + &&shift&&) >= 1
-                         THEN one.chosen / (two.chosen + &&shift&&)
-                         ELSE -1 * (two.chosen / (one.chosen + &&shift&&)) 
+             round((CASE WHEN one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END >= 1
+                         THEN one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END
+                         ELSE -1 * (two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END)
                      END), 1) as fold_change_chosen,
+             CASE WHEN one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END >= 1
+             THEN round(one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END,1)
+             || CASE WHEN two.chosen < &&shift&& THEN '*' ELSE '' END
+                         ELSE round(-1 * two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END, 1)
+             || CASE WHEN one.chosen < &&shift&& THEN '*' ELSE '' END END
+                         as fold_change_chosen_display,
              CASE WHEN &&isLogged&& = 1 
                   THEN round(decode(one.average, 0, 0, log(2, one.average)), 2)
                   ELSE round(one.average, 2) END AS avg_group_one,
@@ -2992,8 +2999,8 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         and ga.gene_na_feature_id = one.na_feature_id 
         and ga.gene_na_feature_id = two.na_feature_id 
         and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-        and ($$regulated_dir$$ ( one.chosen / (two.chosen + &&shift&&))  >= $$fold_change$$
-          OR $$regulated_dir$$ (-(two.chosen / (one.chosen + &&shift&&))) >= $$fold_change$$)
+          and (+ ( one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END)  >= $$fold_change$$
+          OR + (-( two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END)) >= $$fold_change$$)
       ]]>
       </sql>
 
