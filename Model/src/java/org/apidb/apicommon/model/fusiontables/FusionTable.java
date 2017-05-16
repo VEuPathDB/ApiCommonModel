@@ -1,5 +1,7 @@
 package org.apidb.apicommon.model.fusiontables;
 
+import static org.gusdb.fgputil.FormatUtil.urlEncodeUtf8;
+
 // Get data from a Google Fusion Table.
 // Requires the Google GData Client library,
 // which in turn requires the
@@ -11,7 +13,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -132,8 +133,7 @@ public class FusionTable {
     public void loadTuningTableFromFusionTable(String datasetId, Connection dbc, String tuningTable, String suffix)
 	throws IOException, ServiceException, SQLException {
 	String selectQuery = new String("select * from " + datasetId);
-	URL url = new URL(
-			  SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8"));
+	URL url = new URL(SERVICE_URL + "?sql=" + urlEncodeUtf8(selectQuery));
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
 
 	request.execute();
@@ -206,7 +206,7 @@ public class FusionTable {
 	}
 
 	String selectQuery = new String("select * from " + datasetId);
-	String urlString = SERVICE_URL + "?sql=" + URLEncoder.encode(selectQuery, "UTF-8");
+	String urlString = SERVICE_URL + "?sql=" + urlEncodeUtf8(selectQuery);
 	URL url = new URL(urlString);
 	GDataRequest request = service.getRequestFactory().getRequest(RequestType.QUERY, url, ContentType.TEXT_PLAIN);
 	request.execute();
@@ -275,35 +275,28 @@ public class FusionTable {
 	createStmt.executeUpdate(createSql.toString());
     }
 
-    /**
-     *
-     *
-     */
+
     public static void main(String[] args) throws ServiceException, IOException, SQLException, Exception {
 
-	if (args.length != 3 && args.length != 4) {
-	    System.err.println("usage: java FusionTable <datasetId> <tuningTable> <suffix> [ <columnList> ]");
-	    System.exit(1);
-	}
+      if (args.length != 3 && args.length != 4) {
+        System.err.println("usage: java FusionTable <datasetId> <tuningTable> <suffix> [ <columnList> ]");
+        System.exit(1);
+      }
 
-	String instance = "";
-	String schema = "";
-	String password = "";
+      BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+      String instance = in.readLine();
+      String schema = in.readLine();
+      String password = in.readLine();
 
-	try {
-	    BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-	    instance = in.readLine();
-	    schema = in.readLine();
-	    password = in.readLine();
-	} catch (IOException e) {
-	}
-	ConnectionPoolConfig config = SimpleDbConfig.create(
-	    SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
-	Connection dbc = new DatabaseInstance(config).getDataSource().getConnection();
+      ConnectionPoolConfig config = SimpleDbConfig.create(
+          SupportedPlatform.ORACLE, "jdbc:oracle:oci:@" + instance, schema, password);
 
-	FusionTable ft = new FusionTable("");
-	String columnList = new String( (args.length == 4) ? args[3] : "");
-	ft.createTuningTable(args[0], dbc, args[1], args[2], columnList);
-	ft.loadTuningTableFromFusionTable(args[0], dbc, args[1], args[2]);
+      try (DatabaseInstance db = new DatabaseInstance(config)) {
+        Connection dbc = db.getDataSource().getConnection();
+        FusionTable ft = new FusionTable("");
+        String columnList = new String( (args.length == 4) ? args[3] : "");
+        ft.createTuningTable(args[0], dbc, args[1], args[2], columnList);
+        ft.loadTuningTableFromFusionTable(args[0], dbc, args[1], args[2]);
+      }
     }
 }
