@@ -11,9 +11,9 @@ import javax.sql.DataSource;
 
 import org.apache.ibatis.session.SqlSession;
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.EncryptionUtil;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.platform.DBPlatform;
-import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 
@@ -122,7 +122,7 @@ public class Users5DatasetsTask implements MigrationTask, ModelAware {
       return false;
 
     // generate content checksum
-    String checksum = Utilities.encrypt(content);
+    String checksum = EncryptionUtil.encrypt(content);
 
     try {
       psUpdate.setString(1, checksum);
