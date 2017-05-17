@@ -253,29 +253,48 @@
         <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- queryRef="organismVQ.CNV"/ -->
         <paramRef ref="sharedParams.CNV_strain" quote="false"/>
         <paramRef ref="genomicParams.chrCopyNumber"/>
+        <paramRef ref="genomicParams.medianOrIndividual"/>
         <column name="project_id"/>
         <column name="source_id"/>
-        <column name="median_ploidy"/>
+        <column name="median_all"/>
+        <column name="median_hits"/>
         <column name="strains"/>
         <sql>
             <![CDATA[
-            select
-            sa.SOURCE_ID
-            , '@PROJECT_ID' as project_id
-            , MEDIAN(ccn.chr_copy_number) AS median_ploidy
-            , CAST(LISTAGG(REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', ''), ', ') WITHIN GROUP (ORDER BY pan.name) AS VARCHAR2(4000)) AS strains
-            from
-            APIDB.CHRCOPYNUMBER ccn
-            , STUDY.PROTOCOLAPPNODE pan
-            , DOTS.NASEQUENCE ns
-            , Apidbtuning.genomicseqattributes sa
-            where ccn.PROTOCOL_APP_NODE_ID in ($$CNV_strain$$)
-            and ccn.PROTOCOL_APP_NODE_ID = pan.PROTOCOL_APP_NODE_ID
-            and ccn.CHR_COPY_NUMBER >= $$chrCopyNumber$$
-            and ns.NA_SEQUENCE_ID = ccn.NA_SEQUENCE_ID
-            and ns.SOURCE_ID = sa.SOURCE_ID
-            and sa.CHROMOSOME is not null
-            group by sa.source_id
+            WITH bySample AS (
+                SELECT sa.source_id
+                , ccn.chr_copy_number
+                , pan.name
+                FROM apidb.chrcopynumber ccn
+                , study.protocolappnode pan
+                , dots.nasequence ns
+                , apidbtuning.genomicseqattributes sa
+                WHERE ccn.protocol_app_node_id in ($$CNV_strain$$)
+                AND ccn.protocol_app_node_id = pan.protocol_app_node_id
+                AND ns.na_sequence_id = ccn.na_sequence_id
+                AND ns.source_id = sa.source_id
+                AND sa.chromosome IS NOT NULL
+            )
+            , median AS (
+                SELECT DISTINCT s.source_id 
+                , MEDIAN(s.chr_copy_number) AS median
+                FROM bySample s
+                GROUP BY s.source_id
+            )
+            SELECT DISTINCT s.source_id
+            , '@PROJECT_ID' AS project_id
+            , MEDIAN(s.chr_copy_number) AS median_hits
+            , CAST(LISTAGG(REGEXP_REPLACE(s.name, '_[A-Za-z0-9]+ (.+)$', ''), ', ') WITHIN GROUP (ORDER BY s.name) AS VARCHAR2(4000)) AS strains
+            , m.median AS median_all
+            FROM bySample s
+            , median m
+            WHERE m.source_id = s.source_id
+            AND s.chr_copy_number >= $$chrCopyNumber$$
+            AND CASE WHEN $$medianOrIndividual$$ = 'median' AND m.median >= $$chrCopyNumber$$ THEN 1
+                     WHEN $$medianOrIndividual$$ = 'sample' THEN 1
+                     ELSE 0
+                     END = 1
+            GROUP BY s.source_id, '@PROJECT_ID', m.median
             ]]>
         </sql>
     </sqlQuery>
