@@ -1960,7 +1960,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
   <!-- Genes By NGS Snps -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <processQuery name="GenesByNgsSnps" includeProjects="TriTrypDB,PlasmoDB,ToxoDB,AmoebaDB,CryptoDB,FungiDB"
+    <processQuery name="GenesByNgsSnps" includeProjects="TriTrypDB,PlasmoDB,ToxoDB,AmoebaDB,CryptoDB,FungiDB,PiroplasmaDB"
               processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindGenesWithSnpCharsPlugin">
 
        <postCacheUpdateSql>
@@ -2711,11 +2711,14 @@ from
 study.protocolappparam ap,
 study.protocolparam p,
 study.output i,
+study.studylink sl,
 STUDY.PROTOCOLAPPNODE an
 where an.name like '%DESeq%'
 and p.protocol_param_id = ap.protocol_param_id
 and ap.protocol_app_id = i.protocol_app_id
 and i.PROTOCOL_APP_NODE_ID = an.PROTOCOL_APP_NODE_ID
+and sl.study_id = $$profileset_generic$$
+and i.protocol_app_node_id = sl.protocol_app_node_id
 and ((p.name = 'reference' and ap.value = $$samples_de_ref_generic_deseq$$) or (ap.value =$$samples_de_comp_generic_deseq$$  and p.name = 'comparator'))
 group by an.protocol_app_node_id
 having count(*) = 2
@@ -4701,7 +4704,8 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
     <sqlQuery name="GenesByCopyNumber" includeProjects="TriTrypDB, PlasmoDB, ToxoDB" >
         <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- queryRef="organismVQ.CNV"/ -->
         <paramRef ref="sharedParams.CNV_strain"/>
-        <paramRef ref="geneParams.CNV_type" quote="false"/>
+        <paramRef ref="geneParams.medianOrIndividual" />
+        <paramRef ref="geneParams.CNV_type"/>
         <paramRef ref="geneParams.operator" quote="false"/>
         <paramRef ref="geneParams.copyNumber"/>
         <column name="project_id"/>
@@ -4710,28 +4714,19 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <column name="wdk_weight"/>
         <column name="matched_result"/>
         <column name="strains"/>
-        <column name="median_raw_estimate"/>
         <column name="ref_cn"/>
-        <column name="median_haploid_number"/>
-        <column name="median_ploidy"/>
-        <column name="median_gene_dose"/>
+        <column name="median_ploidy_all"/>
+        <column name="median_ploidy_hits"/>
+        <column name="median_raw_all"/>
+        <column name="median_raw_hits"/>
+        <column name="median_haploid_all"/>
+        <column name="median_haploid_hits"/>
+        <column name="median_gene_dose_all"/>
+        <column name="median_gene_dose_hits"/>
         <sql>
             <![CDATA[
-            SELECT
-            project_id
-            , source_id
-            , gene_source_id
-            , 10 as wdk_weight
-            , 'Y' as matched_result
-            , cast (listagg(strain, ', ') within group (order by strain) as varchar2(4000)) as strains
-            , cast(median(raw_estimate) as decimal(10,2)) as median_raw_estimate
-            , median(ref_cn) as ref_cn
-            , cast(median(haploid_number) as decimal(10,2)) as median_haploid_number
-            , median(ploidy) as median_ploidy
-            , cast(median(haploid_number * ploidy) as decimal(10,2)) as median_gene_dose
-            from (
-                select
-                ta.project_id
+            with bySample as (
+                select ta.project_id
                 , ta.source_id
                 , ta.gene_source_id
                 , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
@@ -4739,10 +4734,9 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
                 , gcn.ref_copy_number AS ref_cn
                 , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                     WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
-                    ELSE gcn.haploid_number END AS haploid_number
+                    ELSE round(gcn.haploid_number) END AS haploid_number
                 , ccn.chr_copy_number AS ploidy
-                FROM
-                apidb.genecopynumber gcn
+                FROM apidb.genecopynumber gcn
                 , apidbtuning.genomicseqattributes gsa
                 , apidbtuning.transcriptattributes ta
                 , study.protocolappnode pan
@@ -4761,10 +4755,60 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
                 AND ccn_io.input_node_id = gcn_io.input_node_id
                 AND ta.gene_type = 'protein coding'
                 AND gsa.chromosome IS NOT NULL
+                ORDER BY ta.gene_source_id
             )
-            WHERE $$CNV_type$$ $$operator$$ $$copyNumber$$
-            GROUP BY source_id, gene_source_id, project_id
-            ORDER BY gene_source_id
+            , medians AS (
+                SELECT s.gene_source_id
+                , median (s.ploidy) AS median_ploidy
+                , median (s.raw_estimate) AS median_raw
+                , median (s.haploid_number) AS median_haploid
+                , median (s.ploidy * s.haploid_number) AS median_gene_dose
+                FROM bySample s
+                GROUP BY s.gene_source_id
+            )
+            , hit_medians AS (
+                SELECT s.project_id
+                , s.source_id
+                , s.gene_source_id
+                , LISTAGG(s.strain, ', ') WITHIN GROUP (ORDER BY s.strain) AS strains
+                , s.ref_cn
+                , median(s.ploidy) AS median_ploidy_hits
+                , median(s.raw_estimate) AS median_raw_hits
+                , median(s.haploid_number) AS median_haploid_hits
+                , median(s.ploidy * s.haploid_number) AS median_gene_dose_hits
+                FROM bySample s
+                , medians m
+                WHERE m.gene_source_id = s.gene_source_id
+                AND CASE WHEN $$CNV_type$$ = 'haploid_number' AND s.haploid_number $$operator$$ $$copyNumber$$ THEN 1
+                    WHEN $$CNV_type$$ = 'gene_dose' AND (s.haploid_number * s.ploidy) $$operator$$ $$copyNumber$$ THEN 1
+                    ELSE 0
+                    END = 1
+               AND CASE WHEN $$medianOrIndividual$$ = 'median' AND $$CNV_type$$ = 'haploid_number' AND m.median_haploid $$operator$$ $$copyNumber$$ THEN 1
+                    WHEN $$medianOrIndividual$$ = 'median' AND $$CNV_type$$ = 'gene_dose' AND (m.median_raw * m.median_ploidy) $$operator$$ $$copyNumber$$ THEN 1
+                    WHEN $$medianOrIndividual$$ = 'sample' THEN 1
+                    ELSE 0
+                    END = 1
+                GROUP BY s.project_id, s.source_id, s.gene_source_id, s.ref_cn
+            )
+            SELECT h.project_id
+            , h.source_id
+            , h.gene_source_id
+            , 10 AS wdk_weight
+            , 'Y' AS matched_result
+            , h.strains
+            , h.ref_cn
+            , m.median_ploidy AS median_ploidy_all
+            , h.median_ploidy_hits
+            , CAST(m.median_raw AS DECIMAL(10,2)) AS median_raw_all
+            , CAST (h.median_raw_hits AS DECIMAL(10,2)) AS median_raw_hits
+            , CAST (m.median_haploid AS DECIMAL(10,2)) AS median_haploid_all
+            , CAST (h.median_haploid_hits AS DECIMAL(10,2)) AS median_haploid_hits
+            , CAST (m.median_gene_dose AS DECIMAL(10,2)) AS median_gene_dose_all
+            , CAST (h.median_gene_dose_hits AS DECIMAL(10,2)) AS median_gene_dose_hits
+            FROM hit_medians h
+            , medians m
+            WHERE m.gene_source_id = h.gene_source_id
+            GROUP BY h.project_id, h.source_id, h.gene_source_id, m.median_ploidy, m.median_raw, m.median_haploid, m.median_gene_dose, h.ref_cn, h.strains, h.median_ploidy_hits, h.median_raw_hits, h.median_haploid_hits, h.median_gene_dose_hits
             ]]>
           </sql>
     </sqlQuery>
@@ -4772,35 +4816,27 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
     <sqlQuery name="GenesByCopyNumberComparison" includeProjects="TriTrypDB, PlasmoDB, ToxoDB" >
         <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- queryRef="organismVQ.CNV"/ -->
         <paramRef ref="sharedParams.CNV_strain"/>
+        <paramRef ref="geneParams.medianOrIndividual" />
         <paramRef ref="geneParams.comparisonOperator" quote="false"/>
-        <column name="project_id"/>
+        <column name="project_id"/>                                                                                                                                                                     
         <column name="source_id"/>
         <column name="gene_source_id"/>
-        <column name="wdk_weight" />
+        <column name="wdk_weight"/>
         <column name="matched_result"/>
         <column name="strains"/>
-        <column name="median_raw_estimate"/>
         <column name="ref_cn"/>
-        <column name="median_haploid_number"/>
-        <column name="median_ploidy"/>
-        <column name="median_gene_dose"/>
+        <column name="median_ploidy_all"/>
+        <column name="median_ploidy_hits"/>
+        <column name="median_raw_all"/>
+        <column name="median_raw_hits"/>
+        <column name="median_haploid_all"/>
+        <column name="median_haploid_hits"/>
+        <column name="median_gene_dose_all"/>
+        <column name="median_gene_dose_hits"/>
         <sql>
             <![CDATA[
-            SELECT
-            project_id
-            , source_id
-            , gene_source_id
-            , 10 as wdk_weight
-            , 'Y' as matched_result
-            , CAST(listagg(strain, ', ') WITHIN GROUP (ORDER BY strain) AS varchar2(4000)) AS strains
-            , CAST(MEDIAN(raw_estimate) AS decimal(10,2)) AS median_raw_estimate
-            , MEDIAN(ref_cn) AS ref_cn
-            , CAST(MEDIAN(haploid_number) as decimal(10,2)) AS median_haploid_number
-            , MEDIAN(ploidy) AS median_ploidy
-            , CAST(MEDIAN(haploid_number * ploidy) as decimal(10,2)) AS median_gene_dose
-            FROM (
-                SELECT
-                ta.project_id
+            with bySample as ( 
+                select ta.project_id
                 , ta.source_id
                 , ta.gene_source_id
                 , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
@@ -4808,10 +4844,9 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
                 , gcn.ref_copy_number AS ref_cn
                 , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                     WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
-                    ELSE gcn.haploid_number END AS haploid_number
+                    ELSE round(gcn.haploid_number) END AS haploid_number
                 , ccn.chr_copy_number AS ploidy
-                FROM
-                apidb.genecopynumber gcn
+                FROM apidb.genecopynumber gcn
                 , apidbtuning.genomicseqattributes gsa
                 , apidbtuning.transcriptattributes ta
                 , study.protocolappnode pan
@@ -4825,15 +4860,61 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
                 AND ccn.na_sequence_id = fl.na_sequence_id
                 AND gsa.na_sequence_id = fl.na_sequence_id
                 AND ta.gene_source_id = fl.feature_source_id
-                AND ccn.protocol_app_node_id = ccn_io.output_node_id
                 AND ccn.protocol_app_node_id IN ($$CNV_strain$$)
+                AND ccn.protocol_app_node_id = ccn_io.output_node_id
                 AND ccn_io.input_node_id = gcn_io.input_node_id
                 AND ta.gene_type = 'protein coding'
                 AND gsa.chromosome IS NOT NULL
-            ) 
-            WHERE haploid_number $$comparisonOperator$$ ref_cn
-            GROUP BY source_id, gene_source_id, project_id
-            ORDER BY gene_source_id
+                ORDER BY ta.gene_source_id
+            )
+            , medians AS (
+                SELECT s.gene_source_id
+                , median (s.ploidy) AS median_ploidy
+                , median (s.raw_estimate) AS median_raw
+                , median (s.haploid_number) AS median_haploid
+                , median (s.ploidy * s.haploid_number) AS median_gene_dose
+                FROM bySample s
+                GROUP BY s.gene_source_id
+            )
+            , hit_medians AS (
+                SELECT s.project_id
+                , s.source_id
+                , s.gene_source_id
+                , LISTAGG(s.strain, ', ') WITHIN GROUP (ORDER BY s.strain) AS strains
+                , s.ref_cn
+                , median(s.ploidy) AS median_ploidy_hits
+                , median(s.raw_estimate) AS median_raw_hits
+                , median(s.haploid_number) AS median_haploid_hits
+                , median(s.ploidy * s.haploid_number) AS median_gene_dose_hits
+                FROM bySample s
+                , medians m
+                WHERE m.gene_source_id = s.gene_source_id
+                AND s.haploid_number $$comparisonOperator$$ s.ref_cn
+                AND CASE WHEN $$medianOrIndividual$$ = 'median' AND m.median_haploid $$comparisonOperator$$ s.ref_cn THEN 1
+                    WHEN $$medianOrIndividual$$ = 'sample' THEN 1
+                    ELSE 0
+                    END = 1
+                GROUP BY s.project_id, s.source_id, s.gene_source_id, s.ref_cn
+            )
+            SELECT h.project_id
+            , h.source_id
+            , h.gene_source_id
+            , 10 AS wdk_weight
+            , 'Y' AS matched_result
+            , h.strains
+            , h.ref_cn
+            , m.median_ploidy AS median_ploidy_all
+            , h.median_ploidy_hits
+            , CAST(m.median_raw AS DECIMAL(10,2)) AS median_raw_all
+            , CAST (h.median_raw_hits AS DECIMAL(10,2)) AS median_raw_hits
+            , CAST (m.median_haploid AS DECIMAL(10,2)) AS median_haploid_all
+            , CAST (h.median_haploid_hits AS DECIMAL(10,2)) AS median_haploid_hits
+            , CAST (m.median_gene_dose AS DECIMAL(10,2)) AS median_gene_dose_all
+            , CAST (h.median_gene_dose_hits AS DECIMAL(10,2)) AS median_gene_dose_hits
+            FROM hit_medians h
+            , medians m
+            WHERE m.gene_source_id = h.gene_source_id
+            GROUP BY h.project_id, h.source_id, h.gene_source_id, m.median_ploidy, m.median_raw, m.median_haploid, m.median_gene_dose, h.ref_cn, h.strains, h.median_ploidy_hits, h.median_raw_hits, h.median_haploid_hits, h.median_gene_dose_hits
             ]]>
          </sql>
     </sqlQuery>
