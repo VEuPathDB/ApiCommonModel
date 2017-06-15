@@ -71,6 +71,18 @@
       <regex>\d\d?|100</regex>
     </stringParam>
 
+    <stringParam name="ReadFrequencyPercentStringTwo"
+		 prompt="Major allele frequency &gt;= "
+		 number="true">
+      <help>This parameter applies to the aligned isolate sequences of Set B. When a Set B SNP has a major 
+      allele frequency that is greater than or equal to this value, the SNP 
+      will be compared to the equivalent SNP in Set A isolates. NOTE: 100% is permissible 
+      since we first identify SNPs from Set A and then compare them 
+      with SNPs from Set B. See the Description below the Get Answer button for more.</help>
+      <suggest default="80"/>
+      <regex>20|40|60|80</regex>
+    </stringParam>
+
     <stringParam name="MinPercentIsolateCalls"
 		 prompt="Percent isolates with a base call &gt;= "
 		 number="true">
@@ -107,6 +119,25 @@
       </help>
       <suggest default="80"/>
       <regex>\d\d?|100</regex>
+    </stringParam>
+
+        <stringParam name="ReadFrequencyPercentString"
+		 prompt="Min percent isolates with calls &gt;= "
+		 number="true">
+      <help>
+      <!-- Only return SNPs where the number of isolates with above-threshold calls (see the Read 
+      frequency threshold parameter) is greater than or equal to this percentage  -->
+      
+      This parameter applies to Set B aligned isolate sequences. At any given nucleotide position, 
+      some isolates in Set B may not have data supporting a SNP because the Read Frequency 
+      Threshold was not met. 'Percent isolates with a base call' 
+      defines the fraction of isolates that must have a base call before a SNP is returned 
+      for that nucleotide position based on the remaining isolates that do have data. See the 
+      Description below for more information. 
+      
+      </help>
+      <suggest default="80"/>
+      <regex>20|40|60|80</regex>
     </stringParam>
 
     <enumParam name="ReadFrequencyPercent" excludeProjects="ToxoDB"
@@ -369,6 +400,40 @@ Illumina reads for each isolate are aligned to a reference genome for this organ
         </sql>
       </sqlQuery>
 
+    <sqlQuery name="SamplesMetadataByOrganismWiz">
+<!--        <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/> -->
+      <column name="ontology_term_name"/>
+      <column name="internal"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <column name="string_value"/>
+      <sql>
+select ids.term as internal, ids.property as ontology_term_name,
+cast(CASE WHEN ms.spec_value = 'number' and apidb.is_number(ids.value) = 1 THEN ids.value ELSE null END as number) as number_value,
+CASE WHEN ms.spec_value = 'string' THEN ids.value ELSE cast(null as varchar2(10)) END as string_value,
+cast(CASE WHEN ms.spec_value = 'date' THEN ids.value ELSE null END as date) as date_value
+from
+apidbtuning.metadataspec ms,
+             (  select pan_name as term, term as property, value
+              from apidbTuning.panCharacteristicMetadata
+              where subtype = 'HTS_SNP'
+                and organism = 'Plasmodium falciparum 3D7'
+            union
+              select pan_name as term, term as property, value
+              from apidbTuning.panProtocolMetadata
+              where subtype = 'HTS_SNP'
+                and organism = 'Plasmodium falciparum 3D7'
+            union
+              select pan_name as term, term_name as property, value
+              from apidbTuning.FallbackMetadata
+              where subtype = 'HTS_SNP'
+                and organism = 'Plasmodium falciparum 3D7') ids
+                where ids.property = ms.property
+and ms.spec_property = 'type'
+      </sql>    
+
+    </sqlQuery>        
+
       <sqlQuery name="MetadataSpecByOrganism" doNotTest="1"> 
         <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
         <column name="property" />
@@ -384,9 +449,70 @@ Illumina reads for each isolate are aligned to a reference genome for this organ
         </sql>
       </sqlQuery>
 
+     <sqlQuery name="OntologyByOrganismWiz" doNotTest="1"> 
+<!--        <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/> -->
+        <column name="ontology_term_name"/>
+        <column name="parent_ontology_term_name"/>
+        <column name="display_name"/>
+        <column name="description"/>
+        <column name="type"/>
+        <column name="units"/>
+        <column name="precision"/>
+        <column name="is_range"/>
+    <sql>
+select property as ontology_term_name, parent_ontology_term_name, display_name, description, units,
+CASE WHEN type is null THEN 'string' ELSE type END as type, 
+CASE WHEN range = 'range' THEN 1 ELSE 0 END as is_range, 
+CASE WHEN type = 'number' THEN 1 ELSE null END as precision
+from (
+            select distinct property, spec_property, spec_value
+            from apidbTuning.MetadataSpec
+            where subtype = 'HTS_SNP'
+              and organism = 'Plasmodium falciparum 3D7')
+                 pivot(max(spec_value) for spec_property in ('parent' as parent_ontology_term_name, 'display' as display_name, 'description' as description, 
+    'type' as type, 'units' as units, 'filter' as range, 'categorized' as is_categorized))
+    </sql>
+      </sqlQuery>
+
   </querySet>
 
   <groupSet name="snpParamGroupSet">
+
+    <!-- groups for testing wizard -->
+
+    <group name="set1_strains" displayName="Set A isolates" displayType="ShowHide">
+      <description>
+        <![CDATA[
+                 Select isolates for Set A
+                ]]>
+      </description>
+    </group>
+    
+    <group name="set1_stringency" displayName="Set A stringency" displayType="ShowHide">
+      <description>
+        <![CDATA[
+                 Select stringency for Set A
+                ]]>
+      </description>
+    </group>
+    
+    <group name="set2_strains" displayName="Set B isolates" displayType="ShowHide">
+      <description>
+        <![CDATA[
+                 Select isolates for Set B
+                ]]>
+      </description>
+    </group>
+    
+    <group name="set2_stringency" displayName="Set B stringency" displayType="ShowHide">
+      <description>
+        <![CDATA[
+                 Select stringency for Set B
+                ]]>
+      </description>
+    </group>
+
+    <!-- end of wizard groups -->
     
     <group name="read_freq" displayName="Restrict allele calls for each isolate chosen above based on a minimum frequency in the aligned reads providing evidence for that allele" displayType="ShowHide">
       <description>
