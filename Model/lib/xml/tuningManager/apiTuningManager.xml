@@ -851,12 +851,13 @@ tablespace indx
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="sres.TaxonName"/>
+    <intermediateTable name="OneGeneIds"/>
     <intermediateTable name="CommentAssignment"/>
     <intermediateTable name="NewCsi"/>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixGeneId&1 NOLOGGING AS
-SELECT substr(mapping.id, 1, 100) as id, mapping.gene, cast (null as NUMBER) as unique_mapping,
+SELECT substr(mapping.id, 1, 100) as id, mapping.gene, cast (0 as NUMBER(1)) as unique_mapping,
        SUBSTR(apidb.tab_to_string(set(CAST(COLLECT(union_member order by union_member) AS apidb.varchartab)),'; '), 1, 100) as union_member, 
        SUBSTR(apidb.tab_to_string(set(CAST(COLLECT(database_name order by database_name) AS apidb.varchartab)),'; '), 1, 200) as database_name
 /*   we would use listagg() as follows, but it repeats duplicate values, and doesn't provide a way to aggregate DISTINCT values. (lame!)
@@ -990,13 +991,23 @@ group by mapping.id, mapping.gene
     </sql>
     <sql>
       <![CDATA[
-update &prefixGeneId&1
-set unique_mapping = 1
-where lower(id) in (select lower_id
-                    from (select distinct lower(id) as lower_id, gene
-                          from &prefixGeneId&1) case_independent_mapping
-                    group by lower_id
-                    having count(*) = 1)
+        create table &prefixOneGeneIds
+              (lower_id,
+               constraint ogix&1_pk primary key(lower_id))
+        organization index nologging as
+        select lower_id
+        from (select distinct lower(id) as lower_id, gene
+              from &prefixGeneId&1)
+        group by lower_id
+        having count(*) = 1
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update &prefixGeneId&1
+        set unique_mapping = 1
+        where id = gene
+           or lower(id) in (select lower_id from &prefixOneGeneIds)
       ]]>
     </sql>
     <sql>
@@ -1521,7 +1532,7 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        SUBSTR(soRls.version, 1, 7) AS so_version,
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
        ed.name AS external_db_name,
-       SUBSTR(edr.version, 1, 10) AS external_db_version,
+       edr.version AS external_db_version,
        SUBSTR(sequence.chromosome, 1, 20) AS chromosome,
        sequence.chromosome_order_num, sequence.na_sequence_id,
        --next the protein attributes: 
