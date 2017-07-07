@@ -1,12 +1,11 @@
 package org.apidb.apicommon.model.report;
 
 import static org.gusdb.fgputil.FormatUtil.NL;
+import static org.gusdb.fgputil.FormatUtil.urlEncodeUtf8;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -612,22 +611,12 @@ public class Gff3Reporter extends PagedAnswerReporter {
     String name = getValue(record.get("gff_attr_name"));
     if (name == null)
       name = id;
-    try {
-      buffer.append(";Name=" + URLEncoder.encode(name, "utf-8"));
-    }
-    catch (UnsupportedEncodingException ex) {
-      ex.printStackTrace();
-    }
+    buffer.append(";Name=" + urlEncodeUtf8(name));
 
     String description = getValue(record.get("gff_attr_description"));
     if (description == null)
       description = name;
-    try {
-      buffer.append(";description=" + URLEncoder.encode(description, "utf-8"));
-    }
-    catch (UnsupportedEncodingException ex) {
-      ex.printStackTrace();
-    }
+    buffer.append(";description=" + urlEncodeUtf8(description));
 
     buffer.append(";size=" + getValue(record.get("gff_attr_size")));
   }
