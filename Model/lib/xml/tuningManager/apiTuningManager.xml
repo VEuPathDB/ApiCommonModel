@@ -4073,6 +4073,7 @@ tablespace indx
                   s.organism like 'Penicillium%' or
                   s.organism like 'Neosartorya%' or
                   s.organism like 'Paracoccidioides%' or
+                  s.organism like 'Uncinocarpus%' or
                   s.organism like 'Ajellomyces%')
             then 'Eurotiomycetes'
             when (s.organism like 'Sclerotinia%' or
@@ -4093,6 +4094,7 @@ tablespace indx
             then 'Pucciniomycetes'
             when (s.organism like 'Saccharomyces%' or
                   s.organism like 'Yarrowia%' or
+                  s.organism like 'Clavispora%' or
                   s.organism like 'Candida%')
             then 'Saccharomycetes'
             when (s.organism like 'Schizosaccharomyces%')
@@ -5611,7 +5613,8 @@ where url is not null
     <sql>
       <![CDATA[
         create table GenePubmed&1 nologging as
-        select distinct ta.gene_source_id, ta.source_id, ta.project_id, pm.pubmed_id, pm.doi, pm.title, pm.authors
+        select distinct ta.gene_source_id, ta.source_id, ta.project_id, pm.pubmed_id, pm.doi, pm.title, 
+          dbms_lob.substr(pm.authors, 2000, 1) authors
         from sres.ExternalDatabaseRelease edr, sres.DbRef db, TranscriptAttributes ta,
              dots.DbRefNaFeature dbna, sres.ExternalDatabase ed,
              DatasetPresenter dsa, Pubmed pm
@@ -5917,6 +5920,13 @@ where url is not null
     <sql>
       <![CDATA[
         UPDATE Profile&1
+        SET dataset_name = 'tbruTREU927_Rijo_Circadian_Regulation_rnaSeq_RSRC'
+        WHERE dataset_name= 'tbruTREU927_RNASeq_Rijo_Circadian_Regulation_RSRC'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        UPDATE Profile&1
         SET profile_as_string = NULL 
         WHERE replace(profile_as_string, 'NA' || CHR(9), '') = 'NA'
       ]]>
@@ -6071,12 +6081,14 @@ where url is not null
       <![CDATA[
         CREATE TABLE ExpressionGraphsData&1 NOLOGGING  as
           -- RNASeq
-          select ga.source_id, dnt.dataset_presenter_id as dataset_id,
-                     case when ps.profile_set_suffix is null then ps.protocol_app_node_name else ps.protocol_app_node_name || ' - ' || ps.profile_set_suffix end ||
+          select distinct ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                     case when ps.profile_set_suffix is null then ps.protocol_app_node_name
+                          when ps.protocol_app_node_name ='value' then ps.profile_set_suffix 
+                          else ps.protocol_app_node_name || ' - ' || ps.profile_set_suffix end ||
                       case when dp.value in ('0', 'false') and pan.name like '% firststrand %' then '- sense' 
-                                when dp.value in ('0', 'false') and pan.name like '% secondstrand %' then '- antisense' 
-                                when dp.value in ('1', 'true') and pan.name like '% firststrand %' then '- antisense' 
-                                when dp.value in ('1', 'true') and pan.name like '% secondstrand %' then '- sense' 
+                           when dp.value in ('0', 'false') and pan.name like '% secondstrand %' then '- antisense' 
+                           when dp.value in ('1', 'true') and pan.name like '% firststrand %' then '- antisense' 
+                           when dp.value in ('1', 'true') and pan.name like '% secondstrand %' then '- sense' 
                                 else '' 
                       end  AS sample_name,
                  round(nfe.value, 2) as value,
@@ -6088,7 +6100,7 @@ where url is not null
           from results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
                ProfileSamples ps, study.Study s, study.Study i,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-               DatasetNameTaxon dnt, DatasetProperty dp
+               DatasetPresenter dnt, DatasetProperty dp
           where ga.na_feature_id = nfe.na_feature_id
             and nfe.protocol_app_node_id = pan.protocol_app_node_id
             and pan.protocol_app_node_id = ps.protocol_app_node_id
@@ -6096,7 +6108,7 @@ where url is not null
             and s.investigation_id = i.study_id
             and i.external_database_release_id = r.external_database_release_id
             and r.external_database_id = d.external_database_id
-            and d.name = dnt.name
+            and ps.dataset_name = dnt.name
             and dnt.dataset_presenter_id = dp.dataset_presenter_id
             and dp.property = 'switchStrandsProfiles'
             and ps.study_name not like '%cuff%'
