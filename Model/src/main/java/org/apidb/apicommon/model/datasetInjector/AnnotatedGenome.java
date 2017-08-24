@@ -31,6 +31,7 @@ public class AnnotatedGenome extends DatasetInjector {
       kingdom.put("Agaricomycetes","Fungi");
       kingdom.put("Blastocladiomycetes","Fungi");
       kingdom.put("Chytridiomycetes","Fungi");
+      kingdom.put("Dothideomycetes","Fungi");
       kingdom.put("Eurotiomycetes","Fungi");
       kingdom.put("Leotiomycetes","Fungi");
       kingdom.put("Microsporidia","Fungi");
@@ -130,11 +131,13 @@ public class AnnotatedGenome extends DatasetInjector {
       phylum.put("Trichoderma","Sordariomycetes");
       phylum.put("Trichomonas","Trichomonadida");
       phylum.put("Trypanosoma","Kinetoplastida");
+      phylum.put("Uncinocarpus","Eurotiomycetes");
       phylum.put("Ustilago","Ustilaginomycetes");
       phylum.put("Vavraia","Microsporidia");
       phylum.put("Vitrella","Chromerida");
       phylum.put("Vittaforma","Microsporidia");
       phylum.put("Yarrowia","Saccharomycetes");
+      phylum.put("Zymoseptoria","Dothideomycetes");
     }
 
     // getting properties defined in .prop file
