@@ -3638,7 +3638,7 @@ tablespace indx
   <tuningTable name="GeneIntronJunction">
     <comment>Contained introns from Gsnap with percentages of max intron score and ratios vs expression
     </comment>
-    <internalDependency name="GeneAttributes"/>
+    <!-- internalDependency name="GeneAttributes"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="PANProtocolMetadata"/>
@@ -3646,234 +3646,283 @@ tablespace indx
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.StudyLink"/>
-    <externalDependency name="study.Study"/>
+    <externalDependency name="study.Study"/ -->
+    <intermediateTable name="JunExp"/>
+    <intermediateTable name="NameMapping"/>
+    <sql>
+      <![CDATA[
+create table JunExp NOLOGGING AS
+select distinct junc.protocol_app_node_id as junctions_pan_id, assay.name as junc_name,
+                      fpkm.protocol_app_node_id as exp_pan_id,
+                      regexp_replace(fpkm.name, ' \[htseq-union.*', '') as sample_name, 
+                      pvc.protocol_param_value as strand,
+                      CASE
+                        WHEN pvc.protocol_param_value = 'secondstrand'
+                          THEN 'true'
+                          ELSE 'false'
+                      END as second_strand
+      from study.ProtocolAppNode assay, ProtocolAppNodeIo io2, study.ProtocolAppNode fpkm,
+           PanParameterValues pva, PanParameterValues pvb, PanParameterValues pvc,
+           (select j.protocol_app_node_id,min(input_node_id) as input_node_id
+            from ProtocolAppNodeIo io,
+                 (select distinct protocol_app_node_id
+                  from apidb.intronjunction) j
+            where j.protocol_app_node_id = io.output_node_id
+            group by j.protocol_app_node_id) junc
+      where junc.input_node_id = assay.protocol_app_node_id
+        and junc.input_node_id = io2.input_node_id
+        and io2.output_node_id = fpkm.protocol_app_node_id
+        and fpkm.protocol_app_node_id = pva.protocol_app_node_id
+        and pva.protocol_param = 'QuantificationType'
+        and pva.protocol_param_value = 'HTSeq'
+        and fpkm.protocol_app_node_id = pvb.protocol_app_node_id
+        and pvb.protocol_param = 'Mode'
+        and pvb.protocol_param_value = 'union'
+        and fpkm.protocol_app_node_id = pvc.protocol_app_node_id
+        and pvc.protocol_param = 'Strand'
+        and (pvc.protocol_param_value = 'unstranded'
+             or pvc.protocol_param_value = 'firststrand'
+             or pvc.protocol_param_value = 'secondstrand')
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table NameMapping NOLOGGING AS
+select distinct edp.dataset_presenter_display_name as exp_name,
+                edp.external_database_name, junexp.sample_name,
+                junexp.junctions_pan_id, junexp.exp_pan_id,
+                to_char(substr(dp.value, 1, 4000)) as switch_strands, junexp.strand,
+                to_char(substr(sj.value, 1, 4000)) as show_intron_junctions,
+                to_char(substr(uj.value, 1, 4000)) as include_unified_junctions,
+                to_char(substr(pe.value, 1, 4000)) as has_paired_ends
+             -- dp.property,count(*)
+from junexp, study.StudyLink sl, study.Study s, ExternalDbDatasetPresenter edp,
+     DatasetProperty dp, DatasetProperty sj, DatasetProperty uj, DatasetProperty pe
+where sl.protocol_app_node_id = junexp.junctions_pan_id
+  and s.study_id = sl.study_id
+  and s.name like '%[junctions]'
+  and s.external_database_release_id = edp.external_database_release_id
+  and dp.dataset_presenter_id = edp.dataset_presenter_id
+  and dp.property = 'switchStrandsProfiles'
+  and to_char(substr(dp.value, 1, 10)) = junexp.second_strand
+  and sj.dataset_presenter_id = edp.dataset_presenter_id
+  and sj.property = 'showIntronJunctions'
+  and uj.dataset_presenter_id = edp.dataset_presenter_id
+  and uj.property = 'includeInUnifiedJunctions'
+  and (to_char(substr(sj.value, 1, 10)) = 'true' or to_char(substr(uj.value, 1, 10)) = 'true')
+  and pe.dataset_presenter_id = edp.dataset_presenter_id
+  and pe.property = 'hasPairedEnds'
+      ]]>
+    </sql>
     <sql>
       <![CDATA[
 create table GeneIntronJunction&1 NOLOGGING AS
-with junexp as (
-select distinct junc.protocol_app_node_id as junctions_pan_id, assay.name as junc_name, fpkm.protocol_app_node_id as exp_pan_id,
-regexp_replace(fpkm.name, ' \[htseq-union.*', '') as sample_name, 
-pvc.protocol_param_value as strand,
-CASE WHEN pvc.protocol_param_value = 'secondstrand' THEN 'true' ELSE 'false' END as secondstrand
-from (select j.protocol_app_node_id,min(input_node_id) as input_node_id
-from (select distinct protocol_app_node_id from apidb.intronjunction) j
-, protocolappnodeio io
-where j.protocol_app_node_id = io.output_node_id
-group by j.protocol_app_node_id) junc
-, study.protocolappnode assay
-, protocolappnodeio io2
-, study.protocolappnode fpkm
-, Panparametervalues pva
-, Panparametervalues pvb
-, Panparametervalues pvc
-where  junc.input_node_id = assay.protocol_app_node_id
-and junc.input_node_id = io2.input_node_id
-and io2.output_node_id = fpkm.protocol_app_node_id
-and fpkm.protocol_app_node_id = pva.protocol_app_node_id
-AND pva.protocol_param = 'QuantificationType'
-AND pva.protocol_param_value = 'HTSeq'
-and fpkm.protocol_app_node_id = pvb.protocol_app_node_id
-AND pvb.protocol_param = 'Mode'
-and pvb.protocol_param_value = 'union'
-and fpkm.protocol_app_node_id = pvc.protocol_app_node_id
-AND pvc.protocol_param = 'Strand'
-and (pvc.protocol_param_value = 'unstranded'
-     OR pvc.protocol_param_value = 'firststrand'
-     OR pvc.protocol_param_value = 'secondstrand')
-), 
---end of junexp 
- namemapping as (
-Select distinct edp.dataset_presenter_display_name as exp_name, edp.external_database_name, junexp.sample_name,
-junexp.junctions_pan_id, junexp.exp_pan_id, dp.value as switch_strands,junexp.strand,
-sj.value as show_intron_junctions, uj.value as include_unified_junctions, pe.value as has_paired_ends
---dp.property,count(*)
-FROM junexp, study.studylink sl, study.study s, externaldbdatasetpresenter edp
-, datasetproperty dp, datasetproperty sj, datasetproperty uj
-, datasetproperty pe
-where sl.protocol_app_node_id = junexp.junctions_pan_id
-and s.study_id = sl.study_id
-and s.name like '%[junctions]'
-and s.external_database_release_id = edp.external_database_release_id
-and dp.dataset_presenter_id = edp.dataset_presenter_id
-AND dp.property = 'switchStrandsProfiles'
-AND dp.value = junexp.secondstrand
-and sj.dataset_presenter_id = edp.dataset_presenter_id
-AND sj.property = 'showIntronJunctions'
-and uj.dataset_presenter_id = edp.dataset_presenter_id
-AND uj.property = 'includeInUnifiedJunctions'
-AND (sj.value = 'true' or uj.value = 'true')
-and pe.dataset_presenter_id = edp.dataset_presenter_id
-and pe.property = 'hasPairedEnds'
-),  
--- end of namemapping 
-mappingstats as (
-select junctions_pan_id
-,round(avg(average_read_length - 2),1) as read_length
-, round(avg(number_mapped_reads),1) as mapped_reads
-, round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2) as avg_mapping_coverage
-, count(*) as num_replicates
-from (
-select Nm.Junctions_Pan_Id,to_number(ca.value) as average_read_length,to_number(cb.value) as number_mapped_reads, to_number(cc.value) as avg_mapping_coverage
-from namemapping nm
-, STUDY.CHARACTERISTIC ca
-, sres.ontologyterm ota
-, protocolappnodeio ioa
-, STUDY.CHARACTERISTIC cb
-, sres.ontologyterm otb
-, STUDY.CHARACTERISTIC cc
-, sres.ontologyterm otc
-where nm.junctions_pan_id = ioa.output_node_id
-and ioa.input_node_id = ca.protocol_app_node_id
-and ca.value is not null
-and ca.QUALIFIER_ID = ota.ONTOLOGY_TERM_ID
-and ota.name = 'average read length'
-and ca.protocol_app_node_id = cb.protocol_app_node_id
-and cb.value is not null
-and cb.QUALIFIER_ID = otb.ONTOLOGY_TERM_ID
-and otb.name = 'number mapped reads'
-and ca.protocol_app_node_id = cc.protocol_app_node_id
-and cc.value is not null
-and cc.QUALIFIER_ID = otc.ONTOLOGY_TERM_ID
-and otc.name = 'average mapping coverage'
-)
-group by Junctions_Pan_Id
-),
--- end of mappingstats
-isrmult as (
- select protocol_app_node_id, 'total' as type, count(*) as total_junctions, sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
- from apidb.intronjunction
- where unique_reads >= 1
- group by protocol_app_node_id
-), 
--- end of isrmult
- annot as (
-select distinct gene.feature_source_id as genesource_id,intron.feature_type,intron.na_sequence_id,intron.start_min, intron.end_max, intron.is_reversed
-from apidb.FeatureLocation intron,  apidb.FeatureLocation trans, apidb.FeatureLocation gene
-where intron.feature_type = 'Intron'
-and intron.is_top_level = 1
-and trans.na_feature_id = intron.parent_id
-and gene.na_feature_id = trans.parent_id
-),
--- end of annot = annotated introns
-core as (
-select junc.intron_junction_id
-, nm.exp_name
-, nm.external_database_name
-, nm.sample_name
-, junc.protocol_app_node_id
-, junc.na_sequence_id
-, junc.segment_start
-, junc.segment_end
-, junc.unique_reads
-, round(junc.unique_reads * isrm.multiplier,2) as isrpm
-, junc.nu_reads,max(nafe.value) as value
-, nm.switch_strands
-, nm.strand
-, CASE WHEN max(nafe.value) > 0 THEN round(junc.unique_reads / max(nafe.value),4) ELSE -1 END as exp_ratio
-, CASE WHEN max(nafe.value) > 0 THEN round(junc.unique_reads * isrm.multiplier / max(nafe.value),4) ELSE -1 END as isrpm_exp_ratio
-, CASE WHEN max(nafe.value) > 0 
-  THEN round((max(nafe.value) * ms.mapped_reads / 1000000) * (ms.read_length / 1000),4) 
-  ELSE -1 END as avg_coverage
-, CASE WHEN max(nafe.value) > 0 
-  THEN round(junc.unique_reads / ((max(nafe.value) * ms.mapped_reads / 1000000) * (ms.read_length / 1000)),4)
-  ELSE -1 END as isr_coverage_ratio
-, junc.is_reversed
--- note:  need to deal with datasets that are unstranded ... this always assumes stranded. 
-, CASE WHEN max(ga.is_reversed) keep (dense_rank first order by nafe.value desc) = junc.is_reversed 
-  THEN 1 ELSE 0 END as matches_gene_strand
-, CASE WHEN count(*) > 1
-  THEN max(ga.source_id) keep (dense_rank first order by nafe.value desc)
-  ELSE min(ga.source_id)
-  END as gene_source_id
-, decode(annot.feature_type,'Intron','Yes','No') as annotated_intron
-, nm.include_unified_junctions
-, nm.show_intron_junctions
-FROM apidb.intronjunction junc, geneattributes ga, results.nafeatureexpression nafe, namemapping nm, isrmult isrm, annot, mappingstats ms
-WHERE nafe.protocol_app_node_id = nm.exp_pan_id
-AND nm.junctions_pan_id = junc.protocol_app_node_id
-AND Nm.Junctions_Pan_Id = Ms.Junctions_Pan_Id
-AND isrm.protocol_app_node_id = junc.protocol_app_node_id
-AND nafe.na_feature_id = ga.na_feature_id
-AND ga.na_sequence_id = junc.na_sequence_id
-AND ga.start_min <= junc.segment_start
-AND ga.end_max >= junc.segment_end
-AND ga.is_reversed = junc.is_reversed
-AND junc.na_sequence_id = annot.na_sequence_id(+)
-AND junc.segment_start = annot.start_min(+)
-AND junc.segment_end = annot.end_max(+)
-and junc.is_reversed = annot.is_reversed(+)
-group by nm.exp_name, nm.external_database_name, nm.sample_name,junc.intron_junction_id,junc.Protocol_App_Node_Id,
-         junc.na_sequence_id,junc.segment_start,junc.segment_end,
-         junc.unique_reads,junc.nu_reads,nm.switch_strands,junc.is_reversed, isrm.multiplier, nm.strand,
-annot.feature_type,nm.include_unified_junctions, 
-         nm.show_intron_junctions, ms.read_length, ms.mapped_reads
-),  
---end of core
-ratiostats as (
-select protocol_app_node_id,exp_name,sample_name
-, avg(isr_coverage_ratio) as avg_isr_coverage_ratio
-, median(isr_coverage_ratio) as median_isr_coverage_ratio
-, count(*) as total_introns_averaged
-from core
-where annotated_intron = 'Yes'
-and isr_coverage_ratio != -1
-and unique_reads >= 10 
-group by protocol_app_node_id,exp_name,sample_name
-), -- end of ratiostats
-isrmultcons as (
- select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions, sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
- from core
- where unique_reads >= 1
- and matches_gene_strand = 1
- group by protocol_app_node_id
-),
- totalexpression as (
-select Nm.Junctions_Pan_Id,avg(nafe.value) as avg_expression, median(value) as median_expression
-from results.nafeatureexpression nafe, namemapping nm
-where Nm.Exp_Pan_Id = nafe.protocol_app_node_id
-group by Nm.Junctions_Pan_Id
-)
-/* end with to generate core, namemapping, isrmult and totalexpression --
-------------   start of SQL  ------------- */
-select intron_junction_id,protocol_app_node_id,exp_name,external_database_name,sample_name,na_sequence_id,segment_start,segment_end,
-is_reversed, strand, unique_reads, isrpm, nu_reads,
-round(value,4) as exp_value,round(exp_ratio,4) as intron_exp_ratio,round(isrpm_exp_ratio,4) as isrpm_exp_ratio,
-avg_coverage, isr_coverage_ratio,norm_isr_coverage_ratio,
-round(100 * percent_max_sample,1) as percent_max_sample,
-round(100 * percent_max_total,1) as percent_max_total,
-round(total_ratio,4) as total_ratio,matches_gene_strand,annotated_intron,
-decode(percent_max_sample,-1,0,1) as is_contained, gene_source_id,
-intron_sample_avgexp_ratio, isrpm_sample_avgexp_ratio, intron_sample_medexp_ratio,isrpm_sample_medexp_ratio,
-isr_avgcoverage_ratio,norm_isr_avgcoverage_ratio,
-total_junctions as sample_total_junctions,multiplier as sample_multiplier, consistent_multiplier, 
-round(multiplier / consistent_multiplier,4) as total_cons_mult_ratio,
-include_unified_junctions, show_intron_junctions
-from (select c.*,gene_tot.total_ratio,gene_tot.isrpm_total_ratio,
-CASE WHEN gene_tot.max_total_unique >= 1 THEN c.unique_reads / gene_tot.max_total_unique ELSE 0 END as percent_max_total,
-CASE WHEN sample_tot.max_sample_unique >= 1 THEN c.unique_reads / sample_tot.max_sample_unique ELSE 0 END as percent_max_sample,
-CASE WHEN te.avg_expression > 0 THEN round(c.unique_reads/te.avg_expression,4) ELSE 0 END as intron_sample_avgexp_ratio,
-CASE WHEN te.avg_expression > 0 THEN round(c.isrpm/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
-CASE WHEN te.median_expression > 0 THEN round(c.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
-CASE WHEN te.median_expression > 0 THEN round(c.isrpm/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
-CASE WHEN ms.avg_mapping_coverage > 0 THEN round(c.unique_reads/ms.avg_mapping_coverage,4) ELSE 0 END as isr_avgcoverage_ratio,
-CASE WHEN ms.avg_mapping_coverage > 0 THEN round(
+with
+   mappingstats
+   as (select junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
+              round(avg(number_mapped_reads),1) as mapped_reads,
+              round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
+                as avg_mapping_coverage,
+              count(*) as num_replicates
+       from (select nm.junctions_pan_id, to_number(ca.value) as average_read_length,
+                    to_number(cb.value) as number_mapped_reads,
+                    to_number(cc.value) as avg_mapping_coverage
+             from namemapping nm, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
+                  protocolappnodeio ioa, STUDY.CHARACTERISTIC cb, sres.ontologyterm otb,
+                  STUDY.CHARACTERISTIC cc, sres.ontologyterm otc
+             where nm.junctions_pan_id = ioa.output_node_id
+               and ioa.input_node_id = ca.protocol_app_node_id
+               and ca.value is not null
+               and ca.QUALIFIER_ID = ota.ONTOLOGY_TERM_ID
+               and ota.name = 'average read length'
+               and ca.protocol_app_node_id = cb.protocol_app_node_id
+               and cb.value is not null
+               and cb.QUALIFIER_ID = otb.ONTOLOGY_TERM_ID
+               and otb.name = 'number mapped reads'
+               and ca.protocol_app_node_id = cc.protocol_app_node_id
+               and cc.value is not null
+               and cc.QUALIFIER_ID = otc.ONTOLOGY_TERM_ID
+               and otc.name = 'average mapping coverage'
+               )
+       group by Junctions_Pan_Id
+      ),
+   -- end of mappingstats
+   isrmult
+   as (select protocol_app_node_id, 'total' as type, count(*) as total_junctions,
+              sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+       from apidb.IntronJunction
+       where unique_reads >= 1
+       group by protocol_app_node_id
+      ), 
+   -- end of isrmult
+   annot
+   as (select distinct gene.feature_source_id as genesource_id, intron.feature_type,
+                       intron.na_sequence_id, intron.start_min, intron.end_max, intron.is_reversed
+       from apidb.FeatureLocation intron,  apidb.FeatureLocation trans, apidb.FeatureLocation gene
+       where intron.feature_type = 'Intron'
+         and intron.is_top_level = 1
+         and trans.na_feature_id = intron.parent_id
+         and gene.na_feature_id = trans.parent_id
+      ),
+   -- end of annot = annotated introns
+   core
+   as (select junc.intron_junction_id, nm.exp_name, nm.external_database_name,
+              nm.sample_name, junc.protocol_app_node_id, junc.na_sequence_id,
+              junc.segment_start, junc.segment_end, junc.unique_reads,
+              round(junc.unique_reads * isrm.multiplier,2) as isrpm,
+              junc.nu_reads,max(nafe.value) as value, nm.switch_strands, nm.strand,
+              CASE WHEN max(nafe.value) > 0 THEN round(junc.unique_reads / max(nafe.value),4) ELSE -1
+              END as exp_ratio,
+              CASE
+                WHEN max(nafe.value) > 0
+                  THEN round(junc.unique_reads * isrm.multiplier / max(nafe.value),4)
+                  ELSE -1
+              END as isrpm_exp_ratio,
+              CASE WHEN max(nafe.value) > 0 
+                     THEN round((max(nafe.value) * ms.mapped_reads / 1000000) * (ms.read_length / 1000),4) 
+                     ELSE -1
+              END as avg_coverage,
+              CASE
+                WHEN max(nafe.value) > 0 
+                  THEN round(junc.unique_reads
+                             / ((max(nafe.value) * ms.mapped_reads / 1000000) * (ms.read_length / 1000)), 4)
+                  ELSE -1
+              END as isr_coverage_ratio,
+              junc.is_reversed,
+              -- note:  need to deal with datasets that are unstranded; this assumes always stranded.
+              CASE
+                WHEN max(ga.is_reversed) keep (dense_rank first order by nafe.value desc) = junc.is_reversed 
+                  THEN 1
+                  ELSE 0
+              END as matches_gene_strand,
+              CASE
+                WHEN count(*) > 1
+                  THEN max(ga.source_id) keep (dense_rank first order by nafe.value desc)
+                  ELSE min(ga.source_id)
+              END as gene_source_id,
+              decode(annot.feature_type,'Intron','Yes','No') as annotated_intron,
+              nm.include_unified_junctions,
+              nm.show_intron_junctions
+       from apidb.IntronJunction junc, GeneAttributes ga, results.NaFeatureExpression nafe,
+            NameMapping nm, isrmult isrm, annot, MappingStats ms
+       where nafe.protocol_app_node_id = nm.exp_pan_id
+         and nm.junctions_pan_id = junc.protocol_app_node_id
+         and Nm.Junctions_Pan_Id = Ms.Junctions_Pan_Id
+         and isrm.protocol_app_node_id = junc.protocol_app_node_id
+         and nafe.na_feature_id = ga.na_feature_id
+         and ga.na_sequence_id = junc.na_sequence_id
+         and ga.start_min <= junc.segment_start
+         and ga.end_max >= junc.segment_end
+         and ga.is_reversed = junc.is_reversed
+         and junc.na_sequence_id = annot.na_sequence_id(+)
+         and junc.segment_start = annot.start_min(+)
+         and junc.segment_end = annot.end_max(+)
+         and junc.is_reversed = annot.is_reversed(+)
+       group by nm.exp_name, nm.external_database_name, nm.sample_name,
+                junc.intron_junction_id,junc.Protocol_App_Node_Id, junc.na_sequence_id,
+                junc.segment_start, junc.segment_end, junc.unique_reads, junc.nu_reads,
+                nm.switch_strands, junc.is_reversed, isrm.multiplier, nm.strand,
+                annot.feature_type, nm.include_unified_junctions,
+                nm.show_intron_junctions, ms.read_length, ms.mapped_reads
+      ),  
+   -- end of core
+   ratiostats
+   as (select protocol_app_node_id, exp_name, sample_name,
+              avg(isr_coverage_ratio) as avg_isr_coverage_ratio,
+              median(isr_coverage_ratio) as median_isr_coverage_ratio,
+              count(*) as total_introns_averaged
+       from core
+       where annotated_intron = 'Yes'
+         and isr_coverage_ratio != -1
+         and unique_reads >= 10 
+       group by protocol_app_node_id, exp_name, sample_name
+      ), -- end of ratiostats
+   isrmultcons
+   as (select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions,
+              sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+       from core
+       where unique_reads >= 1
+         and matches_gene_strand = 1
+       group by protocol_app_node_id
+      ),
+   totalexpression
+   as (select Nm.Junctions_Pan_Id, avg(nafe.value) as avg_expression, median(value) as median_expression
+       from results.NaFeatureExpression nafe, namemapping nm
+       where nm.exp_pan_id = nafe.protocol_app_node_id
+       group by nm.Junctions_Pan_Id
+  )
+  -- end of WITH clause; start of main query
+select intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
+       sample_name, na_sequence_id, segment_start, segment_end, is_reversed, strand,
+       unique_reads, isrpm, nu_reads, round(value, 4) as exp_value,
+       round(exp_ratio, 4) as intron_exp_ratio, round(isrpm_exp_ratio, 4) as isrpm_exp_ratio,
+       avg_coverage, isr_coverage_ratio, norm_isr_coverage_ratio,
+       round(100 * percent_max_sample, 1) as percent_max_sample,
+       round(100 * percent_max_total, 1) as percent_max_total,
+       round(total_ratio, 4) as total_ratio, matches_gene_strand, annotated_intron,
+       decode(percent_max_sample, -1, 0, 1) as is_contained, gene_source_id,
+       intron_sample_avgexp_ratio, isrpm_sample_avgexp_ratio, intron_sample_medexp_ratio,
+       isrpm_sample_medexp_ratio,isr_avgcoverage_ratio, norm_isr_avgcoverage_ratio,
+       total_junctions as sample_total_junctions, multiplier as sample_multiplier,
+       consistent_multiplier, 
+       round(multiplier / consistent_multiplier, 4) as total_cons_mult_ratio,
+       include_unified_junctions, show_intron_junctions
+from (select c.*, gene_tot.total_ratio, gene_tot.isrpm_total_ratio,
+      CASE
+        WHEN gene_tot.max_total_unique >= 1
+          THEN c.unique_reads / gene_tot.max_total_unique
+          ELSE 0
+      END as percent_max_total,
+      CASE
+        WHEN sample_tot.max_sample_unique >= 1
+          THEN c.unique_reads / sample_tot.max_sample_unique
+          ELSE 0
+      END as percent_max_sample,
+      CASE
+        WHEN te.avg_expression > 0
+          THEN round(c.unique_reads/te.avg_expression, 4)
+          ELSE 0
+      END as intron_sample_avgexp_ratio,
+      CASE
+        WHEN te.avg_expression > 0
+          THEN round(c.isrpm/te.avg_expression, 4)
+          ELSE 0
+      END as isrpm_sample_avgexp_ratio,
+      CASE
+         WHEN te.median_expression > 0
+           THEN round(c.unique_reads/te.median_expression, 4)
+           ELSE 0
+      END as intron_sample_medexp_ratio,
+CASE
+  WHEN te.median_expression > 0
+    THEN round(c.isrpm/te.median_expression, 4)
+    ELSE 0
+END as isrpm_sample_medexp_ratio,
+CASE
+  WHEN ms.avg_mapping_coverage > 0
+    THEN round(c.unique_reads/ms.avg_mapping_coverage, 4)
+    ELSE 0
+END as isr_avgcoverage_ratio,
+CASE
+  WHEN ms.avg_mapping_coverage > 0
+    THEN round(
 /*     CASE WHEN c.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio > 1 THEN 1 
           ELSE */ c.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio -- END 
-                                                 ,4) ELSE 0 END as norm_isr_avgcoverage_ratio,
+                                                 , 4) ELSE 0 END as norm_isr_avgcoverage_ratio,
 CASE WHEN ms.avg_mapping_coverage > 0 THEN round(
 /*     CASE WHEN c.isr_coverage_ratio / nr.median_isr_coverage_ratio > 1 THEN 1 
           ELSE */ c.isr_coverage_ratio / nr.median_isr_coverage_ratio -- END
-                                                 ,4) ELSE 0 END as norm_isr_coverage_ratio,
-isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_multiplier
+                                                 , 4) ELSE 0 END as norm_isr_coverage_ratio,
+isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consistent_multiplier
   from
-  (select gene_source_id,max(unique_reads) as max_total_unique, max(isrpm) as max_isrpm_unique, sum(value) as total_exp, 
+  (select gene_source_id, max(unique_reads) as max_total_unique, max(isrpm) as max_isrpm_unique, sum(value) as total_exp, 
   CASE WHEN sum(value) > 0 THEN sum(unique_reads) / sum(value) ELSE null END as total_ratio,
   CASE WHEN sum(value) > 0 THEN sum(isrpm) / sum(value) ELSE null END as isrpm_total_ratio
   from core
   group by core.gene_source_id) gene_tot, 
-  (select protocol_app_node_id,gene_source_id,max(unique_reads) as max_sample_unique,max(isrpm) as max_sample_isrpm 
+  (select protocol_app_node_id, gene_source_id, max(unique_reads) as max_sample_unique, max(isrpm) as max_sample_isrpm 
   from core
-  group by protocol_app_node_id,gene_source_id) sample_tot,
+  group by protocol_app_node_id, gene_source_id) sample_tot,
   core c, totalexpression te, isrmult, isrmultcons, mappingstats ms, ratiostats nr
   where gene_tot.gene_source_id = c.gene_source_id
   AND c.protocol_app_node_id = ms.junctions_pan_id
@@ -3884,39 +3933,39 @@ isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_
   AND c.protocol_app_node_id = isrmultcons.protocol_app_node_id
   AND c.protocol_app_node_id = nr.protocol_app_node_id
   UNION ALL
--- union this with intronjunction that are not in core adding in exp_name,sample_name 
+-- union this with intronjunction that are not in core adding in exp_name, sample_name 
 -- first do minus to get missing junctions and join to names.
 -- need to add in the isrpm stuff as is above.  Will need to join to isrmult
-select introns.intron_junction_id,names.exp_name,names.external_database_name,names.sample_name,introns.Protocol_App_Node_Id,introns.na_sequence_id,introns.segment_start,introns.segment_end, 
-introns.unique_reads,round(introns.unique_reads * isrmult.multiplier,2) as isrpm, introns.nu_reads,
--1 as value,names.switch_strands, names.strand,-1 as exp_ratio,-1 as isrpm_exp_ratio,-1 as avg_coverage,-1 as isr_coverage_ratio,
+select introns.intron_junction_id, names.exp_name, names.external_database_name, names.sample_name, introns.Protocol_App_Node_Id, introns.na_sequence_id, introns.segment_start, introns.segment_end, 
+introns.unique_reads, round(introns.unique_reads * isrmult.multiplier, 2) as isrpm, introns.nu_reads,
+-1 as value, names.switch_strands, names.strand, -1 as exp_ratio, -1 as isrpm_exp_ratio, -1 as avg_coverage, -1 as isr_coverage_ratio,
 CASE WHEN names.switch_strands = 'false'
   THEN introns.is_reversed
   WHEN names.switch_strands = 'true'
-  THEN decode(introns.is_reversed,0,1,1,0,-1)
+  THEN decode(introns.is_reversed, 0, 1, 1, 0, -1)
   ELSE -1
 END as is_reversed,
--1 as matches_gene_strand, '' as gene_source_id,'No' as annotated_intron, 
+-1 as matches_gene_strand, '' as gene_source_id, 'No' as annotated_intron, 
 names.include_unified_junctions, names.show_intron_junctions,
--1 as total_ratio,-1 as isrpm_total_ratio,
+-1 as total_ratio, -1 as isrpm_total_ratio,
 -1 as percent_max_total, -1 as percent_max_sample,
-CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads/te.avg_expression,4) ELSE 0 END as intron_sample_avgexp_ratio,
-CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.avg_expression,4) ELSE 0 END as isrpm_sample_avgexp_ratio,
-CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression,4) ELSE 0 END as intron_sample_medexp_ratio,
-CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.median_expression,4) ELSE 0 END as isrpm_sample_medexp_ratio,
-CASE WHEN ms.avg_mapping_coverage > 0 THEN round(introns.unique_reads/ms.avg_mapping_coverage,4) ELSE 0 END as isr_avgcoverage_ratio,
+CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads/te.avg_expression, 4) ELSE 0 END as intron_sample_avgexp_ratio,
+CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.avg_expression, 4) ELSE 0 END as isrpm_sample_avgexp_ratio,
+CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression, 4) ELSE 0 END as intron_sample_medexp_ratio,
+CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.median_expression, 4) ELSE 0 END as isrpm_sample_medexp_ratio,
+CASE WHEN ms.avg_mapping_coverage > 0 THEN round(introns.unique_reads/ms.avg_mapping_coverage, 4) ELSE 0 END as isr_avgcoverage_ratio,
 CASE WHEN ms.avg_mapping_coverage > 0 THEN round(
 /*     CASE WHEN introns.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio > 1 THEN 1 
           ELSE */ introns.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio -- END
-                                                 ,4) ELSE 0 END as norm_isr_avgcoverage_ratio,
+                                                 , 4) ELSE 0 END as norm_isr_avgcoverage_ratio,
 -1 as norm_isr_coverage_ratio,
-isrmult.total_junctions,isrmult.multiplier,isrmultcons.multiplier as consistent_multiplier
+isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consistent_multiplier
 FROM (select intron_junction_id
 from apidb.intronjunction
 MINUS
 select intron_junction_id
 from core) mi,
-namemapping names, totalexpression te, isrmult,isrmultcons, apidb.intronjunction introns, mappingstats ms, ratiostats nr
+namemapping names, totalexpression te, isrmult, isrmultcons, apidb.intronjunction introns, mappingstats ms, ratiostats nr
 where introns.intron_junction_id = mi.intron_junction_id
 AND introns.protocol_app_node_id = names.junctions_pan_id
 AND te.junctions_pan_id = introns.protocol_app_node_id
@@ -3928,7 +3977,7 @@ AND ms.junctions_pan_id = introns.protocol_app_node_id)
     </sql>
     <sql>
       <![CDATA[
-create index GeneIntronJunc_ix&1 on GeneIntronJunction&1 (na_sequence_id,segment_start,segment_end)
+create index GeneIntronJunc_ix&1 on GeneIntronJunction&1 (na_sequence_id, segment_start, segment_end)
 tablespace indx
       ]]>
     </sql>
