@@ -101,9 +101,8 @@ public class AntibodyArray extends DatasetInjector {
         setPropValue("excludedProfileSetsList", excludedProfileSetsList);
         setFunctionProperties() ;
 
-        String help = getPropValue("function_help");
-
-        String fn_display = getPropValue("function_display");
+        //String help = getPropValue("function_help");
+        //String fn_display = getPropValue("function_display");
 
         injectTemplate("antibodyArrayProfileSetParamQuery");
 

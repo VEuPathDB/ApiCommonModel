@@ -6,9 +6,8 @@ public class MicroarrayProbes extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
-      setShortAttribution();
-      String datasetName = getDatasetName();
 
+      setShortAttribution();
       setOrganismAbbrevFromDatasetName();
       String organismAbbrevDisplay = getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));

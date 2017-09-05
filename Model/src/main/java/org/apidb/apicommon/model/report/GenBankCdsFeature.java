@@ -14,7 +14,7 @@ public class GenBankCdsFeature extends GenBankFeature {
     //private List<String> signalPeptides;
     //private List<String> transmembraneHelixes;
 
-    public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, int codonStart, String proteinId) {
+    public GenBankCdsFeature(GenBankFeature genbankFeature, String sequence, String translTable, @SuppressWarnings("unused") int codonStart, String proteinId) {
         super(genbankFeature, "cds");
 
         this.setSequence(sequence);
