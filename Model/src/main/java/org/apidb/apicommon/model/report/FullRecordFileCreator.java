@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.BufferedReader;
@@ -165,7 +162,6 @@ public class FullRecordFileCreator extends BaseCLI {
         question.setName(name + "_dump");
         question.setRecordClass(recordClass);
         question.setQuery(query);
-        // question.setFullAnswer(true);
         questionSet.addQuestion(question);
         question.excludeResources(projectId);
         question.resolveReferences(wdkModel);

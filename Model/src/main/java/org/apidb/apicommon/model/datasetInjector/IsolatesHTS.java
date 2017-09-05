@@ -8,7 +8,6 @@ public class IsolatesHTS extends DatasetInjector {
   @Override
   public void injectTemplates() {
       String datasetName = getDatasetName();
-      String[] datasetWords = datasetName.split("_");
       setOrganismAbbrevFromDatasetName();
 
       String experimentName = getPropValue("name");
