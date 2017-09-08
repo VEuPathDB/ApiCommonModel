@@ -1,7 +1,5 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-
 public class Popset extends SnpChip {
 
   @Override
@@ -41,6 +39,5 @@ public class Popset extends SnpChip {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;
   }
-
 
 }
