@@ -1,8 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-
-public class Popset extends DatasetInjector {
+public class Popset extends SnpChip {
 
   @Override
   public void injectTemplates() {
@@ -11,13 +9,8 @@ public class Popset extends DatasetInjector {
   @Override
   public void addModelReferences() {
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySnps");
-
-      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpBySourceId");
-      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByGeneId");
-      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByLocation");
-      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByStrain");
-      addWdkReference("SnpChipRecordClasses.SnpChipRecordClass", "question", "SnpChipQuestions.SnpsByIsolatePattern");
+      // add all references from SnpChip first
+      super.addModelReferences();
 
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByPopsetId");
       addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByTaxon");
@@ -46,6 +39,5 @@ public class Popset extends DatasetInjector {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;
   }
-
 
 }
