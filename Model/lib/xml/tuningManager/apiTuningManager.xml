@@ -354,22 +354,47 @@ create table &prefixGeneGoTerms&1 nologging as
     <externalDependency name="sres.OntologyTerm"/>
     <sql>
       <![CDATA[
-create table &prefixGoTermSummary&1 nologging as
-        select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id, ggt.is_not, replace(ggt.go_id,'_',':') as go_id,
-               ggt.go_term_id, ggt.ontology, replace(ggt.go_term_name,'_',' ')as go_term_name, ggt.source, ggt.evidence_code, ggt.reference, ggt.evidence_code_parameter,
-               cast (1 as number(1)) as is_leaf, ol.min_depth as depth
-        from GeneGoTerms ggt, &prefixOntologyLevels ol
-             where ggt.go_term_id = ol.ontology_term_id(+)
+          create table &prefixGoTermSummary&1 nologging as
+          select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
+                 ggt.is_not, replace(ggt.go_id, '_', ':') as go_id,
+                 ggt.go_term_id, ggt.ontology,
+                 replace(ggt.go_term_name, '_',' ') as go_term_name, ggt.source,
+                 ggt.evidence_code, ggt.reference, ggt.evidence_code_parameter,
+                 cast (1 as number(1)) as is_leaf, ol.min_depth as depth,
+                 case
+                   when gs.go_subset_id is null then 0
+                   else 1
+                 end as is_go_slim,
+                 case
+                   when gs.go_subset_id is null then 0
+                   else 1
+                 end as is_go_slim_leaf
+          from GeneGoTerms ggt, &prefixOntologyLevels ol, apidb.GoSubset gs
+          where ggt.go_term_id = ol.ontology_term_id(+)
+            and ggt.go_term_id = gs.ontology_term_id(+)
         union
-        select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id, ggt.is_not,
-               replace (substr(ot.source_id, 1, 25),'_',':') as go_id,
-               ot.ontology_term_id as go_term_id, ggt.ontology,
-               replace (substr(ot.name, 1,250),'_',' ') as go_term_name, ggt.source, ggt.evidence_code, ggt.reference, ggt.evidence_code_parameter,
-               cast (1 as number(1)) as is_leaf, ol.min_depth as depth
-        from GeneGoTerms ggt, sres.OntologyRelationship orel, sres.OntologyTerm ot, &prefixOntologyLevels ol
-        where ggt.go_term_id = orel.subject_term_id
-          and orel.object_term_id = ot.ontology_term_id
-          and ot.ontology_term_id = ol.ontology_term_id(+)
+          select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
+                 ggt.is_not,
+                 replace (substr(ot.source_id, 1, 25),'_',':') as go_id,
+                 ot.ontology_term_id as go_term_id, ggt.ontology,
+                 replace (substr(ot.name, 1,250),'_',' ') as go_term_name,
+                 ggt.source, ggt.evidence_code, ggt.reference,
+                 ggt.evidence_code_parameter,
+                 cast (1 as number(1)) as is_leaf, ol.min_depth as depth,
+                 case
+                   when gs.go_subset_id is null then 0
+                   else 1
+                 end as is_go_slim,
+                 case
+                   when gs.go_subset_id is null then 0
+                   else 1
+                 end as is_go_slim_leaf
+          from GeneGoTerms ggt, sres.OntologyRelationship orel,
+               sres.OntologyTerm ot, &prefixOntologyLevels ol, apidb.GoSubset gs
+          where ggt.go_term_id = orel.subject_term_id
+            and orel.object_term_id = ot.ontology_term_id
+            and ot.ontology_term_id = ol.ontology_term_id(+)
+            and ggt.go_term_id = gs.ontology_term_id(+)
       ]]>
     </sql>
     <sql>
@@ -380,6 +405,18 @@ create table &prefixGoTermSummary&1 nologging as
               in (select gts.aa_sequence_id, gts.source, orel.object_term_id
                   from &prefixGoTermSummary&1 gts, sres.OntologyRelationship orel
                   where gts.go_term_id = orel.subject_term_id
+                    and orel.subject_term_id != orel.object_term_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update &prefixGoTermSummary&1
+        set is_go_slim_leaf = 0
+        where (aa_sequence_id, source, go_term_id)
+              in (select gts.aa_sequence_id, gts.source, orel.object_term_id
+                  from &prefixGoTermSummary&1 gts, sres.OntologyRelationship orel, apidb.GoSubset gs
+                  where gts.go_term_id = orel.subject_term_id
+                    and gts.go_term_id = gs.ontology_term_id
                     and orel.subject_term_id != orel.object_term_id)
       ]]>
     </sql>
