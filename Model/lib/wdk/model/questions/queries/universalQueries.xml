@@ -83,19 +83,28 @@
 
         <column name="provider"/>
         <sql>
-            <![CDATA[
-            select userfileid as source_id, '@PROJECT_ID@' as project_id,
+          <![CDATA[
+            WITH users AS (
+              SELECT a.user_id, a.signature, ap.provider
+              FROM @ACCT_SCHEMA@accounts@ACCT_DBLINK@ a
+              LEFT JOIN (
+                SELECT user_id,
+                  rtrim(max(case when key = 'first_name' then value end)) || ' ' ||
+                  rtrim(max(case when key = 'last_name' then value end)) || '<br/>' ||
+                  rtrim(max(case when key = 'organization' then value end)) as provider
+                FROM @ACCT_SCHEMA@account_properties@ACCT_DBLINK@
+                GROUP BY user_id
+              ) ap ON a.user_id = ap.user_id
+            )
+            SELECT userfileid AS source_id, '@PROJECT_ID@' AS project_id,
                    f.filename, f.title, f.notes, 
-                   to_char(f.uploadtime,'YYYY-MM-DD HH24:MI:SS') uploadtime,
-                   f.filesize, f.format,
-                   u.first_name || ' ' || u.last_name || '<br>' ||
-                   u.organization as provider
-            from uploads.UserFile@USER_DBLINK@ f,
-                 @USER_SCHEMA@users@USER_DBLINK@ u
-            where f.owneruserid = u.signature (+)
-              and projectname = '@PROJECT_ID@'
-           ]]>
-       </sql>
+                   to_char(f.uploadtime,'YYYY-MM-DD HH24:MI:SS') AS uploadtime,
+                   f.filesize, f.format, u.provider
+            FROM uploads.UserFile@USER_DBLINK@ f, users u
+            WHERE f.owneruserid = u.signature (+)
+              AND projectname = '@PROJECT_ID@'
+          ]]>
+        </sql>
 
     </sqlQuery>
   </querySet>
