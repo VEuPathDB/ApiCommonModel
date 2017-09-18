@@ -222,7 +222,9 @@ WHERE
     <sql>
       <![CDATA[
         create index TranscriptPath_ix&1
-        on TranscriptPathway&1(gene_source_id, source_id, pathway_source_id, pathway_name, pathway_id, ec_number_gene)
+        on TranscriptPathway&1(gene_source_id, source_id, pathway_source_id,
+                               pathway_name, pathway_id, ec_number_gene, wildcard_count_pathway,
+                               ec_number_pathway, pathway_source)
         tablespace indx
       ]]>
     </sql>
@@ -1597,12 +1599,18 @@ SELECT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as pr
        pa.predicted_go_id_function,
        pa.predicted_go_id_process,
        utr_lengths.five_prime_utr_length, 
-       utr_lengths.three_prime_utr_length
+       utr_lengths.three_prime_utr_length,
+       CASE
+         WHEN proteomics.aa_sequence_id IS NULL THEN 0
+         ELSE 1
+       END as has_proteomics
 FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      sres.externalDatabaseRelease soRls,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed, sres.OntologyTerm tso,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
+     (select distinct aa_sequence_id
+      from apidb.MassSpecSummary) proteomics,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
       GROUP BY rna_feature_id) transcript_exons,
@@ -1794,6 +1802,7 @@ WHERE gf.source_id = gene.source_id
   AND t.source_id = pa.transcript_source_id(+)
   AND t.na_feature_id = utr_lengths.transcript_na_feature_id
   AND t.sequence_ontology_id = tso.ontology_term_id
+  AND pa.aa_sequence_id = proteomics.aa_sequence_id(+)
 ORDER BY tn.taxon_id
       ]]>
     </sql>
@@ -2067,6 +2076,7 @@ and ga.orthomcl_name is null
 		, gene_product AS product
 		, gene_type
 		, aggregates.is_pseudo
+		, aggregates.has_proteomics
 		, organism
 		, species
 		, taxon_id
@@ -2105,7 +2115,8 @@ and ga.orthomcl_name is null
                 , gene_zoom_context_start as zoom_context_start
                 , gene_zoom_context_end as zoom_context_end
             FROM &prefixTranscriptAttributes ta,
-                 (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo
+                 (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo,
+                         MAX(has_proteomics) AS has_proteomics
                   FROM &prefixTranscriptAttributes
                   GROUP BY gene_source_id) aggregates,
                  (select na_feature_id,
