@@ -39,7 +39,7 @@ public class BasketFixer2 extends BaseCLI {
   public static final String ARG_MIGRATION_ID = "migrationId";
 
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     String cmdName = System.getProperty("cmdName");
     BasketFixer cacher = new BasketFixer(cmdName);
     try {
