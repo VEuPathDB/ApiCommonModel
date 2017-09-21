@@ -32,7 +32,7 @@ public class BasketFixer extends BaseCLI {
   // account used to run maintennace scripts
   private static final String WDKMAINT = "wdkmaint.";
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     String cmdName = System.getProperty("cmdName");
     BasketFixer cacher = new BasketFixer(cmdName);
     try {
