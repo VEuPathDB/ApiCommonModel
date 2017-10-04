@@ -1671,10 +1671,6 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
 )
             ]]>
        </sql>
- 
-    
-
-
     </sqlQuery>
 
     <processQuery name="GenesByMassSpec" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
@@ -1695,7 +1691,49 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
         <wsColumn name="sum_spectrum_count" width="10" />
     </processQuery>
 
+<!--TODO: add includes/excludes-->
+    <sqlQuery name="GenesByPTM" >
+        <paramRef ref="geneParams.ptm_assay" />
+        <paramRef ref="geneParams.ptm_type" />
+        <paramRef ref="geneParams.ptm_operator" quote="false"/>
+        <paramRef ref="geneParams.ptm_count" />
+        <column name="source_id" />
+        <column name="gene_source_id" />
+        <column name="wdk_weight" />
+        <column name="matched_result" />
+        <column name="project_id" />
+        <column name="modification_type" />
+        <column name="residues" />
+        <column name="count" />
 
+        <sql><![CDATA[
+            with PTM AS(
+                SELECT DISTINCT ta.source_id
+                , ta.gene_source_id
+                , ms.modification_type
+                , ms.residue
+                , ms.residue_location
+                FROM apidbtuning.msmodifiedpeptidesummary ms
+                , apidbtuning.transcriptattributes ta
+                WHERE ta.source_id = ms.source_id
+                AND ms.sample in ($$ptm_assay$$)
+                AND ms.modification_type = $$ptm_type$$
+            )
+            SELECT source_id
+            , gene_source_id
+            , 10 AS wdk_weight
+            , 'Y' AS matched_result
+            , '@PROJECT_ID@'  AS project_id
+            --, modification_type
+            , $$ptm_type$$ AS modification_type
+            , LISTAGG(residue || ':' || residue_location, ', ') WITHIN GROUP (ORDER BY residue_location) AS residues
+            , COUNT(residue) AS count
+            FROM PTM
+            HAVING COUNT(residue) $$ptm_operator$$ $$ptm_count$$
+            GROUP BY source_id, gene_source_id, modification_type
+        ]]></sql>
+    </sqlQuery>
+<!-- TODO: add process query -->
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- GenesOrthologousToAGivenGene   COULD HAVE SQL ERRORS FOR APIDB -->
