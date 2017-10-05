@@ -248,6 +248,8 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "SequenceCounts");
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GenomeSequencingAndAnnotationAttribution");
+
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs"); // TEST
   }
 
   // declare properties required beyond those inherited from the datasetPresenter
