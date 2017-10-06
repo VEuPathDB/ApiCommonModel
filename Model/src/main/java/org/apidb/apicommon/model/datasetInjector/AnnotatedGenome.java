@@ -249,9 +249,11 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GenomeSequencingAndAnnotationAttribution");
 
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs"); // TEST
+    // if showReferenceTranscriptomics is true, add wdkReference to enable transcritomics of reference strain to be visible for this genome's gene pages.
+    if(getPropValueAsBoolean("showReferenceTranscriptomics")){
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
+    }
   }
-
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
   @Override
@@ -262,6 +264,7 @@ public class AnnotatedGenome extends DatasetInjector {
                                           {"specialLinkExternalDbName", "external DB name for annotation link"},
                                           {"isCurated", "values true|false for whether genome is under active curation"},
                                           {"updatedAnnotationText", "text to use when making link to updated record"},
+                                          {"showReferenceTranscriptomics", "if true, show transcriptomics data of reference strain on gene page"},
     };
 
     return propertiesDeclaration;
