@@ -25,7 +25,7 @@ sub authenticate {
     $ua->env_proxy;
 
     # connect to cookie authentication service and get JSON response
-    my $url = "$baseUrl$javaWebapp/validateLoginCookie.do?wdkLoginCookieValue=$cookieVal";
+    my $url = "$baseUrl$javaWebapp/service/login/verification?wdkLoginCookieValue=$cookieVal";
     print STDERR "Connecting to $url\n" if $DEBUG;
     my $response = $ua->get($url);
 
