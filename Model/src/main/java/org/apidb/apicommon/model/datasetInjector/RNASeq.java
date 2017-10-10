@@ -62,15 +62,11 @@ public class RNASeq extends  DatasetInjector {
 	  injectTemplate("DEGseqProfileSetParamQuery");
       }
       if(getPropValueAsBoolean("isAlignedToAnnotatedGenome")) {
+	  setPropValue("exprMetric", "fpkm");
 
-	  // plas-rbld has NO '%rpkm%' name entries in the study.study table. Are all fpkm then?
-          //if(getPropValueAsBoolean("hasPairedEnds")) {
-              setPropValue("exprMetric", "fpkm");
+	  if(getPropValue("graphYAxisDescription") == null) {
               setPropValue("graphYAxisDescription", "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM). Note that Non-Unique reads are ignored in the expression graphs.  This means that the expression of duplicated genes (or gene families) might be underrepresented.  Please consult the non-unique aligned read tracks in the genome browser to determine if your gene of interest contains non-uniquely aligned reads. The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
-	      //} else {
-              //setPropValue("exprMetric", "rpkm");
-              //setPropValue("graphYAxisDescription", "Transcript levels of reads per kilobase of exon model per million mapped reads (RPKM).  Stacked bars indicate unique and non-uniquely mapped sequences.  Non-Unique sequences are plotted to indicate the maximum expression potential of this gene.  The percentile graph shows the ranking of expression for this gene compared to all others in this experiment.");
-	      //}
+	  }
 
           String exprMetric = getPropValue("exprMetric");
 
