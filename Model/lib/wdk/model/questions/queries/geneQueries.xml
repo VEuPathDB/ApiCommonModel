@@ -1053,6 +1053,7 @@ AND 1=0
 
         <paramRef ref="organismParams.organism"/>
         <paramRef ref="geneParams.go_term_evidence"/>
+	<paramRef ref="geneParams.go_term_slim"/>
         <paramRef ref="geneParams.go_typeahead"/>
         <paramRef ref="geneParams.go_term"/>
         <column name="project_id"/>
@@ -1062,14 +1063,18 @@ AND 1=0
         <column name="evidence_code"/>
         <sql>
             <![CDATA[
-                     SELECT gs.transcript_source_id AS source_id, gs.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
-                     apidb.tab_to_string(set(cast(COLLECT(distinct gs.evidence_code) AS apidb.varchartab)), ', ') as evidence_code
+                     SELECT distinct gs.transcript_source_id AS source_id, gs.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+                    apidb.tab_to_string(set(cast(COLLECT(distinct gs.evidence_code) AS apidb.varchartab)), ', ') as evidence_code
                      FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.GoTermSummary gs
                      WHERE ta.taxon_id IN ($$organism$$)
                      AND ta.aa_sequence_id = gs.aa_sequence_id
                      AND decode(gs.evidence_code, 'IEA', 'Computed', 'Curated') in ($$go_term_evidence$$)
-                     AND (gs.go_id IN ($$go_typeahead$$)
-                       OR (lower(gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))
+                     and case when $$go_term_slim$$ = 'Yes' and gs.is_go_slim = '1' then 1 
+                     when ($$go_term_slim$$ = 'No' and (gs.is_go_slim = '1' or gs.is_go_slim = '0')) then 1 
+                     else 0
+                     end = 1 
+                  AND (gs.go_id IN ($$go_typeahead$$)
+                      OR (lower(gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))
                        OR lower(gs.go_id) like lower(REPLACE($$go_term$$, '*', '%'))
                        OR lower(gs.go_id || ' : ' || gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))) )
                      GROUP BY gs.transcript_source_id, gs.gene_source_id
