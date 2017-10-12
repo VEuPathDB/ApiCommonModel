@@ -4396,20 +4396,20 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
                     displayType="treeBox"
                     suppressNode="false"
                     quote="true"
+                    dependedParamRef="geneParams.ptm_type"
                     multiPick="true">
         <help><![CDATA[
                 Choose the experiment(s) and/or sample(s) that you wish to query for post-translational modifications.  Click the + to expand a section. <br><br>
 
                 Experiments are listed by the organism (reference genome) that peptides are aligned to.]]>
         </help>
-        <suggest selectMode='all'/>
     </flatVocabParam>
 
     <flatVocabParam name="ptm_type"
                     queryRef="GeneVQ.PTMType"
                     prompt="Type of Post-Translational Modification"
-                    multiPick="false"
-                    dependedParamRef="geneParams.ptm_assay">
+                    multiPick="true">
+        <suggest selectMode='first' />
         <help><![CDATA[
                 Choose the type(s) of post-translational modifications that you are interested in searching for.
         ]]></help>
@@ -6791,7 +6791,8 @@ order by term desc
             <wsColumn name="display" width="200" wsName="display"/>
         </processQuery>
 
-        <sqlQuery name="PTMAssay" excludeProjects="EuPathDB">
+        <sqlQuery name="PTMAssay" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,FungiDB" excludeProjects="EuPathDB">
+            <paramRef ref="geneParams.ptm_type"/>
             <column name="internal"/>
             <column name="term"/>
             <column name="parentTerm"/>
@@ -6800,18 +6801,22 @@ order by term desc
                 WITH organismMods AS (
                     SELECT DISTINCT ta.organism
                     , ms.*
+                    , dp.display_name || ' (' || dp.short_attribution || ')' AS experiment_name
                     FROM apidbtuning.msmodifiedpeptidesummary ms
                     , apidbtuning.transcriptattributes ta
+                    , apidbtuning.datasetpresenter dp
                     WHERE ms.source_id = ta.source_id
+                    AND ms.modification_type in ( $$ptm_type$$ )
+                    AND (ms.external_database_name = dp.name OR regexp_replace(ms.external_database_name, '^.+?_', '_') = dp.name)
                     )
                 SELECT DISTINCT sample_display AS display
-                , sample_display AS term
-                , experiment || '_' || organism AS parentterm
+                , replace(sample_display, ',', '') AS term
+                , replace(experiment || '_' || organism, ',', '') AS parentterm
                 , sample_display AS internal
                 FROM organismMods
                 UNION
-                SELECT DISTINCT experiment AS display
-                , experiment || '_' || organism AS term
+                SELECT DISTINCT experiment_name AS display
+                , replace(experiment || '_' || organism, ',', '') AS term
                 , organism AS parentterm
                 , '-1' AS internal
                 FROM organismMods
@@ -6843,8 +6848,7 @@ order by term desc
             <wsColumn name="display" width="200" wsName="display"/>
         </processQuery>
 
-        <sqlQuery name="PTMType" excludeProjects="EuPathDB">
-            <paramRef ref="geneParams.ptm_assay"/>
+        <sqlQuery name="PTMType" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,FungiDB" excludeProjects="EuPathDB">
             <column name="internal"/>
             <column name="term"/>
             <column name="display"/>
@@ -6853,7 +6857,6 @@ order by term desc
                 , modification_type AS term
                 , replace(replace(modification_type, '-', ' '), '_', ' ') AS display
                 FROM apidbtuning.msmodifiedpeptidesummary
-                WHERE sample_display in ($$ptm_assay$$)
             ]]></sql>
         </sqlQuery>
 
