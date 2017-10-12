@@ -1696,10 +1696,9 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
         <wsColumn name="sum_spectrum_count" width="10" />
     </processQuery>
 
-<!--TODO: add includes/excludes-->
-    <sqlQuery name="GenesByPTM" >
-        <paramRef ref="geneParams.ptm_assay" />
+    <sqlQuery name="GenesByPTM" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,FungiDB">
         <paramRef ref="geneParams.ptm_type" />
+        <paramRef ref="geneParams.ptm_assay" />
         <paramRef ref="geneParams.ptm_operator" quote="false"/>
         <paramRef ref="geneParams.ptm_count" />
         <column name="source_id" />
@@ -1707,9 +1706,9 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
         <column name="wdk_weight" />
         <column name="matched_result" />
         <column name="project_id" />
-        <column name="modification_type" />
         <column name="residues" />
         <column name="count" />
+        <column name="modCounts" />
 
         <sql><![CDATA[
             with PTM AS(
@@ -1717,28 +1716,65 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
                 , ta.gene_source_id
                 , ms.modification_type
                 , ms.residue
-                , ms.residue_location
+                , 1 + ms.residue_location AS residue_location
                 FROM apidbtuning.msmodifiedpeptidesummary ms
                 , apidbtuning.transcriptattributes ta
                 WHERE ta.source_id = ms.source_id
                 AND ms.sample_display in ($$ptm_assay$$)
-                AND ms.modification_type = $$ptm_type$$
+                AND ms.modification_type in ($$ptm_type$$)
             )
-            SELECT source_id
-            , gene_source_id
+            , mod_counts AS (
+                SELECT DISTINCT source_id
+                , modification_type
+                , COUNT (*) AS count
+                FROM (
+                    SELECT DISTINCT ms.source_id
+                    , ms.modification_type
+                    , ms.residue
+                    , ms.residue_location
+                    FROM apidbtuning.msmodifiedpeptidesummary ms
+                    WHERE ms.modification_type in ($$ptm_type$$)
+                    GROUP BY source_id, modification_type, residue, residue_location
+                )
+                GROUP BY source_id, modification_type
+            )
+            , results AS (
+                SELECT ptm.source_id
+                , ptm.gene_source_id
+                , LISTAGG(ptm.residue || ':' || ptm.residue_location, ', ') WITHIN GROUP (ORDER BY ptm.residue_location) AS residues
+                , COUNT(ptm.residue) AS count
+                FROM PTM
+                HAVING COUNT(ptm.residue) $$ptm_operator$$ $$ptm_count$$
+                GROUP BY ptm.source_id, ptm.gene_source_id
+            )
+            SELECT results.*
             , 10 AS wdk_weight
             , 'Y' AS matched_result
-            , '@PROJECT_ID@'  AS project_id
-            , modification_type
-            --, $$ptm_type$$ AS modification_type
-            , LISTAGG(residue || ':' || residue_location, ', ') WITHIN GROUP (ORDER BY residue_location) AS residues
-            , COUNT(residue) AS count
-            FROM PTM
-            HAVING COUNT(residue) $$ptm_operator$$ $$ptm_count$$
-            GROUP BY source_id, gene_source_id, modification_type
+            , '@PROJECT_ID@' AS project_id
+            , LISTAGG (mc.modification_type || ':' || mc.count, ', ') WITHIN GROUP (ORDER BY mc.modification_type) AS modCounts
+            FROM results
+            , mod_counts mc
+            WHERE mc.source_id = results.source_id
+            GROUP BY results.source_id, results.gene_source_id, results.residues, results.count
         ]]></sql>
     </sqlQuery>
-<!-- TODO: add process query -->
+
+    <processQuery name="GenesByPTM" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">                                                                      
+        <testParamValues>
+          <paramValue name="ptm_assay">cytosolic fraction of bloodstream form - phosphopeptide enriched</paramValue>
+        </testParamValues>
+        <paramRef ref="geneParams.ptm_type" />                                                                                                                                                                  <paramRef ref="geneParams.ptm_assay" />
+        <paramRef ref="geneParams.ptm_operator" quote="false"/>
+        <paramRef ref="geneParams.ptm_count" />
+        <wsColumn name="source_id" width="50" />
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="wdk_weight" width="10"/>
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="project_id" width="20"/>
+        <wsColumn name="residues" width="50"/>
+        <wsColumn name="count" width="10"/>
+        <wsColumn name="modCounts" width="50"/>
+    </processQuery>
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- GenesOrthologousToAGivenGene   COULD HAVE SQL ERRORS FOR APIDB -->
