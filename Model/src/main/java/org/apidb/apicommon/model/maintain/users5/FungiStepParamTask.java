@@ -5,6 +5,7 @@ import java.util.List;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.log4j.Logger;
 import org.apidb.apicommon.model.maintain.users5.mapper.FungiStepMapper;
+import org.gusdb.fgputil.json.JsonUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -51,10 +52,8 @@ public class FungiStepParamTask implements MigrationTask {
 
     // get params JSON
     JSONObject params = new JSONObject(step.getParams());
-
-    String[] names = JSONObject.getNames(params);
     boolean leftFound = false, rightFound = false;
-    for (String name : names) {
+    for (String name : JsonUtil.getKeys(params)) {
       if (name.startsWith("bq_left_op_")) {
         params.put(name, leftChild);
         leftFound = true;
