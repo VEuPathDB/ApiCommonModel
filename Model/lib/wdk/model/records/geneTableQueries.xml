@@ -261,9 +261,9 @@ group by
             <column name="transcript_ids"/>
             <column name="project_id"/>
             <column name="go_id"/>
+            <column name="is_not"/>
             <column name="go_term_name"/>
             <column name="ontology"/>
-            <column name="is_not"/>
             <column name="source"/>
             <column name="evidence_code"/>
             <column name="reference"/>
@@ -272,51 +272,48 @@ group by
 	    <sql>
             <![CDATA[
 with rough as  (SELECT distinct
-  gs.gene_source_id AS source_id 
+  gene_source_id AS source_id 
 , '@PROJECT_ID@' as project_id
-, gs.transcript_source_id AS transcript_ids
-, replace(gs.go_id, 'GO_', 'GO:') go_id
-, gs.go_term_name
-, gs.ontology
-, NVL(gs.is_not, 'N/A') AS is_not
-, gs.source
-, gs.evidence_code
-, case when gs.reference like 'PMID:%' then '<a href="http://www.ncbi.nlm.nih.gov/pubmed/?term='||REPLACE ( gs.reference , 'PMID:','')||'">'||gs.reference||'</a>'
-       when gs.reference like 'GO_REF:%' then '<a href="http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:'||REPLACE ( gs.reference , 'GO_REF:','')||'">'||gs.reference||'</a>'
-       when gs.reference like 'TrypTag:%' then '<a href="http://tryptag.org/?id='||REPLACE ( gs.reference , 'TrypTag:','')||'">'||gs.reference||'</a>'
-       else gs.reference end as reference
-, gs.evidence_code_parameter
-, case when gt.is_go_slim =1 then 'GO Slim generic' else 'none' end as is_go_slim
-, case when gt.is_go_slim_leaf =1 then 'yes' else 'no' end as is_go_slim_leaf
-, case when gt.is_leaf =1 then 'yes' else 'no' end as is_leaf
---, gt.ONTOLOGY as ont
+, transcript_source_id AS transcript_ids
+, replace(go_id, 'GO_', 'GO:') go_id
+, case when is_not = 'not' then 'Is not' else '' end AS is_not
+, go_term_name
+, ontology
+, source
+, evidence_code
+, case when reference like 'PMID:%' then '<a href="http://www.ncbi.nlm.nih.gov/pubmed/?term='||REPLACE ( reference , 'PMID:','')||'">'||reference||'</a>'
+       when reference like 'GO_REF:%' then '<a href="http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:'||REPLACE ( reference , 'GO_REF:','')||'">'||reference||'</a>'
+       when reference like 'TrypTag:%' then '<a href="http://tryptag.org/?id='||REPLACE ( reference , 'TrypTag:','')||'">'||reference||'</a>'
+       else reference end as reference
+, evidence_code_parameter
+, case when is_go_slim =1 then 'GO Slim generic' else 'none' end as is_go_slim
+, case when is_go_slim_leaf =1 then 'yes' else 'no' end as is_go_slim_leaf
+, case when is_leaf =1 then 'yes' else 'no' end as is_leaf
+--, ONTOLOGY as ont
 FROM
-  ApidbTuning.GeneGoTerms gs
- ,ApidbTuning.GoTermSummary gt
- where gs.gene_source_id = gt.gene_source_id
-and gs.GO_TERM_ID = gt.GO_TERM_ID
-and gt.ontology = gs.ontology
-and gt.go_term_name = gs.go_term_name
-and gs.gene_source_id = $$source_id$$
+ ApidbTuning.GoTermSummary gt
+ where gene_source_id = gene_source_id
+and gene_source_id = $$source_id$$
+and (is_leaf=1 or is_go_slim_leaf=1)
 GROUP BY
-  gs.go_id
-, gs.gene_source_id
-,gs.transcript_source_id
-, gs.go_term_name
-, gs.ontology
-, gs.is_not
-, gs.source
-, gs.evidence_code
-, gs.reference
-, gs.evidence_code_parameter
-, gt.is_go_slim
---,gt.ONTOLOGY
-,gt.is_go_slim_leaf
-,gt.is_leaf
+  go_id
+, gene_source_id
+,transcript_source_id
+, go_term_name
+, ontology
+, is_not
+, source
+, evidence_code
+, reference
+, evidence_code_parameter
+, is_go_slim
+--,ONTOLOGY
+,is_go_slim_leaf
+,is_leaf
 ORDER BY
-gs.ontology
+ontology
 , transcript_ids
-, gs.evidence_code
+, evidence_code
 )
 
 , distincts as (select distinct
@@ -404,7 +401,7 @@ go_id
 go_id
 ,listagg(is_go_slim, ', ') within group (order by is_go_slim) as is_go_slim
 from (select distinct
-case when is_go_slim = 'yes' then 'YES' else null end as is_go_slim
+case when is_go_slim = 'GO Slim generic' then 'GO Slim generic' else null end as is_go_slim
 ,go_id
 from rough
 )
