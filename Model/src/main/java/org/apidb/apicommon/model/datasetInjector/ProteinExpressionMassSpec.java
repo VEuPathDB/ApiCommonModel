@@ -50,10 +50,14 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
   @Override
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMassSpec");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecMod");
+      //addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecMod");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecDownload");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpec");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionPBrowse");
+      if (getPropValueAsBoolean("isPhosphoProteomics")) {
+        addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPTM");
+        addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecMod");
+      }
   }
 
   // second column is for documentation
