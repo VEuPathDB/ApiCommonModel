@@ -99,10 +99,11 @@ public class DetailTableLoader extends BaseCLI {
         "Load a Detail table.  Delete rows that will be replaced");
     try {
       creator.invoke(args);
-    }
-    finally {
-      // always exit normally(?)
       System.exit(0);
+    }
+    catch (Exception ex) {
+	ex.printStackTrace();
+	System.exit(1);
     }
   }
 
