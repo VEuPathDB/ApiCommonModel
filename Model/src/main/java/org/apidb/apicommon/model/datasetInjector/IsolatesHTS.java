@@ -13,6 +13,9 @@ public class IsolatesHTS extends DatasetInjector {
       String experimentName = getPropValue("name");
       setPropValue("experimentName", experimentName);
 
+      // : is a reserved character in gbrowse 
+      String datasetDisplayName = getPropValue("datasetDisplayName");
+      setPropValue("datasetDisplayName", datasetDisplayName.replace("-", ""));
 
       // use getSampleList method, refer to - https://redmine.apidb.org/issues/16510
       String organismAbbrev = getPropValue("organismAbbrev");
