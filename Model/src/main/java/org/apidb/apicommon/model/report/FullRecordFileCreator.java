@@ -80,7 +80,7 @@ public class FullRecordFileCreator extends BaseCLI {
                 + "model-config.xml is stored.");
 
         addSingleValueOption(ARG_SQL_FILE, true, null, "The file that contains"
-                + " a sql that returns the primary key columns of the records");
+                + " an sql statement that returns the primary key columns of the records");
 
         addSingleValueOption(ARG_RECORD, true, null, "The full name of the "
                 + "record class to be dumped.");
