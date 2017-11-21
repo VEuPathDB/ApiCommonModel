@@ -39,7 +39,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       injectTemplate("gbrowseTrackCategory");
       injectTemplate("pbrowseTrackCategory");
 
-      if(getPropValueAsBoolean("isPhosphoProteomics")) {
+      if(getPropValueAsBoolean("hasPTMs")) {
           injectTemplate("proteinExpressionMassSpecPhosphoPBrowseTrack");
       }
       else {
@@ -54,7 +54,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecDownload");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpec");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionPBrowse");
-      if (getPropValueAsBoolean("isPhosphoProteomics")) {
+      if (getPropValueAsBoolean("hasPTMs")) {
         addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPTM");
         addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MassSpecMod");
       }
@@ -65,7 +65,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
   public String[][] getPropertiesDeclaration() {
       String[][] propertiesDeclaration = {{"species", "metadata for the sample organism, not the aligned organism"},
                                           {"optionalOrganismAbbrev","for cases when sample organism is different from the aligned organism"},
-                                          {"isPhosphoProteomics","boolean to flag phosphoProteomics experiments for PBrowse"},
+                                          {"hasPTMs","boolean to flag experiments with post-translational modifications for PBrowse and PTM query model refs"},
       };
       return propertiesDeclaration;
   }
