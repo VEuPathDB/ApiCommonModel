@@ -91,7 +91,7 @@ public class DetailTableLoader extends BaseCLI {
 
   private static final Logger logger = Logger.getLogger(DetailTableLoader.class);
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     String cmdName = System.getProperty("cmdName");
     if (cmdName == null)
       cmdName = DetailTableLoader.class.getName();
