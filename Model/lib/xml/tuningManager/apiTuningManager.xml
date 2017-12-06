@@ -341,6 +341,84 @@ create table &prefixGeneGoTerms&1 nologging as
   </tuningTable>
 
 
+  <tuningTable name="GoSubsetLeaf">
+    <comment>
+       Map each GO term that is assigned to at least one gene to a GoSubset term
+       that is either itself or an immediate ancestor. By "immediate ancestor"
+       we mean an ancestor such that there isn't an intermediate ancestor also
+       in the subset. (Note that there can be multiple links as long as none is
+       in the subset.) This is currently restricted to 'goslim_generic', solely
+       by the condition in the SUBSET_TERM subquery.
+    </comment>
+    <externalDependency name="apidb.GoSubset"/>
+    <externalDependency name="sres.OntologyRelationship"/>
+    <internalDependency name="GeneGoTerms"/>
+    <sql>
+      <![CDATA[
+        create table GoSubsetLeaf&1 nologging as
+        with leaf_term -- GO terms assigned to at least one gene
+             as (select distinct go_term_id
+                 from GeneGoTerms),
+             subset_term -- (term ID, subset name) pairs
+             as (select distinct -- "distinct" is probably unneeded
+                        ontology_term_id, go_subset_term
+                 from apidb.GoSubset
+                 -- where go_subset_term != 'gosubset_prok' -- unrelated and huge
+                 where go_subset_term = 'goslim_generic' -- all we currently need
+                ),
+             subset -- the 17 or so distinct subset names, e.g. "goslim_generic"
+             as (select distinct go_subset_term
+                 from subset_term),
+             leaf_in_subset -- leaf (i.e. assigned) terms that are in a subset
+             as (select leaf_term.go_term_id, subset_term.go_subset_term
+                 from leaf_term, subset_term
+                 where leaf_term.go_term_id = subset_term.ontology_term_id),
+             leaf_not_in_subset -- (go_term_id, subset) pairs such that the GO
+             as (               -- term is assigned, but not in the given subset
+                   select leaf_term.go_term_id, subset.go_subset_term
+                   from leaf_term, subset -- cartesian join
+                 minus
+                   select go_term_id, go_subset_term
+                   from leaf_in_subset),
+             leaf_ancestor -- a leaf not in a subset, with an ancestor that is in the subset
+             as (select lnis.go_subset_term, lnis.go_term_id, gs.ontology_term_id as ancestor_term_id
+                 from leaf_not_in_subset lnis, sres.OntologyRelationship orel, apidb.GoSubset gs
+                 where orel.subject_term_id = lnis.go_term_id -- "subject" = "child"
+                   and orel.object_term_id = gs.ontology_term_id
+                   and orel.subject_term_id != orel.object_term_id
+                   and lnis.go_subset_term = gs.go_subset_term),
+             leaf_nonimmediate_ancestor
+             as (select distinct upper.go_subset_term, upper.go_term_id, upper.ancestor_term_id
+                 from leaf_ancestor upper, leaf_ancestor lower, sres.OntologyRelationship orel
+                 where upper.go_subset_term = lower.go_subset_term
+                   and upper.go_term_id = lower.go_term_id
+                   and upper.ancestor_term_id = orel.object_term_id
+                   and lower.ancestor_term_id = orel.subject_term_id
+                   and orel.subject_term_id != orel.object_term_id),
+             leaf_immediate_ancestor
+             as (  select go_subset_term, go_term_id, ancestor_term_id
+                   from leaf_ancestor
+                 minus
+                   select go_subset_term, go_term_id, ancestor_term_id
+                   from leaf_nonimmediate_ancestor)
+          select -- leaf terms that are in a subset
+                 cast (go_subset_term as varchar2(50)) as go_subset_term, go_term_id, go_term_id as subset_leaf_term_id
+          from leaf_in_subset
+        union
+          select -- leaf terms not in subset with their subset immediate ancestors
+                 cast (go_subset_term as varchar2(50)) as go_subset_term, go_term_id, ancestor_term_id as subset_leaf_term_id
+          from leaf_immediate_ancestor
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index gsl_ix&1 ON GoSubsetLeaf&1 (go_term_id, go_subset_term, subset_leaf_term_id)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="GoTermSummary" prefixEnabled="true">
     <comment>GoTermSummary: each row represents one GO term assignment to one gene.
          (Typically, a gene has multiple such assignments.) This is used for
