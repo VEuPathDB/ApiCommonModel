@@ -18,6 +18,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.BaseCLI;
+import org.gusdb.fgputil.FormatUtil;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.config.ModelConfigUserDB;
@@ -31,7 +32,6 @@ public class MigrateUsers5Fungi extends BaseCLI {
   public static final int UPDATE_PAGE = 200;
 
   private static final String ARG_CUTOFF_DATE = "cutoffDate";
-  private static final String DATE_FORMAT = "yyyy/MM/dd";
 
   private static final String CONFIG_FILE = "/config/migrate-user-5.xml";
 
@@ -76,7 +76,7 @@ public class MigrateUsers5Fungi extends BaseCLI {
 
     addSingleValueOption(ARG_CUTOFF_DATE, false, null, "Any guest user created by this date will be backed " +
         "up, and removed from the live schema defined in the model-config.xml. " +
-        "The data should be in this format: " + DATE_FORMAT);
+        "The data should be in this format: " + FormatUtil.STANDARD_DATE_FORMAT_SLASH);
   }
 
   @Override
@@ -126,7 +126,7 @@ public class MigrateUsers5Fungi extends BaseCLI {
     String cutoffDate = (String) getOptionValue(ARG_CUTOFF_DATE);
     Date date;
     if (cutoffDate != null) {
-      SimpleDateFormat format = new SimpleDateFormat(DATE_FORMAT);
+      SimpleDateFormat format = new SimpleDateFormat(FormatUtil.STANDARD_DATE_FORMAT_SLASH);
       date = format.parse(cutoffDate);
     }
     else { // default cutoff date is 2 days ago from now
