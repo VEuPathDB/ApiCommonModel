@@ -267,189 +267,45 @@ group by
             <column name="source"/>
             <column name="evidence_code"/>
             <column name="reference"/>
-	    <column name="evidence_code_parameter"/>
-	    <column name="is_go_slim"/>
-	    <sql>
-            <![CDATA[
-with rough as  (SELECT distinct
-  gene_source_id AS source_id 
-, '@PROJECT_ID@' as project_id
-, transcript_source_id AS transcript_ids
-, replace(go_id, 'GO_', 'GO:') go_id
-, case when is_not = 'not' then 'Is not' else '' end AS is_not
-, go_term_name
-, ontology
-, source
-, evidence_code
-, case when reference like 'PMID:%' then '<a href="http://www.ncbi.nlm.nih.gov/pubmed/?term='||REPLACE ( reference , 'PMID:','')||'">'||reference||'</a>'
-       when reference like 'GO_REF:%' then '<a href="http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:'||REPLACE ( reference , 'GO_REF:','')||'">'||reference||'</a>'
-       when reference like 'TrypTag:%' then '<a href="http://tryptag.org/?id='||REPLACE ( reference , 'TrypTag:','')||'">'||reference||'</a>'
-       else reference end as reference
-, evidence_code_parameter
-, case when is_go_slim =1 then 'GO Slim generic' else 'none' end as is_go_slim
-, case when is_go_slim_leaf =1 then 'yes' else 'no' end as is_go_slim_leaf
-, case when is_leaf =1 then 'yes' else 'no' end as is_leaf
---, ONTOLOGY as ont
-FROM
- ApidbTuning.GoTermSummary gt
- where gene_source_id = gene_source_id
-and gene_source_id = $$source_id$$
-and (is_leaf=1 or is_go_slim_leaf=1)
-GROUP BY
-  go_id
-, gene_source_id
-,transcript_source_id
-, go_term_name
-, ontology
-, is_not
-, source
-, evidence_code
-, reference
-, evidence_code_parameter
-, is_go_slim
---,ONTOLOGY
-,is_go_slim_leaf
-,is_leaf
-ORDER BY
-ontology
-, transcript_ids
-, evidence_code
-)
+            <column name="evidence_code_parameter"/>
+            <sql>
+              <![CDATA[
+select ggt.gene_source_id as source_id, '@PROJECT_ID@' as project_id, ggt.go_id,
+       listagg(ggt.transcript_source_id, ', ') within group (order by ggt.transcript_source_id) as transcript_ids,
+       case when ggt.is_not = 'not' then 'Is not' else '' end AS is_not,
+       max(ggt.go_term_name) as go_term_name, ggt.ontology, ggt.source, ggt.evidence_code,
+       ggt.reference, ggt.evidence_code_parameter
+from apidbTuning.GeneGoTerms ggt
+group by gene_source_id, go_id, transcript_source_id, is_not, ontology,
+         source, evidence_code, reference, evidence_code_parameter
+order by gene_source_id, ontology, go_id
+              ]]>
+            </sql>
+        </sqlQuery>
 
-, distincts as (select distinct
- source_id
-, project_id
-, transcript_ids
-, go_id
-, go_term_name
-, ontology
-, is_not
-from rough
-group by
-source_id
-,project_id
-,transcript_ids
-, go_id
-, go_term_name
-, ontology
-, is_not
-)
-
-
-,transcripts as (select distinct
-go_id
-,listagg(transcript_ids, ', ') within group (order by transcript_ids) as transcript_ids
-from (select distinct
-go_id
-, transcript_ids
-from rough
-)
-group by
-go_id
-)
-
-,sources as (select distinct
-go_id
-,listagg(source, ', ') within group (order by source) as source
-from (select distinct
-go_id
-, source
-from rough
-)
-group by
-go_id
-)
-
-
-, evidence as (select distinct
-go_id
-,listagg(evidence_code_parameter, ', ') within group (order by evidence_code_parameter) as evidence_code_parameter
-from (select distinct
-evidence_code_parameter
-,go_id
-from rough
-)
-group by
-go_id
-)
-
-, evidenceCode as (select distinct
-go_id
-,listagg(evidence_code, ', ') within group (order by evidence_code) as evidence_code
-from (select distinct
-evidence_code
-,go_id
-from rough
-)
-group by
-go_id
-)
-
-, reference as (select distinct
-go_id
-,listagg(reference, ', ') within group (order by reference) as reference
-from (select distinct
-reference
-,go_id
-from rough
-)
-group by
-go_id
-)
-
-, is_go_slim as (select distinct
-go_id
-,listagg(is_go_slim, ', ') within group (order by is_go_slim) as is_go_slim
-from (select distinct
-case when is_go_slim = 'GO Slim generic' then 'GO Slim generic' else null end as is_go_slim
-,go_id
-from rough
-)
-group by
-go_id
-)
-
-, is_go_slim_leaf as (select distinct
-go_id
-,listagg(is_go_slim_leaf, ', ') within group (order by is_go_slim_leaf) as is_go_slim_leaf
-from (select distinct
-case when is_go_slim_leaf = 'yes' then 'YES' else null end as is_go_slim_leaf
-,go_id
-from rough
-)
-group by
-go_id
-)
-
-, is_leaf as (select distinct
-go_id
-,listagg(is_leaf, ', ') within group (order by is_leaf) as is_leaf
-from (select distinct
-case when is_leaf = 'yes' then 'YES' else null end as is_leaf
-,go_id
-from rough
-)
-group by
-go_id
-)
-select * from distincts d
-join sources
-using (go_id)
-join evidence
-using (go_id)
-join evidenceCode
-using (go_id)
-join reference
-using (go_id)
-join is_go_slim
-using (go_id)
-join is_go_slim_leaf
-using (go_id)
-join is_leaf
-using (go_id)
-order by
-ontology
-         ]]>
+       <sqlQuery name="GOSlim" isCacheable="false" >
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="ontology"/>
+            <column name="go_id"/>
+            <column name="go_term_name"/>
+            <column name="slim_go_id"/>
+            <column name="slim_go_term_name"/>
+            <column name=""/>
+            <sql>
+              <![CDATA[
+select go_term.source_id, '@PROJECT_ID@' AS project_id, go_term.ontology,
+       go_term.go_id, go_term.go_term_name, go_slim.slim_go_id,
+       go_slim.slim_go_term_name
+from (select distinct gene_source_id as source_id, ontology, go_id, go_term_id, go_term_name
+      from apidbTuning.GeneGoTerms) go_term,
+     (select gsl.go_term_id, ot.source_id as slim_go_id, ot.name as slim_go_term_name
+      from apidbTuning.GoSubsetLeaf gsl, sres.OntologyTerm ot
+      where gsl.go_subset_term = 'goslim_generic'
+        and gsl.subset_leaf_term_id = ot.ontology_term_id) go_slim
+where go_term.go_term_id = go_slim.go_term_id(+)
+order by go_term.source_id, go_term.ontology, go_term.go_id
+              ]]>
             </sql>
         </sqlQuery>
 
@@ -3828,12 +3684,12 @@ select distinct p.source_id
 , '@PROJECT_ID@' as project_id
 , dp.dataset_presenter_id as dataset_id
 , mt.property
-, mt.source_id as property_id
+, mt.property_source_id as property_id
 from apidbtuning.metadata m
-, apidbtuning.metadatatype mt
+, apidbtuning.PropertyTypes mt
 , apidbtuning.datasetpresenter dp
 , apidbtuning.profile p 
-where m.TERM_ID = mt.TERM_ID 
+where m.PROPERTY_ID = mt.PROPERTY_ID 
 and mt.type = 'string'
 and m.dataset_name = dp.name
 and m.dataset_name = p.dataset_name
@@ -3855,12 +3711,12 @@ select distinct p.source_id
 , '@PROJECT_ID@' as project_id
 , dp.dataset_presenter_id as dataset_id
 , mt.property
-, mt.source_id as property_id
+, mt.property_source_id as property_id
 from apidbtuning.metadata m
-, apidbtuning.metadatatype mt
+, apidbtuning.PropertyTypes mt
 , apidbtuning.datasetpresenter dp
 , apidbtuning.profile p 
-where m.TERM_ID = mt.TERM_ID 
+where m.PROPERTY_ID = mt.PROPERTY_ID 
 and mt.type = 'number'
 and m.dataset_name = dp.name
 and m.dataset_name = p.dataset_name

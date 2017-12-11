@@ -307,35 +307,122 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <externalDependency name="sres.OntologyTerm"/>
     <sql>
       <![CDATA[
-create table &prefixGeneGoTerms&1 nologging as
+        create table &prefixGeneGoTerms&1 nologging as
         with root_term
              as (select ontology_term_id,
-                        substr(decode(name, 'biological_process', 'Biological Process',
-                                            'molecular_function', 'Molecular Function',
-                                            'cellular_component', 'Cellular Component',
-                                            name), 1, 20)
-                          as ontology
+                        cast(initcap(replace(name, '_', ' ')) as varchar2(20)) as ontology
                  from sres.OntologyTerm
                  where source_id in ('GO_0008150','GO_0003674','GO_0005575'))
-             select gf.source_id as gene_source_id, t.source_id as transcript_source_id, taf.aa_sequence_id,
-                        decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as is_not, substr(gt.source_id, 1, 25) as go_id,
-                        gt.ontology_term_id as go_term_id, rt.ontology, substr(gt.name, 1, 250) AS go_term_name,
-                        substr(gail.name, 1, 24) AS source, substr(gec.name, 1, 12) as evidence_code,
-                        gaiec.reference as reference, gaiec.evidence_code_parameter as evidence_code_parameter
-                 from dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf, dots.GoAssociation ga,
-                      sres.OntologyTerm gt, dots.GoAssociationInstance gai, dots.GoAssociationInstanceLoe gail,
-                      dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm gec, root_term rt
-                 where t.parent_id = gf.na_feature_id
-                   and t.na_feature_id = taf.na_feature_id
-                   and taf.aa_sequence_id = ga.row_id
-                   and ga.table_id = (select table_id
-                                      from core.TableInfo
-                                      where name = 'TranslatedAASequence')and ga.go_term_id = gt.ontology_term_id
-                   and ga.go_association_id = gai.go_association_id
-                   and gai.go_assoc_inst_loe_id = gail.go_assoc_inst_loe_id
-                   and gai.go_association_instance_id = gaiec.go_association_instance_id
-                   and gaiec.go_evidence_code_id = gec.ontology_term_id
-                   and gt.ancestor_term_id = rt.ontology_term_id(+)
+        select gf.source_id as gene_source_id, t.source_id as transcript_source_id, taf.aa_sequence_id,
+               cast (decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as varchar2(3)) as is_not,
+               cast (gt.source_id as varchar2(20)) as go_id,
+               gt.ontology_term_id as go_term_id, rt.ontology,
+               cast(gt.name as varchar2(250)) as go_term_name,
+               cast(gail.name as varchar2(24)) as source,
+               cast(gec.name as varchar2(12)) as evidence_code,
+               cast(gaiec.reference as varchar2(30)) as reference,
+               cast(gaiec.evidence_code_parameter as varchar2(80))as evidence_code_parameter
+        from dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf, dots.GoAssociation ga,
+             sres.OntologyTerm gt, dots.GoAssociationInstance gai, dots.GoAssociationInstanceLoe gail,
+             dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm gec, root_term rt
+        where t.parent_id = gf.na_feature_id
+          and t.na_feature_id = taf.na_feature_id
+          and taf.aa_sequence_id = ga.row_id
+          and ga.table_id = (select table_id
+                             from core.TableInfo
+                             where name = 'TranslatedAASequence')and ga.go_term_id = gt.ontology_term_id
+          and ga.go_association_id = gai.go_association_id
+          and gai.go_assoc_inst_loe_id = gail.go_assoc_inst_loe_id
+          and gai.go_association_instance_id = gaiec.go_association_instance_id
+          and gaiec.go_evidence_code_id = gec.ontology_term_id
+          and gt.ancestor_term_id = rt.ontology_term_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ggt_ix&1 ON &prefixGeneGoTerms&1
+               (gene_source_id, transcript_source_id, ontology, go_id, go_term_id,
+                go_term_name, source, evidence_code, reference,
+                evidence_code_parameter, aa_sequence_id, is_not)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="GoSubsetLeaf">
+    <comment>
+       Map each GO term that is assigned to at least one gene to a GoSubset term
+       that is either itself or an immediate ancestor. By "immediate ancestor"
+       we mean an ancestor such that there isn't an intermediate ancestor also
+       in the subset. (Note that there can be multiple links as long as none is
+       in the subset.) This is currently restricted to 'goslim_generic', solely
+       by the condition in the SUBSET_TERM subquery.
+    </comment>
+    <externalDependency name="apidb.GoSubset"/>
+    <externalDependency name="sres.OntologyRelationship"/>
+    <internalDependency name="GeneGoTerms"/>
+    <sql>
+      <![CDATA[
+        create table GoSubsetLeaf&1 nologging as
+        with leaf_term -- GO terms assigned to at least one gene
+             as (select distinct go_term_id
+                 from GeneGoTerms),
+             subset_term -- (term ID, subset name) pairs
+             as (select distinct -- "distinct" is probably unneeded
+                        ontology_term_id, go_subset_term
+                 from apidb.GoSubset
+                 -- where go_subset_term != 'gosubset_prok' -- unrelated and huge
+                 where go_subset_term = 'goslim_generic' -- all we currently need
+                ),
+             subset -- the 17 or so distinct subset names, e.g. "goslim_generic"
+             as (select distinct go_subset_term
+                 from subset_term),
+             leaf_in_subset -- leaf (i.e. assigned) terms that are in a subset
+             as (select leaf_term.go_term_id, subset_term.go_subset_term
+                 from leaf_term, subset_term
+                 where leaf_term.go_term_id = subset_term.ontology_term_id),
+             leaf_not_in_subset -- (go_term_id, subset) pairs such that the GO
+             as (               -- term is assigned, but not in the given subset
+                   select leaf_term.go_term_id, subset.go_subset_term
+                   from leaf_term, subset -- cartesian join
+                 minus
+                   select go_term_id, go_subset_term
+                   from leaf_in_subset),
+             leaf_ancestor -- a leaf not in a subset, with an ancestor that is in the subset
+             as (select lnis.go_subset_term, lnis.go_term_id, gs.ontology_term_id as ancestor_term_id
+                 from leaf_not_in_subset lnis, sres.OntologyRelationship orel, apidb.GoSubset gs
+                 where orel.subject_term_id = lnis.go_term_id -- "subject" = "child"
+                   and orel.object_term_id = gs.ontology_term_id
+                   and orel.subject_term_id != orel.object_term_id
+                   and lnis.go_subset_term = gs.go_subset_term),
+             leaf_nonimmediate_ancestor
+             as (select distinct upper.go_subset_term, upper.go_term_id, upper.ancestor_term_id
+                 from leaf_ancestor upper, leaf_ancestor lower, sres.OntologyRelationship orel
+                 where upper.go_subset_term = lower.go_subset_term
+                   and upper.go_term_id = lower.go_term_id
+                   and upper.ancestor_term_id = orel.object_term_id
+                   and lower.ancestor_term_id = orel.subject_term_id
+                   and orel.subject_term_id != orel.object_term_id),
+             leaf_immediate_ancestor
+             as (  select go_subset_term, go_term_id, ancestor_term_id
+                   from leaf_ancestor
+                 minus
+                   select go_subset_term, go_term_id, ancestor_term_id
+                   from leaf_nonimmediate_ancestor)
+          select -- leaf terms that are in a subset
+                 cast (go_subset_term as varchar2(50)) as go_subset_term, go_term_id, go_term_id as subset_leaf_term_id
+          from leaf_in_subset
+        union
+          select -- leaf terms not in subset with their subset immediate ancestors
+                 cast (go_subset_term as varchar2(50)) as go_subset_term, go_term_id, ancestor_term_id as subset_leaf_term_id
+          from leaf_immediate_ancestor
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index gsl_ix&1 ON GoSubsetLeaf&1 (go_term_id, go_subset_term, subset_leaf_term_id)
+        tablespace indx
       ]]>
     </sql>
   </tuningTable>
@@ -364,15 +451,11 @@ create table &prefixGeneGoTerms&1 nologging as
                  ggt.go_term_id, ggt.ontology,
                  replace(ggt.go_term_name, '_',' ') as go_term_name, ggt.source,
                  ggt.evidence_code, ggt.reference, ggt.evidence_code_parameter,
-                 cast (1 as number(1)) as is_leaf, ol.min_depth as depth,
+                 ol.min_depth as depth,
                  case
                    when gs.ontology_term_id is null then 0
                    else 1
-                 end as is_go_slim,
-                 case
-                   when gs.ontology_term_id is null then 0
-                   else 1
-                 end as is_go_slim_leaf
+                 end as is_go_slim
           from GeneGoTerms ggt, &prefixOntologyLevels ol,
                (select distinct ontology_term_id
                 from apidb.GoSubset
@@ -387,15 +470,11 @@ create table &prefixGeneGoTerms&1 nologging as
                  replace (substr(ot.name, 1,250),'_',' ') as go_term_name,
                  ggt.source, ggt.evidence_code, ggt.reference,
                  ggt.evidence_code_parameter,
-                 cast (1 as number(1)) as is_leaf, ol.min_depth as depth,
+                 ol.min_depth as depth,
                  case
                    when gs.ontology_term_id is null then 0
                    else 1
-                 end as is_go_slim,
-                 case
-                   when gs.ontology_term_id is null then 0
-                   else 1
-                 end as is_go_slim_leaf
+                 end as is_go_slim
           from GeneGoTerms ggt, sres.OntologyRelationship orel,
                sres.OntologyTerm ot, &prefixOntologyLevels ol,
                sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
@@ -409,29 +488,6 @@ create table &prefixGeneGoTerms&1 nologging as
             and edr.external_database_id = ed.external_database_id
             and ed.name ='GO_RSRC'
             and ot.ontology_term_id = gs.ontology_term_id(+)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        update &prefixGoTermSummary&1
-        set is_leaf = 0
-        where (aa_sequence_id, source, go_term_id)
-              in (select gts.aa_sequence_id, gts.source, orel.object_term_id
-                  from &prefixGoTermSummary&1 gts, sres.OntologyRelationship orel
-                  where gts.go_term_id = orel.subject_term_id
-                    and orel.subject_term_id != orel.object_term_id)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        update &prefixGoTermSummary&1
-        set is_go_slim_leaf = 0
-        where (aa_sequence_id, source, go_term_id)
-              in (select gts.aa_sequence_id, gts.source, orel.object_term_id
-                  from &prefixGoTermSummary&1 gts, sres.OntologyRelationship orel, apidb.GoSubset gs
-                  where gts.go_term_id = orel.subject_term_id
-                    and gts.go_term_id = gs.ontology_term_id
-                    and orel.subject_term_id != orel.object_term_id)
       ]]>
     </sql>
     <sql>
