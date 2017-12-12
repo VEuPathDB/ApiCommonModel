@@ -70,6 +70,7 @@ public class AnnotatedGenome extends DatasetInjector {
       phylum.put("Botrytis","Leotiomycetes");
       phylum.put("Candida","Saccharomycetes");
       phylum.put("Chromera","Chromerida");
+      phylum.put("Clavispora","Saccharomycetes");
       phylum.put("Coccidioides","Eurotiomycetes");
       phylum.put("Coprinopsis","Agaricomycetes");
       phylum.put("Crithidia","Kinetoplastida");
