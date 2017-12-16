@@ -24,7 +24,7 @@ $destRootDir = $outputDir if ($outputDir);
 
 my @projects ;
 if ($includeProjects eq 'ALL'){
-    @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB SchistoDB FungiDB ClinEpiDB/;
+    @projects  = qw/AmoebaDB CryptoDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TriTrypDB TrichDB SchistoDB FungiDB/;
 } else {
     @projects = split (',' , $includeProjects);
 }

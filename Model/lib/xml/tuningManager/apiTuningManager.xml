@@ -2,7 +2,6 @@
 <tuningConfig>
 
   <import file="tuningManager.xml"/>
-  <import file="studyTuningManager.xml"/>
 
   <tuningTable name="OrganismSelectTaxonRank" prefixEnabled="false">
     <comment>Taxon ranks for organisms                                                                                                     
@@ -126,7 +125,7 @@ WHERE
     <comment>
       Taxon metadata for reference SNPs
     </comment>
-    <internalDependency name="ProtocolAppNodeResults"/>
+    <internalDependency name="PANResults"/>
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
@@ -134,7 +133,7 @@ WHERE
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.Study"/>
     <externalDependency name="study.StudyLink"/>
-    <internalDependency name="PANProtocolMetadata"/>
+    <internalDependency name="InferredParams"/>
     <sql>
       <![CDATA[
         create table FallbackOrganism&1 nologging as
@@ -148,10 +147,10 @@ WHERE
                      s.name as study_name
               from study.Study s
               where investigation_id is null) study_release
-        where pan.protocol_app_node_id in (select protocol_app_node_id
-                                           from ProtocolAppNodeResults)
---        and ed.name not in (select dataset_name from PANProtocolMetadata)
---        and ed.name not in (select dataset_name from PANCharacteristicMetadata)
+        where pan.protocol_app_node_id in (select pan_id
+                                           from PANResults)
+--        and ed.name not in (select dataset_name from InferredParams)
+--        and ed.name not in (select dataset_name from InferredChars)
           and pan.protocol_app_node_id = sl.protocol_app_node_id
           and sl.study_id = study_release.study_id
           and study_release.external_database_release_id = edr.external_database_release_id
@@ -493,6 +492,15 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <sql>
       <![CDATA[
         create index GoTermSum_aaSeqId_idx&1 ON &prefixGoTermSummary&1 (aa_sequence_id, go_id, source)
+        tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index GoTermSum_plugin_ix&1 ON &prefixGoTermSummary&1
+               (ontology, gene_source_id, is_not, is_go_slim,
+                go_id, go_term_name,
+                decode(evidence_code, 'IEA', 'Computed', 'Curated'))
         tablespace indx
       ]]>
     </sql>
@@ -1331,6 +1339,7 @@ tablespace indx
     </comment>
     <externalDependency name="apidb.CdsLocation"/>
     <internalDependency name="GoTermSummary"/>
+    <internalDependency name="GeneGoTerms"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
     <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.AaLocation"/>
@@ -1354,8 +1363,7 @@ SELECT aa_sequence_id, ontology, source,
              apidb.tab_to_string(set(cast(COLLECT(go_id order by go_term_name) as apidb.varchartab)), ', ') AS go_ids
       FROM (SELECT aa_sequence_id, ontology, 
                         DECODE(evidence_code, 'IEA', 'predicted', 'annotated') AS source, go_term_name, go_id
-                 FROM  &prefixGoTermSummary
-                 WHERE is_leaf = 1
+                 FROM  &prefixGeneGoTerms
                  )
       GROUP BY aa_sequence_id, ontology, source
       ]]>
@@ -3004,8 +3012,8 @@ tablespace indx
     <comment> Used by the GenesByChipSeq query
      </comment>
     <internalDependency name="TranscriptAttributes"/>
-    <internalDependency name="PANProtocolMetadata"/>
-    <internalDependency name="FallbackMetadata"/>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="DefaultChars"/>
     <externalDependency name="results.SegmentResult"/>
     <sql>
       <![CDATA[
@@ -3040,9 +3048,9 @@ from  TranscriptAttributes ta,
       results.SegmentResult sr
 where sr.na_sequence_id = ta.na_sequence_id
   and sr.protocol_app_node_id
-          in (      select protocol_app_node_id from FallbackMetadata where subtype = 'chipseq'
-              union select protocol_app_node_id from panProtocolMetadata where subtype = 'chipseq'
-              union select protocol_app_node_id from panCharacteristicMetadata where subtype = 'chipseq')
+          in (      select protocol_app_node_id from DefaultChars where dataset_subtype = 'chipseq'
+              union select protocol_app_node_id from InferredParams where dataset_subtype = 'chipseq'
+              union select protocol_app_node_id from InferredChars where dataset_subtype = 'chipseq')
   and ( (ta.is_reversed = 0 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.start_min) <= 3000)
                   or (ta.is_reversed = 1 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.end_max) <= 3000) )
       ]]>
@@ -3381,7 +3389,7 @@ tablespace indx
     <sql>
       <![CDATA[
  create or replace view snpchipattributes as
-  select * from snpattributesdots
+  select * from SnpAttributesDots&1
   where platform in ('Broad_3k_array','Broad_75K_array','NIH_10k','Broad_barcode')
       ]]>
     </sql>
@@ -3754,7 +3762,7 @@ tablespace indx
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="DatasetPresenter"/>
-    <internalDependency name="PANProtocolMetadata"/>
+    <internalDependency name="InferredParams"/>
     <externalDependency name="apidb.IntronJunction"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="study.ProtocolAppNode"/>
@@ -3774,17 +3782,17 @@ select distinct junc.protocol_app_node_id as junctions_pan_id, assay.name as jun
                           THEN 'true'
                           ELSE 'false'
                       END as second_strand
-      from study.ProtocolAppNode assay, ProtocolAppNodeIo io2, study.ProtocolAppNode fpkm,
-           PanParameterValues pva, PanParameterValues pvb, PanParameterValues pvc,
-           (select j.protocol_app_node_id,min(input_node_id) as input_node_id
-            from ProtocolAppNodeIo io,
+      from study.ProtocolAppNode assay, PANIo io2, study.ProtocolAppNode fpkm,
+           PanParamValues pva, PanParamValues pvb, PanParamValues pvc,
+           (select j.protocol_app_node_id,min(input_pan_id) as input_node_id
+            from PANIo io,
                  (select distinct protocol_app_node_id
                   from apidb.intronjunction) j
-            where j.protocol_app_node_id = io.output_node_id
+            where j.protocol_app_node_id = io.output_pan_id
             group by j.protocol_app_node_id) junc
       where junc.input_node_id = assay.protocol_app_node_id
-        and junc.input_node_id = io2.input_node_id
-        and io2.output_node_id = fpkm.protocol_app_node_id
+        and junc.input_node_id = io2.input_pan_id
+        and io2.output_pan_id = fpkm.protocol_app_node_id
         and fpkm.protocol_app_node_id = pva.protocol_app_node_id
         and pva.protocol_param = 'QuantificationType'
         and pva.protocol_param_value = 'HTSeq'
@@ -3841,10 +3849,10 @@ with
                     to_number(cb.value) as number_mapped_reads,
                     to_number(cc.value) as avg_mapping_coverage
              from namemapping nm, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                  protocolappnodeio ioa, STUDY.CHARACTERISTIC cb, sres.ontologyterm otb,
+                  PANIo ioa, STUDY.CHARACTERISTIC cb, sres.ontologyterm otb,
                   STUDY.CHARACTERISTIC cc, sres.ontologyterm otc
-             where nm.junctions_pan_id = ioa.output_node_id
-               and ioa.input_node_id = ca.protocol_app_node_id
+             where nm.junctions_pan_id = ioa.output_pan_id
+               and ioa.input_pan_id = ca.protocol_app_node_id
                and ca.value is not null
                and ca.QUALIFIER_ID = ota.ONTOLOGY_TERM_ID
                and ota.name = 'average read length'
@@ -5827,7 +5835,7 @@ where url is not null
       -->
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="CompoundAttributes"/>
-    <internalDependency name="ProtocolAppNodeResults"/>
+    <internalDependency name="PANResults"/>
     <externalDependency name="apidb.OntologyTermResult"/>
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="results.NaFeatureExpression"/>
@@ -5887,8 +5895,8 @@ where url is not null
         FROM
           study.StudyLink sl
         , (select distinct sl.study_id
-           from study.studylink sl, protocolappnoderesults panr
-           where sl.protocol_app_node_id = panr.protocol_app_node_id
+           from study.studylink sl, PanResults panr
+           where sl.protocol_app_node_id = panr.pan_id
            and panr.result_table = 'Results::NAFeatureDiffResult') dr
         , study.ProtocolAppNode pan
         ,(SELECT
@@ -6053,8 +6061,8 @@ where url is not null
         FROM
           study.StudyLink sl
         , (select distinct sl.study_id
-           from study.studylink sl, protocolappnoderesults panr
-           where sl.protocol_app_node_id = panr.protocol_app_node_id
+           from study.studylink sl, panresults panr
+           where sl.protocol_app_node_id = panr.pan_id
            and panr.result_table = 'Results::NAFeatureDiffResult') dr
 
         , study.ProtocolAppNode pan
@@ -6495,23 +6503,23 @@ where url is not null
        Ordered list of distinct genotypes for each protocol_app_node_id in apidb.RflpGenotypes
     </comment>
     <externalDependency name="apidb.RflpGenotype"/>
-    <internalDependency name="PANProtocolMetadata"/>
+    <internalDependency name="InferredParams"/>
     <sql>
       <![CDATA[
         create table RflpGenotypes&1 nologging as
-        select sd.protocol_app_node_id, sd.output_protocol_app_node_id,
+        select sd.protocol_app_node_id, sd.output_pan_id,
                cast (listagg(genotype, ', ') within group (order by genotype) as varchar2(80)) as genotypes
         from (select distinct genotype, protocol_app_node_id from apidb.RflpGenotype) rg,
-             SampleDownstream sd
-        where sd.output_protocol_app_node_id = rg.protocol_app_node_id
-        group by sd.protocol_app_node_id, sd.output_protocol_app_node_id
+             SampleProcess sd
+        where sd.output_pan_id = rg.protocol_app_node_id
+        group by sd.protocol_app_node_id, sd.output_pan_id
        ]]>
     </sql>
     <sql>
       <![CDATA[
         create index rflpG_ix&1
           on RflpGenotypes&1
-            (protocol_app_node_id, output_protocol_app_node_id, genotypes)
+            (protocol_app_node_id, output_pan_id, genotypes)
         tablespace indx
       ]]>
     </sql>
