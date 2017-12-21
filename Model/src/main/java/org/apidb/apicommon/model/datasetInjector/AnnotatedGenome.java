@@ -77,6 +77,7 @@ public class AnnotatedGenome extends DatasetInjector {
       phylum.put("Cryptococcus","Tremellomycetes");
       phylum.put("Cryptosporidium","Apicomplexa");
       phylum.put("Cyclospora","Apicomplexa");
+      phylum.put("Cystoisospora","Apicomplexa");
       phylum.put("Cytauxzoon","Apicomplexa");
       phylum.put("Edhazardia","Microsporidia");
       phylum.put("Eimeria","Apicomplexa");
