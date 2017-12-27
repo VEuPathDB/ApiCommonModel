@@ -17,6 +17,9 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory.CompleteValidStableValues;
+import org.gusdb.wdk.model.query.param.values.WriteableStableValues;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
@@ -126,9 +129,10 @@ public class RecordDumper {
 
         // ask the question
         User user = wdkModel.getSystemUser();
-        Map<String, String> params = new LinkedHashMap<String, String>();
+        WriteableStableValues params = new WriteableStableValues(question.getQuery());
         params.put(organismParam, organism);
-        AnswerValue sqlAnswer = question.makeAnswerValue(user, params, true, 0);
+        CompleteValidStableValues validParams = ValidStableValuesFactory.createFromCompleteValues(user, params);
+        AnswerValue sqlAnswer = question.makeAnswerValue(user, validParams, 0);
 
         // decide the path-file name
         File dir = new File(baseDir, organism.replace(' ', '_'));

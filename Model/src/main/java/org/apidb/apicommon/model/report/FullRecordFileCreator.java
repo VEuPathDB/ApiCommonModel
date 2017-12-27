@@ -20,6 +20,9 @@ import org.gusdb.wdk.model.query.Column;
 import org.gusdb.wdk.model.query.Query;
 import org.gusdb.wdk.model.query.QuerySet;
 import org.gusdb.wdk.model.query.SqlQuery;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory.CompleteValidStableValues;
+import org.gusdb.wdk.model.query.param.values.WriteableStableValues;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.question.QuestionSet;
 import org.gusdb.wdk.model.record.Field;
@@ -122,9 +125,9 @@ public class FullRecordFileCreator extends BaseCLI {
   
           Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
           User user = wdkModel.getSystemUser();
-          Map<String, String> paramValues = new LinkedHashMap<String, String>();
-          AnswerValue answerValue = question
-                  .makeAnswerValue(user, paramValues, true, 0);
+          CompleteValidStableValues paramValues = ValidStableValuesFactory.createFromCompleteValues(user,
+              new WriteableStableValues(question.getQuery()));
+          AnswerValue answerValue = question.makeAnswerValue(user, paramValues, 0);
   
           OutputStream out = new FileOutputStream(dumpFile);
           Reporter reporter = createReporter(answerValue, cacheTable);

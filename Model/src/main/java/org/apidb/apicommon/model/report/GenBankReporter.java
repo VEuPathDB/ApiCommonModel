@@ -15,11 +15,15 @@ import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.answer.stream.PagedAnswerRecordStream;
 import org.gusdb.wdk.model.answer.stream.RecordStream;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory;
+import org.gusdb.wdk.model.query.param.values.WriteableStableValues;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory.CompleteValidStableValues;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.PagedAnswerReporter;
+import org.gusdb.wdk.model.user.User;
 import org.json.JSONObject;
 
 public class GenBankReporter extends PagedAnswerReporter {
@@ -71,19 +75,21 @@ public class GenBankReporter extends PagedAnswerReporter {
     private void pageSequences(PrintWriter writer) throws WdkModelException {
       try (RecordStream records = getRecords()) {
         for (RecordInstance record : records) {
-            String sequenceId = record.getAttributeValue("source_id").toString();
 
-            Map<String, String> params = new LinkedHashMap<String, String>();
+          String geneQuestionName = _properties.get(PROPERTY_GENE_QUESTION);
+          Question geneQuestion = (Question) _wdkModel.resolveReference(geneQuestionName);
 
-            params.put(_properties.get(PROPERTY_SEQUENCE_ID_PARAM), sequenceId);
+          String sequenceId = record.getAttributeValue("source_id").toString();
 
-            Map<String, Boolean> sorting = new LinkedHashMap<String, Boolean>();
-            sorting.put(_properties.get(PROPERTY_SEQUENCE_ID_COLUMN), true);
+          WriteableStableValues params = new WriteableStableValues(geneQuestion.getQuery());
+          params.put(_properties.get(PROPERTY_SEQUENCE_ID_PARAM), sequenceId);
 
-            String geneQuestionName = _properties.get(PROPERTY_GENE_QUESTION);
-            Question geneQuestion = (Question) _wdkModel.resolveReference(geneQuestionName);
-            AnswerValue geneAnswer = geneQuestion.makeAnswerValue(_baseAnswer.getUser(), params, 0,
-                                                                  _pageSize, sorting, null, true, 0);
+          Map<String, Boolean> sorting = new LinkedHashMap<String, Boolean>();
+          sorting.put(_properties.get(PROPERTY_SEQUENCE_ID_COLUMN), true);
+
+          User user = _baseAnswer.getUser();
+          CompleteValidStableValues validParams = ValidStableValuesFactory.createFromCompleteValues(user, params);
+          AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, validParams, 0, _pageSize, sorting, null, 0);
 
             // write non gene sequence features
             writeSequenceFeatures(record, writer);

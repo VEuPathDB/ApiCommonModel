@@ -14,12 +14,17 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.MapBuilder;
+import org.gusdb.fgputil.Tuples.TwoTuple;
 import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.runtime.GusHome;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory;
+import org.gusdb.wdk.model.query.param.values.ValidStableValuesFactory.CompleteValidStableValues;
+import org.gusdb.wdk.model.query.param.values.WriteableStableValues;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.report.PagedAnswerReporter;
 import org.gusdb.wdk.model.report.ReporterFactory;
@@ -127,7 +132,7 @@ public class Gff3Dumper {
   }
 
   private void dumpOrganism(PreparedStatement psOrganism, String organism, Map<String, String> config) throws WdkUserException,
-      WdkModelException, IOException, SQLException {
+      WdkModelException, SQLException, IOException {
     long start = System.currentTimeMillis();
 
     // decide the path-file name
@@ -152,22 +157,20 @@ public class Gff3Dumper {
     params.put("gff_organism", organism);
 
     User user = wdkModel.getSystemUser();
-    Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
-    AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, true, 0);
-    Gff3Reporter seqReport = (Gff3Reporter) ReporterFactory.getReporter(sqlAnswer, "gff3", config);
 
-    Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
-    AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, true, 0);
+    Gff3Reporter seqReport = getInitializedReporter("gff3", "SequenceDumpQuestions.SequenceDumpQuestion", params, user, config).getSecond();
 
-    config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
-    Gff3Reporter geneReport = (Gff3Reporter) ReporterFactory.getReporter(geneAnswer, "gff3Dump", config);
+    // create copy of config for gene reporter and supplement with additional value
+    Map<String,String> geneConfig = new MapBuilder<String,String>(new HashMap<>(config))
+        .put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes").toMap();
 
-    seqReport.initialize();
-    geneReport.initialize();
+    TwoTuple<AnswerValue, Gff3Reporter> geneBundle =
+        getInitializedReporter("gff3Dump", "GeneDumpQuestions.GeneDumpQuestion", params, user, geneConfig);
+    Gff3Reporter geneReport = geneBundle.getSecond();
 
     // remove rows from the cache table
     String cacheTable = geneReport.getCacheTable();
-    String idSql = geneAnswer.getIdSql();
+    String idSql = geneBundle.getFirst().getIdSql();
     deleteRows(idSql, cacheTable);
 
     try {
@@ -203,6 +206,17 @@ public class Gff3Dumper {
     long end = System.currentTimeMillis();
     System.out.println("GFF3 file saved at " + gffFile.getAbsolutePath() + ".");
     logger.info("Time spent " + ((end - start) / 1000.0) + " seconds.");
+  }
+
+  private TwoTuple<AnswerValue,Gff3Reporter> getInitializedReporter(String reporterName, String questionName,
+      Map<String, String> params, User user, Map<String, String> config) throws WdkModelException, WdkUserException {
+    Question question = (Question) wdkModel.resolveReference(questionName);
+    CompleteValidStableValues validParams = ValidStableValuesFactory.createFromCompleteValues(user,
+        new WriteableStableValues(question.getQuery(), params));
+    AnswerValue answerValue = question.makeAnswerValue(user, validParams, 0);
+    Gff3Reporter reporter = (Gff3Reporter) ReporterFactory.getReporter(answerValue, reporterName, config);
+    reporter.initialize();
+    return new TwoTuple<AnswerValue, Gff3Reporter>(answerValue, reporter);
   }
 
   private void deleteRows(String idSql, String cacheTable) throws SQLException {
