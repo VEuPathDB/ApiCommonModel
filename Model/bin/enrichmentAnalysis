@@ -74,7 +74,8 @@ def processArgs(argv):
 # and percent entities annotated by term in the result set
 #=======================================================
 
-def fishersExactTest(data, rTotal, bTotal, threshold):
+#def fishersExactTest(data, rTotal, bTotal, threshold):
+def fishersExactTest(data, rTotal, bTotal):
     fisherResults = {}
     for idx, row in data.iterrows():
         termID = row[0]
@@ -85,9 +86,8 @@ def fishersExactTest(data, rTotal, bTotal, threshold):
         rNotAnnotated = rTotal - raCount
         percentAnnotated = (float(raCount) / float(rTotal)) * 100.0
         foldEnrichment = (float(raCount) / float(rTotal)) / (float(baCount) / float(bTotal))
-        oddsRatio, pValue = sciStats.fisher_exact([[raCount, baCount],[rNotAnnotated, bNotAnnotated]], alternative = 'greater') # looking for over-enrichment
-        if (pValue <= threshold) :
-            fisherResults[idx] = {'pValue' : pValue, 'percent' : "{0:.2f}".format(percentAnnotated), 'oddsRatio' : "{0:.2f}".format(oddsRatio), 'foldEnrichment' : "{0:.2f}".format(foldEnrichment)}
+        oddsRatio, pValue = sciStats.fisher_exact([[raCount, baCount-raCount],[rNotAnnotated, bNotAnnotated-rNotAnnotated]], alternative = 'greater') # looking for over-enrichment
+        fisherResults[idx] = {'pValue' : pValue, 'percent' : "{0:.2f}".format(percentAnnotated), 'oddsRatio' : "{0:.2f}".format(oddsRatio), 'foldEnrichment' : "{0:.2f}".format(foldEnrichment)}
 
     return (pd.DataFrame.from_dict(fisherResults, orient = 'index', dtype=float))
   
@@ -106,7 +106,7 @@ def main(argv = None):
         data = pd.read_table(sys.stdin, header=None ) # read data to a pandas data frame 
       
         # Fisher Exact Test
-        fisherResults = fishersExactTest(data, resultTotalCount, backgroundTotalCount, pValueCutoff)
+        fisherResults = fishersExactTest(data, resultTotalCount, backgroundTotalCount)
         
         # Multiple Hypothesis Testing
         bonferroni = sm.multipletests(fisherResults['pValue'], method = 'bonferroni')
@@ -118,6 +118,9 @@ def main(argv = None):
         # combine DataFrames based on indexes
         adjustedResults = pd.merge(fisherResults, adjustedStats, how="left", left_index = True, right_index = True) 
         results = pd.merge(adjustedResults, data, how = "left", left_index = True, right_index = True)
+
+        #filter on pValue cutoff (should do this after multiple test corrections)
+        results = results[results.pValue <= pValueCutoff]
 
         # sort on p-value asc
         results.sort(columns = 'pValue', ascending = True, inplace = True)
