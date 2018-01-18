@@ -7752,28 +7752,38 @@ order by nums,chars
 
           <sql>
            <![CDATA[
-select distinct ids.term as internal, ids.term as internal_for_counts, ids.property as ontology_term_name,
-cast(CASE WHEN ms.spec_value = 'number' and apidb.is_number(ids.value) = 1 THEN ids.value ELSE null END as number) as number_value,
-CASE WHEN ms.spec_value = 'string' THEN ids.value ELSE cast(null as varchar2(10)) END as string_value,
-cast(CASE WHEN ms.spec_value = 'date' THEN ids.value ELSE null END as date) as date_value
-from
-(select distinct property,spec_property,spec_value
-from apidbtuning.metadataspec
-where lower(dataset_name) like '%icemr%'
-and spec_property = 'type') ms,
-                (select pan_id as term, property, value
-                from apidbtuning.InferredChars
-                where lower(dataset_name) like '%icemr%'
-              union
-                select pan_id as term, property, value
-                from apidbtuning.InferredParams
-                where lower(dataset_name) like '%icemr%'
-              union
-                select pan_id as term, property, value
-                from apidbtuning.DefaultChars
-                where lower(dataset_name) like '%icemr%') ids
-                where ids.property = ms.property
-                and ms.spec_property = 'type'
+select distinct ids.term as internal, ids.term as internal_for_counts,
+                ids.property as ontology_term_name,
+                cast(case
+                       when pt.type = 'number' and apidb.is_number(ids.value) = 1
+                         then ids.value
+                       else null
+                     end as number) as number_value,
+               case
+                 when pt.type = 'string'
+                   then ids.value
+                 else cast(null as varchar2(10))
+               end as string_value,
+               cast(case
+                      when pt.type = 'date'
+                        then ids.value
+                      else null
+                    end as date) as date_value
+from (select property, max(type) as type
+      from apidbTuning.PropertyType
+      group by property) pt,
+     (  select pan_id as term, property, value
+        from apidbTuning.InferredChars
+        where lower(dataset_name) like '%icemr%'
+      union
+        select pan_id as term, property, value
+        from apidbTuning.InferredParams
+        where lower(dataset_name) like '%icemr%'
+      union
+        select pan_id as term, property, value
+        from apidbTuning.DefaultChars
+        where lower(dataset_name) like '%icemr%') ids
+where ids.property = pt.property
            ]]>
             </sql>
         </sqlQuery>
@@ -7810,24 +7820,12 @@ and spec_property = 'type') ms,
           <column name="is_range"/>
           <sql>
            <![CDATA[
-select ontology_term_name, parent_ontology_term_name, 
-CASE WHEN display_name is null THEN ontology_term_name ELSE display_name END as display_name,
-description, units, type, is_range, precision
-from (
-select property as ontology_term_name, parent_ontology_term_name, display_name, description, units,
-CASE WHEN type is null THEN 'string' ELSE type END as type, 
-CASE WHEN range = 'range' THEN 1 ELSE 0 END as is_range, 
-CASE WHEN type = 'number' THEN 1 ELSE null END as precision
-from (
-                select distinct property, spec_property, spec_value
-                from apidbTuning.MetadataSpec
-                where lower(dataset_name) like '%icemr%')
-                pivot(max(spec_value) for spec_property in ('parent' as parent_ontology_term_name, 'display' as display_name, 'description' as description, 
-    'type' as type, 'units' as units, 'filter' as range, 'categorized' as is_categorized)))
+select distinct ontology_term_name, parent_ontology_term_name, display_name,
+                description, units, type, is_range, precision
+from apidbTuning.Ontology
+where lower(dataset_name) like '%icemr%'
             ]]>
-
-
-            </sql>
+          </sql>
         </sqlQuery>
 
         <processQuery name="SamplesMetadataSpec_ICEMR" doNotTest="1" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
