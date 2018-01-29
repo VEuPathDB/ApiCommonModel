@@ -682,6 +682,69 @@ from (
 
         </sqlQuery>
 
+
+
+
+       <sqlQuery name="NcrassaPhenotypeImages" includeProjects="FungiDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="uri"/>
+            <column name="morphology"/>
+            <column name="physiology"/>
+            <column name="media"/>
+            <column name="timepoint"/>
+            <column name="location"/>
+            <column name="temperature"/>
+            <sql>
+
+<![CDATA[ 
+select * from (
+select ga.source_id, ga.project_id, pan.uri, r.property, r.value
+from APIDB.NAFEATUREPHENOTYPE r, apidbtuning.geneattributes ga,
+study.protocolappnode pan
+where pan.PROTOCOL_APP_NODE_ID = r.PROTOCOL_APP_NODE_ID
+and r.NA_FEATURE_ID = ga.NA_FEATURE_ID
+)
+pivot ( 
+ listagg(value, '</br>') within group (order by value)
+   for property in ( 'morphology' morphology, 'physiology' physiology, 'temperature' temperature, 'location' location, 'timepoint' timepoint, 'media' media)
+)
+ ]]>
+       </sql>
+
+        </sqlQuery>
+
+
+
+       <sqlQuery name="NcrassaKOPhenotype" includeProjects="FungiDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="mating_type" />
+            <column name="BASAL_HYPHAE_GROWTH_RATE"/>
+            <column name="AERIAL_HYPHAE_HEIGHT"/>
+            <column name="CONIDIA_PRODUCTION" />
+            <column name="PROTOPERITHECIA_PRODUCTION" />
+            <column name="PERITHECIA_PRODUCTION" />
+            <column name="ASCOSPORE_PRODUCTION" />
+            <column name="pubmed" />
+            <column name="pubmedid" />
+            <sql>
+<![CDATA[ 
+select ga.source_id, ga.project_id, pm.pubmed as pubmedid,
+case when pm.pubmed is null then '' else '<a href="https://www.ncbi.nlm.nih.gov/pubmed/?term=' || pm.pubmed || '">' || pm.pubmed || '</a>'end as pubmed, 
+nvl(pm.mating_type, 'N/A') as mating_type, pm.BASAL_HYPHAE_GROWTH_RATE, pm.AERIAL_HYPHAE_HEIGHT, pm.CONIDIA_PRODUCTION, pm.PROTOPERITHECIA_PRODUCTION, pm.PERITHECIA_PRODUCTION, pm.ASCOSPORE_PRODUCTION
+from APIDB.PHENOTYPEMUTANTS pm, apidbtuning.geneattributes ga
+where ga.na_feature_id = pm.na_feature_id
+ ]]>
+       </sql>
+
+        </sqlQuery>
+
+
+
+
+
+
        <sqlQuery name="eQTLPhenotypeGraphs" includeProjects="PlasmoDB">
             <column name="source_id" />
             <column name="project_id" />
@@ -803,7 +866,7 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
             <column name="phenotype_comment"/>
             <column name="chebi_annotation_extension"/>
 <!--            <column name="evidence_term_id"/>-->
-            <column name="protein_annotation_extension"/>
+<!--            <column name="protein_annotation_extension"/>-->
             <sql>
     select distinct ga.source_id
               , ga.project_id
@@ -812,9 +875,9 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
               , pm.ALLELE
               , case when oen.name is null then CAST (pr.phenotype_post_composition AS VARCHAR2(4000)) 
               else opq.name ||' '||CASE WHEN opq.name = 'lethal' THEN '' ELSE oen.name||' ' END||pr.Timing||' '||ols.name end as phenotype
-              , pr.PHENOTYPE_COMMENT
-              , pr.CHEBI_ANNOTATION_EXTENSION
-              , pr.PROTEIN_ANNOTATION_EXTENSION
+, case when pr.PHENOTYPE_COMMENT is null then CAST (pr.phenotype_post_composition AS VARCHAR2(4000)) else pr.phenotype_comment end as phenotype_comment
+	      , case when pr.CHEBI_ANNOTATION_EXTENSION not like 'CHEBI%' then null else pr.chebi_annotation_extension end as chebi_annotation_extension
+              --, pr.PROTEIN_ANNOTATION_EXTENSION
               from
               apidbtuning.geneattributes ga
               , APIDB.PHENOTYPEMODEL pm
@@ -822,7 +885,9 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
               , sres.ontologyterm oen
               , sres.ontologyterm opq
               , sres.ontologyterm ols
-              where ga.na_feature_id = pm.na_feature_id
+              , APIDB.NAFEATUREPHENOTYPEMODEL na
+	      where ga.na_feature_id = na.na_feature_id
+              and pm.phenotype_model_id = na.phenotype_model_id
               and pm.phenotype_model_id = pr.phenotype_model_id
               and pr.PHENOTYPE_ENTITY_TERM_ID = oen.ontology_term_id (+)
               and pr.phenotype_quality_term_id = opq.ontology_term_id (+)
