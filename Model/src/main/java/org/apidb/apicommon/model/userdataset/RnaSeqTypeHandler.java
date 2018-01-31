@@ -86,10 +86,9 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
    * 
    */
   @Override
-  public String getAncillaryData(WdkModel wdkModel, UserDataset userDataset) throws WdkModelException {
+  public String getTrackSpecificData(WdkModel wdkModel, UserDataset userDataset) throws WdkModelException {
 	List<String> links = new ArrayList<>();
 	ModelConfig modelConfig = wdkModel.getModelConfig();
-	String webServiceUrl = modelConfig.getWebServiceUrl();
 	String appUrl = modelConfig.getWebAppUrl();
 	Long userId = userDataset.getOwnerId();
 	Long datasetId = userDataset.getUserDatasetId();
@@ -102,9 +101,9 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     String taxonId = getTaxonId(resourceIdentifier);
     String seqId = getSequenceId(taxonId, wdkModel.getAppDb());
     //TODO Is there a better way to just grab the host?
-    String partialGenomeBrowserUrl = appUrl + "/../cgi-bin/gbrowse/fungidb/?ref=" + seqId + ";eurl=";
+    String partialGenomeBrowserUrl = "/cgi-bin/gbrowse/fungidb/?ref=" + seqId + ";eurl=";
     //TODO This url is subject to change based on security concerns.
-    String partialServiceUrl = webServiceUrl + "/users/" + userId + "/user-datasets/" + datasetId;
+    String partialServiceUrl = appUrl + "/service/users/" + userId + "/user-datasets/" + datasetId;
     
     // Created a new link for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.

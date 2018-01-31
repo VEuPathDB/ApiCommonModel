@@ -54,9 +54,4 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
     return q;
   }
   
-  @Override
-  public String getAncillaryData(WdkModel wdkModel, UserDataset userDataset) throws WdkModelException {
-	return "";
-  }
-
 }
