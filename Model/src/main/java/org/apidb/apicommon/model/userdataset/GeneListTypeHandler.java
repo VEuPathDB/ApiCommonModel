@@ -7,6 +7,8 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
+import org.gusdb.wdk.model.WdkModel;
+import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
 import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
@@ -51,5 +53,5 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
     String[] q = {"GeneQuestions.GenesByUserDatasetGeneList"};
     return q;
   }
-
+  
 }
