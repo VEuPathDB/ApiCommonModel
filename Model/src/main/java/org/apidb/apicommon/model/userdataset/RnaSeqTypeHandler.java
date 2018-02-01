@@ -11,6 +11,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 
 import org.gusdb.fgputil.FormatUtil;
+import org.gusdb.fgputil.Tuples.TwoTuple;
 import org.gusdb.fgputil.Wrapper;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.fgputil.db.runner.SQLRunner;
@@ -26,10 +27,22 @@ import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
 import org.json.JSONArray;
 
+/**
+ * Handler for RNA Seq Type user datasets.  Currently only handles datasets containing only
+ * tracks intended for display via GBrowse.
+ * @author crisl-adm
+ *
+ */
 public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	
+  private static final int WINDOW = 200000;	
+	
+  /**
+   * SQL to look up the longest genome sequence available for the genome given in this user
+   * dataset.	
+   */
   private static final String SELECT_SEQUENCE_SQL =
-	      "SELECT gsa.source_id AS seq_id " +
+	      "SELECT gsa.source_id AS seq_id, gsa.length AS length " +
 	      " FROM apidbtuning.genomicseqattributes gsa, apidb.organism o, " +
 	      "  (SELECT MAX(length) AS ML, taxon_id " +
 	      "    FROM apidbtuning.genomicseqattributes " +
@@ -79,7 +92,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   }
   
   /**
-   * The ancillary data here is a JSON Array of genome browser links using the organism cited in the
+   * The track specific data here is a JSON Array of genome browser links using the organism cited in the
    * dependency list as the source of a valid reference seq (longest one chosen).  The embedded link is
    * a url encoded link to the service that can stream out the genome browser big wig track represented
    * by that embedded link.
@@ -99,9 +112,13 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	UserDatasetDependency dependency = (UserDatasetDependency) dependencies.toArray()[0];
 	String resourceIdentifier = dependency.getResourceIdentifier();
     String taxonId = getTaxonId(resourceIdentifier);
-    String seqId = getSequenceId(taxonId, wdkModel.getAppDb());
-    //TODO Is there a better way to just grab the host?
-    String partialGenomeBrowserUrl = "/cgi-bin/gbrowse/fungidb/?ref=" + seqId + ";eurl=";
+    TwoTuple<String,Integer> tuple = getSequenceInfo(taxonId, wdkModel.getAppDb());
+    String seqId = tuple.getFirst();
+    int length = tuple.getSecond();
+    int start = Math.max(0, (length - WINDOW)/2);
+    int end = Math.min(length, (length + WINDOW)/2);
+    String partialGenomeBrowserUrl = "/cgi-bin/gbrowse/fungidb/?ref=" + seqId + 
+    		";start=" + start + ";end=" + end + ";eurl=";
     //TODO This url is subject to change based on security concerns.
     String partialServiceUrl = appUrl + "/service/users/" + userId + "/user-datasets/" + datasetId;
     
@@ -124,20 +141,20 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
    * @return
    * @throws WdkModelException
    */
-  private String getSequenceId(String taxonId, DatabaseInstance appDb) throws WdkModelException {
-    Wrapper<String> wrapper = new Wrapper<>();
-    try {  
+  private TwoTuple<String,Integer> getSequenceInfo(String taxonId, DatabaseInstance appDb) throws WdkModelException {
+    TwoTuple<String, Integer> tuple = new TwoTuple<>(null, null);
+    try { 
       String selectSequenceSql = SELECT_SEQUENCE_SQL;
       new SQLRunner(appDb.getDataSource(), selectSequenceSql, "select-sequence-by-taxon").executeQuery(
         new Object[]{ taxonId },
         new Integer[]{ Types.VARCHAR },
         resultSet -> {
           if (resultSet.next()) {
-            wrapper.set(resultSet.getString("seq_id"));
+            tuple.set(resultSet.getString("seq_id"), resultSet.getInt("length"));
           }
         }
       );
-      return wrapper.get();
+      return tuple;
     }
     catch(SQLRunnerException sre) {
       throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
