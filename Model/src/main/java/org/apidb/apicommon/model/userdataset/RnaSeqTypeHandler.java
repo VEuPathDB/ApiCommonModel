@@ -95,7 +95,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   // TODO For now there is no DB data to uninstall so no command is needed.
   @Override
   public String[] getUninstallInAppDbCommand(Long userDatasetId, String projectId) {
-    String[] cmd = {"uninstallRnaSeqUserDataset", userDatasetId.toString(), projectId};
+    String[] cmd = {};
     return cmd;
   }
 
