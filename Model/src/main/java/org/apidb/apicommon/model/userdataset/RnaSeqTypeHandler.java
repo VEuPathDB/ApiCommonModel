@@ -35,7 +35,19 @@ import org.json.JSONArray;
  */
 public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	
-  private static final int WINDOW = 200000;	
+  private static final int WINDOW = 200000;
+  
+  /**
+   * SQL to look up the current genome build for the organism given in this user dataset.
+   */
+  private static final String SELECT_CURRENT_GENOME_BUILD_SQL =
+		  "SELECT MAX(dh.build_number) as current_build " +
+          " FROM apidbTuning.datasetPresenter dp," +
+          "      apidbTuning.DatasetHistory dh, " +
+          "      apidb.organism o " +
+          " WHERE dh.DATASET_PRESENTER_ID = dp.dataset_presenter_id " +
+          "  AND o.name_for_filenames = ? " +
+          "  AND dp.name = o.abbrev || ‘_primary_genome_RSRC’";
 	
   /**
    * SQL to look up the longest genome sequence available for the genome given in this user
@@ -53,9 +65,12 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	      "  AND ? = o.name_for_filenames ";
 	
   @Override
-  public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
-    // TODO Auto-generated method stub
-    return null;
+  public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) throws WdkModelException {
+	TwoTuple<String,Integer> tuple =  getOrganismAndBuildNumberFromDependencies(userDataset);
+	int currentBuild = getCurrentGenomeBuildNumber(tuple.getKey(), appDbDataSource);
+	boolean match = currentBuild == tuple.getValue();
+	return new UserDatasetCompatibility(match,
+			match ? "" : "Genome build " + tuple.getValue() + " for organism " + tuple.getKey() + " is no longer supported.");
   }
 
   @Override
@@ -105,13 +120,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	String appUrl = modelConfig.getWebAppUrl();
 	Long userId = userDataset.getOwnerId();
 	Long datasetId = userDataset.getUserDatasetId();
-	Set<UserDatasetDependency> dependencies = userDataset.getDependencies();
-	if(dependencies == null || dependencies.size() != 1) {
-	  throw new WdkModelException("Exactly one dependency is needed for this handler.");
-	}
-	UserDatasetDependency dependency = (UserDatasetDependency) dependencies.toArray()[0];
-	String resourceIdentifier = dependency.getResourceIdentifier();
-    String taxonId = getTaxonId(resourceIdentifier);
+    String taxonId = getOrganismAndBuildNumberFromDependencies(userDataset).getKey();
     TwoTuple<String,Integer> tuple = getSequenceInfo(taxonId, wdkModel.getAppDb());
     String seqId = tuple.getFirst();
     int length = tuple.getSecond();
@@ -135,13 +144,43 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   }
   
   /**
+   * A SQL lookup needed to obtain the current genome build for the organism provided.
+   * @param taxonId - organism id
+   * @param appDb
+   * @return
+   * @throws WdkModelException
+   */
+  protected Integer getCurrentGenomeBuildNumber(String taxonId, DataSource appDbDataSource) throws WdkModelException {
+    Wrapper<Integer> wrapper = new Wrapper<>();
+    try { 
+      String selectCurrentGenomeBuildSql = SELECT_CURRENT_GENOME_BUILD_SQL;
+      new SQLRunner(appDbDataSource, selectCurrentGenomeBuildSql, "select-current-genome-build-by-taxon").executeQuery(
+        new Object[]{ taxonId },
+        new Integer[]{ Types.VARCHAR },
+        resultSet -> {
+          if (resultSet.next()) {
+            wrapper.set(resultSet.getInt("current_build"));
+          }
+        }
+      );
+      return wrapper.get();
+    }
+    catch(SQLRunnerException sre) {
+      throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
+    }
+    catch(Exception e) {
+      throw new WdkModelException(e);
+    }
+  }
+  
+  /**
    * A SQL lookup needed to obtain the longest seq id for the organism provided.
    * @param taxonId
    * @param appDb
    * @return
    * @throws WdkModelException
    */
-  private TwoTuple<String,Integer> getSequenceInfo(String taxonId, DatabaseInstance appDb) throws WdkModelException {
+  protected TwoTuple<String,Integer> getSequenceInfo(String taxonId, DatabaseInstance appDb) throws WdkModelException {
     TwoTuple<String, Integer> tuple = new TwoTuple<>(null, null);
     try { 
       String selectSequenceSql = SELECT_SEQUENCE_SQL;
@@ -165,6 +204,33 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   }
   
   /**
+   * The dependency list is expected presently to have just 1 dependency and that is the
+   * current genome build for the organism.  Both are obtained 
+   * @param userDataset
+   * @return
+   * @throws WdkModelException
+   */
+  protected TwoTuple<String, Integer> getOrganismAndBuildNumberFromDependencies(UserDataset userDataset) throws WdkModelException {
+    Set<UserDatasetDependency> dependencies = userDataset.getDependencies();
+	if(dependencies == null || dependencies.size() != 1) {
+	  throw new WdkModelException("Exactly one dependency is needed for this handler.");
+	}
+	UserDatasetDependency dependency = (UserDatasetDependency) dependencies.toArray()[0];
+	String resourceIdentifier = dependency.getResourceIdentifier();
+	String resourceVersion = dependency.getResourceVersion();
+	Integer buildNumber = 0;
+	if(resourceIdentifier == null || resourceVersion == null)
+      throw new WdkModelException("The dependency information for user dataset " + userDataset.getUserDatasetId()  + " is incomplete.");
+	try {
+	  buildNumber = Integer.parseInt(resourceVersion);
+	}
+	catch(NumberFormatException nfe) {
+	  throw new WdkModelException("The dependency resource version for user dataset " + userDataset.getUserDatasetId() + " must be a WDK build number");
+	}
+    return new TwoTuple<String,Integer>(extractTaxonId(resourceIdentifier), buildNumber);
+  }
+  
+  /**
    * This convenience method extracts the abbreviated taxon id from the resource identifier
    * provided.  By convention, the resource identifier looks like projectId-buildNumber_taxonId_Genome
    * If the resource identifier is no in this format, a WdkModelException will be thrown.
@@ -172,7 +238,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
    * @return
    * @throws WdkModelException
    */
-  protected String getTaxonId(String resourceIdentifier)  throws WdkModelException {
+  protected String extractTaxonId(String resourceIdentifier)  throws WdkModelException {
     String sansProject = resourceIdentifier.substring(resourceIdentifier.indexOf("-") + 1);
 	String[] components = sansProject.split("_");
 	if(components.length < 2) {
