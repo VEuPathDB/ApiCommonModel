@@ -16,6 +16,7 @@ import org.gusdb.fgputil.Wrapper;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.fgputil.db.runner.SQLRunner;
 import org.gusdb.fgputil.db.runner.SQLRunnerException;
+import org.gusdb.fgputil.json.JsonType;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.config.ModelConfig;
@@ -107,19 +108,19 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   }
   
   /**
-   * The track specific data here is a JSON Array of genome browser links using the organism cited in the
+   * The type specific data here is a JSON Array of genome browser links using the organism cited in the
    * dependency list as the source of a valid reference seq (longest one chosen).  The embedded link is
    * a url encoded link to the service that can stream out the genome browser big wig track represented
    * by that embedded link.
    * 
    */
   @Override
-  public String getTrackSpecificData(WdkModel wdkModel, UserDataset userDataset) throws WdkModelException {
-	List<String> links = new ArrayList<>();
-	ModelConfig modelConfig = wdkModel.getModelConfig();
-	String appUrl = modelConfig.getWebAppUrl();
-	Long userId = userDataset.getOwnerId();
-	Long datasetId = userDataset.getUserDatasetId();
+  public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset) throws WdkModelException {
+    List<String> links = new ArrayList<>();
+    ModelConfig modelConfig = wdkModel.getModelConfig();
+    String appUrl = modelConfig.getWebAppUrl();
+    Long userId = userDataset.getOwnerId();
+    Long datasetId = userDataset.getUserDatasetId();
     String taxonId = getOrganismAndBuildNumberFromDependencies(userDataset).getKey();
     TwoTuple<String,Integer> tuple = getSequenceInfo(taxonId, wdkModel.getAppDb());
     String seqId = tuple.getFirst();
@@ -127,22 +128,22 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     int start = Math.max(0, (length - WINDOW)/2);
     int end = Math.min(length, (length + WINDOW)/2);
     String partialGenomeBrowserUrl = "/cgi-bin/gbrowse/fungidb/?ref=" + seqId + 
-    		";start=" + start + ";end=" + end + ";eurl=";
+        ";start=" + start + ";end=" + end + ";eurl=";
     //TODO This url is subject to change based on security concerns.
     String partialServiceUrl = appUrl + "/service/users/" + userId + "/user-datasets/" + datasetId;
-    
+
     // Created a new link for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
-	for(String dataFileName : userDataset.getFiles().keySet()) {
-	  if(isBigWigFile(dataFileName)) {
-		String serviceUrl = partialServiceUrl + "/user-datafiles/" + dataFileName;
-		String link = partialGenomeBrowserUrl + FormatUtil.urlEncodeUtf8(serviceUrl);
-		links.add(link);
-	  }
-	}
-	return new JSONArray(links.toArray()).toString();
+    for(String dataFileName : userDataset.getFiles().keySet()) {
+      if(isBigWigFile(dataFileName)) {
+        String serviceUrl = partialServiceUrl + "/user-datafiles/" + dataFileName;
+        String link = partialGenomeBrowserUrl + FormatUtil.urlEncodeUtf8(serviceUrl);
+        links.add(link);
+      }
+    }
+    return new JsonType(new JSONArray(links.toArray()));
   }
-  
+
   /**
    * A SQL lookup needed to obtain the current genome build for the organism provided.
    * @param taxonId - organism id
