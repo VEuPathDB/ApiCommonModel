@@ -17,7 +17,7 @@ public class QuantProteomicsHillSurfaceProteomics extends QuantitativeProteomics
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirectConfidencetbruTREU927_quantitativeMassSpec_BSF_PCF_Surface_Proteomics_RSRC"); 
 
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirecttbruTREU927_quantitativeMassSpec_BSF_PCF_Surface_Proteomics_RSRC"); 
+      //addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirecttbruTREU927_quantitativeMassSpec_BSF_PCF_Surface_Proteomics_RSRC"); 
 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Proteomics::LogRatio"); 
 
