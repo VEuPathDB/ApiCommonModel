@@ -1,5 +1,8 @@
 package org.apidb.apicommon.model.userdataset;
 
+import static org.gusdb.fgputil.functional.Functions.fSwallow;
+import static org.gusdb.fgputil.functional.Functions.mapToList;
+
 import java.io.IOException;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
@@ -124,6 +127,12 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     return q;
   }
   
+  @Override
+  public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
+    List<String> persistedTracks = getPersistedTracks(wdkModel, user.getUserId());	
+    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(wdkModel, userDataset, persistedTracks))));
+  }
+  
   /**
    * The type specific data here is a JSON Array of genome browser links using the organism cited in the
    * dependency list as the source of a valid reference seq (longest one chosen).  The embedded link is
@@ -169,17 +178,17 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   }
   
   protected JSONObject filterOutPersistedTracks(List<String> links, List<String> persistedTracks) {
-    //List<String> unpersistedTrackLinks = links.stream()
-    //		.filter(link -> !persistedTracks.contains(mungeLink(link)))
-    //		.collect(Collectors.toList());
+    List<String> unpersistedTrackLinks = links.stream()
+    		.filter(link -> !persistedTracks.contains(mungeLink(link)))
+    		.collect(Collectors.toList());
 
-    List<String> unpersistedTrackLinks = new ArrayList<>();
-    for(String link : links) {
-      String mungedLink = mungeLink(link);
-	  if(!persistedTracks.contains(mungedLink)) {
-        unpersistedTrackLinks.add(link);
-      }
-   }
+//    List<String> unpersistedTrackLinks = new ArrayList<>();
+//    for(String link : links) {
+//      String mungedLink = mungeLink(link);
+//	  if(!persistedTracks.contains(mungedLink)) {
+//        unpersistedTrackLinks.add(link);
+//      }
+//   }
    return new JSONObject()
 		   .put("total", links.size())
 		   .put("persisted", links.size() - unpersistedTrackLinks.size())
