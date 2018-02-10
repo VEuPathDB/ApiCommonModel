@@ -300,39 +300,43 @@ WHERE  tas.aa_sequence_id = $srcfeature_id
       <sql>
 <![CDATA[
 with peptides as (
-select ms.sample_display
+select ms.sample
+     , ms.sample_display
      , ms.experiment
-     , ms.peptide_aa_feature_id
+     , ms.PEPTIDE_AA_FEATURE_ID
      , ms.peptide_sequence
      , ms.spectrum_count
-     , ms.residue
-     , ms.modification_type
-     , listagg(ms.residue_location + 1, ',') within group (order by ms.residue_location) as residue_location
- --    , listagg(ms.modification_type, ',') within group (order by ms.residue_location) as modification_type
-from  apidbtuning.msmodifiedpeptidesummary ms
-group by experiment, sample, sample_display, peptide_aa_feature_id, peptide_sequence, ms.spectrum_count, ms.residue, ms.modification_type
+     , listagg(ms.residue_location + 1, ',') within group (order by ms.residue_location) as residues
+     , listagg(ms.aa_start_min + 1, ',') within group (order by ms.residue_location) as aa_start_mins
+     , listagg(ms.modification_type, ',') within group (order by ms.residue_location) as modification_type
+FROM  ApiDBTuning.MSModifiedPeptideSummary ms
+group by experiment, sample, sample_display, peptide_aa_feature_id, peptide_sequence, ms.SPECTRUM_COUNT
 )
-select ms.aa_sequence_id  || '_' || ms.modification_type feature_id
-    ,  'domain' type
-    ,  'UnifiedPostTraslationalMod' source
-    ,   ms.source_id name
-    ,  ms.residue_location + 1 startm
-    ,  ms.residue_location + 1 endm
-    ,  'Experiment='  || listagg(peptides.experiment, ';;') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
-       'SCount='      || count(*) || '$dlm' ||
-       'MSCount='     || listagg(peptides.spectrum_count,';') within group (order by peptides.peptide_aa_feature_id desc) || '$dlm' ||
-       'Sample='      || listagg(peptides.sample_display, ';;') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
-       'PeptideStart='|| listagg(ms.aa_start_min,';; ') within group (order by rownum)  || '$dlm' || 
-       'PhosphoSite=' || listagg(peptides.residue_location, ';;') within group (order by peptides.peptide_aa_feature_id)|| '$dlm' ||
-       'Residue='     || listagg(peptides.residue, ';;') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
-       'Ontology='    || listagg(peptides.modification_type, ';;') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
-       'PepSeq='      ||listagg(peptides.peptide_sequence, ';;') within group (order by peptides.peptide_aa_feature_id)   atts
-from ApiDBTuning.MSModifiedPeptideSummary ms, peptides
-where peptides.peptide_aa_feature_id = ms.peptide_aa_feature_id
- and  ms.aa_sequence_id = $srcfeature_id
- and  ms.residue_location <= $rend 
- AND  ms.residue_location >= $base_start
-group by ms.aa_sequence_id , ms.modification_type, ms.source_id,  ms.residue_location
+select ms.aa_sequence_id  || '_' || ms.residue_location feature_id
+     , 'domain' type
+     , 'UnifiedPostTraslationalMod' source
+     , ms.residue || ' (location ' || ms.residue_location || ')' name
+     , '.' phase
+     , '.' score
+     , null as parent_id
+     ,  ms.residue_location + 1 startm
+     ,  ms.residue_location + 1 end
+     ,  '.' strand
+     , 'Experiments='  || listagg(peptides.experiment, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'MSCounts='     || listagg(peptides.spectrum_count, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'Samples='      || listagg(peptides.sample_display, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'Ontologys='    || listagg(peptides.modification_type, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'PepSeqs='      || listagg(peptides.peptide_sequence, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'PepAAFeatIds=' || listagg(peptides.peptide_aa_feature_id, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'AAStartMins=' || listagg(peptides.aa_start_mins, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'ModificationType=' || ms.modification_type || '$dlm' ||
+      'ResidueLocs=' || listagg(peptides.residues, '|') within group (order by peptides.peptide_aa_feature_id) as atts
+from ApiDBTuning.MSModifiedPeptideSummary ms, peptides 
+where peptides.PEPTIDE_AA_FEATURE_ID = ms.peptide_aa_feature_id
+    AND ms.aa_sequence_id = $srcfeature_id
+    AND ms.aa_start_min <= $rend
+    AND ms.aa_end_max >= $base_start
+group by ms.residue_location, ms.residue, ms.aa_sequence_id, ms.modification_type
     ]]>
     </sql>
   </sqlQuery>
