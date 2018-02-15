@@ -270,7 +270,8 @@ group by
             <column name="evidence_code_parameter"/>
             <sql>
               <![CDATA[
-select ggt.gene_source_id as source_id, '@PROJECT_ID@' as project_id, ggt.go_id,
+select ggt.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+       replace(ggt.go_id, 'GO_', 'GO:') as go_id,
        listagg(ggt.transcript_source_id, ', ') within group (order by ggt.transcript_source_id) as transcript_ids,
        case when ggt.is_not = 'not' then 'Is not' else '' end AS is_not,
        max(ggt.go_term_name) as go_term_name, ggt.ontology, ggt.source, ggt.evidence_code,
@@ -295,7 +296,7 @@ order by gene_source_id, ontology, go_id
             <sql>
               <![CDATA[
 select go_term.source_id, '@PROJECT_ID@' AS project_id, go_term.ontology,
-       go_term.go_id, go_term.go_term_name, go_slim.slim_go_id,
+       replace(go_term.go_id, 'GO_', 'GO:') as go_id, go_term.go_term_name, go_slim.slim_go_id,
        go_slim.slim_go_term_name
 from (select distinct gene_source_id as source_id, ontology, go_id, go_term_id, go_term_name
       from apidbTuning.GeneGoTerms) go_term,
@@ -576,39 +577,44 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
             <sql>
 
 <![CDATA[ 
-select g.*, decode(lower(is_graph_custom), 'false', 1, 0) as template, regexp_substr(graph_ids, '[^,]*') as default_graph_id
+select h.*, datapres.summary, datapres.description
 from (
-select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_species ,
-             graph_descrip.dataset as dataset_name, psgene.profile_graph_id as graph_ids,
-             case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
-             tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
-             'FALSE' has_meta_data, '' as meta_data_categories,
-             graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name, dp.description, 'antibody microarray' as assay_type, dp.dataset_presenter_id as dataset_id
-      from apidbtuning.geneattributes ga, 
-           APIDBTUNING.datasetnametaxon dsnt, 
-           apidbtuning.datasetPresenter dp,
-           sres.taxonname tn, 
-           apidbtuning.taxonspecies ts, 
-           sres.taxonname sn,
-           apidbtuning.geneGroupProfile psgene,
-           (  select '' as dataset, '' as module,
-                     '' as x_axis, '' y_axis,  '' as is_graph_custom,
-                     1 as order_num
-              from dual
-      -- TEMPLATE_ANCHOR antibodyArrayGraphDescriptions
-           ) graph_descrip
-        where ga.source_id = psgene.source_id
-          and psgene.dataset_name = dsnt.name
-          and dsnt.dataset_presenter_id = dp.dataset_presenter_id
-          and graph_descrip.dataset = dp.name
-          and dsnt.taxon_id = tn.taxon_id
-          and tn.name_class = 'scientific name'
-          and dsnt.taxon_id = ts.taxon_id
-          and ts.species_taxon_id = sn.taxon_id
-          and sn.name_class = 'scientific name'
-          and ga.genus_species = sn.name
-          and lower(dp.subtype) = 'immune_response'
-) g
+  select distinct g.*, decode(lower(is_graph_custom), 'false', 1, 0) as template, regexp_substr(graph_ids, '[^,]*') as default_graph_id
+  from (
+        select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_species ,
+               graph_descrip.dataset as dataset_name, psgene.profile_graph_id as graph_ids,
+               case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
+               tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
+               'FALSE' has_meta_data, '' as meta_data_categories,
+               graph_descrip.*, dp.short_attribution, dp.display_name, 'antibody microarray' as assay_type, dp.dataset_presenter_id as dataset_id
+        from apidbtuning.geneattributes ga, 
+             APIDBTUNING.datasetnametaxon dsnt, 
+             apidbtuning.datasetPresenter dp,
+             sres.taxonname tn, 
+             apidbtuning.taxonspecies ts, 
+             sres.taxonname sn,
+             apidbtuning.geneGroupProfile psgene,
+             (  select '' as dataset, '' as module,
+                       '' as x_axis, '' y_axis,  '' as is_graph_custom,
+                       1 as order_num
+                from dual
+        -- TEMPLATE_ANCHOR antibodyArrayGraphDescriptions
+             ) graph_descrip
+          where ga.source_id = psgene.source_id
+            and psgene.dataset_name = dsnt.name
+            and dsnt.dataset_presenter_id = dp.dataset_presenter_id
+            and graph_descrip.dataset = dp.name
+            and dsnt.taxon_id = tn.taxon_id
+            and tn.name_class = 'scientific name'
+            and dsnt.taxon_id = ts.taxon_id
+            and ts.species_taxon_id = sn.taxon_id
+            and sn.name_class = 'scientific name'
+            and ga.genus_species = sn.name
+            and lower(dp.subtype) = 'immune_response'
+  ) g
+) h,
+apidbtuning.datasetpresenter datapres
+where datapres.name = h.dataset_name
  ]]>
      
        </sql>
@@ -1701,6 +1707,7 @@ ORDER BY
             <column name="enzyme"/>
             <column name="expasy_url"/>
             <column name="pathway_source"/>
+            <column name="exact_match"/>
 
             <sql>
             <![CDATA[
@@ -1713,6 +1720,7 @@ ORDER BY
             , enzyme
             , expasy_url
             , pathway_source
+            , exact_match
             from (
                 SELECT DISTINCT
                 tp.GENE_SOURCE_ID as source_id
@@ -1723,6 +1731,7 @@ ORDER BY
                 , pr.ENZYME
                 , pr.EXPASY_URL
                 , tp.PATHWAY_SOURCE
+                , decode(max(tp.exact_match), 1, 'Yes', 0, 'No') AS exact_match
                 FROM
                 apidbtuning.transcriptpathway tp
                 , apidbtuning.pathwayattributes pa 
@@ -1734,9 +1743,10 @@ ORDER BY
                 and pr.ext_db_name = pc.ext_db_name
 		        and tp.EC_NUMBER_PATHWAY = pr.ENZYME
 		        and tp.wildcard_count_gene <= tp.wildcard_count_pathway
-                ORDER BY pathway_name
+                GROUP BY tp.GENE_SOURCE_ID, tp.PATHWAY_SOURCE_ID, tp.PATHWAY_NAME, pr.REACTION_SOURCE_ID, pr.ENZYME, pr.EXPASY_URL, tp.PATHWAY_SOURCE
+                ORDER BY exact_match desc, pathway_name
                 )
-            group by source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source
+            group by source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
             order by pathway_source_id, pathway_source
             ]]>
             </sql>
@@ -3308,6 +3318,7 @@ GROUP BY
             <column name="pvalue_exp"/>
             <column name="taxon"/>
             <column name="pdb_title"/>
+            <column name="pdb_url"/>
             <column name="percent_identity"/>
             <column name="percent_plasmo_coverage"/>
             <sql>
@@ -3315,7 +3326,8 @@ GROUP BY
                 SELECT ps.pdb_chain, ps.pdb_title, ps.pdb_id, ps.pvalue_mant,
                        ps.pvalue_exp, ps.taxon, ps.percent_identity,
                        ps.percent_plasmo_coverage, 
-                       ta.source_id as transcript_id , ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id
+                       'http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=' || ps.pdb_id as pdb_url,
+                       ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id
                 FROM ApidbTuning.PdbSimilarity ps, ApidbTuning.TranscriptAttributes ta
                 WHERE ps.source_id = ta.source_id
                 ORDER BY ps.score DESC
@@ -3463,10 +3475,11 @@ GROUP BY
             <column name="substrates_text"/>
             <column name="products_text"/>
             <column name="pathways"/>
+            <column name="exact_match"/>
             <sql>
             <![CDATA[
             SELECT DISTINCT source_id
-            , project_id
+            , '@PROJECT_ID@' AS project_id
             , pathway_source
             , reaction_source_id
             , reaction_url
@@ -3478,35 +3491,38 @@ GROUP BY
             , substrates_text
             , products_text
             , count(name) as pathways
-            FROM ( 
-                select distinct ta.GENE_SOURCE_ID as source_id
-                , ta.PROJECT_ID
-                , pa.PATHWAY_SOURCE
-                , pr.REACTION_SOURCE_ID
-                , pr.REACTION_URL
-                , pr.ENZYME
-                , pr.EXPASY_URL
-                , pr.EQUATION_HTML as equation
-                , pr.EQUATION_text as equation_text
-                , decode (pr.IS_REVERSIBLE, '1', 'Y', '0', 'N') as reversible
-                , pr.SUBSTRATES_TEXT
-                , pr.PRODUCTS_TEXT
-                , pa.NAME
-                from apidbtuning.transcriptattributes ta
-                , apidbtuning.pathwayattributes pa
+            , exact_match
+            FROM (
+                SELECT DISTINCT tp.gene_source_id AS source_id
+                , pa.pathway_source
+                , pr.reaction_source_id
+                , pr.reaction_url
+                , pr.enzyme
+                , pr.expasy_url
+                , pr.equation_html AS equation
+                , pr.equation_text
+                , DECODE(pr.is_reversible, '1', 'Y', '0', 'N') as reversible
+                , pr.substrates_text
+                , pr.products_text
+                , pa.name
+                , DECODE(MAX(exact_match), 1, 'Yes', 0, 'No') AS exact_match
+                FROM apidbtuning.pathwayattributes pa
                 , apidbtuning.pathwaycompounds pc
                 , apidbtuning.pathwayreactions pr
                 , apidbtuning.transcriptpathway tp
-                where ta.GENE_SOURCE_ID = tp.GENE_SOURCE_ID
-                and tp.EC_NUMBER_GENE like replace(pr.ENZYME, '-', '%')
-                and pr.REACTION_ID = pc.REACTION_ID
-                and pr.EXT_DB_NAME = pc.EXT_DB_NAME
-                and pr.EXT_DB_VERSION = pc.EXT_DB_VERSION
-                and pc.PATHWAY_ID = pa.PATHWAY_ID
-                and tp.PATHWAY_ID = pa.PATHWAY_ID
+                WHERE tp.ec_number_pathway = pr.enzyme
+                AND tp.wildcard_count_gene <= tp.wildcard_count_pathway
+                AND pr.reaction_id = pc.reaction_id
+                AND pr.ext_db_name = pc.ext_db_name
+                AND pr.ext_db_version = pc.ext_db_version
+                AND pc.pathway_id = pa.pathway_id
+                AND tp.pathway_id = pa.pathway_id
+                GROUP BY tp.gene_source_id, pa.pathway_source, pr.reaction_source_id, pr.reaction_url, pr.enzyme, pr.expasy_url
+                , pr.equation_html, pr.equation_text, pr.is_reversible, pr.substrates_text, pr.products_text, pa.name
             )
-            GROUP BY source_id, project_id, pathway_source, reaction_source_id, reaction_url, enzyme, expasy_url, equation, equation_text, reversible, substrates_text, products_text
-            order by pathways desc, reaction_source_id, pathway_source
+            GROUP BY source_id, pathway_source, reaction_source_id, reaction_url, enzyme, expasy_url, equation, equation_text
+            , reversible, substrates_text, products_text, exact_match
+            ORDER BY exact_match desc, pathways desc, reaction_source_id, pathway_source
             ]]>
            </sql>
         </sqlQuery>
@@ -3857,7 +3873,7 @@ from apidbtuning.metadata m
 , apidbtuning.profile p 
 where m.PROPERTY_ID = mt.PROPERTY_ID 
 and mt.type = 'string'
-and m.dataset_name = dp.name
+and m.dataset_name like coalesce(dp.dataset_name_pattern, dp.name)
 and m.dataset_name = p.dataset_name
 order by property
 	  ]]>
@@ -3884,7 +3900,7 @@ from apidbtuning.metadata m
 , apidbtuning.profile p 
 where m.PROPERTY_ID = mt.PROPERTY_ID 
 and mt.type = 'number'
-and m.dataset_name = dp.name
+and m.dataset_name like coalesce(dp.dataset_name_pattern, dp.name)
 and m.dataset_name = p.dataset_name
 order by property
           ]]>

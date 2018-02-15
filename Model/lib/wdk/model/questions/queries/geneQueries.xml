@@ -219,20 +219,24 @@ from(
                            , 'Y' as matched_result
                            ,ta.gene_source_id 
                            ,oen.name as e_name
+			   ,oqn.name as q_name
 		           ,pm.pubmed_id
                            from APIDB.PHENOTYPEMODEL pm
                               , ApidbTuning.TranscriptAttributes ta
                               , APIDB.PHENOTYPERESULT pr
                               , sres.ontologyterm oen
+			      , sres.ontologyterm oqn
 			      , APIDB.NAFEATUREPHENOTYPEMODEL na 
 		              where ta.gene_na_feature_id = na.na_feature_id
                               and ta.organism = '$$organismwithPhenotype$$'
 			      and pm.phenotype_model_id = na.phenotype_model_id
                               and pm.phenotype_model_id = pr.phenotype_model_id
                               and pr.PHENOTYPE_ENTITY_TERM_ID = oen.ontology_term_id (+)
+			      and pr.phenotype_quality_term_id = oqn.ontology_term_id (+)
 
 	              )
 	             where e_name = '$$phenotype$$'
+		     and q_name = '$$phenotypeQualifier$$'
      )
     group by source_id,project_id,gene_source_id,matched_result
 	      ]]>
@@ -1386,8 +1390,7 @@ AND 1=0
 
     <sqlQuery name="GenesByParalogCount" excludeProjects="EuPathDB" >
         <paramRef ref="organismParams.organism"/>
-        <paramRef ref="geneParams.num_paralogs_gte"/>
-        <paramRef ref="geneParams.num_paralogs_lte"/>
+        <paramRef ref="geneParams.num_paralogs"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
@@ -1397,8 +1400,8 @@ AND 1=0
              SELECT distinct source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
              FROM ApidbTuning.TranscriptAttributes
              WHERE taxon_id IN ($$organism$$)
-               AND gene_paralog_number >= $$num_paralogs_gte$$ 
-               AND gene_paralog_number <= $$num_paralogs_lte$$
+               AND gene_paralog_number >= $$num_paralogs.min$$ 
+               AND gene_paralog_number <= $$num_paralogs.max$$
             ]]>
        </sql>
     </sqlQuery>
@@ -1408,8 +1411,7 @@ AND 1=0
        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
 
         <paramRef ref="organismParams.organism"/>
-        <paramRef ref="geneParams.num_paralogs_gte"/>
-        <paramRef ref="geneParams.num_paralogs_lte"/>
+        <paramRef ref="geneParams.num_paralogs"/>
 
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
@@ -2074,6 +2076,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
     </processQuery>
 
 
+<!-- disused
     <processQuery name="GenesBySnps" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB"  doNotTest="true">
 
         <paramRef ref="organismParams.organismSinglePick" displayType="select"
@@ -2101,6 +2104,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
         <wsColumn name="num_nonsense" width="10"/>
         <wsColumn name="total_snps" width="10"/>
    </processQuery>
+ -->
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Genes By NGS Snps -->
@@ -2765,7 +2769,7 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="matched_result"/>
-        <column name="confidence"/>
+        <column name="e_value_confidence"/>
         <column name="fold_change"/>
         <column name="group_one_value"/>
         <column name="group_two_value"/>
@@ -3943,6 +3947,59 @@ where one.na_feature_id = ta.gene_na_feature_id
     </processQuery>
 
 
+
+    <sqlQuery name="GenesByDirectComparisonGenericConfidence" includeProjects="TriTrypDB" >
+       <paramRef ref="geneParams.profileset_generic"/>
+       <paramRef ref="geneParams.regulated_dir"/>
+       <paramRef ref="geneParams.samples_direct_generic_confidence"/>
+       <paramRef ref="geneParams.e_value_confidence" default="3.0E-15"/>
+       <paramRef ref="geneParams.fold_change"/>
+       <paramRef ref="geneParams.protein_coding_only"/>
+        <column name="project_id"/>
+        <column name="source_id" />
+        <column name="gene_source_id"/>
+        <column name="matched_result"/>
+        <column name="econfidence"/>
+        <column name="fold_change" />
+       <sql>
+            <![CDATA[
+         SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+                 round(r.fold_change, 2) as fold_change,
+                 TO_CHAR( r.adj_p_value, '99.99EEEE') as econfidence
+          from ApidbTuning.TranscriptAttributes ta
+                 , results.nafeaturediffresult r
+          where $$regulated_dir$$ (r.fold_change) >= $$fold_change$$
+          and r.adj_p_value >= to_char($$e_value_confidence$$,'99.99999999999999')
+          and r.protocol_app_node_id = $$samples_direct_generic_confidence$$ 
+          and ta.gene_na_feature_id = r.na_feature_id
+          and ( $$protein_coding_only$$ = 'no' OR ta.gene_type = $$protein_coding_only$$ )
+          order by r.adj_p_value
+        ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="GenesByDirectComparisonGenericConfidence" includeProjects="EuPathDB"
+        doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+      <testParamValues>
+	<paramValue name="fold_change">0.55</paramValue>
+	<paramValue name="regulated_dir">up-regulated</paramValue>
+      </testParamValues>
+
+       <paramRef ref="geneParams.profileset_generic"/>
+       <paramRef ref="geneParams.regulated_dir"/>
+       <paramRef ref="geneParams.samples_direct_generic_confidence"/>
+       <paramRef ref="geneParams.e_value_confidence" default="3.0E-15"/>
+       <paramRef ref="geneParams.fold_change"/>
+       <paramRef ref="geneParams.protein_coding_only"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="econfidence" />
+        <wsColumn name="fold_change" />
+    </processQuery>
+
+
     <sqlQuery name="GenesByDirectComparisonGenericFDR" includeProjects="PlasmoDB,GiardiaDB,TriTrypDB,AmoebaDB" >
       <testParamValues>
 	<paramValue name="fold_change">0.55</paramValue>
@@ -4336,7 +4393,7 @@ where one.na_feature_id = ta.gene_na_feature_id
   <!-- GenesByNonnuclearGenomicRegion -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesByNonnuclearGenomicRegion" includeProjects="PlasmoDB,ToxoDB,FungiDB,HostDB,PiroplasmaDB,SchistoDB,TriTrypDB"  >
+    <sqlQuery name="GenesByNonnuclearGenomicRegion" includeProjects="PlasmoDB,ToxoDB,FungiDB,HostDB,PiroplasmaDB"  >
         <paramRef ref="organismParams.org_with_nonnuclear_genes" />
         <paramRef ref="geneParams.nonnuclear_sequence"/>
         <paramRef ref="sharedParams.start_point"/>
@@ -4953,7 +5010,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <sql>
             <![CDATA[
             with bySample as (
-                select ta.project_id
+                select distinct ta.project_id
                 , ta.source_id
                 , ta.gene_source_id
                 , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
@@ -5063,7 +5120,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <sql>
             <![CDATA[
             with bySample as ( 
-                select ta.project_id
+                select distinct ta.project_id
                 , ta.source_id
                 , ta.gene_source_id
                 , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain

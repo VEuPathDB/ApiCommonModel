@@ -7,8 +7,6 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
-import org.gusdb.wdk.model.WdkModel;
-import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
 import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
@@ -16,11 +14,11 @@ import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
 
 public class GeneListTypeHandler extends UserDatasetTypeHandler {
-
+	
   @Override
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
-    // TODO Auto-generated method stub
-    return null;
+    // TODO Placeholder - need real compatibility test
+    return new UserDatasetCompatibility(true, "");
   }
 
   @Override

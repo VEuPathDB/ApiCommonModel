@@ -102,6 +102,8 @@ WHERE
   AND cpd.pathway_id = p.pathway_id
   AND enz.pathway_id = p.pathway_id
   AND source_id NOT IN('ec01100', 'ec01110', 'ec01120')
+  -- temporarily remove MPMP from release 36
+  AND ed.name NOT LIKE '%MPMP%'
       ]]>
     </sql>
     <sql>
@@ -4851,6 +4853,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                 ||decode(ec.ec_number_2, null, null,chr(38) || 'field2='||ec.ec_number_2)
                 ||decode(ec.ec_number_3, null, null,chr(38) || 'field3='||ec.ec_number_3)
                 ||decode(ec.ec_number_4, null, null,chr(38) || 'field4='||ec.ec_number_4) else null end ) as expasy_url
+            , ec.description as enzyme_description
             from (
                 select
                 reaction_id
@@ -4893,8 +4896,10 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                       , pn.DISPLAY_LABEL as enzyme
                       , listagg (pc.type, ',') within group (order by pc.pathway_id) as type_list
                       , max (prel.is_reversible) KEEP (DENSE_RANK LAST ORDER BY prel.is_reversible) over (partition by pr.pathway_reaction_id) as is_reversible
-                      , nvl(pc.chebi_accession, pc.compound_source_id) as compound
-                      , (case when nvl(pc.CHEBI_ACCESSION, pc.compound_source_id) like 'CHEBI%' then '<a href="/a/app/record/compound/' || nvl(pc.chebi_accession, pc.compound_source_id) || '">' || nvl(pc.chebi_accession, pc.compound_source_id) || '</a>' else nvl(pc.chebi_accession, pc.compound_source_id) end) as compound_url
+                      , nvl(ca.compound_name, pc.compound_source_id) as compound
+                      , (case when nvl(pc.CHEBI_ACCESSION, pc.compound_source_id) like 'CHEBI%' then '<a href="/a/app/record/compound/' || nvl(pc.chebi_accession, pc.compound_source_id) || 
+                            '" title="' || nvl(pc.chebi_accession, pc.compound_source_id) || '">' || nvl(ca.compound_name, pc.compound_source_id) || '</a>' 
+                            else nvl(pc.chebi_accession, pc.compound_source_id) end) as compound_url
                       , min(pc.type) KEEP (DENSE_RANK FIRST ORDER BY p.pathway_id) as type
                       from
                       sres.pathway p
@@ -4906,6 +4911,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                       , SRES.EXTERNALDATABASERELEASE edr
                       , SRES.ONTOLOGYTERM ot
                       , PathwayCompounds pc
+                      , CompoundAttributes ca
                       where p.PATHWAY_ID = prr.PATHWAY_ID
                       and pr.PATHWAY_REACTION_ID = prr.PATHWAY_REACTION_ID
                       and prr.PATHWAY_RELATIONSHIP_ID = prel.PATHWAY_RELATIONSHIP_ID
@@ -4917,7 +4923,9 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                       and ed.EXTERNAL_DATABASE_ID = edr.EXTERNAL_DATABASE_ID
                       and pc.PATHWAY_ID = p.PATHWAY_ID
                       and pc.REACTION_id = pr.PATHWAY_REACTION_ID
+                      and pc.chebi_accession = ca.source_id (+)
                       group by pr.pathway_reaction_id, pr.SOURCE_ID, ed.NAME, edr.VERSION, pn.DISPLAY_LABEL, prel.IS_REVERSIBLE, nvl(pc.chebi_accession, pc.compound_source_id), pn.display_label
+                        , nvl(ca.compound_name, pc.compound_source_id)
                       )
                     group by reaction_id, reaction_source_id, reaction_url, ext_db_name, ext_db_version, enzyme, is_reversible
                     )
@@ -5319,7 +5327,6 @@ select distinct mss.external_database_release_id, mss.protocol_app_node_id, pan.
 from apidb.massspecsummary mss, dots.massspecfeature msf, study.protocolappnode pan
 where mss.mass_spec_summary_id = msf.source_id
 and mss.PROTOCOL_APP_NODE_ID = pan.protocol_app_node_id
-
       ]]>
     </sql>
     <sql>
@@ -5338,6 +5345,7 @@ select ga.source_id,
        d.name as external_database_name,
        sum(msf.spectrum_count) as spectrum_count,
        mss.aa_sequence_id,
+       msf.aa_feature_id as peptide_aa_feature_id,
        l.start_min as aa_start_min,
        l.end_max as aa_end_max,
        good.name as sample
@@ -5354,7 +5362,7 @@ and dsnt.dataset_presenter_id = dsp.dataset_presenter_id (+)
 and mss.external_database_release_id = good.external_database_release_id (+)
 and mss.protocol_app_node_id = good.protocol_app_node_id (+)
 group by d.name, ga.source_id, ga.gene_source_id, mss.protocol_app_node_id, dsp.display_name, 
-         mss.aa_sequence_id, mss.spectrum_count, l.start_min, l.end_max, good.external_database_release_id, good.name
+         mss.aa_sequence_id, msf.aa_feature_id, mss.spectrum_count, l.start_min, l.end_max, good.external_database_release_id, good.name
 ) pep
 where pep.aa_sequence_id = seq.aa_sequence_id) pep,
 sampledisplayinfo sdi
@@ -5468,6 +5476,7 @@ from   dots.aasequence seq,
                mss.external_database_release_id as external_database_release_id,
                mst.sample_display_name          as Sample_display,
                mst.sample                       as sample,
+               pan.protocol_app_node_id         as protocol_app_node_id,
                mss.aa_sequence_id               as aa_sequence_id,
                msf.aa_feature_id                as peptide_aa_feature_id,
                msf.spectrum_count               as spectrum_count,

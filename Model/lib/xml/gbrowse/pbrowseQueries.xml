@@ -296,76 +296,81 @@ WHERE  tas.aa_sequence_id = $srcfeature_id
 
 
 
-
     <sqlQuery name="domain:UnifiedPostTraslationalMod">
       <sql>
 <![CDATA[
-SELECT ms.aa_sequence_id || '_' || ms.residue_location || '_' || ms.modification_type feature_id,
-       'domain' type,
-       'UnifiedPostTraslationalMod' source,
-       ms.source_id name,
-       ms.residue_location + 1 startm,
-       ms.residue_location + 1 end,
-       'Experiment='  || listagg(ms.experiment,';') within group (order by ROWNUM) || '$dlm' ||
-       'SCount='      || count(*) || '$dlm' ||
-       'MSCount='     || listagg(ms.spectrum_count,';') within group (order by ROWNUM) || '$dlm' ||
-       'Sample='      || listagg(ms.sample,';') within group (order by ROWNUM) || '$dlm' ||
-       'PeptideStart='|| listagg(ms.aa_start_min,';') within group (order by ROWNUM)  || '$dlm' ||
-       'Residue='     || listagg(ms.residue,';') within group (order by ROWNUM) || '$dlm' ||
-       'Ontology='    || ms.modification_type || '$dlm' ||
-       'PepSeq='      || listagg(ms.peptide_sequence,';') within group (order by ROWNUM)  atts
+with peptides as (
+select ms.sample
+     , ms.sample_display
+     , ms.experiment
+     , ms.PEPTIDE_AA_FEATURE_ID
+     , ms.peptide_sequence
+     , ms.spectrum_count
+     , listagg(ms.residue_location + 1, ',') within group (order by ms.residue_location) as residues
+     , listagg(ms.aa_start_min + 1, ',') within group (order by ms.residue_location) as aa_start_mins
+     , listagg(ms.modification_type, ',') within group (order by ms.residue_location) as modification_type
 FROM  ApiDBTuning.MSModifiedPeptideSummary ms
-WHERE ms.aa_sequence_id = $srcfeature_id
- AND  ms.residue_location <= $rend 
- AND  ms.residue_location >= $base_start 
-GROUP BY ms.modification_type, ms.residue_location, ms.aa_sequence_id, ms.source_id
+group by experiment, sample, sample_display, peptide_aa_feature_id, peptide_sequence, ms.SPECTRUM_COUNT
+)
+select ms.aa_sequence_id  || '_' || ms.residue_location feature_id
+     , 'domain' type
+     , 'UnifiedPostTraslationalMod' source
+     , ms.residue || ' (location ' || ms.residue_location || ')' name
+     , '.' phase
+     , '.' score
+     , null as parent_id
+     ,  ms.residue_location + 1 startm
+     ,  ms.residue_location + 1 end
+     ,  '.' strand
+     , 'Experiments='  || listagg(peptides.experiment, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'MSCounts='     || listagg(peptides.spectrum_count, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'Samples='      || listagg(peptides.sample_display, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'Ontologys='    || listagg(peptides.modification_type, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'PepSeqs='      || listagg(peptides.peptide_sequence, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'PepAAFeatIds=' || listagg(peptides.peptide_aa_feature_id, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'AAStartMins=' || listagg(peptides.aa_start_mins, '|') within group (order by peptides.peptide_aa_feature_id) || '$dlm' ||
+      'ModificationType=' || ms.modification_type || '$dlm' ||
+      'ResidueLocs=' || listagg(peptides.residues, '|') within group (order by peptides.peptide_aa_feature_id) as atts
+from ApiDBTuning.MSModifiedPeptideSummary ms, peptides 
+where peptides.PEPTIDE_AA_FEATURE_ID = ms.peptide_aa_feature_id
+    AND ms.aa_sequence_id = $srcfeature_id
+    AND ms.aa_start_min <= $rend
+    AND ms.aa_end_max >= $base_start
+group by ms.residue_location, ms.residue, ms.aa_sequence_id, ms.modification_type
     ]]>
     </sql>
   </sqlQuery>
 
 
+
     <sqlQuery name="domain:MassSpecPeptidePhospho">
       <sql>
 <![CDATA[
-    SELECT DISTINCT 
-    CASE WHEN msps.peptide_aa_feature_id IS NOT NULL
-        THEN msps.peptide_aa_feature_id
-        ELSE rownum
-        END AS feature_id
+    SELECT
+       mps.peptide_aa_feature_id as feature_id
     , 'domain' type
     , '$source' source
     , mps.source_id name
     , mps.aa_start_min startm
     , mps.aa_end_max end
-    , CASE WHEN msps.modification_type IS NULL
-      THEN 'Experiment='  || mps.Experiment || '$dlm' ||
-           'Count='       || mps.spectrum_count || '$dlm' ||
-           'Sample='      || Mps.Sample_display_name || '$dlm' ||
-           'ExtDbName='   || mps.external_database_name || '$dlm' ||
-           'Color='       || mps.Html_Color || '$dlm' ||
-           'PepSeq='      || mps.peptide_sequence
-      ELSE 'Experiment='  || msps.experiment || '$dlm' ||
-           'Count='       || msps.spectrum_count || '$dlm' ||
-           'Sample='      || msps.sample_display || '$dlm' ||
-           'PhosphoSite=' || listagg(msps.residue_location + 1, ';') within group (order by msps.residue_location) || '$dlm' ||
-           'Ontology='    || listagg(msps.modification_type,';') within group (order by  msps.residue_location) || '$dlm' ||
-           'Residue='     || listagg(msps.residue,';') within group (order by  msps.residue_location) || '$dlm' ||
-           'Color='       || listagg(msps.html_color,';') within group (order by  msps.residue_location) || '$dlm' ||
-           'PepSeq='      || msps.peptide_sequence
-      END AS atts
+    , 'Experiment='    || mps.experiment || '$dlm' ||
+           'Count='    || mps.spectrum_count || '$dlm' ||
+           'Sample='   || mps.sample_display_name || '$dlm' ||
+           'Color='    || mps.html_color || '$dlm' ||
+           'ModSite='  || nvl(listagg(msps.residue_location + 1, ';') within group (order by msps.residue_location), 'NA') || '$dlm' ||
+           'Ontology=' || nvl(listagg(msps.modification_type,';') within group (order by  msps.residue_location), 'NA') || '$dlm' ||
+           'Residue='  || nvl(listagg(msps.residue,';') within group (order by  msps.residue_location), 'NA') || '$dlm' ||
+           'PepSeq='   || mps.peptide_sequence
+     AS atts
     FROM apidbtuning.mspeptidesummary mps
-    LEFT OUTER JOIN apidbtuning.msmodifiedpeptidesummary msps
-      ON msps.aa_sequence_id = mps.aa_sequence_id
-      AND msps.external_database_name = mps.external_database_name
-      AND msps.aa_start_min = mps.aa_start_min
-      AND msps.aa_end_max = mps.aa_end_max
-    WHERE mps.external_database_name $$edName$$
-    AND mps.aa_sequence_id = $srcfeature_id
-    AND mps.aa_start_min <= $rend
-    AND mps.aa_end_max >= $base_start
-    GROUP BY mps.aa_sequence_id, mps.source_id, mps.aa_start_min, mps.aa_end_max, msps.experiment, msps.spectrum_count, msps.sample_display
-    , msps.peptide_sequence, msps.modification_type, mps.experiment, mps.spectrum_count, mps.sample_display_name, mps.external_database_name
-    , mps.html_color, mps.peptide_sequence, msps.peptide_aa_feature_id, rownum
+       , apidbtuning.msmodifiedpeptidesummary msps
+    WHERE mps.peptide_aa_feature_id = msps.peptide_aa_feature_id(+)
+     AND mps.external_database_name $$edName$$
+     AND mps.aa_sequence_id = $srcfeature_id
+     AND mps.aa_start_min <= $rend 
+     AND mps.aa_end_max >= $base_start 
+    GROUP BY mps.aa_sequence_id, mps.source_id, mps.aa_start_min, mps.aa_end_max, mps.experiment, mps.spectrum_count
+    ,mps.html_color, mps.peptide_sequence, mps.peptide_aa_feature_id, mps.sample, mps.sample_display_name
     ]]>
     </sql>
   </sqlQuery>
