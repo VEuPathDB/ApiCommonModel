@@ -457,7 +457,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                    when gs.ontology_term_id is null then 0
                    else 1
                  end as is_go_slim
-          from GeneGoTerms ggt, &prefixOntologyLevels ol,
+          from &prefixGeneGoTerms ggt, &prefixOntologyLevels ol,
                (select distinct ontology_term_id
                 from apidb.GoSubset
                 where go_subset_term = 'goslim_generic') gs
@@ -476,7 +476,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                    when gs.ontology_term_id is null then 0
                    else 1
                  end as is_go_slim
-          from GeneGoTerms ggt, sres.OntologyRelationship orel,
+          from &prefixGeneGoTerms ggt, sres.OntologyRelationship orel,
                sres.OntologyTerm ot, &prefixOntologyLevels ol,
                sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
                (select distinct ontology_term_id
@@ -1159,7 +1159,7 @@ tablespace indx
       <![CDATA[
 CREATE TABLE &prefixCommentAssignment NOLOGGING AS
 WITH projects AS
-       (SELECT DISTINCT project_id FROM GenomicSeqAttributes),
+       (SELECT DISTINCT project_id FROM &prefixGenomicSeqAttributes),
      project_comments AS
        (SELECT stable_id, comment_id
         FROM userlogins5.comments@&dblink
@@ -1554,6 +1554,7 @@ tablespace indx
          dozen other tuning tables.
     </comment>
     <internalDependency name="GeneId"/>
+    <internalDependency name="GenomicSeqAttributes"/>
     <externalDependency name="apidb.FeatureLocation"/>
     <externalDependency name="apidb.IntronLocation"/>
     <internalDependency name="ProjectTaxon"/>
@@ -1609,9 +1610,9 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        nvl(deprecated.is_deprecated, 0) as is_deprecated, 
        0 as gene_paralog_number, 0 as gene_ortholog_number,
        GREATEST(1, least(nl.start_min, nl.end_max) - 15000) AS gene_context_start,
-       LEAST(sequence.length, greatest(nl.start_min, nl.end_max) + 15000) AS gene_context_end,
+       LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 15000) AS gene_context_end,
        GREATEST(1, least(nl.start_min, nl.end_max) - 1500) AS gene_zoom_context_start,
-       LEAST(sequence.length, greatest(nl.start_min, nl.end_max) + 1500) AS gene_zoom_context_end,
+       LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 1500) AS gene_zoom_context_end,
        substr(orthologs.name, 1, 60) AS orthomcl_name,
        nvl(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps, 
        nvl(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
@@ -1637,7 +1638,7 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        DECODE(t.is_pseudo, null, 0, t.is_pseudo) as is_pseudo,
        transcript_exons.exon_count,
        sns.length AS length,
-       SUBSTR(sequence.source_id, 1, 50) AS sequence_id,
+       SUBSTR(gsa.source_id, 1, 50) AS sequence_id,
        SUBSTR(tn.name, 1, 80) AS organism,
        SUBSTR(species_name.name, 1, 60) AS species,
        LTRIM(REGEXP_REPLACE(tn.name, species_name.name,'')) AS strain,
@@ -1648,8 +1649,9 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
        ed.name AS external_db_name,
        edr.version AS external_db_version,
-       SUBSTR(sequence.chromosome, 1, 20) AS chromosome,
-       sequence.chromosome_order_num, sequence.na_sequence_id,
+       SUBSTR(gsa.chromosome, 1, 20) AS chromosome,
+       gsa.sequence_type,
+       gsa.chromosome_order_num, gsa.na_sequence_id,
        --next the protein attributes: 
        pa.source_id AS protein_source_id,
        pa.aa_sequence_id,
@@ -1681,11 +1683,7 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
       GROUP BY rna_feature_id) transcript_exons,
-     ( select na_sequence_id, source_id, chromosome, chromosome_order_num, length, taxon_id
-       from dots.ExternalNaSequence
-      union
-       select na_sequence_id, source_id, chromosome, chromosome_order_num, length, taxon_id
-       from dots.VirtualSequence) sequence,
+     &prefixGenomicSeqAttributes gsa,
      apidb.TranscriptLocation tl, &prefixProteinAttributes pa,
      dots.geneinstance gi, &prefixTaxonSpecies ts, sres.TaxonName species_name,
      (SELECT DISTINCT gene AS source_id FROM &prefixGeneId) gene,
@@ -1827,12 +1825,12 @@ WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = nl.na_feature_id
   AND nl.is_top_level = 1
   AND nl.feature_type = 'GeneFeature' 
-  AND nl.na_sequence_id = sequence.na_sequence_id
-  AND (sequence.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
+  AND nl.na_sequence_id = gsa.na_sequence_id
+  AND (gsa.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
   AND gf.sequence_ontology_id = so.ontology_term_id
   AND so.external_database_release_id = soRls.external_database_release_id
-  AND sequence.taxon_id = taxon.taxon_id
-  AND sequence.taxon_id = tn.taxon_id
+  AND gsa.taxon_id = taxon.taxon_id
+  AND gsa.taxon_id = tn.taxon_id
   AND tn.name_class = 'scientific name'
   AND tn.taxon_id NOT IN
 	 (SELECT o.taxon_id FROM apidb.Organism o WHERE  o.is_annotated_genome=0)
@@ -1853,7 +1851,7 @@ WHERE gf.source_id = gene.source_id
   AND gf.source_id = deprecated.source_id(+)
   AND gf.na_feature_id = gi.na_feature_id(+)
   AND gf.source_id = tothtssnps.gene_source_id(+)
-  AND sequence.taxon_id = ts.taxon_id(+)
+  AND gsa.taxon_id = ts.taxon_id(+)
   AND ts.species_taxon_id = species_name.taxon_id
   AND species_name.name_class = 'scientific name'
   AND t.na_feature_id = preferred_product.na_feature_id(+)
@@ -2118,6 +2116,13 @@ and ga.orthomcl_name is null
           TABLESPACE INDX
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX iuc_nfid_ix&1
+          ON IntronUtrCoords&1 (na_feature_id, source_id)
+          TABLESPACE INDX
+      ]]>
+    </sql>
   </tuningTable>
 
 
@@ -2158,6 +2163,7 @@ and ga.orthomcl_name is null
 		, external_db_version
 		, chromosome
 		, chromosome_order_num
+		, sequence_type
 		, gene_transcript_count AS transcript_count
 		, gene_exon_count as exon_count
 		, gene_previous_ids as previous_ids
@@ -2331,7 +2337,7 @@ FROM apidb.Snp, sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
      (SELECT feature_source_id, is_reversed, na_feature_id
       FROM apidb.FeatureLocation
       WHERE is_top_level = 1 and feature_type = 'GeneFeature') fl,
-     GenomicSeqAttributes chromosome_info
+     &prefixGenomicSeqAttributes chromosome_info
 WHERE edr.external_database_release_id = snp.external_database_release_id
   AND ed.external_database_id = edr.external_database_id
   AND sequence.na_sequence_id = snp.na_sequence_id
