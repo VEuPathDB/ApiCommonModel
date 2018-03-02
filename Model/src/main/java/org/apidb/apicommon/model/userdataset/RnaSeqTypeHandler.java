@@ -3,24 +3,19 @@ package org.apidb.apicommon.model.userdataset;
 import static org.gusdb.fgputil.functional.Functions.fSwallow;
 import static org.gusdb.fgputil.functional.Functions.mapToList;
 
-import java.io.IOException;
-import java.nio.file.DirectoryIteratorException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
+import org.apidb.apicommon.model.gbrowse.GBrowseUtils;
 import org.gusdb.fgputil.FormatUtil;
 import org.gusdb.fgputil.Tuples.TwoTuple;
 import org.gusdb.fgputil.Wrapper;
@@ -78,12 +73,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	      "  AND gsa.taxon_id = o.taxon_id " +
 	      "  AND ? = o.name_for_filenames ";
 	
-  private static final String SELECT_SESSION_DATA_SQL =
-		  "SELECT a_session as info " +
-          " FROM gbrowseusers.sessions s, gbrowseusers.session_tbl st " +
-		  " WHERE s.id = st.sessionid AND username = ?";
-  
-  private static final String USER_TRACK_UPLOAD_BASE = "/var/www/Common/workspaces/gbrowse_data";
+
   
   @Override
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) throws WdkModelException {
@@ -129,10 +119,10 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   
   @Override
   public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
-    List<String> persistedTracks = getPersistedTracks(wdkModel, user.getUserId());	
-    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(wdkModel, userDataset, persistedTracks))));
+    List<String> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());
+    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(wdkModel, userDataset, persistedTracks, user.getUserId()))));
   }
-  
+
   /**
    * The type specific data here is a JSON Array of genome browser links using the organism cited in the
    * dependency list as the source of a valid reference seq (longest one chosen).  The embedded link is
@@ -142,25 +132,16 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
    */
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
-    List<String> persistedTracks = getPersistedTracks(wdkModel, user.getUserId());	  
-    return createTrackLinks(wdkModel, userDataset, persistedTracks);
+    List<String> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());	  
+    return createTrackLinks(wdkModel, userDataset, persistedTracks, user.getUserId());
   }
   
-  public JsonType createTrackLinks(WdkModel wdkModel, UserDataset userDataset, List<String> persistedTracks) throws WdkModelException {
+  public JsonType createTrackLinks(WdkModel wdkModel, UserDataset userDataset, List<String> persistedTracks, Long userId) throws WdkModelException {
     List<String> links = new ArrayList<>();
     ModelConfig modelConfig = wdkModel.getModelConfig();
     String appUrl = modelConfig.getWebAppUrl();
-    Long userId = userDataset.getOwnerId();
     Long datasetId = userDataset.getUserDatasetId();
-    String taxonId = getOrganismAndBuildNumberFromDependencies(userDataset).getKey();
-    TwoTuple<String,Integer> tuple = getSequenceInfo(taxonId, wdkModel.getAppDb());
-    String seqId = tuple.getFirst();
-    int length = tuple.getSecond();
-    int start = Math.max(0, (length - WINDOW)/2);
-    int end = Math.min(length, (length + WINDOW)/2);
-    String partialGenomeBrowserUrl = "/cgi-bin/gbrowse/fungidb/?ref=" + seqId + 
-        ";start=" + start + ";end=" + end + ";eurl=";
-    //TODO This url is subject to change based on security concerns.
+    String bigWigTrackServiceUrl = "/service/users/" + userId + "/load-bigwig-track";
     String partialServiceUrl = appUrl + "/service/users/" + userId + "/user-datasets/" + datasetId;
 
     // Created a new link for each bigwig data track found (determined by extension only) in the user
@@ -168,7 +149,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     for(String dataFileName : userDataset.getFiles().keySet()) {
       if(isBigWigFile(dataFileName)) {
         String serviceUrl = partialServiceUrl + "/user-datafiles/" + dataFileName;
-        String link = partialGenomeBrowserUrl + FormatUtil.urlEncodeUtf8(serviceUrl);
+        String link = bigWigTrackServiceUrl + "?eurl=" + FormatUtil.urlEncodeUtf8(serviceUrl);
         links.add(link); 
       }
     }
@@ -179,16 +160,9 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   
   protected JSONObject filterOutPersistedTracks(List<String> links, List<String> persistedTracks) {
     List<String> unpersistedTrackLinks = links.stream()
-    		.filter(link -> !persistedTracks.contains(mungeLink(link)))
+    		.filter(link -> !persistedTracks.contains(getTrackName(link)))
     		.collect(Collectors.toList());
 
-//    List<String> unpersistedTrackLinks = new ArrayList<>();
-//    for(String link : links) {
-//      String mungedLink = mungeLink(link);
-//	  if(!persistedTracks.contains(mungedLink)) {
-//        unpersistedTrackLinks.add(link);
-//      }
-//   }
    return new JSONObject()
 		   .put("total", links.size())
 		   .put("persisted", links.size() - unpersistedTrackLinks.size())
@@ -203,13 +177,16 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     }
     return array;
   }
-  
-  protected String mungeLink(String link) {
-	String mungedLink = link.substring(link.indexOf("eurl=") + 5)
-			.replaceAll("%3A%2F%2F", "_")
-			.replaceAll("%3A","_")
-			.replaceAll("%2F","_");
-	return mungedLink;
+
+  protected String getTrackName(String link) {
+	String decodedLink = FormatUtil.urlDecodeUtf8(link);
+	try {
+	  String trackName = GBrowseUtils.composeTrackName(decodedLink, ".bigwig");
+	  return trackName;
+	}
+	catch(WdkModelException wme) {
+      throw new RuntimeException(wme);
+	}
   }
 
   /**
@@ -325,76 +302,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	return dataFileName.endsWith(".bigwig");
   }
   
-  /**
-   * Returns from the GBrowse schema, the information needed to find the user's persisted tracks.
-   * @param username
-   * @param userDb
-   * @return
-   * @throws WdkModelException
-   */
-  protected String getGBrowseSessionData(String username, DatabaseInstance userDb) throws WdkModelException {
-    Wrapper<String> wrapper = new Wrapper<>();
-    try { 
-      String selectSessionDataSql = SELECT_SESSION_DATA_SQL;
-      new SQLRunner(userDb.getDataSource(), selectSessionDataSql, "select-gbrowse-session-data").executeQuery(
-        new Object[]{ username },
-        new Integer[]{ Types.VARCHAR },
-        resultSet -> {
-          if (resultSet.next()) {
-            wrapper.set(resultSet.getString("info"));
-          }
-        }
-      );
-      return wrapper.get();
-    }
-    catch(SQLRunnerException sre) {
-      throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
-    }
-    catch(Exception e) {
-      throw new WdkModelException(e);
-    }
-  }
+
   
-  /**
-   * Gets a list of the GBrowse tracks for the given user that are already persisted in the
-   * file system.
-   * @param wdkModel
-   * @param userId
-   * @return
-   * @throws WdkModelException
-   */
-  public List<String> getPersistedTracks(WdkModel wdkModel, Long userId) throws WdkModelException {
-	List<String> persistedTracks = new ArrayList<>();   
-    String uploadId = null;
-    String projectId = wdkModel.getProjectId();
-    ModelConfig modelConfig = wdkModel.getModelConfig();
-    String username = userId + "-" + projectId;
-    String info = getGBrowseSessionData(username, wdkModel.getUserDb());
-    Pattern pattern = Pattern.compile("'.uploadsid'\\s*=>\\s*'(\\w*)',");
-    Matcher matcher = pattern.matcher(info); 
-    if (matcher.find()) {
-      uploadId = matcher.group(1);
-    }
-    if(uploadId == null) {
-    	  return persistedTracks;
-    }
-    Path userTracksDir = Paths.get(USER_TRACK_UPLOAD_BASE,
-    		modelConfig.getWebAppName(),
-    		"userdata",
-    		projectId.toLowerCase(),
-    		uploadId);
-    if(!Files.exists(userTracksDir)) {
-    	  return persistedTracks;
-    }
-    try (DirectoryStream<Path> directoryStream = Files.newDirectoryStream(userTracksDir)) {
-      for (Path path : directoryStream) {
-        persistedTracks.add(path.getFileName().toString());
-      }
-    }
-    catch (IOException | DirectoryIteratorException e) {
-      throw new WdkModelException(e);
-    }
-    return persistedTracks;
-  }
 
 }
