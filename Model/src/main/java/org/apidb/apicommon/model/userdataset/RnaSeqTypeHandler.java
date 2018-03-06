@@ -3,9 +3,11 @@ package org.apidb.apicommon.model.userdataset;
 import static org.gusdb.fgputil.functional.Functions.fSwallow;
 import static org.gusdb.fgputil.functional.Functions.mapToList;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -119,7 +121,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   
   @Override
   public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
-    List<String> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());
+    Map<String,LocalDateTime> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());
     return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(wdkModel, userDataset, persistedTracks, user.getUserId()))));
   }
 
@@ -132,12 +134,12 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
    */
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
-    List<String> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());	  
+    Map<String,LocalDateTime> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());	  
     return createTrackLinks(wdkModel, userDataset, persistedTracks, user.getUserId());
   }
   
-  public JsonType createTrackLinks(WdkModel wdkModel, UserDataset userDataset, List<String> persistedTracks, Long userId) throws WdkModelException {
-    List<String> links = new ArrayList<>();
+  public JsonType createTrackLinks(WdkModel wdkModel, UserDataset userDataset, Map<String,LocalDateTime> persistedTracks, Long userId) throws WdkModelException {
+    List<TrackData> tracksData = new ArrayList<>();
     ModelConfig modelConfig = wdkModel.getModelConfig();
     String appUrl = modelConfig.getWebAppUrl();
     Long datasetId = userDataset.getUserDatasetId();
@@ -149,34 +151,44 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     for(String dataFileName : userDataset.getFiles().keySet()) {
       if(isBigWigFile(dataFileName)) {
         String serviceUrl = partialServiceUrl + "/user-datafiles/" + dataFileName;
-        String link = bigWigTrackServiceUrl + "?eurl=" + FormatUtil.urlEncodeUtf8(serviceUrl);
-        links.add(link); 
+        String uploadUrl = bigWigTrackServiceUrl + "?eurl=" + FormatUtil.urlEncodeUtf8(serviceUrl);
+        String name = getTrackName(uploadUrl);
+        boolean uploaded = persistedTracks.keySet().contains(name);
+        LocalDateTime uploadedAt = uploaded ? persistedTracks.get(name) : null;
+        tracksData.add(new TrackData(name, uploadUrl, uploaded, uploadedAt)); 
       }
     }
-    // Method to filter out persisted links
-    JSONObject results = filterOutPersistedTracks(links, persistedTracks);
+    JSONArray results = assembleTracksDataJson(tracksData);
     return new JsonType(results);
   }
   
-  protected JSONObject filterOutPersistedTracks(List<String> links, List<String> persistedTracks) {
-    List<String> unpersistedTrackLinks = links.stream()
-    		.filter(link -> !persistedTracks.contains(getTrackName(link)))
-    		.collect(Collectors.toList());
-
-   return new JSONObject()
-		   .put("total", links.size())
-		   .put("persisted", links.size() - unpersistedTrackLinks.size())
-		   .put("tracks", getFilteredTrackLinksAsJson(unpersistedTrackLinks));
+  protected JSONArray assembleTracksDataJson(List<TrackData> tracksData) {
+	JSONArray tracks = new JSONArray();  
+	for(TrackData trackData : tracksData) {
+	  tracks.put(trackData.assembleJson());
+	}
+    return tracks;
   }
   
-  protected JSONArray getFilteredTrackLinksAsJson(List<String> links) {
-	JSONArray array = new JSONArray();  
-    for(String link : links) {
-    	  JSONObject entry = new JSONObject().put(link.substring(link.lastIndexOf("%2F") + 3), link);
-    	  array.put(entry);
-    }
-    return array;
-  }
+//  protected JSONObject filterOutPersistedTracks(List<String> links, List<String> persistedTracks) {
+//    List<String> unpersistedTrackLinks = links.stream()
+//    		.filter(link -> !persistedTracks.contains(getTrackName(link)))
+//    		.collect(Collectors.toList());
+//
+//   return new JSONObject()
+//		   .put("total", links.size())
+//		   .put("persisted", links.size() - unpersistedTrackLinks.size())
+//		   .put("tracks", getFilteredTrackLinksAsJson(unpersistedTrackLinks));
+//  }
+  
+//  protected JSONArray getFilteredTrackLinksAsJson(List<String> links) {
+//	JSONArray array = new JSONArray();  
+//    for(String link : links) {
+//    	  JSONObject entry = new JSONObject().put(link.substring(link.lastIndexOf("%2F") + 3), link);
+//    	  array.put(entry);
+//    }
+//    return array;
+//  }
 
   protected String getTrackName(String link) {
 	String decodedLink = FormatUtil.urlDecodeUtf8(link);
@@ -300,6 +312,31 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
    */
   protected boolean isBigWigFile(String dataFileName) {
 	return dataFileName.endsWith(".bigwig");
+  }
+  
+  
+  class TrackData {
+	String _name;
+	boolean _uploaded;
+	LocalDateTime _uploadedAt;
+	String _uploadUrl;
+	
+	TrackData(String name, String uploadUrl, boolean uploaded, LocalDateTime uploadedAt) {
+	  _name = name;
+	  _uploadUrl = uploadUrl;
+	  _uploaded = uploaded;
+	  _uploadedAt = uploadedAt;
+	}
+	
+	JSONObject assembleJson() {
+	  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+	  String formattedUploadedAt = _uploadedAt == null ? new JsonType(null).toString() : _uploadedAt.format(formatter);
+	  return new JSONObject()
+        .put("name", _name)
+        .put("uploadUrl", _uploadUrl)
+        .put("uploaded", _uploaded)
+        .put("uploadedAt", formattedUploadedAt);
+	}
   }
   
 
