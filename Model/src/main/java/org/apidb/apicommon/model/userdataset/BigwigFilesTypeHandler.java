@@ -39,12 +39,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Handler for RNA Seq Type user datasets.  Currently only handles datasets containing only
+ * Handler for Bigwig Files Type user datasets.  Currently only handles datasets containing only
  * tracks intended for display via GBrowse.
  * @author crisl-adm
  *
  */
-public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
+public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	
   private static final int WINDOW = 200000;
   
@@ -89,7 +89,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   @Override
   public UserDatasetType getUserDatasetType() {
     // TODO Auto-generated method stub
-    return UserDatasetTypeFactory.getUserDatasetType("RnaSeq", "1.0");
+    return UserDatasetTypeFactory.getUserDatasetType("BigwigFiles", "1.0");
   }
 
   //TODO For now there is no data file to install in the DB so no command is needed.
