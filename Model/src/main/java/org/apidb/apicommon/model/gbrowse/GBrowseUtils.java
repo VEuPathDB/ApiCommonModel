@@ -11,8 +11,14 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.sql.Types;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -135,19 +141,21 @@ public class GBrowseUtils {
    * @return
    * @throws WdkModelException
    */
-  public static List<String> getPersistedTracks(WdkModel wdkModel, Long userId) throws WdkModelException {
+  public static Map<String,LocalDateTime> getPersistedTracks(WdkModel wdkModel, Long userId) throws WdkModelException {
     Path userTracksDir = getUserTracksDirectory(wdkModel, userId);
     if(userTracksDir == null || !Files.exists(userTracksDir)) {
-      return new ArrayList<>();
+      return new HashMap<>();
     }
     return getPersistedTracks(userTracksDir);
   }
   
-  public static List<String> getPersistedTracks(Path userTracksDir) throws WdkModelException {
-    List<String> persistedTracks = new ArrayList<>();
+  public static Map<String, LocalDateTime> getPersistedTracks(Path userTracksDir) throws WdkModelException {
+    Map<String, LocalDateTime> persistedTracks = new HashMap<>();
     try (DirectoryStream<Path> directoryStream = Files.newDirectoryStream(userTracksDir)) {
       for (Path path : directoryStream) {
-        persistedTracks.add(path.getFileName().toString());
+    	    LocalDateTime date =
+          Instant.ofEpochMilli(path.toFile().lastModified()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+        persistedTracks.put(path.getFileName().toString(), date);
       }
     }
     catch (IOException | DirectoryIteratorException e) {
