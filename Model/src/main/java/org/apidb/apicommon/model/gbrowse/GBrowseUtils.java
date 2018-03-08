@@ -6,18 +6,13 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.sql.Types;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -176,7 +171,7 @@ public class GBrowseUtils {
     return path;
   }
 
-  public static String composeTrackName(String url, String trackSuffix) throws WdkModelException {
+  public static String composeTrackName(String url) throws WdkModelException {
 	String datasetId = "";
     Pattern pattern = Pattern.compile("\\/user-datasets\\/(\\d+)\\/");
     Matcher matcher = pattern.matcher(url); 
@@ -187,8 +182,9 @@ public class GBrowseUtils {
     	  throw new WdkModelException("The embedded url does not contain a dataset id.");
     }
     String dataFileName = url.substring(url.lastIndexOf("/") + 1);
-    String rootDataFileName = dataFileName.substring(0, dataFileName.lastIndexOf(trackSuffix));
-    return rootDataFileName + "-" + datasetId + trackSuffix;   
+    String dataFileExtension = dataFileName.substring(dataFileName.lastIndexOf("."));
+    String rootDataFileName = dataFileName.substring(0, dataFileName.lastIndexOf("."));
+    return rootDataFileName + "-" + datasetId + dataFileExtension;   
   }
 
 }
