@@ -47,7 +47,7 @@ public class GBrowseUtils {
   private static final String UPDATE_SESSION_DATA_SQL =
 		  "UPDATE gbrowseusers.sessions SET a_session = ? WHERE id = ?";
 	  
-  public static final String USER_TRACK_UPLOAD_BASE = "/var/www/Common/workspaces/gbrowse_data";
+  public static final String USER_TRACK_UPLOAD_BASE_PROP_NAME = "GBROWSE_USER_TRACK_UPLOAD_BASE";
 
   /**
    * Returns from the GBrowse schema, the information needed to find the user's persisted tracks.
@@ -83,6 +83,11 @@ public class GBrowseUtils {
   public static Path getUserTracksDirectory(WdkModel wdkModel, Long userId) throws WdkModelException {  
     String uploadsId = null;
     String projectId = wdkModel.getProjectId();
+    String userTracksBase = wdkModel.getProperties().get(USER_TRACK_UPLOAD_BASE_PROP_NAME);
+    if (userTracksBase == null) {
+      throw new WdkModelException("Could not find GBrowse user tracks directory." +
+          " Model property \"" + USER_TRACK_UPLOAD_BASE_PROP_NAME + "\" is not configued.");
+    }
     ModelConfig modelConfig = wdkModel.getModelConfig();
     String username = userId + "-" + projectId;
     TwoTuple<String,String> tuple = GBrowseUtils.getGBrowseSessionData(username, wdkModel.getUserDb());
@@ -95,11 +100,7 @@ public class GBrowseUtils {
     if(uploadsId == null) {
     	  uploadsId = addUploadsIdToGBrowseInfo(tuple, wdkModel.getUserDb());
     }
-    Path userTracksDir = Paths.get(GBrowseUtils.USER_TRACK_UPLOAD_BASE,
-    		modelConfig.getWebAppName(),
-    		"userdata",
-    		projectId.toLowerCase(),
-    		uploadsId);
+    Path userTracksDir = Paths.get(userTracksBase, uploadsId);
     if(!Files.exists(userTracksDir)) {
     	  try {
     	    IoUtil.createOpenPermsDirectory(userTracksDir);

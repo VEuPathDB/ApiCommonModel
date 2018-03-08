@@ -148,12 +148,11 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   }
   
   public JsonType createTrackLinks(WdkModel wdkModel, UserDataset userDataset, Map<String,LocalDateTime> persistedTracks, Long userId) throws WdkModelException {
+    // FIXME These service urls should be constructed on the client. These will not work.
     List<TrackData> tracksData = new ArrayList<>();
-    ModelConfig modelConfig = wdkModel.getModelConfig();
-    String appUrl = modelConfig.getWebAppUrl();
     Long datasetId = userDataset.getUserDatasetId();
-    String bigWigTrackServiceUrl = "/service/users/" + userId + "/load-bigwig-track";
-    String partialServiceUrl = appUrl + "/service/users/" + userId + "/user-datasets/" + datasetId;
+    String bigWigTrackServiceUrl = "/users/" + userId + "/load-bigwig-track";
+    String partialServiceUrl = "/users/" + userId + "/user-datasets/" + datasetId;
 
     // Created a new link for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
