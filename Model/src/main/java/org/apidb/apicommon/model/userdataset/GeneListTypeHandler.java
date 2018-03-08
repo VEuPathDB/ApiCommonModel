@@ -13,7 +13,11 @@ import org.gusdb.wdk.model.user.dataset.UserDatasetType;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
 
-public class GeneListTypeHandler extends UserDatasetTypeHandler {
+public class GeneListTypeHandler extends UserDatasetTypeHandler {	
+	
+  public final static String NAME = "GeneList";
+  public final static String VERSION = "1.0";
+  public final static String DISPLAY = "Gene List";
 	
   @Override
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
@@ -24,7 +28,12 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   @Override
   public UserDatasetType getUserDatasetType() {
     // TODO Auto-generated method stub
-    return UserDatasetTypeFactory.getUserDatasetType("GeneList", "1.0");
+    return UserDatasetTypeFactory.getUserDatasetType(NAME, VERSION);
+  }
+  
+  @Override
+  public String getDisplay() {
+	return DISPLAY;
   }
 
   @Override

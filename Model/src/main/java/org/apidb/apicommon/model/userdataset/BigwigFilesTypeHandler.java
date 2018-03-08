@@ -46,6 +46,10 @@ import org.json.JSONObject;
  */
 public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	
+  public final static String NAME = "BigwigFiles";
+  public final static String VERSION = "1.0";
+  public final static String DISPLAY = "Bigwig Files";
+	
   private static final int WINDOW = 200000;
   
   /**
@@ -89,10 +93,14 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public UserDatasetType getUserDatasetType() {
     // TODO Auto-generated method stub
-    return UserDatasetTypeFactory.getUserDatasetType("BigwigFiles", "1.0");
+    return UserDatasetTypeFactory.getUserDatasetType(NAME, VERSION);
+  }
+  
+  @Override
+  public String getDisplay() {
+	return DISPLAY;
   }
 
-  //TODO For now there is no data file to install in the DB so no command is needed.
   @Override
   public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
     String[] cmd = {};
