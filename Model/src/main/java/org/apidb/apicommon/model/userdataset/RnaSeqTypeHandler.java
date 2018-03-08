@@ -201,7 +201,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   protected String getTrackName(String link) {
 	String decodedLink = FormatUtil.urlDecodeUtf8(link);
 	try {
-	  String trackName = GBrowseUtils.composeTrackName(decodedLink, ".bigwig");
+	  String trackName = GBrowseUtils.composeTrackName(decodedLink);
 	  return trackName;
 	}
 	catch(WdkModelException wme) {
