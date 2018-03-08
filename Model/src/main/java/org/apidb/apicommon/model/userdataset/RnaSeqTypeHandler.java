@@ -46,6 +46,10 @@ import org.json.JSONObject;
  */
 public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 	
+  public final static String NAME = "RnaSeq";
+  public final static String VERSION = "1.0";
+  public final static String DISPLAY = "RNASeq";
+	
   private static final int WINDOW = 200000;
   
   /**
@@ -90,6 +94,11 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   public UserDatasetType getUserDatasetType() {
     // TODO Auto-generated method stub
     return UserDatasetTypeFactory.getUserDatasetType("RnaSeq", "1.0");
+  }
+  
+  @Override
+  public String getDisplay() {
+	return DISPLAY;
   }
 
   //TODO For now there is no data file to install in the DB so no command is needed.
