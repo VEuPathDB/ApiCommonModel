@@ -1,5 +1,6 @@
 package org.apidb.apicommon.model.gbrowse;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
@@ -32,7 +33,7 @@ import org.gusdb.wdk.model.WdkModelException;
 public class GBrowseUtils {
 	
   private static final Logger LOG = Logger.getLogger(GBrowseUtils.class);
-	
+
   private static final String SELECT_SESSION_DATA_SQL =
 		  "SELECT id, a_session as info " +
           " FROM gbrowseusers.sessions s, gbrowseusers.session_tbl st " +
@@ -74,6 +75,15 @@ public class GBrowseUtils {
     }
   }
   
+  /**
+   * Returns the path, in the GBrowse uploaded tracks file system, to the user's uploaded tracks
+   * directory.  If the user does not have such a directory (i.e., has never before uploaded a
+   * track to GBrowse) one is created for him/her.
+   * @param wdkModel
+   * @param userId
+   * @return
+   * @throws WdkModelException
+   */
   public static Path getUserTracksDirectory(WdkModel wdkModel, Long userId) throws WdkModelException {  
     String uploadsId = null;
     String projectId = wdkModel.getProjectId();
@@ -105,12 +115,24 @@ public class GBrowseUtils {
     return userTracksDir;
   }
   
+  /**
+   * Returns an imitation of the GBrowse uploads id assigned to each user.
+   * @return
+   */
   public static String createUploadsIdValue() {
 	Long threadId = Thread.currentThread().getId();
 	String currentTime = Instant.now().toString();
     return EncryptionUtil.encrypt(currentTime + threadId.toString());
   }
   
+  /**
+   * Places a freshly created uploads id into the CLOB in the database for this user which defined all the
+   * GBrowse settings for this user.
+   * @param tuple - contains the gbrowse session and the CLOB for a given user
+   * @param userDb
+   * @return
+   * @throws WdkModelException
+   */
   public static String addUploadsIdToGBrowseInfo(TwoTuple<String,String> tuple, DatabaseInstance userDb) throws WdkModelException {
 	String uploadsId = createUploadsIdValue();  
     String uploadsIdKeyValue = "'.uploadsid' => '" + createUploadsIdValue() + "',";
@@ -128,36 +150,66 @@ public class GBrowseUtils {
   }
   
   /**
-   * Gets a list of the GBrowse tracks for the given user that are already persisted in the
+   * Returns a map of all the tracks found for the given user in the GBrowse uploaded tracks file system
+   * along with their status.  An empty map is returned if the user has no uploads directory as yet in the 
    * file system.
    * @param wdkModel
    * @param userId
    * @return
    * @throws WdkModelException
    */
-  public static Map<String,LocalDateTime> getPersistedTracks(WdkModel wdkModel, Long userId) throws WdkModelException {
+  public static Map<String, GBrowseTrackStatus> getTracksStatus(WdkModel wdkModel, Long userId) throws WdkModelException {
     Path userTracksDir = getUserTracksDirectory(wdkModel, userId);
     if(userTracksDir == null || !Files.exists(userTracksDir)) {
       return new HashMap<>();
     }
-    return getPersistedTracks(userTracksDir);
+    return getTracksStatus(userTracksDir);
   }
   
-  public static Map<String, LocalDateTime> getPersistedTracks(Path userTracksDir) throws WdkModelException {
-    Map<String, LocalDateTime> persistedTracks = new HashMap<>();
+  /**
+   * Returns a map of all the tracks found for the given user in the GBrowse uploaded tracks file system
+   * along with their status.
+   * @param userTracksDir - directory where user's uploaded tracks are located
+   * @return
+   * @throws WdkModelException
+   */
+  public static Map<String, GBrowseTrackStatus> getTracksStatus(Path userTracksDir) throws WdkModelException {
+    Map<String, GBrowseTrackStatus> tracksStatus = new HashMap<>();
     try (DirectoryStream<Path> directoryStream = Files.newDirectoryStream(userTracksDir)) {
       for (Path path : directoryStream) {
-    	    LocalDateTime date =
-          Instant.ofEpochMilli(path.toFile().lastModified()).atZone(ZoneId.systemDefault()).toLocalDateTime();
-        persistedTracks.put(path.getFileName().toString(), date);
+    	    String trackName = path.getFileName().toString();
+    	    Path trackStatusPath = Paths.get(path.toString(), GBrowseTrackStatus.TRACK_STATUS_FILE_NAME);
+    	    if(Files.exists(trackStatusPath)) {
+    	    	  String line = "";
+    	      try (BufferedReader reader = Files.newBufferedReader(trackStatusPath)) {
+    	        line = reader.readLine();
+    	      }  
+    	   	  catch (IOException x) {
+    	    	    throw new WdkModelException(x);
+    	    	  }
+    	      String status = line.split(":")[0].trim();
+    	      String errorMessage = line.split(":").length > 1 ? line.split(":")[1].trim() : "";
+    	      LocalDateTime uploadDate = UploadStatus.COMPLETED.name().equals(status) ?
+            Instant.ofEpochMilli(trackStatusPath.toFile().lastModified())
+            .atZone(ZoneId.systemDefault())
+            .toLocalDateTime() : null;  
+          tracksStatus.put(trackName, new GBrowseTrackStatus(trackName, status, errorMessage, uploadDate));
+    	    }
       }
     }
     catch (IOException | DirectoryIteratorException e) {
       throw new WdkModelException(e);
     }
-    return persistedTracks;
+    return tracksStatus;
   }
 
+  /**
+   * Convenience method for setting POSIX permissions.
+   * @param path
+   * @param permissions
+   * @return
+   * @throws IOException
+   */
   public static Path setPosixPermissions(Path path, String permissions) throws IOException {
     Set<PosixFilePermission> perms = PosixFilePermissions.fromString(permissions);
     try {
@@ -169,20 +221,31 @@ public class GBrowseUtils {
     return path;
   }
 
-  public static String composeTrackName(String url) throws WdkModelException {
-	String datasetId = "";
-    Pattern pattern = Pattern.compile("\\/user-datasets\\/(\\d+)\\/");
-    Matcher matcher = pattern.matcher(url); 
-    if (matcher.find()) {
-      datasetId = matcher.group(1);
-    }
-    else {
-    	  throw new WdkModelException("The embedded url does not contain a dataset id.");
-    }
-    String dataFileName = url.substring(url.lastIndexOf("/") + 1);
+  /**
+   * Creates and returns a track name by splicing the user dataset id in between the root
+   * of the datafile name and the extension, using a dash to separate the dataset id from
+   * the root (e.g., myDataFile.bigwig -> myDataFile-12345.bigwig).  The datafile is uploaded
+   * to the GBrowse uploaded track file system in this manner so as to avoid possible name
+   * collisions.
+   * @param datasetId
+   * @param dataFileName
+   * @return
+   */
+  public static String composeTrackName(String datasetId, String dataFileName) {
     String dataFileExtension = dataFileName.substring(dataFileName.lastIndexOf("."));
     String rootDataFileName = dataFileName.substring(0, dataFileName.lastIndexOf("."));
     return rootDataFileName + "-" + datasetId + dataFileExtension;   
+  }
+  
+  /**
+   * Extracts the datafile name from its track name.
+   * @param trackName
+   * @return
+   */
+  public static String composeDatafileName(String trackName) {
+    String dataFileExtension = trackName.substring(trackName.lastIndexOf("."));
+    String rootDataFileName = trackName.substring(0, trackName.lastIndexOf("-"));
+    return rootDataFileName + dataFileExtension;
   }
 
 }
