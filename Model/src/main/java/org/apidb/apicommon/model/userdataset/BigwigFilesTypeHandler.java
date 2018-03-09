@@ -5,7 +5,6 @@ import static org.gusdb.fgputil.functional.Functions.mapToList;
 
 import java.nio.file.Path;
 import java.sql.Types;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -13,7 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
@@ -27,7 +25,6 @@ import org.gusdb.fgputil.db.runner.SQLRunnerException;
 import org.gusdb.fgputil.json.JsonType;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.config.ModelConfig;
 import org.gusdb.wdk.model.user.User;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
 import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
@@ -45,13 +42,11 @@ import org.json.JSONObject;
  *
  */
 public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
-	
+
   public final static String NAME = "BigwigFiles";
   public final static String VERSION = "1.0";
   public final static String DISPLAY = "Bigwig Files";
-	
-  private static final int WINDOW = 200000;
-  
+
   /**
    * SQL to look up the current genome build for the organism given in this user dataset.
    */
@@ -130,7 +125,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
     Map<String,LocalDateTime> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());
-    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(wdkModel, userDataset, persistedTracks, user.getUserId()))));
+    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(userDataset, persistedTracks, user.getUserId()))));
   }
 
   /**
@@ -143,10 +138,10 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
     Map<String,LocalDateTime> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());	  
-    return createTrackLinks(wdkModel, userDataset, persistedTracks, user.getUserId());
+    return createTrackLinks(userDataset, persistedTracks, user.getUserId());
   }
   
-  public JsonType createTrackLinks(WdkModel wdkModel, UserDataset userDataset, Map<String,LocalDateTime> persistedTracks, Long userId) throws WdkModelException {
+  public JsonType createTrackLinks(UserDataset userDataset, Map<String,LocalDateTime> persistedTracks, Long userId) throws WdkModelException {
     // FIXME These service urls should be constructed on the client. These will not work.
     List<TrackData> tracksData = new ArrayList<>();
     Long datasetId = userDataset.getUserDatasetId();

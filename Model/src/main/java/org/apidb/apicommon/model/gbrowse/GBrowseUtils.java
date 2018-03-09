@@ -28,7 +28,6 @@ import org.gusdb.fgputil.db.runner.SQLRunner;
 import org.gusdb.fgputil.db.runner.SQLRunnerException;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
-import org.gusdb.wdk.model.config.ModelConfig;
 
 public class GBrowseUtils {
 	
@@ -83,7 +82,6 @@ public class GBrowseUtils {
       throw new WdkModelException("Could not find GBrowse user tracks directory." +
           " Model property \"" + USER_TRACK_UPLOAD_BASE_PROP_NAME + "\" is not configued.");
     }
-    ModelConfig modelConfig = wdkModel.getModelConfig();
     String username = userId + "-" + projectId;
     TwoTuple<String,String> tuple = GBrowseUtils.getGBrowseSessionData(username, wdkModel.getUserDb());
     String info = tuple.getValue();
