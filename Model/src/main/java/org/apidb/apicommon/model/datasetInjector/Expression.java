@@ -130,6 +130,9 @@ public abstract class Expression extends DatasetInjector {
         injectTemplate("profileAttributeQueries");
         injectTemplate("profileAttributeRef");
 
+        injectTemplate("profileMinMaxAttributesCategory");
+        injectTemplate("profileMinMaxAttributeRef");
+        injectTemplate("profileMinMaxAttributeQueries");
 
         if(getPropValueAsBoolean("hasPercentileData")) {
             setPropValue("graphTextAttrName", "pctGraphAttr" + getDatasetName() + "_pct_graph");
