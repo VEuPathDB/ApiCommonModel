@@ -15,8 +15,9 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
+import org.apidb.apicommon.model.gbrowse.GBrowseTrackStatus;
 import org.apidb.apicommon.model.gbrowse.GBrowseUtils;
-import org.gusdb.fgputil.FormatUtil;
+import org.apidb.apicommon.model.gbrowse.UploadStatus;
 import org.gusdb.fgputil.Tuples.TwoTuple;
 import org.gusdb.fgputil.Wrapper;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
@@ -46,7 +47,9 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   public final static String NAME = "BigwigFiles";
   public final static String VERSION = "1.0";
   public final static String DISPLAY = "Bigwig Files";
-
+	
+  //private static final int WINDOW = 200000;
+  
   /**
    * SQL to look up the current genome build for the organism given in this user dataset.
    */
@@ -87,7 +90,6 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 
   @Override
   public UserDatasetType getUserDatasetType() {
-    // TODO Auto-generated method stub
     return UserDatasetTypeFactory.getUserDatasetType(NAME, VERSION);
   }
   
@@ -102,20 +104,20 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
     return cmd;
   }
 
-  //TODO Only RNASeq tracks for now.  So no files to install in DB.
+  // Nothing to install in DB.
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
     return new HashSet<String>();
   }
 
-  // TODO For now there is no DB data to uninstall so no command is needed.
+  // Nothing to uninstall so no command is needed.
   @Override
   public String[] getUninstallInAppDbCommand(Long userDatasetId, String projectId) {
     String[] cmd = {};
     return cmd;
   }
 
-  //TODO For now, there are no relevant questions
+  // There are no relevant questions
   @Override
   public String[] getRelevantQuestionNames() {
     String[] q = {};
@@ -124,8 +126,8 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   
   @Override
   public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
-    Map<String,LocalDateTime> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());
-    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackLinks(userDataset, persistedTracks, user.getUserId()))));
+    Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());
+    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackData(wdkModel, userDataset, tracksStatus, user.getUserId()))));
   }
 
   /**
@@ -137,27 +139,34 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    */
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
-    Map<String,LocalDateTime> persistedTracks = GBrowseUtils.getPersistedTracks(wdkModel, user.getUserId());	  
-    return createTrackLinks(userDataset, persistedTracks, user.getUserId());
+    Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());	  
+    return createTrackData(wdkModel, userDataset, tracksStatus, user.getUserId());
   }
   
-  public JsonType createTrackLinks(UserDataset userDataset, Map<String,LocalDateTime> persistedTracks, Long userId) throws WdkModelException {
-    // FIXME These service urls should be constructed on the client. These will not work.
+  public JsonType createTrackData(WdkModel wdkModel, UserDataset userDataset, Map<String, GBrowseTrackStatus> tracksStatus, Long userId) throws WdkModelException {
     List<TrackData> tracksData = new ArrayList<>();
     Long datasetId = userDataset.getUserDatasetId();
-    String bigWigTrackServiceUrl = "/users/" + userId + "/load-bigwig-track";
-    String partialServiceUrl = "/users/" + userId + "/user-datasets/" + datasetId;
 
-    // Created a new link for each bigwig data track found (determined by extension only) in the user
+    // Created new track data for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
     for(String dataFileName : userDataset.getFiles().keySet()) {
       if(isBigWigFile(dataFileName)) {
-        String serviceUrl = partialServiceUrl + "/user-datafiles/" + dataFileName;
-        String uploadUrl = bigWigTrackServiceUrl + "?eurl=" + FormatUtil.urlEncodeUtf8(serviceUrl);
-        String name = getTrackName(uploadUrl);
-        boolean uploaded = persistedTracks.keySet().contains(name);
-        LocalDateTime uploadedAt = uploaded ? persistedTracks.get(name) : null;
-        tracksData.add(new TrackData(name, uploadUrl, uploaded, uploadedAt)); 
+        String trackName = getTrackName(datasetId.toString(), dataFileName);
+        
+        // This includes all tracks with a GBrowse file system footprint regardless of condition.
+        List<String> allGBrowseTrackNames = tracksStatus.values().stream().map(ts -> ts.getName()).collect(Collectors.toList());
+        
+        if(allGBrowseTrackNames.contains(trackName)) {
+        	  GBrowseTrackStatus trackStatus = tracksStatus.get(trackName);
+          tracksData.add(
+        		  new TrackData(trackName, trackStatus.getStatusIndicator(),
+        				  trackStatus.getErrorMessage(),
+        				  trackStatus.getUploadedDate())
+          );
+        }
+        else {
+        	  tracksData.add(new TrackData(trackName, UploadStatus.NOT_UPLOADED.toString(), "", null));
+        }
       }
     }
     JSONArray results = assembleTracksDataJson(tracksData);
@@ -171,7 +180,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	}
     return tracks;
   }
-  
+ 
 //  protected JSONObject filterOutPersistedTracks(List<String> links, List<String> persistedTracks) {
 //    List<String> unpersistedTrackLinks = links.stream()
 //    		.filter(link -> !persistedTracks.contains(getTrackName(link)))
@@ -192,15 +201,12 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 //    return array;
 //  }
 
-  protected String getTrackName(String link) {
-	String decodedLink = FormatUtil.urlDecodeUtf8(link);
-	try {
-	  String trackName = GBrowseUtils.composeTrackName(decodedLink);
-	  return trackName;
-	}
-	catch(WdkModelException wme) {
-      throw new RuntimeException(wme);
-	}
+  protected String getTrackName(String datasetId, String datafileName) {
+    return  GBrowseUtils.composeTrackName(datasetId, datafileName);
+  }
+  
+  protected String getDatafileName(String trackName) {
+    return  GBrowseUtils.composeDatafileName(trackName);
   }
 
   /**
@@ -318,15 +324,15 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   
   
   class TrackData {
-	String _name;
-	boolean _uploaded;
+	String _trackName;
+	String _status;
+	String _errorMessage;
 	LocalDateTime _uploadedAt;
-	String _uploadUrl;
 	
-	TrackData(String name, String uploadUrl, boolean uploaded, LocalDateTime uploadedAt) {
-	  _name = name;
-	  _uploadUrl = uploadUrl;
-	  _uploaded = uploaded;
+	TrackData(String trackName, String status, String errorMessage, LocalDateTime uploadedAt) {
+	  _trackName = trackName;
+	  _status = status;
+	  _errorMessage = errorMessage;
 	  _uploadedAt = uploadedAt;
 	}
 	
@@ -334,9 +340,10 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	  String formattedUploadedAt = _uploadedAt == null ? new JsonType(null).toString() : _uploadedAt.format(formatter);
 	  return new JSONObject()
-        .put("name", _name)
-        .put("uploadUrl", _uploadUrl)
-        .put("uploaded", _uploaded)
+        .put("trackName", _trackName)
+        .put("datafileName", getDatafileName(_trackName))
+        .put("status", _status)
+        .put("errorMessage", _errorMessage)
         .put("uploadedAt", formattedUploadedAt);
 	}
   }
