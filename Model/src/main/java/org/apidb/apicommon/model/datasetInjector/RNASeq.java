@@ -93,6 +93,15 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("profileAttributeQueriesStrandSpecificRNASeq");
               injectTemplate("profileAttributeRef");
 
+	      injectTemplate("profileMinMaxAttributesRnaSenseCategory");
+	      injectTemplate("profileMinMaxAttributeRnaSenseRef");
+	      injectTemplate("profileMinMaxAttributeRnaSenseQueries");
+
+	      injectTemplate("profileMinMaxAttributesRnaAntisenseCategory");
+	      injectTemplate("profileMinMaxAttributeRnaAntisenseRef");
+	      injectTemplate("profileMinMaxAttributeRnaAntisenseQueries");
+
+
               String senseExprGraphAttr = datasetName + "_sense_expr_graph";
               String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
 
@@ -153,6 +162,10 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqProfileSetParamQuery");
 	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
+
+	      injectTemplate("profileMinMaxAttributesCategory");
+	      injectTemplate("profileMinMaxAttributeRef");
+	      injectTemplate("profileMinMaxAttributeQueries");
 
               // Add text attribute to the categories ontology
               setPropValue("graphTextAttrName", exprGraphAttr);
