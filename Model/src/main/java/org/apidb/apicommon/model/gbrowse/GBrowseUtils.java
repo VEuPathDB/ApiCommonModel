@@ -7,6 +7,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.sql.Types;
@@ -14,10 +15,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.EncryptionUtil;
@@ -33,6 +36,9 @@ import org.gusdb.wdk.model.WdkModelException;
 public class GBrowseUtils {
 	
   private static final Logger LOG = Logger.getLogger(GBrowseUtils.class);
+  private static final String TRACK_SOURCE_PATH_MACRO = "$$TRACK_SOURCE_PATH_MACROS$$";
+  private static final String TRACK_NAME_MACRO = "$$TRACK_NAME_MACROS$$";
+  private static final String GLOBAL_READ_WRITE_PERMS = "rw-rw-rw-";
 
   private static final String SELECT_SESSION_DATA_SQL =
 		  "SELECT id, a_session as info " +
@@ -247,5 +253,73 @@ public class GBrowseUtils {
     String rootDataFileName = trackName.substring(0, trackName.lastIndexOf("-"));
     return rootDataFileName + dataFileExtension;
   }
+  
+  /**
+   * 
+   * @param userTracksDir
+   * @param trackName
+   * @param configurationFileData
+   * @throws WdkModelException
+   */
+  public static String assembleGBrowseTrackUploadScaffold(String userTracksDir, String trackName, String CONFIGURATION_TEMPLATE)
+  throws WdkModelException {
+    String trackPath = Paths.get(userTracksDir, trackName).toString();
+    try {
 
+      // This directory likely already exists for error'd/in progress tracks
+      IoUtil.createOpenPermsDirectory(Paths.get(trackPath), true);
+      
+      // Create status file is necessary and set it to in progress.
+	  manageStatusFile(userTracksDir, trackName, UploadStatus.IN_PROGRESS, "");
+  
+      // This directory likely already exists for error'd/in progress tracks
+      IoUtil.createOpenPermsDirectory(Paths.get(trackPath, "SOURCES"), true);
+      
+      Path trackSourcePath = Paths.get(trackPath, "SOURCES", trackName);
+  
+      // This is a vanilla configuration file that assumes the datafile type to
+      // be that of a bigwig file.
+      String configurationFileData = CONFIGURATION_TEMPLATE
+              .replace(TRACK_SOURCE_PATH_MACRO, trackSourcePath.toString())
+              .replace(TRACK_NAME_MACRO, trackName);
+      Path configurationFilePath = Paths.get(trackPath, trackName + ".conf");
+
+      // Truncates and re-writes the file for error'd/in progress tracks
+      Files.write(configurationFilePath, configurationFileData.getBytes());
+      GBrowseUtils.setPosixPermissions(configurationFilePath, GLOBAL_READ_WRITE_PERMS);
+      return trackSourcePath.toString();
+    }
+    catch(IOException ioe) {
+    	  // Report any error in the status file.
+  	  manageStatusFile(userTracksDir, trackName, UploadStatus.ERROR, "Unable to create the custom track: " + trackName);
+  	  throw new WdkModelException("Unable to create the custom track: " + trackName, ioe);
+    }
+  }
+
+
+  /**
+   * Create the track status file as needed and populate it with the current status and any error msg.
+   * @param trackPath
+   * @param status
+   * @param msg
+   * @throws WdkModelException
+   */
+  public static void manageStatusFile(String userTracksDir, String trackName, UploadStatus status, String msg) throws WdkModelException {
+    Path trackStatusFilePath = Paths.get(userTracksDir, trackName, GBrowseTrackStatus.TRACK_STATUS_FILE_NAME);
+    try {
+  	  Files.write(trackStatusFilePath, (status + " : " + msg).getBytes(), StandardOpenOption.CREATE);
+      GBrowseUtils.setPosixPermissions(trackStatusFilePath, GLOBAL_READ_WRITE_PERMS);
+    }  
+    catch (IOException ioe) {
+      throw new WdkModelException(ioe);
+    }
+  }
+  
+  public static List<String> identifyTrackNamesIneligibleForUpload(String userTracksDir) throws WdkModelException {
+    Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(Paths.get(userTracksDir));  
+    return tracksStatus.values().stream()
+      .filter(ts -> UploadStatus.COMPLETED.name().equals(ts.getStatusIndicator()) ||
+	  	            UploadStatus.IN_PROGRESS.name().equals(ts.getStatusIndicator()))
+      .map(ts -> ts.getName()).collect(Collectors.toList());
+  }
 }
