@@ -315,6 +315,13 @@ public class GBrowseUtils {
     }
   }
   
+  /**
+   * Returns a list of the name of those tracks which have either been successfully uploaded or in the process of
+   * being uploaded.  These tracks are not eligible for a subsequent upload.
+   * @param userTracksDir - location of the user's upload tracks directory
+   * @return - list of names of tracks ineligible for upload
+   * @throws WdkModelException
+   */
   public static List<String> identifyTrackNamesIneligibleForUpload(String userTracksDir) throws WdkModelException {
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(Paths.get(userTracksDir));  
     return tracksStatus.values().stream()
