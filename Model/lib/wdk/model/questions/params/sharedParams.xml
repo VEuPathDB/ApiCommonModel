@@ -2696,10 +2696,39 @@ GROUP BY a.question_name
           <column name="string_value"/>
           <sql>
             <![CDATA[
-            select pan_name as internal, property as ontology_term_name,
-                   number_value, string_value, date_value
-            from apidbTuning.Metadata
-            where dataset_name = '$$metadata_datasets$$'
+            select md.pan_name as internal,
+                   md.property as ontology_term_name,
+                   cast(case
+                          when pt.type = 'number' and apidb.is_number(md.value) = 1
+                            then md.value
+                          else null
+                        end as number) as number_value,
+                  case
+                    when pt.type = 'string'
+                      then md.value
+                    else cast(null as varchar2(10))
+                  end as string_value,
+                  cast(case
+                         when pt.type = 'date'
+                           then md.value
+                         else null
+                       end as date) as date_value
+               from (  select pan_name, property, value
+                       from apidbtuning.InferredChars
+                       where dataset_name = '$$metadata_datasets$$'
+                     union
+                       select pan_name, property, value
+                       from apidbtuning.InferredParams
+                       where dataset_name = '$$metadata_datasets$$'
+                     union
+                       select pan_name, property, value
+                       from apidbtuning.DefaultChars
+                       where dataset_name = '$$metadata_datasets$$'
+                    ) md,
+                    (select property, max(type) as type
+                     from apidbTuning.PropertyType
+                     group by property) pt
+               where pt.property = md.property
             ]]>
             </sql>
         </sqlQuery>
