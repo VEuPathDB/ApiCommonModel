@@ -21,11 +21,6 @@ public class Sequences extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Taxonomy");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequencePieces");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Aliases");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Centromere");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequenceComments");
   }
 
   // second column is for documentation
