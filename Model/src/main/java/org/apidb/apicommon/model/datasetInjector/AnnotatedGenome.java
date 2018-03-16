@@ -238,10 +238,18 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
+
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesBySimilarity");
+    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Taxonomy");
+    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequencePieces");
+    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Aliases");
+    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Centromere");
+    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequenceComments");
+
+
 
     addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
 
