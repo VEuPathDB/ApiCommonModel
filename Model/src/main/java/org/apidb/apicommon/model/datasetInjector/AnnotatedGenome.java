@@ -261,6 +261,11 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GenomeSequencingAndAnnotationAttribution");
 
+
+    addWdkReference("EstRecordClasses.OrganismRecordClass", "table", "Reference");
+    addWdkReference("EstRecordClasses.OrganismRecordClass", "table", "AlignmentInfo");
+
+
     // if showReferenceTranscriptomics is true, add wdkReference to enable transcritomics of reference strain to be visible for this genome's gene pages.
     if(getPropValueAsBoolean("showReferenceTranscriptomics")){
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
