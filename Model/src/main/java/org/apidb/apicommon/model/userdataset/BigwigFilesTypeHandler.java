@@ -128,7 +128,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());
-    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackData(wdkModel, userDataset, tracksStatus, user.getUserId()))));
+    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackData(userDataset, tracksStatus))));
   }
 
   /**
@@ -141,10 +141,10 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());	  
-    return createTrackData(wdkModel, userDataset, tracksStatus, user.getUserId());
+    return createTrackData(userDataset, tracksStatus);
   }
-  
-  public JsonType createTrackData(WdkModel wdkModel, UserDataset userDataset, Map<String, GBrowseTrackStatus> tracksStatus, Long userId) throws WdkModelException {
+
+  public JsonType createTrackData(UserDataset userDataset, Map<String, GBrowseTrackStatus> tracksStatus) throws WdkModelException {
     List<TrackData> tracksData = new ArrayList<>();
     Long datasetId = userDataset.getUserDatasetId();
 
@@ -153,20 +153,21 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
     for(String dataFileName : userDataset.getFiles().keySet()) {
       if(isBigWigFile(dataFileName)) {
         String trackName = getTrackName(datasetId.toString(), dataFileName);
-        
+
         // This includes all tracks with a GBrowse file system footprint regardless of condition.
         List<String> allGBrowseTrackNames = tracksStatus.values().stream().map(ts -> ts.getName()).collect(Collectors.toList());
-        
+
         if(allGBrowseTrackNames.contains(trackName)) {
-        	  GBrowseTrackStatus trackStatus = tracksStatus.get(trackName);
+          GBrowseTrackStatus trackStatus = tracksStatus.get(trackName);
           tracksData.add(
-        		  new TrackData(trackName, trackStatus.getStatusIndicator(),
-        				  trackStatus.getErrorMessage(),
-        				  trackStatus.getUploadedDate())
+              new TrackData(trackName, trackStatus.getStatusIndicator(),
+                  trackStatus.getErrorMessage(),
+                  trackStatus.getUploadedDate()
+              )
           );
         }
         else {
-        	  tracksData.add(new TrackData(trackName, UploadStatus.NOT_UPLOADED.toString(), "", null));
+          tracksData.add(new TrackData(trackName, UploadStatus.NOT_UPLOADED.toString(), "", null));
         }
       }
     }
