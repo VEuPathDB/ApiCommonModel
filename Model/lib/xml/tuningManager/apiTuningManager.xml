@@ -6643,14 +6643,14 @@ where url is not null
     <externalDependency name="apidb.Synteny"/>
     <sql>
       <![CDATA[
-        CREATE TABLE OrthologousGenes&1
-          (source_id, ortho_source_id, ortho_product, ortho_organism, is_syntenic, syntenic,
-        CONSTRAINT ogenes&1_pk PRIMARY KEY(source_id, is_syntenic, syntenic, ortho_source_id))
-        ORGANIZATION INDEX
-        NOLOGGING
-        AS
+        CREATE TABLE OrthologousGenes&1 NOLOGGING AS
         SELECT gene.source_id, ortho_gene.source_id AS ortho_source_id,
-               ortho_gene.product AS ortho_product, ortho_gene.organism AS ortho_organism,
+               CAST(CASE
+                      WHEN LENGTH(ortho_gene.product) <= 600
+                        THEN ortho_gene.product
+                      ELSE substr(ortho_gene.product, 1, 597) || '...'
+                    END AS VARCHAR2(600)) AS ortho_product,
+               ortho_gene.organism AS ortho_organism,
                CASE (SELECT COUNT(*)
                      FROM apidb.Synteny
                      WHERE a_na_sequence_id = gene.na_sequence_id
@@ -6675,7 +6675,16 @@ where url is not null
                END AS syntenic
         FROM GeneAttributes gene, GeneAttributes ortho_gene
         WHERE gene.orthomcl_name = ortho_gene.orthomcl_name
+          AND gene.source_id != ortho_gene.source_id
+        ORDER BY gene.source_id, syntenic DESC, ortho_gene.source_id
        ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX og_ix&1
+          ON OrthologousGenes&1 (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_organism, is_syntenic)
+        TABLESPACE indx
+      ]]>
     </sql>
   </tuningTable>
 
