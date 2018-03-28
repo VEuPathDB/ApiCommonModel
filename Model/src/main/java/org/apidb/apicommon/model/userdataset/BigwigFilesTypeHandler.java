@@ -340,13 +340,13 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	
 	JSONObject assembleJson() {
 	  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-	  String formattedUploadedAt = _uploadedAt == null ? new JsonType(null).toString() : _uploadedAt.format(formatter);
+	 
 	  return new JSONObject()
         .put("trackName", _trackName)
         .put("datafileName", getDatafileName(_trackName))
         .put("status", _status)
         .put("errorMessage", _errorMessage)
-        .put("uploadedAt", formattedUploadedAt);
+        .put("uploadedAt", _uploadedAt == null ? JSONObject.NULL : _uploadedAt.format(formatter));
 	}
   }
   
