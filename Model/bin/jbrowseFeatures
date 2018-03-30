@@ -1,0 +1,83 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib $ENV{GUS_HOME} . "/lib/perl";
+
+use JSON;
+use DBI;
+use DBD::Oracle;
+
+use WDK::Model::ModelConfig;
+
+use XML::Simple;
+
+use Data::Dumper;
+
+my $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
+
+# TODO: remove gusHome from command line arg
+my ($gusHome, $refseqName, $start, $end, $feature) = @ARGV;
+
+my $bulkSubfeature = "$feature:bulksubfeatures";
+
+# TODO: Get project as command line arg
+my $modelConfig = new WDK::Model::ModelConfig("PlasmoDB");
+
+my $xml = XMLin($gbrowseXmlFile);
+
+my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                        $modelConfig->getAppDbLogin(),
+                        $modelConfig->getAppDbPassword()
+    )
+    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+# solve oracle clob problem; not that we're liable to need it...
+$dbh->{LongTruncOk} = 0;
+$dbh->{LongReadLen} = 10000000;
+;
+
+my ($seqId) = $dbh->selectrow_array("select na_sequence_id from apidbtuning.genomicseqattributes where source_id = '$refseqName'");
+
+die "no seqId found for refseq $refseqName" unless($seqId);
+
+my $result = {"features" => [] };
+
+my $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId);
+
+my $buldSubFeatureSql = &makeSql($xml->{module}->{'Feature.pm'}->{sqlQuery}->{$bulkSubfeature}->{sql}, $start, $end, $seqId);
+
+my $sh = $dbh->prepare($featureSql);
+$sh->execute();
+
+my %lookup;
+
+while(my $hash = $sh->fetchrow_hashref("NAME_lc")) {
+
+  $hash->{start} = $hash->{startm};
+
+  my $uniqueId = $hash->{feature_id};
+  $hash->{uniqueID} = $uniqueId;
+
+  $lookup{$uniqueId} = $hash;
+
+  push @{$result->{features}}, $hash;
+}
+
+
+print encode_json($result);
+
+$dbh->disconnect();
+
+sub makeSql {
+  my ($sql, $start, $end, $seqId) = @_;
+
+  my $dlm = '|';
+
+  $sql =~ s/\$base_start/$start/g;
+  $sql =~ s/\$rend/$end/g;
+  $sql =~ s/\$dlm/;/g;
+  $sql =~ s/\$srcfeature_id/$seqId/g;
+
+  return $sql
+}
