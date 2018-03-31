@@ -19,7 +19,7 @@ my $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
 # TODO: remove gusHome from command line arg
 my ($gusHome, $refseqName, $start, $end, $feature) = @ARGV;
 
-my $bulkSubfeature = "$feature:bulksubfeatures";
+
 
 # TODO: Get project as command line arg
 my $modelConfig = new WDK::Model::ModelConfig("PlasmoDB");
@@ -45,7 +45,7 @@ my $result = {"features" => [] };
 
 my $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId);
 
-my $buldSubFeatureSql = &makeSql($xml->{module}->{'Feature.pm'}->{sqlQuery}->{$bulkSubfeature}->{sql}, $start, $end, $seqId);
+
 
 my $sh = $dbh->prepare($featureSql);
 $sh->execute();
@@ -61,9 +61,25 @@ while(my $hash = $sh->fetchrow_hashref("NAME_lc")) {
 
   $lookup{$uniqueId} = $hash;
 
+  $hash->{subfeatures} = [];
+
   push @{$result->{features}}, $hash;
 }
 
+my $bulkSubfeature = "$feature:bulksubfeatures";
+my $bulkSubfeatureSql =  $xml->{module}->{'Feature.pm'}->{sqlQuery}->{$bulkSubfeature}->{sql};
+if($bulkSubfeatureSql) {
+  $bulkSubfeatureSql = &makeSql($bulkSubfeatureSql, $start, $end, $seqId);
+  my $bsh = $dbh->prepare($bulkSubfeatureSql);
+  $bsh->execute();
+
+  while(my $hash = $bsh->fetchrow_hashref("NAME_lc")) {
+    my $parent = $lookup{$hash->{parent_id}};
+    $hash->{start} = $hash->{startm};
+
+    push @{$parent->{subfeatures}}, $hash;
+  }
+}
 
 print encode_json($result);
 
