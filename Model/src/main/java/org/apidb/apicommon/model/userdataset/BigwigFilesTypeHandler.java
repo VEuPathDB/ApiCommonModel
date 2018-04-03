@@ -47,7 +47,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 
   public final static String NAME = "BigwigFiles";
   public final static String VERSION = "1.0";
-  public final static String DISPLAY = "Bigwig Files";
+  public final static String DISPLAY = "Bigwig";
 	
   //private static final int WINDOW = 200000;
   
