@@ -55,7 +55,20 @@ public class RNASeq extends  DatasetInjector {
       injectTemplate("datasetCategory");
 
       if(getPropValueAsBoolean("isDESeq")) {
+	    if(getPropValueAsBoolean("isStrandSpecific")) {
+		setPropValue("stranded", "Strand Specific ");
+		if (switchStrandsProfiles) {
+		    setPropValue("antisense","firststrand") ;
+		    setPropValue("sense","secondstrand") ;
+		} 
+		else {
+		    setPropValue("sense","firststrand") ;
+		    setPropValue("antisense","secondstrand") ;
+		}
+		
+	    }
 	    injectTemplate("DESeqProfileSetParamQuery");
+	    
       }
       
       if(getPropValueAsBoolean("isDEGseq")) {
