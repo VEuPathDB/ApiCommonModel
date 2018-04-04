@@ -16,13 +16,18 @@ public class Pathways extends DatasetInjector {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMetabolicPathway");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPathwaysTransform");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "table", "CompoundsMetabolicPathways");
-    addWdkReference("PathwayRecordClasses.PathwayRecordClass", "table", "PathwayReactionsXrefs");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByPathwayID");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByGeneList");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByCompounds");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "CompoundsMetabolicPathways");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPathway");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPathwayID");
+
+    //don't show xrefs table for MPMP pathways
+    String datasetName = getDatasetName();
+    if (!datasetName.contains("MPMP")) {
+        addWdkReference("PathwayRecordClasses.PathwayRecordClass", "table", "PathwayReactionsXrefs");
+    }
   }
 
   // second column is for documentation
