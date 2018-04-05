@@ -1,6 +1,7 @@
 package org.apidb.apicommon.model.gbrowse;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
@@ -39,6 +40,8 @@ public class GBrowseUtils {
   private static final String TRACK_SOURCE_PATH_MACRO = "$$TRACK_SOURCE_PATH_MACROS$$";
   private static final String TRACK_NAME_MACRO = "$$TRACK_NAME_MACROS$$";
   private static final String GLOBAL_READ_WRITE_PERMS = "rw-rw-rw-";
+  private static final String GLOBAL_READ_WRITE_EXECUTE_PERMS = "rwxrwxrwx";
+  private static final String TOMCAT_USER = "tomcat";
 
   private static final String SELECT_SESSION_DATA_SQL =
 		  "SELECT id, a_session as info " +
@@ -98,6 +101,7 @@ public class GBrowseUtils {
       throw new WdkModelException("Could not find GBrowse user tracks directory." +
           " Model property \"" + USER_TRACK_UPLOAD_BASE_PROP_NAME + "\" is not configued.");
     }
+    createGBrowseBasePathIfNeeded(userTracksBase);
     String username = userId + "-" + projectId;
     TwoTuple<String,String> tuple = GBrowseUtils.getGBrowseSessionData(username, wdkModel.getUserDb());
     String info = tuple.getValue();
@@ -328,5 +332,24 @@ public class GBrowseUtils {
       .filter(ts -> UploadStatus.COMPLETED.name().equals(ts.getStatusIndicator()) ||
 	  	            UploadStatus.IN_PROGRESS.name().equals(ts.getStatusIndicator()))
       .map(ts -> ts.getName()).collect(Collectors.toList());
+  }
+  
+  public static void createGBrowseBasePathIfNeeded(String userTracksBase) throws WdkModelException {
+    Path path = Paths.get(userTracksBase);
+    if(Files.exists(path)) return;
+    File dir = new File(userTracksBase);
+    boolean successful = dir.mkdirs();
+    if(!successful) {
+    	  throw new WdkModelException("Unable to create the full GBrowse base path.");
+    }
+    try {
+      while(path != null && Files.getOwner(path).getName().contains(TOMCAT_USER)) {
+    	    IoUtil.openPosixPermissions(path);
+    	    path = path.getParent();
+      }
+    }
+    	catch(IOException ioe) {
+      LOG.warn("Couldn't not set posix permissions for path: " + path, ioe);
+    }
   }
 }
