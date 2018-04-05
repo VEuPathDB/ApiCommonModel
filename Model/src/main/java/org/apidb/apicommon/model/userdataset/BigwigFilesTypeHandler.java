@@ -142,13 +142,16 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());	  
-    return createTrackData(userDataset, tracksStatus);
+    JSONArray trackData = createTrackData(userDataset, tracksStatus).getJSONArray();
+    TwoTuple<String,Integer> tuple =  getOrganismAndBuildNumberFromDependencies(userDataset);
+   	int currentBuild = getCurrentGenomeBuildNumber(tuple.getKey(), wdkModel.getAppDb().getDataSource());
+   	return new JsonType(new JSONObject().put("current build",currentBuild).put("tracks",trackData));
   }
 
   public JsonType createTrackData(UserDataset userDataset, Map<String, GBrowseTrackStatus> tracksStatus) throws WdkModelException {
     List<TrackData> tracksData = new ArrayList<>();
     Long datasetId = userDataset.getUserDatasetId();
-
+   
     // Created new track data for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
     for(String dataFileName : userDataset.getFiles().keySet()) {
