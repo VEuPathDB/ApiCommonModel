@@ -31,7 +31,7 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
-      addWdkReference("CompoundRecordClasses.CompoundRecordClasas", "table", "MassSpecGraphsDataTable");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
   }
 
   // second column is for documentation
