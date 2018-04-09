@@ -16,9 +16,12 @@ public class Compounds extends DatasetInjector {
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByCompounds");
     addWdkReference("PathwayRecordClasses.PathwayRecordClass", "question", "PathwayQuestions.PathwaysByCompoundIds");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "Properties");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "IupacNames");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "Definition");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "SecondaryIds");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "Synonyms");
+    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "Structures");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "CompoundsMetabolicPathways");
-    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "SubstanceProps");
-    addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "RelatedCompounds");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByCompoundID");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByTextSearch");
     addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByEcReaction");
