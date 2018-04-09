@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class PubchemCompounds extends DatasetInjector {
+public class Compounds extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
