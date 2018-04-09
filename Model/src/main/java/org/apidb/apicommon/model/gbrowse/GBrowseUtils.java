@@ -242,9 +242,14 @@ public class GBrowseUtils {
    * @return
    */
   public static String composeTrackName(String datasetId, String dataFileName) {
-    String dataFileExtension = dataFileName.substring(dataFileName.lastIndexOf("."));
-    String rootDataFileName = dataFileName.substring(0, dataFileName.lastIndexOf("."));
-    return rootDataFileName + "-" + datasetId + dataFileExtension;   
+	if(dataFileName.contains(".")) {
+      String dataFileExtension = dataFileName.substring(dataFileName.lastIndexOf("."));
+      String rootDataFileName = dataFileName.substring(0, dataFileName.lastIndexOf("."));
+      return rootDataFileName + "-" + datasetId + dataFileExtension;
+	}
+	else {
+      return dataFileName + "-" + datasetId;
+	}
   }
   
   /**
@@ -253,9 +258,14 @@ public class GBrowseUtils {
    * @return
    */
   public static String composeDatafileName(String trackName) {
-    String dataFileExtension = trackName.substring(trackName.lastIndexOf("."));
-    String rootDataFileName = trackName.substring(0, trackName.lastIndexOf("-"));
-    return rootDataFileName + dataFileExtension;
+	if(trackName.contains(".")) {
+      String dataFileExtension = trackName.substring(trackName.lastIndexOf("."));
+      String rootDataFileName = trackName.substring(0, trackName.lastIndexOf("-"));
+      return rootDataFileName + dataFileExtension;
+	}
+	else {
+	  return trackName.substring(0, trackName.lastIndexOf("-"));
+	}
   }
   
   /**
