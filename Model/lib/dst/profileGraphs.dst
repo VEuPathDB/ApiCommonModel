@@ -328,8 +328,10 @@ prop=projectName
 
 >templateTextStart<
         <attributeQueryRef ref="TranscriptAttributes.ProfileMinMax${datasetName}" includeProjects="${projectName}">
-            <columnAttribute name="max_timepoint_${presenterId}" displayName="Max Expression Timepoint" />
-            <columnAttribute name="min_timepoint_${presenterId}" displayName="Min Expression Timepoint" />
+            <columnAttribute name="max_order_${presenterId}" internal="true"/>
+            <columnAttribute name="min_order_${presenterId}" internal="true"/>
+            <columnAttribute name="max_timepoint_${presenterId}" displayName="Max Expression Stage" />
+            <columnAttribute name="min_timepoint_${presenterId}" displayName="Min Expression Stage" />
         </attributeQueryRef>
 >templateTextEnd<
 
@@ -345,22 +347,34 @@ prop=projectName
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
-            <column name="max_timepoint_${presenterId}"/>
-            <column name="min_timepoint_${presenterId}"/>
+            <column name="max_order_${presenterId}"/>
+            <column name="min_order_${presenterId}"/>
+            <column name="max_timepoint_${presenterId}" sortingColumn="max_order_${presenterId}" />
+            <column name="min_timepoint_${presenterId}" sortingColumn="min_order_${presenterId}" />
             <sql>
               <![CDATA[
+                   with sampleorder as
+                   (select dataset_name , protocol_app_node_name, min(node_order_num) as node_order_num from 
+                        (select dataset_name , protocol_app_node_name, node_order_num
+                         from apidbtuning.profilesamples
+                         where profile_type = 'values' )
+                         group by dataset_name , protocol_app_node_name )
                        select ta.source_id, ta.project_id, ta.gene_source_id
-
-                          , regexp_replace(regexp_replace(p.max_timepoint,  '\(.*\)', ''), '\[.*\] ','') as max_timepoint_${presenterId}
+                          , regexp_replace(regexp_replace (p.max_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') as max_timepoint_${presenterId}
                           , regexp_replace(regexp_replace(p.min_timepoint,  '\(.*\)', ''), '\[.*\] ','')  as min_timepoint_${presenterId}
-                       from apidbtuning.transcriptattributes ta, apidbtuning.profile p
-                       where p.dataset_name = '${datasetName}'
+                          , pmax.node_order_num as max_order_${presenterId}, pmin.node_order_num as min_order_${presenterId}
+                       from apidbtuning.transcriptattributes ta, apidbtuning.profile p, sampleorder pmax, sampleorder pmin
+                       where p.dataset_name =  '${datasetName}'
                        and p.dataset_type    = 'transcript_expression'
                        and p.dataset_subtype in ('array', 'rnaseq')
                        and profile_set_name not like '% nonunique]'
                        and p.profile_type = 'values'
                        and ta.gene_source_id = p.source_id
-                       group by ta.source_id,ta.project_id,ta.gene_source_id,p.max_timepoint,p.min_timepoint
+                       and pmax.dataset_name = p.dataset_name
+                       and pmax.dataset_name = pmin.dataset_name
+                       and pmax.protocol_app_node_name =  regexp_replace(regexp_replace (p.max_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') 
+                       and pmin.protocol_app_node_name =  regexp_replace(regexp_replace (p.min_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') 
+                       group by ta.source_id,ta.project_id,ta.gene_source_id,p.max_timepoint,p.min_timepoint, pmax.node_order_num, pmin.node_order_num
               ]]>
             </sql>
         </sqlQuery>
@@ -375,8 +389,10 @@ prop=projectName
 
 >templateTextStart<
         <attributeQueryRef ref="TranscriptAttributes.ProfileMinMaxRnaSense${datasetName}" includeProjects="${projectName}">
-            <columnAttribute name="max_sense_${presenterId}" displayName="Max Sense Expression Timepoint" />
-            <columnAttribute name="min_sense_${presenterId}" displayName="Min Sense Expression Timepoint" />
+            <columnAttribute name="max_order_sense_${presenterId}" internal="true"/>
+            <columnAttribute name="min_order_sense_${presenterId}" internal="true"/>
+            <columnAttribute name="max_sense_${presenterId}" displayName="Max Sense Expression Stage" />
+            <columnAttribute name="min_sense_${presenterId}" displayName="Min Sense Expression Stage" />
         </attributeQueryRef>
 >templateTextEnd<
 
@@ -390,8 +406,10 @@ prop=projectName
 
 >templateTextStart<
         <attributeQueryRef ref="TranscriptAttributes.ProfileMinMaxRnaAntisense${datasetName}" includeProjects="${projectName}">
-            <columnAttribute name="max_antisense_${presenterId}" displayName="Max Antisense Expression Timepoint" />
-            <columnAttribute name="min_antisense_${presenterId}" displayName="Min Antisense Expression Timepoint" />
+            <columnAttribute name="max_order_anti_${presenterId}" internal="true"/>
+            <columnAttribute name="min_order_anti_${presenterId}" internal="true"/>
+            <columnAttribute name="max_antisense_${presenterId}" displayName="Max Antisense Expression Stage" />
+            <columnAttribute name="min_antisense_${presenterId}" displayName="Min Antisense Expression Stage" />
         </attributeQueryRef>
 >templateTextEnd<
 
@@ -409,23 +427,39 @@ prop=switchStrandsProfiles
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
-            <column name="max_sense_${presenterId}"/>
-            <column name="min_sense_${presenterId}"/>
+            <column name="max_order_sense_${presenterId}"/>
+            <column name="min_order_sense_${presenterId}"/>
+            <column name="max_sense_${presenterId}" sortingColumn="max_order_sense_${presenterId}" />
+            <column name="min_sense_${presenterId}" sortingColumn="min_order_sense_${presenterId}" />
             <sql>
               <![CDATA[
-                   select ta.source_id, ta.project_id, ta.gene_source_id,
-                      regexp_replace(p.max_timepoint, '\[.*\] \(.*\)', '' ) AS max_sense_${presenterId},
-                      regexp_replace(p.min_timepoint, '\[.*\] \(.*\)', '' ) AS min_sense_${presenterId}
-                   from apidbtuning.transcriptattributes ta, apidbtuning.profile p
-                   where p.dataset_name = '${datasetName}'
-                   and p.dataset_type    = 'transcript_expression'
-                   and p.dataset_subtype = 'rnaseq'
-                   and p.profile_type    ='values'
-                   and profile_set_name not like '% nonunique]'
-                   and ta.gene_source_id = p.source_id
-                   and (('false'='${switchStrandsProfiles}' and p.max_timepoint like '%firststrand%') or 
-                        ('true'='${switchStrandsProfiles}' and p.max_timepoint like '%secondstrand%'))
-                   group by ta.source_id,ta.project_id,ta.gene_source_id,p.max_timepoint,p.min_timepoint
+                   with sampleorder as
+                   (select dataset_name , protocol_app_node_name, min(node_order_num) as node_order_num from 
+                        (select dataset_name , protocol_app_node_name, node_order_num
+                         from apidbtuning.profilesamples
+                         where profile_type = 'values'
+                         and study_name not like '% nonunique]'
+                         and (('false'='${switchStrandsProfiles}' and study_name like '%firststrand%') or 
+                              ('true'='${switchStrandsProfiles}' and study_name like '%secondstrand%')) )
+                         group by dataset_name , protocol_app_node_name )
+                       select ta.source_id, ta.project_id, ta.gene_source_id
+                          , regexp_replace(regexp_replace (p.max_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') as max_sense_${presenterId}
+                          , regexp_replace(regexp_replace(p.min_timepoint,  '\(.*\)', ''), '\[.*\] ','')  as min_sense_${presenterId}
+                          , pmax.node_order_num as max_order_sense_${presenterId}, pmin.node_order_num as min_order_sense_${presenterId}
+                       from apidbtuning.transcriptattributes ta, apidbtuning.profile p, sampleorder pmax, sampleorder pmin
+                       where p.dataset_name =  '${datasetName}'
+                       and p.dataset_type    = 'transcript_expression'
+                       and p.dataset_subtype = 'rnaseq'
+                       and p.profile_type    ='values'
+                       and profile_set_name not like '% nonunique]'
+                       and ta.gene_source_id = p.source_id
+                       and (('false'='${switchStrandsProfiles}' and p.max_timepoint like '%firststrand%') or 
+                            ('true'='${switchStrandsProfiles}' and p.max_timepoint like '%secondstrand%'))
+                       and pmax.dataset_name = p.dataset_name
+                       and pmax.dataset_name = pmin.dataset_name
+                       and pmax.protocol_app_node_name =  regexp_replace(regexp_replace (p.max_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') 
+                       and pmin.protocol_app_node_name =  regexp_replace(regexp_replace (p.min_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') 
+                       group by ta.source_id,ta.project_id,ta.gene_source_id,p.max_timepoint,p.min_timepoint, pmax.node_order_num, pmin.node_order_num
               ]]>
             </sql>
         </sqlQuery>
@@ -443,23 +477,39 @@ prop=switchStrandsProfiles
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
-            <column name="min_antisense_${presenterId}"/>
-            <column name="max_antisense_${presenterId}"/>
+            <column name="max_order_anti_${presenterId}"/>
+            <column name="min_order_anti_${presenterId}"/>
+            <column name="max_antisense_${presenterId}" sortingColumn="max_order_anti_${presenterId}" />
+            <column name="min_antisense_${presenterId}" sortingColumn="min_order_anti_${presenterId}" />
             <sql>
               <![CDATA[
-                   select ta.source_id, ta.project_id, ta.gene_source_id,
-                      regexp_replace(p.min_timepoint, '\[.*\] \(.*\)', '' ) AS min_antisense_${presenterId},
-                      regexp_replace(p.max_timepoint, '\[.*\] \(.*\)', '' ) AS max_antisense_${presenterId}
-                   from apidbtuning.transcriptattributes ta, apidbtuning.profile p
-                   where p.dataset_name = '${datasetName}'
-                   and p.dataset_type    = 'transcript_expression'
-                   and p.dataset_subtype = 'rnaseq'
-                   and p.profile_type    ='values'
-                   and profile_set_name not like '% nonunique]'
-                   and ta.gene_source_id = p.source_id
+                   with sampleorder as
+                   (select dataset_name , protocol_app_node_name, min(node_order_num) as node_order_num from 
+                        (select dataset_name , protocol_app_node_name, node_order_num
+                         from apidbtuning.profilesamples
+                         where profile_type = 'values'
+                         and study_name not like '% nonunique]'
+                         and (('true'='${switchStrandsProfiles}' and study_name like '%firststrand%') or 
+                               ('false'='${switchStrandsProfiles}' and study_name like '%secondstrand%')) )
+                         group by dataset_name , protocol_app_node_name )
+                       select ta.source_id, ta.project_id, ta.gene_source_id
+                          , regexp_replace(regexp_replace (p.max_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') as max_antisense_${presenterId}
+                          , regexp_replace(regexp_replace(p.min_timepoint,  '\(.*\)', ''), '\[.*\] ','')  as min_antisense_${presenterId}
+                          , pmax.node_order_num as max_order_anti_${presenterId}, pmin.node_order_num as min_order_anti_${presenterId}
+                       from apidbtuning.transcriptattributes ta, apidbtuning.profile p, sampleorder pmax, sampleorder pmin
+                       where p.dataset_name =  '${datasetName}'
+                       and p.dataset_type    = 'transcript_expression'
+                       and p.dataset_subtype = 'rnaseq'
+                       and p.profile_type    ='values'
+                       and profile_set_name not like '% nonunique]'
+                       and ta.gene_source_id = p.source_id
                    and (('true'='${switchStrandsProfiles}' and p.max_timepoint like '%firststrand%') or 
                         ('false'='${switchStrandsProfiles}' and p.max_timepoint like '%secondstrand%'))
-                   group by ta.source_id,ta.project_id,ta.gene_source_id,p.max_timepoint,p.min_timepoint
+                       and pmax.dataset_name = p.dataset_name
+                       and pmax.dataset_name = pmin.dataset_name
+                       and pmax.protocol_app_node_name =  regexp_replace(regexp_replace (p.max_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') 
+                       and pmin.protocol_app_node_name =  regexp_replace(regexp_replace (p.min_timepoint, ' \[.+\] \(.+\)', ''), ' \(.+\)', '') 
+                       group by ta.source_id,ta.project_id,ta.gene_source_id,p.max_timepoint,p.min_timepoint, pmax.node_order_num, pmin.node_order_num
               ]]>
             </sql>
         </sqlQuery>
