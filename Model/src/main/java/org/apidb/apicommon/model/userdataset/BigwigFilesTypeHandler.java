@@ -129,7 +129,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public List<JsonType> getTypeSpecificData(WdkModel wdkModel, List<UserDataset> userDatasets, User user) throws WdkModelException {
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());
-    return mapToList(userDatasets, fSwallow(userDataset -> (createTrackData(userDataset, tracksStatus))));
+    return mapToList(userDatasets, fSwallow(userDataset -> (new JsonType(createTrackData(userDataset, tracksStatus)))));
   }
 
   /**
@@ -142,10 +142,13 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());	  
-    return createTrackData(userDataset, tracksStatus);
+    JSONObject json =  new JSONObject()
+    		.put("tracks",createTrackData(userDataset, tracksStatus))
+    		.put("seqId", getSequenceInfo(userDataset, wdkModel).getFirst());
+    return new JsonType(json);
   }
 
-  public JsonType createTrackData(UserDataset userDataset, Map<String, GBrowseTrackStatus> tracksStatus) throws WdkModelException {
+  public JSONArray createTrackData(UserDataset userDataset, Map<String, GBrowseTrackStatus> tracksStatus) throws WdkModelException {
     List<TrackData> tracksData = new ArrayList<>();
     Long datasetId = userDataset.getUserDatasetId();
 
@@ -173,7 +176,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
       //}
     }
     JSONArray results = assembleTracksDataJson(tracksData);
-    return new JsonType(results);
+    return results;
   }
   
   protected JSONArray assembleTracksDataJson(List<TrackData> tracksData) {
@@ -270,6 +273,16 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
     catch(Exception e) {
       throw new WdkModelException(e);
     }
+  }
+  
+  protected TwoTuple<String,Integer> getSequenceInfo(UserDataset userDataset, WdkModel wdkModel) throws WdkModelException {
+    Set<UserDatasetDependency> dependencies = userDataset.getDependencies();
+	if(dependencies == null || dependencies.size() != 1) {
+	  throw new WdkModelException("Exactly one dependency is needed for this handler.");
+	}
+	UserDatasetDependency dependency = (UserDatasetDependency) dependencies.toArray()[0];
+	String resourceIdentifier = dependency.getResourceIdentifier();
+	return getSequenceInfo(extractTaxonId(resourceIdentifier), wdkModel.getAppDb());
   }
   
   /**
