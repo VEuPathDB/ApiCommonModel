@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <wdkModel>
 
   <querySet name="GeneId" queryType="id" isCacheable="true">
@@ -1131,7 +1132,7 @@ AND 1=0
   <!-- Go Term  CL-->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesByGoTermCL" includeProjects="TriTrypDB,GiardiaDB" >
+    <sqlQuery name="GenesByGoTermCL" includeProjects="GiardiaDB" >
        <postCacheUpdateSql>
           <sql>
              <![CDATA[
@@ -1149,7 +1150,7 @@ AND 1=0
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
 AND 1=0
-                         minus
+                         minus 
                            select source_id, gene_source_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
@@ -1165,6 +1166,90 @@ AND 1=0
         </testParamValues>
 
         <paramRef ref="organismParams.organismWithCellularLocImages"/>
+        <paramRef ref="geneParams.go_typeahead_cl"/>
+        <paramRef ref="geneParams.go_term"/>
+       <column name="project_id"/>
+        <column name="source_id" />
+        <column name="gene_source_id"/>
+        <column name="matched_result"/>
+        <column name="evidence_code"/>
+        <column name="note"/>
+        <column name="image"/>
+        <sql>
+            <![CDATA[
+    SELECT gs.transcript_source_id AS source_id, gs.gene_source_id, '@PROJECT_ID@' AS project_id
+        , 'Y' AS matched_result
+        , apidb.tab_to_string(SET(CAST(COLLECT(DISTINCT gs.evidence_code) AS apidb.varchartab)), ', ') AS evidence_code
+        , apidb.tab_to_string(SET(CAST(COLLECT(regexp_replace (fi.note, ' <a href.+$', NULL))  AS apidb.varchartab)), '; ') AS note
+        , fi.image_uri AS image
+    FROM apidbtuning.transcriptattributes ta, apidbtuning.gotermsummary gs, apidb.nafeatureimage fi
+    WHERE ta.taxon_id IN ($$organismWithCellularLocImages$$)
+    -- Cellular loc datasets
+    AND gs.source in ('TrypTag', 'DawsonLab')
+    AND ta.aa_sequence_id = gs.aa_sequence_id
+    AND (gs.go_id IN ($$go_typeahead_cl$$)
+      OR (gs.go_term_name like REPLACE($$go_term$$, '*', '%')
+      OR gs.go_id like REPLACE($$go_term$$, '*', '%')
+      OR gs.go_id || ' : ' || gs.go_term_name like REPLACE($$go_term$$, '*', '%')))
+      AND fi.image_type = 'GFP'
+      AND (fi.na_feature_id = ta.gene_na_feature_id
+        OR fi.na_feature_id = ta.na_feature_id)
+    GROUP BY gs.transcript_source_id, gs.gene_source_id,fi.image_uri, fi.image_type
+           ]]>
+       </sql>
+    </sqlQuery>
+
+
+    <processQuery name="GenesByGoTermCL" includeProjects="EuPathDB" 
+		processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        <paramRef ref="organismParams.organismWithCellularLocImages"/>
+        <paramRef ref="geneParams.go_typeahead_cl"/>
+        <paramRef ref="geneParams.go_term"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="evidence_code" width="20" wsName="evidence_code"/>
+        <wsColumn name="note" width="20" wsName="note"/>
+    </processQuery>
+
+<!--- GO TERM CL TriTrypSpec-->
+
+    <sqlQuery name="GenesByGoTermCLTriTryp" includeProjects="TriTrypDB" >
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                -- insert missing transcripts of included genes
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select source_id, gene_source_id
+                           from apidbTuning.transcriptAttributes
+                           where gene_source_id in (select gene_source_id from matches)
+AND 1=0
+                         minus 
+                           select source_id, gene_source_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+
+        <testParamValues>
+          <paramValue name="go_typeahead_cl">N/A</paramValue>
+          <paramValue name="go_term">binding</paramValue>
+        </testParamValues>
+
+        <paramRef ref="organismParams.organismWithCellularLocImages"/>
+	<paramRef ref="geneParams.tagType"/>
         <paramRef ref="geneParams.go_typeahead_cl"/>
         <paramRef ref="geneParams.go_term"/>
         <column name="project_id"/>
@@ -1190,8 +1275,8 @@ AND 1=0
       OR (gs.go_term_name like REPLACE($$go_term$$, '*', '%')
       OR gs.go_id like REPLACE($$go_term$$, '*', '%')
       OR gs.go_id || ' : ' || gs.go_term_name like REPLACE($$go_term$$, '*', '%')))
-    AND (fi.image_type LIKE 'N terminal tag - mNG (fluorescent tag) image' OR fi.image_type='GFP')
-    AND (fi.na_feature_id = ta.gene_na_feature_id
+      AND fi.image_type = $$tagType$$
+      AND (fi.na_feature_id = ta.gene_na_feature_id
         OR fi.na_feature_id = ta.na_feature_id)
     GROUP BY gs.transcript_source_id, gs.gene_source_id,fi.image_uri, fi.image_type
            ]]>
@@ -1199,11 +1284,12 @@ AND 1=0
     </sqlQuery>
 
 
-    <processQuery name="GenesByGoTermCL" includeProjects="EuPathDB" 
+    <processQuery name="GenesByGoTermCLTriTryp" includeProjects="EuPathDB" 
 		processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
         <paramRef ref="organismParams.organismWithCellularLocImages"/>
         <paramRef ref="geneParams.go_typeahead_cl"/>
         <paramRef ref="geneParams.go_term"/>
+	<paramRef ref="geneParams.tagType"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
         <wsColumn name="project_id" width="20" />
@@ -1211,7 +1297,6 @@ AND 1=0
         <wsColumn name="evidence_code" width="20" wsName="evidence_code"/>
         <wsColumn name="note" width="20" wsName="note"/>
     </processQuery>
-
 
 
 
