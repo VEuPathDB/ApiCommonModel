@@ -5303,6 +5303,54 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
     <!--TODO index -->
   </tuningTable>
 
+  <!--MetabolicPathwaySres table - simplify model query to improve download performance -->
+  <tuningTable name="PathwaysGeneTable">
+    <comment>Used by pathway table on gene pages</comment>
+    <internalDependency name="TranscriptPathway"/>
+    <internalDependency name="PathwayAttributes"/>
+    <internalDependency name="PathwayCompounds"/>
+    <internalDependency name="PathwayReactions"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE PathwaysGeneTable&1 NOLOGGING AS
+        SELECT DISTINCT gene_source_id
+        , project_id
+        , pathway_source_id
+        , pathway_name
+        , count(reaction_source_id) as reactions
+        , enzyme
+        , expasy_url
+        , pathway_source
+        , exact_match
+        FROM (
+            SELECT DISTINCT tp.gene_source_id
+            , tp.pathway_source_id
+            , tp.pathway_name
+            , pr.reaction_source_id
+            , pr.enzyme
+            , pr.expasy_url
+            , tp.pathway_source
+            , decode(max(tp.exact_match), 1, 'Yes', 0, 'No') AS exact_match
+            FROM TranscriptPathway tp
+            , PathwayAttributes pa
+            , PathwayCompounds pc
+            , PathwayReactions pr
+            WHERE tp.pathway_id = pa.pathway_id
+            AND pc.pathway_id = pa.pathway_id
+            AND pr.reaction_id = pc.reaction_id
+            AND pr.ext_db_name = pc.ext_db_name
+            AND tp.ec_number_pathway = pr.enzyme
+            AND tp.wildcard_count_gene <= tp.wildcard_count_pathway
+            GROUP BY tp.gene_source_id, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
+            ORDER BY exact_match desc, pathway_name
+            )
+        GROUP BY gene_source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
+        ORDER BY pathway_source_id, pathway_source
+      ]]>
+    </sql>
+  </tuningTable>
+    
+
 
   <tuningTable name="CompoundTypeAheads">
     <comment> for use in GenesByReactionCompounds question </comment>
