@@ -17,11 +17,9 @@
         <column name="project_id"/>
         <sql>
           <![CDATA[
-            SELECT DISTINCT ea.source_id, '@PROJECT_ID@' as project_id
+            SELECT DISTINCT ea.source_id, ea.project_id
             FROM ApidbTuning.EstAttributes ea, ($$est_id$$) ds
-            WHERE ea.project_id = '@PROJECT_ID@'
-              AND ea.source_id LIKE REGEXP_REPLACE(REPLACE(ds.source_id, '*', '%'), '[[:space:]]', '')
-              --AND LOWER(ea.project_id) = LOWER('@PROJECT_ID@')
+            WHERE ea.source_id LIKE REGEXP_REPLACE(REPLACE(ds.source_id, '*', '%'), '[[:space:]]', '')
           ]]>
        </sql>
     </sqlQuery>
@@ -58,7 +56,7 @@
        <sql>
             <![CDATA[
               select * from (
-              SELECT accession as source_id, '@PROJECT_ID@' as project_id,
+              SELECT accession as source_id, project_id,
                CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(set(
                     CAST(
                       COLLECT(target_sequence_source_id || ':'
@@ -71,13 +69,12 @@
             FROM (
                  
                SELECT distinct i.accession,i.gene ,i.target_start,i.target_end, 
-                      i.is_reversed, i.target_sequence_source_id
+                      i.is_reversed, i.target_sequence_source_id, ea.project_id
                 FROM ApidbTuning.EstAlignmentGeneSUMMARY i, ApidbTuning.GeneId gi, apidbtuning.estattributes ea
                 WHERE lower(gi.id) LIKE REGEXP_REPLACE(REPLACE(LOWER($$single_gene_id$$),
                                                        '*', '%'),
                                                '[[:space:]]', '')
                 and ea.source_id = i.accession
-                and ea.project_id = '@PROJECT_ID@'
                 AND i.gene = gi.gene
                 AND i.est_gene_overlap_length >= $$bp_overlap_gte$$
                 AND is_consistent in ($$high_confidence_only$$)
@@ -85,7 +82,7 @@
                 AND percent_identity >= $$min_percent_identity$$
                 AND percent_est_bases_aligned >= $$min_percent_est_aligned$$
             )          
-            GROUP BY accession
+            GROUP BY accession, project_id
             )
            ]]>
        </sql>
@@ -166,7 +163,7 @@
         <sql excludeProjects="FungiDB,PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,GiardiaDB">
             <![CDATA[
             select * from (
-            SELECT eags.accession as source_id, '@PROJECT_ID@' as project_id,
+            SELECT eags.accession as source_id, s.project_id,
                    apidb.tab_to_string(set(
                      CAST(
                        COLLECT(s.source_id || ':'
@@ -185,14 +182,14 @@
             AND   b.blat_alignment_id = eags.BLAT_ALIGNMENT_ID
             AND   eags.percent_est_bases_aligned >= $$min_percent_est_aligned$$
             AND   eags.library_id in ($$libraryId$$)
-            GROUP BY eags.accession)
+            GROUP BY eags.accession, s.project_id)
            ]]>
         </sql>
 
         <sql includeProjects="FungiDB,PlasmoDB,ToxoDB,CryptoDB,MicrosporidiaDB,TriTrypDB,GiardiaDB">
             <![CDATA[
             select * from (
-            SELECT eags.accession as source_id, '@PROJECT_ID@' as project_id,
+            SELECT eags.accession as source_id, sa.project_id,
                    apidb.tab_to_string(set(
                      CAST(
                        COLLECT(sa.source_id || ':'
@@ -212,7 +209,7 @@
             AND   b.blat_alignment_id = eags.BLAT_ALIGNMENT_ID
             AND   eags.percent_est_bases_aligned >= $$min_percent_est_aligned$$
             AND   eags.library_id in ($$libraryId$$)
-            GROUP BY eags.accession)
+            GROUP BY eags.accession, sa.project_id)
            ]]>
         </sql>
     </sqlQuery>
@@ -251,7 +248,6 @@
             SELECT ea.source_id, ea.project_id
             FROM ApidbTuning.EstAttributes ea
             WHERE ea.library_id in ($$libraryId$$)
-              AND ea.project_id = '@PROJECT_ID@'
        </sql>
     </sqlQuery>
 
@@ -286,8 +282,8 @@
        <column name="genes"/>
        <sql>
             <![CDATA[
-              select * from (
-              SELECT accession as source_id, '@PROJECT_ID@' as project_id,
+              select wgo.*, ea.project_id from (
+              SELECT accession as source_id,
                CASE WHEN count(*) > 20 THEN count(*)||' locations' ELSE apidb.tab_to_string(set(
                     CAST(
                       COLLECT(target_sequence_source_id || ':'
@@ -309,7 +305,8 @@
                   AND library_id in ($$libraryIdGenes$$)
             )
             GROUP BY accession
-            )
+            ) wgo, apidbtuning.estattributes ea
+            where wgo.source_id = ea.source_id
            ]]>
        </sql>
 

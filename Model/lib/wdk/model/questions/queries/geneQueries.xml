@@ -15,14 +15,14 @@
                   row_offset
                   as (select max(wdk_row_id) as the_max from matches),
                   mismatches
-                  as (  select source_id, gene_source_id
+                  as (  select source_id, gene_source_id, project_id
                         from apidbTuning.transcriptAttributes
                         where gene_source_id in (select gene_source_id from matches)
                       minus
-                        select source_id, gene_source_id
+                        select source_id, gene_source_id, project_id
                         from matches)
              select ##WDK_CACHE_INSTANCE_ID##,
-                    rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                    rownum + the_max, 0, source_id, gene_source_id,  project_id, 'N'
              from row_offset, mismatches
           ]]>
        </sql>
@@ -90,7 +90,7 @@
         <column name="project_id"/>
        <sql>
              <![CDATA[
-      select source_id, t.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
+      select source_id, t.gene_source_id, t.project_id, 'Y' as matched_result
       from ApiDbUserDatasets.UD_GeneId g, apidbtuning.transcriptattributes t
       where g.gene_source_id = t.gene_source_id
       and g.user_dataset_id = $$geneListUserDataset$$
@@ -216,7 +216,7 @@ from(
 		     ,pubmed_id
                      from (
                            select distinct ta.source_id 
-                           , '@PROJECT_ID@' as project_id
+                           , ta.project_id
                            , 'Y' as matched_result
                            ,ta.gene_source_id 
                            ,oen.name as e_name
@@ -308,7 +308,7 @@ and ta.gene_na_feature_id = cp.na_feature_id
         <column name="genedb_link"/>
        <sql>
              <![CDATA[
-                  SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id,
+                  SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id,
 		    '<a href="http://www.genedb.org/Query/quickSearch?pseudogenes=true&' || 'product=true&' || 'allNames=true&' || 'searchText=' || ta.gene_source_id || '" target="genedb">GeneDB record</a>' as genedb_link
                   FROM ApidbTuning.TranscriptAttributes ta
                   WHERE ta.gene_source_id IN (SELECT gene from apidbtuning.AnnotationChange)
@@ -355,7 +355,7 @@ and ta.gene_na_feature_id = cp.na_feature_id
        <sql>
              <![CDATA[
        select  ta.source_id, bg.gene_source_id, 'Y' as matched_result,
-               '@PROJECT_ID@' as project_id,
+               ta.project_id,
                min(bg.distance) as tfbs_distance,
                count(*) as tfbs_count
        from   ApidbTuning.TFBSGene bg, ApidbTuning.TranscriptAttributes ta
@@ -424,7 +424,7 @@ and ta.gene_na_feature_id = cp.na_feature_id
 
         <sql>
           <![CDATA[
-            select 'Y' as matched_result, cct.source_id, cct.gene_source_id, '@PROJECT_ID@' as project_id,
+            select 'Y' as matched_result, cct.source_id, cct.gene_source_id, cct.project_id,
                    min(cct.distance) as chip_distance, max(cct.score) as chip_score
             from apidbTuning.ChipChipTranscript cct, study.ProtocolAppNode pan
             where cct.protocol_app_node_id = pan.protocol_app_node_id
@@ -475,9 +475,9 @@ and ta.gene_na_feature_id = cp.na_feature_id
              <![CDATA[
 SELECT gene_source_id,source_id, 
         apidb.tab_to_string(SET(CAST(COLLECT(input_id) AS apidb.varchartab)), ', ') AS input_id,
-        'Y' AS matched_result, '@PROJECT_ID@' AS project_id
+        'Y' AS matched_result, project_id
 FROM
-  ( SELECT DISTINCT ta.gene_source_id,ta.source_id,
+  ( SELECT DISTINCT ta.gene_source_id,ta.source_id, ta.project_id,
         t.gene_source_id AS input_id
     FROM ApidbTuning.TranscriptAttributes ta,
       ( SELECT DISTINCT ds.gene_source_id, gi.gene
@@ -485,14 +485,13 @@ FROM
         WHERE lower(gi.id) = LOWER(ds.gene_source_id )
        ) t
        WHERE t.gene = ta.gene_source_id
-       AND ta.project_id = '@PROJECT_ID@'
        UNION
-       SELECT DISTINCT ta.gene_source_id, ta.source_id,
+       SELECT DISTINCT ta.gene_source_id, ta.source_id, ta.project_id,
           ta.source_id AS input_id
 	FROM ApidbTuning.TranscriptAttributes ta,($$ds_gene_ids$$) ds
 	WHERE lower(transcript_source_id) = LOWER(ds.gene_source_id )
     )
-   GROUP BY source_id, gene_source_id 
+   GROUP BY source_id, gene_source_id, project_id
            ]]>
        </sql>
     </sqlQuery>
@@ -524,7 +523,7 @@ FROM
         <sql>
             <![CDATA[
             select gene_source_id, source_id, 'Y' as matched_result,
-            '@PROJECT_ID@' as project_id
+            project_id
             from ApidbTuning.TranscriptAttributes
             where lower(source_id) like regexp_replace(replace(replace(lower($$single_gene_id$$),
                                                                '*', '%'),
@@ -550,13 +549,13 @@ FROM
         <sql>
             <![CDATA[
 SELECT gene_source_id, source_id, 'Y'AS matched_result, 
-       '@PROJECT_ID@' AS project_id
+       project_id
 FROM
-  (SELECT ta.gene_source_id,  ta.source_id
+  (SELECT ta.gene_source_id,  ta.source_id, ta.project_id
   FROM ApidbTuning.TranscriptAttributes ta
   WHERE ta.transcript_source_id = $$single_gene_id$$
   UNION
-  SELECT gi.gene AS gene_source_id, ta.source_id
+  SELECT gi.gene AS gene_source_id, ta.source_id, ta.project_id
   FROM ApidbTuning.GeneId gi, ApidbTuning.TranscriptAttributes ta
   WHERE lower(gi.id) LIKE REGEXP_REPLACE(REPLACE(REPLACE(LOWER($$single_gene_id$$), '*', '%'), '_', '\_'), '[[:space:]]', '') ESCAPE '\'
   AND gi.gene  = ta.gene_source_id 
@@ -595,7 +594,7 @@ FROM
           select source_id,gene_source_id,matched_result,project_id,
           Listagg(source,',') within GROUP (order by source) as source
           from (
-            SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id,
+            SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id,
             apidb.tab_to_string(set(cast(COLLECT(distinct decode(asec.evidence_code,'OrthoMCLDerived', 'inferred from OrthoMCL',
 	      'gb', 'GenBank', 
               'Hagai', 'MPMP',evidence_code)) AS apidb.varchartab)), ', ') as source
@@ -646,7 +645,7 @@ FROM
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-            SELECT source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+            SELECT source_id, gene_source_id, 'Y' as matched_result, project_id
             FROM ApidbTuning.TranscriptAttributes
             WHERE tm_count >= $$min_tm$$ 
             AND tm_count <= $$max_tm$$
@@ -680,12 +679,11 @@ FROM
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-            SELECT source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+            SELECT source_id, gene_source_id, 'Y' as matched_result, project_id
             FROM ApidbTuning.TranscriptAttributes
             WHERE gene_type IN ($$geneType$$)
               AND is_pseudo in ($$includePseudogenes$$)
               AND taxon_id IN ($$organism$$)
-              AND project_id = '@PROJECT_ID@'
            ]]>
        </sql>
     </sqlQuery>
@@ -739,15 +737,15 @@ FROM
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
 AND 1=0
                          minus
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'N'
                 from row_offset, mismatches
              ]]>
           </sql>
@@ -868,14 +866,14 @@ AND 1=0
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
                          minus
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'N'
                 from row_offset, mismatches
              ]]>
           </sql>
@@ -946,14 +944,14 @@ AND 1=0
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select ta.source_id, ta.gene_source_id, max_score, fields_matched
+                     as (  select ta.source_id, ta.gene_source_id, max_score, fields_matched, ta.project_id
                            from apidbTuning.transcriptAttributes ta, matches
                            where ta.gene_source_id = matches.gene_source_id
                          minus
-                           select source_id, gene_source_id, max_score, fields_matched
+                           select source_id, gene_source_id, max_score, fields_matched, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'Y', max_score, fields_matched
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'Y', max_score, fields_matched
                 from row_offset, mismatches
              ]]>
           </sql>
@@ -1030,7 +1028,7 @@ AND 1=0
                               WHERE inputs.gene_source_id = ogenes.source_id
                                 AND (ogenes.is_syntenic = 1 OR $$isSyntenic$$ = 'no')
                               GROUP BY ogenes.ortho_source_id)
-                     SELECT ta.gene_source_id, ta.source_id, '@PROJECT_ID@' AS project_id, 'Y' AS matched_result,
+                     SELECT ta.gene_source_id, ta.source_id, ta.project_id, 'Y' AS matched_result,
                             og.wdk_weight, og.gene_list AS orthologs
                      FROM output_gene og, apidbTuning.TranscriptAttributes ta
                      WHERE og.ortho_source_id = ta.gene_source_id
@@ -1082,7 +1080,7 @@ AND 1=0
 
         <sql>
             <![CDATA[
-                     SELECT distinct gs.transcript_source_id AS source_id, gs.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+                     SELECT distinct gs.transcript_source_id AS source_id, gs.gene_source_id, ta.project_id, 'Y' as matched_result,
                     apidb.tab_to_string(set(cast(COLLECT(distinct gs.evidence_code) AS apidb.varchartab)), ', ') as evidence_code, listagg(gs.is_go_slim, ',')WITHIN GROUP (ORDER BY gs.is_go_slim) as is_go_slim
                      FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.GoTermSummary gs
                      WHERE ta.taxon_id IN ($$organism$$)
@@ -1096,7 +1094,7 @@ AND 1=0
                       OR (lower(gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))
                        OR lower( gs.go_id) like lower(REPLACE($$go_term$$, '*', '%'))
                        OR lower(gs.go_id || ' : ' || gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))) )
-                     GROUP BY gs.transcript_source_id, gs.gene_source_id
+                     GROUP BY gs.transcript_source_id, gs.gene_source_id, ta.project_id
                      ORDER BY gs.transcript_source_id
            ]]>
        </sql>
@@ -1146,15 +1144,15 @@ AND 1=0
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
 AND 1=0
                          minus 
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'N'
                 from row_offset, mismatches
              ]]>
           </sql>
@@ -1177,7 +1175,7 @@ AND 1=0
         <column name="image"/>
         <sql>
             <![CDATA[
-    SELECT gs.transcript_source_id AS source_id, gs.gene_source_id, '@PROJECT_ID@' AS project_id
+    SELECT gs.transcript_source_id AS source_id, gs.gene_source_id, ta.project_id
         , 'Y' AS matched_result
         , apidb.tab_to_string(SET(CAST(COLLECT(DISTINCT gs.evidence_code) AS apidb.varchartab)), ', ') AS evidence_code
         , apidb.tab_to_string(SET(CAST(COLLECT(regexp_replace (fi.note, ' <a href.+$', NULL))  AS apidb.varchartab)), '; ') AS note
@@ -1194,7 +1192,7 @@ AND 1=0
       AND fi.image_type = 'GFP'
       AND (fi.na_feature_id = ta.gene_na_feature_id
         OR fi.na_feature_id = ta.na_feature_id)
-    GROUP BY gs.transcript_source_id, gs.gene_source_id,fi.image_uri, fi.image_type
+    GROUP BY gs.transcript_source_id, gs.gene_source_id,fi.image_uri, fi.image_type, ta.project_id
            ]]>
        </sql>
     </sqlQuery>
@@ -1229,15 +1227,15 @@ AND 1=0
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
 AND 1=0
                          minus 
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'N'
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'N'
                 from row_offset, mismatches
              ]]>
           </sql>
@@ -1261,7 +1259,7 @@ AND 1=0
         <column name="image"/>
         <sql>
             <![CDATA[
-    SELECT gs.transcript_source_id AS source_id, gs.gene_source_id, '@PROJECT_ID@' AS project_id
+    SELECT gs.transcript_source_id AS source_id, gs.gene_source_id, ta.project_id
         , 'Y' AS matched_result
         , apidb.tab_to_string(SET(CAST(COLLECT(DISTINCT gs.evidence_code) AS apidb.varchartab)), ', ') AS evidence_code
         , apidb.tab_to_string(SET(CAST(COLLECT(regexp_replace (fi.note, ' <a href.+$', NULL))  AS apidb.varchartab)), '; ') AS note
@@ -1278,7 +1276,7 @@ AND 1=0
       AND fi.image_type = $$tagType$$
       AND (fi.na_feature_id = ta.gene_na_feature_id
         OR fi.na_feature_id = ta.na_feature_id)
-    GROUP BY gs.transcript_source_id, gs.gene_source_id,fi.image_uri, fi.image_type
+    GROUP BY gs.transcript_source_id, gs.gene_source_id,fi.image_uri, fi.image_type, ta.project_id
            ]]>
        </sql>
     </sqlQuery>
@@ -1323,7 +1321,7 @@ AND 1=0
         <sql>
             <![CDATA[
             SELECT DISTINCT ta.source_id, ta.gene_source_id, 'Y' as matched_result,
-             '@PROJECT_ID@' as project_id,
+             ta.project_id,
              (spf.maxy_conclusion + spf.maxc_conclusion + 
               spf.maxs_conclusion + spf.means_conclusion ) as sigp_sum_score,
               to_char((spf.means_score + maxy_score) / 2 , '0.99') as nn_d_score,
@@ -1374,7 +1372,7 @@ AND 1=0
         <column name="isoelectric_point"/>
         <sql>
             <![CDATA[
-            SELECT isoelectric_point, source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+            SELECT isoelectric_point, source_id, gene_source_id, 'Y' as matched_result, project_id
             FROM ApidbTuning.TranscriptAttributes
             WHERE isoelectric_point BETWEEN $$min_isoelectric_point$$
               AND $$max_isoelectric_point$$
@@ -1410,7 +1408,7 @@ AND 1=0
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-            SELECT source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+            SELECT source_id, gene_source_id, 'Y' as matched_result, project_id
             FROM ApidbTuning.TranscriptAttributes
             WHERE molecular_weight <= $$max_molecular_weight$$
               AND molecular_weight >= $$min_molecular_weight$$
@@ -1446,7 +1444,7 @@ AND 1=0
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-             SELECT distinct source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+             SELECT distinct source_id, gene_source_id, 'Y' as matched_result, project_id
              FROM ApidbTuning.TranscriptAttributes
              WHERE taxon_id IN ($$organism$$)
                AND $$scope$$  >= $$num_exons_gte$$ 
@@ -1483,7 +1481,7 @@ AND 1=0
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-             SELECT distinct source_id, gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+             SELECT distinct source_id, gene_source_id, 'Y' as matched_result, project_id
              FROM ApidbTuning.TranscriptAttributes
              WHERE taxon_id IN ($$organism$$)
                AND gene_paralog_number >= $$num_paralogs.min$$ 
@@ -1602,7 +1600,7 @@ AND 1=0
             <![CDATA[
             SELECT * FROM (
               SELECT DISTINCT ta.source_id, ta.gene_source_id, 'Y' as matched_result,
-                     '@PROJECT_ID@' as project_id, ta.taxon_id 
+                     ta.project_id, ta.taxon_id 
                 FROM ApidbTuning.TranscriptAttributes ta
                WHERE ta.gene_ortholog_number = 0 
                  AND ta.gene_paralog_number = 0 
@@ -1611,7 +1609,7 @@ AND 1=0
                  AND $$profile_pattern$$ not like '%:Y%'
                UNION
                SELECT DISTINCT ta.source_id, ta.gene_source_id, 'Y' as matched_result,
-                      '@PROJECT_ID@' as project_id, ta.taxon_id
+                      ta.project_id, ta.taxon_id
                 FROM apidb.PhylogeneticProfile pp, ApidbTuning.TranscriptAttributes ta
                WHERE pp.profile_string LIKE $$profile_pattern$$
                  AND pp.source_id = ta.gene_source_id
@@ -1663,7 +1661,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-              SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+              SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id
             FROM ApidbTuning.TranscriptAttributes ta, dots.DbRefNaFeature drnf, sres.DbRef dr,
               (SELECT idrnf.na_feature_id
                FROM dots.DbRefNaFeature idrnf, sres.DbRef idr
@@ -1702,7 +1700,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-                SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id
+                SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id
                 FROM ApidbTuning.TranscriptAttributes ta
                 WHERE ta.taxon_id in ($$organism$$)
                 ORDER BY ta.source_id
@@ -1738,7 +1736,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="count" />
         <sql>
             <![CDATA[
-        SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id,
+        SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id,
            count(ef.source_id) AS count,
            DECODE(MAX(
                DECODE(ef.type, 'Not Full Set Not on Blast Hit', 1,
@@ -1795,24 +1793,24 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
         <column name="sum_spectrum_count" columnType="number" width="12" />
         <sql>
             <![CDATA[
-select '@PROJECT_ID@' as project_id, 'Y' as matched_result, source_id, gene_source_id,  
+select project_id, 'Y' as matched_result, source_id, gene_source_id,  
       sum_sequence_count, unique_sequence_count, sum_spectrum_count, sample_count
 from (      
 with genesample as (
-select source_id,gene_source_id, protocol_app_node_id, count(*) as peptide_count, count(distinct peptide_sequence) as unique_peptide_count, sum(Spectrum_Count) as spectrum_count
+select source_id,gene_source_id, project_id, protocol_app_node_id, count(*) as peptide_count, count(distinct peptide_sequence) as unique_peptide_count, sum(Spectrum_Count) as spectrum_count
 from apidbtuning.mspeptidesummary
 where sample in ( $$ms_assay$$ )
 group by source_id,gene_source_id, protocol_app_node_id
 having sum(spectrum_count) >= $$min_spectrum_count$$ 
 and ('all' = $$sample_vs_all$$ or count(distinct peptide_sequence) >= $$min_sequence_count$$ )
 )
-select gs.source_id, gs.gene_source_id,  
+select gs.source_id, gs.gene_source_id,  gs.project_id,
       count(*) as sum_sequence_count, count(distinct mps.peptide_sequence) as unique_sequence_count, 
       sum(Mps.Spectrum_Count) as sum_spectrum_count, count(distinct mps.protocol_app_node_id) as sample_count  
 from genesample gs, apidbtuning.mspeptidesummary mps
 where mps.protocol_app_node_id = gs.protocol_app_node_id
 and mps.source_id = gs.source_id
-group by gs.source_id,gs.gene_source_id
+group by gs.source_id,gs.gene_source_id, gs.project_id
 having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $$min_sequence_count$$
 )
             ]]>
@@ -1853,7 +1851,7 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
 
         <sql><![CDATA[
             with PTM AS(
-                SELECT DISTINCT ta.source_id
+                SELECT DISTINCT ta.source_id, ta.project_id
                 , ta.gene_source_id
                 , ms.modification_type
                 , ms.residue
@@ -1881,6 +1879,7 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
             )
             , results AS (
                 SELECT ptm.source_id
+                , ptm.project_id
                 , ptm.gene_source_id
                 , LISTAGG(ptm.residue || ':' || ptm.residue_location, ', ') WITHIN GROUP (ORDER BY ptm.residue_location) AS residues
                 , COUNT(ptm.residue) AS count
@@ -1891,12 +1890,11 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
             SELECT results.*
             , 10 AS wdk_weight
             , 'Y' AS matched_result
-            , '@PROJECT_ID@' AS project_id
             , LISTAGG (replace(replace(replace(mc.modification_type, '-', ' '), '_', ' '), 'binding site', 'ubiquitin binding site') || ':' || mc.count, ', ') WITHIN GROUP (ORDER BY mc.modification_type) AS modCounts
             FROM results
             , mod_counts mc
             WHERE mc.source_id = results.source_id
-            GROUP BY results.source_id, results.gene_source_id, results.residues, results.count
+            GROUP BY results.source_id, results.gene_source_id, results.project_id, results.residues, results.count
         ]]></sql>
     </sqlQuery>
 
@@ -2000,7 +1998,7 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
         <sql includeProjects="TriTrypDB,MicrosporidiaDB,PlasmoDB,CryptoDB,ToxoDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB">
             <![CDATA[
             SELECT gatr.source_id as source_id, 'Y' as matched_result,
-                  '@PROJECT_ID@' as project_id, gatr.gene_source_id,
+                  gatr.project_id, gatr.gene_source_id,
                   apidb.tab_to_string(set(cast(COLLECT(
                   fl.sequence_source_id || ': ' || trim(to_char(fl.start_min,'999,999,999')) || ' - ' || trim(to_char(fl.end_max,'999,999,999')) || decode(fl.is_reversed, 1, ' (-)', ' (+)')
                   )  AS apidb.varchartab)), '<br/>') as dynamic_location
@@ -2010,14 +2008,13 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
               AND fl.NA_FEATURE_ID = gatr.NA_FEATURE_ID
               AND fl.end_max >= REGEXP_REPLACE('$$start_point$$', ',| ','')
               AND (fl.start_min <= REGEXP_REPLACE('$$end_point$$', ',| ','') OR REGEXP_REPLACE('$$end_point$$', ',| ','') = 0)
-              AND gatr.project_id  = '@PROJECT_ID@'
             GROUP BY gatr.source_id,gatr.gene_source_id
            ]]>
        </sql>
 
         <sql includeProjects="TrichDB,AmoebaDB,SchistoDB,UniDB,InitDB">
             <![CDATA[
-            SELECT distinct gatr.source_id, gatr.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+            SELECT distinct gatr.source_id, gatr.gene_source_id, gatr.project_id, 'Y' as matched_result,
               fl.sequence_source_id || ': ' || trim(to_char(fl.start_min,'999,999,999')) || ' - ' || trim(to_char(fl.end_max,'999,999,999')) || decode(fl.is_reversed, 1, ' (-)', ' (+)') as dynamic_location
             FROM apidb.FeatureLocation fl, ApidbTuning.TranscriptAttributes gatr
             WHERE lower(gatr.sequence_id) = lower($$sequenceId$$)
@@ -2026,7 +2023,6 @@ having 'sample' = $$sample_vs_all$$ OR count(distinct mps.peptide_sequence) >= $
               AND fl.end_max >= REGEXP_REPLACE('$$start_point$$', ',| ', '')
               AND (fl.start_min <= REGEXP_REPLACE('$$end_point$$', ',| ', '')
                    OR REGEXP_REPLACE('$$end_point$$', ',| ', '') = 0)
-              AND gatr.project_id  = '@PROJECT_ID@'
            ]]>
        </sql>
     </sqlQuery>
@@ -2118,14 +2114,14 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
                          minus
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, mm.source_id, mm.gene_source_id,  '@PROJECT_ID@', 'Y',
+                       rownum + the_max, 0, mm.source_id, mm.gene_source_id,  mm.project_id, 'Y',
                        wct.cds_snp_density, wct.chip_dn_ds_ratio, wct.chip_num_synonymous,
                        wct.chip_num_non_synonymous, wct.num_noncoding, wct.num_nonsense, wct.chip_total_snps
                 from row_offset ro, mismatches mm, ##WDK_CACHE_TABLE## wct
@@ -2227,14 +2223,14 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
                          minus
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, mm.source_id, mm.gene_source_id,  '@PROJECT_ID@', 'Y',
+                       rownum + the_max, 0, mm.source_id, mm.gene_source_id,  mm.project_id, 'Y',
                        wct.cds_snp_density, wct.ngs_dn_ds_ratio, wct.ngs_num_synonymous,
                        wct.ngs_num_non_synonymous, wct.num_noncoding, wct.num_nonsense, wct.ngs_total_snps
                 from row_offset ro, mismatches mm, ##WDK_CACHE_TABLE## wct
@@ -2306,7 +2302,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
             <![CDATA[
             SELECT ta.gene_source_id, ta.source_id, 
             1 * c.percentage as p_coil, 1 * e.percentage as p_strand, 1 * h.percentage as p_helix,
-            'Y' as matched_result, '@PROJECT_ID@' as project_id
+            'Y' as matched_result, ta.project_id
             FROM dots.SecondaryStructure ss, dots.SecondaryStructureCall c,
                  dots.SecondaryStructureCall e, dots.SecondaryStructureCall h, 
                  ApidbTuning.TranscriptAttributes ta
@@ -2377,7 +2373,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
         <column name="e_value"/>
         <sql>
             <![CDATA[
-            SELECT ga.source_id, ga.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id,
+            SELECT ga.source_id, ga.gene_source_id, 'Y' as matched_result, ga.project_id,
                    to_char(avg(df.e_value),'9.9EEEE') as e_value
             FROM dots.DomainFeature df, ApidbTuning.TranscriptAttributes ga,
                  dots.DbRefAaFeature draf, sres.DbRef dr
@@ -2441,7 +2437,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
 
        <sql>
             <![CDATA[
-            SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, '@PROJECT_ID@' as project_id, 
+            SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id, 
               count(*) as number_of_ests
             FROM ApidbTuning.EstAlignmentGeneSummary s, ApidbTuning.EstAttributes e,
               ApidbTuning.TranscriptAttributes ta, apidb.organism o
@@ -2456,7 +2452,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
             AND e.source_id = s.accession
             AND e.best_alignment_count <= $$max_number_best_alignments$$
             AND NOT (e.project_id = 'CryptoDB' AND s.accession = 'AA555437')
-            GROUP by ta.source_id, ta.gene_source_id
+            GROUP by ta.source_id, ta.gene_source_id, ta.project_id
             HAVING count(*) >= $$min_number_est_aligned$$
             ]]>
           </sql>
@@ -2514,10 +2510,9 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
         <sql>
             <![CDATA[
                 SELECT source_id AS source_id, 'Y' as matched_result,
-                       '@PROJECT_ID@' as project_id
+                       ga.project_id
                 FROM ApidbTuning.GeneAttributes
                 WHERE taxon_id IN ($$gff_organism$$)
-                  AND project_id = '@PROJECT_ID@'
             ]]>
         </sql>
     </sqlQuery>
@@ -2576,7 +2571,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
         <sql>
             <![CDATA[
 SELECT q.*, 'Y' as matched_result FROM
-               (SELECT pf.gene_source_id, pf.source_id, '@PROJECT_ID@' as project_id, pf.gene_source_id as interact_source_id, bait_start, bait_end, prey_start, prey_end,
+               (SELECT pf.gene_source_id, pf.source_id, pf.project_id, pf.gene_source_id as interact_source_id, bait_start, bait_end, prey_start, prey_end,
                        times_observed, number_of_searches,
                        (select distinct prey_number_of_baits
                          from apidb.geneinteraction igi
@@ -2591,7 +2586,7 @@ SELECT q.*, 'Y' as matched_result FROM
                   AND bf.gene_na_feature_id = gi.bait_gene_feature_id
                   AND gi.prey_gene_feature_id = pf.gene_na_feature_id
                 UNION
-                SELECT bf.gene_source_id, bf.source_id, '@PROJECT_ID@' as project_id, bf.gene_source_id as interact_source_id, bait_start, bait_end, prey_start, prey_end,
+                SELECT bf.gene_source_id, bf.source_id, bf.project_id, bf.gene_source_id as interact_source_id, bait_start, bait_end, prey_start, prey_end,
                        times_observed, number_of_searches, prey_number_of_baits,
                        (select distinct bait_number_of_preys
                          from apidb.geneinteraction igi
@@ -2658,7 +2653,7 @@ SELECT q.*, 'Y' as matched_result FROM
         <sql>
             <![CDATA[
 	    SELECT ta.gene_source_id, ta.source_id, 'Y' as matched_result,
-                   '@PROJECT_ID@' as project_id,
+                   ta.project_id,
                    max(round(profile_min_max.max_value, 1)) as max_percentile_chosen,
                    min(round(profile_min_max.min_value, 1)) as min_percentile_chosen
             FROM ( SELECT res.na_feature_id, res.protocol_app_node_id  
@@ -2682,7 +2677,7 @@ SELECT q.*, 'Y' as matched_result FROM
 	    WHERE ta.gene_na_feature_id = PROFILE.na_feature_id
 	    AND ta.gene_na_feature_id = profile_min_max.na_feature_id
 	    AND ( 'no' = $$protein_coding_only$$ OR ta.gene_type = 'protein coding' )
-	    GROUP BY ta.gene_source_id,ta.source_id
+	    GROUP BY ta.gene_source_id,ta.source_id, ta.project_id
 	    HAVING 'any' = $$any_or_all$$ OR count(*) = (SELECT count(*) FROM study.protocolappnode WHERE protocol_app_node_id IN ( $$samples_percentile_generic$$ ))
             ]]>
           </sql>
@@ -2797,8 +2792,8 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
         <column name="lod_score"/>
       <sql>
           <![CDATA[
-           SELECT gene_source_id,source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result, max(lod_score) as lod_score
-           FROM   (SELECT  distinct ga.source_id, ga.gene_source_id,
+           SELECT gene_source_id,source_id, project_id, 'Y' as matched_result, max(lod_score) as lod_score
+           FROM   (SELECT  distinct ga.source_id, ga.gene_source_id, ga.project_id,
                           CASE WHEN (gls.LOD_SCORE_EXP = 0) THEN to_char(gls.LOD_SCORE_MANT)
                                ELSE to_char(to_binary_double(gls.LOD_SCORE_MANT|| 'e' || gls.LOD_SCORE_EXP),'99.99EEEE') 
                           END as lod_score
@@ -2812,7 +2807,7 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
                    AND cef.name = gls.haplotype_block_name 
                    AND gls.na_feature_id = ga.gene_na_feature_id
                    AND to_binary_double(gls.LOD_SCORE_MANT || 'e' || gls.LOD_SCORE_EXP) >= $$lod_score$$)
-           GROUP BY gene_source_id,source_id
+           GROUP BY gene_source_id,source_id, project_id
           ]]>
       </sql>
 
@@ -3149,7 +3144,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
       <sql>
       <![CDATA[
       select ga.source_id, ga.gene_source_id, 'Y' as matched_result,
-             '@PROJECT_ID@' as project_id,
+             ga.project_id,
              round((CASE WHEN one.average / CASE WHEN two.average < &&shift&& THEN &&shift&& ELSE two.average END >= 1
                          THEN one.average / CASE WHEN two.average < &&shift&& THEN &&shift&& ELSE two.average END
                          ELSE -1 * (two.average / CASE WHEN one.average < &&shift&& THEN &&shift&& ELSE one.average END)
@@ -3313,7 +3308,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
       <sqlParamValue includeProjects="PlasmoDB" name="function">'log2'</sqlParamValue>
       <sql>
       <![CDATA[
-select ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+select ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
        round(case 
                when (avg_comp / avg_ref) >= 1
                  then (avg_comp / avg_ref)
@@ -3421,7 +3416,7 @@ where one.na_feature_id = ta.gene_na_feature_id
 
       <sql>
         <![CDATA[
-          select ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+          select ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                  round(case 
                          when (avg_comp / avg_ref) >= 1
                            then (avg_comp / avg_ref)
@@ -3502,7 +3497,7 @@ where one.na_feature_id = ta.gene_na_feature_id
 
       <sql>
         <![CDATA[
-          select ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+          select ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                  round(case 
                          when (avg_comp / avg_ref) >= 1
                            then (avg_comp / avg_ref)
@@ -3678,14 +3673,14 @@ where one.na_feature_id = ta.gene_na_feature_id
                      row_offset
                      as (select max(wdk_row_id) as the_max from matches),
                      mismatches
-                     as (  select source_id, gene_source_id
+                     as (  select source_id, gene_source_id, project_id
                            from apidbTuning.transcriptAttributes
                            where gene_source_id in (select gene_source_id from matches)
                          minus
-                           select source_id, gene_source_id
+                           select source_id, gene_source_id, project_id
                            from matches)
                 select ##WDK_CACHE_INSTANCE_ID##,
-                       rownum + the_max, 0, source_id, gene_source_id,  '@PROJECT_ID@', 'Y'
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'Y'
                 from row_offset, mismatches
              ]]>
           </sql>
@@ -3945,7 +3940,7 @@ where one.na_feature_id = ta.gene_na_feature_id
       <sql>
       <![CDATA[
 	 SELECT ta.gene_source_id, ta.source_id, 'Y' as matched_result,
-             '@PROJECT_ID@' as project_id,
+             ta.project_id,
              round(max(expr.fold_difference), 2) as fold_difference
 	  FROM (
             select res.na_feature_id as gene_feature_id,
@@ -3973,7 +3968,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         where ( $$protein_coding_only$$ = 'no' OR ta.gene_type = $$protein_coding_only$$ )
         and $$regulated_dir$$ (expr.fold_difference)   >=  $$fold_difference$$ 
         and ta.gene_na_feature_id = expr.gene_feature_id
-        group by ta.gene_source_id, ta.source_id
+        group by ta.gene_source_id, ta.source_id, ta.project_id
       ]]>
       </sql>
 
@@ -4014,7 +4009,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="fold_change" />
        <sql>
             <![CDATA[
-         SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+         SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                  round(r.fold_change, 2) as fold_change,
                  round(r.confidence, 2) as confidence
           from ApidbTuning.TranscriptAttributes ta
@@ -4066,7 +4061,7 @@ where one.na_feature_id = ta.gene_na_feature_id
        <column name="fold_change" />
        <sql>
             <![CDATA[
-         SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+         SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                  round(r.fold_change, 2) as fold_change,
                  TO_CHAR( nvl(r.adj_p_value, r.p_value), '99.99EEEE') as pvalue
           from ApidbTuning.TranscriptAttributes ta
@@ -4194,7 +4189,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <sql>
             <![CDATA[
               SELECT DISTINCT s.source_id as  gene_source_id, 'Y' as matched_result,
-                ta.source_id, '@PROJECT_ID@' as project_id
+                ta.source_id, ta.project_id
               FROM ApidbTuning.Subcellular s, ApidbTuning.TranscriptAttributes ta
               WHERE s.source_id = ta.gene_source_id
               AND s.targetting_domain = $$localization$$
@@ -4325,7 +4320,7 @@ where one.na_feature_id = ta.gene_na_feature_id
 
         <sql includeProjects="PlasmoDB">
             <![CDATA[
-               SELECT DISTINCT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
+               SELECT DISTINCT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result
                FROM ApidbTuning.TranscriptAttributes ta,
                 dots.DbRefAaFeature df, sres.DbRef dbr, dots.TranslatedAAFeature taf,
                 sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr                
@@ -4341,7 +4336,7 @@ where one.na_feature_id = ta.gene_na_feature_id
        </sql>
         <sql includeProjects="CryptoDB,ToxoDB">
             <![CDATA[
-               SELECT DISTINCT gf.source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
+               SELECT DISTINCT gf.source_id, gf.project_id, 'Y' as matched_result
                FROM ApidbTuning.GeneAttributes gf,
                 dots.DbRefNaFeature df,
                 sres.DbRef dbr, sres.ExternalDatabaseRelease edr,
@@ -4384,14 +4379,14 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="exportpred_score"/>
         <sql>
             <![CDATA[
-              SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+              SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                   max(df.score) as exportpred_score
                 FROM dots.DomainFeature df, ApidbTuning.TranscriptAttributes ta
                 WHERE  ta.taxon_id in ($$organism$$)
                    AND ta.aa_sequence_id = df.aa_sequence_id
                    AND df.algorithm_name = 'exportpred'
                    AND df.score >= $$min_exportpred_score$$
-                   GROUP BY ta.source_id, ta.gene_source_id
+                   GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
            ]]>
        </sql>
     </sqlQuery>
@@ -4423,7 +4418,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="dist_centromere"/>
         <sql>
             <![CDATA[
-                SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+                SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                 TRIM(TO_CHAR(tcd.centromere_distance,'9,999,999')) as dist_centromere
                 FROM ApidbTuning.TranscriptCenDistance tcd, ApidbTuning.TranscriptAttributes ta
                 WHERE ta.organism = $$org_with_centromere_genes$$
@@ -4463,7 +4458,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="dist_telomere"/>
         <sql>
             <![CDATA[
-            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+            SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
             trim(to_char(LEAST(s.length - l.end_max,l.start_min),'999,999')) as dist_telomere
 	    FROM ApidbTuning.TranscriptAttributes ta, apidb.FeatureLocation l, dots.NaSequence s
 	    WHERE ta.organism = $$organismSinglePick$$
@@ -4507,7 +4502,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-            SELECT distinct gf.source_id, gf.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
+            SELECT distinct gf.source_id, gf.gene_source_id, gf.project_id, 'Y' as matched_result
             FROM ApidbTuning.TranscriptAttributes gf, dots.NaSequence ens
             WHERE ens.source_id IN ($$nonnuclear_sequence$$)
               AND gf.organism = $$org_with_nonnuclear_genes$$
@@ -4542,7 +4537,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-              select  DISTINCT ta.gene_source_id, ta.source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
+              select  DISTINCT ta.gene_source_id, ta.source_id, ta.project_id, 'Y' as matched_result
               from  dots.DbRefaaFeature drnf,  sres.DbRef dr, dots.aafeature paaf,
                 sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,ApidbTuning.TranscriptAttributes ta
               where drnf.db_ref_id = dr.db_ref_id
@@ -4578,7 +4573,7 @@ where one.na_feature_id = ta.gene_na_feature_id
         <column name="matched_result"/>
         <sql>
             <![CDATA[
-            SELECT ta.source_id, ta.gene_source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
+            SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
                    min(to_binary_double(ps.pvalue_mant || 'e' || ps.pvalue_exp)) pvalue
             FROM ApidbTuning.PdbSimilarity ps, ApidbTuning.TranscriptAttributes ta
             WHERE ps.pdb_taxon_id IN
@@ -4588,7 +4583,7 @@ where one.na_feature_id = ta.gene_na_feature_id
               AND ps.gene_taxon_id IN ($$organism$$)
               AND ps.pvalue_exp < $$pvalue_cutoff$$
               AND ps.source_id = ta.transcript_source_id
-            GROUP BY ta.source_id, ta.gene_source_id
+            GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
             ]]>
        </sql>
     </sqlQuery>
@@ -4769,7 +4764,7 @@ and this.protocol_app_node_id = stats.protocol_app_node_id
 -- MAIN START
 select ta.gene_source_id 
      , ta.source_id
-     , '@PROJECT_ID@' as project_id
+     , ta.project_id
      , 'Y' as matched_result
      , one.location as one_loc
      , t1.transcript_source_id as one_transcript_id
@@ -4838,7 +4833,7 @@ and ta.gene_source_id = one.source_id
         <column name="headlines"/>
         <sql>
             <![CDATA[
-            select ta.source_id, '@PROJECT_ID@' as project_id, ta.gene_source_id,
+            select ta.source_id, ta.project_id, ta.gene_source_id,
                    comm.comment_count, comm.min_comment_date, comm.max_comment_date, comm.headlines,
                   'Y' as matched_result
             from (select stable_id, count(*) as comment_count,
@@ -4846,7 +4841,7 @@ and ta.gene_source_id = one.source_id
                          to_char(max(comment_date), 'yyyy-Mon-dd hh24:mi:ss') as max_comment_date,
                          listagg(headline, ' | ') within group (order by comment_date desc) as headlines
                   from @COMMENT_SCHEMA@MappedComment@COMMENT_DBLINK@
-                  where project_name = '@PROJECT_ID@'
+                  where ('@PROJECT_ID@' = 'UniDB' OR project_name = '@PROJECT_ID@')
                     and is_visible = 1
                   group by stable_id
                  ) comm,
@@ -4882,7 +4877,7 @@ and ta.gene_source_id = one.source_id
         <sql>
             <![CDATA[
 SELECT ta.source_id, gene_source_id
-,'Y' as matched_result, '@PROJECT_ID@' AS project_id
+,'Y' as matched_result, ta.project_id
 , round(nfe.VALUE, 2) AS gvalue
 , CASE WHEN (nfe.categorical_value = 2) THEN 'High'
        WHEN (nfe.categorical_value = 1) THEN 'Medium'
@@ -4944,6 +4939,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             WITH transform AS (
                 SELECT DISTINCT ta.gene_source_id
                 , ta.source_id
+                , ta.project_id
                 , tp.ec_number_pathway as ec_pathway
                 , tp.ec_number_gene as ec_gene
                 FROM apidbtuning.transcriptattributes ta
@@ -4959,6 +4955,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             , pathwayAgg AS (
                 SELECT DISTINCT gene_source_id
                 , source_id
+                , project_id
                 , ec_gene
                 , listagg(ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
                 FROM transform
@@ -4968,20 +4965,21 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             , geneAgg AS (
                 SELECT DISTINCT gene_source_id
                 , source_id
+                , project_id
                 , ec_pathway
                 , listagg(ec_gene, ', ') within group (order by ec_gene) as ec_gene
                 FROM pathwayAgg
                 GROUP BY gene_source_id, source_id, ec_pathway
             )
 
-            SELECT DISTINCT '@PROJECT_ID@' as project_id
+            SELECT DISTINCT project_id
             , gene_source_id
             , source_id
             , 'Y' as matched_result
             , listagg(ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
             , listagg(ec_gene, ', ') within group (order by ec_pathway) as ec_gene
             FROM geneAgg
-            GROUP BY '@PROJECT_ID@', gene_source_id, source_id, 'Y'
+            GROUP BY project_id, gene_source_id, source_id, 'Y'
           ]]>
       </sql>
     </sqlQuery>
@@ -5006,7 +5004,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             SELECT DISTINCT ta.source_id
             , ta.gene_source_id
             , 'Y' as matched_result
-            , '@PROJECT_ID@' as project_id
+            , ta.project_id
             FROM apidbtuning.transcriptattributes ta
             , apidbtuning.transcriptpathway tp
             , apidbtuning.pathwaycompounds pc
@@ -5040,7 +5038,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
           <![CDATA[
             SELECT DISTINCT ta.source_id
             , ta.gene_source_id
-            , '@PROJECT_ID@' as project_id
+            , ta.project_id
             , 'Y' as matched_result
             , max(ps.wdk_weight) as wdk_weight
             FROM apidbtuning.transcriptpathway tp
@@ -5057,7 +5055,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             AND tp.ec_number_pathway = pr.enzyme
             AND ta.gene_source_id = tp.gene_source_id
             AND ta.taxon_id in ($$organism$$)
-            GROUP BY ta.source_id, ta.gene_source_id
+            GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
           ]]>
       </sql>
     </sqlQuery>
@@ -5080,7 +5078,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             SELECT DISTINCT ta.gene_source_id
             , ta.source_id
             , 'Y' as matched_result
-            , '@PROJECT_ID@' as project_id
+            , ta.project_id
             , max (ds.wdk_weight) as wdk_weight
             FROM apidbtuning.pathwaycompounds pc
             , apidbtuning.pathwayreactions pr
@@ -5098,7 +5096,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
             AND tp.exact_match >= $$exact_match_only$$
             AND ta.gene_source_id = tp.gene_source_id
             AND ta.taxon_id in ($$organism$$)
-            GROUP BY ta.gene_source_id, ta.source_id
+            GROUP BY ta.gene_source_id, ta.source_id, ta.project_id
           ]]>
       </sql>
     </sqlQuery>
@@ -5486,7 +5484,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <column name="source_id"/>
         <sql>
             <![CDATA[
-                SELECT ga.source_id, '@PROJECT_ID@' as project_id
+                SELECT ga.source_id, ga.project_id
                 FROM ApidbTuning.GeneAttributes ga
                 WHERE ga.taxon_id in ($$organism$$)
                 ORDER BY ga.source_id
