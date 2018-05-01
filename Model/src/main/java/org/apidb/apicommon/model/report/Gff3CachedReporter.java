@@ -19,6 +19,7 @@ import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.PagedAnswerReporter;
+import org.gusdb.wdk.model.report.ReporterRef;
 import org.gusdb.wdk.model.report.StandardConfig;
 import org.json.JSONObject;
 
@@ -64,21 +65,16 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     super(answerValue);
   }
 
-  /**
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.Reporter#setProperties(java.util.Map)
-   */
   @Override
-  public void setProperties(Map<String, String> properties) throws WdkModelException {
-    super.setProperties(properties);
+  public void setProperties(ReporterRef reporterRef) throws WdkModelException {
+    super.setProperties(reporterRef);
 
     // check required properties
-    tableCache = properties.get(PROPERTY_TABLE_CACHE);
-    recordIdColumn = properties.get(PROPERTY_RECORD_ID_COLUMN);
-    recordName = properties.get(PROPERTY_GFF_RECORD_NAME);
-    proteinName = properties.get(PROPERTY_GFF_PROTEIN_NAME);
-    transcriptName = properties.get(PROPERTY_GFF_TRANSCRIPT_NAME);
+    tableCache = _properties.get(PROPERTY_TABLE_CACHE);
+    recordIdColumn = _properties.get(PROPERTY_RECORD_ID_COLUMN);
+    recordName = _properties.get(PROPERTY_GFF_RECORD_NAME);
+    proteinName = _properties.get(PROPERTY_GFF_PROTEIN_NAME);
+    transcriptName = _properties.get(PROPERTY_GFF_TRANSCRIPT_NAME);
 
     if (tableCache == null || tableCache.length() == 0)
       throw new WdkModelException("The required property for reporter " + this.getClass().getName() + ", " +
