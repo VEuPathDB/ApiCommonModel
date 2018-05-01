@@ -190,7 +190,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
-            throws WdkModelException, WdkUserException {
+            throws WdkUserException {
         Question question = answerValue.getQuestion();
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();

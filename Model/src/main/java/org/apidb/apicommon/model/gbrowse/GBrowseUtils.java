@@ -40,7 +40,7 @@ public class GBrowseUtils {
   private static final String TRACK_SOURCE_PATH_MACRO = "$$TRACK_SOURCE_PATH_MACROS$$";
   private static final String TRACK_NAME_MACRO = "$$TRACK_NAME_MACROS$$";
   private static final String GLOBAL_READ_WRITE_PERMS = "rw-rw-rw-";
-  private static final String GLOBAL_READ_WRITE_EXECUTE_PERMS = "rwxrwxrwx";
+  //private static final String GLOBAL_READ_WRITE_EXECUTE_PERMS = "rwxrwxrwx";
   private static final String TOMCAT_USER = "tomcat";
 
   private static final String SELECT_SESSION_DATA_SQL =
