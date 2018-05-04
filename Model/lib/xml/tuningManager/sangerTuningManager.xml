@@ -1,16 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tuningConfig>
 
-  <tuningTable name="OldAnnotationChange" alwaysUpdate="true">
-    <ancillaryTable name="OldReviewedComment"/>
-    <program commandLine="buildOldAnnotationChangeTT"/>
+  <tuningTable name="SangerProducts" alwaysUpdate="true">
+    <ancillaryTable name="GenesWithChanges"/>
+    <ancillaryTable name="SangerUcTags"/>
+
+    <program commandLine="buildSangerProductsTT"/>
   </tuningTable>
 
-  <tuningTable name="OldChangedGeneProduct" alwaysUpdate="true">
-    <internalDependency name="OldAnnotationChange"/>
+  <tuningTable name="ReviewedComment" alwaysUpdate="true">
+    <internalDependency name="SangerProducts"/>
     <sql>
       <![CDATA[
-        create table OldChangedGeneProduct&1 nologging as
+        create table ReviewedComment&1 nologging as
+        select *
+        from (select distinct geneid as gene,
+                              to_number(replace(tag, 'eupathdb_uc=', '')) as comment_id
+              from SangerUcTags)
+        where gene in (select id from apidbTuning.GeneId)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index revcom_ix&1 on ReviewedComment&1 (gene, comment_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="AnnotationChange" alwaysUpdate="true">
+    <internalDependency name="SangerProducts"/>
+    <sql>
+      <![CDATA[
+        create table AnnotationChange&1 nologging as
+        select gwc.geneid as gene, gwc.mrnaid, gwc.annotationvalue as change,
+               cast(null as date) as change_date,
+               sp.genename as name, sp.product
+        from GenesWithChanges gwc,
+             (select mrnaid, geneid, genename, product,
+                     row_number() over (partition by mrnaid order by rankalternative) as ranking
+              from SangerProducts) sp
+        where gwc.mrnaid = sp.mrnaid(+)
+          and sp.ranking = 1
+          and gwc.geneid in (select id from apidbTuning.GeneId)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index annch_ix&1 on AnnotationChange&1 (gene)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="ChangedGeneProduct" alwaysUpdate="true">
+    <internalDependency name="AnnotationChange"/>
+    <sql>
+      <![CDATA[
+        create table ChangedGeneProduct&1 nologging as
         select distinct *
         from (select ga.source_id as gene, 
                      case when ga.product != ac.product then ac.product else null end as product,
@@ -19,7 +64,7 @@
                    (select gene,
                            max(product) keep (dense_rank last order by change_date) as product,
                            max(name) keep (dense_rank last order by change_date) as name
-                    from OldAnnotationChange ac
+                    from AnnotationChange ac
                     where gene is not null
                     group by gene) ac
               where ac.gene = ga.source_id)
@@ -28,13 +73,9 @@
     </sql>
     <sql>
       <![CDATA[
-        create unique index cgp_ix&1 on OldChangedGeneProduct&1 (gene)
+        create unique index cgp_ix&1 on ChangedGeneProduct&1 (gene)
       ]]>
     </sql>
-  </tuningTable>
-
-  <tuningTable name="OldPlasmogem" alwaysUpdate="true">
-    <program commandLine="buildOldPlasmogemTT"/>
   </tuningTable>
 
 </tuningConfig>
