@@ -1,0 +1,180 @@
+import datetime
+import json
+import sys
+import paths
+
+from event import Event
+
+
+class Dataset:
+    """
+    This is the central object of the irods system and is found as a collection under the user's workspace under the
+    datasets subcollection.  The structure is as follows:
+        <user_id>
+            datasets
+                <dataset_id>
+                    dataset.json
+                    meta.json
+                    datafiles
+                        <data file 1>
+                        <data file 2>
+                        ...
+    """
+
+    def __init__(self, **kwargs):
+        """
+        A dataset is discoverable by its owner and dataset ids as those combine to identify the path to the dataset
+        collection.  So they are the minimum needed to create a Dataset object.  Doing a minimal creation since some
+        dataset properties (e.g., related events) can take time to generate and may not always be required for display.
+        :param dashboard:
+        :param owner_id: wdk id of owner
+        :param dataset_id: id of dataset represented by this object
+        """
+        self.dashboard = kwargs.get("dashboard")
+        self.workspace = self.dashboard.workspace
+        self.dataset_id = kwargs.get("dataset_id")
+        self.owner_id = kwargs.get("owner_id", None)
+        if not self.owner_id:
+            self.owner_id = self.get_dataset_owner(self.dataset_id)
+        self.owner = self.dashboard.find_user_by_id(self.owner_id)
+        self.parse_metadata_json()
+        self.parse_dataset_json()
+        self.events = []
+        self.shares = {}
+
+    def get_dataset_owner(self, dataset_id):
+        """
+        The dataset id is not sufficient information to locate a dataset collection directly.  The path to the
+        dataset collection is formed with both the owner id and the dataset id.  This method indirectly
+        determines the id of the dataset owner.
+        :param dataset_id the id of the dataset
+        :return: wdk id of the dataset owner.  Otherwise the dataset does not exist and the proceedure is
+        terminated with a message to that effect.
+        """
+        user_ids = self.workspace.get_coll_names(paths.USERS_PATH)
+        for user_id in user_ids:
+            datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_id)
+            dataset_coll_names = self.workspace.get_coll_names(datasets_coll_path)
+            for dataset_coll_name in dataset_coll_names:
+                if dataset_coll_name == dataset_id:
+                    return user_id
+        sys.exit("The dataset id given (i.e., %s) belongs to no current dataset.  It may have been deleted previously."
+              % dataset_id)
+
+
+    def parse_dataset_json(self):
+        """
+        Populates the dataset object with information gathered from the dataset's dataset.json data object (i.e.,
+        projects, type, create date, total size, dependency information and datafile information.
+        """
+        dataset_json_path = paths.USER_DATASET_DATASET_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)
+        dataset_json_data = self.workspace.get_dataobj_data(dataset_json_path)
+        dataset_json = json.loads(dataset_json_data)
+        self.projects = dataset_json["projects"]
+        self.created = dataset_json["created"]
+        self.type = dataset_json["type"]
+        self.size = dataset_json["size"]
+        self.projects = dataset_json["projects"]
+        self.dependencies = dataset_json["dependencies"]
+        self.datafiles = dataset_json["dataFiles"]
+
+    def parse_metadata_json(self):
+        """
+        Populates the dataset object with information gathered from the dataset's meta.json data object (i.e.,
+        dataset name, summary and description).
+        :return:
+        """
+        metadata_json_path = paths.USER_DATASET_METADATA_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)
+        metadata_json_data = self.workspace.get_dataobj_data(metadata_json_path)
+        metadata_json = json.loads(metadata_json_data)
+        self.name = metadata_json["name"]
+        self.summary = metadata_json["summary"]
+        self.description = metadata_json["description"]
+
+    def get_shares(self):
+        """
+        Find a list of users (wdk ids), if any, with whom the given dataset is shared.  The data objects within a
+        dataset's sharedWith collection are devoid of content.  The share recipient's wdk id is the data object's
+        name.
+        """
+        dataset_shared_with_coll = paths.USER_DATASET_SHARED_WITH_COLLECTION_TEMPLATE\
+            .format(self.owner_id, self.dataset_id)
+        recipient_ids = self.workspace.get_dataobj_names(dataset_shared_with_coll)
+        for recipient_id in recipient_ids:
+            self.shares[recipient_id] = {"recipient" : self.dashboard.find_user_by_id(recipient_id), "valid" : self.is_share_valid(recipient_id)}
+
+    def is_share_valid(self, recipient_id):
+        """
+        An iRODS share has two components.  The owner identifies the share recipients in a sharedWith collection under
+        the collection for the dataset being shared and each of those recipients have an externalDataset collection
+        under their user collection that identifies each dataset shared with them and the dataset's owner.  Both
+        components need to be in place for a dataset to be properly shared.  This method confirms that a sharedWith
+        recipient has a matching externalDatasets collection component.
+        :param recipient_id: wdk id of the share recipient
+        :return: True if the share exists in the recipient's externalDatasets collection and False otherwise
+        """
+        return self.workspace.is_external_dataset_dataobj_present(self.owner_id, self.dataset_id, recipient_id)
+
+    def generate_event_list(self):
+        """
+        Create a list of events containing event information for this dataset.  Since identifying which event data
+        objects correspond to which dataset requires reading each event data object, we cut the search down by looking
+        only at those data objects created at or following the time at which the user dataset was created.  Then we
+        examine each returned and only retain those having a dataset_id matching that of this user dataset.  This could
+        be done more efficiently if the dataset_id corresponding to an event was also kept as iRODS metadata.
+        """
+        # The user dataset created time is in millisec but iRODS handles timestamps in sec
+        dataset_create_time = datetime.datetime.fromtimestamp(int(self.created) / 1000)
+        event_dataobj_names = self.workspace.find_event_dataobj_names_created_since(dataset_create_time)
+        for event_dataobj_name in event_dataobj_names:
+            event_path = paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_dataobj_name)
+            event = Event(self.workspace.get_dataobj_data(event_path))
+            if event.dataset_id == self.dataset_id:
+                self.events.append(event)
+        self.events.sort(key = lambda x: x.event_id)
+
+    def short_display(self):
+        """
+        Provides a more abbreviated report of a user dataset based upon content available in the meta.json and
+        dataset.json objects only.
+        """
+        print("\nDataset: {} - ({})".format(self.name, self.dataset_id))
+        print("Created {}"
+              .format(datetime.datetime.fromtimestamp(int(self.created) / 1000).strftime('%Y-%m-%d %H:%M:%S')))
+        print("Total Size {} bytes".format(self.size))
+
+    def display(self):
+        """
+        Provides a full featured report of a user dataset.  The Dataset object is fully populated only prior to display
+        since some of those processes could be lengthy depending on system usage.
+        """
+        self.get_shares()
+        self.generate_event_list()
+        print("\nMetadata:")
+        print("Dataset: {} - ({})".format(self.name, self.dataset_id))
+        print("Summary: {}".format(self.summary))
+        print("Description: {}".format(self.description))
+        print("Owner {} ({}) - {}".format(self.owner.full_name, self.owner.email, self.owner_id))
+        print("Created {}".format(datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S')))
+        print("Type {} (v{})".format(self.type["name"], self.type["version"]))
+        print("Total Size {} bytes".format(self.size))
+        print("Projects {}".format(",".join(self.projects)))
+        print("\nDependencies:")
+        for dependency in self.dependencies:
+            print("Name: {}, Version: {}, Identifier: {}"
+                  .format(dependency["resourceDisplayName"],
+                          dependency["resourceVersion"],
+                          dependency["resourceIdentifier"]))
+        print("\nData Files:")
+        for datafile in self.datafiles:
+            print("Name: {}, Size: {} bytes".format(datafile["name"],datafile["size"]))
+        print("\nShared With:")
+        for recipient_id in self.shares.keys():
+            print("recipient {} ({}) - {} - validated: {}".
+                  format(self.shares[recipient_id]['recipient'].full_name,
+                         self.shares[recipient_id]['recipient'].email,
+                         recipient_id,
+                         self.shares[recipient_id]['valid']))
+        print("\nEvent History:")
+        for event in self.events:
+            event.display(self.dashboard)
