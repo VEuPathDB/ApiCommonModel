@@ -1,11 +1,14 @@
 import os
 import json
 from account import Account
+from manager import Manager
 from workspace import Workspace
 from user import User
 from dataset import Dataset
 import paths
 import sys
+from irods.column import Criterion
+from irods.models import Collection, DataObject
 
 class Dashboard:
     """
@@ -13,6 +16,7 @@ class Dashboard:
     and databases and houses the reports that the software offers.
     """
     CONFIGURATION_PATH = "/../../../configuration/config.json"
+    IRODS_ID = "irods_id"
 
     def __init__(self):
         """
@@ -32,7 +36,7 @@ class Dashboard:
             str(config_json["account_db"]["password"]) + "@" + \
             str(config_json["account_db"]["name"])
         self.account = Account(self)
-        self.workspace = Workspace(self)
+        self.manager = Manager(self)
         self.users = self.create_user_cache()
 
     def create_user_cache(self):
@@ -44,7 +48,7 @@ class Dashboard:
         :return: list of User objects encompassing current iRODS users.
         """
         users = []
-        user_ids = self.workspace.get_coll_names(paths.USERS_PATH)
+        user_ids = self.manager.get_coll_names(paths.USERS_PATH)
         results = self.account.get_users_by_user_ids(user_ids)
         for result in results:
             user = User(self, str(result[0]), str(result[1]), str(result[2]))
@@ -69,12 +73,16 @@ class Dashboard:
         user = [user for user in self.users if user.email == email]
         return user[0] if user else sys.exit("No user can be found with the email %s" % email)
 
+    def workspace_report(self, *args):
+        workspace = Workspace(dashboard = self)
+        workspace.display()
+
     def all_datasets_report(self, *args):
         """
         Reports the list of users and user datasets without additional annotation.
         :param args: no additional args are needed here
         """
-        self.workspace.display_all_dataset_colls()
+        self.manager.display_all_dataset_colls()
 
     def user_report(self, args):
         """

@@ -31,7 +31,7 @@ class Dataset:
         :param dataset_id: id of dataset represented by this object
         """
         self.dashboard = kwargs.get("dashboard")
-        self.workspace = self.dashboard.workspace
+        self.manager = self.dashboard.manager
         self.dataset_id = kwargs.get("dataset_id")
         self.owner_id = kwargs.get("owner_id", None)
         if not self.owner_id:
@@ -51,10 +51,10 @@ class Dataset:
         :return: wdk id of the dataset owner.  Otherwise the dataset does not exist and the proceedure is
         terminated with a message to that effect.
         """
-        user_ids = self.workspace.get_coll_names(paths.USERS_PATH)
+        user_ids = self.manager.get_coll_names(paths.USERS_PATH)
         for user_id in user_ids:
             datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_id)
-            dataset_coll_names = self.workspace.get_coll_names(datasets_coll_path)
+            dataset_coll_names = self.manager.get_coll_names(datasets_coll_path)
             for dataset_coll_name in dataset_coll_names:
                 if dataset_coll_name == dataset_id:
                     return user_id
@@ -68,7 +68,7 @@ class Dataset:
         projects, type, create date, total size, dependency information and datafile information.
         """
         dataset_json_path = paths.USER_DATASET_DATASET_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)
-        dataset_json_data = self.workspace.get_dataobj_data(dataset_json_path)
+        dataset_json_data = self.manager.get_dataobj_data(dataset_json_path)
         dataset_json = json.loads(dataset_json_data)
         self.projects = dataset_json["projects"]
         self.created = dataset_json["created"]
@@ -85,7 +85,7 @@ class Dataset:
         :return:
         """
         metadata_json_path = paths.USER_DATASET_METADATA_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)
-        metadata_json_data = self.workspace.get_dataobj_data(metadata_json_path)
+        metadata_json_data = self.manager.get_dataobj_data(metadata_json_path)
         metadata_json = json.loads(metadata_json_data)
         self.name = metadata_json["name"]
         self.summary = metadata_json["summary"]
@@ -99,7 +99,7 @@ class Dataset:
         """
         dataset_shared_with_coll = paths.USER_DATASET_SHARED_WITH_COLLECTION_TEMPLATE\
             .format(self.owner_id, self.dataset_id)
-        recipient_ids = self.workspace.get_dataobj_names(dataset_shared_with_coll)
+        recipient_ids = self.manager.get_dataobj_names(dataset_shared_with_coll)
         for recipient_id in recipient_ids:
             self.shares[recipient_id] = {"recipient" : self.dashboard.find_user_by_id(recipient_id), "valid" : self.is_share_valid(recipient_id)}
 
@@ -113,7 +113,7 @@ class Dataset:
         :param recipient_id: wdk id of the share recipient
         :return: True if the share exists in the recipient's externalDatasets collection and False otherwise
         """
-        return self.workspace.is_external_dataset_dataobj_present(self.owner_id, self.dataset_id, recipient_id)
+        return self.manager.is_external_dataset_dataobj_present(self.owner_id, self.dataset_id, recipient_id)
 
     def generate_event_list(self):
         """
@@ -125,10 +125,10 @@ class Dataset:
         """
         # The user dataset created time is in millisec but iRODS handles timestamps in sec
         dataset_create_time = datetime.datetime.fromtimestamp(int(self.created) / 1000)
-        event_dataobj_names = self.workspace.find_event_dataobj_names_created_since(dataset_create_time)
+        event_dataobj_names = self.manager.get_event_dataobj_names_created_since(dataset_create_time)
         for event_dataobj_name in event_dataobj_names:
             event_path = paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_dataobj_name)
-            event = Event(self.workspace.get_dataobj_data(event_path))
+            event = Event(self.manager.get_dataobj_data(event_path))
             if event.dataset_id == self.dataset_id:
                 self.events.append(event)
         self.events.sort(key = lambda x: x.event_id)
