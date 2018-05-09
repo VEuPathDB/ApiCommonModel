@@ -1,5 +1,7 @@
 import json
 import datetime
+import paths
+
 
 class Event:
     """

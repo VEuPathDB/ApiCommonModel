@@ -19,7 +19,7 @@ class Flag:
 
     def __init__(self, dashboard, name):
         self.dashboard = dashboard
-        self.workspace = dashboard.workspace
+        self.manager = self.dashboard.manager
         self.name = name
         self.parse_flag_name()
 
@@ -36,7 +36,7 @@ class Flag:
 
     def get_flag_contents(self):
          path = paths.FLAG_DATA_OBJECT_TEMPLATE.format(self.name)
-         self.content = self.workspace.get_dataobj_data(path)
+         self.content = self.manager.get_dataobj_data(path)
 
     def display(self, show_owner_info):
         print("Export:  Date: {}, Type: {}, Export Pid: {}".
@@ -47,8 +47,3 @@ class Flag:
             print("Owner: {} ({}) - {}".format(self.user.full_name, self.user.email, self.user.id))
         if self.type == "failure_dataset":
             print("\tMessage: {}".format(self.get_flag_contents()))
-
-
-
-
-

@@ -1,5 +1,6 @@
 from __future__ import print_function
 from dataset import Dataset
+from flag import Flag
 import paths
 
 class User:
@@ -10,14 +11,14 @@ class User:
 
     def __init__(self, dashboard, id, full_name, email):
         self.dashboard = dashboard
-        self.workspace = dashboard.workspace
+        self.manager = dashboard.manager
         self.id = id
         self.email = email
         self.full_name = full_name
 
     def get_datasets(self):
         datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(self.id)
-        dataset_ids = self.workspace.get_coll_names(datasets_coll_path)
+        dataset_ids = self.manager.get_coll_names(datasets_coll_path)
         return [Dataset(dashboard = self.dashboard, dataset_id = dataset_id, owner_id = self.id) for dataset_id in dataset_ids]
 
     def get_external_datasets(self):
@@ -28,13 +29,14 @@ class User:
         :return: a list of names of the external dataset data objects
         """
         external_dataset_coll_path = paths.USER_EXTERNAL_DATASETS_COLLECTION_TEMPLATE.format(self.id)
-        return self.workspace.get_dataobj_names(external_dataset_coll_path)
+        return self.manager.get_dataobj_names(external_dataset_coll_path)
 
     def generate_related_flags(self):
         """
         Generates a list of Flag objects, sorted by exported dataset create time, associated with this user.
         """
-        self.flags = self.workspace.find_flag_dataobjs(self.id)
+        flags = self.manager.get_flag_dataobj_names_by_user(self.id)
+        self.flags = [Flag(self.dashboard, flag) for flag in flags]
         self.flags.sort(key = lambda flag: flag.exported)
 
     def display(self):
@@ -70,4 +72,3 @@ class User:
             print("No datasets are currently being shared with this user.")
 
         print("\n")
-
