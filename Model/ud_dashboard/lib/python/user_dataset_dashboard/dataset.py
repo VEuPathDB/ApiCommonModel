@@ -133,16 +133,6 @@ class Dataset:
                 self.events.append(event)
         self.events.sort(key = lambda x: x.event_id)
 
-    def short_display(self):
-        """
-        Provides a more abbreviated report of a user dataset based upon content available in the meta.json and
-        dataset.json objects only.
-        """
-        print("\nDataset: {} - ({})".format(self.name, self.dataset_id))
-        print("Created {}"
-              .format(datetime.datetime.fromtimestamp(int(self.created) / 1000).strftime('%Y-%m-%d %H:%M:%S')))
-        print("Total Size {} bytes".format(self.size))
-
     def display_properites(self):
         format_string = "{0:15} {1:70}"
         print("\nPROPERTIES:")
@@ -155,7 +145,7 @@ class Dataset:
         print(format_string.format("Created",
                                    datetime.datetime.fromtimestamp(int(self.created) / 1000).strftime('%Y-%m-%d %H:%M:%S')))
         print("{0:15} {1} (v{2})".format("Type", self.type["name"], self.type["version"]))
-        print("{0:15} {1} Mb".format("Total Size", self.size/1E6))
+        print("{0:15} {1:.6f} Mb".format("Total Size", self.size/1E6))
         print(format_string.format("Projects",",".join(self.projects)))
 
     def display_dependencies(self):
@@ -176,12 +166,11 @@ class Dataset:
         should be populated by at least one datafile if the dataset is valid.  Lack of any datafiles will
         likely result in a parsing error during an installation attempt.
         """
-        format_string = "{0:25} {1:14}"
         print("\nDATA FILES:")
-        print(format_string.format("File Name","File Size (Mb)"))
+        print("{0:25} {1:14}".format("File Name","File Size (Mb)"))
         if self.datafiles:
             for datafile in self.datafiles:
-                print(format_string.format(datafile["name"], datafile["size"]/1E6))
+                print("{0:25} {1:.6f}".format(datafile["name"], datafile["size"]/1E6))
         else:
             print("This dataset does not indicate any datafiles and as such is not a valid dataset.")
 
@@ -214,6 +203,19 @@ class Dataset:
         for event in self.events:
             event.display(self.dashboard)
 
+    @staticmethod
+    def display_header():
+        print("{0:15} {1:19} {2:>17} {3}".format("Dataset Id", "Create Date", "Total Size (Mb)", "Dataset Name"))
+
+    def display_dataset(self):
+        """
+        Provides a more abbreviated report of a user dataset based upon content available in the meta.json and
+        dataset.json objects only.
+        """
+        print("{0:15} {1:19} {2:17.6f} {3}".format(self.dataset_id,
+                      datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                      self.size/1E6, self.name))
+
 
     def display(self):
         """
@@ -227,4 +229,5 @@ class Dataset:
         self.display_datafiles()
         self.display_shares()
         self.display_events()
+        print("")
 
