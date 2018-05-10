@@ -13,7 +13,7 @@ class Workspace:
 
 
     def get_default_quota(self):
-        """Return quota which is stored in units of Gb."""
+        """Return quota which is stored in units of Mb."""
         return self.manager.get_dataobj_data(paths.DEFAULT_QUOTA_DATA_OBJECT_PATH).strip()
 
     def get_workspace_identity(self):

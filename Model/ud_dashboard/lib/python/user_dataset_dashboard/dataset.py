@@ -134,6 +134,10 @@ class Dataset:
         self.events.sort(key = lambda x: x.event_id)
 
     def display_properites(self):
+        """
+        Convenience method to handle a key : value display of dataset properties.  Note that changes to name, summary
+        and description are possible whereas other properties are immutable.
+        """
         format_string = "{0:15} {1:70}"
         print("\nPROPERTIES:")
         print(format_string.format("Property","Value"))
@@ -149,6 +153,11 @@ class Dataset:
         print(format_string.format("Projects",",".join(self.projects)))
 
     def display_dependencies(self):
+        """
+        Convenience method to handle tabular display of dataset dependencies.  The table always appears but an
+        absence of dependencies is noted with a message.
+        :return:
+        """
         format_string = "{0:30} {1:10} {2:40}"
         print("\nDEPENDENCIES:")
         print(format_string.format("Name", "Version", "Identifier"))
@@ -210,7 +219,8 @@ class Dataset:
     def display_dataset(self):
         """
         Provides a more abbreviated report of a user dataset based upon content available in the meta.json and
-        dataset.json objects only.
+        dataset.json objects only.  This report may be called when assembling other reports where the dataset is not
+        the emphasis of the report.
         """
         print("{0:15} {1:19} {2:17.6f} {3}".format(self.dataset_id,
                       datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
