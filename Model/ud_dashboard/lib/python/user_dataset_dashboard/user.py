@@ -39,11 +39,12 @@ class User:
         self.flags = [Flag(self.dashboard, flag) for flag in flags]
         self.flags.sort(key = lambda flag: flag.exported)
 
-    def display(self):
-        print("\nUser Data")
+    def display_properites(self):
+        print("\nPROPERTIES")
         print("{} ({}) - {}".format(self.full_name, self.email, self.id))
 
-        print("\nExports")
+    def display_flags(self):
+        print("\nEXPORTS")
         Flag.display_header(False, True)
         self.generate_related_flags()
         if self.flags:
@@ -52,24 +53,34 @@ class User:
         else:
             print("No exports currently exist for this user.")
 
-        print("\nOwned Datasets: ", end='')
+    def display_datasets(self):
+        print("\nOWNED DATASETS:")
         datasets = self.get_datasets()
         if datasets:
             total_size = reduce(lambda x, y: x + y, [dataset.size for dataset in datasets])
-            print("\tTotal size: {} bytes".format(total_size))
+            print("Total size: {0:.6f} Mb".format(total_size/1E6))
+            Dataset.display_header()
             for dataset in datasets:
-                dataset.short_display()
+                dataset.display_dataset()
         else:
             print("No datasets currently exist for this user.")
 
-        print("\nDatasets Shared With User:")
+    def display_shares(self):
+        print("\nSHARED DATASETS:")
+        print("{0:15} {1}".format("Dataset Id", "Owner"))
         external_datasets = self.get_external_datasets()
         if external_datasets:
             for result in self.get_external_datasets():
                 (owner_id, dataset) = result.split(".")
                 owner = self.dashboard.find_user_by_id(owner_id)
-                print("Dataset id: {} owned by {} ({}) - {}".format(dataset, owner.full_name, owner.email, owner_id))
+                print("{0:15} {1} ({2}) - {3}".format(dataset, owner.full_name, owner.email, owner_id))
         else:
             print("No datasets are currently being shared with this user.")
 
-        print("\n")
+    def display(self):
+        print("\nUSER PROPERTIES")
+        print("{} ({}) - {}".format(self.full_name, self.email, self.id))
+        self.display_flags()
+        self.display_datasets()
+        self.display_shares()
+        print("")
