@@ -1,3 +1,4 @@
+from __future__ import print_function
 import json
 import datetime
 import paths
@@ -23,6 +24,10 @@ class Event:
         self.event_id = event_data["eventId"]
         self.event_date = str(self.event_id)[:-8]
 
+    @staticmethod
+    def display_header():
+        print("{0:19} {1:19} {2:12} {3:8} {4:8} {5:63}".format("Event Date","Event Id","Dataset Id","Type","Action","Recipient"))
+
     def display(self, dashboard):
         """
         Provides a display of the event contained within this Event object.  The action and recipient properties
@@ -31,12 +36,11 @@ class Event:
         """
         if self.event == "share":
             recipient = dashboard.find_user_by_id(self.recipient_id)
-            print("Event id {} at {} for user dataset id {}: {} - action {} - recipient {} ({}) - {}"
-                .format(self.event_id, self.dataset_id,
-                datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+            print("{0:19} {1:19} {2:12} {3:8} {4:8} {5} ({6}) - {7}".format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+                self.event_id, self.dataset_id,
                 self.event, self.action, recipient.full_name, recipient.email, self.recipient_id))
         else:
-            print("Event id {} at {} for user dataset id {}: {}"
-                .format(self.event_id, self.dataset_id,
-                datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+            print("{0:19} {1:19} {2:12} {3:8}"
+                .format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+                self.event_id, self.dataset_id,
                 self.event))
