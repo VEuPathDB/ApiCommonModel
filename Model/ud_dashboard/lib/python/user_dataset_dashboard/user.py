@@ -1,4 +1,5 @@
 from __future__ import print_function
+from workspace import Workspace
 from dataset import Dataset
 from flag import Flag
 import paths
@@ -40,10 +41,23 @@ class User:
         self.flags.sort(key = lambda flag: flag.exported)
 
     def display_properites(self):
+        """
+        Convenience method to handle a key : value display of user properties.  The iRODS system contains only user
+        wdk ids.  Full names and email addresses are gleaned from the account db.
+        """
         print("\nPROPERTIES")
         print("{} ({}) - {}".format(self.full_name, self.email, self.id))
+        total_size = reduce(lambda x, y: x + y, [dataset.size for dataset in self.datasets])/1E6
+        print("{0:15} {1:.6f} Mb".format("Usage", total_size))
+        quota = float(Workspace(self.dashboard).get_default_quota())
+        print("{0:15} {1}".format("% Quota Used", round(100 * total_size/quota, 1)))
 
     def display_flags(self):
+        """
+        Convenience method to handle tabular display of flags set by this user.  Presently, flags only refer to
+        Galaxy exports.  The table appears but the absence of flags is noted with a message.  Note that a user
+        may have an existence on the iRODS system without having used it at all.
+        """
         print("\nEXPORTS")
         Flag.display_header(False, True)
         self.generate_related_flags()
@@ -54,18 +68,23 @@ class User:
             print("No exports currently exist for this user.")
 
     def display_datasets(self):
+        """
+        Convenience method to handle tabular display of datasets owned by this user.  The table always appears
+        but the absence of datasets is noted with a message.
+        """
         print("\nOWNED DATASETS:")
-        datasets = self.get_datasets()
-        if datasets:
-            total_size = reduce(lambda x, y: x + y, [dataset.size for dataset in datasets])
-            print("Total size: {0:.6f} Mb".format(total_size/1E6))
+        if self.datasets:
             Dataset.display_header()
-            for dataset in datasets:
+            for dataset in self.datasets:
                 dataset.display_dataset()
         else:
             print("No datasets currently exist for this user.")
 
     def display_shares(self):
+        """
+        Convenience method to handle tabular display of datasets currently shared with this user.  The table
+        always appears but the absence of shares is noted with a message.
+        """
         print("\nSHARED DATASETS:")
         print("{0:15} {1}".format("Dataset Id", "Owner"))
         external_datasets = self.get_external_datasets()
@@ -78,8 +97,11 @@ class User:
             print("No datasets are currently being shared with this user.")
 
     def display(self):
-        print("\nUSER PROPERTIES")
-        print("{} ({}) - {}".format(self.full_name, self.email, self.id))
+        """
+        Provides a full featured report of an iRODS user.
+        """
+        self.datasets = self.get_datasets()
+        self.display_properites()
         self.display_flags()
         self.display_datasets()
         self.display_shares()
