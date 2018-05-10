@@ -35,9 +35,10 @@ class Event:
         :param dashboard:
         """
         format_string = "{0:19} {1:19} {2:12} {3:8}"
+        long_format_string = format_string + "{4:8} {5} ({6}) - {7}"
         if self.event == "share":
             recipient = dashboard.find_user_by_id(self.recipient_id)
-            print(format_string + "{4:8} {5} ({6}) - {7}".format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+            print(long_format_string.format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
                 self.event_id, self.dataset_id,
                 self.event, self.action, recipient.full_name, recipient.email, self.recipient_id))
         else:
