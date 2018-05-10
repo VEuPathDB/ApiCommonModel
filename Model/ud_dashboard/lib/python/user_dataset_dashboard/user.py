@@ -43,11 +43,12 @@ class User:
         print("\nUser Data")
         print("{} ({}) - {}".format(self.full_name, self.email, self.id))
 
-        print("\nUser Exports")
+        print("\nExports")
+        Flag.display_header(False, True)
         self.generate_related_flags()
         if self.flags:
             for flag in self.flags:
-                flag.display(False)
+                flag.display(False, True)
         else:
             print("No exports currently exist for this user.")
 

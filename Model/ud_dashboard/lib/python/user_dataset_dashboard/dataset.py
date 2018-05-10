@@ -143,6 +143,78 @@ class Dataset:
               .format(datetime.datetime.fromtimestamp(int(self.created) / 1000).strftime('%Y-%m-%d %H:%M:%S')))
         print("Total Size {} bytes".format(self.size))
 
+    def display_properites(self):
+        format_string = "{0:15} {1:70}"
+        print("\nPROPERTIES:")
+        print(format_string.format("Property","Value"))
+        print(format_string.format("Dataset Id", self.dataset_id))
+        print(format_string.format("Name", self.name))
+        print(format_string.format("Summary", self.summary))
+        print(format_string.format("Description", self.description))
+        print("{0:15} {1} ({2}) - {3}".format("Owner", self.owner.full_name, self.owner.email, self.owner_id))
+        print(format_string.format("Created",
+                                   datetime.datetime.fromtimestamp(int(self.created) / 1000).strftime('%Y-%m-%d %H:%M:%S')))
+        print("{0:15} {1} (v{2})".format("Type", self.type["name"], self.type["version"]))
+        print("{0:15} {1} Mb".format("Total Size", self.size/1E6))
+        print(format_string.format("Projects",",".join(self.projects)))
+
+    def display_dependencies(self):
+        format_string = "{0:30} {1:10} {2:40}"
+        print("\nDEPENDENCIES:")
+        print(format_string.format("Name", "Version", "Identifier"))
+        if self.dependencies:
+            for dependency in self.dependencies:
+                print(format_string.format(dependency["resourceDisplayName"],
+                    dependency["resourceVersion"],
+                    dependency["resourceIdentifier"]))
+        else:
+            print("The dataset has no dependecies")
+
+    def display_datafiles(self):
+        """
+        Convenience method to handle tabular display of dataset data files.  The table always appears and
+        should be populated by at least one datafile if the dataset is valid.  Lack of any datafiles will
+        likely result in a parsing error during an installation attempt.
+        """
+        format_string = "{0:25} {1:14}"
+        print("\nDATA FILES:")
+        print(format_string.format("File Name","File Size (Mb)"))
+        if self.datafiles:
+            for datafile in self.datafiles:
+                print(format_string.format(datafile["name"], datafile["size"]/1E6))
+        else:
+            print("This dataset does not indicate any datafiles and as such is not a valid dataset.")
+
+    def display_shares(self):
+        """
+        Convenience method to handle tabular display of current share information.  The table always appears but
+        an absence of shares is noted with a message.
+        """
+        format_string = "{0:25} {1:25} {2:15} {3:9}"
+        print("\nCURRENT SHARES:")
+        print(format_string.format("Recipient Name", "Recipient Email", "Recipient Id","Validated"))
+        if self.shares:
+            for recipient_id in self.shares.keys():
+                print(format_string.
+                    format(self.shares[recipient_id]['recipient'].full_name,
+                    self.shares[recipient_id]['recipient'].email,
+                    recipient_id,
+                    self.shares[recipient_id]['valid']))
+        else:
+            print("This dataset is not currently shared.")
+
+    def display_events(self):
+        """
+        Convenience method to handle tabular display of events history.  At a minimum, one should see an install event.
+        One will never see a delete event since the dataset would have been removed just prior to the creation of
+        such an event.
+        """
+        print("\nEVENT HISTORY:")
+        Event.display_header()
+        for event in self.events:
+            event.display(self.dashboard)
+
+
     def display(self):
         """
         Provides a full featured report of a user dataset.  The Dataset object is fully populated only prior to display
@@ -150,31 +222,9 @@ class Dataset:
         """
         self.get_shares()
         self.generate_event_list()
-        print("\nMetadata:")
-        print("Dataset: {} - ({})".format(self.name, self.dataset_id))
-        print("Summary: {}".format(self.summary))
-        print("Description: {}".format(self.description))
-        print("Owner {} ({}) - {}".format(self.owner.full_name, self.owner.email, self.owner_id))
-        print("Created {}".format(datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S')))
-        print("Type {} (v{})".format(self.type["name"], self.type["version"]))
-        print("Total Size {} bytes".format(self.size))
-        print("Projects {}".format(",".join(self.projects)))
-        print("\nDependencies:")
-        for dependency in self.dependencies:
-            print("Name: {}, Version: {}, Identifier: {}"
-                  .format(dependency["resourceDisplayName"],
-                          dependency["resourceVersion"],
-                          dependency["resourceIdentifier"]))
-        print("\nData Files:")
-        for datafile in self.datafiles:
-            print("Name: {}, Size: {} bytes".format(datafile["name"],datafile["size"]))
-        print("\nShared With:")
-        for recipient_id in self.shares.keys():
-            print("recipient {} ({}) - {} - validated: {}".
-                  format(self.shares[recipient_id]['recipient'].full_name,
-                         self.shares[recipient_id]['recipient'].email,
-                         recipient_id,
-                         self.shares[recipient_id]['valid']))
-        print("\nEvent History:")
-        for event in self.events:
-            event.display(self.dashboard)
+        self.display_properites()
+        self.display_dependencies()
+        self.display_datafiles()
+        self.display_shares()
+        self.display_events()
+
