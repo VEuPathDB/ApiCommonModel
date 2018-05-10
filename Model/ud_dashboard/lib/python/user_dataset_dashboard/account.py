@@ -53,5 +53,4 @@ class Account:
             )
           WHERE user_id = """ + user_id
         cursor.execute(querystring)
-        user = cursor.fetchone()[0]
-        print(user)
+        return cursor.fetchone()[0]

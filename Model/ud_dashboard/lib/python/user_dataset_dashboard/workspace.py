@@ -74,7 +74,7 @@ class Workspace:
 
     def display(self):
         print("iRODS Workspace - id: {} - host: {}".format(self.id, self.dashboard.workspace_host))
-        print("Default quota is {} Gb".format(self.quota))
+        print("Default quota is {} Mb".format(self.quota))
         print("\nInventory:")
         self.display_inventory()
         self.display_exports()

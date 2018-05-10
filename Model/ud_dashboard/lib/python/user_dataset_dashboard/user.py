@@ -2,6 +2,7 @@ from __future__ import print_function
 from workspace import Workspace
 from dataset import Dataset
 from flag import Flag
+from event import Event
 import paths
 
 class User:
@@ -40,6 +41,15 @@ class User:
         self.flags = [Flag(self.dashboard, flag) for flag in flags]
         self.flags.sort(key = lambda flag: flag.exported)
 
+    def generate_related_events(self):
+        event_names = self.manager.get_dataobj_names(paths.EVENTS_PATH)
+        self.events = []
+        for event_name in event_names:
+            event= Event(self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_name)))
+            if any(dataset.dataset_id == event.dataset_id for dataset in self.datasets):
+                self.events.append(event)
+        self.events.sort(key = lambda event : event.event_id)
+
     def display_properites(self):
         """
         Convenience method to handle a key : value display of user properties.  The iRODS system contains only user
@@ -47,7 +57,10 @@ class User:
         """
         print("\nPROPERTIES")
         print("{} ({}) - {}".format(self.full_name, self.email, self.id))
-        total_size = reduce(lambda x, y: x + y, [dataset.size for dataset in self.datasets])/1E6
+        if self.datasets:
+            total_size = reduce(lambda acc, value: acc + value, [dataset.size for dataset in self.datasets])/1E6
+        else:
+            total_size = 0
         print("{0:15} {1:.6f} Mb".format("Usage", total_size))
         quota = float(Workspace(self.dashboard).get_default_quota())
         print("{0:15} {1}".format("% Quota Used", round(100 * total_size/quota, 1)))
@@ -66,6 +79,17 @@ class User:
                 flag.display(False, True)
         else:
             print("No exports currently exist for this user.")
+
+    def display_events(self):
+        print("\nEVENTS")
+        Event.display_header()
+        self.generate_related_events()
+        if self.events:
+            for event in self.events:
+                event.display(self.dashboard)
+        else:
+            print("No event currently exist for this user.")
+
 
     def display_datasets(self):
         """
@@ -96,13 +120,15 @@ class User:
         else:
             print("No datasets are currently being shared with this user.")
 
-    def display(self):
+    def display(self, show_events):
         """
         Provides a full featured report of an iRODS user.
         """
         self.datasets = self.get_datasets()
         self.display_properites()
         self.display_flags()
+        if show_events:
+            self.display_events()
         self.display_datasets()
         self.display_shares()
         print("")
