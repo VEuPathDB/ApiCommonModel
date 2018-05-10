@@ -34,13 +34,13 @@ class Event:
         only have meaning in the case of a share or unshare event and are otherwise not shown.
         :param dashboard:
         """
+        format_string = "{0:19} {1:19} {2:12} {3:8}"
         if self.event == "share":
             recipient = dashboard.find_user_by_id(self.recipient_id)
-            print("{0:19} {1:19} {2:12} {3:8} {4:8} {5} ({6}) - {7}".format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+            print(format_string + "{4:8} {5} ({6}) - {7}".format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
                 self.event_id, self.dataset_id,
                 self.event, self.action, recipient.full_name, recipient.email, self.recipient_id))
         else:
-            print("{0:19} {1:19} {2:12} {3:8}"
-                .format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+            print(format_string.format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
                 self.event_id, self.dataset_id,
                 self.event))
