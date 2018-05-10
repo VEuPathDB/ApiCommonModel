@@ -7,8 +7,6 @@ from user import User
 from dataset import Dataset
 import paths
 import sys
-from irods.column import Criterion
-from irods.models import Collection, DataObject
 
 class Dashboard:
     """
@@ -77,21 +75,15 @@ class Dashboard:
         workspace = Workspace(dashboard = self)
         workspace.display()
 
-    def all_datasets_report(self, *args):
-        """
-        Reports the list of users and user datasets without additional annotation.
-        :param args: no additional args are needed here
-        """
-        self.manager.display_all_dataset_colls()
-
     def user_report(self, args):
         """
         Reports the relevant information for a user as given by his/her wdk user email (logon)
         :param args: user email
         """
         user_email = args.user_email
+        show_events = args.show_events
         user = self.find_user_by_email(user_email)
-        user.display()
+        user.display(show_events)
 
     def dataset_report(self, args):
         """
