@@ -8,6 +8,7 @@ from dataset import Dataset
 import paths
 import sys
 
+
 class Dashboard:
     """
     The Dashboard is the point of entry for this software.  It contains the configuration data for the iRODS system
@@ -30,9 +31,9 @@ class Dashboard:
             self.workspace_password = str(config_json["workspace"]["password"])
             self.workspace_zone = str(config_json["workspace"]["zone"])
             self.account_db_connection_string = \
-            str(config_json["account_db"]["user"]) + "/" + \
-            str(config_json["account_db"]["password"]) + "@" + \
-            str(config_json["account_db"]["name"])
+                str(config_json["account_db"]["user"]) + "/" + \
+                str(config_json["account_db"]["password"]) + "@" + \
+                str(config_json["account_db"]["name"])
         self.account = Account(self)
         self.manager = Manager(self)
         self.users = self.create_user_cache()
@@ -79,7 +80,7 @@ class Dashboard:
         """
         start_date = args.start_date
         end_date = args.end_date
-        workspace = Workspace(dashboard = self, start_date = start_date, end_date = end_date)
+        workspace = Workspace(dashboard=self, start_date=start_date, end_date=end_date)
         workspace.display()
 
     def user_report(self, args):
@@ -97,5 +98,5 @@ class Dashboard:
         Reports the relevant information for a user dataset as given by its dataset id
         :param args: dataset id provided
         """
-        dataset = Dataset(dashboard = self, dataset_id = args.dataset_id)
+        dataset = Dataset(dashboard=self, dataset_id=args.dataset_id)
         dataset.display()
