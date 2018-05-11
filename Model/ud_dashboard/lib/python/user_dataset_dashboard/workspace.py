@@ -79,6 +79,14 @@ class Workspace:
         else:
             return None, None, None
 
+    def display_properties(self):
+        format_string = "{0:15} {1:70}"
+        print("PROPERTIES")
+        print(format_string.format("Property", "Value"))
+        print(format_string.format("Id",self.id))
+        print(format_string.format("Host", self.dashboard.workspace_host))
+        print("{0:15} {1} Mb".format("Default quota", self.quota))
+
     def display_inventory(self):
         """
         Prints a summary view of the workspace contents
@@ -174,8 +182,8 @@ class Workspace:
             print("No events found in the workspace for this period")
 
     def display(self):
-        print("iRODS Workspace - id: {} - host: {}".format(self.id, self.dashboard.workspace_host))
-        print("Default quota is {} Mb".format(self.quota))
+        print("WORKSPACE REPORT from {} to {}".format(self.start_date, self.end_date))
+        self.display_properties()
         self.display_landing_zone_content()
         self.display_staging_area_content()
         self.display_inventory()
