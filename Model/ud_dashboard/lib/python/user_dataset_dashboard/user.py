@@ -131,6 +131,7 @@ class User:
         """
         Provides a full featured report of an iRODS user.
         """
+        print("\niRODS USER REPORT for {}".format(self.email))
         self.datasets = self.get_datasets()
         self.display_properites()
         self.display_flags()
