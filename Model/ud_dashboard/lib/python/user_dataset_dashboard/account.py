@@ -2,12 +2,20 @@ import cx_Oracle
 
 
 class Account:
+    """
+    Houses queries to the Eupath account db.
+    """
 
     def __init__(self, dashboard):
         self.dashboard = dashboard
 
-
     def get_users_by_user_ids(self, user_ids):
+        """
+        Query to obtain user information (full name and email) for a  given list of user wdk ids.  Needs improvement
+        to handle errors without dangling connections/cursors
+        :param user_ids: list of user wdk ids
+        :return: 
+        """
         connection = cx_Oracle.connect(self.dashboard.account_db_connection_string)
         cursor = connection.cursor()
         querystring = """
@@ -27,13 +35,11 @@ class Account:
                      )
                    WHERE user_id IN (""" + ",".join(user_ids) + ")"
         cursor.execute(querystring)
-        results =  cursor.fetchall()
+        results = cursor.fetchall()
         cursor.close()
         return results
 
-
-
-    def getUserInfo(self, user_id):
+    def get_user_by_id(self, user_id):
         connection = cx_Oracle.connect(self.dashboard.account_db_connection_string)
         cursor = connection.cursor()
         querystring = """

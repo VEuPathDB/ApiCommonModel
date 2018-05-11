@@ -2,7 +2,7 @@ from irods.session import iRODSSession
 
 from irods.models import Collection, DataObject
 from irods.query import Query
-from irods.column import Criterion
+from irods.column import Criterion, Between
 import paths
 
 
@@ -94,6 +94,13 @@ class Manager:
         query = Query(self.session, DataObject.name)
         for criterion in criteria:
             query = query.filter(criterion)
+        results = query.execute()
+        return [row[DataObject.name] for row in results.rows]
+
+    def get_dataobj_names_created_between(self, path, start_time, end_time):
+        query = Query(self.session, DataObject.name)
+        query = query.filter(Collection.name == path) \
+            .filter(Between(DataObject.create_time, (start_time, end_time)))
         results = query.execute()
         return [row[DataObject.name] for row in results.rows]
 
