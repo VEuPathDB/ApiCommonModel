@@ -1,4 +1,6 @@
 from __future__ import print_function
+import re
+import datetime
 import paths
 from flag import Flag
 from event import Event
@@ -63,10 +65,23 @@ class Workspace:
             self.events.append(event)
         self.events.sort(key=lambda item: item.event_id)
 
+    def parse_tarball_name(self, name):
+        """
+        Pulls apart the tarball data object's name in order to extract the the user, the export date and the export pid.
+        These components should match up with at least two export flags.
+        :return: tuple providing components of parsed data object name:  exporter, exported time, and export pid.  If
+        the data object's name format is not observed, None is returned.
+        """
+        matches = re.match(r'dataset_u(.*)_t(.*)_p(.*).tgz', name, flags=0)
+        if matches:
+            exporter = self.dashboard.find_user_by_id(matches.group(1))
+            return exporter, matches.group(2), matches.group(3)
+        else:
+            return None, None, None
+
     def display_inventory(self):
         """
         Prints a summary view of the workspace contents
-        :return:
         """
         print("\nINVENTORY:")
         print("{0:9} {1:25} {2:25} {3:15}".format("User Id", "User Name", "User Email", "Dataset Id"))
@@ -86,10 +101,44 @@ class Workspace:
                         print("{0:9} {1:25} {2:25} {3:15}".format("", "", "", dataset_coll_name))
             else:
                 print()
-        print("\nLANDING ZONE (any tarballs there should be short-lived):")
+
+    def display_landing_zone_content(self):
+        """
+        Convenience method to handle tabular display of any residual tarballs in the landing zone.  Tarballs should
+        have the name format: dataset__u<user id>_t<timestamp in millsec>_p<pid>.tgz.  Any items matching this
+        format should have a corresponding pair of export flags in the flags collection.  Anything that does not
+        match the naming convention is simply detritus.
+        """
+        print("\nLANDING ZONE (Note: Any tarballs there should be short-lived):")
+        print("{0:45} {1:19} {2:6} {3}".format("Name", "Export Date", "Pid", "Exporter"))
         tarball_names = self.manager.get_dataobj_names(paths.LANDING_ZONE_PATH)
-        for tarball_name in tarball_names:
-            print("Tarball: " + tarball_name)
+        if tarball_names:
+            for tarball_name in tarball_names:
+                exporter, exported, pid = self.parse_tarball_name(tarball_name)
+                if exporter == None:
+                    print("{0:45} {1:19} {2:6} {3}".format(tarball_name, "?", "?", "?"))
+                else:
+                    print("{0:45} {1:19} {2:6} {3}"
+                          .format(tarball_name,
+                                  datetime.datetime.fromtimestamp(int(exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                                  pid, exporter.full_name + "(" + exporter.email + ")" + " - " + exporter.id))
+        else:
+            print("No exported tarballs remaining in the workspace")
+
+    def display_staging_area_content(self):
+        """
+        Convenience method to handle tabular display of any residual staged datasets in the staging area.  These
+        collections would have names corresponding to the dataset id they would have had they been successfully
+        processed.
+        """
+        print("\nSTAGING AREA (Note: Any datasets there should be short-lived):")
+        print("{}".format("Dataset Name"))
+        staging_area_coll_names = self.manager.get_coll_names(paths.STAGING_PATH)
+        if staging_area_coll_names:
+            for staging_area_coll_name in staging_area_coll_names:
+                print("{}".format(staging_area_coll_name))
+        else:
+            print("No unpacked tarballs (staged datasets) remaining in the workspace")
 
     def display_flags(self):
         """
@@ -127,6 +176,8 @@ class Workspace:
     def display(self):
         print("iRODS Workspace - id: {} - host: {}".format(self.id, self.dashboard.workspace_host))
         print("Default quota is {} Mb".format(self.quota))
+        self.display_landing_zone_content()
+        self.display_staging_area_content()
         self.display_inventory()
         self.display_flags()
         self.display_events()
