@@ -230,6 +230,7 @@ class Dataset:
         Provides a full featured report of a user dataset.  The Dataset object is fully populated only prior to display
         since some of those processes could be lengthy depending on system usage.
         """
+        print("\nUSER DATASET REPORT for {}".format(self.dataset_id))
         self.get_shares()
         self.generate_event_list()
         self.display_properites()

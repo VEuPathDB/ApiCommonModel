@@ -80,10 +80,13 @@ class Workspace:
             return None, None, None
 
     def display_properties(self):
+        """
+        Convenience method to handle a key : value display of workspace properties.
+        """
         format_string = "{0:15} {1:70}"
-        print("PROPERTIES")
+        print("\nPROPERTIES")
         print(format_string.format("Property", "Value"))
-        print(format_string.format("Id",self.id))
+        print(format_string.format("Id", self.id))
         print(format_string.format("Host", self.dashboard.workspace_host))
         print("{0:15} {1} Mb".format("Default quota", self.quota))
 
@@ -123,7 +126,7 @@ class Workspace:
         if tarball_names:
             for tarball_name in tarball_names:
                 exporter, exported, pid = self.parse_tarball_name(tarball_name)
-                if exporter == None:
+                if exporter is None:
                     print("{0:45} {1:19} {2:6} {3}".format(tarball_name, "?", "?", "?"))
                 else:
                     print("{0:45} {1:19} {2:6} {3}"
@@ -182,10 +185,11 @@ class Workspace:
             print("No events found in the workspace for this period")
 
     def display(self):
-        print("WORKSPACE REPORT from {} to {}".format(self.start_date, self.end_date))
+        print("\nWORKSPACE REPORT from {} to {}".format(self.start_date, self.end_date))
         self.display_properties()
         self.display_landing_zone_content()
         self.display_staging_area_content()
         self.display_inventory()
         self.display_flags()
         self.display_events()
+        print("")
