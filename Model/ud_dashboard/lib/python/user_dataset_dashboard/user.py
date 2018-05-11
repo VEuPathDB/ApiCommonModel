@@ -5,6 +5,7 @@ from flag import Flag
 from event import Event
 import paths
 
+
 class User:
     """
     This object holds information about an irods user, which is represented in irods as a user collection under the
@@ -17,11 +18,15 @@ class User:
         self.id = id
         self.email = email
         self.full_name = full_name
+        self.datasets = []
+        self.events = []
+        self.flags = []
 
     def get_datasets(self):
         datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(self.id)
         dataset_ids = self.manager.get_coll_names(datasets_coll_path)
-        return [Dataset(dashboard = self.dashboard, dataset_id = dataset_id, owner_id = self.id) for dataset_id in dataset_ids]
+        return [Dataset(dashboard=self.dashboard,
+                        dataset_id=dataset_id, owner_id=self.id) for dataset_id in dataset_ids]
 
     def get_external_datasets(self):
         """
@@ -39,16 +44,19 @@ class User:
         """
         flags = self.manager.get_flag_dataobj_names_by_user(self.id)
         self.flags = [Flag(self.dashboard, flag) for flag in flags]
-        self.flags.sort(key = lambda flag: flag.exported)
+        self.flags.sort(key=lambda item: item.exported)
 
     def generate_related_events(self):
+        """
+        Generates a list of Event objects, sorted by event create time, associated with this user.
+        """
         event_names = self.manager.get_dataobj_names(paths.EVENTS_PATH)
         self.events = []
         for event_name in event_names:
-            event= Event(self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_name)))
+            event = Event(self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_name)))
             if any(dataset.dataset_id == event.dataset_id for dataset in self.datasets):
                 self.events.append(event)
-        self.events.sort(key = lambda event : event.event_id)
+        self.events.sort(key=lambda item: item.event_id)
 
     def display_properites(self):
         """
@@ -62,7 +70,7 @@ class User:
         else:
             total_size = 0
         print("{0:15} {1:.6f} Mb".format("Usage", total_size))
-        quota = float(Workspace(self.dashboard).get_default_quota())
+        quota = float(Workspace(dashboard=self.dashboard).get_default_quota())
         print("{0:15} {1}".format("% Quota Used", round(100 * total_size/quota, 1)))
 
     def display_flags(self):
@@ -89,7 +97,6 @@ class User:
                 event.display(self.dashboard)
         else:
             print("No event currently exist for this user.")
-
 
     def display_datasets(self):
         """
