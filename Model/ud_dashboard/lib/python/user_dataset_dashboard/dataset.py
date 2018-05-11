@@ -37,8 +37,8 @@ class Dataset:
         if not self.owner_id:
             self.owner_id = self.get_dataset_owner(self.dataset_id)
         self.owner = self.dashboard.find_user_by_id(self.owner_id)
-        self.parse_metadata_json()
-        self.parse_dataset_json()
+        self.name, self.summary, self.description = self.parse_metadata_json()
+        self.created, self.type, self.size, self.projects, self.dependencies, self.datafiles = self.parse_dataset_json()
         self.events = []
         self.shares = {}
 
@@ -58,38 +58,32 @@ class Dataset:
             for dataset_coll_name in dataset_coll_names:
                 if dataset_coll_name == dataset_id:
                     return user_id
-        sys.exit("The dataset id given (i.e., %s) belongs to no current dataset.  It may have been deleted previously."
-              % dataset_id)
-
+        sys.exit("The dataset id given (i.e., {}) belongs to no current dataset."
+                 "  It may have been deleted previously.".format(dataset_id))
 
     def parse_dataset_json(self):
         """
         Populates the dataset object with information gathered from the dataset's dataset.json data object (i.e.,
         projects, type, create date, total size, dependency information and datafile information.
+        :return: tuplic containing dataset create date, type of dataset, total size, project list, dependency data, and
+        data file information.
         """
         dataset_json_path = paths.USER_DATASET_DATASET_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)
         dataset_json_data = self.manager.get_dataobj_data(dataset_json_path)
         dataset_json = json.loads(dataset_json_data)
-        self.projects = dataset_json["projects"]
-        self.created = dataset_json["created"]
-        self.type = dataset_json["type"]
-        self.size = dataset_json["size"]
-        self.projects = dataset_json["projects"]
-        self.dependencies = dataset_json["dependencies"]
-        self.datafiles = dataset_json["dataFiles"]
+        return dataset_json["created"], dataset_json["type"], dataset_json["size"], \
+            dataset_json["projects"], dataset_json["dependencies"], dataset_json["dataFiles"]
 
     def parse_metadata_json(self):
         """
         Populates the dataset object with information gathered from the dataset's meta.json data object (i.e.,
         dataset name, summary and description).
-        :return:
+        :return: tuple containing dataset name, summary and description
         """
         metadata_json_path = paths.USER_DATASET_METADATA_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)
         metadata_json_data = self.manager.get_dataobj_data(metadata_json_path)
         metadata_json = json.loads(metadata_json_data)
-        self.name = metadata_json["name"]
-        self.summary = metadata_json["summary"]
-        self.description = metadata_json["description"]
+        return metadata_json["name"], metadata_json["summary"], metadata_json["description"]
 
     def get_shares(self):
         """
@@ -101,7 +95,9 @@ class Dataset:
             .format(self.owner_id, self.dataset_id)
         recipient_ids = self.manager.get_dataobj_names(dataset_shared_with_coll)
         for recipient_id in recipient_ids:
-            self.shares[recipient_id] = {"recipient" : self.dashboard.find_user_by_id(recipient_id), "valid" : self.is_share_valid(recipient_id)}
+            self.shares[recipient_id] =\
+                {"recipient": self.dashboard.find_user_by_id(recipient_id),
+                 "valid": self.is_share_valid(recipient_id)}
 
     def is_share_valid(self, recipient_id):
         """
@@ -131,7 +127,7 @@ class Dataset:
             event = Event(self.manager.get_dataobj_data(event_path))
             if event.dataset_id == self.dataset_id:
                 self.events.append(event)
-        self.events.sort(key = lambda x: x.event_id)
+        self.events.sort(key=lambda item: item.event_id)
 
     def display_properites(self):
         """
@@ -140,17 +136,18 @@ class Dataset:
         """
         format_string = "{0:15} {1:70}"
         print("\nPROPERTIES:")
-        print(format_string.format("Property","Value"))
+        print(format_string.format("Property", "Value"))
         print(format_string.format("Dataset Id", self.dataset_id))
         print(format_string.format("Name", self.name))
         print(format_string.format("Summary", self.summary))
         print(format_string.format("Description", self.description))
         print("{0:15} {1} ({2}) - {3}".format("Owner", self.owner.full_name, self.owner.email, self.owner_id))
         print(format_string.format("Created",
-                                   datetime.datetime.fromtimestamp(int(self.created) / 1000).strftime('%Y-%m-%d %H:%M:%S')))
+                                   datetime.datetime.fromtimestamp(int(self.created) / 1000)
+                                   .strftime('%Y-%m-%d %H:%M:%S')))
         print("{0:15} {1} (v{2})".format("Type", self.type["name"], self.type["version"]))
         print("{0:15} {1:.6f} Mb".format("Total Size", self.size/1E6))
-        print(format_string.format("Projects",",".join(self.projects)))
+        print(format_string.format("Projects", ",".join(self.projects)))
 
     def display_dependencies(self):
         """
@@ -163,9 +160,10 @@ class Dataset:
         print(format_string.format("Name", "Version", "Identifier"))
         if self.dependencies:
             for dependency in self.dependencies:
-                print(format_string.format(dependency["resourceDisplayName"],
-                    dependency["resourceVersion"],
-                    dependency["resourceIdentifier"]))
+                print(format_string
+                      .format(dependency["resourceDisplayName"],
+                              dependency["resourceVersion"],
+                              dependency["resourceIdentifier"]))
         else:
             print("The dataset has no dependecies")
 
@@ -176,7 +174,7 @@ class Dataset:
         likely result in a parsing error during an installation attempt.
         """
         print("\nDATA FILES:")
-        print("{0:25} {1:14}".format("File Name","File Size (Mb)"))
+        print("{0:25} {1:14}".format("File Name", "File Size (Mb)"))
         if self.datafiles:
             for datafile in self.datafiles:
                 print("{0:25} {1:.6f}".format(datafile["name"], datafile["size"]/1E6))
@@ -190,14 +188,14 @@ class Dataset:
         """
         format_string = "{0:25} {1:25} {2:15} {3:9}"
         print("\nCURRENT SHARES:")
-        print(format_string.format("Recipient Name", "Recipient Email", "Recipient Id","Validated"))
+        print(format_string.format("Recipient Name", "Recipient Email", "Recipient Id", "Validated"))
         if self.shares:
             for recipient_id in self.shares.keys():
-                print(format_string.
-                    format(self.shares[recipient_id]['recipient'].full_name,
-                    self.shares[recipient_id]['recipient'].email,
-                    recipient_id,
-                    self.shares[recipient_id]['valid']))
+                print(format_string
+                      .format(self.shares[recipient_id]['recipient'].full_name,
+                              self.shares[recipient_id]['recipient'].email,
+                              recipient_id,
+                              self.shares[recipient_id]['valid']))
         else:
             print("This dataset is not currently shared.")
 
@@ -222,10 +220,10 @@ class Dataset:
         dataset.json objects only.  This report may be called when assembling other reports where the dataset is not
         the emphasis of the report.
         """
-        print("{0:15} {1:19} {2:17.6f} {3}".format(self.dataset_id,
-                      datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
-                      self.size/1E6, self.name))
-
+        print("{0:15} {1:19} {2:17.6f} {3}".
+              format(self.dataset_id,
+                     datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                     self.size/1E6, self.name))
 
     def display(self):
         """
@@ -240,4 +238,3 @@ class Dataset:
         self.display_shares()
         self.display_events()
         print("")
-

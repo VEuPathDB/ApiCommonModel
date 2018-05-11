@@ -71,8 +71,15 @@ class Dashboard:
         user = [user for user in self.users if user.email == email]
         return user[0] if user else sys.exit("No user can be found with the email %s" % email)
 
-    def workspace_report(self, *args):
-        workspace = Workspace(dashboard = self)
+    def workspace_report(self, args):
+        """
+        Reports the relevant inforamtion for the iRODS workspace.  Export and event history can be limited by
+        start and end dates.
+        :param args: optional start and end dates
+        """
+        start_date = args.start_date
+        end_date = args.end_date
+        workspace = Workspace(dashboard = self, start_date = start_date, end_date = end_date)
         workspace.display()
 
     def user_report(self, args):
