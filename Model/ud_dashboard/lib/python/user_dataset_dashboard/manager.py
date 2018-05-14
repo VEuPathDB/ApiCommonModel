@@ -4,6 +4,7 @@ from irods.models import Collection, DataObject
 from irods.query import Query
 from irods.column import Criterion, Between
 import paths
+import os
 
 
 class Manager:
@@ -20,18 +21,25 @@ class Manager:
         :param dashboard:
         """
         self.dashboard = dashboard
-        self.session = self.get_irods_session()
+        self.session = self.get_irods_session(dashboard.workspace_use_env_file)
 
-    def get_irods_session(self):
+    def get_irods_session(self, use_env_file):
         """
         Create one iRODS session and use it for the lenght of the command line command.
         :return: iRODS session
         """
-        return iRODSSession(host=self.dashboard.workspace_host,
-                            port=self.dashboard.workspace_port,
-                            user=self.dashboard.workspace_user,
-                            password=self.dashboard.workspace_password,
-                            zone=self.dashboard.workspace_zone)
+        if use_env_file:
+            env_file = os.path.expanduser('~/.irods/irods_environment.json')
+            return iRODSSession(irods_env_file=env_file)
+        else:
+            return iRODSSession(host=self.dashboard.workspace_host,
+                                port=self.dashboard.workspace_port,
+                                user=self.dashboard.workspace_user,
+                                password=self.dashboard.workspace_password,
+                                zone=self.dashboard.workspace_zone)
+
+    def get_host(self):
+        return self.session.host
 
     def get_coll(self, path):
         """

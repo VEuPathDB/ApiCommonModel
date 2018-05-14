@@ -60,8 +60,8 @@ class Account:
               GROUP BY user_id) ap
               ON a.user_id = ap.user_id
             )
-          WHERE user_id = """ + user_id
-        bindvars = user_id
+          WHERE user_id = :user_id"""
+        bindvars = {'user_id': user_id}
         try:
             self.db.execute(sql, bindvars=bindvars)
             return self.db.cursor.fetchone()[0]
