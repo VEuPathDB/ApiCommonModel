@@ -25,11 +25,14 @@ class Dashboard:
         dirname = os.path.dirname(__file__)
         with open(dirname + self.CONFIGURATION_PATH, "r+") as config_file:
             config_json = json.load(config_file)
-            self.workspace_host = str(config_json["workspace"]["host"])
-            self.workspace_port = config_json["workspace"]["port"]
-            self.workspace_user = str(config_json["workspace"]["user"])
-            self.workspace_password = str(config_json["workspace"]["password"])
-            self.workspace_zone = str(config_json["workspace"]["zone"])
+            self.workspace_use_env_file = True
+            if config_json.get("workspace", None):
+                self.workspace_host = str(config_json["workspace"]["host"])
+                self.workspace_port = config_json["workspace"]["port"]
+                self.workspace_user = str(config_json["workspace"]["user"])
+                self.workspace_password = str(config_json["workspace"]["password"])
+                self.workspace_zone = str(config_json["workspace"]["zone"])
+                self.workspace_use_env_file = False
             self.account_db_connection_string = \
                 str(config_json["account_db"]["user"]) + "/" + \
                 str(config_json["account_db"]["password"]) + "@" + \

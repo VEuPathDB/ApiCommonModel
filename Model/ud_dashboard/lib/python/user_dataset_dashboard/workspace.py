@@ -87,7 +87,7 @@ class Workspace:
         print("\nPROPERTIES")
         print(format_string.format("Property", "Value"))
         print(format_string.format("Id", self.id))
-        print(format_string.format("Host", self.dashboard.workspace_host))
+        print(format_string.format("Host", self.manager.get_host()))
         print("{0:15} {1} Mb".format("Default quota", self.quota))
 
     def display_inventory(self):
