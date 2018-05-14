@@ -34,7 +34,7 @@ class Dashboard:
                 str(config_json["account_db"]["user"]) + "/" + \
                 str(config_json["account_db"]["password"]) + "@" + \
                 str(config_json["account_db"]["name"])
-        self.account = Account(self)
+        self.account = Account(self.account_db_connection_string)
         self.manager = Manager(self)
         self.users = self.create_user_cache()
 
