@@ -106,10 +106,10 @@ class Manager:
 
     def get_event_dataobj_names_created_since(self, start_time):
         """
-         Returns the names of all event data objects created since the given start time.
-         :param start_time: datetime in sec
-         :return: list of all event data object names satisfying the criteria
-         """
+        Returns the names of all event data objects created since the given start time.
+        :param start_time: datetime in sec
+        :return: list of all event data object names satisfying the criteria
+        """
         criteria = [Criterion("=", Collection.name, paths.EVENTS_PATH),
                     Criterion(">=", DataObject.create_time, start_time)]
         return self.get_dataobj_names_by_query(criteria)

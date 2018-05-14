@@ -1,13 +1,16 @@
-import cx_Oracle
-
+from oracle import Oracle
 
 class Account:
     """
     Houses queries to the Eupath account db.
     """
 
-    def __init__(self, dashboard):
-        self.dashboard = dashboard
+    def __init__(self, connection_string):
+        """
+        Oracle underlies the account db
+        :param connection_string: account db connection string
+        """
+        self.db = Oracle(connection_string)
 
     def get_users_by_user_ids(self, user_ids):
         """
@@ -16,9 +19,8 @@ class Account:
         :param user_ids: list of user wdk ids
         :return: 
         """
-        connection = cx_Oracle.connect(self.dashboard.account_db_connection_string)
-        cursor = connection.cursor()
-        querystring = """
+        self.db.connect()
+        sql = """
                    SELECT user_id, first_name | | ' ' | | last_name AS full_name, email
                    FROM (
                      SELECT
@@ -34,15 +36,16 @@ class Account:
                        ON a.user_id = ap.user_id
                      )
                    WHERE user_id IN (""" + ",".join(user_ids) + ")"
-        cursor.execute(querystring)
-        results = cursor.fetchall()
-        cursor.close()
-        return results
+        try:
+            self.db.execute(sql)
+            results = self.db.cursor.fetchall()
+            return results
+        finally:
+            self.db.disconnect()
 
     def get_user_by_id(self, user_id):
-        connection = cx_Oracle.connect(self.dashboard.account_db_connection_string)
-        cursor = connection.cursor()
-        querystring = """
+        self.db.connect()
+        sql = """
           SELECT first_name | | ' ' | | last_name | | ' (' | | email | | ')' AS user_info
           FROM (
             SELECT
@@ -58,5 +61,9 @@ class Account:
               ON a.user_id = ap.user_id
             )
           WHERE user_id = """ + user_id
-        cursor.execute(querystring)
-        return cursor.fetchone()[0]
+        bindvars = user_id
+        try:
+            self.db.execute(sql, bindvars=bindvars)
+            return self.db.cursor.fetchone()[0]
+        finally:
+            self.db.disconnect()
