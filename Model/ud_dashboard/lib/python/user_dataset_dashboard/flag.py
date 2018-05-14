@@ -26,6 +26,7 @@ class Flag:
         self.manager = self.dashboard.manager
         self.name = name
         self.type, self.indicator, self.exporter, self.exported, self.export_pid = self.parse_flag_name()
+        self.valid = True if self.type else False
         self.content = None
 
     def parse_flag_name(self):
@@ -36,12 +37,15 @@ class Flag:
         and export pid
         """
         matches = re.match(r'(.*)_u(.*)_t(.*)_p(.*).*', self.name, flags=0)
-        flag_type = matches.group(1)
-        indicator = self.FLAG_INDICATOR.get(flag_type)
-        exporter = self.dashboard.find_user_by_id(matches.group(2))
-        exported = matches.group(3)
-        export_pid = matches.group(4).replace(".txt", "")
-        return flag_type, indicator, exporter, exported, export_pid
+        if matches:
+            flag_type = matches.group(1)
+            indicator = self.FLAG_INDICATOR.get(flag_type)
+            exporter = self.dashboard.find_user_by_id(matches.group(2))
+            exported = matches.group(3)
+            export_pid = matches.group(4).replace(".txt", "")
+            return flag_type, indicator, exporter, exported, export_pid
+        else:
+            return None, None, None, None, None
 
     def get_flag_contents(self):
         """
@@ -61,9 +65,9 @@ class Flag:
         """
         msg = "Msg" if show_message else ""
         if show_exporter:
-            print("{0:19} {1:17} {2:6} {3:65} {4:40}".format("Export Date", "Indicates", "Pid", "Exporter", msg))
+            print("{0:19} {1:17} {2:9} {3:65} {4:40}".format("Export Date", "Indicates", "Pid", "Exporter", msg))
         else:
-            print("{0:19} {1:17} {2:6} {3:40}".format("Export Date", "Indicates", "Pid", msg))
+            print("{0:19} {1:17} {2:9} {3:40}".format("Export Date", "Indicates", "Pid", msg))
 
     def display(self, show_exporter, show_messages):
         """
@@ -72,7 +76,7 @@ class Flag:
         :param show_exporter: True if the exporter information is to be displayed and False otherwise
         :param show_messages: True if any message are to be displayed and False otherwise
         """
-        print("{0:19} {1:17} {2:6}".format(
+        print("{0:19} {1:17} {2:9}".format(
               datetime.datetime.fromtimestamp(int(self.exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
               self.indicator,
               self.export_pid), end='')

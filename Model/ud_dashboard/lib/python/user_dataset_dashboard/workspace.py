@@ -47,7 +47,9 @@ class Workspace:
         """
         flag_dataobj_names = self.manager\
             .get_dataobj_names_created_between(paths.FLAGS_PATH, self.start_date, self.end_date)
-        self.flags = [Flag(self.dashboard, flag_dataobj_name) for flag_dataobj_name in flag_dataobj_names]
+        candidate_flags = [Flag(self.dashboard, flag_dataobj_name) for flag_dataobj_name in flag_dataobj_names]
+        self.flags = [item for item in candidate_flags if item.valid]
+        self.invalid_flags = list(set(candidate_flags) - set(self.flags))
         self.flags.sort(key=lambda item: item.exported)
 
     def generate_related_events(self):
@@ -167,6 +169,12 @@ class Workspace:
         else:
             print("No exports found in the workspace for this period")
 
+    def display_invalid_flags(self):
+        print("\nFLAGS NOT RECOGNIZED AS EXPORTS:")
+        print("Flag file name")
+        for flag in self.invalid_flags:
+            print(flag.name)
+
     def display_events(self):
         """
         Convenience method to handle tabular display of events in the workspace.  The table always appears but the
@@ -191,5 +199,7 @@ class Workspace:
         self.display_staging_area_content()
         self.display_inventory()
         self.display_flags()
+        if self.invalid_flags:
+            self.display_invalid_flags()
         self.display_events()
         print("")
