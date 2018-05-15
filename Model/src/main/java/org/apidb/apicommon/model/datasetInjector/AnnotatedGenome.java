@@ -3,10 +3,9 @@ package org.apidb.apicommon.model.datasetInjector;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import org.gusdb.wdk.model.WdkRuntimeException;
 
-public class AnnotatedGenome extends DatasetInjector {
+public class AnnotatedGenome extends UnannotatedGenome {
 
     protected boolean hasFilters = true;
 
@@ -216,6 +215,8 @@ public class AnnotatedGenome extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+    super.addModelReferences();
+
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "InternalQuestions.GenesByOrthologs");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLocation");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySimilarity");
@@ -239,28 +240,7 @@ public class AnnotatedGenome extends DatasetInjector {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
 
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesBySimilarity");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Taxonomy");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequencePieces");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Aliases");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Centromere");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequenceComments");
-
-
-
     addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
-
-    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "attribute", "overview");
-    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansBySourceId");
-    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
-
-    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "SequenceCounts");
-    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
-    addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GenomeSequencingAndAnnotationAttribution");
-
 
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "Reference");
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "AlignmentInfo");
