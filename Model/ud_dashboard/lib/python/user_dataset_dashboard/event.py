@@ -9,6 +9,8 @@ class Event:
     workspaces.
     """
 
+    EVENT_TYPES = {'INSTALL': 'install', 'SHARE': 'share', 'UNINSTALL': 'uninstall'}
+
     def __init__(self, event_name, event_json):
         """
         Populate a new event object with the data obtained from an event data object which is in a json format.  Note

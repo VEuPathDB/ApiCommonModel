@@ -41,6 +41,8 @@ class Dataset:
         self.created, self.type, self.size, self.projects, self.dependencies, self.datafiles = self.parse_dataset_json()
         self.events = []
         self.shares = {}
+        self.handle_status = {"handled": False, "completed": ""}
+        self.install_status = {"installed": False, "name": ""}
 
     def get_dataset_owner(self, dataset_id):
         """
@@ -128,6 +130,50 @@ class Dataset:
             if event.dataset_id == self.dataset_id:
                 self.events.append(event)
         self.events.sort(key=lambda item: item.event_id)
+
+    def check_dataset_handled(self):
+        """
+        Determines whether the dataset has been 'handled' in the given appdb database.  This is determined by
+        looking through the datasets events for the install event.  If found, it is used as a database lookup.
+        Handled datasets are identified in the dataset by their install event id and as such entry provides a
+        completed date or a null if an error prevents completion.
+        """
+        filtered = list(filter(lambda item: item.event == 'install', self.events))
+        if filtered:
+            install_event_id = next(iter(filtered)).event_id
+            result = self.dashboard.appdb.get_handled_status(install_event_id)
+            if result:
+                self.handle_status["handled"] = True
+                self.handle_status["completed"] = result[1]
+
+    def check_dataset_installed(self):
+        """
+        Determines whether the dataset has been 'installed' in the given appdb database.  If so, the name of the
+        dataset in the database (name at the time of installation) is provided.  Note that this is a potential
+        synchronization error since if the name in the database is used in any meaningful way (e.g., as the
+        name for a relevant question).
+        """
+        result = self.dashboard.appdb.get_installation_status(self.dataset_id)
+        if result:
+            self.install_status["installed"] = True
+            self.install_status["name"] = result[1]
+
+    def display_database_info(self):
+        """
+        Convenience method to handle a key : value display of database properties specific to this dataset.  Note
+        that if a dataset is not 'handled' in the database, it is certainly not 'installed'.
+        """
+        format_string = "{0:15} {1}"
+        print("\nDATABASE INFORMATION:")
+        print(format_string.format("Property", "Value"))
+        self.check_dataset_handled()
+        print(format_string.format("Handled", str(self.handle_status["handled"])))
+        if self.handle_status["handled"]:
+            print(format_string.format("Handled On", self.handle_status["completed"]))
+            self.check_dataset_installed()
+            print(format_string.format("Installed", str(self.install_status["installed"])))
+            if self.install_status["installed"]:
+                print(format_string.format("Installed As", self.install_status["name"]))
 
     def display_properites(self):
         """
@@ -238,4 +284,5 @@ class Dataset:
         self.display_datafiles()
         self.display_shares()
         self.display_events()
+        self.display_database_info()
         print("")
