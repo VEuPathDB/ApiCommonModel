@@ -198,8 +198,15 @@ public class AnnotatedGenome extends UnannotatedGenome {
     // setting properties to be used in template
     setPropValue("familySpecies", familySpecies);
     setPropValue("organismFullName", organismFullName);
-    if(getPropValueAsBoolean("isEuPathDBSite")) setPropValue("includeProjects", projectName + ",EuPathDB");
-    else setPropValue("includeProjects", projectName);
+
+    if(getPropValueAsBoolean("isEuPathDBSite")) {
+        setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
+        setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
+            
+    } else {
+        setPropValue("includeProjects", projectName);
+        setPropValue("includeProjectsExcludeEuPathDB", projectName);
+    }
 
     // inject templates
     injectTemplate("geneFilter");

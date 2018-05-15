@@ -47,11 +47,14 @@ public class AntibodyArray extends DatasetInjector {
 
         String projectName = getPropValue("projectName");
 
+
         if(getPropValueAsBoolean("isEuPathDBSite")) {
-            setPropValue("includeProjects", projectName + ",EuPathDB");
+            setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
+            setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
             
         } else {
             setPropValue("includeProjects", projectName);
+            setPropValue("includeProjectsExcludeEuPathDB", projectName);
         }
 
 
