@@ -37,11 +37,14 @@ public class RNASeq extends  DatasetInjector {
       setPropValue("metadataFileSuffix","");
       setOrganismAbbrevFromDatasetName();
 
-      if(getPropValueAsBoolean("isEuPathDBSite")) {
-          setPropValue("includeProjects", projectName + ",EuPathDB");
 
+      if(getPropValueAsBoolean("isEuPathDBSite")) {
+          setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
+          setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
+            
       } else {
           setPropValue("includeProjects", projectName);
+          setPropValue("includeProjectsExcludeEuPathDB", projectName);
       }
 
       setPropValue("graphModule", "RNASeq");
