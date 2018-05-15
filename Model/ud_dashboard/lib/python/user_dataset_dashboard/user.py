@@ -22,6 +22,9 @@ class User:
         self.events = []
         self.flags = []
 
+    def formatted_user(self):
+        return "{} ({}) - {}".format(self.full_name, self.email, self.id)
+
     def get_datasets(self):
         datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(self.id)
         dataset_ids = self.manager.get_coll_names(datasets_coll_path)
@@ -64,7 +67,7 @@ class User:
         wdk ids.  Full names and email addresses are gleaned from the account db.
         """
         print("\nPROPERTIES")
-        print("{} ({}) - {}".format(self.full_name, self.email, self.id))
+        print(self.formatted_user())
         if self.datasets:
             total_size = reduce(lambda acc, value: acc + value, [dataset.size for dataset in self.datasets])/1E6
         else:

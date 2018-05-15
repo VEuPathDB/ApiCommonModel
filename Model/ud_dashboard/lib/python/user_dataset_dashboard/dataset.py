@@ -42,6 +42,7 @@ class Dataset:
         self.events = []
         self.shares = {}
         self.handle_status = {"handled": False, "completed": ""}
+        self.db_owner = {"validated": False, "user": None}
         self.install_status = {"installed": False, "name": ""}
 
     def get_dataset_owner(self, dataset_id):
@@ -146,6 +147,13 @@ class Dataset:
                 self.handle_status["handled"] = True
                 self.handle_status["completed"] = result[1]
 
+    def check_ownership(self):
+        result = self.dashboard.appdb.get_owner(self.dataset_id)
+        if result:
+            self.db_owner["validated"] = str(result[0]) == self.owner_id
+            if not self.db_owner["validated"]:
+                self.db_owner["user"] = self.dashboard.find_user_by_id(str(result[0]))
+
     def check_dataset_installed(self):
         """
         Determines whether the dataset has been 'installed' in the given appdb database.  If so, the name of the
@@ -169,7 +177,11 @@ class Dataset:
         self.check_dataset_handled()
         print(format_string.format("Handled", str(self.handle_status["handled"])))
         if self.handle_status["handled"]:
-            print(format_string.format("Handled On", self.handle_status["completed"]))
+            print(format_string.format("Handled On", self.handle_status.get("completed", "error'd")))
+            self.check_ownership()
+            print(format_string.format("Owner Valid", self.db_owner["validated"]))
+            if not self.db_owner["validated"]:
+                print(format_string.format("DB Owner", self.db_owner["user"].formatted_user()))
             self.check_dataset_installed()
             print(format_string.format("Installed", str(self.install_status["installed"])))
             if self.install_status["installed"]:
@@ -187,7 +199,7 @@ class Dataset:
         print(format_string.format("Name", self.name))
         print(format_string.format("Summary", self.summary))
         print(format_string.format("Description", self.description))
-        print("{0:15} {1} ({2}) - {3}".format("Owner", self.owner.full_name, self.owner.email, self.owner_id))
+        print("{0:15} {1}".format("Owner", self.owner.formatted_user()))
         print(format_string.format("Created",
                                    datetime.datetime.fromtimestamp(int(self.created) / 1000)
                                    .strftime('%Y-%m-%d %H:%M:%S')))
