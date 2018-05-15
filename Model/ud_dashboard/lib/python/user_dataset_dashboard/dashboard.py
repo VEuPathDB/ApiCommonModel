@@ -44,6 +44,7 @@ class Dashboard:
                 str(config_json["app_db"]["name"])
         self.account = Account(self.account_db_connection_string)
         self.appdb = AppDB(self.app_db_connection_string)
+        self.appdb_name = str(config_json["app_db"]["name"])
         self.manager = Manager(self)
         self.users = self.create_user_cache()
 
