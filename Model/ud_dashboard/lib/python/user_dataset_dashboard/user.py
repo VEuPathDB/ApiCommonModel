@@ -12,10 +12,10 @@ class User:
     users collection under workspaces.
     """
 
-    def __init__(self, dashboard, id, full_name, email):
+    def __init__(self, dashboard, user_id, full_name, email):
         self.dashboard = dashboard
         self.manager = dashboard.manager
-        self.id = id
+        self.id = user_id
         self.email = email
         self.full_name = full_name
         self.datasets = []
@@ -23,6 +23,10 @@ class User:
         self.flags = []
 
     def formatted_user(self):
+        """
+        Convenience method to return user data formatted for display
+        :return: formatted user string
+        """
         return "{} ({}) - {}".format(self.full_name, self.email, self.id)
 
     def get_datasets(self):
@@ -56,7 +60,8 @@ class User:
         event_names = self.manager.get_dataobj_names(paths.EVENTS_PATH)
         self.events = []
         for event_name in event_names:
-            event = Event(event_name, self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_name)))
+            event = Event(event_name, self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.
+                                                                    format(event_name)))
             if any(dataset.dataset_id == event.dataset_id for dataset in self.datasets):
                 self.events.append(event)
         self.events.sort(key=lambda item: item.event_id)

@@ -71,6 +71,7 @@ class AppDB:
             self.db.disconnect()
 
     def get_shares(self, dataset_id):
+        self.db.connect()
         sql = """
               SELECT * FROM apidbuserdatasets.userdatasetsharedwith WHERE user_dataset_id = :dataset_id
               """

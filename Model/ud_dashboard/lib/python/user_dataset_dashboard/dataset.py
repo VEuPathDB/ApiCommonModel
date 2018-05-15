@@ -42,8 +42,9 @@ class Dataset:
         self.events = []
         self.shares = {}
         self.handle_status = {"handled": False, "completed": ""}
-        self.db_owner = {"validated": False, "user": None}
+        self.db_owner = {"consistent": False, "user": None}
         self.install_status = {"installed": False, "name": ""}
+        self.db_shares = []
 
     def get_dataset_owner(self, dataset_id):
         """
@@ -150,9 +151,17 @@ class Dataset:
     def check_ownership(self):
         result = self.dashboard.appdb.get_owner(self.dataset_id)
         if result:
-            self.db_owner["validated"] = str(result[0]) == self.owner_id
-            if not self.db_owner["validated"]:
+            self.db_owner["consistent"] = str(result[0]) == self.owner_id
+            if not self.db_owner["consistent"]:
                 self.db_owner["user"] = self.dashboard.find_user_by_id(str(result[0]))
+
+    def check_shares(self):
+        results = self.dashboard.appdb.get_shares(self.dataset_id)
+        for result in results:
+            db_share = dict()
+            db_share["consistent"] = str(result[0]) == self.owner_id
+            db_share["recipient"] = self.dashboard.find_user_by_id(str(result[1]))
+            self.db_shares.append(db_share)
 
     def check_dataset_installed(self):
         """
@@ -171,21 +180,30 @@ class Dataset:
         Convenience method to handle a key : value display of database properties specific to this dataset.  Note
         that if a dataset is not 'handled' in the database, it is certainly not 'installed'.
         """
-        format_string = "{0:15} {1}"
-        print("\nDATABASE INFORMATION:")
+        format_string = "{0:17} {1}"
+        print("\nDATABASE INFORMATION: " + self.dashboard.appdb_name)
         print(format_string.format("Property", "Value"))
         self.check_dataset_handled()
         print(format_string.format("Handled", str(self.handle_status["handled"])))
         if self.handle_status["handled"]:
             print(format_string.format("Handled On", self.handle_status.get("completed", "error'd")))
-            self.check_ownership()
-            print(format_string.format("Owner Valid", self.db_owner["validated"]))
-            if not self.db_owner["validated"]:
-                print(format_string.format("DB Owner", self.db_owner["user"].formatted_user()))
             self.check_dataset_installed()
             print(format_string.format("Installed", str(self.install_status["installed"])))
             if self.install_status["installed"]:
                 print(format_string.format("Installed As", self.install_status["name"]))
+                self.check_ownership()
+                print(format_string.format("Owner Consistent", self.db_owner["consistent"]))
+                if not self.db_owner["consistent"]:
+                    print(format_string.format("DB Owner", self.db_owner["user"].formatted_user()))
+                self.check_shares()
+                first = True
+                for db_share in self.db_shares:
+                    key = "Shares" if first else ""
+                    consistent = "consistent" if db_share["consistent"] else "inconsistent"
+                    print(format_string.format(key,
+                                               consistent +
+                                               " / shared with " + db_share["recipient"].formatted_user()))
+                    first = False
 
     def display_properites(self):
         """
