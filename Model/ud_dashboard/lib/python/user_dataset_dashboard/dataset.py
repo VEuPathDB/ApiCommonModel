@@ -124,7 +124,7 @@ class Dataset:
         event_dataobj_names = self.manager.get_event_dataobj_names_created_since(dataset_create_time)
         for event_dataobj_name in event_dataobj_names:
             event_path = paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_dataobj_name)
-            event = Event(self.manager.get_dataobj_data(event_path))
+            event = Event(event_dataobj_name, self.manager.get_dataobj_data(event_path))
             if event.dataset_id == self.dataset_id:
                 self.events.append(event)
         self.events.sort(key=lambda item: item.event_id)

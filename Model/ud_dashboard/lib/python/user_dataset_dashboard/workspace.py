@@ -22,7 +22,9 @@ class Workspace:
         self.id = self.get_workspace_identity()
         self.quota = self.get_default_quota()
         self.flags = []
+        self.invalid_flags = None
         self.events = []
+        self.invalid_events = None
 
     def get_default_quota(self):
         """Return quota which is stored in units of Mb."""
@@ -43,7 +45,8 @@ class Workspace:
         Generates a list of Flag objects, sorted by exported dataset create time, created during the period specified.
         If no period is specified, all flags are displayed.  If only a start date is specified, only those flags created
         between then and the current time are displayed.  If only an end date is specified, only those flags created
-        up to but not including the end date are displayed.
+        up to but not including the end date are displayed.  Note that any invalid flags are separated out into a
+        separate list for special display.
         """
         flag_dataobj_names = self.manager\
             .get_dataobj_names_created_between(paths.FLAGS_PATH, self.start_date, self.end_date)
@@ -54,17 +57,21 @@ class Workspace:
 
     def generate_related_events(self):
         """
-        Generates a list of Event objects, sorted by event creation time, created during the periond specified.
+        Generates a list of Event objects, sorted by event creation time, created during the period specified.
         If no period is specified, all events are displayed.  If only a start date is specified, only those events
         created between then and the current time are displayed.  If only an end date is specified, only those events
-        created up to but not including the end date are displayed.
+        created up to but not including the end date are displayed.  Note that any invalid events are separated out
+        into a separate list for special display.
         """
+        candidate_events = []
         event_dataobj_names = self.manager\
             .get_dataobj_names_created_between(paths.EVENTS_PATH, self.start_date, self.end_date)
         for event_dataobj_name in event_dataobj_names:
             event_path = paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_dataobj_name)
-            event = Event(self.manager.get_dataobj_data(event_path))
-            self.events.append(event)
+            event = Event(event_dataobj_name, self.manager.get_dataobj_data(event_path))
+            candidate_events.append(event)
+        self.events = [item for item in candidate_events if item.valid]
+        self.invalid_events = list(set(candidate_events) - set(self.events))
         self.events.sort(key=lambda item: item.event_id)
 
     def parse_tarball_name(self, name):
@@ -170,6 +177,10 @@ class Workspace:
             print("No exports found in the workspace for this period")
 
     def display_invalid_flags(self):
+        """
+        Convenience method to print out the names of those data objects in the flags collection that do not conform
+        to the flag naming convention and as such, cannot be parsed.
+        """
         print("\nFLAGS NOT RECOGNIZED AS EXPORTS:")
         print("Flag file name")
         for flag in self.invalid_flags:
@@ -192,6 +203,16 @@ class Workspace:
         else:
             print("No events found in the workspace for this period")
 
+    def display_invalid_events(self):
+        """
+        Convenience method to print out the names of those data objects in the events collection that contains no
+        or incomplete json data.  Any error message is provided to help diagnose the problem.
+        """
+        print("\nINVALID EVENTS:")
+        print("{0:20} {1}".format("Event file name", "Reason"))
+        for event in self.invalid_events:
+            print("{0:20} {1}".format(event.name, event.message))
+
     def display(self):
         print("\nWORKSPACE REPORT from {} to {}".format(self.start_date, self.end_date))
         self.display_properties()
@@ -202,4 +223,6 @@ class Workspace:
         if self.invalid_flags:
             self.display_invalid_flags()
         self.display_events()
+        if self.invalid_events:
+            self.display_invalid_events()
         print("")
