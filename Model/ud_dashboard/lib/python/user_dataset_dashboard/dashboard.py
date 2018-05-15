@@ -1,5 +1,6 @@
 import os
 import json
+from appdb import AppDB
 from account import Account
 from manager import Manager
 from workspace import Workspace
@@ -37,7 +38,12 @@ class Dashboard:
                 str(config_json["account_db"]["user"]) + "/" + \
                 str(config_json["account_db"]["password"]) + "@" + \
                 str(config_json["account_db"]["name"])
+            self.app_db_connection_string = \
+                str(config_json["app_db"]["user"]) + "/" + \
+                str(config_json["app_db"]["password"]) + "@" + \
+                str(config_json["app_db"]["name"])
         self.account = Account(self.account_db_connection_string)
+        self.appdb = AppDB(self.app_db_connection_string)
         self.manager = Manager(self)
         self.users = self.create_user_cache()
 
