@@ -66,7 +66,7 @@ class Dashboard:
     def find_user_by_id(self, user_id):
         """
         Returns a User object having the given user id
-        :param user_id: wdk id of user to look up
+        :param user_id: wdk id of user to look up (make sure it is a string)
         :return: the User object if found.  Otherwise the procedure halts with an error message.
         """
         user = [user for user in self.users if user.id == user_id]
