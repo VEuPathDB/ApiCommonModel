@@ -9,19 +9,26 @@ class Event:
     workspaces.
     """
 
-    def __init__(self, event_json):
+    def __init__(self, event_name, event_json):
         """
         Populate a new event object with the data obtained from an event data object which is in a json format.  Note
         that the event id is a concatenation of a timestamp in sec and an 8 digit pid.
         :param event_json: event data object
         """
-        event_data = json.loads(event_json)
-        self.event = event_data["event"]
-        self.action = event_data.get("action")
-        self.recipient_id = event_data.get("recipient")
-        self.dataset_id = event_data["datasetId"]
-        self.event_id = event_data["eventId"]
-        self.event_date = str(self.event_id)[:-8]
+        self.valid = True
+        try:
+            self.name = event_name
+            event_data = json.loads(event_json)
+            self.event = event_data["event"]
+            self.action = event_data.get("action")
+            self.recipient_id = event_data.get("recipient")
+            self.dataset_id = event_data["datasetId"]
+            self.event_id = event_data["eventId"]
+            self.event_date = str(self.event_id)[:-8]
+        except Exception as e:
+            self.valid = False
+            self.dataset_id = None
+            self.message = getattr(e, 'message') or repr(e)
 
     @staticmethod
     def display_header():

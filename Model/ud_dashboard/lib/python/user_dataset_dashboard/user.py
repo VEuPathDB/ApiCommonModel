@@ -53,7 +53,7 @@ class User:
         event_names = self.manager.get_dataobj_names(paths.EVENTS_PATH)
         self.events = []
         for event_name in event_names:
-            event = Event(self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_name)))
+            event = Event(event_name, self.manager.get_dataobj_data(paths.EVENTS_DATA_OBJECT_TEMPLATE.format(event_name)))
             if any(dataset.dataset_id == event.dataset_id for dataset in self.datasets):
                 self.events.append(event)
         self.events.sort(key=lambda item: item.event_id)
@@ -96,7 +96,7 @@ class User:
             for event in self.events:
                 event.display(self.dashboard)
         else:
-            print("No event currently exist for this user.")
+            print("No events currently exist for this user.")
 
     def display_datasets(self):
         """
