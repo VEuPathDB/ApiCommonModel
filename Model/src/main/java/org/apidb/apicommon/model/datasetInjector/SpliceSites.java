@@ -22,12 +22,11 @@ public class SpliceSites extends  DatasetInjector {
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
-          setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
-
       } else {
-          setPropValue("includeProjects", projectName);
-          setPropValue("includeProjectsExcludeEuPathDB", projectName);
+          setPropValue("includeProjects", projectName + ",UniDB");
       }
+
+      setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
       setPropValue("graphGenePageSection", "expression");
 
