@@ -8,7 +8,7 @@ from user import User
 from dataset import Dataset
 import paths
 import sys
-import types
+import datetime
 
 
 class Dashboard:
@@ -89,12 +89,12 @@ class Dashboard:
 
     def workspace_report(self, args):
         """
-        Reports the relevant inforamtion for the iRODS workspace.  Export and event history can be limited by
-        start and end dates.
+        Reports the relevant information for the iRODS workspace.  Export and event history can be limited by
+        start and end dates.  The end date is extended 1 day since the end date alone is not inclusive.
         :param args: optional start and end dates
         """
         start_date = args.start_date
-        end_date = args.end_date
+        end_date = args.end_date + datetime.timedelta(days=1)
         workspace = Workspace(dashboard=self, start_date=start_date, end_date=end_date)
         workspace.display()
 
