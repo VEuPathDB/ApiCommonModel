@@ -53,7 +53,7 @@ class Workspace:
         candidate_flags = [Flag(self.dashboard, flag_dataobj_name) for flag_dataobj_name in flag_dataobj_names]
         self.flags = [item for item in candidate_flags if item.valid]
         self.invalid_flags = list(set(candidate_flags) - set(self.flags))
-        self.flags.sort(key=lambda item: item.exported)
+        self.flags.sort(key=lambda f: f.exported)
 
     def generate_related_events(self):
         """
@@ -72,7 +72,7 @@ class Workspace:
             candidate_events.append(event)
         self.events = [item for item in candidate_events if item.valid]
         self.invalid_events = list(set(candidate_events) - set(self.events))
-        self.events.sort(key=lambda item: item.event_id)
+        self.events.sort(key=lambda e: e.event_id)
 
     def parse_tarball_name(self, name):
         """
@@ -92,12 +92,12 @@ class Workspace:
         """
         Convenience method to handle a key : value display of workspace properties.
         """
-        format_string = "{0:15} {1:70}"
+        format_string = "{0:15} {1}"
         print("\nPROPERTIES")
         print(format_string.format("Property", "Value"))
         print(format_string.format("Id", self.id))
         print(format_string.format("Host", self.manager.get_host()))
-        print("{0:15} {1} Mb".format("Default quota", self.quota))
+        print(format_string.format("Default quota", self.quota + " Mb"))
 
     def display_inventory(self):
         """
@@ -112,11 +112,9 @@ class Workspace:
             datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_coll_name)
             dataset_coll_names = self.manager.get_coll_names(datasets_coll_path)
             if dataset_coll_names:
-                first = True
-                for dataset_coll_name in dataset_coll_names:
-                    if first:
+                for ctr, dataset_coll_name in enumerate(dataset_coll_names):
+                    if ctr == 0:
                         print("{0:15}".format(dataset_coll_name))
-                        first = False
                     else:
                         print("{0:9} {1:25} {2:25} {3:15}".format("", "", "", dataset_coll_name))
             else:
@@ -129,16 +127,18 @@ class Workspace:
         format should have a corresponding pair of export flags in the flags collection.  Anything that does not
         match the naming convention is simply detritus.
         """
+        format_string = "{0:45} {1:19} {2:6} {3}"
         print("\nLANDING ZONE (Note: Any tarballs there should be short-lived):")
-        print("{0:45} {1:19} {2:6} {3}".format("Name", "Export Date", "Pid", "Exporter"))
+        print(format_string.format("Name", "Export Date", "Pid", "Exporter"))
         tarball_names = self.manager.get_dataobj_names(paths.LANDING_ZONE_PATH)
         if tarball_names:
             for tarball_name in tarball_names:
                 exporter, exported, pid = self.parse_tarball_name(tarball_name)
                 if exporter is None:
-                    print("{0:45} {1:19} {2:6} {3}".format(tarball_name, "?", "?", "?"))
+                    # tarball name not parseable
+                    print(format_string.format(tarball_name, "?", "?", "?"))
                 else:
-                    print("{0:45} {1:19} {2:6} {3}"
+                    print(format_string
                           .format(tarball_name,
                                   datetime.datetime.fromtimestamp(int(exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
                                   pid, exporter.full_name + "(" + exporter.email + ")" + " - " + exporter.id))
@@ -151,12 +151,13 @@ class Workspace:
         collections would have names corresponding to the dataset id they would have had they been successfully
         processed.
         """
+        format_string = "{}"
         print("\nSTAGING AREA (Note: Any datasets there should be short-lived):")
-        print("{}".format("Dataset Name"))
+        print(format_string.format("Dataset Name"))
         staging_area_coll_names = self.manager.get_coll_names(paths.STAGING_PATH)
         if staging_area_coll_names:
             for staging_area_coll_name in staging_area_coll_names:
-                print("{}".format(staging_area_coll_name))
+                print(format_string.format(staging_area_coll_name))
         else:
             print("No unpacked tarballs (staged datasets) remaining in the workspace")
 
@@ -208,13 +209,19 @@ class Workspace:
         Convenience method to print out the names of those data objects in the events collection that contains no
         or incomplete json data.  Any error message is provided to help diagnose the problem.
         """
+        format_string = "{0:20} {1}"
         print("\nINVALID EVENTS:")
-        print("{0:20} {1}".format("Event file name", "Reason"))
+        print(format_string.format("Event file name", "Reason"))
         for event in self.invalid_events:
-            print("{0:20} {1}".format(event.name, event.message))
+            print(format_string.format(event.name, event.message))
 
     def display(self):
-        print("\nWORKSPACE REPORT from {} to {}".format(self.start_date, self.end_date))
+        """
+        Full featured display of workspace.  Invalid flag (export) and event displays are produced only if invalid
+        flags or events exist.
+        """
+        print("\nWORKSPACE REPORT from {} through {}"
+              .format(self.start_date.strftime('%Y-%m-%d'), (self.end_date - datetime.timedelta(days=1)).strftime('%Y-%m-%d')))
         self.display_properties()
         self.display_landing_zone_content()
         self.display_staging_area_content()
