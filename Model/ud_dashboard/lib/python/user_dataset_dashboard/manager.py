@@ -21,24 +21,21 @@ class Manager:
         :param dashboard:
         """
         self.dashboard = dashboard
-        self.session = self.get_irods_session(dashboard.workspace_use_env_file)
+        self.session = self.get_irods_session()
 
-    def get_irods_session(self, use_env_file):
+    def get_irods_session(self):
         """
-        Create one iRODS session and use it for the lenght of the command line command.
+        Create one iRODS session and use it for the length of the command line command.
         :return: iRODS session
         """
-        if use_env_file:
-            env_file = os.path.expanduser('~/.irods/irods_environment.json')
-            return iRODSSession(irods_env_file=env_file)
-        else:
-            return iRODSSession(host=self.dashboard.workspace_host,
-                                port=self.dashboard.workspace_port,
-                                user=self.dashboard.workspace_user,
-                                password=self.dashboard.workspace_password,
-                                zone=self.dashboard.workspace_zone)
+        return iRODSSession(**self.dashboard.workspace_params)
 
     def get_host(self):
+        """
+        Provides iRODS host for reports to help avoid confusion when reports are generated against different
+        iRODS systems (e.g., prod, qa, vm).
+        :return: iRODS hostname
+        """
         return self.session.host
 
     def get_coll(self, path):

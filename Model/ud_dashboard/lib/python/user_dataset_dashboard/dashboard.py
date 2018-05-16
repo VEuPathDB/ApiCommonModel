@@ -8,6 +8,7 @@ from user import User
 from dataset import Dataset
 import paths
 import sys
+import types
 
 
 class Dashboard:
@@ -20,20 +21,23 @@ class Dashboard:
 
     def __init__(self):
         """
-        The dashbard sets up the configuration information an references both the account db via the Account object
-        and iRODS workspace via the Workspace object.
+        The dashbard sets up the configuration information an references both the account db via the Account object,
+        a specific app db via the ApiDB object and iRODS workspace via the Workspace object.
         """
         dirname = os.path.dirname(__file__)
         with open(dirname + self.CONFIGURATION_PATH, "r+") as config_file:
             config_json = json.load(config_file)
-            self.workspace_use_env_file = True
+
+            # Handle irods configuration
+            self.workspace_params = dict()
             if config_json.get("workspace", None):
-                self.workspace_host = str(config_json["workspace"]["host"])
-                self.workspace_port = config_json["workspace"]["port"]
-                self.workspace_user = str(config_json["workspace"]["user"])
-                self.workspace_password = str(config_json["workspace"]["password"])
-                self.workspace_zone = str(config_json["workspace"]["zone"])
-                self.workspace_use_env_file = False
+                # Get rid of unicode in the strings for keys and values
+                for key, value in config_json["workspace"].items():
+                    self.workspace_params[str(key)] = str(value) if isinstance(value, basestring) else value
+            else:
+                self.workspace_params = {'irods_env_file': os.path.expanduser('~/.irods/irods_environment.json')}
+
+            # Handle DB configurations
             self.account_db_connection_string = \
                 str(config_json["account_db"]["user"]) + "/" + \
                 str(config_json["account_db"]["password"]) + "@" + \
@@ -42,6 +46,7 @@ class Dashboard:
                 str(config_json["app_db"]["user"]) + "/" + \
                 str(config_json["app_db"]["password"]) + "@" + \
                 str(config_json["app_db"]["name"])
+
         self.account = Account(self.account_db_connection_string)
         self.appdb = AppDB(self.app_db_connection_string)
         self.appdb_name = str(config_json["app_db"]["name"])
