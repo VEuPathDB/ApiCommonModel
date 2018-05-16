@@ -199,14 +199,14 @@ public class AnnotatedGenome extends UnannotatedGenome {
     setPropValue("familySpecies", familySpecies);
     setPropValue("organismFullName", organismFullName);
 
+
     if(getPropValueAsBoolean("isEuPathDBSite")) {
         setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
-        setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
-            
     } else {
-        setPropValue("includeProjects", projectName);
-        setPropValue("includeProjectsExcludeEuPathDB", projectName);
+        setPropValue("includeProjects", projectName + ",UniDB");
     }
+
+    setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
     // inject templates
     injectTemplate("geneFilter");
