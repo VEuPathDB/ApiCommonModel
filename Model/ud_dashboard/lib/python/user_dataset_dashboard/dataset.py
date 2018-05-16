@@ -40,7 +40,7 @@ class Dataset:
         self.created, self.type, self.size, self.projects, self.dependencies, self.datafiles = self.parse_dataset_json()
         self.events = []
         self.shares = {}
-        self.handle_status = {"handled": False, "completed": ""}
+        self.handle_status = {"handled": False, "completed": "pending"}
         self.db_owner = {"consistent": False, "user": None}
         self.install_status = {"installed": False, "name": ""}
         self.db_shares = []
@@ -143,9 +143,12 @@ class Dataset:
         if filtered:
             install_event_id = next(iter(filtered)).event_id
             result = self.dashboard.appdb.get_handled_status(install_event_id)
+            # THe else case (no row returned) is handled by the default setting in __init__
             if result:
                 self.handle_status["handled"] = True
                 self.handle_status["completed"] = result[1]
+        else:
+            self.handle_status["completed"] = "no install event found"
 
     def check_ownership(self):
         """
@@ -200,8 +203,8 @@ class Dataset:
         print(format_string.format("Property", "Value"))
         self.check_dataset_handled()
         print(format_string.format("Handled", str(self.handle_status["handled"])))
+        print(format_string.format("Handled Info", self.handle_status.get("completed", "error'd")))
         if self.handle_status["handled"]:
-            print(format_string.format("Handled On", self.handle_status.get("completed", "error'd")))
             self.check_dataset_installed()
             print(format_string.format("Installed", str(self.install_status["installed"])))
             if self.install_status["installed"]:
