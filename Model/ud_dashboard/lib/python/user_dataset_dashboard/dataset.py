@@ -2,7 +2,6 @@ import datetime
 import json
 import sys
 import paths
-
 from event import Event
 
 
@@ -101,7 +100,7 @@ class Dataset:
         for recipient_id in recipient_ids:
             self.shares[recipient_id] =\
                 {"recipient": self.dashboard.find_user_by_id(recipient_id),
-                 "valid": self.is_share_valid(recipient_id)}
+                 "valid": str(self.is_share_valid(recipient_id))}
 
     def is_share_valid(self, recipient_id):
         """
@@ -149,17 +148,32 @@ class Dataset:
                 self.handle_status["completed"] = result[1]
 
     def check_ownership(self):
+        """
+        Obtains the dataset owner from the given apidb database and accesses its consistency against that of the
+        iRODS system.  Consistency requires that the db version of the dataset owner and the iRODS version of the
+        dataset owner match.  Note that this makes sense to check only if the dataset is installed in this app
+        database.
+        """
         result = self.dashboard.appdb.get_owner(self.dataset_id)
+        # The else case (no row returned) is handled by the default setting in __init__
         if result:
             self.db_owner["consistent"] = str(result[0]) == self.owner_id
             if not self.db_owner["consistent"]:
                 self.db_owner["user"] = self.dashboard.find_user_by_id(str(result[0]))
 
     def check_shares(self):
+        """
+        Obtains the dataset shares from the given appdb database and accesses their consistency against the
+        iRODS system.  Consistency requires that the share owner (iRODS) is the dataset owner (DB) and that the
+        share recipient (iRODS) is the share recipient (DB).  Note that the iRODS shares must be obtained first and
+        that the check makes sense only if the dataset is installed in this app database.
+        """
         results = self.dashboard.appdb.get_shares(self.dataset_id)
+        # Not checking that all shares present in iRODS have matches in DB.  Only checking the reverse.
         for result in results:
             db_share = dict()
-            db_share["consistent"] = str(result[0]) == self.owner_id
+            # Make sure to convert ids to strings prior to making comparisons
+            db_share["consistent"] = str(result[0]) == self.owner_id and self.shares.get(str(result[1]))
             db_share["recipient"] = self.dashboard.find_user_by_id(str(result[1]))
             self.db_shares.append(db_share)
 
@@ -171,6 +185,7 @@ class Dataset:
         name for a relevant question).
         """
         result = self.dashboard.appdb.get_installation_status(self.dataset_id)
+        # The else case (no row returned) is handled by the default setting in __init__
         if result:
             self.install_status["installed"] = True
             self.install_status["name"] = result[1]
@@ -194,7 +209,8 @@ class Dataset:
                 self.check_ownership()
                 print(format_string.format("Owner Consistent", self.db_owner["consistent"]))
                 if not self.db_owner["consistent"]:
-                    print(format_string.format("DB Owner", self.db_owner["user"].formatted_user()))
+                    db_owner = self.db_owner["user"].formatted_user() if self.db_owner["user"] else None
+                    print(format_string.format("DB Owner", db_owner))
                 self.check_shares()
                 first = True
                 for db_share in self.db_shares:
