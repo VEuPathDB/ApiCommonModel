@@ -26,6 +26,7 @@ class Event:
             self.recipient_id = event_data.get("recipient")
             self.dataset_id = event_data["datasetId"]
             self.event_id = event_data["eventId"]
+            self.owner_id = event_data["owner"]
             self.event_date = str(self.event_id)[:-8]
         except Exception as e:
             self.valid = False
@@ -34,7 +35,7 @@ class Event:
 
     @staticmethod
     def display_header():
-        print("{0:19} {1:19} {2:12} {3:8} {4:8} {5:63}"
+        print("{0:19} {1:19} {2:12} {3:9} {4:8} {5}"
               .format("Event Date", "Event Id", "Dataset Id", "Type", "Action", "Recipient"))
 
     def display(self, dashboard):
@@ -43,14 +44,13 @@ class Event:
         only have meaning in the case of a share or unshare event and are otherwise not shown.
         :param dashboard:
         """
-        format_string = "{0:19} {1:19} {2:12} {3:8}"
-        long_format_string = format_string + "{4:8} {5} ({6}) - {7}"
+        format_string = "{0:19} {1:19} {2:12} {3:9}"
+        long_format_string = format_string + "{4:8} {5}"
         if self.event == "share":
             recipient = dashboard.find_user_by_id(self.recipient_id)
             print(long_format_string
                   .format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
-                          self.event_id, self.dataset_id, self.event, self.action,
-                          recipient.full_name, recipient.email, self.recipient_id))
+                          self.event_id, self.dataset_id, self.event, self.action, recipient.formatted_user()))
         else:
             print(format_string
                   .format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
