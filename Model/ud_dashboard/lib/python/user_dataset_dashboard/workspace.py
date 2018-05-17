@@ -101,7 +101,7 @@ class Workspace:
         properties_table.add_row(["Default quota", self.quota + " Mb"])
         print(properties_table)
 
-    def display_inventory(self):
+    def display_inventory(self, show_dataset_owners):
         """
         Prints a summary view of the workspace users contents
         """
@@ -120,8 +120,9 @@ class Workspace:
                         row = [user.formatted_user(), dataset_coll_name] if ctr == 0 else ["", dataset_coll_name]
                         inventory_table.add_row(row)
                 else:
-                    row = [user.formatted_user(), ""]
-                    inventory_table.add_row(row)
+                    if not show_dataset_owners:
+                        row = [user.formatted_user(), ""]
+                        inventory_table.add_row(row)
             print(inventory_table)
         else:
             print("Workspace currently unused.")
@@ -220,7 +221,7 @@ class Workspace:
                 invalid_events_table.add_row([event.name, event.message])
             print(invalid_events_table)
 
-    def display(self):
+    def display(self, show_dataset_owners):
         """
         Full featured display of workspace.  Invalid flag (export) and event displays are produced only if invalid
         flags or events exist.
@@ -231,7 +232,7 @@ class Workspace:
         self.display_properties()
         self.display_landing_zone_content()
         self.display_staging_area_content()
-        self.display_inventory()
+        self.display_inventory(show_dataset_owners)
         self.display_flags()
         self.display_invalid_flags()
         self.display_events()

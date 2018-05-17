@@ -115,9 +115,10 @@ class User:
             datasets_table.align["Total Size (Mb)"] = "r"
             datasets_table.align["Dataset Name"] = "l"
             for dataset in self.datasets:
-                datasets_table.add_row([dataset.dataset_id,
-                     datetime.datetime.fromtimestamp(int(dataset.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
-                                              "{: .6f}".format(dataset.size/1E6), dataset.name])
+                row = [dataset.dataset_id,
+                       datetime.datetime.fromtimestamp(int(dataset.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                       "{: .6f}".format(dataset.size/1E6), dataset.name]
+                datasets_table.add_row(row)
             print(datasets_table)
         else:
             print("No datasets currently exist for this user.")

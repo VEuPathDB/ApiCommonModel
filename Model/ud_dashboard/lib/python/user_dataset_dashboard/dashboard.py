@@ -95,8 +95,9 @@ class Dashboard:
         """
         start_date = args.start_date
         end_date = args.end_date + datetime.timedelta(days=1)
+        show_dataset_owners = args.show_dataset_owners
         workspace = Workspace(dashboard=self, start_date=start_date, end_date=end_date)
-        workspace.display()
+        workspace.display(show_dataset_owners)
 
     def user_report(self, args):
         """
