@@ -69,7 +69,7 @@ class Dataset:
         """
         Populates the dataset object with information gathered from the dataset's dataset.json data object (i.e.,
         projects, type, create date, total size, dependency information and datafile information.
-        :return: tuplic containing dataset create date, type of dataset, total size, project list, dependency data, and
+        :return: tuple containing dataset create date, type of dataset, total size, project list, dependency data, and
         data file information.
         """
         dataset_json_path = paths.USER_DATASET_DATASET_DATA_OBJECT_TEMPLATE.format(self.owner_id, self.dataset_id)

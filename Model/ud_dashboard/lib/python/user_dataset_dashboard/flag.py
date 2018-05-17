@@ -62,24 +62,27 @@ class Flag:
         Class method that takes in a set of flags and displays them.  Optionally, the caller can suppress display
         of the exporter (e.g., would be redundant information in a user report).  Also optionally, the caller can
         suppress display of any failure messages (those involve reading data object contents which would probably
-        needlessly slow a workspace report).
+        needlessly slow a workspace report).  The absence of flags is noted with a message.
         :param flags: set of flag objects to display
         :param show_exporter: true if the exporter (user) should be displayed and false otherwise.
         :param show_message: true if any failure msg should be displayed and false otherwise.
         """
         print("\nEXPORT HISTORY:")
-        msg = "Msg" if show_message else ""
-        flag_table = PrettyTable(["Export Date", "Indicates", "Pid", "Exporter", msg]) if show_exporter\
-            else PrettyTable(["Export Date", "Indicates", "Pid", msg])
-        flag_table.align["Indicates"] = "l"
-        flag_table.align["Pid"] = "r"
-        for flag in flags:
-            row = [datetime.datetime.fromtimestamp(int(flag.exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
-                   flag.indicator,
-                   flag.export_pid]
-            if show_exporter:
-                flag_table.align["Exporter"] = "l"
-                row.append(flag.exporter.formatted_user())
-            row.append(flag.get_flag_contents()) if show_message and flag.type == "failure dataset" else row.append("")
-            flag_table.add_row(row)
-        print(flag_table)
+        if flags:
+            msg = "Msg" if show_message else ""
+            flag_table = PrettyTable(["Export Date", "Indicates", "Pid", "Exporter", msg]) if show_exporter\
+                else PrettyTable(["Export Date", "Indicates", "Pid", msg])
+            flag_table.align["Indicates"] = "l"
+            flag_table.align["Pid"] = "r"
+            for flag in flags:
+                row = [datetime.datetime.fromtimestamp(int(flag.exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                       flag.indicator,
+                       flag.export_pid]
+                if show_exporter:
+                    flag_table.align["Exporter"] = "l"
+                    row.append(flag.exporter.formatted_user())
+                row.append(flag.get_flag_contents()) if show_message and flag.type == "failure dataset" else row.append("")
+                flag_table.add_row(row)
+            print(flag_table)
+        else:
+            print("No exports were found for the given circumstances.")

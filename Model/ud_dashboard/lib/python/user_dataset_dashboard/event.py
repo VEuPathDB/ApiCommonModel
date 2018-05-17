@@ -37,7 +37,8 @@ class Event:
     @staticmethod
     def display(dashboard, events):
         """
-        Class method that takes in a list of event objects and displays them.
+        Class method that takes in a list of event objects and displays them.  The absence of events is noted
+        with a message.
         :param dashboard:
         :param events: set of event objects to display
         """
@@ -55,8 +56,8 @@ class Event:
                     recipient = dashboard.find_user_by_id(event.recipient_id)
                     row.extend([event.action, recipient.formatted_user()])
                 else:
-                    row.extend(["",""])
+                    row.extend(["", ""])
                 event_table.add_row(row)
             print(event_table)
         else:
-            print("No events found for the given circumstances.")
+            print("No events were found for the given circumstances.")
