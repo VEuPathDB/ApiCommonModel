@@ -4,6 +4,8 @@ from dataset import Dataset
 from flag import Flag
 from event import Event
 import paths
+import datetime
+from prettytable import PrettyTable
 
 
 class User:
@@ -72,66 +74,70 @@ class User:
         wdk ids.  Full names and email addresses are gleaned from the account db.
         """
         print("\nPROPERTIES")
-        print(self.formatted_user())
+        properties_table = PrettyTable(["Property", "Value"])
+        properties_table.align = "l"
+        properties_table.add_row(["User Info", self.formatted_user()])
         if self.datasets:
             total_size = reduce(lambda acc, value: acc + value, [dataset.size for dataset in self.datasets])/1E6
         else:
             total_size = 0
-        print("{0:15} {1:.6f} Mb".format("Usage", total_size))
+        properties_table.add_row(["Usage", str(total_size) + " Mb"])
         quota = float(Workspace(dashboard=self.dashboard).get_default_quota())
-        print("{0:15} {1}".format("% Quota Used", round(100 * total_size/quota, 1)))
+        properties_table.add_row(["% Quota Used", round(100 * total_size/quota, 1)])
+        print(properties_table)
 
     def display_flags(self):
         """
         Convenience method to handle tabular display of flags set by this user.  Presently, flags only refer to
-        Galaxy exports.  The table appears but the absence of flags is noted with a message.  Note that a user
-        may have an existence on the iRODS system without having used it at all.
+        Galaxy exports.  The absence of flags is noted with a message.  Note that a user may have an existence on
+        the iRODS system without ever having exported to it.
         """
-        print("\nEXPORTS")
-        Flag.display_header(False, True)
         self.generate_related_flags()
-        if self.flags:
-            for flag in self.flags:
-                flag.display(False, True)
-        else:
-            print("No exports currently exist for this user.")
+        Flag.display(self.flags, False, True)
 
     def display_events(self):
-        print("\nEVENTS")
-        Event.display_header()
+        """
+        Convenience method to handle tabular display of events set by this user.  Since generating event data can be a
+        lengthy process, event data is generated only when the user report is set to include it.
+        """
         self.generate_related_events()
-        if self.events:
-            for event in self.events:
-                event.display(self.dashboard)
-        else:
-            print("No events currently exist for this user.")
+        Event.display(self.dashboard, self.events)
 
     def display_datasets(self):
         """
-        Convenience method to handle tabular display of datasets owned by this user.  The table always appears
-        but the absence of datasets is noted with a message.
+        Convenience method to handle tabular display of datasets owned by this user.  The absence of datasets is
+        noted with a message.
         """
         print("\nOWNED DATASETS:")
         if self.datasets:
-            Dataset.display_header()
+            datasets_table = PrettyTable(["Dataset Id", "Create Date", "Total Size (Mb)", "Dataset Name"])
+            datasets_table.align["Dataset Id"] = "r"
+            datasets_table.align["Total Size (Mb)"] = "r"
+            datasets_table.align["Dataset Name"] = "l"
             for dataset in self.datasets:
-                dataset.display_dataset()
+                datasets_table.add_row([dataset.dataset_id,
+                     datetime.datetime.fromtimestamp(int(dataset.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                                              "{: .6f}".format(dataset.size/1E6), dataset.name])
+            print(datasets_table)
         else:
             print("No datasets currently exist for this user.")
 
     def display_shares(self):
         """
-        Convenience method to handle tabular display of datasets currently shared with this user.  The table
-        always appears but the absence of shares is noted with a message.
+        Convenience method to handle tabular display of datasets currently shared with this user.  The absence of
+        shares is noted with a message.
         """
         print("\nSHARED DATASETS:")
-        print("{0:15} {1}".format("Dataset Id", "Owner"))
         external_datasets = self.get_external_datasets()
         if external_datasets:
+            shares_table = PrettyTable(["Dataset Id", "Owner"])
+            shares_table.align["Dataset Id"] = "r"
+            shares_table.align["Owner"] = "l"
             for result in self.get_external_datasets():
                 (owner_id, dataset) = result.split(".")
                 owner = self.dashboard.find_user_by_id(owner_id)
-                print("{0:15} {1} ({2}) - {3}".format(dataset, owner.full_name, owner.email, owner_id))
+                shares_table.add_row([dataset, owner.formatted_user()])
+            print(shares_table)
         else:
             print("No datasets are currently being shared with this user.")
 

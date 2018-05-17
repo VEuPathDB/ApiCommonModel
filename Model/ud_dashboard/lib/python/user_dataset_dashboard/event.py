@@ -1,6 +1,7 @@
 from __future__ import print_function
 import json
 import datetime
+from prettytable import PrettyTable
 
 
 class Event:
@@ -34,24 +35,23 @@ class Event:
             self.message = getattr(e, 'message') or repr(e)
 
     @staticmethod
-    def display_header():
-        print("{0:19} {1:19} {2:12} {3:9} {4:8} {5}"
-              .format("Event Date", "Event Id", "Dataset Id", "Type", "Action", "Recipient"))
-
-    def display(self, dashboard):
-        """
-        Provides a display of the event contained within this Event object.  The action and recipient properties
-        only have meaning in the case of a share or unshare event and are otherwise not shown.
-        :param dashboard:
-        """
-        format_string = "{0:19} {1:19} {2:12} {3:9}"
-        long_format_string = format_string + "{4:8} {5}"
-        if self.event == "share":
-            recipient = dashboard.find_user_by_id(self.recipient_id)
-            print(long_format_string
-                  .format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
-                          self.event_id, self.dataset_id, self.event, self.action, recipient.formatted_user()))
+    def display(dashboard, events):
+        print("\nEVENT HISTORY:")
+        if events:
+            event_table = PrettyTable(["Event Date", "Event Id", "Dataset Id", "Type", "Action", "Recipient"])
+            event_table.align["Dataset Id"] = "r"
+            event_table.align["Type"] = "l"
+            event_table.align["Action"] = "l"
+            event_table.align["Recipient"] = "l"
+            for event in events:
+                row = [datetime.datetime.fromtimestamp(int(event.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
+                       event.event_id, event.dataset_id, event.event]
+                if event.event == Event.EVENT_TYPES['SHARE']:
+                    recipient = dashboard.find_user_by_id(event.recipient_id)
+                    row.extend([event.action, recipient.formatted_user()])
+                else:
+                    row.extend(["",""])
+                event_table.add_row(row)
+            print(event_table)
         else:
-            print(format_string
-                  .format(datetime.datetime.fromtimestamp(int(self.event_date)).strftime('%Y-%m-%d %H:%M:%S'),
-                          self.event_id, self.dataset_id, self.event))
+            print("No events found for the given circumstances.")

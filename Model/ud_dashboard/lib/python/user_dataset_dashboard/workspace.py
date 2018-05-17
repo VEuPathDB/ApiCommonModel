@@ -2,6 +2,7 @@ from __future__ import print_function
 import re
 import datetime
 import paths
+from prettytable import PrettyTable
 from flag import Flag
 from event import Event
 
@@ -92,33 +93,38 @@ class Workspace:
         """
         Convenience method to handle a key : value display of workspace properties.
         """
-        format_string = "{0:15} {1}"
-        print("\nPROPERTIES")
-        print(format_string.format("Property", "Value"))
-        print(format_string.format("Id", self.id))
-        print(format_string.format("Host", self.manager.get_host()))
-        print(format_string.format("Default quota", self.quota + " Mb"))
+        print("\nPROPERTIES:")
+        properties_table = PrettyTable(["Property", "Value"])
+        properties_table.align = "l"
+        properties_table.add_row(["Id", self.id])
+        properties_table.add_row(["Host", self.manager.get_host()])
+        properties_table.add_row(["Default quota", self.quota + " Mb"])
+        print(properties_table)
 
     def display_inventory(self):
         """
-        Prints a summary view of the workspace contents
+        Prints a summary view of the workspace users contents
         """
         print("\nINVENTORY:")
-        print("{0:9} {1:25} {2:25} {3:15}".format("User Id", "User Name", "User Email", "Dataset Id"))
+        inventory_table = PrettyTable(["User", "Dataset Id"])
+        inventory_table.align["User"] = "l"
+        inventory_table.align["Dataset Id"] = "r"
         user_coll_names = self.manager.get_coll_names(paths.USERS_PATH)
-        for user_coll_name in user_coll_names:
-            user = self.dashboard.find_user_by_id(user_coll_name)
-            print("{0:9} {1:25} {2:25} ".format(user.id, user.full_name, user.email), end='')
-            datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_coll_name)
-            dataset_coll_names = self.manager.get_coll_names(datasets_coll_path)
-            if dataset_coll_names:
-                for ctr, dataset_coll_name in enumerate(dataset_coll_names):
-                    if ctr == 0:
-                        print("{0:15}".format(dataset_coll_name))
-                    else:
-                        print("{0:9} {1:25} {2:25} {3:15}".format("", "", "", dataset_coll_name))
-            else:
-                print()
+        if user_coll_names:
+            for user_coll_name in user_coll_names:
+                user = self.dashboard.find_user_by_id(user_coll_name)
+                datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_coll_name)
+                dataset_coll_names = self.manager.get_coll_names(datasets_coll_path)
+                if dataset_coll_names:
+                    for ctr, dataset_coll_name in enumerate(dataset_coll_names):
+                        row = [user.formatted_user(), dataset_coll_name] if ctr == 0 else ["", dataset_coll_name]
+                        inventory_table.add_row(row)
+                else:
+                    row = [user.formatted_user(), ""]
+                    inventory_table.add_row(row)
+            print(inventory_table)
+        else:
+            print("Workspace currently unused.")
 
     def display_landing_zone_content(self):
         """
@@ -127,37 +133,43 @@ class Workspace:
         format should have a corresponding pair of export flags in the flags collection.  Anything that does not
         match the naming convention is simply detritus.
         """
-        format_string = "{0:45} {1:19} {2:6} {3}"
         print("\nLANDING ZONE (Note: Any tarballs there should be short-lived):")
-        print(format_string.format("Name", "Export Date", "Pid", "Exporter"))
+        landing_zone_table = PrettyTable(["Name", "Export Date", "Pid", "Exporter"])
+        landing_zone_table.align["Name"] = "l"
+        landing_zone_table.align["Export Date"] = "c"
+        landing_zone_table.align["Pid"] = "r"
+        landing_zone_table.align["Exporter"] = "l"
         tarball_names = self.manager.get_dataobj_names(paths.LANDING_ZONE_PATH)
         if tarball_names:
             for tarball_name in tarball_names:
                 exporter, exported, pid = self.parse_tarball_name(tarball_name)
                 if exporter is None:
                     # tarball name not parseable
-                    print(format_string.format(tarball_name, "?", "?", "?"))
+                    landing_zone_table.add_row([tarball_name, "?", "?", "?"])
                 else:
-                    print(format_string
-                          .format(tarball_name,
-                                  datetime.datetime.fromtimestamp(int(exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
-                                  pid, exporter.full_name + "(" + exporter.email + ")" + " - " + exporter.id))
+                    pass
+                    row = [tarball_name,
+                           datetime.datetime.fromtimestamp(int(exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                           pid, exporter.formatted_user()]
+                    landing_zone_table.add_row(row)
+            print(landing_zone_table)
         else:
             print("No exported tarballs remaining in the workspace")
 
     def display_staging_area_content(self):
         """
         Convenience method to handle tabular display of any residual staged datasets in the staging area.  These
-        collections would have names corresponding to the dataset id they would have had they been successfully
+        collections would have names corresponding to the dataset id they would have had, had they been successfully
         processed.
         """
-        format_string = "{}"
         print("\nSTAGING AREA (Note: Any datasets there should be short-lived):")
-        print(format_string.format("Dataset Name"))
         staging_area_coll_names = self.manager.get_coll_names(paths.STAGING_PATH)
         if staging_area_coll_names:
+            staging_area_table = PrettyTable(["Dataset Name"])
+            staging_area_table.align = "r"
             for staging_area_coll_name in staging_area_coll_names:
-                print(format_string.format(staging_area_coll_name))
+                staging_area_table.add_row([staging_area_coll_name])
+            print(staging_area_table)
         else:
             print("No unpacked tarballs (staged datasets) remaining in the workspace")
 
@@ -168,24 +180,21 @@ class Workspace:
         flags shows the exporter but no messages in the case of a failed export.  That information is available
         via a user_report parameterized with the exporter's email.
         """
-        print("\nEXPORT HISTORY:")
         self.generate_related_flags()
-        Flag.display_header(True, False)
-        if self.flags:
-            for flag in self.flags:
-                flag.display(True, False)
-        else:
-            print("No exports found in the workspace for this period")
+        Flag.display(self.flags, True, False)
 
     def display_invalid_flags(self):
         """
         Convenience method to print out the names of those data objects in the flags collection that do not conform
         to the flag naming convention and as such, cannot be parsed.
         """
-        print("\nFLAGS NOT RECOGNIZED AS EXPORTS:")
-        print("Flag file name")
-        for flag in self.invalid_flags:
-            print(flag.name)
+        if self.invalid_flags:
+            print("\nFLAGS NOT RECOGNIZED AS EXPORTS:")
+            invalid_flags_table = PrettyTable(["Flag data object name"])
+            invalid_flags_table.align = "l"
+            for flag in self.invalid_flags:
+                invalid_flags_table.add_row([flag.name])
+            print(invalid_flags_table)
 
     def display_events(self):
         """
@@ -195,25 +204,21 @@ class Workspace:
         the scope of the request by entering a period defined by start and end dates when requesting a workspace
         report.
         """
-        print("\nEVENT HISTORY:")
         self.generate_related_events()
-        Event.display_header()
-        if self.events:
-            for event in self.events:
-                event.display(self.dashboard)
-        else:
-            print("No events found in the workspace for this period")
+        Event.display(self.dashboard, self.events)
 
     def display_invalid_events(self):
         """
         Convenience method to print out the names of those data objects in the events collection that contains no
-        or incomplete json data.  Any error message is provided to help diagnose the problem.
+        or incomplete json data.  Any error message available is provided to help diagnose the problem.
         """
-        format_string = "{0:20} {1}"
-        print("\nINVALID EVENTS:")
-        print(format_string.format("Event file name", "Reason"))
-        for event in self.invalid_events:
-            print(format_string.format(event.name, event.message))
+        if self.invalid_events:
+            print("\nINVALID EVENTS:")
+            invalid_events_table = PrettyTable(["Event file name", "Reason"])
+            invalid_events_table.align = "l"
+            for event in self.invalid_events:
+                invalid_events_table.add_row([event.name, event.message])
+            print(invalid_events_table)
 
     def display(self):
         """
@@ -221,15 +226,14 @@ class Workspace:
         flags or events exist.
         """
         print("\nWORKSPACE REPORT from {} through {}"
-              .format(self.start_date.strftime('%Y-%m-%d'), (self.end_date - datetime.timedelta(days=1)).strftime('%Y-%m-%d')))
+              .format(self.start_date.strftime('%Y-%m-%d'),
+                      (self.end_date - datetime.timedelta(days=1)).strftime('%Y-%m-%d')))
         self.display_properties()
         self.display_landing_zone_content()
         self.display_staging_area_content()
         self.display_inventory()
         self.display_flags()
-        if self.invalid_flags:
-            self.display_invalid_flags()
+        self.display_invalid_flags()
         self.display_events()
-        if self.invalid_events:
-            self.display_invalid_events()
+        self.display_invalid_events()
         print("")

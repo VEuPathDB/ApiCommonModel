@@ -1,6 +1,7 @@
 import datetime
 import json
 import sys
+from prettytable import PrettyTable
 import paths
 from event import Event
 
@@ -198,67 +199,66 @@ class Dataset:
         Convenience method to handle a key : value display of database properties specific to this dataset.  Note
         that if a dataset is not 'handled' in the database, it is certainly not 'installed'.
         """
-        format_string = "{0:17} {1}"
         print("\nDATABASE INFORMATION: " + self.dashboard.appdb_name)
-        print(format_string.format("Property", "Value"))
+        database_info_table = PrettyTable(["Property", "Value"])
+        database_info_table.align = "l"
         self.check_dataset_handled()
-        print(format_string.format("Handled", str(self.handle_status["handled"])))
-        print(format_string.format("Handled Info", self.handle_status.get("completed", "error'd")))
+        database_info_table.add_row(["Handled", str(self.handle_status["handled"])])
+        database_info_table.add_row(["Handled Info", self.handle_status.get("completed", "error'd")])
         if self.handle_status["handled"]:
             self.check_dataset_installed()
-            print(format_string.format("Installed", str(self.install_status["installed"])))
+            database_info_table.add_row(["Installed", str(self.install_status["installed"])])
             if self.install_status["installed"]:
-                print(format_string.format("Installed As", self.install_status["name"]))
+                database_info_table.add_row(["Installed As", self.install_status["name"]])
                 self.check_ownership()
-                print(format_string.format("Owner Consistent", self.db_owner["consistent"]))
+                database_info_table.add_row(["Owner Consistent", self.db_owner["consistent"]])
                 if not self.db_owner["consistent"]:
                     db_owner = self.db_owner["user"].formatted_user() if self.db_owner["user"] else None
-                    print(format_string.format("DB Owner", db_owner))
+                    database_info_table.add_row(["DB Owner", db_owner])
                 self.check_shares()
-                first = True
-                for db_share in self.db_shares:
-                    key = "Shares" if first else ""
+                for ctr, db_share in enumerate(self.db_shares):
+                    key = "Shares" if ctr == 0 else ""
                     consistent = "consistent" if db_share["consistent"] else "inconsistent"
-                    print(format_string.format(key,
+                    database_info_table.add_row([key,
                                                consistent +
-                                               " / shared with " + db_share["recipient"].formatted_user()))
-                    first = False
+                                               " / shared with " + db_share["recipient"].formatted_user()])
+        print(database_info_table)
 
     def display_properites(self):
         """
         Convenience method to handle a key : value display of dataset properties.  Note that changes to name, summary
         and description are possible whereas other properties are immutable.
         """
-        format_string = "{0:15} {1:70}"
         print("\nPROPERTIES:")
-        print(format_string.format("Property", "Value"))
-        print(format_string.format("Dataset Id", self.dataset_id))
-        print(format_string.format("Name", self.name))
-        print(format_string.format("Summary", self.summary))
-        print(format_string.format("Description", self.description))
-        print("{0:15} {1}".format("Owner", self.owner.formatted_user()))
-        print(format_string.format("Created",
+        properties_table = PrettyTable(["Property", "Value"])
+        properties_table.align = "l"
+        properties_table.add_row(["Dataset Id", self.dataset_id])
+        properties_table.add_row(["Name", self.name])
+        properties_table.add_row(["Summary", self.summary])
+        properties_table.add_row(["Description", self.description])
+        properties_table.add_row(["Owner", self.owner.formatted_user()])
+        properties_table.add_row(["Created",
                                    datetime.datetime.fromtimestamp(int(self.created) / 1000)
-                                   .strftime('%Y-%m-%d %H:%M:%S')))
-        print("{0:15} {1} (v{2})".format("Type", self.type["name"], self.type["version"]))
-        print("{0:15} {1:.6f} Mb".format("Total Size", self.size/1E6))
-        print(format_string.format("Projects", ",".join(self.projects)))
+                                   .strftime('%Y-%m-%d %H:%M:%S')])
+        properties_table.add_row(["Type", "{} (v{})".format(self.type["name"], self.type["version"])])
+        properties_table.add_row(["Total Size", "{:.6f} Mb".format(self.size/1E6)])
+        properties_table.add_row(["Projects", ",".join(self.projects)])
+        print(properties_table)
 
     def display_dependencies(self):
         """
-        Convenience method to handle tabular display of dataset dependencies.  The table always appears but an
-        absence of dependencies is noted with a message.
-        :return:
+        Convenience method to handle tabular display of dataset dependencies.  The absence of dependencies is noted
+        with a message.
         """
-        format_string = "{0:30} {1:10} {2:40}"
         print("\nDEPENDENCIES:")
-        print(format_string.format("Name", "Version", "Identifier"))
         if self.dependencies:
+            dependency_table = PrettyTable(["Name", "Version", "Identifier"])
+            dependency_table.align = "l"
             for dependency in self.dependencies:
-                print(format_string
-                      .format(dependency["resourceDisplayName"],
-                              dependency["resourceVersion"],
-                              dependency["resourceIdentifier"]))
+                dependency_table.add_row([dependency["resourceDisplayName"],
+                                          dependency["resourceVersion"],
+                                          dependency["resourceIdentifier"]])
+            print(dependency_table)
         else:
             print("The dataset has no dependecies")
 
@@ -269,28 +269,29 @@ class Dataset:
         likely result in a parsing error during an installation attempt.
         """
         print("\nDATA FILES:")
-        print("{0:25} {1:14}".format("File Name", "File Size (Mb)"))
         if self.datafiles:
+            datafiles_table = PrettyTable(["File Name", "File Size (Mb)"])
+            datafiles_table.align["File Name"] = "l"
+            datafiles_table.align["File Size (Mb)"] = "r"
             for datafile in self.datafiles:
-                print("{0:25} {1:.6f}".format(datafile["name"], datafile["size"]/1E6))
+                datafiles_table.add_row([datafile["name"], "{:.6f}".format(datafile["size"]/1E6)])
+            print(datafiles_table)
         else:
             print("This dataset does not indicate any datafiles and as such is not a valid dataset.")
 
     def display_shares(self):
         """
-        Convenience method to handle tabular display of current share information.  The table always appears but
-        an absence of shares is noted with a message.
+        Convenience method to handle tabular display of current share information.  The absence of shares is noted
+        with a message.
         """
-        format_string = "{0:25} {1:25} {2:15} {3:9}"
         print("\nCURRENT SHARES:")
-        print(format_string.format("Recipient Name", "Recipient Email", "Recipient Id", "Validated"))
         if self.shares:
+            shares_table = PrettyTable(["Recipient", "Validated"])
+            shares_table.align["Recipient"] = "l"
             for recipient_id in self.shares.keys():
-                print(format_string
-                      .format(self.shares[recipient_id]['recipient'].full_name,
-                              self.shares[recipient_id]['recipient'].email,
-                              recipient_id,
-                              self.shares[recipient_id]['valid']))
+                row = [self.shares[recipient_id]['recipient'].formatted_user(), self.shares[recipient_id]['valid']]
+                shares_table.add_row(row)
+            print(shares_table)
         else:
             print("This dataset is not currently shared.")
 
@@ -300,25 +301,8 @@ class Dataset:
         One will never see a delete event since the dataset would have been removed just prior to the creation of
         such an event.
         """
-        print("\nEVENT HISTORY:")
-        Event.display_header()
-        for event in self.events:
-            event.display(self.dashboard)
-
-    @staticmethod
-    def display_header():
-        print("{0:15} {1:19} {2:>17} {3}".format("Dataset Id", "Create Date", "Total Size (Mb)", "Dataset Name"))
-
-    def display_dataset(self):
-        """
-        Provides a more abbreviated report of a user dataset based upon content available in the meta.json and
-        dataset.json objects only.  This report may be called when assembling other reports where the dataset is not
-        the emphasis of the report.
-        """
-        print("{0:15} {1:19} {2:17.6f} {3}".
-              format(self.dataset_id,
-                     datetime.datetime.fromtimestamp(int(self.created)/1000).strftime('%Y-%m-%d %H:%M:%S'),
-                     self.size/1E6, self.name))
+        self.generate_event_list()
+        Event.display(self.dashboard, self.events)
 
     def display(self):
         """
@@ -327,7 +311,6 @@ class Dataset:
         """
         print("\nUSER DATASET REPORT for {}".format(self.dataset_id))
         self.get_shares()
-        self.generate_event_list()
         self.display_properites()
         self.display_dependencies()
         self.display_datafiles()
