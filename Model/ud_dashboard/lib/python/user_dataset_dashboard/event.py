@@ -36,6 +36,11 @@ class Event:
 
     @staticmethod
     def display(dashboard, events):
+        """
+        Class method that takes in a list of event objects and displays them.
+        :param dashboard:
+        :param events: set of event objects to display
+        """
         print("\nEVENT HISTORY:")
         if events:
             event_table = PrettyTable(["Event Date", "Event Id", "Dataset Id", "Type", "Action", "Recipient"])

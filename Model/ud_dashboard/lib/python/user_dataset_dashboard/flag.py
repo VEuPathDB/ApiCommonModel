@@ -58,6 +58,15 @@ class Flag:
 
     @staticmethod
     def display(flags, show_exporter, show_message):
+        """
+        Class method that takes in a set of flags and displays them.  Optionally, the caller can suppress display
+        of the exporter (e.g., would be redundant information in a user report).  Also optionally, the caller can
+        suppress display of any failure messages (those involve reading data object contents which would probably
+        needlessly slow a workspace report).
+        :param flags: set of flag objects to display
+        :param show_exporter: true if the exporter (user) should be displayed and false otherwise.
+        :param show_message: true if any failure msg should be displayed and false otherwise.
+        """
         print("\nEXPORT HISTORY:")
         msg = "Msg" if show_message else ""
         flag_table = PrettyTable(["Export Date", "Indicates", "Pid", "Exporter", msg]) if show_exporter\
@@ -69,6 +78,7 @@ class Flag:
                    flag.indicator,
                    flag.export_pid]
             if show_exporter:
+                flag_table.align["Exporter"] = "l"
                 row.append(flag.exporter.formatted_user())
             row.append(flag.get_flag_contents()) if show_message and flag.type == "failure dataset" else row.append("")
             flag_table.add_row(row)

@@ -220,8 +220,8 @@ class Dataset:
                     key = "Shares" if ctr == 0 else ""
                     consistent = "consistent" if db_share["consistent"] else "inconsistent"
                     database_info_table.add_row([key,
-                                               consistent +
-                                               " / shared with " + db_share["recipient"].formatted_user()])
+                                                 consistent +
+                                                 " / shared with " + db_share["recipient"].formatted_user()])
         print(database_info_table)
 
     def display_properites(self):
@@ -238,8 +238,8 @@ class Dataset:
         properties_table.add_row(["Description", self.description])
         properties_table.add_row(["Owner", self.owner.formatted_user()])
         properties_table.add_row(["Created",
-                                   datetime.datetime.fromtimestamp(int(self.created) / 1000)
-                                   .strftime('%Y-%m-%d %H:%M:%S')])
+                                  datetime.datetime.fromtimestamp(int(self.created) / 1000)
+                                  .strftime('%Y-%m-%d %H:%M:%S')])
         properties_table.add_row(["Type", "{} (v{})".format(self.type["name"], self.type["version"])])
         properties_table.add_row(["Total Size", "{:.6f} Mb".format(self.size/1E6)])
         properties_table.add_row(["Projects", ",".join(self.projects)])
