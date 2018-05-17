@@ -20,6 +20,10 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       setPropValue("graphYAxisDescription", yAxis.replace("'", ""));
 
       setPropValue("isGraphCustom", "true");
+
+      String projectName = getPropValue("projectName");
+      setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
+
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
