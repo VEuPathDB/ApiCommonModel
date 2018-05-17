@@ -2,6 +2,7 @@ from __future__ import print_function
 import datetime
 import re
 import paths
+from prettytable import PrettyTable
 
 
 class Flag:
@@ -56,34 +57,19 @@ class Flag:
         self.content = self.manager.get_dataobj_data(path)
 
     @staticmethod
-    def display_header(show_exporter, show_message):
-        """
-        A tabular display of flags may optionally show or hide exporter information and flag content (i.e., diagnostic
-        messages).  The header accommodates those options.
-        :param show_exporter: True if the exporter information is to be displayed and False otherwise
-        :param show_message:  True if any messages are to be displayed and False otherwise
-        """
+    def display(flags, show_exporter, show_message):
+        print("\nEXPORT HISTORY:")
         msg = "Msg" if show_message else ""
-        if show_exporter:
-            print("{0:19} {1:17} {2:9} {3:65} {4:40}".format("Export Date", "Indicates", "Pid", "Exporter", msg))
-        else:
-            print("{0:19} {1:17} {2:9} {3:40}".format("Export Date", "Indicates", "Pid", msg))
-
-    def display(self, show_exporter, show_messages):
-        """
-        Provides a display of the flag contained within this Flag object.  The display may optionally show or hide
-        exporter information and flag content.
-        :param show_exporter: True if the exporter information is to be displayed and False otherwise
-        :param show_messages: True if any message are to be displayed and False otherwise
-        """
-        print("{0:19} {1:17} {2:9}".format(
-              datetime.datetime.fromtimestamp(int(self.exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
-              self.indicator,
-              self.export_pid), end='')
-        if show_exporter:
-            print("{0:<65}".format(self.exporter.full_name + " (" + self.exporter.email + ") - " + self.exporter.id),
-                  end='')
-        if show_messages:
-            if self.type == "failure_dataset":
-                print("{0:40}".format(self.get_flag_contents()))
-        print()
+        flag_table = PrettyTable(["Export Date", "Indicates", "Pid", "Exporter", msg]) if show_exporter\
+            else PrettyTable(["Export Date", "Indicates", "Pid", msg])
+        flag_table.align["Indicates"] = "l"
+        flag_table.align["Pid"] = "r"
+        for flag in flags:
+            row = [datetime.datetime.fromtimestamp(int(flag.exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
+                   flag.indicator,
+                   flag.export_pid]
+            if show_exporter:
+                row.append(flag.exporter.formatted_user())
+            row.append(flag.get_flag_contents()) if show_message and flag.type == "failure dataset" else row.append("")
+            flag_table.add_row(row)
+        print(flag_table)
