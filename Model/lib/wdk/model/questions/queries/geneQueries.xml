@@ -2659,29 +2659,30 @@ SELECT q.*, 'Y' as matched_result FROM
                    ta.project_id,
                    max(round(profile_min_max.max_value, 1)) as max_percentile_chosen,
                    min(round(profile_min_max.min_value, 1)) as min_percentile_chosen
-            FROM ( SELECT res.na_feature_id, res.protocol_app_node_id  
-	        FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
-		WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
-		AND pan.protocol_app_node_id in ($$samples_percentile_generic$$)
-		AND pan.protocol_app_node_id = res.protocol_app_node_id
-		AND res.percentile_$$channel$$ BETWEEN $$min_expression_percentile$$ AND $$max_expression_percentile$$
-		GROUP BY res.na_feature_id, res.protocol_app_node_id
-            ) profile, 
-	    ApidbTuning.TranscriptAttributes ta,
-	    ( SELECT res.na_feature_id, min(res.percentile_$$channel$$) as  min_value, 
-	            max(res.percentile_$$channel$$) as max_value
-		FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
-		WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
-		AND pan.protocol_app_node_id in ($$samples_percentile_generic$$)
-		AND pan.protocol_app_node_id = res.protocol_app_node_id
-		AND res.percentile_$$channel$$ BETWEEN $$min_expression_percentile$$ AND $$max_expression_percentile$$
-		GROUP BY res.na_feature_id
-            ) profile_min_max
+            FROM apidbTuning.TranscriptAttributes ta,
+                 (SELECT res.na_feature_id, res.protocol_app_node_id
+                  FROM results.NaFeatureExpression res
+                  WHERE res.protocol_app_node_id in ($$samples_percentile_generic$$)
+                    AND res.percentile_$$channel$$
+                          BETWEEN $$min_expression_percentile$$ AND $$max_expression_percentile$$
+                  GROUP BY res.na_feature_id, res.protocol_app_node_id
+                 ) profile, 
+                 (SELECT res.na_feature_id, min(res.percentile_$$channel$$) as  min_value, 
+                         max(res.percentile_$$channel$$) as max_value
+                  FROM results.NaFeatureExpression res
+                  WHERE res.protocol_app_node_id in ($$samples_percentile_generic$$)
+                    AND res.percentile_$$channel$$
+                          BETWEEN $$min_expression_percentile$$ AND $$max_expression_percentile$$
+                  GROUP BY res.na_feature_id
+                 ) profile_min_max
 	    WHERE ta.gene_na_feature_id = PROFILE.na_feature_id
-	    AND ta.gene_na_feature_id = profile_min_max.na_feature_id
-	    AND ( 'no' = $$protein_coding_only$$ OR ta.gene_type = 'protein coding' )
-	    GROUP BY ta.gene_source_id,ta.source_id, ta.project_id
-	    HAVING 'any' = $$any_or_all$$ OR count(*) = (SELECT count(*) FROM study.protocolappnode WHERE protocol_app_node_id IN ( $$samples_percentile_generic$$ ))
+              AND ta.gene_na_feature_id = profile_min_max.na_feature_id
+              AND ('no' = $$protein_coding_only$$ OR ta.gene_type = 'protein coding')
+            GROUP BY ta.gene_source_id,ta.source_id, ta.project_id
+	    HAVING 'any' = $$any_or_all$$
+                   OR count(*) = (SELECT count(*)
+                                  FROM study.ProtocolAppNode
+                                  WHERE protocol_app_node_id IN ($$samples_percentile_generic$$) )
             ]]>
           </sql>
     </sqlQuery>
@@ -3108,19 +3109,19 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 
     <sqlQuery name="GenesByGenericFoldChange" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,UniDB"  >
 
-      <testParamValues>
-        <paramValue name="samples_fc_ref_generic" selectMode="all"/>
-        <paramValue name="samples_fc_comp_generic" selectMode="first"/>
-      </testParamValues>
+        <testParamValues>
+          <paramValue name="samples_fc_ref_generic" selectMode="all"/>
+          <paramValue name="samples_fc_comp_generic" selectMode="first"/>
+        </testParamValues>
 
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.regulated_dir"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_fc_ref_generic"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_ref"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_fc_comp_generic"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_comp"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
-      <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.regulated_dir"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_fc_ref_generic"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_ref"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_fc_comp_generic"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.min_max_avg_comp"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
@@ -3139,13 +3140,13 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <column name="chose_group_one"/>
         <column name="chose_group_two"/>
 
-      <sqlParamValue includeProjects="CryptoDB" name="isLogged">0</sqlParamValue>
-      <sqlParamValue includeProjects="CryptoDB" name="shift">0.01</sqlParamValue>
-      <sqlParamValue excludeProjects="CryptoDB" name="isLogged">1</sqlParamValue>
-      <sqlParamValue excludeProjects="CryptoDB" name="shift">0.0001</sqlParamValue>
+        <sqlParamValue includeProjects="CryptoDB" name="isLogged">0</sqlParamValue>
+        <sqlParamValue includeProjects="CryptoDB" name="shift">0.01</sqlParamValue>
+        <sqlParamValue excludeProjects="CryptoDB" name="isLogged">1</sqlParamValue>
+        <sqlParamValue excludeProjects="CryptoDB" name="shift">0.0001</sqlParamValue>
    
-      <sql>
-      <![CDATA[
+        <sql>
+          <![CDATA[
       select ga.source_id, ga.gene_source_id, 'Y' as matched_result,
              ga.project_id,
              round((CASE WHEN one.average / CASE WHEN two.average < &&shift&& THEN &&shift&& ELSE two.average END >= 1
@@ -3192,7 +3193,8 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
              CASE WHEN &&isLogged&& = 1 
                   THEN round(decode(two.chosen, 0, 0, log(2, two.chosen)), 2) 
                   ELSE round(two.chosen, 2) END AS chose_group_two
-      from ( SELECT res.na_feature_id,
+      from apidbTuning.TranscriptAttributes ga,
+           ( SELECT res.na_feature_id,
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'minimum'
                          THEN power(2, min(res.value))
                          WHEN &&isLogged&& = 1 AND $$min_max_avg_comp$$ = 'maximum'
@@ -3214,10 +3216,8 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
                     decode(&&isLogged&&, 1, power(2, max(res.value)), max(res.value)) as maximum,
                     decode(&&isLogged&&, 1, power(2, min(res.value)), min(res.value)) as minimum,
                     decode(&&isLogged&&, 1, power(2, median(res.value)), median(res.value)) as median
-             FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
-             WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
-	     AND pan.protocol_app_node_id in ($$samples_fc_comp_generic$$)
-	     AND pan.protocol_app_node_id = res.protocol_app_node_id
+             FROM results.NaFeatureExpression res
+             WHERE res.protocol_app_node_id in ($$samples_fc_comp_generic$$)
              GROUP BY res.na_feature_id ) one,
            ( SELECT res.na_feature_id,
                     CASE WHEN &&isLogged&& = 1 AND $$min_max_avg_ref$$ = 'minimum'
@@ -3241,18 +3241,16 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
                     decode(&&isLogged&&, 1, power(2, max(res.value)), max(res.value)) as maximum,
                     decode(&&isLogged&&, 1, power(2, min(res.value)), min(res.value)) as minimum,
                     decode(&&isLogged&&, 1, power(2, median(res.value)), median(res.value)) as median
-             FROM study.studylink sl, study.protocolappnode pan, results.nafeatureexpression res
-             WHERE sl.protocol_app_node_id = pan.protocol_app_node_id
-	     AND pan.protocol_app_node_id in  ($$samples_fc_ref_generic$$)
-	     AND pan.protocol_app_node_id = res.protocol_app_node_id
-             GROUP BY res.na_feature_id) two,  
-           ApidbTuning.TranscriptAttributes ga
+             FROM results.NaFeatureExpression res
+             WHERE res.protocol_app_node_id in ($$samples_fc_ref_generic$$)
+             GROUP BY res.na_feature_id) two
       where one.na_feature_id = two.na_feature_id
-        and ga.gene_na_feature_id = one.na_feature_id 
-        and ga.gene_na_feature_id = two.na_feature_id 
-        and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-          and ($$regulated_dir$$ ( one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END)  >= $$fold_change$$
-          OR $$regulated_dir$$ (-( two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END)) >= $$fold_change$$)
+        and ga.gene_na_feature_id = one.na_feature_id
+        and ga.gene_na_feature_id = two.na_feature_id
+        and ( $$protein_coding_only$$ = 'no'
+              OR ga.gene_type = $$protein_coding_only$$ )
+        and ($$regulated_dir$$ ( one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END)  >= $$fold_change$$
+             OR $$regulated_dir$$ (-( two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END)) >= $$fold_change$$)
       ]]>
       </sql>
 
