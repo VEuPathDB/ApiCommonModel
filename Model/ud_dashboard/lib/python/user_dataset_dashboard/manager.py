@@ -62,6 +62,13 @@ class Manager:
             return [coll.name for coll in coll.subcollections] or []
         return []
 
+    def get_coll_create_time(self, path):
+        if self.session.collections.exists(path):
+            query = Query(self.session, Collection.create_time)
+            query = query.filter(Collection.name == path)
+            result = query.execute()
+            return result[0][Collection.create_time]
+
     def get_dataobj_names(self, path):
         """
         Generic method to return the names of all data objects under the collection identified by the given
