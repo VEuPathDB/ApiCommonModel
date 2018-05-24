@@ -9,6 +9,7 @@ from dataset import Dataset
 import paths
 import sys
 import datetime
+import time
 
 
 class Dashboard:
@@ -86,6 +87,17 @@ class Dashboard:
         """
         user = [user for user in self.users if user.email == email]
         return user[0] if user else sys.exit("No user can be found with the email %s" % email)
+
+    @staticmethod
+    def datetime_from_utc_to_local(utc_datetime):
+        """
+        Utility method to convert a utc timestamp to a timestamp for this time zone by comparing the present time
+        in this time zone to utc time.
+        :return: timestamp adjusted for this time zone.
+        """
+        now_timestamp = time.time()
+        offset = datetime.datetime.fromtimestamp(now_timestamp) - datetime.datetime.utcfromtimestamp(now_timestamp)
+        return utc_datetime + offset
 
     def workspace_report(self, args):
         """
