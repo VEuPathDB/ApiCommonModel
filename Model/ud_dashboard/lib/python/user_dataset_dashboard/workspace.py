@@ -193,7 +193,6 @@ class Workspace:
             staging_area_table.align["Create Date"] = "c"
             for staging_area_coll_name in staging_area_coll_names:
                 create_time = self.manager.get_coll_create_time(paths.STAGING_COLLECTION.format(staging_area_coll_name))
-                print(create_time)
                 staging_area_table.add_row([staging_area_coll_name, create_time])
             print(staging_area_table)
         else:
