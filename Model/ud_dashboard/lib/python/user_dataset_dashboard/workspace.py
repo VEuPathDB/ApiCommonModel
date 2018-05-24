@@ -22,6 +22,7 @@ class Workspace:
         self.end_date = kwargs.get('end_date')
         self.id = self.get_workspace_identity()
         self.quota = self.get_default_quota()
+        self.inventory = []
         self.flags = []
         self.invalid_flags = None
         self.events = []
@@ -40,6 +41,31 @@ class Workspace:
         """
         workspace_coll = self.manager.get_coll(paths.WORKSPACES_PATH)
         return workspace_coll.metadata.get_one(self.dashboard.IRODS_ID).value
+
+    def generate_inventory(self, show_dataset_owners):
+        """
+        Generates a listing of the workspace users contents (i.e., users and the datasets they own.
+        :param show_dataset_owners: when true, the inventory will contain only users currently owning
+        datasets.  If false, the inventory will include all users having a presence in irods.  Also
+        when all users are included, the inventory list is sorted by dataset id.  Otherwise the
+        inventory list is sorted by user email address.
+        """
+        user_coll_names = self.manager.get_coll_names(paths.USERS_PATH)
+        if user_coll_names:
+            for user_coll_name in user_coll_names:
+                user = self.dashboard.find_user_by_id(user_coll_name)
+                datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_coll_name)
+                dataset_coll_names = self.manager.get_coll_names(datasets_coll_path)
+                if dataset_coll_names:
+                    for ctr, dataset_coll_name in enumerate(dataset_coll_names):
+                        self.inventory.append({"user": user, "dataset": dataset_coll_name, "ctr": ctr})
+                else:
+                    if not show_dataset_owners:
+                        self.inventory.append({"user": user, "dataset": "", "ctr": 0})
+            if show_dataset_owners:
+                self.inventory.sort(key=lambda i: i['dataset'])
+            else:
+                self.inventory.sort(key=lambda i: (i['user'].email, i['ctr']))
 
     def generate_related_flags(self):
         """
@@ -79,6 +105,7 @@ class Workspace:
         """
         Pulls apart the tarball data object's name in order to extract the the user, the export date and the export pid.
         These components should match up with at least two export flags.
+        :param name: tarball data object name
         :return: tuple providing components of parsed data object name:  exporter, exported time, and export pid.  If
         the data object's name format is not observed, None is returned.
         """
@@ -104,25 +131,20 @@ class Workspace:
     def display_inventory(self, show_dataset_owners):
         """
         Prints a summary view of the workspace users contents
+        :param show_dataset_owners: boolean controlling the content and arrangement of the inventory data.
         """
+        self.generate_inventory(show_dataset_owners)
         print("\nINVENTORY:")
         inventory_table = PrettyTable(["User", "Dataset Id"])
         inventory_table.align["User"] = "l"
         inventory_table.align["Dataset Id"] = "r"
-        user_coll_names = self.manager.get_coll_names(paths.USERS_PATH)
-        if user_coll_names:
-            for user_coll_name in user_coll_names:
-                user = self.dashboard.find_user_by_id(user_coll_name)
-                datasets_coll_path = paths.USER_DATASETS_COLLECTION_TEMPLATE.format(user_coll_name)
-                dataset_coll_names = self.manager.get_coll_names(datasets_coll_path)
-                if dataset_coll_names:
-                    for ctr, dataset_coll_name in enumerate(dataset_coll_names):
-                        row = [user.formatted_user(), dataset_coll_name] if ctr == 0 else ["", dataset_coll_name]
-                        inventory_table.add_row(row)
+        if self.inventory:
+            for item in self.inventory:
+                if not show_dataset_owners and item['ctr'] > 0:
+                    row = ["", item['dataset']]
                 else:
-                    if not show_dataset_owners:
-                        row = [user.formatted_user(), ""]
-                        inventory_table.add_row(row)
+                    row = [item['user'].formatted_user(), item['dataset']]
+                inventory_table.add_row(row)
             print(inventory_table)
         else:
             print("Workspace currently unused.")
