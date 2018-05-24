@@ -188,10 +188,13 @@ class Workspace:
         print("\nSTAGING AREA (Note: Any datasets there should be short-lived):")
         staging_area_coll_names = self.manager.get_coll_names(paths.STAGING_PATH)
         if staging_area_coll_names:
-            staging_area_table = PrettyTable(["Dataset Name"])
-            staging_area_table.align = "r"
+            staging_area_table = PrettyTable(["Dataset Name", "Create Date"])
+            staging_area_table.align["Dataset Name"] = "r"
+            staging_area_table.align["Create Date"] = "c"
             for staging_area_coll_name in staging_area_coll_names:
-                staging_area_table.add_row([staging_area_coll_name])
+                create_time = self.manager.get_coll_create_time(paths.STAGING_COLLECTION.format(staging_area_coll_name))
+                print(create_time)
+                staging_area_table.add_row([staging_area_coll_name, create_time])
             print(staging_area_table)
         else:
             print("No unpacked tarballs (staged datasets) remaining in the workspace")

@@ -4,6 +4,7 @@ iRODS paths and path templates that together define the architecture of the user
 WORKSPACES_PATH = "/ebrc/workspaces"
 LANDING_ZONE_PATH = WORKSPACES_PATH + "/lz"
 STAGING_PATH = WORKSPACES_PATH + "/staging"
+STAGING_COLLECTION = STAGING_PATH + "/{}"
 USERS_PATH = WORKSPACES_PATH + "/users"
 DEFAULT_QUOTA_DATA_OBJECT_PATH = USERS_PATH + "/default_quota"
 USER_DATASETS_COLLECTION_TEMPLATE = USERS_PATH + "/{}/datasets"
