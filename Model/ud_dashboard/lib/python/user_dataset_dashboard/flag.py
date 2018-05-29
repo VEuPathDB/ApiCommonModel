@@ -54,7 +54,8 @@ class Flag:
         have no content.
         """
         path = paths.FLAG_DATA_OBJECT_TEMPLATE.format(self.name)
-        self.content = self.manager.get_dataobj_data(path)
+        return self.manager.get_dataobj_data(path)
+
 
     @staticmethod
     def display(flags, show_exporter, show_message):
@@ -81,7 +82,7 @@ class Flag:
                 if show_exporter:
                     flag_table.align["Exporter"] = "l"
                     row.append(flag.exporter.formatted_user())
-                row.append(flag.get_flag_contents()) if show_message and flag.type == "failure dataset" else row.append("")
+                row.append(flag.get_flag_contents()) if show_message and flag.type == "failure_dataset" else row.append("")
                 flag_table.add_row(row)
             print(flag_table)
         else:
