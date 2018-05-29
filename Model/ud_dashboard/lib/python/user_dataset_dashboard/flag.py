@@ -75,6 +75,8 @@ class Flag:
                 else PrettyTable(["Export Date", "Indicates", "Pid", msg])
             flag_table.align["Indicates"] = "l"
             flag_table.align["Pid"] = "r"
+            if show_message:
+                flag_table.align["Msg"] = "l"
             for flag in flags:
                 row = [datetime.datetime.fromtimestamp(int(flag.exported)/1000).strftime('%Y-%m-%d %H:%M:%S'),
                        flag.indicator,
@@ -82,7 +84,7 @@ class Flag:
                 if show_exporter:
                     flag_table.align["Exporter"] = "l"
                     row.append(flag.exporter.formatted_user())
-                row.append(flag.get_flag_contents()) if show_message and flag.type == "failure_dataset" else row.append("")
+                row.append(flag.get_flag_contents()) if show_message else row.append("")
                 flag_table.add_row(row)
             print(flag_table)
         else:
