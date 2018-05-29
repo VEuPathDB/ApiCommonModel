@@ -3,6 +3,7 @@ import datetime
 import re
 import paths
 from prettytable import PrettyTable
+import textwrap
 
 
 class Flag:
@@ -51,10 +52,14 @@ class Flag:
     def get_flag_contents(self):
         """
         A failure flag data object will contain a message that will hopefully help diagnose the failure.  Other flags
-        have no content.
+        have no content.  Added some massaging to handle extra spaces that the microservice messages may have and
+        wrapped to stay under 100 chars.
         """
         path = paths.FLAG_DATA_OBJECT_TEMPLATE.format(self.name)
-        return self.manager.get_dataobj_data(path)
+        content = self.manager.get_dataobj_data(path)
+        exp = re.compile(r'\s\s+')
+        content = exp.sub(" ", content)
+        return textwrap.fill(content, 100)
 
 
     @staticmethod
@@ -84,7 +89,7 @@ class Flag:
                 if show_exporter:
                     flag_table.align["Exporter"] = "l"
                     row.append(flag.exporter.formatted_user())
-                row.append(flag.get_flag_contents()) if show_message else row.append("")
+                row.append(flag.get_flag_contents()) if show_message and flag.type != 'dataset' else row.append("")
                 flag_table.add_row(row)
             print(flag_table)
         else:
