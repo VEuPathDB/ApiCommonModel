@@ -38,7 +38,7 @@ class Flag:
         :return: tuple provided components of parsed data object name: flag type, indicator, exporter, exported time,
         and export pid
         """
-        matches = re.match(r'(.*)_u(.*)_t(.*)_p(.*).*', self.name, flags=0)
+        matches = re.match(r'(.*)_u(\d*)_t(\d*)_p(.*).*', self.name, flags=0)
         if matches:
             flag_type = matches.group(1)
             indicator = self.FLAG_INDICATOR.get(flag_type)
@@ -60,7 +60,6 @@ class Flag:
         exp = re.compile(r'\s\s+')
         content = exp.sub(" ", content)
         return textwrap.fill(content, 100)
-
 
     @staticmethod
     def display(flags, show_exporter, show_message):
