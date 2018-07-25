@@ -11,7 +11,7 @@ public class PhenotypePiggyBac extends DatasetInjector {
   @Override
   public void addModelReferences() {
       String datasetName = getDatasetName();
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GenesByPhenotype_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC");
   }
 
   // second column is for documentation
