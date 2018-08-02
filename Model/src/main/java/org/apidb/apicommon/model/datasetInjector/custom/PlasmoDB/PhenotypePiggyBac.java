@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class RodMalPhenotype extends DatasetInjector {
+public class PhenotypePiggyBac extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -10,8 +10,7 @@ public class RodMalPhenotype extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "RodMalPhenotype");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearch");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC");
   }
 
   // second column is for documentation
@@ -21,5 +20,4 @@ public class RodMalPhenotype extends DatasetInjector {
     return propertiesDeclaration;
   }
 
-  
 }

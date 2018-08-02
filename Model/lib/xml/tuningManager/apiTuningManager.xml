@@ -256,6 +256,69 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     </sql>
   </tuningTable>
 
+  <tuningTable name="RnaSeqStats">
+    <externalDependency name="apidb.DataSource"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Characteristic"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <sql>
+      <![CDATA[
+        create table RnaSeqStats&1 nologging as
+        select study_id, study_name, dataset_name, taxon_id, round(avg(num_reads),0) as avg_unique_reads
+        from (select sl.study_id
+                , s.name as study_name
+                , ed.name as dataset_name
+                , ds.taxon_id
+                , c.value as num_reads
+            from apidb.DataSource ds
+                , sres.ExternalDatabase ed
+                , sres.ExternalDatabaseRelease edr
+                , study.Study s
+                , study.StudyLink sl
+                , study.ProtocolAppNode pan
+                , study.Characteristic c
+                , sres.OntologyTerm ot
+            where ds.external_database_name = ed.name
+                and ed.external_database_id = edr.external_database_id
+                and edr.external_database_release_id = s.external_database_release_id
+                and s.study_id = sl.study_id
+                and sl.protocol_app_node_id = pan.protocol_app_node_id
+                and pan.protocol_app_node_id = c.protocol_app_node_id
+                and c.qualifier_id = ot.ontology_term_id
+                and ot.source_id = 'EUPATH_0000460')
+        group by study_id, study_name, dataset_name, taxon_id
+        union
+        select study_id, study_name, dataset_name, taxon_id, round(2*avg(num_reads),0) as avg_unique_reads
+        from (select sl.study_id
+                , s.name as study_name
+                , ed.name as dataset_name
+                , ds.taxon_id
+                , c.value as num_reads
+            from apidb.DataSource ds
+                , sres.ExternalDatabase ed
+                , sres.ExternalDatabaseRelease edr
+                , study.Study s
+                , study.StudyLink sl
+                , study.ProtocolAppNode pan
+                , study.Characteristic c
+                , sres.OntologyTerm ot
+            where ds.external_database_name = ed.name
+                and ed.external_database_id = edr.external_database_id
+                and edr.external_database_release_id = s.external_database_release_id
+                and s.study_id = sl.study_id
+                and sl.protocol_app_node_id = pan.protocol_app_node_id
+                and pan.protocol_app_node_id = c.protocol_app_node_id
+                and c.qualifier_id = ot.ontology_term_id
+                and (ot.source_id = 'EUPATH_0000468' or ot.source_id = 'EuPathUserDefined_00523'))
+        group by study_id, study_name, dataset_name, taxon_id
+      ]]>
+    </sql>
+  </tuningTable>
+
 
   <tuningTable name="OntologyLevels" prefixEnabled="true">
     <comment>the max and min depth of each ontology term in OntologyRelationship. Used by the GoTermSummary tuning table</comment>
@@ -875,7 +938,8 @@ SELECT o.project_name as project_id,
        nvl(psc.popsetCount, 0) as popsetCount,
        nvl(pc.geneArrayCount, 0) as arrayGeneCount,
        nvl(pc.rnaSeqCount, 0) as rnaSeqCount,
-       nvl(pc.rtPCRCount, 0) as rtPCRCount
+       nvl(pc.rtPCRCount, 0) as rtPCRCount,
+       nvl(ta.avg_transcript_length, 0) as avg_transcript_length
 FROM   apidb.Organism o,
        sres.Taxon t,
        sres.TaxonName tn,
@@ -883,7 +947,10 @@ FROM   apidb.Organism o,
        CommunityCount cc,
        GeneCount gc,
        popsetCount psc,
-       profileCount pc
+       profileCount pc,
+       (select taxon_id, round(avg(length),1) as avg_transcript_length
+        from TranscriptAttributes
+        group by taxon_id) ta
 WHERE t.taxon_id = tn.taxon_id
   AND tn.taxon_id = o.taxon_id
   AND tn.name_class = 'scientific name' 
@@ -892,6 +959,7 @@ WHERE t.taxon_id = tn.taxon_id
   AND o.taxon_id = gc.taxon_id (+)
   AND o.taxon_id = psc.taxon_id (+)
   AND o.taxon_id = pc.taxon_id (+)
+  AND o.taxon_id = ta.taxon_id (+)
 ) oa,
   TaxonSpecies ts,
   sres.taxon t,
