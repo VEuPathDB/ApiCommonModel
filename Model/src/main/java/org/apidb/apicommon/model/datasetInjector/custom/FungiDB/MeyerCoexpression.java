@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
