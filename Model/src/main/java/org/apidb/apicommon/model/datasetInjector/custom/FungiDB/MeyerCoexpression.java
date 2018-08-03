@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class InterPro extends DatasetInjector {
+public class MeyerCoexpression extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
