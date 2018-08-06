@@ -106,7 +106,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
       phylum.put("Ordospora","Microsporidia");
       phylum.put("Paracoccidioides","Eurotiomycetes");
       phylum.put("Paratrypanosoma","Kinetoplastida");
-			phylum.put("Penicillium","Eurotiomycetes");
+      phylum.put("Penicillium","Eurotiomycetes");
       phylum.put("Phanerochaete","Agaricomycetes");
       phylum.put("Phycomyces","Zygomycetes");
       phylum.put("Phytophthora","Oomycetes");
