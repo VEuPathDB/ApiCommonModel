@@ -906,11 +906,12 @@
         <flatVocabParam name="hard_floor"
                      prompt="Floor ="
                      multiPick="false"
+		     quote="false"
 		     queryRef="GeneVQ.hardFloor"
                      dependedParamRef="geneParams.profileset_generic"
 		     visible="false">
         <noTranslation value="true" includeProjects="EuPathDB" />
-            <help>All FPKM values less than the floor are raised to the floor, because such low values are considered unreliable. Also, flooring avoids both division by 0 and division by very low expression values.  A default floor has been calculated based on (a) the amount of sequencing for each dataset and (b) the average transcript size in the organism, so that the default floor represents 10 mapped reads per gene. Before August 20, 2018 (including releases 38 and earlier), the default was 1. In some cases (e.g., scaled data), a default floor cannot be calculated and thus is set to 1. The floor can be adjusted with the pull-down menu.</help>
+            <help>The default FPKM floor has been calculated to represent 10 mapped reads per gene and is the suggested floor. In some cases (e.g., scaled data), a default floor cannot be calculated and thus is set to 1. The floor can be adjusted with the pull-down menu. For more explanation, see the Detailed Help for this Search.</help>
         </flatVocabParam>
 
         <stringParam name="minimum_percentile_value"
@@ -4250,7 +4251,16 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
       </flatVocabParam>
 
 
-
+       <filterParam name="phenoImageProtocolAppNodes" includeProjects="FungiDB,UniDB"
+                      metadataQueryRef="GeneVQ.MetadataQuery_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC"
+                      backgroundQueryRef="GeneVQ.MetadataQuery_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC"
+                      ontologyQueryRef="GeneVQ.OntologyQuery_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC"
+                      prompt="Images"
+                      trimMetadataTerms="false">
+         <help>
+              Filter based on phenotype data
+         </help>
+       </filterParam>
 
         <stringParam name="phenotype_score_gt"
                      prompt="Phenotype Score >="
@@ -5807,28 +5817,24 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
     </flatVocabParam>
 
 
-    <enumParam name="coexp_operator"
-               prompt="Coefficient is">
+    <enumParam name="coexp_correlation"
+               prompt="Search Goal" multiPick="false">
         <noTranslation value="true" includeProjects="EuPathDB"/>
-        <help><![CDATA[Search for genes where the coexpression is greater than or equal to, equal to, or less than or equal to the entered number]]></help>
+        <help>Type of correlation the search should look for</help>
         <enumList>
             <enumValue default="true">
-                <term>Greater than or equal to</term>
+                <term>Positive Correlation</term>
                 <internal>&gt;=</internal>
             </enumValue>
             <enumValue>
-                <term>Equal to</term>
-                <internal>=</internal>
-            </enumValue>
-            <enumValue>
-                <term> Less than or equal to</term>
+                <term>Negative Correlation</term>
                 <internal>&lt;=</internal>
             </enumValue>
         </enumList>
     </enumParam>
 
     <stringParam name="coexp_value" includeProjects="FungiDB"
-        prompt="Coexpession coefficient"
+        prompt="Coexpression coefficient"
         number="true">
         <help><![CDATA[Enter a value for coexpession coefficient.]]></help>
         <suggest default="0.75"/>
@@ -5847,6 +5853,56 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
     <querySet name="GeneVQ" queryType="vocab" isCacheable="true">
 
 
+
+	<sqlQuery name="MetadataQuery_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC" doNotTest="1">
+          <column name="ontology_term_name"/>
+          <column name="internal"/>
+          <column name="number_value"/>
+          <column name="date_value"/>
+          <column name="string_value"/>
+          <sql>
+           <![CDATA[
+                    select distinct p.protocol_app_node_id as internal,
+                    p.property as ontology_term_name,
+                    cast(null as number(10)) as number_value,
+                    lower(p.value) as string_value,
+                    cast(null as date) as date_value
+                    from APIDB.NAFEATUREPHENOTYPE p
+           ]]>
+            </sql>
+        </sqlQuery>
+
+
+
+	<sqlQuery name="OntologyQuery_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC" doNotTest="1">
+          <column name="ontology_term_name"/>
+          <column name="parent_ontology_term_name"/>
+          <column name="display_name"/>
+          <column name="description"/>
+          <column name="type"/>
+          <column name="units"/>
+          <column name="precision"/>
+          <column name="is_range"/>
+          <sql>
+           <![CDATA[
+                    select distinct p.property as ontology_term_name
+                    , cast(null as varchar(10)) as parent_ontology_term_name
+                    , initcap(p.property) as display_name
+                    , cast(null as varchar(10)) as description
+                    , cast(null as varchar(10)) as units
+                    , 'string' as type
+                    , 0 as is_range
+                    , 1 as precision
+                    from apidb.nafeaturephenotype p
+                    order by initcap(p.property)
+           ]]>
+            </sql>
+        </sqlQuery>
+
+
+
+
+
        <sqlQuery name="PhenotypeGrowthRate" isCacheable="false" includeProjects="UniDB,PlasmoDB">
             <column name="internal" />
             <column name="term" />
@@ -5858,6 +5914,7 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
             <wsColumn name="internal" width="50" wsName="internal"/>
             <wsColumn name="term" width="50" wsName="term"/>
         </processQuery>
+
 
 
        <sqlQuery name="PhenoMutAscospore" isCacheable="false" includeProjects="FungiDB,UniDB">
@@ -6485,18 +6542,18 @@ group by r.value
 		      where s.study_id = $$profileset_generic$$
                         and s.study_id = stats.study_id(+))
                 UNION
-                SELECT '0.1' as term, 0.1 as internal, 1 as num from dual                                                         
-                UNION                                                                                                           
-                SELECT '0.2' as term, 0.2 as internal, 2 as num from dual                                                         
-                UNION                                                                                                           
-                SELECT '0.5' as term, 0.5 as internal, 3 as num from dual                                                   
-                UNION                                                                                                           
-                SELECT '1' as term, 1 as internal, 4 as num from dual                                                             
-                UNION                                                                                                           
-                SELECT '2' as term, 2 as internal, 5 as num from dual                                                             
-                UNION                                                                                                           
-                SELECT '5' as term, 5 as internal, 6 as num from dual                                                             
-                UNION                                                                                         
+                SELECT '0.1' as term, 0.1 as internal, 1 as num from dual
+                UNION
+                SELECT '0.2' as term, 0.2 as internal, 2 as num from dual
+                UNION
+                SELECT '0.5' as term, 0.5 as internal, 3 as num from dual
+                UNION
+                SELECT '1' as term, 1 as internal, 4 as num from dual
+                UNION
+                SELECT '2' as term, 2 as internal, 5 as num from dual
+                UNION
+                SELECT '5' as term, 5 as internal, 6 as num from dual
+                UNION
                 SELECT '10' as term, 10 as internal, 7 as num from dual)
             order by num
             </sql>
