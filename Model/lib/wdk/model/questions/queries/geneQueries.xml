@@ -298,42 +298,24 @@ and ta.gene_na_feature_id = cp.na_feature_id
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
     <sqlQuery name="GenesByPhenotype_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC" includeProjects="PlasmoDB,UniDB">
-        <paramRef ref="geneParams.phenotype_score_type" queryRef="GeneVQ.PhenotypeScoreType_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC"/>
-        <paramRef ref="geneParams.phenotype_score_gt" default="-5"/>
-        <paramRef ref="geneParams.phenotype_score_lt" default="3"/>
+        <paramRef ref="geneParams.phenoPlasmogemScore"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="project_id"/>
-        <column name="phenotype_score" />
         <column name="matched_result"/>
        <sql>
              <![CDATA[
-select ta.source_id
+select distinct ta.source_id
      , ta.gene_source_id
      , 'Y' as matched_result
      , ta.project_id
-     , ps.score as phenotype_score
 from apidb.phenotypescore ps
    , apidbtuning.transcriptattributes ta
-where ps.score >= $$phenotype_score_gt$$
-and ps.score <= $$phenotype_score_lt$$
-and ta.gene_na_feature_id = ps.na_feature_id
-and ps.score_type = $$phenotype_score_type$$
+where ta.gene_na_feature_id = ps.na_feature_id
+and ps.na_feature_id in ($$phenoPlasmogemScore$$)
            ]]>
        </sql>
     </sqlQuery>
-
-    <processQuery name="GenesByPhenotype_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC" includeProjects="EuPathDB"
-             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.phenotype_score_type" queryRef="GeneVQ.PhenotypeScoreType_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC"/>
-        <paramRef ref="geneParams.phenotype_score_gt"/>
-        <paramRef ref="geneParams.phenotype_score_lt"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="phenotype_score" width="32"/>
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-    </processQuery>
 
 
 
@@ -438,47 +420,20 @@ where nvl(pm.BASAL_HYPHAE_GROWTH_RATE, 0) >= $$phenoMut_bh_growth_rate.min$$
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
     <sqlQuery name="GenesByPhenotype_pberANKA_phenotype_Bushnell_functional_profiling_RSRC" includeProjects="PlasmoDB,UniDB">
-        <paramRef ref="geneParams.growth_rate_phenotype"/>
+        <paramRef ref="geneParams.phenoBushnellGrowthRatesNAFeatureIds"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="project_id"/>
-        <column name="phenotype" />
-        <column name="relative_growth_rate" />
-        <column name="confidence" />
         <column name="matched_result"/>
        <sql>
              <![CDATA[
-select ta.source_id
-     , ta.gene_source_id
-     , 'Y' as matched_result
-     , ta.project_id
-     , ps.phenotype
-     , ps.relative_growth_rate
-     , ps.confidence
-from apidb.phenotypegrowthrate ps
-   , apidbtuning.transcriptattributes ta
-where ta.gene_na_feature_id = ps.na_feature_id
-and ps.phenotype = $$growth_rate_phenotype$$
+                      select distinct ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result
+                      from apidbtuning.transcriptattributes ta, apidb.phenotypegrowthrate p
+                      where p.na_feature_id = ta.gene_na_feature_id
+                      and p.na_feature_id in ($$phenoBushnellGrowthRatesNAFeatureIds$$)
            ]]>
        </sql>
     </sqlQuery>
-
-    <processQuery name="GenesByPhenotype_pberANKA_phenotype_Bushnell_functional_profiling_RSRC" includeProjects="EuPathDB"
-             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.growth_rate_phenotype"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="phenotype"  width="20"/>
-        <wsColumn name="relative_growth_rate"  width="20"/>
-        <wsColumn name="confidence"  width="20"/>
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-    </processQuery>
-
-
-
-
-
 
 
     <sqlQuery name="GenesWithUpdatedAnnotation" includeProjects="TriTrypDB,PlasmoDB,UniDB">
@@ -1165,6 +1120,87 @@ AND 1=0
         <wsColumn name="max_score" width="10" columnType="float"/>
         <wsColumn name="fields_matched" width="200"/>
     </processQuery>
+
+
+
+
+    <processQuery name="GenesByTextSearchPhenotype" includeProjects="PlasmoDB,FungiDB,UniDB"
+          processName="org.apidb.apicomplexa.wsfplugin.textsearch.TranscriptSearchPlugin">
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                update ##WDK_CACHE_TABLE##
+                set source_id = (select min(source_id)
+                                      from apidbTuning.transcriptAttributes
+                                      where gene_source_id = ##WDK_CACHE_TABLE##.gene_source_id)
+                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                  and source_id is null
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result, max_score, fields_matched)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select ta.source_id, ta.gene_source_id, max_score, fields_matched, ta.project_id
+                           from apidbTuning.transcriptAttributes ta, matches
+                           where ta.gene_source_id = matches.gene_source_id
+                         minus
+                           select source_id, gene_source_id, max_score, fields_matched, project_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'Y', max_score, fields_matched
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <paramRef ref="organismParams.text_search_organism"/>
+       <paramRef ref="sharedParams.text_expression"/>
+       <paramRef ref="geneParams.text_fields_phenotype"/>
+       <paramRef ref="geneParams.max_pvalue" groupRef="paramGroups.advancedParams"/>
+       <!-- the parameter below caches the results for 30 minutes -->
+       <paramRef ref="sharedParams.timestamp" interval="1800" />
+        <wsColumn name="source_id" width="50" wsName="RecordID"/>
+        <wsColumn name="gene_source_id" width="50"/>
+        <wsColumn name="project_id" width="20" wsName="ProjectId"/>
+        <wsColumn name="matched_result" width="1"/>
+        <wsColumn name="max_score" width="10" wsName="MaxScore" columnType="float"/>
+        <wsColumn name="fields_matched" width="200" wsName="Datasets"/>
+    </processQuery>
+
+    <processQuery name="GenesByTextSearch" includeProjects="EuPathDB"
+          processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+       <paramRef ref="organismParams.text_search_organism"  quote="false"/>
+       <paramRef ref="sharedParams.text_expression" noTranslation="true"/>
+       <paramRef ref="geneParams.text_fields_phenotype"  quote="false"/>
+       <paramRef ref="geneParams.max_pvalue" groupRef="paramGroups.advancedParams"/>
+       <paramRef ref="sharedParams.timestamp" />
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="max_score" width="10" columnType="float"/>
+        <wsColumn name="fields_matched" width="200"/>
+    </processQuery>
+
+
+
+
+
+
+
+
+
+
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Orthologs -->
