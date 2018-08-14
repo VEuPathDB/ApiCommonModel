@@ -1,8 +1,8 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class Phenotype extends DatasetInjector {
+public class PhenotypeAspergillus extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -10,7 +10,7 @@ public class Phenotype extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_phenotype_DATA_RSRC"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
   }
@@ -24,3 +24,5 @@ public class Phenotype extends DatasetInjector {
 
 
 }
+
+
