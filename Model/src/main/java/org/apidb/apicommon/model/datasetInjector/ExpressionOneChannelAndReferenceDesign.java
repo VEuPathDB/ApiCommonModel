@@ -36,8 +36,10 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
             **/
 
 	    setPropValue("dynColSuffix","");
+	    setPropValue("datasetFloor","0.01");
 	    if(getPropValue("isLogged").equals("1")) {
 		setPropValue("dynColSuffix"," (log2)");
+		setPropValue("datasetFloor","0");
 	    }
 
             injectTemplate("expressionFoldChangeQuestion");
