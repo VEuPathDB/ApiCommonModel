@@ -35,6 +35,10 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
             }
             **/
 
+	    setPropValue("dynColSuffix","");
+	    if(getPropValue("isLogged").equals("1")) {
+		setPropValue("dynColSuffix"," (log2)");
+	    }
 
             injectTemplate("expressionFoldChangeQuestion");
             //            injectTemplate(lcDataType + "FoldChangeCategories");
