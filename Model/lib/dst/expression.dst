@@ -67,17 +67,23 @@ prop=dataType
              <column name="term"/>
           <sql>
            <![CDATA[
-select profile_study_id as internal, profile_set_name as term,
-                 decode(profile_set_name, '', '', ${decodeProfileSet}  '${datasetDisplayName}') as display
-from apidbtuning.profiletype pt,  (select distinct sl.study_id
-                                                          from study.studylink sl, apidbtuning.PanResults panr
-                                                          where sl.protocol_app_node_id = panr.pan_id
-                                                          and panr.result_table = 'Results::NAFeatureDiffResult') dr
-where (dataset_name = '${datasetName}' OR dataset_name like '${datasetNamePattern}')
-and pt.profile_set_name not in ( ${excludedProfileSetsList})
-and pt.profile_type = 'values'
-and pt.profile_study_id = dr.study_id (+)
-and dr.study_id is null
+with p as (select profile_study_id , profile_set_name
+    from apidbtuning.profiletype pt, 
+         (select distinct sl.study_id
+          from study.studylink sl, apidbtuning.PanResults panr
+          where sl.protocol_app_node_id = panr.pan_id
+          and panr.result_table = 'Results::NAFeatureDiffResult') dr
+    where (dataset_name = '${datasetName}' OR dataset_name like '${datasetNamePattern}')
+    and pt.profile_set_name not in ( ${excludedProfileSetsList})
+    and pt.profile_type = 'values'
+    and pt.profile_study_id = dr.study_id (+)
+    and dr.study_id is null),
+  ct as (select count(*) as total from p) 
+select  profile_study_id as internal, profile_set_name as term,
+        case when (my_ct.total =1) 
+             then decode(profile_set_name, '', '', ${decodeProfileSet}  '${datasetDisplayName}')
+             else profile_set_name end as display
+from ct my_ct, p
             ]]>
           </sql>
         </sqlQuery>
@@ -153,6 +159,7 @@ prop=defaultFoldDifference
         <paramRef ref="geneParams.profileset_generic" groupRef="paramGroups.dynamicParams" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change" default="${defaultFoldDifference}"/>
+<paramRef ref="geneParams.hard_floor" groupRef="paramGroups.dynamicParams" default="0"/>
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 	<attributesList includeProjects="${includeProjectsExcludeEuPathDB}"
 	   summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one,exprGraphAttr${datasetName}_expr_graph"

@@ -10,4 +10,13 @@ public class QuantProteomicsProcyclicCellCycle extends QuantitativeProteomicsNon
       setPropValue("isLogged", "0"); 
   }
 
+
+  @Override
+  protected void setExprPlotPartModule() {
+      setPropValue("exprPlotPartModule", "QuantMassSpecNonRatioUnlogged");
+
+  }
+
 }
+
+

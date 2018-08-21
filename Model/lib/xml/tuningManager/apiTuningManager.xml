@@ -366,6 +366,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <externalDependency name="dots.GoAssociationInstance"/>
     <externalDependency name="dots.GoAssociationInstanceLoe"/>
     <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.OntologyTerm"/>
@@ -378,7 +379,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                  from sres.OntologyTerm
                  where source_id in ('GO_0008150','GO_0003674','GO_0005575'))
         select gf.source_id as gene_source_id, t.source_id as transcript_source_id, taf.aa_sequence_id,
-               cast (decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as varchar2(3)) as is_not,
+               cast (decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as varchar2(3)) as is_not, ns.taxon_id,
                cast (gt.source_id as varchar2(20)) as go_id,
                gt.ontology_term_id as go_term_id, rt.ontology,
                cast(gt.name as varchar2(250)) as go_term_name,
@@ -388,8 +389,9 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                cast(gaiec.evidence_code_parameter as varchar2(80))as evidence_code_parameter
         from dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf, dots.GoAssociation ga,
              sres.OntologyTerm gt, dots.GoAssociationInstance gai, dots.GoAssociationInstanceLoe gail,
-             dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm gec, root_term rt
+             dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm gec, root_term rt, dots.NaSequence ns
         where t.parent_id = gf.na_feature_id
+          and gf.na_sequence_id = ns.na_sequence_id
           and t.na_feature_id = taf.na_feature_id
           and taf.aa_sequence_id = ga.row_id
           and ga.table_id = (select table_id
@@ -544,10 +546,12 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
       <![CDATA[
           create table &prefixGoTermSummary&1 nologging as
           select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
-                 ggt.is_not, replace(ggt.go_id, '_', ':') as go_id,
+                 ggt.taxon_id, ggt.is_not, replace(ggt.go_id, '_', ':') as go_id,
                  ggt.go_term_id, ggt.ontology,
                  replace(ggt.go_term_name, '_',' ') as go_term_name, ggt.source,
-                 ggt.evidence_code, ggt.reference, ggt.evidence_code_parameter,
+                 ggt.evidence_code, 
+                 decode(ggt.evidence_code, 'IEA', 'Computed', 'Curated') as evidence_category,
+                 ggt.reference, ggt.evidence_code_parameter,
                  ol.min_depth as depth,
                  case
                    when gs.ontology_term_id is null then 0
@@ -561,11 +565,13 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
             and ggt.go_term_id = gs.ontology_term_id(+)
         union
           select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
-                 ggt.is_not,
+                 ggt.taxon_id, ggt.is_not,
                  replace (substr(ot.source_id, 1, 25),'_',':') as go_id,
                  ot.ontology_term_id as go_term_id, ggt.ontology,
                  replace (substr(ot.name, 1,250),'_',' ') as go_term_name,
-                 ggt.source, ggt.evidence_code, ggt.reference,
+                 ggt.source, ggt.evidence_code,
+                 decode(ggt.evidence_code, 'IEA', 'Computed', 'Curated') as evidence_category,
+                 ggt.reference,
                  ggt.evidence_code_parameter,
                  ol.min_depth as depth,
                  case
@@ -597,8 +603,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
       <![CDATA[
         create index GoTermSum_plugin_ix&1 ON &prefixGoTermSummary&1
                (ontology, gene_source_id, is_not, is_go_slim,
-                go_id, go_term_name,
-                decode(evidence_code, 'IEA', 'Computed', 'Curated'))
+                go_id, go_term_name, evidence_code, evidence_category)
         tablespace indx
       ]]>
     </sql>
