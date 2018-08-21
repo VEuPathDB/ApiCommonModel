@@ -37,9 +37,11 @@ public abstract class ExpressionOneChannelAndReferenceDesign extends Expression 
 
 	    setPropValue("dynColSuffix","");
 	    setPropValue("datasetFloor","0.01");
+	    setPropValue("floorText","Any values less than the floor of 0.01 are raised to 0.01 to compute the fold difference."); 
 	    if(getPropValue("isLogged").equals("1")) {
 		setPropValue("dynColSuffix"," (log2)");
 		setPropValue("datasetFloor","0");
+		setPropValue("floorText","");
 	    }
 
             injectTemplate("expressionFoldChangeQuestion");
