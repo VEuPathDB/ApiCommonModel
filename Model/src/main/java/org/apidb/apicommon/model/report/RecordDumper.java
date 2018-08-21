@@ -12,11 +12,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.gusdb.fgputil.validation.ValidObjectFactory;
+import org.gusdb.fgputil.validation.ValidationLevel;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.factory.AnswerValue;
+import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
+import org.gusdb.wdk.model.answer.spec.AnswerSpec;
+import org.gusdb.wdk.model.answer.spec.QueryInstanceSpec;
+import org.gusdb.wdk.model.answer.spec.QueryInstanceSpec.QueryInstanceSpecBuilder;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
@@ -126,9 +132,14 @@ public class RecordDumper {
 
         // ask the question
         User user = wdkModel.getSystemUser();
-        Map<String, String> params = new LinkedHashMap<String, String>();
+        QueryInstanceSpecBuilder params = QueryInstanceSpec.builder();
         params.put(organismParam, organism);
-        AnswerValue sqlAnswer = question.makeAnswerValue(user, params, true, 0);
+
+        AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(user,
+                    ValidObjectFactory.getSemanticallyValid(AnswerSpec.builder(wdkModel)
+                        .setQuestionName(question.getFullName())
+                        .setQueryInstanceSpec(params)
+                        .build(ValidationLevel.RUNNABLE)));
 
         // decide the path-file name
         File dir = new File(baseDir, organism.replace(' ', '_'));

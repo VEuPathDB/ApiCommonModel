@@ -211,7 +211,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     writer.flush();
   }
 
-  private void writeRecords(PrintWriter writer) throws WdkModelException, WdkUserException {
+  private void writeRecords(PrintWriter writer) throws WdkModelException {
     // get primary key columns
     //RecordClass recordClass = getQuestion().getRecordClass();
     //String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
@@ -245,7 +245,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     }
   }
 
-  private void writeSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
+  private void writeSequences(PrintWriter writer) throws WdkModelException {
     // get primary key columns
     //RecordClass recordClass = getQuestion().getRecordClass();
     //String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();

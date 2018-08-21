@@ -11,11 +11,15 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.BaseCLI;
+import org.gusdb.fgputil.validation.ValidObjectFactory;
+import org.gusdb.fgputil.validation.ValidationLevel;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.factory.AnswerValue;
+import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
+import org.gusdb.wdk.model.answer.spec.AnswerSpec;
 import org.gusdb.wdk.model.query.Column;
 import org.gusdb.wdk.model.query.Query;
 import org.gusdb.wdk.model.query.QuerySet;
@@ -29,7 +33,6 @@ import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.StandardConfig;
 import org.gusdb.wdk.model.report.TableCache;
-import org.gusdb.wdk.model.user.User;
 
 /**
  * @author xingao
@@ -121,10 +124,9 @@ public class FullRecordFileCreator extends BaseCLI {
               dumpFile = cacheTable + ".txt";
   
           Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
-          User user = wdkModel.getSystemUser();
-          Map<String, String> paramValues = new LinkedHashMap<String, String>();
-          AnswerValue answerValue = question
-                  .makeAnswerValue(user, paramValues, true, 0);
+          AnswerValue answerValue = AnswerValueFactory.makeAnswer(wdkModel.getSystemUser(),
+              ValidObjectFactory.getSemanticallyValid(AnswerSpec.builder(wdkModel)
+                  .setQuestionName(question.getFullName()).build(ValidationLevel.RUNNABLE)));
   
           OutputStream out = new FileOutputStream(dumpFile);
           Reporter reporter = createReporter(answerValue, cacheTable);
@@ -155,16 +157,15 @@ public class FullRecordFileCreator extends BaseCLI {
     private Question createQuestion(WdkModel wdkModel, String projectId, RecordClass recordClass,
             String idSql) throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
-        QuestionSet questionSet = wdkModel
-                .getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
+        QuestionSet questionSet = wdkModel.getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
         Query query = createQuery(wdkModel, recordClass, idSql);
         Question question = new Question();
         question.setName(name + "_dump");
         question.setRecordClass(recordClass);
-        question.setQuery(query);
-        questionSet.addQuestion(question);
+        question.setQueryRef(query.getFullName());
         question.excludeResources(projectId);
         question.resolveReferences(wdkModel);
+        questionSet.addQuestion(question);
         return question;
     }
 
@@ -191,7 +192,7 @@ public class FullRecordFileCreator extends BaseCLI {
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
             throws WdkUserException {
-        Question question = answerValue.getQuestion();
+        Question question = answerValue.getAnswerSpec().getQuestion();
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();
         for (String fieldName : fields.keySet()) {
