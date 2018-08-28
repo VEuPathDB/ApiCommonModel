@@ -10,8 +10,6 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.gusdb.fgputil.validation.ValidObjectFactory;
-import org.gusdb.fgputil.validation.ValidationLevel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.factory.AnswerValue;
@@ -87,10 +85,10 @@ public class GenBankReporter extends PagedAnswerReporter {
             String geneQuestionName = _properties.get(PROPERTY_GENE_QUESTION);
             Question geneQuestion = (Question) _wdkModel.resolveReference(geneQuestionName);
             AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(_baseAnswer.getUser(),
-                ValidObjectFactory.getSemanticallyValid(AnswerSpec.builder(_wdkModel)
-                    .setQuestionName(geneQuestion.getFullName())
-                    .setParamValues(params)
-                    .build(ValidationLevel.RUNNABLE)), 0, _pageSize, sorting);
+                AnswerSpec.builder(_wdkModel)
+                .setQuestionName(geneQuestion.getFullName())
+                .setParamValues(params)
+                .buildRunnable(), 0, _pageSize, sorting);
 
             // write non gene sequence features
             writeSequenceFeatures(record, writer);

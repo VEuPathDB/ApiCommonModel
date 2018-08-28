@@ -136,10 +136,10 @@ public class RecordDumper {
         params.put(organismParam, organism);
 
         AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(user,
-                    ValidObjectFactory.getSemanticallyValid(AnswerSpec.builder(wdkModel)
-                        .setQuestionName(question.getFullName())
-                        .setQueryInstanceSpec(params)
-                        .build(ValidationLevel.RUNNABLE)));
+            AnswerSpec.builder(wdkModel)
+            .setQuestionName(question.getFullName())
+            .setQueryInstanceSpec(params)
+            .buildRunnable());
 
         // decide the path-file name
         File dir = new File(baseDir, organism.replace(' ', '_'));

@@ -11,8 +11,6 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.BaseCLI;
-import org.gusdb.fgputil.validation.ValidObjectFactory;
-import org.gusdb.fgputil.validation.ValidationLevel;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -125,8 +123,7 @@ public class FullRecordFileCreator extends BaseCLI {
   
           Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
           AnswerValue answerValue = AnswerValueFactory.makeAnswer(wdkModel.getSystemUser(),
-              ValidObjectFactory.getSemanticallyValid(AnswerSpec.builder(wdkModel)
-                  .setQuestionName(question.getFullName()).build(ValidationLevel.RUNNABLE)));
+              AnswerSpec.builder(wdkModel).setQuestionName(question.getFullName()).buildRunnable());
   
           OutputStream out = new FileOutputStream(dumpFile);
           Reporter reporter = createReporter(answerValue, cacheTable);
