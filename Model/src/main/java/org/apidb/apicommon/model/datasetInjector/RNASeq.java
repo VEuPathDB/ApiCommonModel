@@ -116,9 +116,9 @@ public class RNASeq extends  DatasetInjector {
 	      injectTemplate("profileMinMaxAttributeRnaAntisenseRef");
 	      injectTemplate("profileMinMaxAttributeRnaAntisenseQueries");
 
-
               String senseExprGraphAttr = datasetName + "_sense_expr_graph";
               String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
+              String Both_strandsExprGraphAttr = datasetName + "_Both_strands_expr_graph";
 
               String sensePctGraphAttr = datasetName + "_sense_pct_graph";
               String antisensePctGraphAttr = datasetName + "_antisense_pct_graph";
@@ -126,7 +126,7 @@ public class RNASeq extends  DatasetInjector {
               String pathwayGraphAttr = datasetName + "_ss_expr_graph_pr";
 
               // These are used for the question
-              setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr);
+              setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr + "," + Both_strandsExprGraphAttr);
               setPropValue("pctGraphAttr", sensePctGraphAttr + "," + antisensePctGraphAttr);
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
@@ -139,10 +139,11 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphTextAttrName", antisenseExprGraphAttr);
               injectTemplate("graphTextAttributeCategory");
 
-
+              setPropValue("graphTextAttrName", Both_strandsExprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+	      
               setPropValue("graphTextAttrName", sensePctGraphAttr);
               injectTemplate("graphTextAttributeCategory");
-
 
               setPropValue("graphTextAttrName", antisensePctGraphAttr);
               injectTemplate("graphTextAttributeCategory");
@@ -155,6 +156,9 @@ public class RNASeq extends  DatasetInjector {
 	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
 	      injectTemplate("rnaSeqGraph");
+
+	      injectTemplate("antisenseSamplesParamQuery");
+	      injectTemplate("rnaSeqAntisenseRegulationQuestion");
           } else {
 	      //	      setPropValue("sense","unstranded") ;
 
@@ -176,7 +180,6 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqExpressionGraphAttributesPathwayRecord");
               injectTemplate("rnaSeqProfileSetParamQuery");
 	      injectTemplate("rnaSeqPctProfileSetParamQuery");
-
 
 	      injectTemplate("profileMinMaxAttributesCategory");
 	      injectTemplate("profileMinMaxAttributeRef");
@@ -331,12 +334,16 @@ public class RNASeq extends  DatasetInjector {
               addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
       
           if(getPropValueAsBoolean("hasMultipleSamples")) {
-
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
-
           }
 	  
+          if(getPropValueAsBoolean("isStrandSpecific")) {
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+                              "GeneQuestions.GenesByAntisenseRegulation" + getDatasetName());
+	  }
+
+
 	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
 	  }
