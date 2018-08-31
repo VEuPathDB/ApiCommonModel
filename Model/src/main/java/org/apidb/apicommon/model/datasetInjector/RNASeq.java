@@ -343,11 +343,13 @@ public class RNASeq extends  DatasetInjector {
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
-	      if(getPropValueAsBoolean("isStrandSpecific")) {
+          }
+
+          if(getPropValueAsBoolean("isStrandSpecific")) {
 		  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName() +"AntisenseRegulation");
-	      }
           }
+
 	  
 	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
