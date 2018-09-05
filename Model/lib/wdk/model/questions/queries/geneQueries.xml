@@ -3442,6 +3442,100 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
     </processQuery>
 
 
+    <sqlQuery name="GenesByAntisenseRegulation" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,UniDB"  >
+
+        <testParamValues>
+          <paramValue name="samples_ref_antisense" selectMode="all"/>
+          <paramValue name="samples_comp_antisense" selectMode="first"/>
+        </testParamValues>
+
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_ref_antisense"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_comp_antisense"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_floor"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.sense_diff"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_diff"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_fraction_diff"/>
+	<sqlParamValue name="sense">'firststrand'</sqlParamValue>
+	<sqlParamValue name="antisense">'secondstrand'</sqlParamValue>
+
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="gene_source_id"/>
+        <column name="matched_result"/>
+        <column name="antisense_samples"/>
+   
+        <sql>
+          <![CDATA[
+	  
+	     with ref as
+                  (select r.NA_FEATURE_ID, ps.PROTOCOL_APP_NODE_NAME as sample, ps.study_name, r.value 
+		  from apidbtuning.profilesamples ps, results.nafeatureexpression r
+		  where ps.PROTOCOL_APP_NODE_ID = r.PROTOCOL_APP_NODE_ID 
+		       and ps.protocol_app_node_id in ($$samples_ref_antisense$$)
+		       and ps.profile_type = 'values')
+		  , comp as 
+		  (select r.NA_FEATURE_ID, ps.PROTOCOL_APP_NODE_NAME as sample, ps.study_name, r.value 
+		  from apidbtuning.profilesamples ps, results.nafeatureexpression r
+		  where ps.PROTOCOL_APP_NODE_ID = r.PROTOCOL_APP_NODE_ID 
+		       and ps.protocol_app_node_id in ($$samples_comp_antisense$$)
+		       and ps.profile_type = 'values')
+		  , ref1 as
+		  (select s.NA_FEATURE_ID, s.sample, s.value as sense_value, a.value as antisense_value  
+		  from (select * from ref where study_name like '%' || '&&sense&&' || '%') s,
+		  (select * from ref where study_name like '%' || '&&antisense&&' || '%') a
+		  where s.sample = a.sample
+		       and s.NA_FEATURE_ID = a.NA_FEATURE_ID
+		       and (a.value+s.value)>=$$antisense_floor$$)
+		  , comp1 as
+		  (select s.NA_FEATURE_ID, s.sample, s.value as sense_value, a.value as antisense_value  
+		  from (select * from comp where study_name like '%' || '&&sense&&' || '%') s,
+		  (select * from comp where study_name like '%' || '&&antisense&&' || '%') a
+		  where s.sample = a.sample
+		       and s.NA_FEATURE_ID = a.NA_FEATURE_ID
+		       and (s.value+a.value)>=$$antisense_floor$$)
+	    select ga.source_id, ga.gene_source_id, 'Y' as matched_result, ga.project_id, fin.antisense_samples
+	    from apidbTuning.TranscriptAttributes ga
+	         , (select NA_FEATURE_ID, listagg(sample, ',') within
+		             group (order by NA_FEATURE_ID) as antisense_samples
+		    from (select ref1.NA_FEATURE_ID,comp1.sample 
+		          from comp1, ref1
+			  where ref1.NA_FEATURE_ID = comp1.NA_FEATURE_ID
+			        and ref1.sample != comp1.sample
+				and (comp1.antisense_value /(comp1.sense_value + comp1.antisense_value) -
+				    ref1.antisense_value /(ref1.sense_value + ref1.antisense_value)) >= 
+				    $$antisense_fraction_diff$$
+				and (comp1.antisense_value-ref1.antisense_value)>$$antisense_diff$$
+				and (ref1.sense_value-comp1.sense_value)>$$sense_diff$$
+			  group by ref1.NA_FEATURE_ID, comp1.sample) 
+		    group by NA_FEATURE_ID) fin
+	    where ga.gene_na_feature_id = fin.na_feature_id
+	          and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
+
+
+	  ]]>
+      </sql>
+
+    </sqlQuery>
+
+    <processQuery name="GenesByAntisenseRegulation" includeProjects="EuPathDB"
+        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_ref_antisense"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_comp_antisense"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_floor"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.sense_diff"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_diff"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_fraction_diff"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"  quote="false"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="antisense_samples" wsName="antisense_samples"/>
+    </processQuery>
+
+
+
     <sqlQuery name="GenesByTTestWithMetadata" includeProjects="PlasmoDB,UniDB"  >
 
      <!-- don't override query ref; done in question
