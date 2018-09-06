@@ -14,13 +14,6 @@ import org.gusdb.wdk.model.user.dataset.UserDatasetType;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
 
-/**
- * Handler renamed to BigwigFilesTypeHandler.  This one kept as people may still
- * have this handler in their website configuration.
- * @author crisl-adm
- *
- */
-@Deprecated
 public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 
   public final static String NAME = "RnaSeq";
@@ -39,30 +32,34 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 
   @Override
   public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
-    String[] cmd = {};
+    String[] cmd = {"installRnaSeqUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("manifest.txt").toString(), projectId};
     return cmd;
   }
 
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
-    return new HashSet<String>();
+    Set<String> filenames = new HashSet<String>();
+    filenames.add("manifest.txt");
+    return filenames;
   }
 
   @Override
   public String[] getUninstallInAppDbCommand(Long userDatasetId, String projectId) {
-    String[] cmd = {};
+    String[] cmd = {"uninstallRnaSeqUserDataset", userDatasetId.toString(), projectId};
     return cmd;
   }
 
   @Override
   public String[] getRelevantQuestionNames() {
+      // TODO
     String[] q = {};
     return q;
   }
 
   @Override
-  public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource)
-	throws WdkModelException {
-	return new UserDatasetCompatibility(false, "This handler is deprecated.");
+  public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
+      // TODO Placeholder - need real compatibility test
+      return new UserDatasetCompatibility(true, "");
   }
+
 }
