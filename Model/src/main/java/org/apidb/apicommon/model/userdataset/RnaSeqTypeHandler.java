@@ -12,6 +12,9 @@ import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
+import org.gusdb.wdk.model.user.dataset.UserDatasetFile;
+
+import org.gusdb.wdk.model.WdkModelException;
 
 public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 
@@ -37,9 +40,17 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
-    Set<String> filenames = new HashSet<String>();
-    filenames.add("manifest.txt");
-    return filenames;
+
+      //    Set<String> filenames = new HashSet<String>();
+    //    filenames.add();
+
+
+      try {
+          return userDataset.getFiles().keySet();
+      }
+      catch(WdkModelException e) {
+          throw new RuntimeException("Error Getting all files for this dataset: " + e.toString());
+      }
   }
 
   @Override
