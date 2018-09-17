@@ -31,14 +31,14 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 
   @Override
   public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
-    String[] cmd = {"installRnaSeqUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("meta.json").toString(), projectId};
+    String[] cmd = {"installRnaSeqUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("manifest.txt").toString(), projectId};
     return cmd;
   }
 
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
     Set<String> filenames = new HashSet<String>();
-    filenames.add("meta.json");
+    filenames.add("manifest.txt");
     return filenames;
   }
 
