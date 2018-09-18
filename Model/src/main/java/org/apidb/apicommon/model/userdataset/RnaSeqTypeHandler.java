@@ -41,12 +41,16 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
 
-      //    Set<String> filenames = new HashSet<String>();
-    //    filenames.add();
-
-
       try {
-          return userDataset.getFiles().keySet();
+          Set<String> files = userDataset.getFiles().keySet();
+          Set<String> textFiles = new HashSet<String>();
+
+          for(String s : files) {
+              if(s.endsWith("txt")) {
+                  textFiles.add(s);
+              }
+          }
+          return textFiles;
       }
       catch(WdkModelException e) {
           throw new RuntimeException("Error Getting all files for this dataset: " + e.toString());
