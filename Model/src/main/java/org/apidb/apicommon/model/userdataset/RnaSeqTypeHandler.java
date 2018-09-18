@@ -16,11 +16,13 @@ import org.gusdb.wdk.model.user.dataset.UserDatasetFile;
 
 import org.gusdb.wdk.model.WdkModelException;
 
-public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
+import org.apidb.apicommon.model.userdataset.BigwigFilesTypeHandler;
+
+public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
 
   public final static String NAME = "RnaSeq";
   public final static String VERSION = "1.0";
-  public final static String DISPLAY = "RNASeq - Deprecated";
+  public final static String DISPLAY = "RNASeq";
 
   @Override
   public UserDatasetType getUserDatasetType() {
@@ -29,7 +31,7 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
 
   @Override
   public String getDisplay() {
-	return DISPLAY;
+        return DISPLAY;
   }
 
   @Override
@@ -70,10 +72,10 @@ public class RnaSeqTypeHandler extends UserDatasetTypeHandler {
     return q;
   }
 
-  @Override
-  public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
-      // TODO Placeholder - need real compatibility test
-      return new UserDatasetCompatibility(true, "");
-  }
+  // @Override
+  // public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
+  //     // TODO Placeholder - need real compatibility test
+  //     return new UserDatasetCompatibility(true, "");
+  // }
 
 }
