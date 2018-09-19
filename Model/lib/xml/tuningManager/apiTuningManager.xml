@@ -5051,7 +5051,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                         end) as reaction_url
                       , ed.NAME as ext_db_name
                       , edr.VERSION as ext_db_version
-                      , pn.DISPLAY_LABEL as enzyme
+                      , cast(pn.DISPLAY_LABEL as varchar2(20)) as enzyme
                       , listagg (pc.type, ',') within group (order by pc.pathway_id) as type_list
                       , max (prel.is_reversible) KEEP (DENSE_RANK LAST ORDER BY prel.is_reversible) over (partition by pr.pathway_reaction_id) as is_reversible
                       , nvl(ca.compound_name, pc.compound_source_id) as compound
@@ -5443,6 +5443,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
   <!--MetabolicPathwaySres table - simplify model query to improve download performance -->
   <tuningTable name="PathwaysGeneTable">
     <comment>Used by pathway table on gene pages</comment>
+    <internalDependency name="GeneAttributes"/>
     <internalDependency name="TranscriptPathway"/>
     <internalDependency name="PathwayAttributes"/>
     <internalDependency name="PathwayCompounds"/>
@@ -5451,6 +5452,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
       <![CDATA[
         CREATE TABLE PathwaysGeneTable&1 NOLOGGING AS
         SELECT DISTINCT gene_source_id
+        , cast (null as varchar2(20)) as project_id
         , pathway_source_id
         , pathway_name
         , count(reaction_source_id) as reactions
@@ -5484,9 +5486,25 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         ORDER BY pathway_source_id, pathway_source
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+        update PathwaysGeneTable&1 pgt
+        set project_id
+            = (select project_id
+               from GeneAttributes
+               where source_id = pgt.gene_source_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+      create index pgt_ix&1 on PathwaysGeneTable&1
+             (gene_source_id, project_id, pathway_source_id, pathway_name, 
+              reactions, enzyme, expasy_url, pathway_source, exact_match)
+      tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
     
-
 
   <tuningTable name="CompoundTypeAheads">
     <comment> for use in GenesByReactionCompounds question </comment>
