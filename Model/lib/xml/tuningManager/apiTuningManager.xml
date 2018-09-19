@@ -2249,6 +2249,7 @@ and ga.orthomcl_name is null
          stores all its attributes. 
     </comment>
     <internalDependency name="TranscriptAttributes"/>
+    <ancillaryTable name="SpeciesInfo"/>
     <sql>
       <![CDATA[
 	    CREATE TABLE &prefixGeneAttributes&1 NOLOGGING AS
@@ -2304,6 +2305,7 @@ and ga.orthomcl_name is null
 		, representative_transcript
                 , gene_zoom_context_start as zoom_context_start
                 , gene_zoom_context_end as zoom_context_end
+                , cast (null as number) as strain_count
             FROM &prefixTranscriptAttributes ta,
                  (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo
                   FROM &prefixTranscriptAttributes
@@ -2328,6 +2330,23 @@ and ga.orthomcl_name is null
                 )  uniprot
             WHERE ta.gene_source_id = aggregates.gene_source_id
               AND ta.gene_na_feature_id = uniprot.na_feature_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table &prefixSpeciesInfo&1 nologging as
+select genus_species, count(distinct organism) as strain_count
+from &prefixGeneAttributes&1
+group by genus_species
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+update &prefixGeneAttributes&1 ga
+set strain_count
+    = (select strain_count
+       from &prefixSpeciesInfo&1 si
+       where si.genus_species = ga.genus_species)
       ]]>
     </sql>
     <sql>
@@ -3613,7 +3632,7 @@ create index Blastp_text_ix&1 on Blastp&1(description) indextype is ctxsys.conte
         create index Blastp_pvalfunc_ix&1
              on Blastp&1 
                 (pvalue_exp, gene_source_id,
-                 regexp_replace (external_database_name,'_RSRC$',''))
+                 replace (external_database_name,'_RSRC',''))
              tablespace indx
       ]]>
     </sql>
@@ -5032,7 +5051,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                         end) as reaction_url
                       , ed.NAME as ext_db_name
                       , edr.VERSION as ext_db_version
-                      , pn.DISPLAY_LABEL as enzyme
+                      , cast(pn.DISPLAY_LABEL as varchar2(20)) as enzyme
                       , listagg (pc.type, ',') within group (order by pc.pathway_id) as type_list
                       , max (prel.is_reversible) KEEP (DENSE_RANK LAST ORDER BY prel.is_reversible) over (partition by pr.pathway_reaction_id) as is_reversible
                       , nvl(ca.compound_name, pc.compound_source_id) as compound
@@ -5424,6 +5443,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
   <!--MetabolicPathwaySres table - simplify model query to improve download performance -->
   <tuningTable name="PathwaysGeneTable">
     <comment>Used by pathway table on gene pages</comment>
+    <internalDependency name="GeneAttributes"/>
     <internalDependency name="TranscriptPathway"/>
     <internalDependency name="PathwayAttributes"/>
     <internalDependency name="PathwayCompounds"/>
@@ -5432,6 +5452,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
       <![CDATA[
         CREATE TABLE PathwaysGeneTable&1 NOLOGGING AS
         SELECT DISTINCT gene_source_id
+        , cast (null as varchar2(20)) as project_id
         , pathway_source_id
         , pathway_name
         , count(reaction_source_id) as reactions
@@ -5465,9 +5486,25 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         ORDER BY pathway_source_id, pathway_source
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+        update PathwaysGeneTable&1 pgt
+        set project_id
+            = (select project_id
+               from GeneAttributes
+               where source_id = pgt.gene_source_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+      create index pgt_ix&1 on PathwaysGeneTable&1
+             (gene_source_id, project_id, pathway_source_id, pathway_name, 
+              reactions, enzyme, expasy_url, pathway_source, exact_match)
+      tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
     
-
 
   <tuningTable name="CompoundTypeAheads">
     <comment> for use in GenesByReactionCompounds question </comment>
@@ -6905,7 +6942,7 @@ where url is not null
             AND p.profile_type          = 'values'
             AND p.dataset_name          = dp.NAME
             AND dp.dataset_presenter_id = dprop.dataset_presenter_id
-	    AND p.profile_set_name like '%[htseq-union - unstranded - fpkm - unique]'
+	    AND p.profile_set_name like '%- unique]'
             AND property                = 'switchStrandsProfiles'
             AND ((to_char(substr(dprop.value, 1, 10)) = 'false' AND p.min_timepoint LIKE '%firststrand%')
               OR (to_char(substr(dprop.value, 1, 10)) = 'true' AND p.min_timepoint LIKE '%secondstrand%')
@@ -7009,6 +7046,83 @@ tablespace indx
         ON RodMalPhenotype&1(source_id)
         TABLESPACE indx
       ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="ChrCopyNumbers">
+    <comment>Chromosome data for CNV queries</comment>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="TranscriptAttributes"/>
+    
+    <sql>
+        <![CDATA[
+            CREATE TABLE ChrCopyNumbers&1 NOLOGGING AS
+                SELECT DISTINCT ta.na_sequence_id
+                , ta.chromosome
+                , ccn.chr_copy_number AS ploidy
+                , io.input_pan_id
+                , io.output_pan_id
+                FROM apidb.chrcopynumber ccn
+                , TranscriptAttributes ta
+                ,  PANIo io
+                WHERE ta.na_sequence_id = ccn.na_sequence_id
+                AND ta.chromosome IS NOT NULL
+                AND ccn.protocol_app_node_id = io.output_pan_id
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+        CREATE INDEX ChrCN_ix&1
+        ON ChrCopyNumbers&1(input_pan_id, na_sequence_id)
+        TABLESPACE indx
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+        CREATE INDEX ChrCN_output&1
+        ON ChrCopyNumbers&1(output_pan_id)
+        TABLESPACE indx
+        ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="GeneCopyNumbers">
+    <comment>Gene Data for CNV queries</comment>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="TranscriptAttributes"/>
+
+    <sql>
+        <![CDATA[
+            CREATE TABLE GeneCopyNumbers&1 NOLOGGING AS
+                SELECT DISTINCT ta.project_id
+                , ta.source_id
+                , ta.gene_source_id
+                , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+                , gcn.haploid_number AS raw_estimate
+                , gcn.ref_copy_number AS ref_cn
+                , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
+                    WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
+                    ELSE round(gcn.haploid_number) END AS haploid_number
+                , ta.chromosome
+                , ta.na_sequence_id
+                , io.input_pan_id
+                , io.output_pan_id
+                FROM apidb.genecopynumber gcn
+                , study.protocolappnode pan
+                , TranscriptAttributes ta
+                ,  PANIo io
+                WHERE gcn.protocol_app_node_id = pan.protocol_app_node_id
+                AND gcn.na_feature_id = ta.gene_na_feature_id
+                AND gcn.protocol_app_node_id = io.output_pan_id
+                AND ta.gene_type = 'protein coding'
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+            CREATE INDEX GeneCN_ix&1
+            ON GeneCopyNumbers&1(input_pan_id, na_sequence_id)
+            TABLESPACE indx
+        ]]>
     </sql>
   </tuningTable>
 
