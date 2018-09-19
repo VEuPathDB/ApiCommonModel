@@ -157,8 +157,6 @@ public class RNASeq extends  DatasetInjector {
 
 	      injectTemplate("rnaSeqGraph");
 
-	      injectTemplate("antisenseSamplesParamQuery");
-
           } else {
 	      //	      setPropValue("sense","unstranded") ;
 
@@ -212,10 +210,11 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
               injectTemplate("internalGeneSearchCategory");
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
-		  injectTemplate("rnaSeqAntisenseRegulationQuestion");
-		  //              injectTemplate("rnaSeqAntisenseRegulationCategories");
-		  setPropValue("searchCategory", "searchCategory-transcriptomics-antisense-regulation");
-		  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "AntisenseRegulation");
+       	          injectTemplate("antisenseSamplesParamQuery");
+		  injectTemplate("rnaSeqSenseAntisenseQuestion");
+		  //              injectTemplate("rnaSeqSenseAntisenseCategories");
+		  setPropValue("searchCategory", "searchCategory-transcriptomics-sense-antisense");
+		  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
 		  injectTemplate("internalGeneSearchCategory");
 	      }         
 	  }
@@ -343,14 +342,13 @@ public class RNASeq extends  DatasetInjector {
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
-          }
 
-          if(getPropValueAsBoolean("isStrandSpecific")) {
+	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                              "GeneQuestions.GenesByRNASeq" + getDatasetName() +"AntisenseRegulation");
+                              "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
+	      }
           }
 
-	  
 	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
 	  }

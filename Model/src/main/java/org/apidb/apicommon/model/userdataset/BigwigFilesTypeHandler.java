@@ -155,7 +155,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
     // Created new track data for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
     for(String dataFileName : userDataset.getFiles().keySet()) {
-      //if(isBigWigFile(dataFileName)) {
+      if(isBigWigFile(dataFileName)) {
         String trackName = getTrackName(datasetId.toString(), dataFileName);
 
         // This includes all tracks with a GBrowse file system footprint regardless of condition.
@@ -173,7 +173,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
         else {
           tracksData.add(new TrackData(trackName, UploadStatus.NOT_UPLOADED.toString(), "", null));
         }
-      //}
+      }
     }
     JSONArray results = assembleTracksDataJson(tracksData);
     return results;
