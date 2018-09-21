@@ -45,9 +45,9 @@ import org.json.JSONObject;
  */
 public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 
-  public final static String NAME = "BigwigFiles";
-  public final static String VERSION = "1.0";
-  public final static String DISPLAY = "Bigwig";
+  private final static String NAME = "BigwigFiles";
+  private final static String VERSION = "1.0";
+  private final static String DISPLAY = "Bigwig";
 	
   //private static final int WINDOW = 200000;
   
