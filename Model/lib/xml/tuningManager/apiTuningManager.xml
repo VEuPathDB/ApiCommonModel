@@ -7012,4 +7012,81 @@ tablespace indx
     </sql>
   </tuningTable>
 
+  <tuningTable name="ChrCopyNumbers">                                                                                               
+    <comment>Chromosome data for CNV queries</comment>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="TranscriptAttributes"/>
+    
+    <sql>
+        <![CDATA[
+            CREATE TABLE ChrCopyNumbers&1 NOLOGGING AS
+                SELECT DISTINCT ta.na_sequence_id
+                , ta.chromosome
+                , ccn.chr_copy_number AS ploidy
+                , io.input_pan_id
+                , io.output_pan_id
+                FROM apidb.chrcopynumber ccn
+                , TranscriptAttributes ta
+                ,  PANIo io
+                WHERE ta.na_sequence_id = ccn.na_sequence_id
+                AND ta.chromosome IS NOT NULL
+                AND ccn.protocol_app_node_id = io.output_pan_id
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+        CREATE INDEX ChrCN_ix&1
+        ON ChrCopyNumbers&1(input_pan_id, na_sequence_id)
+        TABLESPACE indx
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+        CREATE INDEX ChrCN_output&1
+        ON ChrCopyNumbers&1(output_pan_id)
+        TABLESPACE indx
+        ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="GeneCopyNumbers">                                                                                              
+    <comment>Gene Data for CNV queries</comment>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="TranscriptAttributes"/>
+
+    <sql>
+        <![CDATA[
+            CREATE TABLE GeneCopyNumbers&1 NOLOGGING AS
+                SELECT DISTINCT ta.project_id
+                , ta.source_id
+                , ta.gene_source_id
+                , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+                , gcn.haploid_number AS raw_estimate
+                , gcn.ref_copy_number AS ref_cn
+                , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
+                    WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
+                    ELSE round(gcn.haploid_number) END AS haploid_number
+                , ta.chromosome
+                , ta.na_sequence_id
+                , io.input_pan_id
+                , io.output_pan_id
+                FROM apidb.genecopynumber gcn
+                , study.protocolappnode pan
+                , TranscriptAttributes ta
+                ,  PANIo io
+                WHERE gcn.protocol_app_node_id = pan.protocol_app_node_id
+                AND gcn.na_feature_id = ta.gene_na_feature_id
+                AND gcn.protocol_app_node_id = io.output_pan_id
+                AND ta.gene_type = 'protein coding'
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+            CREATE INDEX GeneCN_ix&1
+            ON GeneCopyNumbers&1(input_pan_id, na_sequence_id)
+            TABLESPACE indx
+        ]]>
+    </sql>
+  </tuningTable>
+
 </tuningConfig>
