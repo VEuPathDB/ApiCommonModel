@@ -3460,7 +3460,8 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="matched_result"/>
-        <column name="comp_samples"/>
+        <column name="sample_pairs"/>
+	<column name="max_FC_product"/>
    
         <sql>
           <![CDATA[
@@ -3489,20 +3490,25 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 		  (select * from comp where study_name like '%' || '&&antisense&&' || '%') a
 		  where s.sample = a.sample
 		       and s.NA_FEATURE_ID = a.NA_FEATURE_ID)
-	    select ga.source_id, ga.gene_source_id, 'Y' as matched_result, ga.project_id, fin.comp_samples
+	    select ga.source_id, ga.gene_source_id, 'Y' as matched_result, ga.project_id, fin.sample_pairs, fin.max_FC_product
 	    from apidbTuning.TranscriptAttributes ga
-	         , (select NA_FEATURE_ID, listagg(sample, ',') within
-		             group (order by NA_FEATURE_ID) as comp_samples
-		    from (select ref1.NA_FEATURE_ID,comp1.sample 
+	         , (select NA_FEATURE_ID, listagg(sample_pair, ',') within group (order by NA_FEATURE_ID) as sample_pairs
+		           , MAX(FC_product) as max_FC_product
+		    from (select ref1.NA_FEATURE_ID,comp1.sample || ':' || ref1.sample as sample_pair,
+		             round(CASE WHEN comp1.sense_value / greatest($$antisense_floor$$,ref1.sense_value) > 1
+			     THEN comp1.sense_value / greatest($$antisense_floor$$,ref1.sense_value)
+			     ELSE ref1.sense_value / greatest($$antisense_floor$$,comp1.sense_value) END
+			     * CASE WHEN comp1.antisense_value / greatest($$antisense_floor$$,ref1.antisense_value) > 1
+			     THEN comp1.antisense_value / greatest($$antisense_floor$$,ref1.antisense_value)
+			     ELSE ref1.antisense_value / greatest($$antisense_floor$$,comp1.antisense_value) END, 1) as FC_product
 		          from comp1, ref1
 			  where ref1.NA_FEATURE_ID = comp1.NA_FEATURE_ID
 			        and ref1.sample != comp1.sample
 				and ((($$sense_direction$$ * comp1.sense_value / greatest($$antisense_floor$$,ref1.sense_value)) >= $$sense_fold_change$$)
 				  OR (($$sense_direction$$ * -1 * ref1.sense_value / greatest($$antisense_floor$$,comp1.sense_value)) >= $$sense_fold_change$$))
 				and ((($$antisense_direction$$ * comp1.antisense_value / greatest($$antisense_floor$$,ref1.antisense_value)) >= $$antisense_fold_change$$)
-				  OR (($$antisense_direction$$ * -1 * ref1.antisense_value / greatest($$antisense_floor$$,comp1.antisense_value)) >= $$antisense_fold_change$$))
-			  group by ref1.NA_FEATURE_ID, comp1.sample) 
-		    group by NA_FEATURE_ID) fin
+				  OR (($$antisense_direction$$ * -1 * ref1.antisense_value / greatest($$antisense_floor$$,comp1.antisense_value)) >= $$antisense_fold_change$$))) 
+		    group by NA_FEATURE_ID order by NA_FEATURE_ID) fin
 	    where ga.gene_na_feature_id = fin.na_feature_id
 	          and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
 
@@ -3524,7 +3530,8 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
         <wsColumn name="project_id" width="20" />
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="comp_samples" wsName="comp_samples"/>
+        <wsColumn name="sample_pairs" wsName="sample_pairs"/>
+        <wsColumn name="max_FC_product" wsName="max_FC_product"/>
     </processQuery>
 
 
