@@ -126,7 +126,7 @@ public class RNASeq extends  DatasetInjector {
               String pathwayGraphAttr = datasetName + "_ss_expr_graph_pr";
 
               // These are used for the question
-              setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr + "," + Both_strandsExprGraphAttr);
+              setPropValue("exprGraphAttr", senseExprGraphAttr + "," + antisenseExprGraphAttr);
               setPropValue("pctGraphAttr", sensePctGraphAttr + "," + antisensePctGraphAttr);
 
               injectTemplate("rnaSeqSsExpressionGraphAttributes");
