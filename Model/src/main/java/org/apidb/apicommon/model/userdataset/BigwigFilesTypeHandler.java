@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
+import org.apache.log4j.Logger;
 import org.apidb.apicommon.model.gbrowse.GBrowseTrackStatus;
 import org.apidb.apicommon.model.gbrowse.GBrowseUtils;
 import org.apidb.apicommon.model.gbrowse.UploadStatus;
@@ -45,6 +46,7 @@ import org.json.JSONObject;
  */
 public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 
+  private static final Logger logger = Logger.getLogger(BigwigFilesTypeHandler.class);
   public final static String NAME = "BigwigFiles";
   public final static String VERSION = "1.0";
   public final static String DISPLAY = "Bigwig";
@@ -85,6 +87,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) throws WdkModelException {
 	TwoTuple<String,Integer> tuple =  getOrganismAndBuildNumberFromDependencies(userDataset);
 	int currentBuild = getCurrentGenomeBuildNumber(tuple.getKey(), appDbDataSource);
+  logger.debug("CURRENT BUILD IS:" + currentBuild);
 	boolean match = currentBuild == tuple.getValue();
 	return new UserDatasetCompatibility(match, new JSONObject().put("currentBuild", currentBuild),
 			match ? "" : "Genome build " + tuple.getValue() + " for organism " + tuple.getKey() + " is no longer supported. Current build " + currentBuild);
