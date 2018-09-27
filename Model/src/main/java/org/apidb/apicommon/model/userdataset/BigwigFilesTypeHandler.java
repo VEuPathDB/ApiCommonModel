@@ -65,7 +65,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
           " WHERE dh.DATASET_PRESENTER_ID = dp.dataset_presenter_id " +
           "  AND o.name_for_filenames = ? " +
           "  AND dp.name = o.abbrev || '_primary_genome_RSRC'" +
-          "  AND (dh.note LIKE '%sequence-changed%' OR dh.note like '%re-annotated%')";
+          "  AND (dh.note is NULL OR dh.note LIKE '%sequence-changed%' OR dh.note like '%re-annotated%')";
 	
   /**
    * SQL to look up the longest genome sequence available for the genome given in this user
@@ -228,6 +228,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    */
   protected Integer getCurrentGenomeBuildNumber(String taxonId, DataSource appDbDataSource) throws WdkModelException {
     Wrapper<Integer> wrapper = new Wrapper<>();
+    logger.debug("TAXONID:" + taxonId);
     try { 
       String selectCurrentGenomeBuildSql = SELECT_CURRENT_GENOME_BUILD_SQL;
       new SQLRunner(appDbDataSource, selectCurrentGenomeBuildSql, "select-current-genome-build-by-taxon").executeQuery(
