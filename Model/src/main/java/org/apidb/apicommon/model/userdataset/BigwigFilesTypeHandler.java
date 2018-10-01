@@ -63,8 +63,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
           "      apidb.organism o " +
           " WHERE dh.DATASET_PRESENTER_ID = dp.dataset_presenter_id " +
           "  AND o.name_for_filenames = ? " +
-          "  AND dp.name = o.abbrev || '_primary_genome_RSRC'" +
-          "  AND (dh.note is NULL OR dh.note LIKE '%sequence-changed%' OR dh.note like '%re-annotated%')";
+		"  AND dp.name = o.abbrev || '_primary_genome_RSRC'";
 	
   /**
    * SQL to look up the longest genome sequence available for the genome given in this user
