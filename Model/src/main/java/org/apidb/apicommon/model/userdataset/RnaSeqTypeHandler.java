@@ -60,7 +60,7 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
   @Override
   public String[] getRelevantQuestionNames() {
       // TODO
-    String[] q = {};
+    String[] q = {"GeneQuestions.GenesByRNASeqUserDataset"};
     return q;
   }
 
