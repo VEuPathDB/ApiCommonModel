@@ -5901,6 +5901,48 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
 
   </paramSet>
 
+  <paramSet name="userDatasetParams">
+    <flatVocabParam name="rna_seq_dataset"
+                    queryRef="GeneVQ.RnaSeqUserDataset"
+                    prompt="Your RNA-Seq Dataset"
+                    quote="false"
+                    multiPick="false" >
+         <help>An RNA-Seq dataset that you have imported into your workspace, and that is installed in @PROJECT_ID@ </help>
+    </flatVocabParam>
+
+       <flatVocabParam name="profileset_generic"
+                     queryRef="GeneVQ.rna_seq_profileset"
+                     prompt="Experiment"
+                     quote="false"
+                     multiPick="false"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset">
+            <help>Choose an Experiment</help> 
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_ref_generic"
+                     queryRef="GeneVQ.RnaSeqSamples"
+                     prompt="Reference Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.profileset_generic">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_comp_generic"
+                     queryRef="GeneVQ.RnaSeqSamples"
+                     prompt="Comparison Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.profileset_generic">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+      </flatVocabParam>
+
+  </paramSet>
+
 
     <!--===========================================================================-->
     <!-- Vocab queries  -->
@@ -6211,6 +6253,38 @@ from dual
    ) order by num, display
        </sql>
        </sqlQuery>
+
+        <sqlQuery name="RnaSeqUserDataset" isCacheable="false">
+           <paramRef ref="InternalParams.user_id"/>
+           <column name="internal"/>
+           <column name="term"/>
+           <column name="display"/>
+           <sql>
+           <![CDATA[
+   select term, internal, display
+   from (--   select 0 as term, 0 as internal,
+         --          'Choose an RNA-Seq dataset, if you have any' as display,
+         --          1 as ordering
+         --  from dual
+         -- union
+           select iud.user_dataset_id as term, iud.user_dataset_id as internal,
+                  iud.name as display, 2 as ordering
+           from apidbUserDatasets.InstalledUserDataset iud
+           where iud.user_dataset_id
+                 in (select udac.user_dataset_id
+                     from apidbUserDatasets.UserDatasetAccessControl udac,
+                          apidbUserDatasets.UD_ProfileSet ps,
+                          apidbUserDatasets.UD_ProtocolAppNode pan,
+                          apidbUserDatasets.UD_NaFeatureExpression nfe
+                     where udac.user_id = $$user_id$$ -- enforce dataset access
+                       and udac.user_dataset_id = ps.user_dataset_id
+                       and ps.profile_set_id = pan.profile_set_id
+                       and pan.protocol_app_node_id = nfe.protocol_app_node_id
+                    )
+        ) order by ordering, display
+             ]]>
+           </sql>
+        </sqlQuery>
 
        <sqlQuery name="PFTimeSeriesFoldChangeProfileSet" includeProjects="PlasmoDB,UniDB">
             <column name="internal" />
@@ -8205,6 +8279,27 @@ ORDER BY pan2.node_order_num
             <wsColumn name="term" width="100" wsName="term"/>
             <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
+      <sqlQuery name="RnaSeqSamples" excludeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.profileset_generic"/>
+         <column name="internal"/>
+         <column name="term"/>
+         <column name="display"/>
+         <sql>
+	    SELECT protocol_app_node_id as internal, name as term,
+	           name as display
+	    FROM (SELECT protocol_app_node_id, name, node_order_num
+                  FROM apidbUserDatasets.ud_ProtocolAppNode
+                  WHERE profile_set_id = '$$profileset_generic$$'
+                  ORDER BY node_order_num, protocol_app_node_id
+                 )
+         </sql>
+      </sqlQuery>
+      <processQuery name="RnaSeqSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.profileset_generic"/>
+         <wsColumn name="internal" width="100" wsName="internal"/>
+         <wsColumn name="term" width="100" wsName="term"/>
+         <wsColumn name="display" width="100" wsName="display"/>
+      </processQuery>
 
       <sqlQuery name="GenericDESeqSamples" excludeProjects="EuPathDB">
              <paramRef ref="geneParams.profileset_generic"/>
@@ -8257,6 +8352,25 @@ ORDER BY ps.node_order_num
             <wsColumn name="display" width="300" wsName="display"/>
         </processQuery>
 
+
+      <sqlQuery name="rna_seq_profileset" excludeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.rna_seq_dataset"/>
+             <column name="display"/>
+             <column name="internal"/>
+             <column name="term"/>
+          <sql>
+           select profile_set_id AS internal, name AS term,
+                  name AS display
+           from apidbUserDatasets.ud_profileset
+           where user_dataset_id = $$rna_seq_dataset$$
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="rna_seq_profileset" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="300" wsName="internal"/>
+            <wsColumn name="term" width="300" wsName="term"/>
+            <wsColumn name="display" width="300" wsName="display"/>
+        </processQuery>
 
 
       <sqlQuery name="GenericSamplesConfidence" excludeProjects="EuPathDB">
