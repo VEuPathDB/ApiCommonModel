@@ -5,24 +5,16 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import javax.sql.DataSource;
-
+import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
-import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
-import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
-import org.gusdb.wdk.model.user.dataset.UserDatasetFile;
-
-import org.gusdb.wdk.model.WdkModelException;
-
-import org.apidb.apicommon.model.userdataset.BigwigFilesTypeHandler;
 
 public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
 
-  public final static String NAME = "RnaSeq";
-  public final static String VERSION = "1.0";
-  public final static String DISPLAY = "RNASeq";
+  private final static String NAME = "RnaSeq";
+  private final static String VERSION = "1.0";
+  private final static String DISPLAY = "RNASeq";
 
   @Override
   public UserDatasetType getUserDatasetType() {
@@ -68,7 +60,7 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
   @Override
   public String[] getRelevantQuestionNames() {
       // TODO
-    String[] q = {};
+    String[] q = {"GeneQuestions.GenesByRNASeqUserDataset"};
     return q;
   }
 

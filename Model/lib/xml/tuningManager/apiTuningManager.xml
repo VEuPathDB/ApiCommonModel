@@ -4436,6 +4436,8 @@ tablespace indx
                   s.organism like 'Fusarium%' or 
                   s.organism like 'Gibberella%' or
                   s.organism like 'Trichoderma%' or
+                  s.organism like 'Lomentospora%' or
+                  s.organism like 'Scedosporium%' or
                   s.organism like 'Sordaria%' or
                   s.organism like 'Sporothrix%')
             then 'Sordariomycetes'
@@ -6021,41 +6023,41 @@ where url is not null
   <tuningTable name="GenePubmed">
     <!-- PubMed records mapped to genes
       -->
-    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="Pubmed"/>
     <externalDependency name="dots.DbRefNaFeature"/>
     <externalDependency name="sres.DbRef"/>
-    <externalDependency name="sres.ExternalDatabase"/>
-    <externalDependency name="sres.ExternalDatabaseRelease"/>
     <sql>
       <![CDATA[
         create table GenePubmed&1 nologging as
-        select distinct ta.gene_source_id, ta.source_id, ta.project_id, pm.pubmed_id, pm.doi, pm.title, 
-          dbms_lob.substr(pm.authors, 2000, 1) authors
-        from sres.ExternalDatabaseRelease edr, sres.DbRef db, TranscriptAttributes ta,
-             dots.DbRefNaFeature dbna, sres.ExternalDatabase ed,
-             DatasetPresenter dsa, Pubmed pm
-        where edr.external_database_release_id = db.external_database_release_id
-          and ed.external_database_id = edr.external_database_id
-	  -- consider using ApiDBTuing.ExternalDbDatasetPresenter instead of the LIKE below, if its performance is a problem
-          and (ed.name = dsa.name or ed.name like (dsa.dataset_name_pattern))
-          and dbna.db_ref_id = db.db_ref_id
-          and (ta.na_feature_id= dbna.na_feature_id or ta.gene_na_feature_id = dbna.na_feature_id)
-          and lower(dsa.display_name) like '%pubmed%'
+        select distinct tref.gene_source_id, tref.source_id, tref.project_id,
+                        pm.pubmed_id, pm.doi, pm.title, 
+                        dbms_lob.substr(pm.authors, 2000, 1) authors
+        from ExternalDbDatasetPresenter dbdp, sres.DbRef db, Pubmed pm,
+             (select ta.source_id, max(ta.gene_source_id) as gene_source_id,
+                     max(ta.project_id) as project_id, dbna.db_ref_id
+              from TranscriptAttributes ta, dots.DbRefNaFeature dbna
+              where ta.na_feature_id = dbna.na_feature_id
+                 or ta.gene_na_feature_id = dbna.na_feature_id
+              group by ta.source_id, dbna.db_ref_id
+             ) tref
+        where dbdp.external_database_release_id = db.external_database_release_id
+          and tref.db_ref_id = db.db_ref_id
+          and lower(dbdp.dataset_presenter_display_name) like '%pubmed%'
           and db.primary_identifier = to_char(pm.pubmed_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index gpm_gene_ix&1
+        create index gpm_gene_idx&1
           on GenePubmed&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
         tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index gpm_tx_ix&1
+        create index gpm_tx_idx&1
           on GenePubmed&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
         tablespace indx
       ]]>
