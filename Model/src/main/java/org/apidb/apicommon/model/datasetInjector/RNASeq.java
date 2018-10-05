@@ -151,7 +151,6 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphTextAttrName", pathwayGraphAttr);
               injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
-
               injectTemplate("rnaSeqProfileSetParamQuery");
 	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
@@ -195,7 +194,6 @@ public class RNASeq extends  DatasetInjector {
 
               injectTemplate("rnaSeqGraph");
 
-
               if(!projectName.equals("EuPathDB")) {
                   injectTemplate("profileSampleAttributesCategory");
                   injectTemplate("profileAttributeQueries");
@@ -210,6 +208,7 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
               injectTemplate("internalGeneSearchCategory");
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
+		  injectTemplate("strandSpecificGraph");
        	          injectTemplate("antisenseSamplesParamQuery");
 		  injectTemplate("rnaSeqSenseAntisenseQuestion");
 		  //              injectTemplate("rnaSeqSenseAntisenseCategories");
