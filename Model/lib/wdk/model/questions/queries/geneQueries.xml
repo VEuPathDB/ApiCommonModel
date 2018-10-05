@@ -3452,6 +3452,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_ref_antisense"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_floor"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
+        <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.fraction_change_antisense"/>
 
 	<sqlParamValue name="sense">'firststrand'</sqlParamValue>
 	<sqlParamValue name="antisense">'secondstrand'</sqlParamValue>
@@ -3462,6 +3463,9 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <column name="matched_result"/>
         <column name="sample_pairs"/>
 	<column name="max_FC_product"/>
+	<column name="antisense_floor"/>
+	<column name="antisense_fold_change"/>
+	<column name="sense_fold_change"/>
    
         <sql>
           <![CDATA[
@@ -3491,10 +3495,13 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 		  where s.sample = a.sample
 		       and s.NA_FEATURE_ID = a.NA_FEATURE_ID)
 	    select ga.source_id, ga.gene_source_id, 'Y' as matched_result, ga.project_id, fin.sample_pairs, fin.max_FC_product
+	           , $$antisense_floor$$ as antisense_floor
+		   , round($$antisense_direction$$ * log(2,$$antisense_fold_change$$),1) as antisense_fold_change
+		   , round($$sense_direction$$ * log(2,$$sense_fold_change$$),1) as sense_fold_change
 	    from apidbTuning.TranscriptAttributes ga
-	         , (select NA_FEATURE_ID, listagg(sample_pair, ',') within group (order by NA_FEATURE_ID) as sample_pairs
+	         , (select NA_FEATURE_ID, listagg(sample_pair, ', ') within group (order by NA_FEATURE_ID) as sample_pairs
 		           , MAX(FC_product) as max_FC_product
-		    from (select ref1.NA_FEATURE_ID,comp1.sample || ':' || ref1.sample as sample_pair,
+		    from (select ref1.NA_FEATURE_ID,ref1.sample || '->' || comp1.sample as sample_pair,
 		             round(CASE WHEN comp1.sense_value / greatest($$antisense_floor$$,ref1.sense_value) > 1
 			     THEN comp1.sense_value / greatest($$antisense_floor$$,ref1.sense_value)
 			     ELSE ref1.sense_value / greatest($$antisense_floor$$,comp1.sense_value) END
@@ -3507,7 +3514,8 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 				and ((($$sense_direction$$ * comp1.sense_value / greatest($$antisense_floor$$,ref1.sense_value)) >= $$sense_fold_change$$)
 				  OR (($$sense_direction$$ * -1 * ref1.sense_value / greatest($$antisense_floor$$,comp1.sense_value)) >= $$sense_fold_change$$))
 				and ((($$antisense_direction$$ * comp1.antisense_value / greatest($$antisense_floor$$,ref1.antisense_value)) >= $$antisense_fold_change$$)
-				  OR (($$antisense_direction$$ * -1 * ref1.antisense_value / greatest($$antisense_floor$$,comp1.antisense_value)) >= $$antisense_fold_change$$))) 
+				  OR (($$antisense_direction$$ * -1 * ref1.antisense_value / greatest($$antisense_floor$$,comp1.antisense_value)) >= $$antisense_fold_change$$))
+				and abs((comp1.antisense_value/greatest(2*$$antisense_floor$$,(comp1.antisense_value+comp1.sense_value))) - (ref1.antisense_value/greatest(2*$$antisense_floor$$,(ref1.antisense_value+ref1.sense_value))))>$$fraction_change_antisense$$)	  
 		    group by NA_FEATURE_ID order by NA_FEATURE_ID) fin
 	    where ga.gene_na_feature_id = fin.na_feature_id
 	          and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
@@ -3527,12 +3535,17 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_ref_antisense"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_floor"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only" quote="false"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fraction_change_antisense"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
         <wsColumn name="project_id" width="20" />
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
         <wsColumn name="sample_pairs" wsName="sample_pairs"/>
         <wsColumn name="max_FC_product" wsName="max_FC_product"/>
+	<wsColumn name="antisense_floor" wsName="antisense_floor"/>
+	<wsColumn name="antisense_fold_change" wsName="antisense_fold_change"/>
+	<wsColumn name="sense_fold_change" wsName="sense_fold_change"/>
+
     </processQuery>
 
     <sqlQuery name="GenesByUserDatasetRnaSeq" excludeProjects="EuPathDB">
