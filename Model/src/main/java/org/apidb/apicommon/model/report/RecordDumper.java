@@ -20,9 +20,9 @@ import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.util.ReporterFactory;
 import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.ReporterFactory;
-import org.gusdb.wdk.model.report.StandardConfig;
 import org.gusdb.wdk.model.user.User;
 
 /**

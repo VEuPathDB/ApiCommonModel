@@ -25,10 +25,10 @@ import org.gusdb.wdk.model.question.QuestionSet;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.record.RecordClass;
-import org.gusdb.wdk.model.report.FullRecordReporter;
 import org.gusdb.wdk.model.report.Reporter;
-import org.gusdb.wdk.model.report.StandardConfig;
-import org.gusdb.wdk.model.report.TableCache;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.reporter.FullRecordReporter;
+import org.gusdb.wdk.model.report.util.TableCache;
 import org.gusdb.wdk.model.user.User;
 
 /**
