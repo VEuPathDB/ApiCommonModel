@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
+import org.apache.log4j.Logger;
 import org.apidb.apicommon.model.gbrowse.GBrowseTrackStatus;
 import org.apidb.apicommon.model.gbrowse.GBrowseUtils;
 import org.apidb.apicommon.model.gbrowse.UploadStatus;
@@ -45,9 +46,11 @@ import org.json.JSONObject;
  */
 public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 
-  public final static String NAME = "BigwigFiles";
-  public final static String VERSION = "1.0";
-  public final static String DISPLAY = "Bigwig";
+  private static final Logger logger = Logger.getLogger(BigwigFilesTypeHandler.class);
+
+  private final static String NAME = "BigwigFiles";
+  private final static String VERSION = "1.0";
+  private final static String DISPLAY = "Bigwig";
 	
   //private static final int WINDOW = 200000;
   
@@ -61,8 +64,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
           "      apidb.organism o " +
           " WHERE dh.DATASET_PRESENTER_ID = dp.dataset_presenter_id " +
           "  AND o.name_for_filenames = ? " +
-          "  AND dp.name = o.abbrev || '_primary_genome_RSRC'" +
-          "  AND (dh.note LIKE '%sequence-changed%' OR dh.note like '%re-annotated%')";
+		"  AND dp.name = o.abbrev || '_primary_genome_RSRC'";
 	
   /**
    * SQL to look up the longest genome sequence available for the genome given in this user
@@ -78,13 +80,12 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	      "  AND info.ml = gsa.length " +
 	      "  AND gsa.taxon_id = o.taxon_id " +
 	      "  AND ? = o.name_for_filenames ";
-	
-
   
   @Override
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) throws WdkModelException {
 	TwoTuple<String,Integer> tuple =  getOrganismAndBuildNumberFromDependencies(userDataset);
 	int currentBuild = getCurrentGenomeBuildNumber(tuple.getKey(), appDbDataSource);
+	logger.debug("CURRENT BUILD IS:" + currentBuild);
 	boolean match = currentBuild == tuple.getValue();
 	return new UserDatasetCompatibility(match, new JSONObject().put("currentBuild", currentBuild),
 			match ? "" : "Genome build " + tuple.getValue() + " for organism " + tuple.getKey() + " is no longer supported. Current build " + currentBuild);
@@ -155,7 +156,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
     // Created new track data for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
     for(String dataFileName : userDataset.getFiles().keySet()) {
-      //if(isBigWigFile(dataFileName)) {
+      if(isBigWigFile(dataFileName)) {
         String trackName = getTrackName(datasetId.toString(), dataFileName);
 
         // This includes all tracks with a GBrowse file system footprint regardless of condition.
@@ -173,7 +174,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
         else {
           tracksData.add(new TrackData(trackName, UploadStatus.NOT_UPLOADED.toString(), "", null));
         }
-      //}
+      }
     }
     JSONArray results = assembleTracksDataJson(tracksData);
     return results;
@@ -224,6 +225,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    */
   protected Integer getCurrentGenomeBuildNumber(String taxonId, DataSource appDbDataSource) throws WdkModelException {
     Wrapper<Integer> wrapper = new Wrapper<>();
+    logger.debug("TAXONID:" + taxonId);
     try { 
       String selectCurrentGenomeBuildSql = SELECT_CURRENT_GENOME_BUILD_SQL;
       new SQLRunner(appDbDataSource, selectCurrentGenomeBuildSql, "select-current-genome-build-by-taxon").executeQuery(

@@ -116,9 +116,9 @@ public class RNASeq extends  DatasetInjector {
 	      injectTemplate("profileMinMaxAttributeRnaAntisenseRef");
 	      injectTemplate("profileMinMaxAttributeRnaAntisenseQueries");
 
-
               String senseExprGraphAttr = datasetName + "_sense_expr_graph";
               String antisenseExprGraphAttr = datasetName + "_antisense_expr_graph";
+              String Both_strandsExprGraphAttr = datasetName + "_Both_strands_expr_graph";
 
               String sensePctGraphAttr = datasetName + "_sense_pct_graph";
               String antisensePctGraphAttr = datasetName + "_antisense_pct_graph";
@@ -139,10 +139,11 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphTextAttrName", antisenseExprGraphAttr);
               injectTemplate("graphTextAttributeCategory");
 
-
+              setPropValue("graphTextAttrName", Both_strandsExprGraphAttr);
+              injectTemplate("graphTextAttributeCategory");
+	      
               setPropValue("graphTextAttrName", sensePctGraphAttr);
               injectTemplate("graphTextAttributeCategory");
-
 
               setPropValue("graphTextAttrName", antisensePctGraphAttr);
               injectTemplate("graphTextAttributeCategory");
@@ -150,11 +151,11 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("graphTextAttrName", pathwayGraphAttr);
               injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
-
               injectTemplate("rnaSeqProfileSetParamQuery");
 	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
 	      injectTemplate("rnaSeqGraph");
+
           } else {
 	      //	      setPropValue("sense","unstranded") ;
 
@@ -177,7 +178,6 @@ public class RNASeq extends  DatasetInjector {
               injectTemplate("rnaSeqProfileSetParamQuery");
 	      injectTemplate("rnaSeqPctProfileSetParamQuery");
 
-
 	      injectTemplate("profileMinMaxAttributesCategory");
 	      injectTemplate("profileMinMaxAttributeRef");
 	      injectTemplate("profileMinMaxAttributeQueries");
@@ -194,7 +194,6 @@ public class RNASeq extends  DatasetInjector {
 
               injectTemplate("rnaSeqGraph");
 
-
               if(!projectName.equals("EuPathDB")) {
                   injectTemplate("profileSampleAttributesCategory");
                   injectTemplate("profileAttributeQueries");
@@ -208,7 +207,16 @@ public class RNASeq extends  DatasetInjector {
               setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
               setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
               injectTemplate("internalGeneSearchCategory");
-          }
+	      if(getPropValueAsBoolean("isStrandSpecific")) {
+		  injectTemplate("strandSpecificGraph");
+       	          injectTemplate("antisenseSamplesParamQuery");
+		  injectTemplate("rnaSeqSenseAntisenseQuestion");
+		  //              injectTemplate("rnaSeqSenseAntisenseCategories");
+		  setPropValue("searchCategory", "searchCategory-transcriptomics-sense-antisense");
+		  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
+		  injectTemplate("internalGeneSearchCategory");
+	      }         
+	  }
 
           injectTemplate("rnaSeqPercentileQuestion");
           //          injectTemplate("rnaSeqPercentileCategories");
@@ -331,12 +339,15 @@ public class RNASeq extends  DatasetInjector {
               addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
       
           if(getPropValueAsBoolean("hasMultipleSamples")) {
-
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                               "GeneQuestions.GenesByRNASeq" + getDatasetName());
 
+	      if(getPropValueAsBoolean("isStrandSpecific")) {
+		  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+                              "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
+	      }
           }
-	  
+
 	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
 	  }

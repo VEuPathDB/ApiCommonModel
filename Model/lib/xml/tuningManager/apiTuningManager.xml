@@ -256,6 +256,69 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     </sql>
   </tuningTable>
 
+  <tuningTable name="RnaSeqStats">
+    <externalDependency name="apidb.DataSource"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Characteristic"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <sql>
+      <![CDATA[
+        create table RnaSeqStats&1 nologging as
+        select study_id, study_name, dataset_name, taxon_id, round(avg(num_reads),0) as avg_unique_reads
+        from (select sl.study_id
+                , s.name as study_name
+                , ed.name as dataset_name
+                , ds.taxon_id
+                , c.value as num_reads
+            from apidb.DataSource ds
+                , sres.ExternalDatabase ed
+                , sres.ExternalDatabaseRelease edr
+                , study.Study s
+                , study.StudyLink sl
+                , study.ProtocolAppNode pan
+                , study.Characteristic c
+                , sres.OntologyTerm ot
+            where ds.external_database_name = ed.name
+                and ed.external_database_id = edr.external_database_id
+                and edr.external_database_release_id = s.external_database_release_id
+                and s.study_id = sl.study_id
+                and sl.protocol_app_node_id = pan.protocol_app_node_id
+                and pan.protocol_app_node_id = c.protocol_app_node_id
+                and c.qualifier_id = ot.ontology_term_id
+                and ot.source_id = 'EUPATH_0000460')
+        group by study_id, study_name, dataset_name, taxon_id
+        union
+        select study_id, study_name, dataset_name, taxon_id, round(2*avg(num_reads),0) as avg_unique_reads
+        from (select sl.study_id
+                , s.name as study_name
+                , ed.name as dataset_name
+                , ds.taxon_id
+                , c.value as num_reads
+            from apidb.DataSource ds
+                , sres.ExternalDatabase ed
+                , sres.ExternalDatabaseRelease edr
+                , study.Study s
+                , study.StudyLink sl
+                , study.ProtocolAppNode pan
+                , study.Characteristic c
+                , sres.OntologyTerm ot
+            where ds.external_database_name = ed.name
+                and ed.external_database_id = edr.external_database_id
+                and edr.external_database_release_id = s.external_database_release_id
+                and s.study_id = sl.study_id
+                and sl.protocol_app_node_id = pan.protocol_app_node_id
+                and pan.protocol_app_node_id = c.protocol_app_node_id
+                and c.qualifier_id = ot.ontology_term_id
+                and (ot.source_id = 'EUPATH_0000468' or ot.source_id = 'EuPathUserDefined_00523'))
+        group by study_id, study_name, dataset_name, taxon_id
+      ]]>
+    </sql>
+  </tuningTable>
+
 
   <tuningTable name="OntologyLevels" prefixEnabled="true">
     <comment>the max and min depth of each ontology term in OntologyRelationship. Used by the GoTermSummary tuning table</comment>
@@ -303,6 +366,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <externalDependency name="dots.GoAssociationInstance"/>
     <externalDependency name="dots.GoAssociationInstanceLoe"/>
     <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.OntologyTerm"/>
@@ -315,7 +379,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                  from sres.OntologyTerm
                  where source_id in ('GO_0008150','GO_0003674','GO_0005575'))
         select gf.source_id as gene_source_id, t.source_id as transcript_source_id, taf.aa_sequence_id,
-               cast (decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as varchar2(3)) as is_not,
+               cast (decode(ga.is_not, 0, '', 1, 'not', ga.is_not) as varchar2(3)) as is_not, ns.taxon_id,
                cast (gt.source_id as varchar2(20)) as go_id,
                gt.ontology_term_id as go_term_id, rt.ontology,
                cast(gt.name as varchar2(250)) as go_term_name,
@@ -325,8 +389,9 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                cast(gaiec.evidence_code_parameter as varchar2(80))as evidence_code_parameter
         from dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf, dots.GoAssociation ga,
              sres.OntologyTerm gt, dots.GoAssociationInstance gai, dots.GoAssociationInstanceLoe gail,
-             dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm gec, root_term rt
+             dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm gec, root_term rt, dots.NaSequence ns
         where t.parent_id = gf.na_feature_id
+          and gf.na_sequence_id = ns.na_sequence_id
           and t.na_feature_id = taf.na_feature_id
           and taf.aa_sequence_id = ga.row_id
           and ga.table_id = (select table_id
@@ -481,10 +546,12 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
       <![CDATA[
           create table &prefixGoTermSummary&1 nologging as
           select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
-                 ggt.is_not, replace(ggt.go_id, '_', ':') as go_id,
+                 ggt.taxon_id, ggt.is_not, replace(ggt.go_id, '_', ':') as go_id,
                  ggt.go_term_id, ggt.ontology,
                  replace(ggt.go_term_name, '_',' ') as go_term_name, ggt.source,
-                 ggt.evidence_code, ggt.reference, ggt.evidence_code_parameter,
+                 ggt.evidence_code, 
+                 decode(ggt.evidence_code, 'IEA', 'Computed', 'Curated') as evidence_category,
+                 ggt.reference, ggt.evidence_code_parameter,
                  ol.min_depth as depth,
                  case
                    when gs.ontology_term_id is null then 0
@@ -498,11 +565,13 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
             and ggt.go_term_id = gs.ontology_term_id(+)
         union
           select ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
-                 ggt.is_not,
+                 ggt.taxon_id, ggt.is_not,
                  replace (substr(ot.source_id, 1, 25),'_',':') as go_id,
                  ot.ontology_term_id as go_term_id, ggt.ontology,
                  replace (substr(ot.name, 1,250),'_',' ') as go_term_name,
-                 ggt.source, ggt.evidence_code, ggt.reference,
+                 ggt.source, ggt.evidence_code,
+                 decode(ggt.evidence_code, 'IEA', 'Computed', 'Curated') as evidence_category,
+                 ggt.reference,
                  ggt.evidence_code_parameter,
                  ol.min_depth as depth,
                  case
@@ -534,8 +603,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
       <![CDATA[
         create index GoTermSum_plugin_ix&1 ON &prefixGoTermSummary&1
                (ontology, gene_source_id, is_not, is_go_slim,
-                go_id, go_term_name,
-                decode(evidence_code, 'IEA', 'Computed', 'Curated'))
+                go_id, go_term_name, evidence_code, evidence_category)
         tablespace indx
       ]]>
     </sql>
@@ -830,7 +898,8 @@ select genomestat.taxon_id,
     <sql>
       <![CDATA[
 CREATE TABLE OrganismAttributes&1 NOLOGGING AS
-SELECT oa.*, tn2.name as species, replace(oa.organism_name, tn2.name) as strain
+SELECT oa.*, tn2.name as species,
+       ltrim(replace(oa.organism_name, tn2.name)) as strain
 FROM
 (
 SELECT o.project_name as project_id,
@@ -875,7 +944,8 @@ SELECT o.project_name as project_id,
        nvl(psc.popsetCount, 0) as popsetCount,
        nvl(pc.geneArrayCount, 0) as arrayGeneCount,
        nvl(pc.rnaSeqCount, 0) as rnaSeqCount,
-       nvl(pc.rtPCRCount, 0) as rtPCRCount
+       nvl(pc.rtPCRCount, 0) as rtPCRCount,
+       nvl(ta.avg_transcript_length, 0) as avg_transcript_length
 FROM   apidb.Organism o,
        sres.Taxon t,
        sres.TaxonName tn,
@@ -883,7 +953,10 @@ FROM   apidb.Organism o,
        CommunityCount cc,
        GeneCount gc,
        popsetCount psc,
-       profileCount pc
+       profileCount pc,
+       (select taxon_id, round(avg(length),1) as avg_transcript_length
+        from TranscriptAttributes
+        group by taxon_id) ta
 WHERE t.taxon_id = tn.taxon_id
   AND tn.taxon_id = o.taxon_id
   AND tn.name_class = 'scientific name' 
@@ -892,6 +965,7 @@ WHERE t.taxon_id = tn.taxon_id
   AND o.taxon_id = gc.taxon_id (+)
   AND o.taxon_id = psc.taxon_id (+)
   AND o.taxon_id = pc.taxon_id (+)
+  AND o.taxon_id = ta.taxon_id (+)
 ) oa,
   TaxonSpecies ts,
   sres.taxon t,
@@ -2176,6 +2250,7 @@ and ga.orthomcl_name is null
          stores all its attributes. 
     </comment>
     <internalDependency name="TranscriptAttributes"/>
+    <ancillaryTable name="SpeciesInfo"/>
     <sql>
       <![CDATA[
 	    CREATE TABLE &prefixGeneAttributes&1 NOLOGGING AS
@@ -2231,6 +2306,7 @@ and ga.orthomcl_name is null
 		, representative_transcript
                 , gene_zoom_context_start as zoom_context_start
                 , gene_zoom_context_end as zoom_context_end
+                , cast (null as number) as strain_count
             FROM &prefixTranscriptAttributes ta,
                  (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo
                   FROM &prefixTranscriptAttributes
@@ -2255,6 +2331,23 @@ and ga.orthomcl_name is null
                 )  uniprot
             WHERE ta.gene_source_id = aggregates.gene_source_id
               AND ta.gene_na_feature_id = uniprot.na_feature_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table &prefixSpeciesInfo&1 nologging as
+select genus_species, count(distinct organism) as strain_count
+from &prefixGeneAttributes&1
+group by genus_species
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+update &prefixGeneAttributes&1 ga
+set strain_count
+    = (select strain_count
+       from &prefixSpeciesInfo&1 si
+       where si.genus_species = ga.genus_species)
       ]]>
     </sql>
     <sql>
@@ -2330,7 +2423,7 @@ tablespace indx
     <comment>Each record represents one SNP. Widely used in the model, as well as in
          the creation of several other tuning tables, Includes only NGS SNPs.
     </comment>
-    <!-- internalDependency name="ProjectTaxon"/-->
+    <internalDependency name="ProjectTaxon"/>
     <externalDependency name="apidb.FeatureLocation"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="apidb.Snp" noTrigger="true"/>
@@ -3540,7 +3633,7 @@ create index Blastp_text_ix&1 on Blastp&1(description) indextype is ctxsys.conte
         create index Blastp_pvalfunc_ix&1
              on Blastp&1 
                 (pvalue_exp, gene_source_id,
-                 regexp_replace (external_database_name,'_RSRC$',''))
+                 replace (external_database_name,'_RSRC',''))
              tablespace indx
       ]]>
     </sql>
@@ -4344,7 +4437,10 @@ tablespace indx
                   s.organism like 'Fusarium%' or 
                   s.organism like 'Gibberella%' or
                   s.organism like 'Trichoderma%' or
-                  s.organism like 'Sordaria%')
+                  s.organism like 'Lomentospora%' or
+                  s.organism like 'Scedosporium%' or
+                  s.organism like 'Sordaria%' or
+                  s.organism like 'Sporothrix%')
             then 'Sordariomycetes'
             when (s.organism like 'Tremella%' or
                   s.organism like 'Cryptococcus%')
@@ -4958,7 +5054,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                         end) as reaction_url
                       , ed.NAME as ext_db_name
                       , edr.VERSION as ext_db_version
-                      , pn.DISPLAY_LABEL as enzyme
+                      , cast(pn.DISPLAY_LABEL as varchar2(20)) as enzyme
                       , listagg (pc.type, ',') within group (order by pc.pathway_id) as type_list
                       , max (prel.is_reversible) KEEP (DENSE_RANK LAST ORDER BY prel.is_reversible) over (partition by pr.pathway_reaction_id) as is_reversible
                       , nvl(ca.compound_name, pc.compound_source_id) as compound
@@ -5350,6 +5446,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
   <!--MetabolicPathwaySres table - simplify model query to improve download performance -->
   <tuningTable name="PathwaysGeneTable">
     <comment>Used by pathway table on gene pages</comment>
+    <internalDependency name="GeneAttributes"/>
     <internalDependency name="TranscriptPathway"/>
     <internalDependency name="PathwayAttributes"/>
     <internalDependency name="PathwayCompounds"/>
@@ -5358,6 +5455,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
       <![CDATA[
         CREATE TABLE PathwaysGeneTable&1 NOLOGGING AS
         SELECT DISTINCT gene_source_id
+        , cast (null as varchar2(20)) as project_id
         , pathway_source_id
         , pathway_name
         , count(reaction_source_id) as reactions
@@ -5391,9 +5489,25 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         ORDER BY pathway_source_id, pathway_source
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+        update PathwaysGeneTable&1 pgt
+        set project_id
+            = (select project_id
+               from GeneAttributes
+               where source_id = pgt.gene_source_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+      create index pgt_ix&1 on PathwaysGeneTable&1
+             (gene_source_id, project_id, pathway_source_id, pathway_name, 
+              reactions, enzyme, expasy_url, pathway_source, exact_match)
+      tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
     
-
 
   <tuningTable name="CompoundTypeAheads">
     <comment> for use in GenesByReactionCompounds question </comment>
@@ -5910,41 +6024,41 @@ where url is not null
   <tuningTable name="GenePubmed">
     <!-- PubMed records mapped to genes
       -->
-    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="Pubmed"/>
     <externalDependency name="dots.DbRefNaFeature"/>
     <externalDependency name="sres.DbRef"/>
-    <externalDependency name="sres.ExternalDatabase"/>
-    <externalDependency name="sres.ExternalDatabaseRelease"/>
     <sql>
       <![CDATA[
         create table GenePubmed&1 nologging as
-        select distinct ta.gene_source_id, ta.source_id, ta.project_id, pm.pubmed_id, pm.doi, pm.title, 
-          dbms_lob.substr(pm.authors, 2000, 1) authors
-        from sres.ExternalDatabaseRelease edr, sres.DbRef db, TranscriptAttributes ta,
-             dots.DbRefNaFeature dbna, sres.ExternalDatabase ed,
-             DatasetPresenter dsa, Pubmed pm
-        where edr.external_database_release_id = db.external_database_release_id
-          and ed.external_database_id = edr.external_database_id
-	  -- consider using ApiDBTuing.ExternalDbDatasetPresenter instead of the LIKE below, if its performance is a problem
-          and (ed.name = dsa.name or ed.name like (dsa.dataset_name_pattern))
-          and dbna.db_ref_id = db.db_ref_id
-          and (ta.na_feature_id= dbna.na_feature_id or ta.gene_na_feature_id = dbna.na_feature_id)
-          and lower(dsa.display_name) like '%pubmed%'
+        select distinct tref.gene_source_id, tref.source_id, tref.project_id,
+                        pm.pubmed_id, pm.doi, pm.title, 
+                        dbms_lob.substr(pm.authors, 2000, 1) authors
+        from ExternalDbDatasetPresenter dbdp, sres.DbRef db, Pubmed pm,
+             (select ta.source_id, max(ta.gene_source_id) as gene_source_id,
+                     max(ta.project_id) as project_id, dbna.db_ref_id
+              from TranscriptAttributes ta, dots.DbRefNaFeature dbna
+              where ta.na_feature_id = dbna.na_feature_id
+                 or ta.gene_na_feature_id = dbna.na_feature_id
+              group by ta.source_id, dbna.db_ref_id
+             ) tref
+        where dbdp.external_database_release_id = db.external_database_release_id
+          and tref.db_ref_id = db.db_ref_id
+          and lower(dbdp.dataset_presenter_display_name) like '%pubmed%'
           and db.primary_identifier = to_char(pm.pubmed_id)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index gpm_gene_ix&1
+        create index gpm_gene_idx&1
           on GenePubmed&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
         tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index gpm_tx_ix&1
+        create index gpm_tx_idx&1
           on GenePubmed&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
         tablespace indx
       ]]>
@@ -6831,7 +6945,7 @@ where url is not null
             AND p.profile_type          = 'values'
             AND p.dataset_name          = dp.NAME
             AND dp.dataset_presenter_id = dprop.dataset_presenter_id
-	    AND p.profile_set_name like '%[htseq-union - unstranded - fpkm - unique]'
+	    AND p.profile_set_name like '%- unique]'
             AND property                = 'switchStrandsProfiles'
             AND ((to_char(substr(dprop.value, 1, 10)) = 'false' AND p.min_timepoint LIKE '%firststrand%')
               OR (to_char(substr(dprop.value, 1, 10)) = 'true' AND p.min_timepoint LIKE '%secondstrand%')
@@ -6935,6 +7049,83 @@ tablespace indx
         ON RodMalPhenotype&1(source_id)
         TABLESPACE indx
       ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="ChrCopyNumbers">
+    <comment>Chromosome data for CNV queries</comment>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="TranscriptAttributes"/>
+    
+    <sql>
+        <![CDATA[
+            CREATE TABLE ChrCopyNumbers&1 NOLOGGING AS
+                SELECT DISTINCT ta.na_sequence_id
+                , ta.chromosome
+                , ccn.chr_copy_number AS ploidy
+                , io.input_pan_id
+                , io.output_pan_id
+                FROM apidb.chrcopynumber ccn
+                , TranscriptAttributes ta
+                ,  PANIo io
+                WHERE ta.na_sequence_id = ccn.na_sequence_id
+                AND ta.chromosome IS NOT NULL
+                AND ccn.protocol_app_node_id = io.output_pan_id
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+        CREATE INDEX ChrCN_ix&1
+        ON ChrCopyNumbers&1(input_pan_id, na_sequence_id)
+        TABLESPACE indx
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+        CREATE INDEX ChrCN_output&1
+        ON ChrCopyNumbers&1(output_pan_id)
+        TABLESPACE indx
+        ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="GeneCopyNumbers">
+    <comment>Gene Data for CNV queries</comment>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="TranscriptAttributes"/>
+
+    <sql>
+        <![CDATA[
+            CREATE TABLE GeneCopyNumbers&1 NOLOGGING AS
+                SELECT DISTINCT ta.project_id
+                , ta.source_id
+                , ta.gene_source_id
+                , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+                , gcn.haploid_number AS raw_estimate
+                , gcn.ref_copy_number AS ref_cn
+                , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
+                    WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
+                    ELSE round(gcn.haploid_number) END AS haploid_number
+                , ta.chromosome
+                , ta.na_sequence_id
+                , io.input_pan_id
+                , io.output_pan_id
+                FROM apidb.genecopynumber gcn
+                , study.protocolappnode pan
+                , TranscriptAttributes ta
+                ,  PANIo io
+                WHERE gcn.protocol_app_node_id = pan.protocol_app_node_id
+                AND gcn.na_feature_id = ta.gene_na_feature_id
+                AND gcn.protocol_app_node_id = io.output_pan_id
+                AND ta.gene_type = 'protein coding'
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+            CREATE INDEX GeneCN_ix&1
+            ON GeneCopyNumbers&1(input_pan_id, na_sequence_id)
+            TABLESPACE indx
+        ]]>
     </sql>
   </tuningTable>
 

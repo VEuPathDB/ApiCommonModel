@@ -67,17 +67,23 @@ prop=dataType
              <column name="term"/>
           <sql>
            <![CDATA[
-select profile_study_id as internal, profile_set_name as term,
-                 decode(profile_set_name, '', '', ${decodeProfileSet}  '${datasetDisplayName}') as display
-from apidbtuning.profiletype pt,  (select distinct sl.study_id
-                                                          from study.studylink sl, apidbtuning.PanResults panr
-                                                          where sl.protocol_app_node_id = panr.pan_id
-                                                          and panr.result_table = 'Results::NAFeatureDiffResult') dr
-where (dataset_name = '${datasetName}' OR dataset_name like '${datasetNamePattern}')
-and pt.profile_set_name not in ( ${excludedProfileSetsList})
-and pt.profile_type = 'values'
-and pt.profile_study_id = dr.study_id (+)
-and dr.study_id is null
+with p as (select profile_study_id , profile_set_name
+    from apidbtuning.profiletype pt, 
+         (select distinct sl.study_id
+          from study.studylink sl, apidbtuning.PanResults panr
+          where sl.protocol_app_node_id = panr.pan_id
+          and panr.result_table = 'Results::NAFeatureDiffResult') dr
+    where (dataset_name = '${datasetName}' OR dataset_name like '${datasetNamePattern}')
+    and pt.profile_set_name not in ( ${excludedProfileSetsList})
+    and pt.profile_type = 'values'
+    and pt.profile_study_id = dr.study_id (+)
+    and dr.study_id is null),
+  ct as (select count(*) as total from p) 
+select  profile_study_id as internal, profile_set_name as term,
+        case when (my_ct.total =1) 
+             then decode(profile_set_name, '', '', ${decodeProfileSet}  '${datasetDisplayName}')
+             else profile_set_name end as display
+from ct my_ct, p
             ]]>
           </sql>
         </sqlQuery>
@@ -140,9 +146,12 @@ prop=optionalQuestionDescription
 prop=organismAbbrevDisplay
 prop=dataType
 prop=isLogged
+prop=dynColSuffix
 prop=defaultProteinCodingOnly
 prop=proteinCodingParamVisible
 prop=defaultFoldDifference
+prop=datasetFloor
+prop=floorText
 >templateTextStart<
     <question name="GenesBy${dataType}${datasetName}" includeProjects="${includeProjects}" newBuild="${buildNumberIntroduced}"
          displayName="${organismAbbrevDisplay} ${datasetDisplayName} ${dataType} (fold change)"
@@ -153,7 +162,7 @@ prop=defaultFoldDifference
         <paramRef ref="geneParams.profileset_generic" groupRef="paramGroups.dynamicParams" queryRef="GeneVQ.${datasetName}${dataType}Profiles"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only" default="${defaultProteinCodingOnly}" visible="${proteinCodingParamVisible}"/> 
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.fold_change" default="${defaultFoldDifference}"/>
-
+<paramRef ref="geneParams.hard_floor" groupRef="paramGroups.dynamicParams" default="${datasetFloor}"/>
 	<sqlParamValue name="isLogged">${isLogged}</sqlParamValue>
 	<attributesList includeProjects="${includeProjectsExcludeEuPathDB}"
 	   summary="organism,gene_product,fold_change_chosen,chose_group_two,chose_group_one,exprGraphAttr${datasetName}_expr_graph"
@@ -174,9 +183,10 @@ Find genes which are differentially expressed in a ${dataType} experiment.
 Find genes which are differentially expressed in a ${dataType} experiment.  First choose an experiment as the available samples may change.  If only one "Experiment" is shown, this field will be selected for you.
 <br/><br/>
 After selecting samples you have the option to take the average, minimum, or maximum expression value within each group.  (If choosing only one sample from a group, the selected 'operation' will not affect your results).  Time series experiments will offer an extra parameter called "Global min/max" which allows you to filter your results further.  Finally, you can choose the directionality and the magnitude of the difference.  For example, selecting up-regulated with a fold difference of 2 will only show results where the comparator is twice that of the reference.
-<br /><br/>
+<br/><br/>
+${floorText}
+<br/><br/>
 ${optionalQuestionDescription}
-
           ]]>
          </description>
 
@@ -184,16 +194,16 @@ ${optionalQuestionDescription}
 
         <dynamicAttributes>
            <columnAttribute name="fold_change_avg" displayName="Fold Difference (Avg)" align="center"/>
-           <columnAttribute name="fold_change_chosen" displayName="Fold Difference" align="center"/>
-           <columnAttribute name="fold_change_chosen_display" displayName="Fold Change" align="center" inReportMaker="false" help="* indicates that the chosen reference has been set to 1 to compute the fold change"/>
-           <columnAttribute name="avg_group_one" displayName="Avg Comp (log2)" align="center"/>
-           <columnAttribute name="avg_group_two" displayName="Avg Ref (log2)" align="center"/>
-           <columnAttribute name="min_group_one" displayName="Min Comp (log2)" align="center"/>
-           <columnAttribute name="min_group_two" displayName="Min Ref (log2)" align="center"/>
-           <columnAttribute name="max_group_one" displayName="Max Comp (log2)" align="center"/>
-           <columnAttribute name="max_group_two" displayName="Max Ref (log2)" align="center"/>
-           <columnAttribute name="chose_group_one" displayName="Chosen Comp (log2)" align="center" help="This number represents the expression value calculated for the 'Comparison Samples' and 'Operation Applied to Comparison Samples' that you chose when setting up the fold change search."/>
-           <columnAttribute name="chose_group_two" displayName="Chosen Ref (log2)" align="center" help="This number represents the expression value calculated for the 'Reference Samples' and 'Operation Applied to Reference Samples' that you chose when setting up the fold change search."/>
+           <columnAttribute name="fold_change_chosen" displayName="Fold Difference" align="center" help="${floorText}"/>
+           <columnAttribute name="fold_change_chosen_display" displayName="Fold Difference Display" align="center" inReportMaker="false" help="* indicates that the chosen reference has been set to the floor in order to compute the fold change"/>
+           <columnAttribute name="avg_group_one" displayName="Avg Comp${dynColSuffix}" align="center"/>
+           <columnAttribute name="avg_group_two" displayName="Avg Ref${dynColSuffix}" align="center"/>
+           <columnAttribute name="min_group_one" displayName="Min Comp${dynColSuffix}" align="center"/>
+           <columnAttribute name="min_group_two" displayName="Min Ref${dynColSuffix}" align="center"/>
+           <columnAttribute name="max_group_one" displayName="Max Comp${dynColSuffix}" align="center"/>
+           <columnAttribute name="max_group_two" displayName="Max Ref${dynColSuffix}" align="center"/>
+           <columnAttribute name="chose_group_one" displayName="Chosen Comp${dynColSuffix}" align="center" help="This number represents the expression value calculated for the 'Comparison Samples' and 'Operation Applied to Comparison Samples' that you chose when setting up the fold change search."/>
+           <columnAttribute name="chose_group_two" displayName="Chosen Ref${dynColSuffix}" align="center" help="This number represents the expression value calculated for the 'Reference Samples' and 'Operation Applied to Reference Samples' that you chose when setting up the fold change search."/>
         </dynamicAttributes>
 
 

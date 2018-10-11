@@ -1,8 +1,8 @@
-package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
+package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class RodMalPhenotype extends DatasetInjector {
+public class MeyerCoexpression extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -10,8 +10,7 @@ public class RodMalPhenotype extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "RodMalPhenotype");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCoexpression"); 
   }
 
   // second column is for documentation
@@ -21,5 +20,5 @@ public class RodMalPhenotype extends DatasetInjector {
     return propertiesDeclaration;
   }
 
-  
+
 }

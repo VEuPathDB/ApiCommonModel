@@ -65,6 +65,26 @@
                <paramValue name="project_id"></paramValue>
             </defaultTestParamValues>
 
+
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- protein source ids -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <sqlQuery name="ProteinSourceIDs">
+         <column name="source_id"/>
+         <column name="project_id"/>
+         <column name="protein_source_id"/>
+         <sql>
+         <![CDATA[
+select ta.gene_source_id as source_id,ta.project_id, ta.protein_source_id
+FROM APIDBTUNING.TRANSCRIPTATTRIBUTES ta
+         ]]>
+         </sql>
+       </sqlQuery>
+
+
+
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Gene Transcripts -->
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -543,6 +563,97 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
         </sqlQuery>
 
 
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- UserDataset Graphs -->  
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+          <sqlQuery name="UserDatasetsTranscriptomicsGraphsDataTable" isCacheable="false" excludeProjects="EuPathDB">
+            <paramRef ref="InternalParams.user_id"/>
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="dataset_id"/>
+            <!--column name="profile_set_display_name"/-->
+            <column name="sample_name"/>
+            <column name="value"/>
+            <sql>
+            <![CDATA[
+select ga.source_id, ga.project_id, ps.user_dataset_id as dataset_id, pan.name as sample_name, naf.value
+from apidbtuning.geneattributes ga
+   , apidbuserdatasets.USERDATASETACCESSCONTROL ac
+   , apidbuserdatasets.ud_profileset ps
+   , apidbuserdatasets.ud_protocolappnode pan
+   , apidbuserdatasets.ud_nafeatureexpression naf
+where ac.user_id = $$user_id$$
+and ac.user_dataset_id = ps.user_dataset_id
+and ps.profile_set_id = pan.profile_set_id
+and pan.protocol_app_node_id = naf.PROTOCOL_APP_NODE_ID
+and naf.na_feature_id = ga.na_feature_id
+             ]]>
+            </sql>
+          </sqlQuery>
+
+
+
+
+       <sqlQuery name="UserDatasetsTranscriptomicsGraphs" excludeProjects="EuPathDB">
+         <paramRef ref="InternalParams.user_id"/>
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="graph_ids" />
+            <column name="default_graph_id" />
+            <column name="module" />
+            <column name="species" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
+            <column name="display_name" />
+            <column name="description" />
+            <column name="x_axis" />
+            <column name="y_axis" />
+            <column name="has_graph_data"/>
+	    <column name="has_meta_data"/>
+	    <column name="meta_data_categories"/>
+            <column name="dataset_name"/>
+            <column name="dataset_id"/>
+            <column name="is_graph_custom"/>
+            <column name="summary"/>
+            <column name="short_attribution"/>
+            <column name="assay_type"/>
+            <column name="template"/>
+            <sql>
+            <![CDATA[
+select distinct g.*, decode(lower(is_graph_custom), 'false', 1, 0) as template, regexp_substr(graph_ids, '[^,]*') as default_graph_id
+from (select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_species ,
+             i.name as dataset_name, ga.source_id as graph_ids,
+             case when ga.source_id is null then 0 else 1 end as has_graph_data,
+             ga.organism as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
+             'FALSE' has_meta_data, '' as meta_data_categories,
+             graph_descrip.*, '' as summary, '' as short_attribution, i.name as display_name, '' as description, 'RNA-seq' as assay_type, i.user_dataset_id as dataset_id
+      from apidbtuning.geneattributes ga,
+           APIDBUSERDATASETS.INSTALLEDUSERDATASET i,
+           APIDBUSERDATASETS.USERDATASETACCESSCONTROL ac,
+           APIDBUSERDATASETS.UD_NAFEATUREEXPRESSION naf,
+           APIDBUSERDATASETS.UD_PROTOCOLAPPNODE pan,
+           APIDBUSERDATASETS.UD_PROFILESET ps,
+           (select 'UserDatasets::RNASeq' as module,
+                   'Stage/Sample' as x_axis,
+                   'Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM). ' y_axis,
+                   'true' as is_graph_custom,
+                   1 as order_num
+            from dual
+           ) graph_descrip
+        where i.user_dataset_id = ps.user_dataset_id
+          and ac.user_dataset_id = i.user_dataset_id
+          and ac.user_id = $$user_id$$
+          and ps.profile_set_id = pan.profile_set_id
+          and pan.protocol_app_node_id = naf.protocol_app_node_id
+          and naf.na_feature_id = ga.na_feature_id
+) g 
+             ]]>
+            </sql>
+        </sqlQuery>
+
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Host Response  Graphs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -705,6 +816,7 @@ from (
             <column name="dataset_name"/>
             <column name="dataset_id"/>
             <column name="is_graph_custom"/>
+            <column name="has_special_gbrowse"/>
             <column name="summary"/>
             <column name="short_attribution"/>
             <column name="assay_type"/>
@@ -731,12 +843,12 @@ from (
            apidbtuning.geneGroupProfile psgene,
            (  select 'pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC' as dataset, 'PhenotypeScore' as module,
                      'Genes ranked by score' as x_axis, 'MIS/MFS Scores' y_axis,  'false' as is_graph_custom,
-                     1 as order_num
+                     'true' as has_special_gbrowse, 1 as order_num
               from dual
               union
             select 'pberANKA_phenotype_Bushnell_functional_profiling_RSRC' as dataset, 'PhenotypeScore' as module,
                      'Genes ranked by score' as x_axis, 'Relative Growth Rate' y_axis,  'false' as is_graph_custom,
-                     1 as order_num
+                     'false' as has_special_gbrowse, 1 as order_num
               from dual
            ) graph_descrip
         where ga.source_id = psgene.source_id
@@ -846,6 +958,20 @@ where ga.na_feature_id = r.na_feature_id
 
 
 
+       <sqlQuery name="pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC" includeProjects="PlasmoDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="score"/>
+            <column name="score_type"/>
+            <sql>
+<![CDATA[ 
+select ga.source_id, ga.project_id, r.score, r.score_type
+from APIDB.phenotypescore r, apidbtuning.geneattributes ga
+where ga.na_feature_id = r.na_feature_id
+ ]]>
+       </sql>
+
+        </sqlQuery>
 
 
 
@@ -996,6 +1122,31 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
               and pr.PHENOTYPE_ENTITY_TERM_ID = oen.ontology_term_id (+)
               and pr.phenotype_quality_term_id = opq.ontology_term_id (+)
               and pr.LIFE_CYCLE_STAGE_TERM_ID = ols.ONTOLOGY_TERM_ID (+)
+UNION
+    select distinct ga.source_id
+              , ga.project_id
+              , pm.PUBMED_ID
+              , pm.MODIFICATION_TYPE
+              , pm.ALLELE
+              , case when oen.name is null then CAST (pr.phenotype_post_composition AS VARCHAR2(4000)) 
+              else opq.name ||' '||CASE WHEN opq.name = 'lethal' THEN '' ELSE oen.name||' ' END||pr.Timing||' '||ols.name end as phenotype
+, case when pr.PHENOTYPE_COMMENT is null then CAST (pr.phenotype_post_composition AS VARCHAR2(4000)) else pr.phenotype_comment end as phenotype_comment
+	      , case when pr.CHEBI_ANNOTATION_EXTENSION not like 'CHEBI%' then null else pr.chebi_annotation_extension end as chebi_annotation_extension
+              --, pr.PROTEIN_ANNOTATION_EXTENSION
+              from
+              apidbtuning.geneattributes ga
+              , APIDB.PHENOTYPEMODEL pm
+              , apidb.phenotyperesult pr
+              , sres.ontologyterm oen
+              , sres.ontologyterm opq
+              , sres.ontologyterm ols
+	      where ga.na_feature_id = pm.na_feature_id
+              and pm.phenotype_model_id = pr.phenotype_model_id
+              and pr.PHENOTYPE_ENTITY_TERM_ID = oen.ontology_term_id (+)
+              and pr.phenotype_quality_term_id = opq.ontology_term_id (+)
+              and pr.LIFE_CYCLE_STAGE_TERM_ID = ols.ONTOLOGY_TERM_ID (+)
+
+
         </sql>
  </sqlQuery>
 
@@ -1709,7 +1860,7 @@ ORDER BY
             <sql>
               <![CDATA[
                 SELECT pg.gene_source_id AS source_id
-                , ga.project_id
+                , pg.project_id
                 , pg.pathway_source_id
                 , pg.pathway_name
                 , pg.reactions
@@ -1717,8 +1868,7 @@ ORDER BY
                 , pg.expasy_url
                 , pg.pathway_source
                 , pg.exact_match
-                FROM apidbtuning.pathwaysgenetable pg, apidbtuning.geneattributes ga
-                WHERE pg.gene_source_id = ga.source_id
+                FROM apidbtuning.pathwaysgenetable pg
               ]]>
             </sql>
         </sqlQuery>

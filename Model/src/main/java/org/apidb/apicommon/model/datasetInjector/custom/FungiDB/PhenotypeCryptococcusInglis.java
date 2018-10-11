@@ -1,8 +1,9 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
+
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class Phenotype extends DatasetInjector {
+public class PhenotypeCryptococcusInglis extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -10,9 +11,8 @@ public class Phenotype extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype"); 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
   }
 
   // second column is for documentation
@@ -21,6 +21,5 @@ public class Phenotype extends DatasetInjector {
     String[][] propertiesDeclaration = {};
     return propertiesDeclaration;
   }
-
 
 }

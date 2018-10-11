@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class RodMalPhenotype extends DatasetInjector {
+public class PhenotypeGrowthRate extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -10,8 +10,9 @@ public class RodMalPhenotype extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "RodMalPhenotype");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
+      String datasetName = getDatasetName();
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", datasetName + "_Phenotype");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_pberANKA_phenotype_Bushnell_functional_profiling_RSRC");
   }
 
   // second column is for documentation
