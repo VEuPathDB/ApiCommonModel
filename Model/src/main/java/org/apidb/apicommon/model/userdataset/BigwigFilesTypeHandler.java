@@ -62,14 +62,14 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 
       "SELECT MAX(dh.build_number) as current_build " +
       "FROM (" +
-		  "SELECT dh.build_number, annotation_version, " +
-             "LAG(annotation_version ,1, 0) OVER (order by dh.build_number) as av_prev " +
+          "SELECT dh.build_number as build_number, annotation_version, " +
+          "       LAG(annotation_version ,1, 0) OVER (order by build_number) as av_prev " +
           " FROM apidbTuning.datasetPresenter dp," +
           "      apidbTuning.DatasetHistory dh, " +
           "      apidb.organism o " +
           " WHERE dh.DATASET_PRESENTER_ID = dp.dataset_presenter_id " +
           "  AND o.name_for_filenames = ? " +
-		      "  AND dp.name = o.abbrev || '_primary_genome_RSRC'" +
+          "  AND dp.name = o.abbrev || '_primary_genome_RSRC'" +
       ")" +
       "WHERE annotation_version != av_prev ";
 	
