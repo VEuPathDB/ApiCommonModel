@@ -60,10 +60,10 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    */
   private static final String SELECT_CURRENT_GENOME_BUILD_SQL =
 
-      "SELECT MAX(dh.build_number) as current_build " +
+      "SELECT MAX(build_number) as current_build " +
       "FROM (" +
-          "SELECT dh.build_number as build_number, annotation_version, " +
-          "       LAG(annotation_version ,1, 0) OVER (order by build_number) as av_prev " +
+          "SELECT dh.build_number, annotation_version, " +
+          "       LAG(annotation_version ,1, 0) OVER (order by dh.build_number) as av_prev " +
           " FROM apidbTuning.datasetPresenter dp," +
           "      apidbTuning.DatasetHistory dh, " +
           "      apidb.organism o " +
