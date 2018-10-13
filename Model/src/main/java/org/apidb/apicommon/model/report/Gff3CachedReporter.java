@@ -18,9 +18,9 @@ import org.gusdb.wdk.model.answer.factory.AnswerValue;
 import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.PagedAnswerReporter;
 import org.gusdb.wdk.model.report.ReporterRef;
-import org.gusdb.wdk.model.report.StandardConfig;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.json.JSONObject;
 
 /**

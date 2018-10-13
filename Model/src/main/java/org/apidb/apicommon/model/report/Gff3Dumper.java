@@ -26,9 +26,9 @@ import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
 import org.gusdb.wdk.model.answer.spec.AnswerSpec;
 import org.gusdb.wdk.model.answer.spec.QueryInstanceSpec;
 import org.gusdb.wdk.model.answer.spec.QueryInstanceSpec.QueryInstanceSpecBuilder;
-import org.gusdb.wdk.model.report.PagedAnswerReporter;
-import org.gusdb.wdk.model.report.ReporterFactory;
-import org.gusdb.wdk.model.report.StandardConfig;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
+import org.gusdb.wdk.model.report.util.ReporterFactory;
 import org.gusdb.wdk.model.user.User;
 
 /**

@@ -29,8 +29,8 @@ import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.PagedAnswerReporter;
-import org.gusdb.wdk.model.report.StandardConfig;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.json.JSONObject;
 
 /**
