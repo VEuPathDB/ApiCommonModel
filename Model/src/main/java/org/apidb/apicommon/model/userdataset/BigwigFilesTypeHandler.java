@@ -56,15 +56,22 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   
   /**
    * SQL to look up the current genome build for the organism given in this user dataset.
+   *     it is the last time/build when the annotation_version got updated (there was a structural annotation).
    */
   private static final String SELECT_CURRENT_GENOME_BUILD_SQL =
-		  "SELECT MAX(dh.build_number) as current_build " +
+
+      "SELECT MAX(build_number) as current_build " +
+      "FROM (" +
+          "SELECT dh.build_number, annotation_version, " +
+          "       LAG(annotation_version ,1, 0) OVER (order by dh.build_number) as av_prev " +
           " FROM apidbTuning.datasetPresenter dp," +
           "      apidbTuning.DatasetHistory dh, " +
           "      apidb.organism o " +
           " WHERE dh.DATASET_PRESENTER_ID = dp.dataset_presenter_id " +
           "  AND o.name_for_filenames = ? " +
-		"  AND dp.name = o.abbrev || '_primary_genome_RSRC'";
+          "  AND dp.name = o.abbrev || '_primary_genome_RSRC'" +
+      ")" +
+      "WHERE annotation_version != av_prev ";
 	
   /**
    * SQL to look up the longest genome sequence available for the genome given in this user

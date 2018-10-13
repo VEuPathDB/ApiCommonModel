@@ -26,6 +26,8 @@ import org.gusdb.wdk.model.answer.spec.QueryInstanceSpec.QueryInstanceSpecBuilde
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.util.ReporterFactory;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.util.ReporterFactory;

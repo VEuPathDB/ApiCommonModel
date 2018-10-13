@@ -19,6 +19,7 @@ import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
 import org.gusdb.wdk.model.report.ReporterRef;
+import org.gusdb.wdk.model.report.ReporterConfigException;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.json.JSONObject;
@@ -99,7 +100,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
    * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
    */
   @Override
-  public Gff3CachedReporter configure(Map<String, String> newConfig) throws WdkUserException {
+  public Gff3CachedReporter configure(Map<String, String> newConfig) throws ReporterConfigException {
 
     if (newConfig.containsKey(StandardConfig.ATTACHMENT_TYPE)) fileType = newConfig.get(StandardConfig.ATTACHMENT_TYPE);
 
@@ -119,7 +120,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
   }
 
   @Override
-  public Gff3CachedReporter configure(JSONObject newConfig) throws WdkUserException {
+  public Gff3CachedReporter configure(JSONObject newConfig) throws ReporterConfigException {
 
     if (newConfig.has(StandardConfig.ATTACHMENT_TYPE_JSON))
       fileType = newConfig.getString(StandardConfig.ATTACHMENT_TYPE_JSON);
