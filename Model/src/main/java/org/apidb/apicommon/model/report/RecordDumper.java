@@ -12,8 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
-import org.gusdb.fgputil.validation.ValidObjectFactory;
-import org.gusdb.fgputil.validation.ValidationLevel;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -26,8 +24,6 @@ import org.gusdb.wdk.model.answer.spec.QueryInstanceSpec.QueryInstanceSpecBuilde
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
-import org.gusdb.wdk.model.report.config.StandardConfig;
-import org.gusdb.wdk.model.report.util.ReporterFactory;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.util.ReporterFactory;

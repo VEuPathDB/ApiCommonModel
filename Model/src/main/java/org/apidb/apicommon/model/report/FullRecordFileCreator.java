@@ -31,7 +31,6 @@ import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.FullRecordReporter;
 import org.gusdb.wdk.model.report.util.TableCache;
-import org.gusdb.wdk.model.user.User;
 
 /**
  * @author xingao
