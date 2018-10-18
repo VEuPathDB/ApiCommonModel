@@ -29,8 +29,9 @@ import org.gusdb.wdk.model.record.RecordClass;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.TableValue;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.PagedAnswerReporter;
-import org.gusdb.wdk.model.report.StandardConfig;
+import org.gusdb.wdk.model.report.ReporterConfigException;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.json.JSONObject;
 
 /**
@@ -161,7 +162,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
    * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
    */
   @Override
-  public Gff3Reporter configure(Map<String, String> newConfig) throws WdkUserException {
+  public Gff3Reporter configure(Map<String, String> newConfig) throws ReporterConfigException {
 
     if (newConfig.containsKey(StandardConfig.ATTACHMENT_TYPE))
       fileType = newConfig.get(StandardConfig.ATTACHMENT_TYPE);
@@ -182,7 +183,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
   }
 
   @Override
-  public Gff3Reporter configure(JSONObject newConfig) throws WdkUserException {
+  public Gff3Reporter configure(JSONObject newConfig) throws ReporterConfigException {
 
     if (newConfig.has(StandardConfig.ATTACHMENT_TYPE_JSON))
       fileType = newConfig.getString(StandardConfig.ATTACHMENT_TYPE_JSON);

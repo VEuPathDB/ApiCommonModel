@@ -21,9 +21,9 @@ import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.question.Question;
-import org.gusdb.wdk.model.report.PagedAnswerReporter;
-import org.gusdb.wdk.model.report.ReporterFactory;
-import org.gusdb.wdk.model.report.StandardConfig;
+import org.gusdb.wdk.model.report.config.StandardConfig;
+import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
+import org.gusdb.wdk.model.report.util.ReporterFactory;
 import org.gusdb.wdk.model.user.User;
 
 /**

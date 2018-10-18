@@ -103,7 +103,7 @@ WHERE
   AND enz.pathway_id = p.pathway_id
   AND source_id NOT IN('ec01100', 'ec01110', 'ec01120')
   -- temporarily remove MPMP from release 38
-  AND ed.name NOT LIKE '%MPMP%'
+  --AND ed.name NOT LIKE '%MPMP%'
       ]]>
     </sql>
     <sql>
@@ -5231,15 +5231,20 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
     <internalDependency name="PathwayNodeGene"/>
     <internalDependency name="CompoundId"/>
     <internalDependency name="PathwayReactions"/>
+    <ancillaryTable name="NodesWithTypes"/>
+    <ancillaryTable name="ReactionsWithReversibility"/>
+    <ancillaryTable name="EnzymeEdges"/>
+    <ancillaryTable name="ParentNodes"/>
+    <ancillaryTable name="NodesWithParents"/>
+    <ancillaryTable name="EnzymeReactions"/>
     <sql>
       <![CDATA[
-        CREATE TABLE PathwayNodes&1 NOLOGGING AS
-        WITH nodes_with_types AS
-            (SELECT pn.pathway_id
+        CREATE TABLE NodesWithTypes&1 NOLOGGING AS
+            SELECT pn.pathway_id
             , pa.name AS display_label
             , pa.url
             , pa.name AS name
-            , pa.source_id as node_identifier
+            , pa.source_id AS node_identifier
             , to_char(pn.pathway_node_id) AS pathway_node_id
             , pn.x
             , pn.y
@@ -5258,7 +5263,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             UNION ALL
             SELECT pn.pathway_id
             , pn.display_label
-            , NULL as url
+            , NULL AS url
             , nvl(ec.description, pn.display_label) AS name
             , ec.ec_number AS node_identifier
             , to_char(pn.pathway_node_id) AS pathway_node_id
@@ -5268,7 +5273,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             , pn.height
             , pn.cellular_location
             , ot.name AS type
-            , count(tp.gene_source_id) AS gene_count
+            , count (tp.gene_source_id) as gene_count
             , NULL AS default_structure
             FROM sres.pathwaynode pn
             , sres.ontologyterm ot
@@ -5289,7 +5294,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             , pn.height
             , pn.cellular_location
             , ot.name
-            UNION ALL
+             UNION ALL
             SELECT pn.pathway_id
             , pn.display_label
             , NULL AS url
@@ -5325,58 +5330,78 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             AND ot.name = 'molecular entity'
             AND pn.row_id = c.id (+)
             AND c.chebi_accession = st.compound (+)
-            )
-        , reactions_with_reversibility AS
-            (SELECT DISTINCT spr.pathway_relationship_id
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE ReactionsWithReversibility&1 NOLOGGING AS
+            SELECT DISTINCT spr.pathway_relationship_id
             , tpr.is_reversible
             FROM sres.pathwayrelationship spr
             , apidb.pathwayreactionrel prr
             , PathwayReactions tpr
             WHERE prr.pathway_relationship_id = spr.pathway_relationship_id
             AND tpr.reaction_id = prr.pathway_reaction_id
-        )
-        , enzyme_edges AS
-            (SELECT nodes_with_types.pathway_id AS pathway_id
-            , nodes_with_types.pathway_node_id AS e_id
-            , nodes_with_types.type
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE EnzymeEdges&1 NOLOGGING AS
+            SELECT nwt.pathway_id AS pathway_id
+            , nwt.pathway_node_id AS e_id
+            , nwt.type
             , i.associated_node_id AS m1_id
             , rri.is_reversible as ir1
             , o.node_id AS m2_id
             , rro.is_reversible AS ir2
             FROM sres.pathwayrelationship i
             , sres.pathwayrelationship o
-            , nodes_with_types
-            , reactions_with_reversibility rri
-            , reactions_with_reversibility rro
-            WHERE i.node_id = nodes_with_types.pathway_node_id
-            AND o.associated_node_id = nodes_with_types.pathway_node_id
+            , NodesWithTypes&1 nwt
+            , ReactionsWithReversibility&1 rri
+            , ReactionsWithReversibility&1 rro
+            WHERE i.node_id = nwt.pathway_node_id
+            AND o.associated_node_id = nwt.pathway_node_id
             AND i.pathway_relationship_id = rri.pathway_relationship_id
             AND o.pathway_relationship_id = rro.pathway_relationship_id
-            AND nodes_with_types.type = 'enzyme'
-        )
-        , parents AS
-            (SELECT m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 as io
+            AND nwt.type = 'enzyme'
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE ParentNodes&1 NOLOGGING AS
+            SELECT m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 as io
             , listagg(e_id, '_') WITHIN GROUP (ORDER BY e_id) AS parent
             , pathway_id
-            FROM enzyme_edges
+            FROM EnzymeEdges&1
             GROUP BY pathway_id
             , m1_id
             , m2_id
             , ir1
             , ir2
             HAVING COUNT (*) > 1
-        )
-        , node_parents AS
-            (SELECT e_id as pathway_node_id
-            , parents.parent
-            , type as node_type
-            , enzyme_edges.pathway_id
-            FROM enzyme_edges
-            , parents
-            WHERE m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = parents.io
-        )
-        , enzyme_reactions AS
-            (SELECT DISTINCT pn.PATHWAY_NODE_ID node_id
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE NodesWithParents&1 NOLOGGING AS
+            SELECT e_id as pathway_node_id
+            , np.parent
+            , ee.type as node_type
+            , ee.pathway_id
+            FROM EnzymeEdges&1 ee
+            , ParentNodes&1 np
+            WHERE m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = np.io
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE EnzymeReactions&1 NOLOGGING AS
+            SELECT DISTINCT pn.PATHWAY_NODE_ID node_id
             , pr.SOURCE_ID AS reaction_source_id
             FROM sres.pathwaynode pn
             , apidb.pathwayreaction pr
@@ -5388,7 +5413,12 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             AND pr.PATHWAY_REACTION_ID = prr.PATHWAY_REACTION_ID
             AND ot.name = 'enzyme'
             AND pn.PATHWAY_NODE_TYPE_ID = ot.ONTOLOGY_TERM_ID
-        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE PathwayNodes&1 NOLOGGING AS
         SELECT pa.source_id
         , pa.pathway_source
         , pn.display_label
@@ -5409,32 +5439,32 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         , pn.default_structure
         FROM
             (SELECT e_id AS pathway_node_id
-            , node_parents.parent
+            , nwp.parent
             , type AS node_type
-            , enzyme_edges.pathway_id
-            , enzyme_reactions.reaction_source_id
-            FROM enzyme_edges
-            , node_parents
-            , enzyme_reactions
-            WHERE enzyme_edges.e_id = node_parents.pathway_node_id (+)
-            AND enzyme_reactions.node_id = enzyme_edges.e_id
+            , ee.pathway_id
+            , er.reaction_source_id
+            FROM EnzymeEdges&1 ee
+            , NodesWithParents&1 nwp
+            , EnzymeReactions&1 er
+            WHERE ee.e_id = nwp.pathway_node_id (+)
+            AND er.node_id = ee.e_id
             UNION
-            SELECT parents.parent
+            SELECT nwp.parent
             , NULL 
             , 'nodeOfNodes'
             , pathway_id
             , NULL
-            FROM parents
+            FROM NodesWithParents&1 nwp
             UNION
-            SELECT nodes_with_types.pathway_node_id AS pathway_node_id
+            SELECT nwt.pathway_node_id AS pathway_node_id
             , NULL AS parent
-            , nodes_with_types.type
-            , nodes_with_types.pathway_id
+            , nwt.type
+            , nwt.pathway_id
             , NULL
-            FROM nodes_with_types
-            WHERE nodes_with_types.type != 'enzyme'
+            FROM NodesWithTypes&1 nwt
+            WHERE nwt.type != 'enzyme'
             ) nodes_with_parents
-        , nodes_with_types pn
+        , NodesWithTypes&1 pn
         , PathwayAttributes pa
         WHERE nodes_with_parents.pathway_node_id = pn.pathway_node_id (+)
         AND nodes_with_parents.pathway_id = pa.pathway_id
