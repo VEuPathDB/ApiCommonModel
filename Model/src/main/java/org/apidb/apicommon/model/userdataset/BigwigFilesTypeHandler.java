@@ -344,7 +344,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    * @return
    */
   protected boolean isBigWigFile(String dataFileName) {
-	return dataFileName.endsWith(".bigwig") || dataFileName.endsWith(".bw");
+      return true;
   }
   
   
