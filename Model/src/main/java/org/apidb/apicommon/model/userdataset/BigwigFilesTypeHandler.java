@@ -149,10 +149,12 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    */
   @Override
   public JsonType getDetailedTypeSpecificData(WdkModel wdkModel, UserDataset userDataset, User user) throws WdkModelException {
+	  logger.debug("In BigWigHandler: getDetailedTypeSpecificData: going to gbrowseutils and checking on gbrowse stuff");
     Map<String, GBrowseTrackStatus> tracksStatus = GBrowseUtils.getTracksStatus(wdkModel, user.getUserId());	  
     JSONObject json =  new JSONObject()
     		.put("tracks",createTrackData(userDataset, tracksStatus))
     		.put("seqId", getSequenceInfo(userDataset, wdkModel).getFirst());
+		logger.debug("Returning json: " + json);
     return new JsonType(json);
   }
 
@@ -160,10 +162,14 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
     List<TrackData> tracksData = new ArrayList<>();
     Long datasetId = userDataset.getUserDatasetId();
 
+		logger.debug("In BigWigHandler");
+
     // Created new track data for each bigwig data track found (determined by extension only) in the user
     // dataset datafiles collection.
     for(String dataFileName : userDataset.getFiles().keySet()) {
-      if(isBigWigFile(dataFileName)) {
+			logger.debug("In BigWigHandler:dataFileName: " + dataFileName);
+      // do not enforce extensions until we do so in galaxy installer
+		  //if(isBigWigFile(dataFileName)) {
         String trackName = getTrackName(datasetId.toString(), dataFileName);
 
         // This includes all tracks with a GBrowse file system footprint regardless of condition.
@@ -181,7 +187,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
         else {
           tracksData.add(new TrackData(trackName, UploadStatus.NOT_UPLOADED.toString(), "", null));
         }
-      }
+				//}
     }
     JSONArray results = assembleTracksDataJson(tracksData);
     return results;
@@ -344,7 +350,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    * @return
    */
   protected boolean isBigWigFile(String dataFileName) {
-	return dataFileName.endsWith(".bigwig") || dataFileName.endsWith(".bw");
+	  return dataFileName.endsWith(".bigwig") || dataFileName.endsWith(".bw");
   }
   
   

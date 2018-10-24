@@ -184,13 +184,15 @@ public class GBrowseUtils {
    * @throws WdkModelException
    */
   public static Map<String, GBrowseTrackStatus> getTracksStatus(Path userTracksDir) throws WdkModelException {
+    LOG.debug("In GBrowseUtils!!!!!!!!! \n");
     Map<String, GBrowseTrackStatus> tracksStatus = new HashMap<>();
     try (DirectoryStream<Path> directoryStream = Files.newDirectoryStream(userTracksDir)) {
       for (Path path : directoryStream) {
     	    String trackName = path.getFileName().toString();
+          LOG.debug("In GBrowseUtils: getTrackStatus: trackName: " + trackName + "\n");
     	    Path trackStatusPath = Paths.get(path.toString(), GBrowseTrackStatus.TRACK_STATUS_FILE_NAME);
     	    if(Files.exists(trackStatusPath)) {
-    	    	  String line = "";
+            String line = "";
     	      try (BufferedReader reader = Files.newBufferedReader(trackStatusPath)) {
     	        line = reader.readLine();
     	      }  
@@ -210,6 +212,7 @@ public class GBrowseUtils {
     catch (IOException | DirectoryIteratorException e) {
       throw new WdkModelException(e);
     }
+		LOG.debug("Returning trackStatus: " + tracksStatus) ;
     return tracksStatus;
   }
 
