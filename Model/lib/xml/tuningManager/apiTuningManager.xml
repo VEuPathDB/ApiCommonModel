@@ -6062,21 +6062,26 @@ where url is not null
     <sql>
       <![CDATA[
         create table GenePubmed&1 nologging as
-        select distinct tref.gene_source_id, tref.source_id, tref.project_id,
-                        pm.pubmed_id, pm.doi, pm.title, 
-                        dbms_lob.substr(pm.authors, 2000, 1) authors
-        from ExternalDbDatasetPresenter dbdp, sres.DbRef db, Pubmed pm,
-             (select ta.source_id, max(ta.gene_source_id) as gene_source_id,
-                     max(ta.project_id) as project_id, dbna.db_ref_id
-              from TranscriptAttributes ta, dots.DbRefNaFeature dbna
-              where ta.na_feature_id = dbna.na_feature_id
-                 or ta.gene_na_feature_id = dbna.na_feature_id
-              group by ta.source_id, dbna.db_ref_id
-             ) tref
-        where dbdp.external_database_release_id = db.external_database_release_id
-          and tref.db_ref_id = db.db_ref_id
-          and lower(dbdp.dataset_presenter_display_name) like '%pubmed%'
-          and db.primary_identifier = to_char(pm.pubmed_id)
+        with feat_pm as (
+        select dbref_subset.na_feature_id,
+               pm.pubmed_id, pm.doi, pm.title,
+               dbms_lob.substr(pm.authors, 2000, 1) authors
+        from Pubmed pm,
+             (select dbna.na_feature_id, db.primary_identifier
+              from dots.DbRefNaFeature dbna,
+                   sres.DbRef db, 
+                   ExternalDbDatasetPresenter dbdp
+              where dbdp.external_database_release_id = db.external_database_release_id
+               and db.db_ref_id = dbna.db_ref_id
+               and lower(dbdp.dataset_presenter_display_name) like '%pubmed%'
+             ) dbref_subset
+        where dbref_subset.primary_identifier = to_char(pm.pubmed_id)
+        )
+        select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors from TranscriptAttributes ta, feat_pm 
+        where ta.na_feature_id = feat_pm.na_feature_id
+        union
+        select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors from TranscriptAttributes ta, feat_pm 
+        where ta.gene_na_feature_id = feat_pm.na_feature_id
       ]]>
     </sql>
     <sql>
