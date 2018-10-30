@@ -64,6 +64,12 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
     return q;
   }
 
+  @Override
+  protected boolean isBigWigFile(String dataFileName) {
+	return dataFileName.endsWith(".bigwig") || dataFileName.endsWith(".bw");
+  }
+
+
   // @Override
   // public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
   //     // TODO Placeholder - need real compatibility test

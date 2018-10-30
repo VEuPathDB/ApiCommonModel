@@ -1,0 +1,189 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use Getopt::Long qw(GetOptions);
+use Data::Dumper;
+use EbrcModelCommon::Model::tmUtils;
+
+my $startTime = time;
+my ($help, $propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug);
+
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "prefix=s" => \$prefix,
+           "filterValue=s" => \$filterValue,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+          );
+
+usage() if ($help);
+
+die "required parameter missing" unless ($propfile && $instance && $suffix);
+
+my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+# create table
+$dbh->do(<<SQL) or die "creating table";
+   create table NewOrthologousGenes$suffix (
+      source_id           varchar2(80),
+      project_id          varchar2(20),
+      na_feature_id       number(12),
+      ortho_source_id     varchar2(80),
+      ortho_na_feature_id number(12),
+      ortho_product       varchar2(600),
+      ortho_organism      varchar2(320),
+      syntenic            varchar2(3)
+   ) nologging
+SQL
+
+# prepare insert
+my $insertStmt = $dbh->prepare(<<SQL);
+   insert into NewOrthologousGenes$suffix
+          (source_id, project_id, na_feature_id, ortho_source_id,
+           ortho_na_feature_id, ortho_product, ortho_organism, syntenic)
+   values (?, ?, ?, ?, ?, ?, ?, ?)
+SQL
+
+# prepare (main) query against GeneAttributes
+my $geneQ = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
+     select orthomcl_name, source_id, project_id, na_feature_id,
+           na_sequence_id, start_min, end_max, organism, species,
+           case
+             when length(product) <= 600
+               then product
+             else substr(product, 1, 597) || '...'
+           end as product
+     from GeneAttributes
+     order by orthomcl_name, source_id
+SQL
+
+# prepare the synteny query
+my $syntenyQ = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
+     select count(*)
+     from apidb.Synteny
+     where a_na_sequence_id = ? -- gene.na_sequence_id
+       and a_start <= ? -- gene.end_max
+       and a_end >= ? -- gene.start_min
+       and b_na_sequence_id = ? -- ortho_gene.na_sequence_id
+       and b_start <= ? -- ortho_gene.end_max
+       and b_end >= ? -- ortho_gene.start_min
+       and rownum = 1
+SQL
+
+$geneQ->execute();
+
+my $insertCount;
+my $ortholog_count = 0;
+my $current_group = "no such group";
+
+my (@source_ids, @na_feature_ids, @na_seqence_ids, @start_mins, @end_maxes,
+    @organisms, @species, @products, @project_ids);
+
+while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
+           $na_sequence_id, $start_min, $end_max, $organism, $species,
+           $product)
+          = $geneQ->fetchrow_array()) {
+
+  if ($orthomcl_name ne $current_group) {
+    # we have seen a whole ortholog group
+    # insert a row for each pair of different genes
+    for (my $i = 0; $i < $ortholog_count; $i++) {
+      for (my $j = 0; $j < $ortholog_count; $j++) {
+	next if $i == $j; # genes must differ
+
+	# query for synteny
+	$syntenyQ->execute($na_feature_ids[$i], $end_maxes[$i], $start_mins[$i],
+			   $na_feature_ids[$j], $end_maxes[$j], $start_mins[$j])
+	  or die "executing synteny query";
+	my ($syntenic) = $syntenyQ->fetchrow_array();
+#	my $syntenic = 0;
+	# insert NewOrthologousGenes row
+	$insertStmt->execute($source_ids[$i], $project_ids[$i], $na_feature_ids[$i],
+                             $source_ids[$j], $na_feature_ids[$j], $products[$j], $organisms[$j],
+                             $syntenic ? "yes" : "no")
+	  or die "executing insert statement";
+
+	$insertCount++;
+	print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds\n"
+	  unless ($insertCount % 100000);
+	$dbh->commit()
+	  unless ($insertCount % 100000);
+      } # for $i
+    } # for $j
+
+    # reset for next ortholog group
+    $ortholog_count = 0;
+    $current_group = $orthomcl_name;
+  } # if ($orthomcl_name ne $current_group) (fetched whole group)
+
+  # push this gene onto its group's info
+  $source_ids[$ortholog_count] = $source_id;
+  $na_feature_ids[$ortholog_count] = $na_feature_id;
+  $start_mins[$ortholog_count] = $start_min;
+  $end_maxes[$ortholog_count] = $end_max;
+  $organisms[$ortholog_count] = $organism;
+  $species[$ortholog_count] = $species;
+  $products[$ortholog_count] = $product;
+  $project_ids[$ortholog_count] = $project_id;
+  $ortholog_count++;
+} # while fetchrow
+
+$geneQ->finish();
+
+# process last group
+for (my $i = 0; $i < $ortholog_count; $i++) {
+  for (my $j = 0; $j < $ortholog_count; $j++) {
+    next if $i == $j; # genes must differ
+
+    # query for synteny
+    $syntenyQ->execute($na_feature_ids[$i], $end_maxes[$i], $start_mins[$i],
+		       $na_feature_ids[$j], $end_maxes[$j], $start_mins[$j])
+      or die "executing synteny query";
+    my ($syntenic) = $syntenyQ->fetchrow_array();
+    # insert NewOrthologousGenes row
+    $insertStmt->execute($source_ids[$i], $project_ids[$i], $na_feature_ids[$i],
+			 $source_ids[$j], $na_feature_ids[$j], $products[$j], $organisms[$j],
+			 $syntenic ? "yes" : "no")
+      or die "executing insert statement";
+
+    $insertCount++;
+  } # for $i
+} # for $j
+
+
+print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds\n"
+  if $insertCount;
+$dbh->commit();
+
+# create index
+$dbh->do(<<SQL) or die "creating index";
+    create index ogix$suffix
+        on NewOrthologousGenes$suffix
+        (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_organism)
+        tablespace indx
+SQL
+
+$dbh->disconnect();
+
+sub usage {
+  my $e = shift;
+  if($e) {
+    print STDERR $e . "\n";
+  }
+  print STDERR "
+Build a table of pairs of different genes that share an OrthoMCL ID
+
+usage:  buildOrthologousGenesTT -propfile prop_file -instance instance -schema schema -suffix suffix  [-debug] [-help]
+";
+  exit;
+}
+
+1;
+
