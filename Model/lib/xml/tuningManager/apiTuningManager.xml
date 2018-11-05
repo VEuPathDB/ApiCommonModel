@@ -3676,9 +3676,9 @@ tablespace indx
 
 
   <tuningTable name="TaxonSpecies" prefixEnabled="true">
-    <comment>Each record maps a taxon_id of interest onto the taxon_id that taxon's
+    <comment>Each record maps a taxon_id of interest onto the taxon_id of that taxon's
          taxon-tree ancestor whose rank is "species". Used by
-         buildAnnotationChangeTT and by gene queries, as well as an input in the
+         buildAnnotationChangeTT and by gene queries, and as an input in the
          creation of several tuning tables, including GeneAttributes and
          OrganismTree.
     </comment>
@@ -3687,13 +3687,24 @@ tablespace indx
     <sql>
       <![CDATA[
 create table &prefixTaxonSpecies&1 nologging as
-select t.taxon_id, species.taxon_id as species_taxon_id
-from sres.Taxon species, (select distinct sa.taxon_id
-      from &prefixGenomicSeqAttributes sa) t
-where species.taxon_id in (select taxon_id from sres.Taxon
-                           connect by taxon_id = prior parent_id and prior rank != 'species'
-                           start with taxon_id = t.taxon_id)
-  and species.rank = 'species'
+  -- recursively walk taxon tree to find ancestor with rank "species"
+  select taxon_id, species_taxon_id
+  from (select connect_by_root child.taxon_id as taxon_id, parent.taxon_id as species_taxon_id, parent.rank
+        from sres.Taxon child, sres.Taxon parent
+        where child.parent_id = parent.taxon_id
+        start with child.taxon_id
+                   in (select taxon_id
+                       from &prefixGenomicSeqAttributes)
+        connect by parent.taxon_id = prior parent.parent_id
+                   and prior parent.rank != 'species')
+  where rank = 'species'
+union
+  -- special case: for taxa that are species, map taxon ID to itself
+  select taxon_id, taxon_id as species_taxon_id
+  from sres.Taxon
+  where rank = 'species'
+  and taxon_id in (select taxon_id
+                       from &prefixGenomicSeqAttributes)
       ]]>
     </sql>
   </tuningTable>
