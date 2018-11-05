@@ -8,6 +8,7 @@ use DBI;
 use Getopt::Long qw(GetOptions);
 use Data::Dumper;
 use EbrcModelCommon::Model::tmUtils;
+use POSIX; # for floor() function
 
 my $startTime = time;
 my ($help, $propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug);
@@ -31,7 +32,7 @@ my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $prop
 
 # create table
 $dbh->do(<<SQL) or die "creating table";
-   create table NewOrthologousGenes$suffix (
+   create table OrthologousGenes$suffix (
       source_id           varchar2(80),
       project_id          varchar2(20),
       na_feature_id       number(12),
@@ -45,7 +46,7 @@ SQL
 
 # prepare insert
 my $insertStmt = $dbh->prepare(<<SQL);
-   insert into NewOrthologousGenes$suffix
+   insert into OrthologousGenes$suffix
           (source_id, project_id, na_feature_id, ortho_source_id,
            ortho_na_feature_id, ortho_product, ortho_organism, syntenic)
    values (?, ?, ?, ?, ?, ?, ?, ?)
@@ -54,7 +55,10 @@ SQL
 # store synteny spans
 my $syntenyStartTime = time;
 my (@a_na_sequence_id, @a_start, @a_end, @b_na_sequence_id, @b_start, @b_end);
-my $syntenyCount;
+my $syntenyCount = 0;
+
+# $sequenceFirstRecord{X} is the smallest $i such that $a_na_sequence_id[$i] = X
+my %sequenceFirstRecord;
 
 my $syntenyQ = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
      select a_na_sequence_id, a_start, a_end, b_na_sequence_id, b_start, b_end
@@ -71,10 +75,17 @@ while (my ($a_na_sequence_id, $a_start, $a_end, $b_na_sequence_id, $b_start, $b_
   $b_na_sequence_id[$syntenyCount] = $b_na_sequence_id;
   $b_start[$syntenyCount] = $b_start;
   $b_end[$syntenyCount] = $b_end;
+
+  if ($syntenyCount == 0) {
+    $sequenceFirstRecord{$a_na_sequence_id} = $syntenyCount;
+  } elsif ($a_na_sequence_id != $a_na_sequence_id[$syntenyCount -1]) {
+    $sequenceFirstRecord{$a_na_sequence_id} = $syntenyCount;
+  }
+
   $syntenyCount++;
 }
 $syntenyQ->finish();
-print STDERR "Read $syntenyCount Synteny records in " . (time - $syntenyStartTime) . " seconds\n";
+print STDERR "Finished reading $syntenyCount Synteny records in " . (time - $syntenyStartTime) . " seconds\n";
 
 # prepare (main) query against GeneAttributes
 my $geneQ = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
@@ -98,6 +109,7 @@ my $current_group = "no such group"; # so the very first record is seen as the s
 my (@source_ids, @na_feature_ids, @na_sequence_ids, @start_mins, @end_maxes,
     @organisms, @species, @products, @project_ids);
 
+print STDERR "Iterating through gene records\n";
 while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
            $na_sequence_id, $start_min, $end_max, $organism, $species,
            $product)
@@ -111,41 +123,45 @@ while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
 	next if $i == $j; # genes must differ
 
 	# check for synteny by searching the ordered list of synteny spans
-	# checks up to $syntenyCount spans; a binary search would check at most log2($syntenyCount) spans
 	# print STDERR "\nchecking for synteny between (" . $na_sequence_ids[$i] . ', '
 	#   . $start_mins[$i] . ', ' . $end_maxes[$i] . ') and (' . $na_sequence_ids[$j]
 	#   . ', ' . $start_mins[$j] . ', ' . $end_maxes[$j] . ")\n";
 	my $syntenic = 0;
-	for (my $k=0; $k < $syntenyCount; $k++) {
-	  if ($a_na_sequence_id[$k] == $na_sequence_ids[$i]
-              and $a_start[$k] <= $end_maxes[$i]
-              and $a_end[$k] >= $start_mins[$i]
-              and $b_na_sequence_id[$k] == $na_sequence_ids[$j]
-              and $b_start[$k] <= $end_maxes[$j]
-              and $b_end[$k] >= $start_mins[$j]) {
-	    # print STDERR "FOUND in Synteny span (" . $a_na_sequence_id[$k] . ", "
-	    #   . $a_start[$k] . ", " . $a_end[$k] . ") - (" . $a_na_sequence_id[$k]
-	    # . ", " . $a_start[$k] . ", " . $a_end[$k] . ")\n";
-	    $syntenic = 1;
-	    last;
+
+	if ($sequenceFirstRecord{$na_sequence_ids[$i]} # is there a (nonzero) index for this seq ID?
+	    or $a_na_sequence_id[0] == $na_sequence_ids[$i]) { # is this the ID in the 0th span?
+	  for (my $k=$sequenceFirstRecord{$na_sequence_ids[$i]}; $k < $syntenyCount; $k++) {
+	    if ($a_na_sequence_id[$k] == $na_sequence_ids[$i]
+		and $a_start[$k] <= $end_maxes[$i]
+		and $a_end[$k] >= $start_mins[$i]
+		and $b_na_sequence_id[$k] == $na_sequence_ids[$j]
+		and $b_start[$k] <= $end_maxes[$j]
+		and $b_end[$k] >= $start_mins[$j]) {
+	      # print STDERR "FOUND in Synteny span (" . $a_na_sequence_id[$k] . ", "
+	      #   . $a_start[$k] . ", " . $a_end[$k] . ") - (" . $a_na_sequence_id[$k]
+	      # . ", " . $a_start[$k] . ", " . $a_end[$k] . ")\n";
+	      $syntenic = 1;
+	      last;
+	    }
+
+	    # print STDERR "GIVING UP at Synteny span (" . $a_na_sequence_id[$k] . ", "
+	    #   . $a_start[$k] . ", " . $a_end[$k] . ") - (" . $a_na_sequence_id[$k] . ", "
+	    #     . $a_start[$k] . ", " . $a_end[$k] . ")\n";
+
+	    last if $a_na_sequence_id[$k] > $na_sequence_ids[$i];
 	  }
-
-	  # print STDERR "GIVING UP at Synteny span (" . $a_na_sequence_id[$k] . ", "
-	  #   . $a_start[$k] . ", " . $a_end[$k] . ") - (" . $a_na_sequence_id[$k] . ", "
-	  #     . $a_start[$k] . ", " . $a_end[$k] . ")\n";
-
-	  last if $a_na_sequence_id[$k] > $na_sequence_ids[$i];
 	}
 
-	# insert NewOrthologousGenes row
+	# insert OrthologousGenes row
 	$insertStmt->execute($source_ids[$i], $project_ids[$i], $na_feature_ids[$i],
                              $source_ids[$j], $na_feature_ids[$j], $products[$j], $organisms[$j],
                              $syntenic ? "yes" : "no")
 	  or die "executing insert statement";
 
 	$insertCount++;
-	print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds\n"
-	  unless ($insertCount % 100000);
+	print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds ("
+	  . floor($insertCount / (time - $startTime) + 0.5) . " records/second)\n"
+	  unless ($insertCount % 1000000);
 	$dbh->commit()
 	  unless ($insertCount % 100000);
       } # for $i
@@ -192,7 +208,7 @@ for (my $i = 0; $i < $ortholog_count; $i++) {
       last if $a_na_sequence_id[$k] > $na_sequence_ids[$i];
     }
 
-    # insert NewOrthologousGenes row
+    # insert OrthologousGenes row
     $insertStmt->execute($source_ids[$i], $project_ids[$i], $na_feature_ids[$i],
 			 $source_ids[$j], $na_feature_ids[$j], $products[$j], $organisms[$j],
 			 $syntenic ? "yes" : "no")
@@ -208,7 +224,7 @@ $dbh->commit();
 # create index
 $dbh->do(<<SQL) or die "creating index";
     create index ogix$suffix
-        on NewOrthologousGenes$suffix
+        on OrthologousGenes$suffix
         (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_organism)
         tablespace indx
 SQL
