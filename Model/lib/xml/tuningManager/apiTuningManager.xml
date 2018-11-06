@@ -257,7 +257,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
   </tuningTable>
 
   <tuningTable name="RnaSeqStats">
-    <externalDependency name="apidb.DataSource"/>
+    <externalDependency name="apidb.Datasource"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="study.Study"/>
@@ -274,7 +274,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                 , ed.name as dataset_name
                 , ds.taxon_id
                 , c.value as num_reads
-            from apidb.DataSource ds
+            from apidb.Datasource ds
                 , sres.ExternalDatabase ed
                 , sres.ExternalDatabaseRelease edr
                 , study.Study s
@@ -298,7 +298,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                 , ed.name as dataset_name
                 , ds.taxon_id
                 , c.value as num_reads
-            from apidb.DataSource ds
+            from apidb.Datasource ds
                 , sres.ExternalDatabase ed
                 , sres.ExternalDatabaseRelease edr
                 , study.Study s
@@ -2129,7 +2129,7 @@ and ga.orthomcl_name is null
                                from &prefixTranscriptAttributes&1 g1
                                where g1.orthomcl_name = gaup.orthomcl_name
                                and g1.organism = gaup.organism
-                               and gaup.source_id != g1.source_id),
+                               and gaup.gene_source_id != g1.gene_source_id),
            gene_ortholog_number = (select count(*)
                                from &prefixTranscriptAttributes&1 g1
                                where g1.orthomcl_name = gaup.orthomcl_name
@@ -3676,9 +3676,9 @@ tablespace indx
 
 
   <tuningTable name="TaxonSpecies" prefixEnabled="true">
-    <comment>Each record maps a taxon_id of interest onto the taxon_id that taxon's
+    <comment>Each record maps a taxon_id of interest onto the taxon_id of that taxon's
          taxon-tree ancestor whose rank is "species". Used by
-         buildAnnotationChangeTT and by gene queries, as well as an input in the
+         buildAnnotationChangeTT and by gene queries, and as an input in the
          creation of several tuning tables, including GeneAttributes and
          OrganismTree.
     </comment>
@@ -3687,13 +3687,24 @@ tablespace indx
     <sql>
       <![CDATA[
 create table &prefixTaxonSpecies&1 nologging as
-select t.taxon_id, species.taxon_id as species_taxon_id
-from sres.Taxon species, (select distinct sa.taxon_id
-      from &prefixGenomicSeqAttributes sa) t
-where species.taxon_id in (select taxon_id from sres.Taxon
-                           connect by taxon_id = prior parent_id and prior rank != 'species'
-                           start with taxon_id = t.taxon_id)
-  and species.rank = 'species'
+  -- recursively walk taxon tree to find ancestor with rank "species"
+  select taxon_id, species_taxon_id
+  from (select connect_by_root child.taxon_id as taxon_id, parent.taxon_id as species_taxon_id, parent.rank
+        from sres.Taxon child, sres.Taxon parent
+        where child.parent_id = parent.taxon_id
+        start with child.taxon_id
+                   in (select taxon_id
+                       from &prefixGenomicSeqAttributes)
+        connect by parent.taxon_id = prior parent.parent_id
+                   and prior parent.rank != 'species')
+  where rank = 'species'
+union
+  -- special case: for taxa that are species, map taxon ID to itself
+  select taxon_id, taxon_id as species_taxon_id
+  from sres.Taxon
+  where rank = 'species'
+  and taxon_id in (select taxon_id
+                       from &prefixGenomicSeqAttributes)
       ]]>
     </sql>
   </tuningTable>
@@ -6906,57 +6917,13 @@ where url is not null
   </tuningTable>
 
 
-  <tuningTable name="NewOrthologousGenes">
-    <comment>
-       Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
-    </comment>
-    <internalDependency name="GeneAttributes"/>
-    <externalDependency name="apidb.Synteny"/>
-    <program commandLine="buildOrthologousGenesTT"/>
-  </tuningTable>
-
-
   <tuningTable name="OrthologousGenes">
     <comment>
        Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
     </comment>
     <internalDependency name="GeneAttributes"/>
     <externalDependency name="apidb.Synteny"/>
-    <sql>
-      <![CDATA[
-        CREATE TABLE OrthologousGenes&1 NOLOGGING AS
-        SELECT gene.source_id, gene.project_id, ortho_gene.source_id AS ortho_source_id,
-               CAST(CASE
-                      WHEN LENGTH(ortho_gene.product) <= 600
-                        THEN ortho_gene.product
-                      ELSE substr(ortho_gene.product, 1, 597) || '...'
-                    END AS VARCHAR2(600)) AS ortho_product,
-               ortho_gene.organism AS ortho_organism,
-               CASE WHEN EXISTS
-                       (SELECT NULL
-                        FROM apidb.Synteny
-                        WHERE a_na_sequence_id = gene.na_sequence_id
-                          AND a_start <= gene.end_max
-                          AND a_end >= gene.start_min
-                          AND b_na_sequence_id = ortho_gene.na_sequence_id
-                          AND b_start <= ortho_gene.end_max
-                          AND b_end >= ortho_gene.start_min)
-                    THEN 'yes'
-                 ELSE 'no'
-               END AS syntenic
-        FROM GeneAttributes gene, GeneAttributes ortho_gene
-        WHERE gene.orthomcl_name = ortho_gene.orthomcl_name
-          AND gene.source_id != ortho_gene.source_id
-        ORDER BY gene.source_id, syntenic DESC, ortho_gene.source_id
-       ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX og_ix&1
-          ON OrthologousGenes&1 (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_organism)
-        TABLESPACE indx
-      ]]>
-    </sql>
+    <program commandLine="buildOrthologousGenesTT"/>
   </tuningTable>
 
 
