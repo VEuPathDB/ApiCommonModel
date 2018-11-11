@@ -147,6 +147,8 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Vittaforma","Microsporidia");
 			phylum.put("Yarrowia","Saccharomycetes");
 			phylum.put("Zymoseptoria","Dothideomycetes");
+			phylum.put("Lomentospora","Sordariomycetes");
+			phylum.put("Scedosporium","Sordariomycetes");
     }
 
     // getting properties defined in .prop file
