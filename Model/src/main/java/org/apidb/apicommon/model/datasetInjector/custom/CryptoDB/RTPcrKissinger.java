@@ -11,12 +11,6 @@ public class RTPcrKissinger extends CusomGenePageExpressionGraphs {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Kissinger::KissingerRtPcrProfiles"); 
   }
 
-  protected void setProfileSamplesHelp() {
-      String profileSamplesHelp = "Median Expr (standardized)";
-
-      setPropValue("profileSamplesHelp", profileSamplesHelp);
-    }
-
 
   @Override
   public void injectTemplates() {
@@ -26,11 +20,10 @@ public class RTPcrKissinger extends CusomGenePageExpressionGraphs {
       setShortAttribution();
       String organismAbbrevDisplay = "C. parvum Iowa II"; //getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
-      setProfileSamplesHelp();
 
       injectTemplate("datasetCategory");
       injectTemplate("profileSampleAttributesCategory");
-      injectTemplate("profileAttributeQueries");
+      //injectTemplate("profileAttributeQueries");
       injectTemplate("profileAttributeRef");
   }
 
