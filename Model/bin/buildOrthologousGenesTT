@@ -120,63 +120,17 @@ while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
 
   if ($orthomcl_name ne $current_group) {
     # we have seen a whole ortholog group
-    # insert a row for each pair of different genes
-    for (my $i = 0; $i < $ortholog_count; $i++) {
-      for (my $j = 0; $j < $ortholog_count; $j++) {
-	next if $i == $j; # genes must differ
 
-	# check for synteny by searching the ordered list of synteny spans
-	# print STDERR "\nchecking for synteny between (" . $na_sequence_ids[$i] . ', '
-	#   . $start_mins[$i] . ', ' . $end_maxes[$i] . ') and (' . $na_sequence_ids[$j]
-	#   . ', ' . $start_mins[$j] . ', ' . $end_maxes[$j] . ")\n";
-	my $syntenic = 0;
-
-	if ($sequenceFirstRecord{$na_sequence_ids[$i]} # is there a (nonzero) index for this seq ID?
-	    or $a_na_sequence_id[0] == $na_sequence_ids[$i]) { # is this the ID in the 0th span?
-	  for (my $k=$sequenceFirstRecord{$na_sequence_ids[$i]}; $k < $syntenyCount; $k++) {
-	    if ($a_na_sequence_id[$k] == $na_sequence_ids[$i]
-		and $a_start[$k] <= $end_maxes[$i]
-		and $a_end[$k] >= $start_mins[$i]
-		and $b_na_sequence_id[$k] == $na_sequence_ids[$j]
-		and $b_start[$k] <= $end_maxes[$j]
-		and $b_end[$k] >= $start_mins[$j]) {
-	      # print STDERR "FOUND in Synteny span (" . $a_na_sequence_id[$k] . ", "
-	      #   . $a_start[$k] . ", " . $a_end[$k] . ") - (" . $a_na_sequence_id[$k]
-	      # . ", " . $a_start[$k] . ", " . $a_end[$k] . ")\n";
-	      $syntenic = 1;
-	      last;
-	    }
-
-	    # print STDERR "GIVING UP at Synteny span (" . $a_na_sequence_id[$k] . ", "
-	    #   . $a_start[$k] . ", " . $a_end[$k] . ") - (" . $a_na_sequence_id[$k] . ", "
-	    #     . $a_start[$k] . ", " . $a_end[$k] . ")\n";
-
-	    last if $a_na_sequence_id[$k] > $na_sequence_ids[$i];
-	  }
-	}
-
-	# insert OrthologousGenes row
-	$insertStmt->execute($source_ids[$i], $project_ids[$i], $na_feature_ids[$i],
-                             $source_ids[$j], $na_feature_ids[$j], $products[$j], $organisms[$j],
-                             $syntenic ? "yes" : "no")
-	  or die "executing insert statement";
-
-	$insertCount++;
-	my $elapsedTime = time - $startTime;
-	my $rateMessage;
-	$rateMessage = " (" . floor( 0.5 + ($insertCount / $elapsedTime) ) . " records/second)"
-	  if $elapsedTime;
-	print STDERR "Inserted $insertCount records in " . $elapsedTime . " seconds $rateMessage\n"
-	  unless ($insertCount % $LOG_INTERVAL);
-	$dbh->commit()
-	  unless ($insertCount % $COMMIT_INTERVAL);
-      } # for $i
-    } # for $j
+    # start of sub
+    storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@start_mins, \@end_maxes, \@na_feature_ids, \@products, \@organisms, $syntenyCount, \@a_na_sequence_id, \@a_start, \@a_end, \@b_na_sequence_id, \@b_start, \@b_end, \%sequenceFirstRecord, \$insertCount);
+  # end of sub
 
     # reset for next ortholog group
     $ortholog_count = 0;
     $current_group = $orthomcl_name;
+
   } # if ($orthomcl_name ne $current_group) (fetched whole group)
+
 
   # push this gene onto its group's info
   $source_ids[$ortholog_count] = $source_id;
@@ -194,34 +148,7 @@ while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
 $geneQ->finish();
 
 # process last group
-for (my $i = 0; $i < $ortholog_count; $i++) {
-  for (my $j = 0; $j < $ortholog_count; $j++) {
-    next if $i == $j; # genes must differ
-
-    # check for synteny
-    my $syntenic = 0;
-    for (my $k=0; $k < $syntenyCount; $k++) {
-      if ($a_na_sequence_id[$k] == $na_sequence_ids[$i]
-	  and $a_start[$k] <= $end_maxes[$i]
-	  and $a_end[$k] >= $start_mins[$i]
-	  and $b_na_sequence_id[$k] == $na_sequence_ids[$j]
-	  and $b_start[$k] <= $end_maxes[$j]
-	  and $b_end[$k] >= $start_mins[$j]) {
-	$syntenic = 1;
-	last;
-      }
-
-      last if $a_na_sequence_id[$k] > $na_sequence_ids[$i];
-    }
-
-    # insert OrthologousGenes row
-    $insertStmt->execute($source_ids[$i], $project_ids[$i], $na_feature_ids[$i],
-			 $source_ids[$j], $na_feature_ids[$j], $products[$j], $organisms[$j],
-			 $syntenic ? "yes" : "no")
-      or die "executing insert statement";
-    $insertCount++;
-  } # for $i
-} # for $j
+storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@start_mins, \@end_maxes, \@na_feature_ids, \@products, \@organisms, $syntenyCount, \@a_na_sequence_id, \@a_start, \@a_end, \@b_na_sequence_id, \@b_start, \@b_end, \%sequenceFirstRecord, \$insertCount);
 
 print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds\n"
   if $insertCount;
@@ -236,6 +163,63 @@ $dbh->do(<<SQL) or die "creating index";
 SQL
 
 $dbh->disconnect();
+
+sub storeGroup {
+  my ($ortholog_count, $source_ids_ref, $project_ids_ref, $na_sequence_ids_ref, $start_mins_ref, $end_maxes_ref, $na_feature_ids_ref, $products_ref, $organisms_ref, $syntenyCount, $a_na_sequence_id_ref, $a_start_ref, $a_end_ref, $b_na_sequence_id_ref, $b_start_ref, $b_end_ref, $sequenceFirstRecord_ref, $insertCount_ref) = @_;
+
+    # insert a row for each pair of different genes
+    for (my $i = 0; $i < $ortholog_count; $i++) {
+      for (my $j = 0; $j < $ortholog_count; $j++) {
+	next if $i == $j; # genes must differ
+
+	# check for synteny by searching the ordered list of synteny spans
+	# print STDERR "\nchecking for synteny between (" . ${$na_sequence_ids_ref}[$i] . ', '
+	#   . ${$start_mins_ref}[$i] . ', ' . ${$end_maxes_ref}[$i] . ') and (' . ${$na_sequence_ids_ref}[$j]
+	#   . ', ' . ${$start_mins_ref}[$j] . ', ' . ${$end_maxes_ref}[$j] . ")\n";
+	my $syntenic = 0;
+
+	if (${$sequenceFirstRecord_ref}{${$na_sequence_ids_ref}[$i]} # is there a (nonzero) index for this seq ID?
+	    or ${$a_na_sequence_id_ref}[0] == ${$na_sequence_ids_ref}[$i]) { # is this the ID in the 0th span?
+	  for (my $k=${$sequenceFirstRecord_ref}{${$na_sequence_ids_ref}[$i]}; $k < $syntenyCount; $k++) {
+	    if (${$a_na_sequence_id_ref}[$k] == ${$na_sequence_ids_ref}[$i]
+		and ${$a_start_ref}[$k] <= ${$end_maxes_ref}[$i]
+		and ${$a_end_ref}[$k] >= ${$start_mins_ref}[$i]
+		and ${$b_na_sequence_id_ref}[$k] == ${$na_sequence_ids_ref}[$j]
+		and ${$b_start_ref}[$k] <= ${$end_maxes_ref}[$j]
+		and ${$b_end_ref}[$k] >= ${$start_mins_ref}[$j]) {
+	      # print STDERR "FOUND in Synteny span (" . ${$a_na_sequence_id_ref}[$k] . ", "
+	      #   . ${$a_start_ref}[$k] . ", " . ${$a_end_ref}[$k] . ") - (" . ${$a_na_sequence_id_ref}[$k]
+	      # . ", " . ${$a_start_ref}[$k] . ", " . ${$a_end_ref}[$k] . ")\n";
+	      $syntenic = 1;
+	      last;
+	    }
+
+	    # print STDERR "GIVING UP at Synteny span (" . ${$a_na_sequence_id_ref}[$k] . ", "
+	    #   . ${$a_start_ref}[$k] . ", " . ${$a_end_ref}[$k] . ") - (" . ${$a_na_sequence_id_ref}[$k] . ", "
+	    #     . ${$a_start_ref}[$k] . ", " . ${$a_end_ref}[$k] . ")\n";
+
+	    last if ${$a_na_sequence_id_ref}[$k] > ${$na_sequence_ids_ref}[$i];
+	  }
+	}
+
+	# insert OrthologousGenes row
+	$insertStmt->execute(${$source_ids_ref}[$i], ${$project_ids_ref}[$i], ${$na_feature_ids_ref}[$i],
+                             ${$source_ids_ref}[$j], ${$na_feature_ids_ref}[$j], ${$products_ref}[$j], ${$organisms_ref}[$j],
+                             $syntenic ? "yes" : "no")
+	  or die "executing insert statement";
+
+	${$insertCount_ref}++;
+	my $elapsedTime = time - $startTime;
+	my $rateMessage;
+	$rateMessage = " (" . floor( 0.5 + (${$insertCount_ref} / $elapsedTime) ) . " records/second)"
+	  if $elapsedTime;
+	print STDERR "Inserted ${$insertCount_ref} records in " . $elapsedTime . " seconds $rateMessage\n"
+	  unless (${$insertCount_ref} % $LOG_INTERVAL);
+	$dbh->commit()
+	  unless (${$insertCount_ref} % $COMMIT_INTERVAL);
+      } # for $i
+    } # for $j
+}
 
 sub usage {
   my $e = shift;
