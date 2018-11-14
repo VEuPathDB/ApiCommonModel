@@ -12,6 +12,20 @@ public class RTPcrKissinger extends CusomGenePageExpressionGraphs {
   }
 
 
+  @Override
+  public void injectTemplates() {
+      super.injectTemplates();
+
+      setPropValue("includeProjectsExcludeEuPathDB", "CryptoDB,UniDB");
+      setShortAttribution();
+      String organismAbbrevDisplay = "C. parvum Iowa II"; //getPropValue("organismAbbrevDisplay");
+      setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
+
+      injectTemplate("datasetCategory");
+      injectTemplate("profileSampleAttributesCategory");
+      //injectTemplate("profileAttributeQueries");
+      injectTemplate("profileAttributeRef");
+  }
 
 }
 
