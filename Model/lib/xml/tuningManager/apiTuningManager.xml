@@ -240,6 +240,101 @@ WHERE
   </tuningTable>
 
 
+  <tuningTable name="NewTranscriptPathway">
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="PathwayAttributes"/>
+    <externalDependency name="sres.PathwayNode"/>
+    <externalDependency name="dots.AaSequenceEnzymeClass"/>
+    <externalDependency name="sres.EnzymeClass"/>
+    <sql>
+      <![CDATA[
+       create table NewTranscriptPathway&1 nologging as
+        with transcript_ec
+        as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
+                   case when ec_number_1 is null then 1 else 0 end
+                   + case when ec_number_2 is null then 1 else 0 end
+                   + case when ec_number_3 is null then 1 else 0 end
+                   + case when ec_number_4 is null then 1 else 0 end as wildcard_count
+            from sres.EnzymeClass ec
+            where enzyme_class_id
+                  in (select enzyme_class_id
+                      from dots.AaSequenceEnzymeClass)),
+        pathway_node_ec
+        as (select distinct pn.pathway_id, pn.row_id as enzyme_class_id
+            from sres.PathwayNode pn, sres.ontologyterm ot
+                      where pn.pathway_node_type_id = ot.ontology_term_id
+                      and ot.name = 'enzyme'),
+        pathway_ec
+        as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
+                   case when ec_number_1 is null then 1 else 0 end
+                   + case when ec_number_2 is null then 1 else 0 end
+                   + case when ec_number_3 is null then 1 else 0 end
+                   + case when ec_number_4 is null then 1 else 0 end as wildcard_count
+            from sres.EnzymeClass ec
+            where enzyme_class_id
+                  in (select enzyme_class_id
+                      from pathway_node_ec)),
+        ec_match
+        as (select tec.enzyme_class_id as transcript_enzyme_class_id,
+                   pec.enzyme_class_id as pathway_enzyme_class_id,
+                   tec.wildcard_count as wildcard_count_transcript,
+                   pec.wildcard_count as wildcard_count_pathway,
+                   tec.ec_number as ec_number_transcript,
+                   pec.ec_number as ec_number_pathway
+            from transcript_ec tec, pathway_ec pec
+            where (tec.ec_number_1 = pec.ec_number_1 or tec.ec_number_1 is null or pec.ec_number_1 is null)
+              and (tec.ec_number_2 = pec.ec_number_2 or tec.ec_number_2 is null or pec.ec_number_2 is null)
+              and (tec.ec_number_3 = pec.ec_number_3 or tec.ec_number_3 is null or pec.ec_number_3 is null)
+              and (tec.ec_number_4 = pec.ec_number_4 or tec.ec_number_4 is null or pec.ec_number_4 is null))
+        select distinct ga.source_id
+        , ga.gene_source_id
+        , pa.source_id as pathway_source_id
+        , pa.name as pathway_name
+        , ec_match.ec_number_transcript as ec_number_gene
+        , ec_match.wildcard_count_transcript as wildcard_count_gene
+        , ec_match.ec_number_pathway
+        , ec_match.wildcard_count_pathway
+        , CASE WHEN ec_match.ec_number_pathway = ec_match.ec_number_transcript
+            THEN 1
+            ELSE 0 END as exact_match
+        , CASE WHEN ec_match.wildcard_count_pathway + ec_match.wildcard_count_transcript = 0
+            THEN 1
+            ELSE 0  END as complete_ec 
+        , pa.pathway_id
+        , pa.pathway_source
+        , p.external_database_release_id
+        from PathwayAttributes pa
+        , sres.pathway p
+        , pathway_node_ec pec
+        , ec_match
+        , dots.AaSequenceEnzymeClass asec
+        , TranscriptAttributes ga
+        where pa.pathway_id = pec.pathway_id
+        and p.pathway_id = pa.pathway_id
+        and pec.enzyme_class_id = ec_match.pathway_enzyme_class_id
+        and asec.enzyme_class_id = ec_match.transcript_enzyme_class_id
+        and ga.aa_sequence_id  = asec.aa_sequence_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index TranscriptPath_ix&1
+        on NewTranscriptPathway&1(gene_source_id, source_id, pathway_source_id,
+                               pathway_name, pathway_id, ec_number_gene, wildcard_count_pathway,
+                               ec_number_pathway, pathway_source)
+        tablespace indx
+      ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+            create index TranscriptPathSource_ix&1
+            on NewTranscriptPathway&1(pathway_source, gene_source_id, source_id)
+            tablespace indx
+        ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="PathwayNodeGene">
     <internalDependency name="TranscriptPathway"/>
     <externalDependency name="sres.PathwayNode"/>
