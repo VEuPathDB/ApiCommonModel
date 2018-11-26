@@ -9,12 +9,16 @@ use Getopt::Long qw(GetOptions);
 use Data::Dumper;
 use EbrcModelCommon::Model::tmUtils;
 use POSIX; # for floor() function
+use File::Temp qw/ tempfile /;
 
-my $COMMIT_INTERVAL = 1000; # how many records to insert between commits
-my $LOG_INTERVAL = 1000000; # how many records to insert between printing a status message
+my $LOG_INTERVAL = 1000000; # how many records to write between printing a status message
 
 my $startTime = time;
 my ($help, $propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug);
+
+my $END_OF_RECORD_DELIMITER = "#EOR#\n";
+my $END_OF_COLUMN_DELIMITER = "#EOC#\t";
+my @_active_forked_processes;
 
 Getopt::Long::Configure("pass_through");
 GetOptions("propfile=s" => \$propfile,
@@ -32,6 +36,7 @@ usage() if ($help);
 die "required parameter missing" unless ($propfile && $instance && $suffix);
 
 my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+my ($rtnInstance, $rtnSchema, $password) = EbrcModelCommon::Model::tmUtils::getDbLoginInfo($instance, $schema, $propfile);
 
 # create table
 $dbh->do(<<SQL) or die "creating table";
@@ -47,13 +52,16 @@ $dbh->do(<<SQL) or die "creating table";
    ) nologging
 SQL
 
-# prepare insert
-my $insertStmt = $dbh->prepare(<<SQL);
-   insert into OrthologousGenes$suffix
-          (source_id, project_id, na_feature_id, ortho_source_id,
-           ortho_na_feature_id, ortho_product, ortho_organism, syntenic)
-   values (?, ?, ?, ?, ?, ?, ?, ?)
-SQL
+# start sqlldr
+my ($sqlldrFh, $sqlldrFn, $dataFh, $dataFn, $sqlldrProcess, $sqlldrProcessString);
+($sqlldrFh, $sqlldrFn) = tempfile("sqlldrXXXX", UNLINK => 0, SUFFIX => '.ctl');
+$dataFn = "OrthologousGenes." . $suffix . "." . $instance . ".dat";
+writeConfigFile($sqlldrFh, $dataFn, $schema, $suffix);
+error("Could not create named pipe for sqlloader map file") unless(mkfifo($dataFn, 0700));
+$sqlldrProcessString = "sqlldr $schema/$password\@$instance control=$sqlldrFn bindsize=512000 direct=TRUE log=${sqlldrFn}.log discardmax=0 errors=0 >/dev/null 2>&1 |";
+my $pid = open($sqlldrProcess, $sqlldrProcessString) or die "Cannot open pipe for sqlldr process:  $!";
+addActiveForkedProcess($pid);
+open($dataFh, ">$dataFn") or die "Could not open named pipe $dataFn for writing: $!";
 
 # store synteny spans
 my $syntenyStartTime = time;
@@ -152,7 +160,8 @@ storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@st
 
 print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds\n"
   if $insertCount;
-$dbh->commit();
+close $dataFh;
+close $sqlldrProcess;
 
 # create index
 $dbh->do(<<SQL) or die "creating index";
@@ -203,10 +212,12 @@ sub storeGroup {
 	}
 
 	# insert OrthologousGenes row
-	$insertStmt->execute(${$source_ids_ref}[$i], ${$project_ids_ref}[$i], ${$na_feature_ids_ref}[$i],
-                             ${$source_ids_ref}[$j], ${$na_feature_ids_ref}[$j], ${$products_ref}[$j], ${$organisms_ref}[$j],
-                             $syntenic ? "yes" : "no")
-	  or die "executing insert statement";
+	my @ogRow = (${$source_ids_ref}[$i], ${$project_ids_ref}[$i], ${$na_feature_ids_ref}[$i],
+			  ${$source_ids_ref}[$j], ${$na_feature_ids_ref}[$j], ${$products_ref}[$j], ${$organisms_ref}[$j],
+			  $syntenic ? "yes" : "no");
+
+	print $dataFh join($END_OF_COLUMN_DELIMITER, @ogRow) . $END_OF_RECORD_DELIMITER;
+
 
 	${$insertCount_ref}++;
 	my $elapsedTime = time - $startTime;
@@ -215,8 +226,6 @@ sub storeGroup {
 	  if $elapsedTime;
 	print STDERR "Inserted ${$insertCount_ref} records in " . $elapsedTime . " seconds $rateMessage\n"
 	  unless (${$insertCount_ref} % $LOG_INTERVAL);
-	$dbh->commit()
-	  unless (${$insertCount_ref} % $COMMIT_INTERVAL);
       } # for $i
     } # for $j
 }
@@ -232,6 +241,58 @@ Build a table of pairs of different genes that share an OrthoMCL ID
 usage:  buildOrthologousGenesTT -propfile prop_file -instance instance -schema schema -suffix suffix  [-debug] [-help]
 ";
   exit;
+}
+
+sub getActiveForkedProcesses {
+
+  return @_active_forked_processes || [];
+}
+
+sub addActiveForkedProcess {
+  my ($pid) = @_;
+
+  push @_active_forked_processes, $pid;
+}
+
+sub resetActiveForkedProcesses {
+
+  @_active_forked_processes = [];
+}
+
+sub error {
+  my ($msg) = @_;
+  print STDERR "\nERROR: $msg\n";
+
+  foreach my $pid (@{getActiveForkedProcesses()}) {
+    kill(9, $pid);
+  }
+}
+
+sub writeConfigFile {
+  my ($sqlldrFh, $dataFn, $schema, $suffix) = @_;
+
+  my $ctlText = <<CTL;
+UNRECOVERABLE
+LOAD DATA
+CHARACTERSET UTF8 LENGTH SEMANTICS CHAR
+INFILE '$dataFn' "str '#EOR#\\n'"
+APPEND
+INTO TABLE $schema.OrthologousGenes$suffix
+FIELDS TERMINATED BY '#EOC#\\t'
+TRAILING NULLCOLS
+(source_id char(80),
+ project_id char(20),
+ na_feature_id char(12),
+ ortho_source_id char(80),
+ ortho_na_feature_id char(12),
+ ortho_product char(600),
+ ortho_organism char(320),
+ syntenic char(3)
+)
+CTL
+
+  print $sqlldrFh $ctlText;
+  close $sqlldrFh;
 }
 
 1;
