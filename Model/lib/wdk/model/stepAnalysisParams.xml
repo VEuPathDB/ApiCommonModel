@@ -1,12 +1,15 @@
 <wdkModel>
 
   <paramSet name="stepAnalysisParams">
+
+    <stringParam name="answerIdSql" number="false" isSql="true"/>
     
     <flatVocabParam name="organismsInAnswer"
                     queryRef="stepAnalysisParamQueries.organismsInAnswer"
                     prompt="Organism"
                     quote="false"
-                    multiPick="false" >
+                    multiPick="false"
+		    dependedParamRef="stepAnalysisParams.answerIdSql">
       <help>Choose an organism to run the enrichment analysis on.  Only organisms in your result are available.</help>
     </flatVocabParam>
 
@@ -14,7 +17,8 @@
                     queryRef="stepAnalysisParamQueries.ontologiesInAnswer"
                     prompt="Ontology"
                     quote="false"
-                    multiPick="false" >
+                    multiPick="false"
+		    dependedParamRef="stepAnalysisParams.answerIdSql" >
       <help>
 	Choose the Ontology that you are interested in analyzing. Only terms from this ontology will be considered during the enrichment analysis.
 The ontologies are three structured, controlled vocabularies that describe gene products in terms of their related biological processes, cellular components and molecular functions. For statistical reasons, only one ontology may be analyzed at once. If you are interested in more than one, run separate GO enrichment analyses.
@@ -67,9 +71,9 @@ The ontologies are three structured, controlled vocabularies that describe gene 
     </numberParam>
   </paramSet>
 
-  <querySet name="stepAnalysisParamQueries" queryType="vocab" isCacheable="true">
-
+  <querySet name="stepAnalysisParamQueries" queryType="vocab" isCacheable="false">
     <sqlQuery name="organismsInAnswer" doNotTest="1">
+      <paramRef ref="stepAnalysisParams.answerIdSql"/>
       <column name="term" />
       <column name="display" />
       <column name="internal"/>
@@ -78,23 +82,32 @@ The ontologies are three structured, controlled vocabularies that describe gene 
 
 select organism as term, organism as display, organism as internal
 from (SELECT distinct ga.organism
-FROM ApidbTuning.GeneAttributes ga
+FROM ApidbTuning.GeneAttributes ga,
+($$answerIdSql$$) r
+where ga.source_id = r.gene_source_id
 order by ga.organism asc) q
         ]]>
       </sql>
     </sqlQuery>
     
-    <sqlQuery name="ontologiesInAnswer" doNotTest="1">
+    <sqlQuery name="ontologiesInAnswer" doNotTest="1" isCacheable="false">
+      <paramRef ref="stepAnalysisParams.answerIdSql"/>
       <column name="term" />
       <column name="display" />
       <column name="internal"/>
       <sql>
+select distinct gts.ontology" + NL +
+      "from apidbtuning.GoTermSummary gts, (" + idSql + ") r" + NL +
+      "where gts.gene_source_id = r.gene_source_id and gts.ontology is not null"
         <![CDATA[
 		 select ontology as term, ontology as display, ontology as internal
 		 from (
 		  select distinct gts.ontology
-		 from apidbtuning.GoTermSummary gts
-		 where gts.ontology is not null) q
+		 from apidbtuning.GoTermSummary gts,
+		 ($$answerIdSql$$) r
+		 where gts.gene_source_id = r.gene_source_id and 
+		 gts.ontology is not null
+		 ) q
         ]]>
       </sql>
     </sqlQuery>
