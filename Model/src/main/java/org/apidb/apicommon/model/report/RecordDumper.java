@@ -20,13 +20,14 @@ import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
 import org.gusdb.wdk.model.answer.spec.AnswerSpec;
 import org.gusdb.wdk.model.query.spec.QueryInstanceSpec;
-import org.gusdb.wdk.model.query.spec.QueryInstanceSpec.QueryInstanceSpecBuilder;
+import org.gusdb.wdk.model.query.spec.QueryInstanceSpecBuilder;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.Field;
 import org.gusdb.wdk.model.record.FieldScope;
 import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.util.ReporterFactory;
+import org.gusdb.wdk.model.user.StepContainer;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -137,7 +138,7 @@ public class RecordDumper {
             AnswerSpec.builder(wdkModel)
             .setQuestionName(question.getFullName())
             .setQueryInstanceSpec(params)
-            .buildRunnable());
+            .buildRunnable(user, StepContainer.emptyContainer()));
 
         // decide the path-file name
         File dir = new File(baseDir, organism.replace(' ', '_'));

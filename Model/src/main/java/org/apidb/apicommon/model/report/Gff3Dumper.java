@@ -23,10 +23,11 @@ import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
 import org.gusdb.wdk.model.answer.spec.AnswerSpec;
 import org.gusdb.wdk.model.query.spec.QueryInstanceSpec;
-import org.gusdb.wdk.model.query.spec.QueryInstanceSpec.QueryInstanceSpecBuilder;
+import org.gusdb.wdk.model.query.spec.QueryInstanceSpecBuilder;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.gusdb.wdk.model.report.util.ReporterFactory;
+import org.gusdb.wdk.model.user.StepContainer;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -160,14 +161,14 @@ public class Gff3Dumper {
         AnswerSpec.builder(wdkModel)
         .setQuestionName("SequenceDumpQuestions.SequenceDumpQuestion")
         .setQueryInstanceSpec(params)
-        .buildRunnable());
+        .buildRunnable(user, StepContainer.emptyContainer()));
     Gff3Reporter seqReport = (Gff3Reporter) ReporterFactory.getReporter(sqlAnswer, "gff3", config);
 
     AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(user,
         AnswerSpec.builder(wdkModel)
         .setQuestionName("GeneDumpQuestions.GeneDumpQuestion")
         .setQueryInstanceSpec(params)
-        .buildRunnable());
+        .buildRunnable(user, StepContainer.emptyContainer()));
 
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
     Gff3Reporter geneReport = (Gff3Reporter) ReporterFactory.getReporter(geneAnswer, "gff3Dump", config);

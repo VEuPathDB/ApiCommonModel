@@ -31,6 +31,8 @@ import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.FullRecordReporter;
 import org.gusdb.wdk.model.report.util.TableCache;
+import org.gusdb.wdk.model.user.StepContainer;
+import org.gusdb.wdk.model.user.User;
 
 /**
  * @author xingao
@@ -95,11 +97,6 @@ public class FullRecordFileCreator extends BaseCLI {
                 + " current location.");
     }
 
-    /*
-     * (non-Javadoc)
-     * 
-     * @see org.gusdb.fgputil.BaseCLI#invoke()
-     */
     @Override
     public void execute() throws Exception {
         long start = System.currentTimeMillis();
@@ -121,9 +118,11 @@ public class FullRecordFileCreator extends BaseCLI {
           if (dumpFile == null)
               dumpFile = cacheTable + ".txt";
   
+          User user = wdkModel.getSystemUser();
           Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
-          AnswerValue answerValue = AnswerValueFactory.makeAnswer(wdkModel.getSystemUser(),
-              AnswerSpec.builder(wdkModel).setQuestionName(question.getFullName()).buildRunnable());
+          AnswerValue answerValue = AnswerValueFactory.makeAnswer(user,
+              AnswerSpec.builder(wdkModel).setQuestionName(question.getFullName())
+                .buildRunnable(user, StepContainer.emptyContainer()));
   
           OutputStream out = new FileOutputStream(dumpFile);
           Reporter reporter = createReporter(answerValue, cacheTable);
