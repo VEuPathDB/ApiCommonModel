@@ -214,6 +214,7 @@ WHERE
               and (tec.ec_number_4 = pec.ec_number_4 or tec.ec_number_4 is null or pec.ec_number_4 is null))
         select distinct ga.source_id
         , ga.gene_source_id
+        , ga.project_id
         , pa.source_id as pathway_source_id
         , pa.name as pathway_name
         , ec_match.ec_number_transcript as ec_number_gene
@@ -4300,7 +4301,7 @@ tablespace indx
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
          relevant attribute query of the WDK popset record, as well as by
-         PopsetClustalw. Propagated to portal instances.
+         PopsetClustalOmega. Propagated to portal instances.
      </comment>
     <internalDependency name="PopsetAttributes"/>
     <externalDependency name="dots.NaSequence"/>
@@ -5515,7 +5516,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
       <![CDATA[
         CREATE TABLE PathwaysGeneTable&1 NOLOGGING AS
         SELECT DISTINCT gene_source_id
-        , cast (null as varchar2(20)) as project_id
+        , project_id
         , pathway_source_id
         , pathway_name
         , count(reaction_source_id) as reactions
@@ -5525,6 +5526,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         , exact_match
         FROM (
             SELECT DISTINCT tp.gene_source_id
+            , tp.project_id
             , tp.pathway_source_id
             , tp.pathway_name
             , pr.reaction_source_id
@@ -5542,13 +5544,14 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             AND pr.ext_db_name = pc.ext_db_name
             AND tp.ec_number_pathway = pr.enzyme
             AND tp.wildcard_count_gene <= tp.wildcard_count_pathway
-            GROUP BY tp.gene_source_id, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
+            GROUP BY tp.gene_source_id, tp.project_id, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
             ORDER BY exact_match desc, pathway_name
             )
-        GROUP BY gene_source_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
+        GROUP BY gene_source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
         ORDER BY pathway_source_id, pathway_source
       ]]>
     </sql>
+<!-- now in CREATE TABLE
     <sql>
       <![CDATA[
         update PathwaysGeneTable&1 pgt
@@ -5558,6 +5561,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                where source_id = pgt.gene_source_id)
       ]]>
     </sql>
+-->
     <sql>
       <![CDATA[
       create index pgt_ix&1 on PathwaysGeneTable&1
@@ -6581,7 +6585,6 @@ where url is not null
         AND sl.study_id = s.study_id
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
         AND  pan.protocol_app_node_id =r.protocol_app_node_id
-
       ]]>
     </sql>
     <sql>
@@ -6782,11 +6785,9 @@ where url is not null
     </sql>
   </tuningTable>
 
-<!--
   <tuningTable name="GeneModelDump">
     <comment>
        Materialization of GeneTables.GeneModelDump.
-       THIS WILL NOT BE NEEDED AFTER PENDING CHANGES TO THE WDK ARE COMPLETED.
     </comment>
     <externalDependency name="apidb.FeatureLocation"/>
     <internalDependency name="TranscriptAttributes"/>
@@ -6796,9 +6797,9 @@ where url is not null
     <sql>
       <![CDATA[
         CREATE TABLE GeneModelDump&1 NOLOGGING as
-          SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
+         SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
   listagg(transcript_id, ', ') within GROUP(ORDER BY transcript_id) AS transcript_ids
- from ( select ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+ from ( select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
                 ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
          from
@@ -6816,7 +6817,7 @@ where url is not null
          and gl.is_top_level = 1
          and ta.gene_type = 'protein coding'
          UNION ALL
-         (select ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+         (select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
                 ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
          from dots.GeneFeature gf, apidb.FeatureLocation gl, dots.NaSequence s,
@@ -6861,7 +6862,6 @@ where url is not null
       ]]>
     </sql>
   </tuningTable>
--->
 
   <tuningTable name="RflpGenotypes">
     <comment>

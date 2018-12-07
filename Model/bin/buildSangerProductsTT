@@ -15,13 +15,7 @@ use XML::Simple;
 use EbrcModelCommon::Model::tmUtils;
 use File::Path 'rmtree';
 
-# To check that no genome of interest has a null release_date in sres.ExternalDatabaseRelease,
-# we will use nvl() to set an impossibly early date in the case of a null. If this
-# value appears in the result set then nvl() must have done its work. So we'll die.
-my $sentinelDate = '1918-08-13';
-
 my $annotationInsert;
-my $commentsInsert;
 my $changesInsert;
 my $productsInsert;
 
@@ -44,25 +38,12 @@ loadRawData($dbh, $suffix);
 $dbh->commit() or print STDERR $dbh->errstr;
 
 
-sub getCommentsInsert {
-
-    my ($dbh, $suffix) = @_;
-    if (!$commentsInsert) {
-    $commentsInsert = $dbh->prepare(<<SQL) or die "preparing comments insert";
-      insert into SangerUcTags$suffix (mrnaid, geneid, tag, orgid)
-      values (?, ?, ?, ?)
-SQL
-  }
-
-  return $commentsInsert;
-}
-
 sub getChangesInsert {
 
     my ($dbh, $suffix) = @_;
     if (!$changesInsert) {
     $changesInsert = $dbh->prepare(<<SQL) or die "preparing changesInsert";
-      insert into GenesWithChanges$suffix (mrnaid, geneid, annotationid, annotationvalue, type_id)
+      insert into GenesWithChanges$suffix (organismName, transcriptId, geneId, changeDate, annotation)
       values (?, ?, ?, ?, ?)
 SQL
   }
@@ -75,7 +56,7 @@ sub getProductsInsert {
     my ($dbh, $suffix) = @_;
     if (!$productsInsert) {
     $productsInsert = $dbh->prepare(<<SQL) or die "preparing products insert";
-      insert into SangerProducts$suffix (mrnaid, geneid, genename, product, rankalternative, organismid)
+      insert into SangerProducts$suffix (organismName, transcriptId, geneId, geneName, product, rankalternative)
       values (?, ?, ?, ?, ?, ?)
 SQL
   }
@@ -88,31 +69,22 @@ sub createTables {
 
     $dbh->do(<<SQL) or die "creating GenesWithChanges table";
        create table GenesWithChanges$suffix (
-          mrnaid          varchar2(80),
-          geneid          varchar2(60),
-          annotationid    varchar2(20),
-          annotationvalue varchar2(400),
-          type_id         varchar2(20)
-       ) nologging
-SQL
-
-    $dbh->do(<<SQL) or die "creating SangerUcTags table";
-       create table SangerUcTags$suffix (
-          mrnaid varchar2(80),
-          geneid varchar2(60),
-          tag    varchar2(60),
-          orgid  number
+          organismName varchar2(50),
+          transcriptid varchar2(80),
+          geneid       varchar2(60),
+          changeDate   varchar2(20),
+          annotation   varchar2(400)
        ) nologging
 SQL
 
     $dbh->do(<<SQL) or die "creating SangerProducts table";
        create table SangerProducts$suffix (
-          mrnaid          varchar2(80),
+          organismName    varchar2(50),
+          transcriptid    varchar2(80),
           geneid          varchar2(60),
           genename        varchar2(60),
-          product         varchar2(400),
-          rankalternative number,
-          organismid      number
+          product         varchar2(800),
+          rankalternative number
        ) nologging
 SQL
 
@@ -123,15 +95,19 @@ sub loadRawData {
 
   my $TMPDIR = "/tmp/sangerfeed.$$";
   # my $TMPDIR = "/home/iodice/genedbFtp/";
-  my @WGET_COMMAND = qw( wget ftp://ftp.sanger.ac.uk/pub/project/pathogens/fs10/eupathdb_genedb_updates/* );
+  my @WGET_COMMAND = qw( wget ftp://ftp.sanger.ac.uk/pub/genedb/genedb_products/* );
 
   mkdir $TMPDIR;
   chdir $TMPDIR;
   system(@WGET_COMMAND) == 0
-      or die "attempting wget from Sanger FTP site with the URL \"" . $WGET_COMMAND[1] . "\"";
+    or die "attempting wget from Sanger FTP site with the URL \"" . $WGET_COMMAND[1] . "\"";
+
+  @WGET_COMMAND = qw( wget ftp://ftp.sanger.ac.uk/pub/genedb/annotation_updates/* );
+  system(@WGET_COMMAND) == 0
+    or die "attempting wget from Sanger FTP site with the URL \"" . $WGET_COMMAND[1] . "\"";
 
   # "genes with changes" files, e.g.Pfalciparum3D7_genes_with_changes.tsv 
-  open (my $changes_fh, "-|", "cat *_genes_with_changes.tsv | grep -v '^mrnaid'")
+  open (my $changes_fh, "-|", "cat *_updates_* | grep -v '^organism_name'")
     or die "opening changes pipeline";
 
   my $changesInsert = getChangesInsert($dbh, $suffix);
@@ -139,27 +115,26 @@ sub loadRawData {
   while (<$changes_fh>) {
     $changeCount++;
     chomp();
-    my ($mrnaId, $geneId, $annotationId, $annotationValue, $typeId) = split /\t/;
-    $changesInsert->execute($mrnaId, $geneId, $annotationId, $annotationValue, $typeId)
+    my ($organismName, $transcriptId, $geneId, $date, $annotation) = split /\t/;
+
+    $changesInsert->execute($organismName, $transcriptId, $geneId, $date, $annotation)
       or die "inserting changes, record #$changeCount, values \"$_\"";
   }
 
-  # user-comment tag files, e.g. Pfalciparum3D7_eupathdb_uc_tags.tsv
-  open (my $comments_fh, "-|", "cat *_eupathdb_uc_tags.tsv | grep -v '^mrnaid'")
-    or die "opening user-comments pipeline";
+  # gene product files, e.g. pathogens_genedb_products_20181008.tsv
+  my $filenamePattern =  (lc($instance) =~ /fung/)
+    ? "fungi_genedb_products_*.tsv"
+      : "pathogens_genedb_products_*.tsv";
+  open (my $filenames_fh, "-|", "ls $filenamePattern")
+    or die "opening filename pipeline";
 
-  my $commentsInsert = getCommentsInsert($dbh, $suffix);
-  my $commentCount = 0;
-  while (<$comments_fh>) {
-    $commentCount++;
+  my $productFilename;
+  while (<$filenames_fh>) {
     chomp();
-    my ($mrnaId, $geneId, $tag, $orgid) = split /\t/;
-    $commentsInsert->execute($mrnaId, $geneId, $tag, $orgid)
-      or die "inserting comments, record #$commentCount, values \"$_\"";
+    $productFilename = $_;
   }
 
-  # gene product files, e.g. GeneDB_products.tsv
-  open (my $products_fh, "-|", "cat *_products.tsv | grep -v '^mrnaid'")
+  open (my $products_fh, "-|", "cat $productFilename | grep -v rankalternative")
     or die "opening products pipeline";
 
   my $productsInsert = getProductsInsert($dbh, $suffix);
@@ -167,9 +142,9 @@ sub loadRawData {
   while (<$products_fh>) {
     $productCount++;
     chomp();
-    my ($mrnaId, $geneId, $genename, $product, $rankalternative, $organismid) = split /\t/;
+    my ($organismName, $transcriptId, $geneId, $genename, $product, $rankalternative) = split /\t/;
 
-    $productsInsert->execute($mrnaId, $geneId, $genename, $product, $rankalternative, $organismid)
+    $productsInsert->execute($organismName, $transcriptId, $geneId, $genename, $product, $rankalternative)
       or die "inserting products, record #$productCount, values \"$_\"";
   }
 
