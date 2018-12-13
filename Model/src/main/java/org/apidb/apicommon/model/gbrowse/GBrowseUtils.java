@@ -27,7 +27,6 @@ import org.apache.log4j.Logger;
 import org.gusdb.fgputil.EncryptionUtil;
 import org.gusdb.fgputil.IoUtil;
 import org.gusdb.fgputil.Tuples.TwoTuple;
-import org.gusdb.fgputil.Wrapper;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.fgputil.db.runner.SQLRunner;
 import org.gusdb.fgputil.db.runner.SQLRunnerException;
@@ -61,20 +60,16 @@ public class GBrowseUtils {
    * @throws WdkModelException
    */
   public static TwoTuple<String,String> getGBrowseSessionData(String username, DatabaseInstance userDb) throws WdkModelException {
-    Wrapper<TwoTuple<String,String>> wrapper = new Wrapper<>();
     try { 
-      String selectSessionDataSql = SELECT_SESSION_DATA_SQL;
-      new SQLRunner(userDb.getDataSource(), selectSessionDataSql, "select-gbrowse-session-data").executeQuery(
-        new Object[]{ username },
-        new Integer[]{ Types.VARCHAR },
-        resultSet -> {
-          if (resultSet.next()) {
-        	    TwoTuple<String,String> tuple = new TwoTuple<>(resultSet.getString("id"), resultSet.getString("info"));
-            wrapper.set(tuple);
-          }
-        }
-      );
-      return wrapper.get();
+      return new SQLRunner(userDb.getDataSource(),
+          SELECT_SESSION_DATA_SQL, "select-gbrowse-session-data")
+        .executeQuery(
+          new Object[]{ username },
+          new Integer[]{ Types.VARCHAR },
+          resultSet -> {
+            return !resultSet.next() ? null :
+              new TwoTuple<>(resultSet.getString("id"), resultSet.getString("info"));
+          });
     }
     catch(SQLRunnerException sre) {
       throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
