@@ -66,6 +66,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Babesia","Apicomplexa");
 			phylum.put("Batrachochytrium","Chytridiomycetes");
 			phylum.put("Blechomonas","Kinetoplastida");
+			phylum.put("Bodo","Kinetoplastida");
 			phylum.put("Botrytis","Leotiomycetes");
 			phylum.put("Candida","Saccharomycetes");
 			phylum.put("Chromera","Chromerida");
