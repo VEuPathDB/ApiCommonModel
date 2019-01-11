@@ -95,6 +95,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Histoplasma","Eurotiomycetes");
 			phylum.put("Homo","Chordata");
 			phylum.put("Hyaloperonospora","Oomycetes");
+			phylum.put("Kwoniella","Tremellomycetes");
 			phylum.put("Leishmania","Kinetoplastida");
 			phylum.put("Leptomonas","Kinetoplastida");
 			phylum.put("Macaca","Chordata");
