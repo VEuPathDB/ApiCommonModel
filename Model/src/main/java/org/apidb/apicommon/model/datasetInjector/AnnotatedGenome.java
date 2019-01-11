@@ -11,6 +11,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
     @Override
     public void injectTemplates() {
+                super.injectTemplates();
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
     // hack until we have filters reading from datatabase (instead of relying on dataset xml files)
