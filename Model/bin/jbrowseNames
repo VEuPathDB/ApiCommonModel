@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib $ENV{GUS_HOME} . "/lib/perl";
+
+use JSON;
+use DBI;
+use DBD::Oracle;
+
+use WDK::Model::ModelConfig;
+
+use Data::Dumper;
+
+# TODO: remove gusHome from command line arg
+my ($gusHome, $organismAbbrev, $isPartial, $sourceId) = @ARGV;
+
+# TODO: Get project as command line arg
+my $modelConfig = new WDK::Model::ModelConfig("PlasmoDB");
+
+my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                        $modelConfig->getAppDbLogin(),
+                        $modelConfig->getAppDbPassword()
+    )
+    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+# solve oracle clob problem; not that we're liable to need it...
+$dbh->{LongTruncOk} = 0;
+$dbh->{LongReadLen} = 10000000;
+
+my $operator;
+if($sourceId && lc $isPartial eq "false") {
+  $operator = "=";
+}
+elsif($sourceId && lc $isPartial eq "true") {
+  $sourceId = $sourceId . "%";
+  $operator = "like";
+}
+else {
+  die "Invalid sourceId [$sourceId] when isPartial=$isPartial";
+}
+
+my $sql = "select source_id
+     , sequence_id
+     , start_min
+     , end_max
+from apidbtuning.geneattributes ga
+   , apidb.organism o
+where source_id $operator '$sourceId'
+and ga.taxon_id = o.taxon_id
+and o.abbrev = '$organismAbbrev'";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+my $result = [];
+while(my ($id, $seqId, $start, $end) = $sh->fetchrow_array()) {
+
+  my $hash =  {
+    "name" => $id,
+    "location" => {
+      "ref" => $seqId,
+      "start" => $start,
+      "end" => $end,
+      "tracks" => ["gene:annotation" ],
+    },
+    "objectName" => $id
+  };
+
+  push @$result, $hash;
+}
+
+print encode_json($result);
+
+$dbh->disconnect();
+
