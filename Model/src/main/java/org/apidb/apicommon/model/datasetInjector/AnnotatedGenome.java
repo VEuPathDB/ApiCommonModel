@@ -11,6 +11,10 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
     @Override
     public void injectTemplates() {
+                super.injectTemplates();
+
+
+      injectTemplate("jbrowseAnnotatedGenome");
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
     // hack until we have filters reading from datatabase (instead of relying on dataset xml files)
@@ -95,6 +99,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Histoplasma","Eurotiomycetes");
 			phylum.put("Homo","Chordata");
 			phylum.put("Hyaloperonospora","Oomycetes");
+			phylum.put("Kwoniella","Tremellomycetes");
 			phylum.put("Leishmania","Kinetoplastida");
 			phylum.put("Leptomonas","Kinetoplastida");
 			phylum.put("Macaca","Chordata");
