@@ -7,6 +7,7 @@ public class UnannotatedGenome extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+      injectTemplate("jbrowseCommon");
   }
 
   @Override
