@@ -1,0 +1,63 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+use Data::Dumper;
+
+my $projectName = "PlasmoDB";
+my $buildNumber = 42;
+
+# TODO: remove gusHome from command line arg
+my ($gusHome, $organismAbbrev, $study) = @ARGV;
+
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+my $dbh = $jbrowseUtil->getDbh();   
+
+my $sql = "select ds.name, o.name_for_filenames, dsp.display_name
+from apidb.datasource ds 
+   , apidb.organism o
+   , (select display_name from apidbtuning.datasetpresenter where name = '${organismAbbrev}_HTS_SNP_${study}_RSRC') dsp
+where ds.name like '%${study}%'
+and o.taxon_id = ds.taxon_id
+and ds.name like '%HTS_SNPSample_RSRC'";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+my $result = {"tracks" => [] };
+
+while(my ($sampleDataset, $publicAbbrev, $studyDisplayName) = $sh->fetchrow_array()) {
+
+  my ($sampleName) = $sampleDataset =~ /${study}_(.+)_HTS_SNPSample_RSRC$/;
+
+  my $bamUrl = "/a/jbrowse/eupath_data/webServices/$projectName/build-$buildNumber/$publicAbbrev/bam/$study/$sampleName/result.bam";
+
+  my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
+                   urlTemplate => $bamUrl,
+                   label => "$sampleName Alignments",
+                   type => "JBrowse/View/Track/Alignments2",
+                   category => "DNASeq / $studyDisplayName / Read Alignments"
+  };
+
+  my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BAM",
+                  urlTemplate => $bamUrl,
+                  label => "$sampleName Coverage",
+                  chunkSizeLimit => 20000000,
+                  maxFeatureScreenDensity => 1,
+                  type => "JBrowse/View/Track/FeatureCoverage",
+                  category => "DNASeq / $studyDisplayName / Coverage"
+  };
+
+  push @{$result->{tracks}}, $alignment;
+  push @{$result->{tracks}}, $coverage;
+
+}
+
+print encode_json($result);
+
+$dbh->disconnect();
+
+1;
+

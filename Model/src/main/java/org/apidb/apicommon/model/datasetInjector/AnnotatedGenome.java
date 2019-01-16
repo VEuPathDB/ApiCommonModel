@@ -11,6 +11,10 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
     @Override
     public void injectTemplates() {
+                super.injectTemplates();
+
+
+      injectTemplate("jbrowseAnnotatedGenome");
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
     // hack until we have filters reading from datatabase (instead of relying on dataset xml files)
@@ -66,6 +70,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Babesia","Apicomplexa");
 			phylum.put("Batrachochytrium","Chytridiomycetes");
 			phylum.put("Blechomonas","Kinetoplastida");
+			phylum.put("Bodo","Kinetoplastida");
 			phylum.put("Botrytis","Leotiomycetes");
 			phylum.put("Candida","Saccharomycetes");
 			phylum.put("Chromera","Chromerida");
@@ -94,6 +99,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Histoplasma","Eurotiomycetes");
 			phylum.put("Homo","Chordata");
 			phylum.put("Hyaloperonospora","Oomycetes");
+			phylum.put("Kwoniella","Tremellomycetes");
 			phylum.put("Leishmania","Kinetoplastida");
 			phylum.put("Leptomonas","Kinetoplastida");
 			phylum.put("Macaca","Chordata");
@@ -147,6 +153,8 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Vittaforma","Microsporidia");
 			phylum.put("Yarrowia","Saccharomycetes");
 			phylum.put("Zymoseptoria","Dothideomycetes");
+			phylum.put("Lomentospora","Sordariomycetes");
+			phylum.put("Scedosporium","Sordariomycetes");
     }
 
     // getting properties defined in .prop file

@@ -13,6 +13,8 @@ public class IsolatesHTS extends DatasetInjector {
       String experimentName = getPropValue("name");
       setPropValue("experimentName", experimentName);
 
+      injectTemplate("jbrowseDNASeq");
+
       // : is a reserved character in gbrowse 
       String datasetDisplayName = getPropValue("datasetDisplayName");
       setPropValue("datasetDisplayName", datasetDisplayName.replace("-", ""));
@@ -83,27 +85,14 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNgsSnps");
       //addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTajimasDHtsSnps");
 
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByPopsetId");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByTaxon");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByHost");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByIsolationSource");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByProduct");
-      //addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByGenotypeNumber");
-      //addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByRFLPGenotype");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByStudy");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByCountry");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetByAuthor");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsByTextSearch");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsByClustering");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "table", "Reference");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "table", "HtsContacts");
-      addWdkReference("PopsetRecordClasses.PopsetRecordClass", "attribute", "overview");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SNPsAlignment");
 
       addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
- 
+
+      if(getPropValueAsBoolean("hasCNVData")) {
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
+      }
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Datasets");
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "Characteristics");
       addWdkReference("SampleRecordClasses.SampleRecordClass", "table", "ProcessedSample");

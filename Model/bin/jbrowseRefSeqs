@@ -1,0 +1,56 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib $ENV{GUS_HOME} . "/lib/perl";
+
+use JSON;
+use DBI;
+use DBD::Oracle;
+
+use WDK::Model::ModelConfig;
+
+use Data::Dumper;
+
+# TODO: remove gusHome from command line arg
+my ($gusHome, $organismAbbrev) = @ARGV;
+
+# TODO: Get project as command line arg
+my $modelConfig = new WDK::Model::ModelConfig("PlasmoDB");
+
+my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                        $modelConfig->getAppDbLogin(),
+                        $modelConfig->getAppDbPassword()
+    )
+    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+# solve oracle clob problem; not that we're liable to need it...
+$dbh->{LongTruncOk} = 0;
+$dbh->{LongReadLen} = 10000000;
+
+
+my $sql = "select s.source_id, s.length
+from apidbtuning.genomicseqattributes s, apidb.organism o
+where s.TAXON_ID = o.taxon_id
+and s.is_top_level = 1
+and o.PUBLIC_ABBREV = '$organismAbbrev'";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+my $result = [];
+while(my ($sourceId, $length) = $sh->fetchrow_array()) {
+
+  my $hash =  {
+    "name" => $sourceId,
+    "start" => 0 + 0,
+    "end" => $length - 1
+  };
+
+  push @$result, $hash;
+}
+
+print encode_json($result);
+
+$dbh->disconnect();
+
