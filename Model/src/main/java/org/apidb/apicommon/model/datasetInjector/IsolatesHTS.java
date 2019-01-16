@@ -13,6 +13,8 @@ public class IsolatesHTS extends DatasetInjector {
       String experimentName = getPropValue("name");
       setPropValue("experimentName", experimentName);
 
+      injectTemplate("jbrowseDNASeq");
+
       // : is a reserved character in gbrowse 
       String datasetDisplayName = getPropValue("datasetDisplayName");
       setPropValue("datasetDisplayName", datasetDisplayName.replace("-", ""));
