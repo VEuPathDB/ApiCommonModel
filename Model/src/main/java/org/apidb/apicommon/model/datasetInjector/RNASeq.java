@@ -320,6 +320,11 @@ public class RNASeq extends  DatasetInjector {
           injectTemplate("gbrowseTrackCategory");
       }
 
+
+      String studyName = getPropValue("name");
+      setPropValue("studyName", studyName);
+      injectTemplate("jbrowseRNASeq");
+
   }
 
 
