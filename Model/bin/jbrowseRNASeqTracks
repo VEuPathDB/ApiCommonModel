@@ -1,0 +1,142 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+use Data::Dumper;
+
+my $metadataBase = "metadata_unlogged";
+
+# TODO: remove gusHome from command line arg
+my ($gusHome, $organismAbbrev, $study, $projectName, $buildNumber, $webservicesDir) = @ARGV;
+
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+my $dbh = $jbrowseUtil->getDbh();   
+
+my $datasetName = "${organismAbbrev}_${study}_rnaSeq_RSRC";
+
+my $sql = "select prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name = '$datasetName'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+union
+select 'nameForFileNames', name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'
+";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+
+my (%studyProperties);
+while(my ($prop, $val) = $sh->fetchrow_array()) {
+  $studyProperties{$prop} = $val;
+}
+$sh->finish();
+
+my $nameForFileNames = $studyProperties{nameForFileNames};
+
+if(lc $studyProperties{switchStrandsGBrowse} eq 'true') {
+  $metadataBase = $metadataBase . "_alt";
+}
+
+# EXAMPLE:
+#/var/www/Common/apiSiteFilesMirror/webServices/PlasmoDB/build-42/Pfalciparum3D7/bigwig/pfal3D7_Caro_ribosome_profiling_rnaSeq_RSRC/metadata_unlogged
+
+my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";;
+
+my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
+
+open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
+
+my $result = {"tracks" => [] };
+
+my ($start, $file, $displayName, $strand, $alignment);;
+
+my @multiUrls;
+
+while(<FILE>) {
+  chomp;
+  if(/^\[(.+)\]$/) {
+    &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $bigWigRelativePath, \@multiUrls) if($start);
+    $file = $1;
+    $start = 1;
+  }
+  if(/^display_name\s*=\s*(.+)$/) {
+    $displayName = $1;
+    $displayName =~ s/^\S+ - //; #remove everything to the first " - "
+  }
+  if(/^alignment\s*=\s*(.+)$/) {
+    $alignment = $1;
+  }
+  if(/^strand\s*=\s*(.+)$/) {
+    $strand = $1;
+  }
+
+}
+&addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $bigWigRelativePath, \@multiUrls);
+
+my $studyDisplayName = $studyProperties{datasetDisplayName};
+my $multiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+                   urlTemplates => \@multiUrls,
+                   showTooltips => "true",
+                   category => "RNASeq / $studyDisplayName",
+                   label => $studyProperties{datasetDisplayName} . " Density",
+                   type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
+};
+
+push @{$result->{tracks}}, $multiBigWig;
+
+print encode_json($result);
+
+$dbh->disconnect();
+
+sub addConfiguration {
+  my ($result, $file, $displayName, $strand, $alignemnt, $properties, $bigWigRelativePath, $multiUrls) = @_;
+
+  my $studyDisplayName = $properties->{datasetDisplayName};
+
+  my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
+  my $color = &color($strand, $alignment);
+
+  my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
+                  urlTemplate => $bwUrl,
+                  label => "$displayName Coverage",
+                  type => "JBrowse/View/Track/Wiggle/XYPlot",
+                  category => "RNASeq / $studyDisplayName / $alignment",
+                  min_score => 0,
+                  autoscale => "local",
+                  style => {
+                    "pos_color"         => $color,
+                    "clip_marker_color" =>  "red",
+                  },
+                  metadata => {
+                    strand => $strand,
+                    alignment => $alignment,
+                  },
+  };
+
+  my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color};
+  push @{$result->{tracks}}, $coverage;
+  push @multiUrls, $multiUrlHash;
+}
+
+
+sub color {
+  my ($strand, $alignment) = @_;
+
+  if($alignment eq 'unique') {
+    if($strand eq 'reverse') {
+      return 'red';
+    }
+    else {
+      return 'blue';
+    }
+  }
+
+  return 'grey';;
+}
+
+1;
+
