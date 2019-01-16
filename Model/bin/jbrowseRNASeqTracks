@@ -44,7 +44,7 @@ if(lc $studyProperties{switchStrandsGBrowse} eq 'true') {
 # EXAMPLE:
 #/var/www/Common/apiSiteFilesMirror/webServices/PlasmoDB/build-42/Pfalciparum3D7/bigwig/pfal3D7_Caro_ribosome_profiling_rnaSeq_RSRC/metadata_unlogged
 
-my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName/";
+my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";;
 
 my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
 
@@ -53,15 +53,19 @@ open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!
 my $result = {"tracks" => [] };
 
 my ($start, $file, $displayName, $strand, $alignment);;
+
+my @multiUrls;
+
 while(<FILE>) {
   chomp;
   if(/^\[(.+)\]$/) {
-    &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $bigWigRelativePath) if($start);
+    &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $bigWigRelativePath, \@multiUrls) if($start);
     $file = $1;
     $start = 1;
   }
   if(/^display_name\s*=\s*(.+)$/) {
     $displayName = $1;
+    $displayName =~ s/^\S+ - //; #remove everything to the first " - "
   }
   if(/^alignment\s*=\s*(.+)$/) {
     $alignment = $1;
@@ -70,42 +74,68 @@ while(<FILE>) {
     $strand = $1;
   }
 
-
-#  push @{$result->{tracks}}, $coverage;
 }
-&addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $bigWigRelativePath);
+&addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $bigWigRelativePath, \@multiUrls);
+
+my $studyDisplayName = $studyProperties{datasetDisplayName};
+my $multiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+                   urlTemplates => \@multiUrls,
+                   showTooltips => "true",
+                   category => "RNASeq / $studyDisplayName",
+                   label => $studyProperties{datasetDisplayName} . " Density",
+                   type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
+};
+
+push @{$result->{tracks}}, $multiBigWig;
 
 print encode_json($result);
 
 $dbh->disconnect();
 
-
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignemnt, $properties, $bigWigRelativePath) = @_;
+  my ($result, $file, $displayName, $strand, $alignemnt, $properties, $bigWigRelativePath, $multiUrls) = @_;
 
   my $studyDisplayName = $properties->{datasetDisplayName};
 
   my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
+  my $color = &color($strand, $alignment);
 
   my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
                   urlTemplate => $bwUrl,
                   label => "$displayName Coverage",
                   type => "JBrowse/View/Track/Wiggle/XYPlot",
-                  category => "RNASeq / $studyDisplayName",
+                  category => "RNASeq / $studyDisplayName / $alignment",
                   min_score => 0,
                   autoscale => "local",
-#                  style => {
-#                    "pos_color"         => "#FFA600",
-#                    "neg_color"         => "#005EFF",
-#                    "clip_marker_color" =>  "red",
-#                    "height"            => 100,
-#                  },
+                  style => {
+                    "pos_color"         => $color,
+                    "clip_marker_color" =>  "red",
+                  },
                   metadata => {
                     strand => $strand,
                     alignment => $alignment,
                   },
   };
+
+  my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color};
   push @{$result->{tracks}}, $coverage;
+  push @multiUrls, $multiUrlHash;
+}
+
+
+sub color {
+  my ($strand, $alignment) = @_;
+
+  if($alignment eq 'unique') {
+    if($strand eq 'reverse') {
+      return 'red';
+    }
+    else {
+      return 'blue';
+    }
+  }
+
+  return 'grey';;
 }
 
 1;
