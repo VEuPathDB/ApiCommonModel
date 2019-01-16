@@ -102,8 +102,8 @@ WHERE
   AND cpd.pathway_id = p.pathway_id
   AND enz.pathway_id = p.pathway_id
   AND source_id NOT IN('ec01100', 'ec01110', 'ec01120')
-  -- temporarily remove MPMP from release 38
-  --AND ed.name NOT LIKE '%MPMP%'
+  -- temporarily remove MPMP from release 41
+  AND ed.name NOT LIKE '%MPMP%'
       ]]>
     </sql>
     <sql>
@@ -175,33 +175,56 @@ WHERE
     <sql>
       <![CDATA[
        create table TranscriptPathway&1 nologging as
-        with WildcardedPathwayNode
-            as (select pn.pathway_id
-                , replace(ec.ec_number, '-', '%') as ec_number_wc
-                , ec.ec_number
-                from sres.PathwayNode pn
-                , sres.ontologyterm ot
-                , SRES.ENZYMECLASS ec
-                where pn.pathway_node_type_id = ot.ontology_term_id
-                and pn.row_id = ec.enzyme_class_id
-                and ot.name = 'enzyme'),
-            WildcardedEnzymeClass
-            as (select enzyme_class_id
-                , ec_number
-                , replace(ec_number, '-', '%') as ec_number_wc
-                from sres.EnzymeClass)
+        with transcript_ec
+        as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
+                   case when ec_number_1 is null then 1 else 0 end
+                   + case when ec_number_2 is null then 1 else 0 end
+                   + case when ec_number_3 is null then 1 else 0 end
+                   + case when ec_number_4 is null then 1 else 0 end as wildcard_count
+            from sres.EnzymeClass ec
+            where enzyme_class_id
+                  in (select enzyme_class_id
+                      from dots.AaSequenceEnzymeClass)),
+        pathway_node_ec
+        as (select distinct pn.pathway_id, pn.row_id as enzyme_class_id
+            from sres.PathwayNode pn, sres.ontologyterm ot
+                      where pn.pathway_node_type_id = ot.ontology_term_id
+                      and ot.name = 'enzyme'),
+        pathway_ec
+        as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
+                   case when ec_number_1 is null then 1 else 0 end
+                   + case when ec_number_2 is null then 1 else 0 end
+                   + case when ec_number_3 is null then 1 else 0 end
+                   + case when ec_number_4 is null then 1 else 0 end as wildcard_count
+            from sres.EnzymeClass ec
+            where enzyme_class_id
+                  in (select enzyme_class_id
+                      from pathway_node_ec)),
+        ec_match
+        as (select tec.enzyme_class_id as transcript_enzyme_class_id,
+                   pec.enzyme_class_id as pathway_enzyme_class_id,
+                   tec.wildcard_count as wildcard_count_transcript,
+                   pec.wildcard_count as wildcard_count_pathway,
+                   tec.ec_number as ec_number_transcript,
+                   pec.ec_number as ec_number_pathway
+            from transcript_ec tec, pathway_ec pec
+            where (tec.ec_number_1 = pec.ec_number_1 or tec.ec_number_1 is null or pec.ec_number_1 is null)
+              and (tec.ec_number_2 = pec.ec_number_2 or tec.ec_number_2 is null or pec.ec_number_2 is null)
+              and (tec.ec_number_3 = pec.ec_number_3 or tec.ec_number_3 is null or pec.ec_number_3 is null)
+              and (tec.ec_number_4 = pec.ec_number_4 or tec.ec_number_4 is null or pec.ec_number_4 is null))
         select distinct ga.source_id
         , ga.gene_source_id
+        , ga.project_id
         , pa.source_id as pathway_source_id
         , pa.name as pathway_name
-        , ec.ec_number as ec_number_gene
-        , (length(ec.ec_number) - length(replace(ec.ec_number, '-', ''))) as wildcard_count_gene
-        , pn.ec_number as ec_number_pathway
-        , (length(pn.ec_number) - length(replace(pn.ec_number, '-', ''))) as wildcard_count_pathway
-        , CASE WHEN ec.ec_number = pn.ec_number
+        , ec_match.ec_number_transcript as ec_number_gene
+        , ec_match.wildcard_count_transcript as wildcard_count_gene
+        , ec_match.ec_number_pathway
+        , ec_match.wildcard_count_pathway
+        , CASE WHEN ec_match.ec_number_pathway = ec_match.ec_number_transcript
             THEN 1
             ELSE 0 END as exact_match
-        , CASE WHEN ec.ec_number not like '%-%' AND pn.ec_number not like '%-%'
+        , CASE WHEN ec_match.wildcard_count_pathway + ec_match.wildcard_count_transcript = 0
             THEN 1
             ELSE 0  END as complete_ec 
         , pa.pathway_id
@@ -209,15 +232,14 @@ WHERE
         , p.external_database_release_id
         from PathwayAttributes pa
         , sres.pathway p
-        , WildcardedPathwaynode pn
-        , WildcardedEnzymeClass ec
+        , pathway_node_ec pec
+        , ec_match
         , dots.AaSequenceEnzymeClass asec
         , TranscriptAttributes ga
-        where pa.pathway_id = pn.pathway_id
+        where pa.pathway_id = pec.pathway_id
         and p.pathway_id = pa.pathway_id
-        and (ec.ec_number_wc like pn.ec_number_wc
-           or pn.ec_number_wc like ec.ec_number_wc)
-        and asec.enzyme_class_id = ec.enzyme_class_id
+        and pec.enzyme_class_id = ec_match.pathway_enzyme_class_id
+        and asec.enzyme_class_id = ec_match.transcript_enzyme_class_id
         and ga.aa_sequence_id  = asec.aa_sequence_id
       ]]>
     </sql>
@@ -257,7 +279,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
   </tuningTable>
 
   <tuningTable name="RnaSeqStats">
-    <externalDependency name="apidb.DataSource"/>
+    <externalDependency name="apidb.Datasource"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="study.Study"/>
@@ -274,7 +296,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                 , ed.name as dataset_name
                 , ds.taxon_id
                 , c.value as num_reads
-            from apidb.DataSource ds
+            from apidb.Datasource ds
                 , sres.ExternalDatabase ed
                 , sres.ExternalDatabaseRelease edr
                 , study.Study s
@@ -298,7 +320,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                 , ed.name as dataset_name
                 , ds.taxon_id
                 , c.value as num_reads
-            from apidb.DataSource ds
+            from apidb.Datasource ds
                 , sres.ExternalDatabase ed
                 , sres.ExternalDatabaseRelease edr
                 , study.Study s
@@ -1753,6 +1775,7 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
        ed.name AS external_db_name,
        edr.version AS external_db_version,
+       edr.external_database_release_id AS external_db_rls_id,
        SUBSTR(gsa.chromosome, 1, 20) AS chromosome,
        gsa.sequence_type,
        gsa.chromosome_order_num, gsa.na_sequence_id,
@@ -2279,6 +2302,7 @@ and ga.orthomcl_name is null
 		, anticodon
 		, external_db_name
 		, external_db_version
+		, external_db_rls_id
 		, chromosome
 		, chromosome_order_num
 		, sequence_type
@@ -3676,9 +3700,9 @@ tablespace indx
 
 
   <tuningTable name="TaxonSpecies" prefixEnabled="true">
-    <comment>Each record maps a taxon_id of interest onto the taxon_id that taxon's
+    <comment>Each record maps a taxon_id of interest onto the taxon_id of that taxon's
          taxon-tree ancestor whose rank is "species". Used by
-         buildAnnotationChangeTT and by gene queries, as well as an input in the
+         buildAnnotationChangeTT and by gene queries, and as an input in the
          creation of several tuning tables, including GeneAttributes and
          OrganismTree.
     </comment>
@@ -3687,13 +3711,24 @@ tablespace indx
     <sql>
       <![CDATA[
 create table &prefixTaxonSpecies&1 nologging as
-select t.taxon_id, species.taxon_id as species_taxon_id
-from sres.Taxon species, (select distinct sa.taxon_id
-      from &prefixGenomicSeqAttributes sa) t
-where species.taxon_id in (select taxon_id from sres.Taxon
-                           connect by taxon_id = prior parent_id and prior rank != 'species'
-                           start with taxon_id = t.taxon_id)
-  and species.rank = 'species'
+  -- recursively walk taxon tree to find ancestor with rank "species"
+  select taxon_id, species_taxon_id
+  from (select connect_by_root child.taxon_id as taxon_id, parent.taxon_id as species_taxon_id, parent.rank
+        from sres.Taxon child, sres.Taxon parent
+        where child.parent_id = parent.taxon_id
+        start with child.taxon_id
+                   in (select taxon_id
+                       from &prefixGenomicSeqAttributes)
+        connect by parent.taxon_id = prior parent.parent_id
+                   and prior parent.rank != 'species')
+  where rank = 'species'
+union
+  -- special case: for taxa that are species, map taxon ID to itself
+  select taxon_id, taxon_id as species_taxon_id
+  from sres.Taxon
+  where rank = 'species'
+  and taxon_id in (select taxon_id
+                       from &prefixGenomicSeqAttributes)
       ]]>
     </sql>
   </tuningTable>
@@ -4268,7 +4303,7 @@ tablespace indx
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
          relevant attribute query of the WDK popset record, as well as by
-         PopsetClustalw. Propagated to portal instances.
+         PopsetClustalOmega. Propagated to portal instances.
      </comment>
     <internalDependency name="PopsetAttributes"/>
     <externalDependency name="dots.NaSequence"/>
@@ -4441,6 +4476,7 @@ tablespace indx
                   s.organism like 'Sporothrix%')
             then 'Sordariomycetes'
             when (s.organism like 'Tremella%' or
+                  s.organism like 'Kwoniella%' or
                   s.organism like 'Cryptococcus%')
             then 'Tremellomycetes'
             when (s.organism like 'Ustilago%' or
@@ -5483,7 +5519,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
       <![CDATA[
         CREATE TABLE PathwaysGeneTable&1 NOLOGGING AS
         SELECT DISTINCT gene_source_id
-        , cast (null as varchar2(20)) as project_id
+        , project_id
         , pathway_source_id
         , pathway_name
         , count(reaction_source_id) as reactions
@@ -5493,6 +5529,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         , exact_match
         FROM (
             SELECT DISTINCT tp.gene_source_id
+            , tp.project_id
             , tp.pathway_source_id
             , tp.pathway_name
             , pr.reaction_source_id
@@ -5510,13 +5547,14 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             AND pr.ext_db_name = pc.ext_db_name
             AND tp.ec_number_pathway = pr.enzyme
             AND tp.wildcard_count_gene <= tp.wildcard_count_pathway
-            GROUP BY tp.gene_source_id, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
+            GROUP BY tp.gene_source_id, tp.project_id, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
             ORDER BY exact_match desc, pathway_name
             )
-        GROUP BY gene_source_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
+        GROUP BY gene_source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
         ORDER BY pathway_source_id, pathway_source
       ]]>
     </sql>
+<!-- now in CREATE TABLE
     <sql>
       <![CDATA[
         update PathwaysGeneTable&1 pgt
@@ -5526,6 +5564,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
                where source_id = pgt.gene_source_id)
       ]]>
     </sql>
+-->
     <sql>
       <![CDATA[
       create index pgt_ix&1 on PathwaysGeneTable&1
@@ -6454,7 +6493,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, results.nafeatureexpression r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id
@@ -6467,7 +6506,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, results.compoundMassSpec r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id 
@@ -6480,7 +6519,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, apidb.ontologytermresult r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id 
@@ -6493,7 +6532,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl, 
 	  study.protocolAppNode pan, results.nafeaturehostresponse r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id 
@@ -6506,7 +6545,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl,
 	  study.protocolAppNode pan, apidb.crisprphenotype r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id
@@ -6519,7 +6558,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl,
 	  study.protocolAppNode pan, apidb.phenotypescore r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id
@@ -6532,7 +6571,7 @@ where url is not null
           pt.profile_set_suffix
 	FROM profileType pt, study.study s, study.studyLink sl,
 	  study.protocolAppNode pan, apidb.phenotypegrowthrate r
-	WHERE pt.profile_set_name =  s.name
+	WHERE pt.profile_study_id = s.study_id
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id
@@ -6545,11 +6584,10 @@ where url is not null
           pt.profile_set_suffix
         FROM profileType pt, study.study s, study.studyLink sl,
           study.protocolAppNode pan, apidb.subjectresult r
-        WHERE pt.profile_set_name =  s.name
+        WHERE pt.profile_study_id = s.study_id
         AND sl.study_id = s.study_id
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
         AND  pan.protocol_app_node_id =r.protocol_app_node_id
-
       ]]>
     </sql>
     <sql>
@@ -6750,11 +6788,9 @@ where url is not null
     </sql>
   </tuningTable>
 
-<!--
   <tuningTable name="GeneModelDump">
     <comment>
        Materialization of GeneTables.GeneModelDump.
-       THIS WILL NOT BE NEEDED AFTER PENDING CHANGES TO THE WDK ARE COMPLETED.
     </comment>
     <externalDependency name="apidb.FeatureLocation"/>
     <internalDependency name="TranscriptAttributes"/>
@@ -6764,9 +6800,9 @@ where url is not null
     <sql>
       <![CDATA[
         CREATE TABLE GeneModelDump&1 NOLOGGING as
-          SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
+         SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
   listagg(transcript_id, ', ') within GROUP(ORDER BY transcript_id) AS transcript_ids
- from ( select ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+ from ( select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
                 ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
          from
@@ -6784,7 +6820,7 @@ where url is not null
          and gl.is_top_level = 1
          and ta.gene_type = 'protein coding'
          UNION ALL
-         (select ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+         (select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
                 ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
          from dots.GeneFeature gf, apidb.FeatureLocation gl, dots.NaSequence s,
@@ -6829,7 +6865,6 @@ where url is not null
       ]]>
     </sql>
   </tuningTable>
--->
 
   <tuningTable name="RflpGenotypes">
     <comment>
@@ -6906,7 +6941,7 @@ where url is not null
   </tuningTable>
 
 
-  <tuningTable name="NewOrthologousGenes">
+  <tuningTable name="OrthologousGenes">
     <comment>
        Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
     </comment>
@@ -6914,51 +6949,6 @@ where url is not null
     <externalDependency name="apidb.Synteny"/>
     <program commandLine="buildOrthologousGenesTT"/>
   </tuningTable>
-
-
-  <tuningTable name="OrthologousGenes">
-    <comment>
-       Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
-    </comment>
-    <internalDependency name="GeneAttributes"/>
-    <externalDependency name="apidb.Synteny"/>
-    <sql>
-      <![CDATA[
-        CREATE TABLE OrthologousGenes&1 NOLOGGING AS
-        SELECT gene.source_id, gene.project_id, ortho_gene.source_id AS ortho_source_id,
-               CAST(CASE
-                      WHEN LENGTH(ortho_gene.product) <= 600
-                        THEN ortho_gene.product
-                      ELSE substr(ortho_gene.product, 1, 597) || '...'
-                    END AS VARCHAR2(600)) AS ortho_product,
-               ortho_gene.organism AS ortho_organism,
-               CASE WHEN EXISTS
-                       (SELECT NULL
-                        FROM apidb.Synteny
-                        WHERE a_na_sequence_id = gene.na_sequence_id
-                          AND a_start <= gene.end_max
-                          AND a_end >= gene.start_min
-                          AND b_na_sequence_id = ortho_gene.na_sequence_id
-                          AND b_start <= ortho_gene.end_max
-                          AND b_end >= ortho_gene.start_min)
-                    THEN 'yes'
-                 ELSE 'no'
-               END AS syntenic
-        FROM GeneAttributes gene, GeneAttributes ortho_gene
-        WHERE gene.orthomcl_name = ortho_gene.orthomcl_name
-          AND gene.source_id != ortho_gene.source_id
-        ORDER BY gene.source_id, syntenic DESC, ortho_gene.source_id
-       ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX og_ix&1
-          ON OrthologousGenes&1 (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_organism)
-        TABLESPACE indx
-      ]]>
-    </sql>
-  </tuningTable>
-
 
   <tuningTable name="DatasetGeneList">
     <comment>

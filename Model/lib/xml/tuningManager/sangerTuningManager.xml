@@ -3,7 +3,6 @@
 
   <tuningTable name="SangerProducts" alwaysUpdate="true">
     <ancillaryTable name="GenesWithChanges"/>
-    <ancillaryTable name="SangerUcTags"/>
 
     <program commandLine="buildSangerProductsTT"/>
   </tuningTable>
@@ -13,11 +12,10 @@
     <sql>
       <![CDATA[
         create table ReviewedComment&1 nologging as
-        select *
-        from (select distinct geneid as gene,
-                              to_number(regexp_replace(regexp_replace(tag, '^.*eupathdb_uc=', ''), '[^0-9].*$', '')) as comment_id
-              from SangerUcTags)
-        where gene in (select id from apidbTuning.GeneId)
+        select distinct geneid as gene,
+                        to_number(regexp_replace(regexp_replace(annotation, '^.*eupathdb_uc=', ''), '[^0-9].*$', '')) as comment_id
+        from GenesWithChanges
+        where annotation like '%eupathdb_uc=%'
       ]]>
     </sql>
     <sql>
@@ -32,16 +30,29 @@
     <sql>
       <![CDATA[
         create table AnnotationChange&1 nologging as
-        select gwc.geneid as gene, gwc.mrnaid, gwc.annotationvalue as change,
-               cast(null as date) as change_date,
+        select gwc.geneid as gene, gwc.TranscriptId as mrnaid, gwc.annotation as change,
+               to_date(gwc.changedate, 'yyyymmdd') as change_date,
                sp.genename as name, sp.product
         from GenesWithChanges gwc,
-             (select mrnaid, geneid, genename, product,
-                     row_number() over (partition by mrnaid order by rankalternative) as ranking
+             (select transcriptid, geneid, genename, product,
+                     row_number() over (partition by transcriptid order by rankalternative) as ranking
               from SangerProducts) sp
-        where gwc.mrnaid = sp.mrnaid(+)
+        where gwc.transcriptid = sp.transcriptid(+)
           and sp.ranking = 1
           and gwc.geneid in (select id from apidbTuning.GeneId)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        -- delete changes whose dates are older than the loaded genome
+        delete from AnnotationChange&1
+        where (gene, change_date)
+              in (select ac.gene, ac.change_date
+                  from AnnotationChange&1 ac, GeneAttributes ga, sres.ExternalDatabaseRelease edr
+                  where ac.gene = ga.source_id
+                    and ga.external_db_rls_id = edr.external_database_release_id
+                    and edr.release_date > ac.change_date
+                  )
       ]]>
     </sql>
     <sql>
