@@ -16,10 +16,7 @@ use Data::Dumper;
 
 my $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
 
-# TODO: remove gusHome from command line arg
-my ($gusHome, $refseqName, $start, $end, $feature) = @ARGV;
-
-
+my ($gusHome, $refseqName, $start, $end, $feature, @queryParams) = @ARGV;
 
 # TODO: Get project as command line arg
 my $modelConfig = new WDK::Model::ModelConfig("PlasmoDB");
@@ -52,7 +49,7 @@ if($feature eq "ReferenceSequence") {
   $featureSql = "select substr(sequence, $start, $length) as seq, $start -1 as startm, $end -1 as end, '$refseqName' as feature_id from apidbtuning.genomicsequencesequence where source_id = '$refseqName'"
 }
 else {
-  $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId);
+  $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId, \@queryParams);
 }
 
 
@@ -86,7 +83,7 @@ while(my $hash = $sh->fetchrow_hashref("NAME_lc")) {
 my $bulkSubfeature = "$feature:bulksubfeatures";
 my $bulkSubfeatureSql =  $xml->{module}->{'Feature.pm'}->{sqlQuery}->{$bulkSubfeature}->{sql};
 if($bulkSubfeatureSql) {
-  $bulkSubfeatureSql = &makeSql($bulkSubfeatureSql, $start, $end, $seqId);
+  $bulkSubfeatureSql = &makeSql($bulkSubfeatureSql, $start, $end, $seqId, \@queryParams);
   my $bsh = $dbh->prepare($bulkSubfeatureSql);
   $bsh->execute();
 
@@ -103,7 +100,7 @@ print encode_json($result);
 $dbh->disconnect();
 
 sub makeSql {
-  my ($sql, $start, $end, $seqId) = @_;
+  my ($sql, $start, $end, $seqId, $queryParams) = @_;
 
   my $dlm = '|';
 
@@ -111,6 +108,13 @@ sub makeSql {
   $sql =~ s/\$rend/$end/g;
   $sql =~ s/\$dlm/;/g;
   $sql =~ s/\$srcfeature_id/$seqId/g;
+
+  foreach my $p (@$queryParams) {
+    next if($p =~ /select/i);
+    my ($key, $value) = split(/=/, $p);
+    $sql =~ s/\$\$${key}\$\$/${value}/g;
+  }
+
 
   return $sql
 }
