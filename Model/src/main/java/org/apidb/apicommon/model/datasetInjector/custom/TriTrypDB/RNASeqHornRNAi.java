@@ -13,9 +13,9 @@ public class RNASeqHornRNAi extends DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("datasetCategory");
-      //injectTemplate("profileSampleAttributesCategory");
-      //injectTemplate("profileAttributeQueries");
-      //injectTemplate("profileAttributeRef");
+      injectTemplate("profileSampleAttributesCategory");
+      injectTemplate("profileAttributeQueries");
+      injectTemplate("profileAttributeRef");
   }
 
   @Override
