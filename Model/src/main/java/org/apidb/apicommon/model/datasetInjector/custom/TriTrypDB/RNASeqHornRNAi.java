@@ -6,6 +6,16 @@ public class RNASeqHornRNAi extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+      setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_3298");
+      setPropValue("includeProjectsExcludeEuPathDB", "TriTrypDB,UniDB");
+      setShortAttribution();
+      String organismAbbrevDisplay = "T. brucei brucei TREU927"; //getPropValue("organismAbbrevDisplay");
+      setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
+
+      injectTemplate("datasetCategory");
+      //injectTemplate("profileSampleAttributesCategory");
+      //injectTemplate("profileAttributeQueries");
+      //injectTemplate("profileAttributeRef");
   }
 
   @Override
