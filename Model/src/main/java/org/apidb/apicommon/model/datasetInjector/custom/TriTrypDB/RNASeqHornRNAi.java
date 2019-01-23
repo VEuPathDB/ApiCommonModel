@@ -12,10 +12,14 @@ public class RNASeqHornRNAi extends DatasetInjector {
       String organismAbbrevDisplay = "T. brucei brucei TREU927"; //getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
+      String xAxis = "No_Tet: uninduced control;<br> BFD3: bloodstream-form cells grown for 3 days;<br> BFD6: bloodstream-form cells grown for 6 days;<br> PF: insect/procyclic-form cells;<br> DIF: cells induced throughout growth as bloodstream forms, differentiation and growth as procyclic forms";
+      setPropValue("graphXAxisSamplesDescription", xAxis.replace("'", ""));
+
+
       injectTemplate("datasetCategory");
-      //injectTemplate("profileSampleAttributesCategory");
-      //injectTemplate("profileAttributeQueries");
-      //injectTemplate("profileAttributeRef");
+      injectTemplate("profileSampleAttributesCategory");
+      injectTemplate("profileAttributeQueries");
+      injectTemplate("profileAttributeRef");
   }
 
   @Override
