@@ -12,10 +12,6 @@ public class RNASeqHornRNAi extends DatasetInjector {
       String organismAbbrevDisplay = "T. brucei brucei TREU927"; //getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
-      String xAxis = getPropValue("graphXAxisSamplesDescription");
-      setPropValue("graphXAxisSamplesDescription", xAxis.replace("'", ""));
-
-
       injectTemplate("datasetCategory");
       injectTemplate("profileSampleAttributesCategory");
       injectTemplate("profileAttributeQueries");
