@@ -282,6 +282,7 @@ public class RNASeq extends  DatasetInjector {
 
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
+      setPropValue("intronSizeLimit", "0");
       if(Boolean.parseBoolean(showIntronJunctions)) {
         
           String experimentName = datasetName.replace("_rnaSeq_RSRC", "");
@@ -324,7 +325,6 @@ public class RNASeq extends  DatasetInjector {
       String studyName = getPropValue("name");
       setPropValue("studyName", studyName);
       injectTemplate("jbrowseRNASeq");
-
   }
 
 
