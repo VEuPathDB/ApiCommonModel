@@ -310,10 +310,12 @@ public class RNASeq extends  DatasetInjector {
 
 
           if(projectName.equals("HostDB")) {
-              setPropValue("intronSizeLimit", "100000");
+              // <10% human introns greater than 11000 bp
+              setPropValue("intronSizeLimit", "20000");
           }
           else {
-              setPropValue("intronSizeLimit", "9000");
+              // this matches the refind value in unified junctions
+              setPropValue("intronSizeLimit", "3000");
           }
 
           injectTemplate("rnaSeqJunctionsTrack");
