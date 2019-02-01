@@ -11,6 +11,7 @@ public class PhenotypeCryptococcusInglis extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_phenotype_QIAGEN_RSRC"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
   }
