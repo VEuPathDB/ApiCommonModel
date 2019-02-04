@@ -1,0 +1,78 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+use FgpUtil::Util::CommandHelper;
+use Getopt::Long qw(GetOptions);
+use EbrcModelCommon::Model::tmUtils;
+
+my $GUS_HOME = $ENV{GUS_HOME};
+# my $CLASSPATH = &FgpUtil::Util::CommandHelper::getJavaClasspath($GUS_HOME);
+# my $sysProps = &FgpUtil::Util::CommandHelper::getSystemProps($GUS_HOME, 'Ssgcid');
+
+my ($propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug, $password);
+
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "prefix=s" => \$prefix,
+           "filterValue=s" => \$filterValue,
+           "debug!" => \$debug,
+	  );
+die "required parameter missing" unless ($propfile && $instance && $suffix);
+
+($instance, $schema, $password) = EbrcModelCommon::Model::tmUtils::getDbLoginInfo($instance, $schema, $propfile);
+
+my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+# create table
+$dbh->do(<<SQL) or die "creating table";
+   create table Stringdb$suffix (
+      ncbi_tax_id         number(10),
+      string_type         varchar2(20),
+      string_name_compact varchar2(80),
+      official_name_ncbi  varchar2(120),
+      is_eupath_organism  number(1)
+   ) nologging
+SQL
+
+# fetch data file from STRING
+my $datafile = "/tmp/stringdb" . $suffix . ".dat";
+system("wget https://stringdb-static.org/download/species.v11.0.txt --output-document " . $datafile);
+
+# prepare insert
+    my $insertStmt = $dbh->prepare(<<SQL) or die "preparing insertStmt";
+      insert into Stringdb$suffix
+        (ncbi_tax_id, string_type, string_name_compact, official_name_ncbi, is_eupath_organism)
+        values (?, ?, ?, ?, 0)
+SQL
+
+# load data
+open (STRINGDATA, $datafile)
+  or die "opening datafile \"" . $datafile . "\"";
+while (<STRINGDATA>) {
+  chomp;
+  my ($ncbiTaxId, $stringType, $stringNameCompact, $officialNameNcbi) = split /\t/;
+  next if $ncbiTaxId =~ /##/; # skip header record
+  $insertStmt->execute($ncbiTaxId, $stringType, $stringNameCompact, $officialNameNcbi)
+    or die "inserting data";
+}
+close STRINGDATA;
+
+# flag eupath organisms
+$dbh->do(<<SQL) or die "updating EuPath organism flag";
+  update Stringdb$suffix
+  set is_eupath_organism = 1
+  where ncbi_tax_id
+        in (select distinct t.ncbi_tax_id
+            from GeneAttributes ga, TaxonSpecies ts, sres.Taxon t
+            where ga.taxon_id = ts.taxon_id
+              and ts.species_taxon_id = t.taxon_id)
+SQL
+
+$dbh->commit();
+
+system("rm " . $datafile);
