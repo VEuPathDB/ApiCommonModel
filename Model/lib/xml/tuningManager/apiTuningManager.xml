@@ -726,6 +726,7 @@ where p.rn = 1
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="apidb.MassSpecSummary"/>
     <intermediateTable name="DataSourceCount"/>
+    <intermediateTable name="SequenceCount"/>
     <intermediateTable name="CommunityCount"/>
     <intermediateTable name="ProfileCount"/>
     <intermediateTable name="PopsetCount"/>
@@ -756,6 +757,20 @@ CREATE TABLE DataSourceCount nologging as (
         FROM   apidb.DataSource ds
           group by ds.taxon_id
          )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create table SequenceCount nologging as
+       select * from (
+         select count(*) as num, sequence_type, taxon_id
+         from apidbtuning.genomicseqattributes
+         where is_top_level =1
+       group by  taxon_id, sequence_type)
+       pivot (
+         listagg(num, ';') within group (order by num) as num
+         for sequence_type in ('contig' contig, 'supercontig' supercont, 'chromosome' chrom)
+       )
       ]]>
     </sql>
     <sql>
@@ -962,6 +977,9 @@ SELECT o.project_name as project_id,
        nvl(dsc.hasPopset, 0) as hasPopset,
        nvl(dsc.hasEpitope, 0) as hasEpitope,
        nvl(dsc.hasArray, 0) as hasArray,
+       nvl(sc.contig_num, 0) as contigCount,
+       nvl(sc.supercont_num, 0) as supercontigCount,
+       nvl(sc.chrom_num, 0) as chromosomeCount,
        nvl(cc.communityCount, 0) as communityCount,
        nvl(psc.popsetCount, 0) as popsetCount,
        nvl(pc.geneArrayCount, 0) as arrayGeneCount,
@@ -972,6 +990,7 @@ FROM   apidb.Organism o,
        sres.Taxon t,
        sres.TaxonName tn,
        DataSourceCount dsc,
+       SequenceCount sc,
        CommunityCount cc,
        GeneCount gc,
        popsetCount psc,
@@ -983,6 +1002,7 @@ WHERE t.taxon_id = tn.taxon_id
   AND tn.taxon_id = o.taxon_id
   AND tn.name_class = 'scientific name' 
   AND o.taxon_id = dsc.taxon_id (+)
+  AND o.taxon_id = sc.taxon_id (+)
   AND o.taxon_id = cc.taxon_id (+)
   AND o.taxon_id = gc.taxon_id (+)
   AND o.taxon_id = psc.taxon_id (+)
@@ -4477,6 +4497,7 @@ tablespace indx
             then 'Sordariomycetes'
             when (s.organism like 'Tremella%' or
                   s.organism like 'Kwoniella%' or
+                  s.organism like 'Naganishia%' or
                   s.organism like 'Cryptococcus%')
             then 'Tremellomycetes'
             when (s.organism like 'Ustilago%' or
@@ -7160,6 +7181,15 @@ tablespace indx
             TABLESPACE indx
         ]]>
     </sql>
+  </tuningTable>
+
+  <tuningTable name="Stringdb" alwaysUpdate="true">
+    <comment> Data from STRING-DB.org, populated from their web service.
+         Used in the gene record.
+      </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TaxonSpecies"/>
+    <program commandLine="buildStringdbTT"/>
   </tuningTable>
 
 </tuningConfig>

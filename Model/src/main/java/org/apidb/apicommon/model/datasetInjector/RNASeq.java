@@ -282,6 +282,7 @@ public class RNASeq extends  DatasetInjector {
 
 
       String showIntronJunctions = getPropValue("showIntronJunctions");
+      setPropValue("intronSizeLimit", "0");
       if(Boolean.parseBoolean(showIntronJunctions)) {
         
           String experimentName = datasetName.replace("_rnaSeq_RSRC", "");
@@ -309,10 +310,12 @@ public class RNASeq extends  DatasetInjector {
 
 
           if(projectName.equals("HostDB")) {
-              setPropValue("intronSizeLimit", "100000");
+              // <10% human introns greater than 11000 bp
+              setPropValue("intronSizeLimit", "20000");
           }
           else {
-              setPropValue("intronSizeLimit", "9000");
+              // this matches the refind value in unified junctions
+              setPropValue("intronSizeLimit", "3000");
           }
 
           injectTemplate("rnaSeqJunctionsTrack");
@@ -324,7 +327,6 @@ public class RNASeq extends  DatasetInjector {
       String studyName = getPropValue("name");
       setPropValue("studyName", studyName);
       injectTemplate("jbrowseRNASeq");
-
   }
 
 

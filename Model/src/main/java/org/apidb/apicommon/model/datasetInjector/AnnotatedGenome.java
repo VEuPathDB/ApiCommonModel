@@ -109,6 +109,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Mitosporidium","Microsporidia");
 			phylum.put("Mucor","Zygomycetes");
 			phylum.put("Mus","Chordata");
+			phylum.put("Bos","Chordata");
 			phylum.put("Naegleria","Amoebozoa");
 			phylum.put("Nematocida","Microsporidia");
 			phylum.put("Neospora","Apicomplexa");
@@ -155,6 +156,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Zymoseptoria","Dothideomycetes");
 			phylum.put("Lomentospora","Sordariomycetes");
 			phylum.put("Scedosporium","Sordariomycetes");
+			phylum.put("Amphiamblys","Microsporidia");
     }
 
     // getting properties defined in .prop file
