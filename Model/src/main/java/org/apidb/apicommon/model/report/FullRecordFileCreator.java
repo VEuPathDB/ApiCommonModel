@@ -111,7 +111,7 @@ public class FullRecordFileCreator extends BaseCLI {
         try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
           String idSql = loadIdSql(sqlFile);
-          RecordClass recordClass = wdkModel.getRecordClass(recordClassName).orElseThrow(
+          RecordClass recordClass = wdkModel.getRecordClassByName(recordClassName).orElseThrow(
               () -> new WdkModelException("No record class exists with name '" + recordClassName + "'."));
   
           if (cacheTable == null)
@@ -154,7 +154,7 @@ public class FullRecordFileCreator extends BaseCLI {
     private Question createQuestion(WdkModel wdkModel, String projectId, RecordClass recordClass,
             String idSql) throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
-        QuestionSet questionSet = wdkModel.getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
+        QuestionSet questionSet = wdkModel.getQuestionSet(Utilities.INTERNAL_QUESTION_SET).get();
         Query query = createQuery(wdkModel, recordClass, idSql);
         Question question = new Question();
         question.setName(name + "_dump");
