@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
-import org.apidb.apicommon.model.datasetInjector.ProteinExpressionMassSpec;
+import org.apidb.apicommon.model.datasetInjector.QuantitativeProteomicsNonRatio;
 
-public class QuantMassSpecApicoplastEr extends ProteinExpressionMassSpec {
+public class QuantMassSpecApicoplastEr extends QuantitativeProteomicsNonRatio {
 
   @Override
   public void addModelReferences() {
