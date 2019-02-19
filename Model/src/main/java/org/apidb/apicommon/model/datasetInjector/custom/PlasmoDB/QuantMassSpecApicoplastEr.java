@@ -7,11 +7,8 @@ public class QuantMassSpecApicoplastEr extends QuantitativeProteomicsNonRatio {
 
   @Override
   protected void injectTemplate(String templateName) {
-    if (templateName.equals("expressionFoldChangeQuestion")) {
-      //Do Nothing
-    }
-    else {
+      setPropValue("datasetFloor","0.001");
+      setPropValue("defaultFoldDifference","0.7");
       super.injectTemplate(templateName);
-    }
   }
 }
