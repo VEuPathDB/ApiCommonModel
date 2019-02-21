@@ -21,6 +21,7 @@ sub new {
   push(@formdata, "tool", "pubmedTool");
   push(@formdata, "db", "pubmed");
   push(@formdata, "id", join(',', @$pmidList));
+  push(@formdata, "api_key", "f2006d7a9fa4e92b2931d964bb75ada85a08");
   my $response = $ua->post($pubmedUrl, \@formdata);
   if (!($response->is_success)) {
     die $response->status_line;
