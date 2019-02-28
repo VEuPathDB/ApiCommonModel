@@ -2458,6 +2458,13 @@ create index GeneAttr_txid_ix&1
 tablespace indx
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+create index GeneAttr_ids_ix&1
+       ON &prefixGeneAttributes&1 (na_feature_id, source_id, project_id)
+tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
 
 
@@ -6160,7 +6167,7 @@ where url is not null
 
 
   <tuningTable name="Profile">
-    <!-- One profile for one gene. Used for graphs
+    <!-- One profile per gene per dataset. Used for graphs
       -->
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="CompoundAttributes"/>
@@ -6216,13 +6223,14 @@ where url is not null
         , res.profile_type
         , sl.study_id
         , res.id
-        , listagg(NVL(TO_CHAR(ROUND(res.value, 2)), 'NA'), CHR(9)) within GROUP(ORDER BY pan.node_order_num) AS profile_as_string
+        , CASE WHEN (s.NAME ='Apicoplast and ER Proteomes') THEN listagg(nvl(to_char(round(res.VALUE, 6)), 'NA'), chr(9)) WITHIN GROUP(ORDER BY pan.node_order_num)
+           ELSE  listagg(NVL(TO_CHAR(ROUND(res.value, 2)), 'NA'), CHR(9)) within GROUP(ORDER BY pan.node_order_num) END  AS profile_as_string
         , MAX(res.value) AS max_value
         , min(value) as min_value
         , max(pan.name) keep(dense_rank last order by value) as max_timepoint
         , MAX(pan.name) keep(dense_rank FIRST ORDER BY value) AS min_timepoint
         FROM
-          study.StudyLink sl
+          study.StudyLink sl, study.study s
         , (select distinct sl.study_id
            from study.studylink sl, PanResults panr
            where sl.protocol_app_node_id = panr.pan_id
@@ -6242,7 +6250,7 @@ where url is not null
             GROUP BY
               na_feature_id
             , protocol_app_node_id
-            UNION
+            UNION ALL
             SELECT
               'values' AS profile_type
             , mean_phenotype
@@ -6250,7 +6258,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               apidb.crisprphenotype
-            UNION
+            UNION ALL
             SELECT
               'values' AS profile_type
             , score
@@ -6258,7 +6266,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               apidb.phenotypescore
-            UNION
+            UNION ALL
             SELECT
               'values' AS profile_type
             , relative_growth_rate
@@ -6266,7 +6274,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               apidb.phenotypegrowthrate
-            UNION
+            UNION ALL
             SELECT
               'values' AS profile_type
             , value
@@ -6274,7 +6282,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               results.NaFeatureExpression
-            UNION
+            UNION ALL
             SELECT
               'channel1_percentiles' AS profile_type
             , percentile_channel1 AS value
@@ -6282,7 +6290,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               results.NaFeatureExpression
-            UNION
+            UNION ALL
             SELECT
               'channel2_percentiles' AS profile_type
             , percentile_channel2 AS value
@@ -6290,7 +6298,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               results.NaFeatureExpression
-            UNION
+            UNION ALL
             SELECT
               'standard_error' AS profile_type
             , standard_error AS value
@@ -6298,7 +6306,7 @@ where url is not null
             , protocol_app_node_id
             FROM
               results.NaFeatureExpression
---            UNION
+--            UNION ALL
 --          SELECT
 --            'value' AS profile_type
 --          , value AS value
@@ -6310,7 +6318,7 @@ where url is not null
           , GeneAttributes ga
           WHERE
             gene_profiles.id = ga.na_feature_id
-           UNION
+           UNION ALL
             SELECT
               'value' AS profile_type
             , otr.value AS value
@@ -6320,7 +6328,7 @@ where url is not null
             FROM
               apidb.OntologyTermResult otr, sres.ontologyterm ot
             WHERE ot.ontology_term_id = otr.ontology_term_id
-          UNION
+          UNION ALL
           SELECT
             'values' AS profile_type
           , value
@@ -6329,7 +6337,7 @@ where url is not null
           , subject as source_id
           FROM
             apidb.subjectresult   
-          UNION
+          UNION ALL
           SELECT
             compound_profiles.profile_type
           , compound_profiles.value
@@ -6362,11 +6370,13 @@ where url is not null
          AND pan.protocol_app_node_id = res.protocol_app_node_id
          AND sl.study_id IN (SELECT study_id FROM study.Study WHERE investigation_id IS NOT NULL)
          AND sl.study_id = dr.study_id (+)
+         AND sl.study_id = s.study_id
          AND dr.study_id is null
         GROUP BY
           res.source_id
         , res.profile_type
         , sl.study_id
+        , s.name
         , res.id
         ) profile
       WHERE
@@ -6377,7 +6387,7 @@ where url is not null
         AND r.external_database_release_id = i.external_database_release_id
         AND i.investigation_id IS NULL
         AND profile.study_id = ps.study_id
-    UNION
+    UNION ALL
       SELECT
         ds.name AS dataset_name
       , ds.type AS dataset_type
