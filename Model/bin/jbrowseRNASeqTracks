@@ -6,179 +6,177 @@ use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 
-my $metadataBase = "metadata_unlogged";
-
 # TODO: remove gusHome from command line arg
-my ($gusHome, $organismAbbrev, $study, $projectName, $buildNumber, $webservicesDir, $hasJunctions, $intronSizeLimit) = @ARGV;
+my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir) = @ARGV;
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+
 my $dbh = $jbrowseUtil->getDbh();   
 
-my $datasetName = "${organismAbbrev}_${study}_rnaSeq_RSRC";
-
-my $sql = "select prop.property, prop.value
+my $sql = "select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
-where dsp.name = '$datasetName'
+where dsp.name like '${organismAbbrev}%_rnaSeq_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
-union
-select 'nameForFileNames', name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'
 ";
 
 my $sh = $dbh->prepare($sql);
 $sh->execute();
 
-
-my (%studyProperties);
-while(my ($prop, $val) = $sh->fetchrow_array()) {
-  $studyProperties{$prop} = $val;
+my (%allStudyProperties);
+while(my ($datasetName, $prop, $val) = $sh->fetchrow_array()) {
+  $allStudyProperties{$datasetName}->{$prop} = $val;
 }
 $sh->finish();
 
-my $nameForFileNames = $studyProperties{nameForFileNames};
+my $nffSh = $dbh->prepare("select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'");
+$nffSh->execute();
 
-if(lc $studyProperties{switchStrandsGBrowse} eq 'true') {
-  $metadataBase = $metadataBase . "_alt";
-}
+my ($nameForFileNames) = $nffSh->fetchrow_array();
+
+my $result = {"tracks" => [] };
+
+
+foreach my $datasetName (keys %allStudyProperties) {
+  my $metadataBase = "metadata_unlogged";
+
+  my %studyProperties = %{$allStudyProperties{$datasetName}};
+
+  if(lc $studyProperties{isStrandSpecific} eq 'true' && lc $studyProperties{switchStrandsGBrowse} eq 'true') {
+    $metadataBase = $metadataBase . "_alt";
+  }
+
+  my %refinedQueryParams = %{$jbrowseUtil->intronJunctionsQueryParams('refined')};
+  $refinedQueryParams{intronSizeLimit} = $projectName eq 'HostDB' ? 20000 : 3000;
 
 # EXAMPLE:
 #/var/www/Common/apiSiteFilesMirror/webServices/PlasmoDB/build-42/Pfalciparum3D7/bigwig/pfal3D7_Caro_ribosome_profiling_rnaSeq_RSRC/metadata_unlogged
 
-my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";
+  my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";
 
-my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
+  my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
 
-open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
+  open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
 
-my $result = {"tracks" => [] };
 
-my ($start, $file, $displayName, $strand, $alignment);;
 
-my @multiUrls;
+  my ($start, $file, $displayName, $strand, $alignment);;
+  
+  my @multiUrls;
 
-while(<FILE>) {
-  chomp;
-  if(/^\[(.+)\]$/) {
-    &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls) if($start);
-    $file = $1;
-    $start = 1;
+  while(<FILE>) {
+    chomp;
+    if(/^\[(.+)\]$/) {
+      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls) if($start);
+      $file = $1;
+      $start = 1;
+    }
+    if(/^display_name\s*=\s*(.+)$/) {
+      $displayName = $1;
+      $displayName =~ s/^\S+ - //; #remove everything to the first " - "
+    }
+    if(/^alignment\s*=\s*(.+)$/) {
+      $alignment = $1;
+    }
+    if(/^strand\s*=\s*(.+)$/) {
+      $strand = $1;
+    }
+    
   }
-  if(/^display_name\s*=\s*(.+)$/) {
-    $displayName = $1;
-    $displayName =~ s/^\S+ - //; #remove everything to the first " - "
-  }
-  if(/^alignment\s*=\s*(.+)$/) {
-    $alignment = $1;
-  }
-  if(/^strand\s*=\s*(.+)$/) {
-    $strand = $1;
-  }
-
-}
-&addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls);
+  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls);
 
 
-my @uniqueOnlyUrls = grep { $_->{alignment} eq 'unique' } @multiUrls;
+  my @uniqueOnlyUrls = grep { $_->{alignment} eq 'unique' } @multiUrls;
 
-my $studyDisplayName = $studyProperties{datasetDisplayName};
-my $multiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-                   urlTemplates => \@multiUrls,
-                   showTooltips => "true",
-                   category => "Transcriptomics",
-                   key => $studyProperties{datasetDisplayName} . " Density",
-                   label => $studyProperties{datasetDisplayName} . " Density",
-                   type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
-                   style => {
-                     pos_color => "black",
-                     neg_color => "white"
-                   },
-                   scale => "log",
-                   metadata => {
-                     subcategory => 'RNASeq',
-                     dataset => $studyDisplayName,
-                     track => 'Multi-Density'
-                   },
-
-};
-
-my $uniqueMultiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-                         urlTemplates => \@uniqueOnlyUrls,
-                         showTooltips => "true",
-                         category => "Transcriptomics",
-                         key => $studyProperties{datasetDisplayName} . " Density - Unique",
-                         label => $studyProperties{datasetDisplayName} . " Density - Unique",
-                         type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
-                         style => {
-                           pos_color => "black",
-                           neg_color => "white"
-                         },
-                         scale => "log",
-                         metadata => {
-                           subcategory => 'RNASeq',
-                           dataset => $studyDisplayName,
-                           track => 'Multi-Density'
-                         },
-
-};
-
-
-
-
-push @{$result->{tracks}}, $multiBigWig;
-push @{$result->{tracks}}, $uniqueMultiBigWig;
-
-if(lc($hasJunctions) eq 'true') {
-  my $junctions = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                   baseUrl => "/a/service/jbrowse",
-                   type => "JBrowse/View/Track/HTMLFeatures",
-                   key => "$studyDisplayName Intron Junctions",
-                   label => "$studyDisplayName Intron Junctions",
-                   category => "Transcriptomics",
-                   maxFeatureScreenDensity => 0.01,
-                   metadata => {
-                     subcategory => 'RNASeq',
-                     dataset => $studyDisplayName,
-                     track => 'Predicted Intron Junctions',
-                   },
-                   hooks => {
-                     modify => "{gsnapUnifiedIntronJunctionHooksModify}",
-                   },
-                   style => {
-                     className => "ibeam",
-                     labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
-                   },
-                   query => {
-                     feature => "gsnap:unifiedintronjunction",
-                     intronSizeLimit => $intronSizeLimit,
-                     minIntronPercent => .05,
-                     minNonContainedRatio => .02,
-                     minContainedRatio => .2,
-                     minContainedScore => 4,
-                     minNonContainedScore => 20,
-                     maxIsrpmMult => 50,
-                     isrpmRatio => .05,
-                     externalDatabaseName => $datasetName,
-                     minReadsMaxSample => 3,
-                   },
-                   onClick => {
-                     content => "{gsnapUnifiedIntronJunctionTitleFxn}",
-                   },
-                   menuTemplate => [
-                     {label => "View Details", 
-                      content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+  my $studyDisplayName = $studyProperties{datasetDisplayName};
+  my $multiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+                     urlTemplates => \@multiUrls,
+                     showTooltips => "true",
+                     category => "Transcriptomics",
+                     key => $studyProperties{datasetDisplayName} . " Density",
+                     label => $studyProperties{datasetDisplayName} . " Density",
+                     type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
+                     style => {
+                       pos_color => "black",
+                       neg_color => "white"
                      },
-                       ],
+                           scale => "log",
+                           metadata => {
+                             subcategory => 'RNASeq',
+                             dataset => $studyDisplayName,
+                             track => 'Multi-Density'
+                       },
+
   };
 
-  push @{$result->{tracks}}, $junctions;
-}
+  my $uniqueMultiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+                           urlTemplates => \@uniqueOnlyUrls,
+                           showTooltips => "true",
+                           category => "Transcriptomics",
+                           key => $studyProperties{datasetDisplayName} . " Density - Unique",
+                           label => $studyProperties{datasetDisplayName} . " Density - Unique",
+                           type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
+                           style => {
+                             pos_color => "black",
+                             neg_color => "white"
+                           },
+                                 scale => "log",
+                                 metadata => {
+                                   subcategory => 'RNASeq',
+                                   dataset => $studyDisplayName,
+                                   track => 'Multi-Density'
+                             },
+                                       
+  };
 
+
+
+
+  push @{$result->{tracks}}, $multiBigWig;
+  push @{$result->{tracks}}, $uniqueMultiBigWig;
+
+  if(lc($studyProperties{showIntronJunctions}) eq 'true') {
+    my $junctions = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                     baseUrl => "/a/service/jbrowse",
+                     type => "JBrowse/View/Track/HTMLFeatures",
+                     key => "$studyDisplayName Intron Junctions",
+                     label => "$studyDisplayName Intron Junctions",
+                     category => "Transcriptomics",
+                     maxFeatureScreenDensity => 0.01,
+                     metadata => {
+                       subcategory => 'RNASeq',
+                       dataset => $studyDisplayName,
+                       track => 'Predicted Intron Junctions',
+                     },
+                     hooks => {
+                       modify => "{gsnapUnifiedIntronJunctionHooksModify}",
+                     },
+                     style => {
+                       className => "ibeam",
+                       labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+                     },
+                     query => \%refinedQueryParams,
+                     onClick => {
+                       content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+                     },
+                     menuTemplate => [
+                       {label => "View Details", 
+                        content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+                       },
+                         ],
+    };
+    
+    push @{$result->{tracks}}, $junctions;
+  }
+
+}
+  
 print encode_json($result);
 
 $dbh->disconnect();
 
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignemnt, $properties, $datasetName, $nameForFileNames, $bigWigRelativePath, $multiUrls) = @_;
+  my ($result, $file, $displayName, $strand, $alignment, $properties, $datasetName, $nameForFileNames, $bigWigRelativePath, $multiUrls) = @_;
 
   $strand = 'not strand specific' unless($strand);
 
@@ -188,8 +186,6 @@ sub addConfiguration {
   #my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
   #my $bwUrl = "/a/service/jbrowse/rnaseq/bigwig/$nameForFileNames/$datasetName/$file"; 
   my $bwUrl = "/a/service/jbrowse/store?data=$nameForFileNames/bigwig/$datasetName/$file"; 
-
-
 
   my $color = &color($strand, $alignment);
 
@@ -218,7 +214,7 @@ sub addConfiguration {
 
   my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color, alignment => $alignment};
   push @{$result->{tracks}}, $coverage;
-  push @multiUrls, $multiUrlHash;
+  push @$multiUrls, $multiUrlHash;
 }
 
 
