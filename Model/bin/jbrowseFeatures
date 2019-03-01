@@ -16,7 +16,17 @@ use Data::Dumper;
 
 my $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
 
+
 my ($gusHome, $projectId, $refseqName, $start, $end, $feature, @queryParams) = @ARGV;
+
+my %qp;
+foreach my $p (@queryParams) {
+  next if($p =~ /select/i);
+  my ($key, $value) = split(/=/, $p);
+  $qp{$key} = $value;
+}
+
+my $basesPerBin = $qp{basesPerBin} + 0;
 
 my $modelConfig = new WDK::Model::ModelConfig($projectId);
 
@@ -117,6 +127,40 @@ if(scalar @{$result->{features}} > 0 && $bulkSubfeatureSql) {
     }
   }
 }
+
+if($basesPerBin) {
+  my $binCount = ($end - $start) / $basesPerBin;
+
+  my %bins;
+
+  foreach my $feature (@{$result->{features}}) {
+    my $startBin = int(($feature->{start} - $start) / $basesPerBin);
+    my $endBin = int(($feature->{end} - $start) / $basesPerBin);
+
+    $bins{$startBin}++;
+    if($startBin != $endBin) {
+      $bins{$endBin}++;
+    }
+  }
+
+  my $maxBin = 0;
+  my @sortedBinValues;
+  for(my $i = 0; $i < $binCount; $i++) {
+    my $value = $bins{$i} ? $bins{$i} : 0;
+
+    $maxBin = $value if($value > $maxBin);
+    push @sortedBinValues, $value;
+  }
+
+  $result = {
+    "bins" =>  \@sortedBinValues,
+    "stats" => {
+      "basesPerBin" => $basesPerBin,
+      "max"=> $maxBin
+    }
+  };
+}
+
 
 print encode_json($result);
 

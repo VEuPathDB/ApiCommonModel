@@ -197,8 +197,8 @@ public class AnnotatedGenome extends UnannotatedGenome {
       familySpecies = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
     } else {
       species = orgs[0] + " " + orgs[1];  // for popup on distinct filter
-      orgs[1] = orgs[1].replaceAll("-", "=-");
-      orgs[1] = orgs[1].replaceAll("_", "=_");
+      orgs[1] = orgs[1].replaceAll("-", "==");
+      orgs[1] = orgs[1].replaceAll("_", "===");
       familySpecies = orgs[0] + "-" + orgs[1];  // for filter name
     }
 
