@@ -1,0 +1,132 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+use Data::Dumper;
+
+# TODO: remove gusHome from command line arg
+my ($gusHome, $organismAbbrev, $projectName) = @ARGV;
+
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+my $dbh = $jbrowseUtil->getDbh();   
+
+my $sql = "select count(*)
+from apidbtuning.datasetproperty p
+   , apidbtuning.datasetnametaxon d
+   , apidb.organism o
+where d.DATASET_PRESENTER_ID = p.DATASET_PRESENTER_ID
+and o.taxon_id = d.taxon_id
+and d.name like '%rnaSeq_RSRC'
+and p.property = 'showIntronJunctions'
+and lower(p.value) = 'true'
+and o.PUBLIC_ABBREV = '$organismAbbrev'";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+
+my ($count) = $sh->fetchrow_array();
+$sh->finish();
+
+my $result = {"tracks" => [] };
+if($count > 0) {
+
+
+  my $inclusive = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                   baseUrl => "/a/service/jbrowse",
+#                   type => "JBrowse/View/Track/HTMLFeatures",
+                   type => "Filters/View/Track/IntronJunction",
+                   key => "RNASeq Evidence for Introns (Inclusive)",
+                   label => "RNASeq Evidence for Introns (Inclusive)",
+                   category => "Transcriptomics",
+                   maxFeatureScreenDensity => 0.01,
+                   metadata => {
+                     subcategory => 'RNASeq',
+                     track => 'Predicted Intron Junctions',
+                   },
+                   hooks => {
+                     modify => "{gsnapUnifiedIntronJunctionHooksModify}",
+                   },
+                   style => {
+                     className => "ibeam",
+                     labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+                   },
+                   query => {
+                     feature => "gsnap:unifiedintronjunction",
+                     intronSizeLimit => 5000,
+                     minIntronPercent => .001,
+                     minNonContainedRatio => .0001,
+                     minContainedRatio => .0001,
+                     minContainedScore => 2,
+                     minNonContainedScore => 10,
+                     maxIsrpmMult => 50,
+                     isrpmRatio => .05,
+                     externalDatabaseName => "ALL",
+                     minReadsMaxSample => 1,
+                   },
+                   onClick => {
+                     content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+                   },
+                   menuTemplate => [
+                     {label => "View Details", 
+                      content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+                     },
+                       ],
+  };
+
+
+  my $refined = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                   baseUrl => "/a/service/jbrowse",
+#                   type => "JBrowse/View/Track/HTMLFeatures",
+                   type => "Filters/View/Track/IntronJunction",
+                   key => "RNASeq Evidence for Introns (Refined)",
+                   label => "RNASeq Evidence for Introns (Refined)",
+                   category => "Transcriptomics",
+                   maxFeatureScreenDensity => 0.01,
+                   metadata => {
+                     subcategory => 'RNASeq',
+                     track => 'Predicted Intron Junctions',
+                   },
+                   hooks => {
+                     modify => "{gsnapUnifiedIntronJunctionHooksModify}",
+                   },
+                   style => {
+                     className => "ibeam",
+                     labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+                   },
+                   query => {
+                     feature => "gsnap:unifiedintronjunction",
+                     intronSizeLimit => 3000,
+                     minIntronPercent => .05,
+                     minNonContainedRatio => .02,
+                     minContainedRatio => .2,
+                     minContainedScore => 4,
+                     minNonContainedScore => 20,
+                     maxIsrpmMult => 50,
+                     isrpmRatio => .05,
+                     externalDatabaseName => "ALL",
+                     minReadsMaxSample => 3,
+                   },
+                   onClick => {
+                     content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+                   },
+                   menuTemplate => [
+                     {label => "View Details", 
+                      content => "{gsnapUnifiedIntronJunctionTitleFxn}",
+                     },
+                       ],
+  };
+
+
+  push @{$result->{tracks}}, $refined;
+  push @{$result->{tracks}}, $inclusive;
+}
+
+print encode_json($result);
+
+$dbh->disconnect();
+
+
+1;

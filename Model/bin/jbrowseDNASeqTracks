@@ -7,7 +7,7 @@ use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 
 # TODO: remove gusHome from command line arg
-my ($gusHome, $organismAbbrev, $study, $projectName, $buildNumber) = @ARGV;
+my ($gusHome, $organismAbbrev, $study, $projectName, $hasCNVData) = @ARGV;
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
 my $dbh = $jbrowseUtil->getDbh();   
@@ -29,7 +29,11 @@ while(my ($sampleDataset, $publicAbbrev, $studyDisplayName) = $sh->fetchrow_arra
 
   my ($sampleName) = $sampleDataset =~ /${study}_(.+)_HTS_SNPSample_RSRC$/;
 
-  my $bamUrl = "/a/jbrowse/eupath_data/webServices/$projectName/build-$buildNumber/$publicAbbrev/bam/$study/$sampleName/result.bam";
+
+  my $bamUrl = "/a/service/jbrowse/store?data=$publicAbbrev/bam/$study/$sampleName/result.bam"; 
+
+  my $copyNumberDataset = "${organismAbbrev}_copyNumberVariations_${study}_RSRC";
+  my $cnvBWUrl = "/a/service/jbrowse/store?data=$publicAbbrev/bigwig/$copyNumberDataset/$sampleName.bw"; 
 
   my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
                    urlTemplate => $bamUrl,
@@ -46,6 +50,7 @@ while(my ($sampleDataset, $publicAbbrev, $studyDisplayName) = $sh->fetchrow_arra
 
   my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BAM",
                   urlTemplate => $bamUrl,
+                  yScalePosition => "left",
                   key => "$sampleName Coverage",
                   label => "$sampleName Coverage",
                   chunkSizeLimit => 20000000,
@@ -60,9 +65,31 @@ while(my ($sampleDataset, $publicAbbrev, $studyDisplayName) = $sh->fetchrow_arra
 
   };
 
+
+  
+  my $cnvCoverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
+                     urlTemplate => $cnvBWUrl,
+                     yScalePosition => "left",
+                     key => "$sampleName Coverage normalised to chromosome copy number (ploidy)",
+                     label => "$sampleName Coverage normalised to chromosome copy number (ploidy)",
+                     type => "JBrowse/View/Track/Wiggle/XYPlot",
+                     category => "Genetic Variation",
+                     min_score => 0,
+                     autoscale => "local",
+                     style => {
+                       "pos_color"         => "black",
+                       "clip_marker_color" =>  "red",
+                     },
+                     metadata => {
+                       subcategory => 'DNASeq',
+                       dataset => $studyDisplayName,
+                       track => 'Coverage (ploidy Normalized)',
+                     },
+  };
+
   push @{$result->{tracks}}, $alignment;
   push @{$result->{tracks}}, $coverage;
-
+  push @{$result->{tracks}}, $cnvCoverage if(lc $hasCNVData eq "true");;
 }
 
 print encode_json($result);
