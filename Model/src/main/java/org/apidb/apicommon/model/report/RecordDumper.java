@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.report;
 
 import java.io.File;
