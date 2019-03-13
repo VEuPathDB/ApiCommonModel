@@ -9,9 +9,6 @@ public class UnannotatedGenome extends DatasetInjector {
   @Override
   public void injectTemplates() {
       injectTemplate("jbrowseCommon");
-      injectTemplate("jbrowseRNASeq");
-      injectTemplate("jbrowseDNASeq");
-      injectTemplate("jbrowseIntronJunctions");
   }
 
   @Override
