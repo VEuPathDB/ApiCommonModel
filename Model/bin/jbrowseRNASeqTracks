@@ -7,18 +7,38 @@ use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 
 # TODO: remove gusHome from command line arg
-my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir) = @ARGV;
+my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType) = @ARGV;
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
 
 my $dbh = $jbrowseUtil->getDbh();   
 
-my $sql = "select dsp.name, prop.property, prop.value
+my ($sql, $category, $covMaxScoreDefault, $multiCovScale);
+if($technologyType eq 'ChIPSeq') {
+  $sql = "select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_chipSeq_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+";
+  $category = 'Epigenomics';
+  $covMaxScoreDefault = 200;
+  $multiCovScale = "linear";
+}
+elsif($technologyType eq 'ChIPSeq') {
+  $sql = "select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
 where dsp.name like '${organismAbbrev}%_rnaSeq_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
 ";
+  $category = 'Transcriptomics';
+  $covMaxScoreDefault = 1000;
+  $multiCovScale = "log";
+}
+else {
+  die "technologyType must be either RNASeq or ChIPSeq";
+}
 
 my $sh = $dbh->prepare($sql);
 $sh->execute();
@@ -74,6 +94,7 @@ foreach my $datasetName (keys %allStudyProperties) {
     if(/^display_name\s*=\s*(.+)$/) {
       $displayName = $1;
       $displayName =~ s/^\S+ - //; #remove everything to the first " - "
+      $displayName =~ s/ \(\)//; # remove open/close parens
     }
     if(/^alignment\s*=\s*(.+)$/) {
       $alignment = $1;
@@ -92,7 +113,7 @@ foreach my $datasetName (keys %allStudyProperties) {
   my $multiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
                      urlTemplates => \@multiUrls,
                      showTooltips => "true",
-                     category => "Transcriptomics",
+                     category => "$category",
                      key => $studyProperties{datasetDisplayName} . " Density",
                      label => $studyProperties{datasetDisplayName} . " Density",
                      type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
@@ -100,9 +121,9 @@ foreach my $datasetName (keys %allStudyProperties) {
                        pos_color => "black",
                        neg_color => "white"
                      },
-                           scale => "log",
+                           scale => $multiCovScale,
                            metadata => {
-                             subcategory => 'RNASeq',
+                             subcategory => $technologyType,
                              dataset => $studyDisplayName,
                              track => 'Multi-Density'
                        },
@@ -112,7 +133,7 @@ foreach my $datasetName (keys %allStudyProperties) {
   my $uniqueMultiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
                            urlTemplates => \@uniqueOnlyUrls,
                            showTooltips => "true",
-                           category => "Transcriptomics",
+                           category => "$category",
                            key => $studyProperties{datasetDisplayName} . " Density - Unique",
                            label => $studyProperties{datasetDisplayName} . " Density - Unique",
                            type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
@@ -120,20 +141,17 @@ foreach my $datasetName (keys %allStudyProperties) {
                              pos_color => "black",
                              neg_color => "white"
                            },
-                                 scale => "log",
+                                 scale => $multiCovScale,
                                  metadata => {
-                                   subcategory => 'RNASeq',
+                                   subcategory => $technologyType,
                                    dataset => $studyDisplayName,
                                    track => 'Multi-Density'
                              },
                                        
   };
 
-
-
-
   push @{$result->{tracks}}, $multiBigWig;
-  push @{$result->{tracks}}, $uniqueMultiBigWig;
+  push @{$result->{tracks}}, $uniqueMultiBigWig if($technologyType eq 'RNASeq');;
 
   if(lc($studyProperties{showIntronJunctions}) eq 'true') {
     my $junctions = {storeClass => "JBrowse/Store/SeqFeature/REST",
@@ -141,10 +159,10 @@ foreach my $datasetName (keys %allStudyProperties) {
                      type => "JBrowse/View/Track/HTMLFeatures",
                      key => "$studyDisplayName Intron Junctions",
                      label => "$studyDisplayName Intron Junctions",
-                     category => "Transcriptomics",
+                     category => "$category",
                      maxFeatureScreenDensity => 0.01,
                      metadata => {
-                       subcategory => 'RNASeq',
+                       subcategory => $technologyType,
                        dataset => $studyDisplayName,
                        track => 'Predicted Intron Junctions',
                      },
@@ -167,6 +185,41 @@ foreach my $datasetName (keys %allStudyProperties) {
     };
     
     push @{$result->{tracks}}, $junctions;
+  }
+
+  if(lc($studyProperties{hasCalledPeaks}) eq 'true') {
+    my $subTrackAttr = $studyProperties{subTrackAttr};
+
+    my $chipSeqPeaks = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                        baseUrl => "/a/service/jbrowse",
+                        type => "JBrowse/View/Track/CanvasFeatures",
+                        key => "$studyDisplayName Called Peaks",
+                        label => "$studyDisplayName Called Peaks",
+                        category => "$category",
+                        maxFeatureScreenDensity => 0.03,
+                        metadata => {
+                          subcategory => $technologyType,
+                          dataset => $studyDisplayName,
+                          track => 'Peak',
+                        },
+                        style => {
+                          'color' => "{chipColorFxn}",
+                          'height' => 8,
+                        },
+                        query => {'feature' => "ChIP:ChIPSeqPeaks",
+                                  'exp' => $datasetName,
+                                  'sub' => $subTrackAttr,
+                        },
+                     onClick => {
+                       content => "{peakTitleChipSeqFxn}",
+                     },
+                     menuTemplate => [
+                       {label => "View Details", 
+                        content => "{peakTitleChipSeqFxn}",
+                       },
+                         ],
+    };
+    push @{$result->{tracks}}, $chipSeqPeaks;
   }
 
 }
@@ -195,22 +248,25 @@ sub addConfiguration {
                   key => "$displayName Coverage",
                   label => "$displayName Coverage",
                   type => "JBrowse/View/Track/Wiggle/XYPlot",
-                  category => "Transcriptomics",
+                  category => "$category",
                   min_score => 0,
-                  max_score => 1000,
+                  max_score => $covMaxScoreDefault,
 #                  autoscale => "local",
                   style => {
                     "pos_color"         => $color,
                     "clip_marker_color" =>  "black",
                   },
                   metadata => {
-                    'strand' => $strand,
-                    'alignment' => $alignment,
-                    subcategory => 'RNASeq',
+                    subcategory => $technologyType,
                     dataset => $studyDisplayName,
                     track => 'Coverage'
                   },
   };
+
+  if($technologyType eq 'RNASeq') {
+    $coverage->{metadata}->{strand} = $strand;
+    $coverage->{metadata}->{alignment} = $alignment;
+  }
 
   my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color, alignment => $alignment};
   push @{$result->{tracks}}, $coverage;
