@@ -86,7 +86,7 @@ public class GenBankReporter extends PagedAnswerReporter {
             Question geneQuestion = (Question) _wdkModel.resolveReference(geneQuestionName);
             AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(_baseAnswer.getUser(),
                 AnswerSpec.builder(_wdkModel)
-                .setQuestionName(geneQuestion.getFullName())
+                .setQuestionFullName(geneQuestion.getFullName())
                 .setParamValues(params)
                 .buildRunnable(_baseAnswer.getUser(),
                     _baseAnswer.getAnswerSpec().getStepContainer()),

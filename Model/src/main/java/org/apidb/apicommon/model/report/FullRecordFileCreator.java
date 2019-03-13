@@ -122,7 +122,7 @@ public class FullRecordFileCreator extends BaseCLI {
           User user = wdkModel.getSystemUser();
           Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
           AnswerValue answerValue = AnswerValueFactory.makeAnswer(user,
-              AnswerSpec.builder(wdkModel).setQuestionName(question.getFullName())
+              AnswerSpec.builder(wdkModel).setQuestionFullName(question.getFullName())
                 .buildRunnable(user, StepContainer.emptyContainer()));
   
           OutputStream out = new FileOutputStream(dumpFile);

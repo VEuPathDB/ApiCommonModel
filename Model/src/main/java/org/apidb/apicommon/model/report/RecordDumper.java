@@ -133,7 +133,7 @@ public class RecordDumper {
 
         AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(user,
             AnswerSpec.builder(wdkModel)
-            .setQuestionName(question.getFullName())
+            .setQuestionFullName(question.getFullName())
             .setQueryInstanceSpec(params)
             .buildRunnable(user, StepContainer.emptyContainer()));
 
