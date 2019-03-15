@@ -1,0 +1,215 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+use Data::Dumper;
+
+my ($organismAbbrev, $projectName) = @ARGV;
+
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+
+my $dbh = $jbrowseUtil->getDbh();   
+
+my $result = {"tracks" => [] };
+
+my $datasetProperties = &datasetProperties($dbh);
+
+&addChipChipTracks($dbh, $result, $datasetProperties);
+&addUnifiedMassSpec($dbh, $result);
+
+
+print encode_json($result);
+
+
+sub datasetProperties {
+  my ($dbh) = @_;
+
+  my $sql = "select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_chipChipExper%_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  my %datasetProperties;
+  while(my ($datasetName, $prop, $val) = $sh->fetchrow_array()) {
+    $datasetProperties{$datasetName}->{$prop} = $val;
+  }
+  $sh->finish();
+
+  return \%datasetProperties;
+}
+
+
+sub addUnifiedMassSpec {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select count(*) from apidbtuning.datasetpresenter where name like '%massSpec%'";
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my $massSpecCount = $sh->fetchrow_array();
+  $sh->finish();
+
+  if($massSpecCount > 0) {
+    my $unifiedMassSpecTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                                baseUrl => "/a/service/jbrowse",
+                                type => "JBrowse/View/Track/CanvasFeatures",
+                                key => "All MS/MS Peptides",
+                                label => "All MS/MS Peptides",
+                                maxFeatureScreenDensity => 0.01,
+                                region_feature_densities => "{true}",
+                                category => "Proteomics",
+                                displayMode => "compact",
+                                style => {
+                                  color => "{massSpecColor}",
+                                },
+                                metadata => {
+                                  subcategory => "Protein Expression",
+                                  track => 'Segments',
+                                },
+                                query => {'feature' => "domain:UnifiedMassSpecPeptides",
+                                },
+                                onClick => {
+                                  content => "{massSpecDetails}",
+                                },
+                                menuTemplate => [
+                                  {label => "View Details", 
+                                   content => "{massSpecDetails}",
+                                  },
+                                    ],
+    };
+
+    push @{$result->{tracks}}, $unifiedMassSpecTrack;
+
+  }
+
+
+}
+
+sub addChipChipTracks {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  my $sql = "select d.name, s.name, pan.name, pan.protocol_app_node_id
+from study.study s
+   , SRES.EXTERNALDATABASERELEASE r
+   , SRES.EXTERNALDATABASE d
+   , study.protocolappnode pan
+   , study.studylink sl
+where d.name like '%_chipChipExper_%'
+and s.EXTERNAL_DATABASE_RELEASE_ID = r.EXTERNAL_DATABASE_RELEASE_ID
+and r.EXTERNAL_DATABASE_ID = d.EXTERNAL_DATABASE_ID
+and s.study_id = sl.study_id
+and sl.protocol_app_node_id = pan.PROTOCOL_APP_NODE_ID";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  my %seenDataset;
+
+  while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
+    if(!$seenDataset{$dataset} && $panName =~ /_peaks \(ChIP-chip\)/) {
+      my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties);
+      push @{$result->{tracks}}, $peakTrack;
+      $seenDataset{$dataset} = 1;
+    }
+    if($panName =~ /_smoothed \(ChIP-chip\)/) {
+      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties);
+      push @{$result->{tracks}}, $track;
+    }
+  }
+ 
+  $sh->finish();
+}
+
+
+sub makeChipChipPeak {
+  my ($dataset, $study, $panName, $panId, $datasetProperties) = @_;
+
+  my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+
+  my $datasetKey = $datasetProperties->{$dataset}->{key};
+  my $key = $datasetKey ? "${datasetDisplayName} Called Peaks ${datasetKey}" : "${datasetDisplayName} Called Peaks"; 
+
+  my $subTrackAttr = $datasetProperties->{$dataset}->{subTrackAttr};
+
+  my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
+  
+  my $colorFunction = $cutoff ? "colorSegmentByScoreFxn" : "chipColorFxn";
+
+  my $peaks = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                  baseUrl => "/a/service/jbrowse",
+                  type => "JBrowse/View/Track/CanvasFeatures",
+                  key => $key,
+                  label => $key,
+                  category => "Epigenomics",
+                  style => {
+                    color => "{chipColorFxn}",
+                  },
+                  metadata => {
+                    subcategory => "ChIP chip",
+                    dataset => $datasetDisplayName,
+                    track => 'Segments',
+                  },
+                  query => {'feature' => "ChIP:ChIPchip_peaks",
+                            'exp' => $dataset,
+                            'sub' => $subTrackAttr,
+                            'cutoff' => $cutoff,
+                  },
+               onClick => {
+                 content => "{peakTitleChipSeqFxn}",
+               },
+               menuTemplate => [
+                 {label => "View Details", 
+                  content => "{peakTitleChipSeqFxn}",
+                 },
+                   ],
+    };
+
+
+  return $peaks;
+
+
+}
+
+sub makeChipChipSmoothed {
+  my ($dataset, $study, $panName, $panId, $datasetProperties) = @_;
+
+  my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+#  my $datasetKey = $datasetProperties->{$dataset}->{key};
+#  my $key = $datasetKey ? "${panName} ${datasetKey}" : $panName; # no longer valid??
+  my $key = $panName;
+  my $subTrackAttr = $datasetProperties->{$dataset}->{subTrackAttr};
+
+  my $smoothed = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                  baseUrl => "/a/service/jbrowse",
+                  type => "JBrowse/View/Track/Wiggle/XYPlot",
+                  key => $key,
+                  label => $key,
+                  category => "Epigenomics",
+                  style => {
+                    pos_color => "{chipColorFxn}",
+                    neg_color => "{chipColorFxn}"
+                  },
+                  metadata => {
+                    subcategory => "ChIP chip",
+                    dataset => $datasetDisplayName,
+                    track => 'XYPlot',
+                  },
+                  query => {'feature' => "ChIP:ChIPchip_smoothedjbrowse",
+                            'exp' => $dataset,
+                            'sub' => $subTrackAttr,
+                            'panId' => $panId
+                  },
+                  max_score => 3,
+                  min_score => -3,
+    };
+
+
+  return $smoothed;
+}
+
+
