@@ -18,6 +18,7 @@ my $datasetProperties = &datasetProperties($dbh);
 
 &addChipChipTracks($dbh, $result, $datasetProperties);
 &addUnifiedMassSpec($dbh, $result);
+&addUnifiedSnp($dbh, $result);
 
 
 print encode_json($result);
@@ -44,11 +45,59 @@ and dsp.dataset_presenter_id = prop.dataset_presenter_id";
   return \%datasetProperties;
 }
 
+sub addUnifiedSnp {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select count(*) from apidbtuning.datasetpresenter where name like '${organismAbbrev}%HTS_SNP_%'";
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my $snpCount = $sh->fetchrow_array();
+  $sh->finish();
+
+  if($snpCount > 0) {
+    my $snpTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                    baseUrl => "/a/service/jbrowse",
+                    type => "JBrowse/View/Track/CanvasFeatures",
+                    glyph => "SNPDiamond/View/FeatureGlyph/Diamond",
+                    key => "SNPs by coding potential",
+                    label => "SNPs by coding potential",
+                    maxFeatureScreenDensity => 0.01,
+                    region_feature_densities => "function(){return true}",
+                    category => "Genetic Variation",
+                    displayMode => "normal",
+                    style => {
+                      borderColor => "black",
+                      color => "{snpColorFxn}",
+                      strandArrow => "function(){return false}",
+                      labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+                    },
+                    metadata => {
+                      subcategory => "DNA polymorphism",
+                      track => 'Diamond',
+                    },
+                    query => {'feature' => "SNP:Population",
+                              'edname' => 'InsertSnps.pm NGS SNPs INTERNAL'
+                    },
+                     onClick => {
+                       content => "{snpTitleFxn}",
+                     },
+                    # menuTemplate => [
+                    #   {label => "View Details", 
+                    #    content => "{massSpecDetails}",
+                    #   },
+                    #     ],
+    };
+
+    push @{$result->{tracks}}, $snpTrack;
+
+  }
+
+}
 
 sub addUnifiedMassSpec {
   my ($dbh, $result) = @_;
 
-  my $sql = "select count(*) from apidbtuning.datasetpresenter where name like '%massSpec%'";
+  my $sql = "select count(*) from apidbtuning.datasetpresenter where name like '${organismAbbrev}%massSpec%'";
   my $sh = $dbh->prepare($sql);
   $sh->execute();
   my $massSpecCount = $sh->fetchrow_array();
@@ -61,7 +110,7 @@ sub addUnifiedMassSpec {
                                 key => "All MS/MS Peptides",
                                 label => "All MS/MS Peptides",
                                 maxFeatureScreenDensity => 0.01,
-                                region_feature_densities => "{true}",
+                                region_feature_densities => "function(){return true}",
                                 category => "Proteomics",
                                 displayMode => "compact",
                                 style => {
@@ -99,7 +148,7 @@ from study.study s
    , SRES.EXTERNALDATABASE d
    , study.protocolappnode pan
    , study.studylink sl
-where d.name like '%_chipChipExper_%'
+where d.name like '${organismAbbrev}%_chipChipExper_%'
 and s.EXTERNAL_DATABASE_RELEASE_ID = r.EXTERNAL_DATABASE_RELEASE_ID
 and r.EXTERNAL_DATABASE_ID = d.EXTERNAL_DATABASE_ID
 and s.study_id = sl.study_id
