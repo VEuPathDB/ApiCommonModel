@@ -16,6 +16,7 @@ public class ChIPChip extends DatasetInjector {
         setPropValue ("key", " - " + key);
     }
     injectTemplate("chipChipSmoothed");
+
     setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipSmoothed");
     injectTemplate("gbrowseTrackCategory");
 
