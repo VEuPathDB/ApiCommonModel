@@ -426,6 +426,18 @@ function snpTitle(track, feature, featureDiv) {
   return table(rows);
 }
 
+function gffKirkland(track, feature, featureDiv) {
+  var rows = new Array();
+
+  var motif = feature.data["Target"];
+  motif = motif.replace(/Motif:|,|[0-9*]/gi, "");
+ 
+  rows.push(twoColRow('Motif: ', motif))
+  rows.push(twoColRow('Score: ', feature.data["score"]))
+
+  return table(rows);
+}
+
 function repeatFamily(track, feature, featureDiv) {
   var rows = new Array();
 
