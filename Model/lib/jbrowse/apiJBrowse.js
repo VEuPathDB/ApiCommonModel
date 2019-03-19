@@ -21,6 +21,10 @@ positionString = function(refseq, start, end, strand)  {
     return refseq + ":" + start + ".." + end + " " + strandString;
 }
 
+positionNoStrandString = function(refseq, start, end)  {
+    return refseq + ":" + start + ".." + end;
+}
+
 function round(value, decimals) {
   return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
 }
@@ -418,6 +422,15 @@ function snpTitle(track, feature, featureDiv) {
 
   rows.push(twoColRow("Major Allele:", "&nbsp;" + major_allele + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + major_product + "&nbsp;&nbsp;&nbsp;&nbsp;(" + major_allele_freq + ")"));
   rows.push(twoColRow("Minor Allele:", "&nbsp;" + minor_allele + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + minor_product + "&nbsp;&nbsp;&nbsp;&nbsp;(" + minor_allele_freq + ")"));
+
+  return table(rows);
+}
+
+function repeatFamily(track, feature, featureDiv) {
+  var rows = new Array();
+
+  rows.push(twoColRow('Family:', feature.data["Family"] ));
+  rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
 
   return table(rows);
 }
