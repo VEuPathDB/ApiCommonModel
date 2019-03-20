@@ -446,3 +446,59 @@ function repeatFamily(track, feature, featureDiv) {
 
   return table(rows);
 }
+
+
+
+
+function bindingSiteTitle(track, feature, featureDiv) {
+
+//    console.log(feature);
+    var name = feature.data["Name"];
+    var start = feature.data["start"];
+    var end  = feature.data["end"];
+    var strand  = feature.data["strand"];
+    var score = feature.data["Score"];
+    var sequence = feature.data["Sequence"];
+
+  if(strand === '+1') {
+      strand = 'FORWARD';
+  }
+  else {
+      strand = 'REVERSE';
+  }
+
+    var link = "<a href='/a/images/pf_tfbs/"+ name + ".png'><img src='/a/images/pf_tfbs/" + name + ".png'  height='140' width='224' align=left/></a>";
+    var rows = new Array();
+  rows.push(twoColRow('Name:', name));
+  rows.push(twoColRow('Start:', start));
+  rows.push(twoColRow('End:', end));
+  rows.push(twoColRow('Strand:', strand));
+  rows.push(twoColRow('Score:', score));
+  rows.push(twoColRow('Sequence:', sequence));
+  rows.push(twoColRow('Click logo for larger image:', link));
+   
+    return table(rows);
+
+}
+
+function colorForBindingSitesByPvalue(feature){
+    var strand  = feature.data["strand"];
+    var pvalue = feature.data["Score"];
+
+
+if(strand == '+1') {
+        if(pvalue <= 1e-5) return 'mediumblue';
+        if(pvalue <= 5e-5) return 'royalblue';
+        if(pvalue <= 1e-4) return 'dodgerblue';
+        return 'skyblue';
+    }
+    else {
+        if(pvalue <=1e-5) return 'darkred';
+        if(pvalue <= 5e-5) return 'crimson';
+        if(pvalue <= 1e-4) return 'red';
+        return 'tomato';
+    }
+    
+}
+
+
