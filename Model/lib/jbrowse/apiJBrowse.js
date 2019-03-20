@@ -501,4 +501,46 @@ if(strand == '+1') {
     
 }
 
+function changeScaffoldType(feature) {
+    if(feature.data['Type'] == 'fgap') {
+        return 'JBrowse/View/FeatureGlyph/Segments'; 
+    }
+    return 'JBrowse/View/FeatureGlyph/Box';
+}
 
+function scaffoldColor(feature) {
+    var orient = feature.data["strand"];
+    if (orient == 1) {
+      return "orange";
+    } 
+    if (orient == -1) {
+        return "darkseagreen";
+    }
+    return "red";
+}
+
+function scaffoldHeight(feature) {
+    if(feature.data['type'] == 'gap' || feature.data['Type'] == 'fgap') {
+        return 25;
+    }
+
+    return 1;
+}
+
+
+function scaffoldDetails(track, feature) {
+    var rows = new Array();
+
+    if(feature.data["Type"] == 'fgap') {
+        feature.data["subfeatures"].forEach(function(element) {
+            rows.push(twoColRow('Gap Position:', positionNoStrandString(track.refSeq.name, element.data["start"], element.data["end"])));
+        });
+
+    }
+    else {
+        rows.push(twoColRow('Name:', feature.data["name"]));
+        rows.push(twoColRow('Position:', positionString(track.refSeq.name, feature.data["start"], feature.data["end"], feature.data["strand"])));
+    }
+   
+    return table(rows);
+}
