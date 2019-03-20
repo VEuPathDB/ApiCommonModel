@@ -447,8 +447,17 @@ function repeatFamily(track, feature, featureDiv) {
   return table(rows);
 }
 
+function transposon(track, feature, featureDiv) {
+  var rows = new Array();
 
+    console.log(feature);
+    rows.push(twoColRow('Transposable Element:', feature.data["name"] ));
+    rows.push(twoColRow('Name:', feature.data["te_name"] ));
+    rows.push(twoColRow('Size:', feature.data["alignLength"] ));
+    rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
 
+    return table(rows);
+}
 
 function bindingSiteTitle(track, feature, featureDiv) {
 
