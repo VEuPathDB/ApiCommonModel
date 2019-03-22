@@ -587,3 +587,13 @@ function genericEndFeatureTitle(track, feature, trackType) {
   });
    return table(rows);
 }
+
+function arrayElementTitle (track, feature, type) { 
+  var rows = new Array();
+
+  rows.push(twoColRow("Name:" , feature.data["SourceId"]));
+  rows.push(twoColRow("Probe Type:" , type));
+  rows.push(twoColRow("Position:" , positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
+
+  return table(rows);
+}
