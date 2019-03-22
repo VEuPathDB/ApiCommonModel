@@ -16,13 +16,19 @@ use Data::Dumper;
 
 my $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
 
-# TODO: remove gusHome from command line arg
-my ($gusHome, $refseqName, $start, $end, $feature) = @ARGV;
 
+my ($gusHome, $projectId, $refseqName, $start, $end, $feature, @queryParams) = @ARGV;
 
+my %qp;
+foreach my $p (@queryParams) {
+  next if($p =~ /select/i);
+  my ($key, $value) = split(/=/, $p);
+  $qp{$key} = $value;
+}
 
-# TODO: Get project as command line arg
-my $modelConfig = new WDK::Model::ModelConfig("PlasmoDB");
+my $basesPerBin = $qp{basesPerBin} + 0;
+
+my $modelConfig = new WDK::Model::ModelConfig($projectId);
 
 my $xml = XMLin($gbrowseXmlFile);
 
@@ -52,7 +58,7 @@ if($feature eq "ReferenceSequence") {
   $featureSql = "select substr(sequence, $start, $length) as seq, $start -1 as startm, $end -1 as end, '$refseqName' as feature_id from apidbtuning.genomicsequencesequence where source_id = '$refseqName'"
 }
 else {
-  $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId);
+  $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId, \@queryParams);
 }
 
 
@@ -61,10 +67,16 @@ $sh->execute();
 
 my %lookup;
 
+my ($minStart, $maxEnd);
+
 while(my $hash = $sh->fetchrow_hashref("NAME_lc")) {
 
   $hash->{start} = $hash->{startm} + 0;
   $hash->{end} = $hash->{end} + 0;
+
+  $minStart = $hash->{start} if(!defined($minStart) || $hash->{start} < $minStart);
+  $maxEnd = $hash->{end} if(!defined($maxEnd) || $hash->{end} > $maxEnd);
+
   if($hash->{atts}) {
     my @atts = split(';', $hash->{atts});
     foreach(@atts) {
@@ -85,8 +97,8 @@ while(my $hash = $sh->fetchrow_hashref("NAME_lc")) {
 
 my $bulkSubfeature = "$feature:bulksubfeatures";
 my $bulkSubfeatureSql =  $xml->{module}->{'Feature.pm'}->{sqlQuery}->{$bulkSubfeature}->{sql};
-if($bulkSubfeatureSql) {
-  $bulkSubfeatureSql = &makeSql($bulkSubfeatureSql, $start, $end, $seqId);
+if(scalar @{$result->{features}} > 0 && $bulkSubfeatureSql) {
+  $bulkSubfeatureSql = &makeSql($bulkSubfeatureSql, $minStart, $maxEnd, $seqId, \@queryParams);
   my $bsh = $dbh->prepare($bulkSubfeatureSql);
   $bsh->execute();
 
@@ -94,16 +106,76 @@ if($bulkSubfeatureSql) {
     my $parent = $lookup{$hash->{parent_id}};
     $hash->{start} = $hash->{startm};
 
-    push @{$parent->{subfeatures}}, $hash;
+    if($hash->{atts}) {
+      my @atts = split(';', $hash->{atts});
+      foreach(@atts) {
+        my ($key, $value) = split("=", $_);
+        $hash->{$key} = $value;
+      }
+    }
+
+    if($hash->{tstarts}) {
+      my @tstarts = map { s/\s+//g; $_+1 } split /,/, $hash->{tstarts};
+      my @blocksizes = map { s/\s+//g; $_ } split /,/, $hash->{blocksizes};
+      my $counter = 0;
+      foreach my $start (@tstarts) {
+        my $end = $start + $blocksizes[$counter] - 1;
+
+        my %tmp = %$hash;
+        $tmp{feature_id} = $tmp{feature_id} . "_$counter";
+        $tmp{name} = $tmp{name} . "_$counter";
+        $tmp{start} = $start;
+        $tmp{end} = $end;
+        push @{$parent->{subfeatures}}, \%tmp;
+        $counter = $counter + 1;
+      }
+    }
+    else {
+      push @{$parent->{subfeatures}}, $hash;
+    }
   }
 }
+
+if($basesPerBin) {
+  my $binCount = ($end - $start) / $basesPerBin;
+
+  my %bins;
+
+  foreach my $feature (@{$result->{features}}) {
+    my $startBin = int(($feature->{start} - $start) / $basesPerBin);
+    my $endBin = int(($feature->{end} - $start) / $basesPerBin);
+
+    $bins{$startBin}++;
+    if($startBin != $endBin) {
+      $bins{$endBin}++;
+    }
+  }
+
+  my $maxBin = 0;
+  my @sortedBinValues;
+  for(my $i = 0; $i < $binCount; $i++) {
+    my $value = $bins{$i} ? $bins{$i} : 0;
+
+    $maxBin = $value if($value > $maxBin);
+    push @sortedBinValues, $value;
+  }
+
+  $result = {
+    "bins" =>  \@sortedBinValues,
+    "stats" => {
+      "basesPerBin" => $basesPerBin,
+      "max"=> $maxBin
+    }
+  };
+}
+
 
 print encode_json($result);
 
 $dbh->disconnect();
 
 sub makeSql {
-  my ($sql, $start, $end, $seqId) = @_;
+  my ($sql, $start, $end, $seqId, $queryParams) = @_;
 
   my $dlm = '|';
 
@@ -111,6 +183,13 @@ sub makeSql {
   $sql =~ s/\$rend/$end/g;
   $sql =~ s/\$dlm/;/g;
   $sql =~ s/\$srcfeature_id/$seqId/g;
+
+  foreach my $p (@$queryParams) {
+    next if($p =~ /select/i);
+    my ($key, $value) = split(/=/, $p);
+    $sql =~ s/\$\$${key}\$\$/${value}/g;
+  }
+
 
   return $sql
 }

@@ -85,6 +85,24 @@ FROM APIDBTUNING.TRANSCRIPTATTRIBUTES ta
 
 
 
+       <sqlQuery name="StringDBProtein">
+         <column name="source_id"/>
+         <column name="project_id"/>
+         <column name="protein_source_id"/>
+	 <column name="jsonString"/>
+
+         <sql>
+         <![CDATA[
+select ta.gene_source_id as source_id,ta.project_id, ta.protein_source_id,
+(select '[' || listagg('[' || ncbi_tax_id || ', "' || official_name_ncbi || '"]', ', ') within group (order by official_name_ncbi) || ']' as json from apidbTuning.Stringdb  where is_eupath_organism = 1) as jsonString
+from apidbTuning.TranscriptAttributes ta
+
+         ]]>
+         </sql>
+       </sqlQuery>
+
+
+
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Gene Transcripts -->
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -239,7 +257,7 @@ SELECT
 , listagg(ta.source_id, ', ') within GROUP(ORDER BY ta.source_id) AS transcript_ids
 , ec.ec_number
 , ec.description AS ec_description
-, DECODE(asec.evidence_code, 'OrthoMCLDerived', 'inferred from OrthoMCL', 'gb', 'GenBank', 'Hagai', 'MPMP', evidence_code) AS ec_source
+, DECODE(asec.evidence_code, 'OrthoMCLDerived', 'computationally inferred from orthology', 'gb', 'GenBank', 'Hagai', 'MPMP', evidence_code) AS ec_source
 ,                    'http://enzyme.expasy.org/cgi-bin/enzyme/enzyme-search-ec?field1='
                    ||ec.ec_number_1
                    || decode(ec.ec_number_2, null, null,
@@ -249,7 +267,6 @@ SELECT
                    || decode(ec.ec_number_4, null, null,
                              chr(38) || 'field4='||ec.ec_number_4)
                    as expasy_url
-
 FROM
   apidbtuning.transcriptattributes ta
 , sres.enzymeclass ec
@@ -312,7 +329,8 @@ from apidbTuning.GeneGoTable
 select goslim.*, ga.project_id
 from (
 select go_term.source_id, go_term.ontology,
-       replace(go_term.go_id, 'GO_', 'GO:') as go_id, go_term.go_term_name, go_slim.slim_go_id,
+       REPLACE(go_term.go_id, 'GO_', 'GO:') as go_id, go_term.go_term_name,
+       REPLACE(go_slim.slim_go_id, 'GO_', 'GO:') AS slim_go_id,
        substr(apidb.tab_to_string(set(cast(collect(go_term.is_not)as apidb.varchartab)),''),1,10) as is_not, 
        go_slim.slim_go_term_name
 from (select distinct gene_source_id as source_id, ontology, go_id, go_term_id, go_term_name, is_not
@@ -546,7 +564,12 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
            apidbtuning.geneGroupProfile psgene,
            (        select 'tbruTREU927_RNAi_Horn_*rnaSeq_RSRC' as dataset,
        'RNASeq' as module,
-       'Stage/Sample' as x_axis,
+       --'Stage/Sample' as x_axis,
+       'No_Tet: uninduced control<br>
+BFD3: bloodstream-form cells grown for 3 days<br>
+BFD6: bloodstream-form cells grown for 6 days<br>
+PF: insect/procyclic-form cells<br>
+DIF: cells induced throughout growth as bloodstream forms, differentiation and growth as procyclic forms.<br>' as x_axis,
        'Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM). Stacked bars indicate unique and non-uniquely mapped sequences. Non-Unique sequences are plotted to indicate the maximum expression potential of this gene. ' y_axis,
        'false' as is_graph_custom,
        1 as order_num
@@ -1524,7 +1547,7 @@ ORDER BY
                        AND cmnts.is_visible = 1
                        ) c
                WHERE tb.gene_id = ga.gene_id
-                 AND tb.project_id = c.project_name
+                 AND tb.project_id = c.project_name(+)
                  AND tb.aa_sequence_id = ms.aa_sequence_id(+)
                  AND tb.source_id = c.stable_id(+)
                  AND tb.gene_na_feature_id = p1.na_feature_id(+)
@@ -2516,31 +2539,90 @@ FROM
             </sql>
         </sqlQuery>
  
+        <sqlQuery name="PreferredProducts" isCacheable="false" >
+            <column name="source_id"/>
+            <column name="transcript_ids"/>
+            <column name="project_id"/>
+            <column name="product"/>
+            <column name="reference" includeProjects="FungiDB,TriTrypDB"/>
+            <column name="evidence_code" includeProjects="FungiDB,TriTrypDB"/>
+            <column name="evidence_code_parameter" includeProjects="FungiDB,TriTrypDB"/>
+            <sql>
+            <![CDATA[
+
+
+WITH evids AS (
+  SELECT DISTINCT gaiec.go_evidence_code_id, ot.name
+  FROM  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
+  WHERE ot.ontology_term_id = gaiec.go_evidence_code_id)
+SELECT
+  ta.gene_source_id AS source_id
+, tp.product
+, ta.project_id
+, LISTAGG(source_id, ', ') WITHIN GROUP(ORDER BY source_id) AS transcript_ids
+, LISTAGG(publication, ', ') WITHIN GROUP(ORDER BY source_id) AS reference
+, e.name AS evidence_code
+, tp.with_from AS evidence_code_parameter
+FROM
+  apidb.transcriptproduct tp
+, apidbtuning.transcriptattributes ta
+, evids e
+WHERE
+  ta.na_feature_id = tp.na_feature_id
+  AND tp.is_preferred = 1
+  AND tp.evidence_code = e.go_evidence_code_id(+)
+GROUP BY
+  gene_source_id
+, ta.project_id
+, tp.product
+, tp.is_preferred
+, e.name
+, tp.with_from
+            ]]>
+            </sql>
+        </sqlQuery> 
+
         <sqlQuery name="AlternateProducts" isCacheable="false">
             <column name="source_id"/>
             <column name="transcript_ids"/>
             <column name="project_id"/>
             <column name="product"/>
             <column name="is_alternate"/>
+            <column name="reference" includeProjects="FungiDB,TriTrypDB"/>
+            <column name="evidence_code" includeProjects="FungiDB,TriTrypDB"/>
+            <column name="evidence_code_parameter" includeProjects="FungiDB,TriTrypDB"/>
             <sql>
             <![CDATA[
+
+
+WITH evids AS (
+  SELECT DISTINCT gaiec.go_evidence_code_id, ot.name
+  FROM  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
+  WHERE ot.ontology_term_id = gaiec.go_evidence_code_id)
 SELECT
   ta.gene_source_id AS source_id
 , tp.product
 , ta.project_id
 , DECODE(tp.is_preferred, 1, 'No', 0, 'Yes') AS is_alternate
-, listagg(source_id, ', ') within GROUP(ORDER BY source_id) AS transcript_ids
+, LISTAGG(source_id, ', ') WITHIN GROUP(ORDER BY source_id) AS transcript_ids
+, LISTAGG(publication, ', ') WITHIN GROUP(ORDER BY source_id) AS reference
+, e.name AS evidence_code
+, tp.with_from AS evidence_code_parameter
 FROM
   apidb.transcriptproduct tp
 , apidbtuning.transcriptattributes ta
+, evids e
 WHERE
   ta.na_feature_id = tp.na_feature_id
   AND tp.is_preferred = 0
+  AND tp.evidence_code = e.go_evidence_code_id(+)
 GROUP BY
   gene_source_id
 , ta.project_id
 , tp.product
 , tp.is_preferred
+, e.name
+, tp.with_from
             ]]>
             </sql>
         </sqlQuery> 

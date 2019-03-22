@@ -75,6 +75,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Candida","Saccharomycetes");
 			phylum.put("Chromera","Chromerida");
 			phylum.put("Clavispora","Saccharomycetes");
+			phylum.put("Cladophialophora","Eurotiomycetes");
 			phylum.put("Coccidioides","Eurotiomycetes");
 			phylum.put("Coprinopsis","Agaricomycetes");
 			phylum.put("Crithidia","Kinetoplastida");
@@ -90,6 +91,8 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Entamoeba","Amoebozoa");
 			phylum.put("Enterocytozoon","Microsporidia");
 			phylum.put("Enterospora","Microsporidia");
+			phylum.put("Exophiala","Eurotiomycetes");
+			phylum.put("Fonsecaea","Eurotiomycetes");
 			phylum.put("Fusarium","Sordariomycetes");
 			phylum.put("Giardia","Diplomonadida");
 			phylum.put("Gregarina","Apicomplexa");
@@ -109,6 +112,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Mitosporidium","Microsporidia");
 			phylum.put("Mucor","Zygomycetes");
 			phylum.put("Mus","Chordata");
+			phylum.put("Bos","Chordata");
 			phylum.put("Naegleria","Amoebozoa");
 			phylum.put("Nematocida","Microsporidia");
 			phylum.put("Neospora","Apicomplexa");
@@ -155,6 +159,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 			phylum.put("Zymoseptoria","Dothideomycetes");
 			phylum.put("Lomentospora","Sordariomycetes");
 			phylum.put("Scedosporium","Sordariomycetes");
+			phylum.put("Amphiamblys","Microsporidia");
     }
 
     // getting properties defined in .prop file
@@ -195,8 +200,8 @@ public class AnnotatedGenome extends UnannotatedGenome {
       familySpecies = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
     } else {
       species = orgs[0] + " " + orgs[1];  // for popup on distinct filter
-      orgs[1] = orgs[1].replaceAll("-", "=-");
-      orgs[1] = orgs[1].replaceAll("_", "=_");
+      orgs[1] = orgs[1].replaceAll("-", "==");
+      orgs[1] = orgs[1].replaceAll("_", "===");
       familySpecies = orgs[0] + "-" + orgs[1];  // for filter name
     }
 
