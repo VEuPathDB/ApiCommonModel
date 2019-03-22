@@ -14,12 +14,14 @@ my $dbh = $jbrowseUtil->getDbh();
 
 my $result = {"tracks" => [] };
 
-my $datasetProperties = &datasetProperties($dbh);
 
-&addChipChipTracks($dbh, $result, $datasetProperties);
+&addScaffolds($dbh, $result);
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
 
+my $datasetProperties = &datasetProperties($dbh);
+
+&addChipChipTracks($dbh, $result, $datasetProperties);
 
 print encode_json($result);
 
@@ -45,6 +47,55 @@ and dsp.dataset_presenter_id = prop.dataset_presenter_id";
   return \%datasetProperties;
 }
 
+
+sub addScaffolds {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select count(*) from dots.virtualsequence vs, apidb.organism o where o.TAXON_ID = vs.taxon_id and public_abbrev = '${organismAbbrev}'";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my $count = $sh->fetchrow_array();
+  $sh->finish();
+  if($count > 0) {
+
+    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                 baseUrl => "/a/service/jbrowse",
+                 type => "JBrowse/View/Track/CanvasFeatures",
+                 glyph => "function(feature){ return changeScaffoldType(feature)}",
+                 key => "Scaffolds",
+                 label => "Scaffolds",
+                 category => "Sequence Analysis",
+                 displayMode => "normal",
+                 subParts => "gap",
+                    style => {
+                      connectorColor => 'white',
+                      connectorThickness => '0',
+                      color => "function(feature){ return scaffoldColor(feature)}",
+                      height => "function(feature){ return scaffoldHeight(feature)}",
+                    },
+                    metadata => {
+                      subcategory => "Sequence assembly",
+                      track => 'Segments',
+                    },
+                    query => {'feature' => "scaffold:genome",
+                    },
+                     onClick => {
+                       content => "function(track, feature){ return scaffoldDetails(track, feature)}",
+                     },
+                     menuTemplate => [
+                       {label => "View Details", 
+                        content => "{massSpecDetails}",
+                       },
+                         ],
+    };
+
+    push @{$result->{tracks}}, $track;
+
+
+  }
+}
+
 sub addUnifiedSnp {
   my ($dbh, $result) = @_;
 
@@ -59,6 +110,7 @@ sub addUnifiedSnp {
                     baseUrl => "/a/service/jbrowse",
                     type => "JBrowse/View/Track/CanvasFeatures",
                     glyph => "SNPDiamond/View/FeatureGlyph/Diamond",
+		    # glyph => "JBrowse/View/FeatureGlyph/Diamond",
                     key => "SNPs by coding potential",
                     label => "SNPs by coding potential",
                     maxFeatureScreenDensity => 0.01,
@@ -81,11 +133,11 @@ sub addUnifiedSnp {
                      onClick => {
                        content => "{snpTitleFxn}",
                      },
-                    # menuTemplate => [
-                    #   {label => "View Details", 
-                    #    content => "{massSpecDetails}",
-                    #   },
-                    #     ],
+                     menuTemplate => [
+                       {label => "View Details", 
+                        content => "{snpTitleFxn}",
+                       },
+                         ],
     };
 
     push @{$result->{tracks}}, $snpTrack;

@@ -21,6 +21,10 @@ positionString = function(refseq, start, end, strand)  {
     return refseq + ":" + start + ".." + end + " " + strandString;
 }
 
+positionNoStrandString = function(refseq, start, end)  {
+    return refseq + ":" + start + ".." + end;
+}
+
 function round(value, decimals) {
   return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
 }
@@ -375,6 +379,7 @@ function snpTitle(track, feature, featureDiv) {
   var link_type = feature.data["type"];
 
   var start = feature.data["start"];
+  var end = feature.data["end"];
 
   var revArray = { 'A' : 'T', 'C' : 'G', 'T' : 'A', 'G' : 'C' };
 
@@ -398,7 +403,7 @@ function snpTitle(track, feature, featureDiv) {
 
 
   rows.push(twoColRow("SNP:", link));
-  rows.push(twoColRow("Location:", start));
+  rows.push(twoColRow("Location:", end));
   if(gene) rows.push(twoColRow("Gene:", gene));
 
   if (isCoding == 1 || /yes/i.test(isCoding)) {
@@ -418,6 +423,178 @@ function snpTitle(track, feature, featureDiv) {
 
   rows.push(twoColRow("Major Allele:", "&nbsp;" + major_allele + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + major_product + "&nbsp;&nbsp;&nbsp;&nbsp;(" + major_allele_freq + ")"));
   rows.push(twoColRow("Minor Allele:", "&nbsp;" + minor_allele + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + minor_product + "&nbsp;&nbsp;&nbsp;&nbsp;(" + minor_allele_freq + ")"));
+
+  return table(rows);
+}
+
+function gffKirkland(track, feature, featureDiv) {
+  var rows = new Array();
+
+  var motif = feature.data["Target"];
+  motif = motif.replace(/Motif:|,|[0-9*]/gi, "");
+ 
+  rows.push(twoColRow('Motif: ', motif))
+  rows.push(twoColRow('Score: ', feature.data["score"]))
+
+  return table(rows);
+}
+
+function repeatFamily(track, feature, featureDiv) {
+  var rows = new Array();
+
+  rows.push(twoColRow('Family:', feature.data["Family"] ));
+  rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
+
+  return table(rows);
+}
+
+function transposon(track, feature, featureDiv) {
+  var rows = new Array();
+
+    console.log(feature);
+    rows.push(twoColRow('Transposable Element:', feature.data["name"] ));
+    rows.push(twoColRow('Name:', feature.data["te_name"] ));
+    rows.push(twoColRow('Size:', feature.data["alignLength"] ));
+    rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
+
+    return table(rows);
+}
+
+function bindingSiteTitle(track, feature, featureDiv) {
+
+//    console.log(feature);
+    var name = feature.data["Name"];
+    var start = feature.data["start"];
+    var end  = feature.data["end"];
+    var strand  = feature.data["strand"];
+    var score = feature.data["Score"];
+    var sequence = feature.data["Sequence"];
+
+  if(strand === '+1') {
+      strand = 'FORWARD';
+  }
+  else {
+      strand = 'REVERSE';
+  }
+
+    var link = "<a href='/a/images/pf_tfbs/"+ name + ".png'><img src='/a/images/pf_tfbs/" + name + ".png'  height='140' width='224' align=left/></a>";
+    var rows = new Array();
+  rows.push(twoColRow('Name:', name));
+  rows.push(twoColRow('Start:', start));
+  rows.push(twoColRow('End:', end));
+  rows.push(twoColRow('Strand:', strand));
+  rows.push(twoColRow('Score:', score));
+  rows.push(twoColRow('Sequence:', sequence));
+  rows.push(twoColRow('Click logo for larger image:', link));
+   
+    return table(rows);
+
+}
+
+function colorForBindingSitesByPvalue(feature){
+    var strand  = feature.data["strand"];
+    var pvalue = feature.data["Score"];
+
+
+if(strand == '+1') {
+        if(pvalue <= 1e-5) return 'mediumblue';
+        if(pvalue <= 5e-5) return 'royalblue';
+        if(pvalue <= 1e-4) return 'dodgerblue';
+        return 'skyblue';
+    }
+    else {
+        if(pvalue <=1e-5) return 'darkred';
+        if(pvalue <= 5e-5) return 'crimson';
+        if(pvalue <= 1e-4) return 'red';
+        return 'tomato';
+    }
+    
+}
+
+function changeScaffoldType(feature) {
+    if(feature.data['Type'] == 'fgap') {
+        return 'JBrowse/View/FeatureGlyph/Segments'; 
+    }
+    return 'JBrowse/View/FeatureGlyph/Box';
+}
+
+function scaffoldColor(feature) {
+    var orient = feature.data["strand"];
+    if (orient == 1) {
+      return "orange";
+    } 
+    if (orient == -1) {
+        return "darkseagreen";
+    }
+    return "red";
+}
+
+function scaffoldHeight(feature) {
+    if(feature.data['type'] == 'gap' || feature.data['Type'] == 'fgap') {
+        return 25;
+    }
+
+    return 1;
+}
+
+
+function scaffoldDetails(track, feature) {
+    var rows = new Array();
+
+    if(feature.data["Type"] == 'fgap') {
+        feature.data["subfeatures"].forEach(function(element) {
+            rows.push(twoColRow('Gap Position:', positionNoStrandString(track.refSeq.name, element.data["start"], element.data["end"])));
+        });
+
+    }
+    else {
+        rows.push(twoColRow('Name:', feature.data["name"]));
+        rows.push(twoColRow('Position:', positionString(track.refSeq.name, feature.data["start"], feature.data["end"], feature.data["strand"])));
+    }
+   
+    return table(rows);
+}
+
+
+function genericEndFeatureTitle(track, feature, trackType) { 
+  var start = feature.data["start"];
+  var end  = feature.data["end"];
+  var length = end - start + 1;
+  var cname = feature.data["name"];
+
+  var rows = new Array();
+
+  rows.push(twoColRow("End-Sequenced " + trackType + ":", cname));
+  rows.push(twoColRow('Clone Size:', length));
+  rows.push(twoColRow('Clone Location:', start + ".." + end));
+  rows.push(twoColRow('<hr>', '<hr>'));
+
+  var count = 0;
+  feature.data["subfeatures"].forEach(function(element) {
+      console.log(element);
+
+    count = count + 1;
+    var name  = element.data['name']; 
+    var start = element.data['start']; 
+    var end = element.data['end']; 
+    var pct = element.data["pct"];
+    var score = element.data["score"];
+
+    rows.push(twoColRow(trackType + ' End:', name));
+    rows.push(twoColRow('Location:', start + ".." + end));
+    rows.push(twoColRow('Percent Identity:', pct + " %"));
+    rows.push(twoColRow('Score:', score));
+    if(count % 2) rows.push(twoColRow('<hr>', '<hr>'));
+  });
+   return table(rows);
+}
+
+function arrayElementTitle (track, feature, type) { 
+  var rows = new Array();
+
+  rows.push(twoColRow("Name:" , feature.data["SourceId"]));
+  rows.push(twoColRow("Probe Type:" , type));
+  rows.push(twoColRow("Position:" , positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
 
   return table(rows);
 }
