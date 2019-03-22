@@ -379,6 +379,7 @@ function snpTitle(track, feature, featureDiv) {
   var link_type = feature.data["type"];
 
   var start = feature.data["start"];
+  var end = feature.data["end"];
 
   var revArray = { 'A' : 'T', 'C' : 'G', 'T' : 'A', 'G' : 'C' };
 
@@ -402,7 +403,7 @@ function snpTitle(track, feature, featureDiv) {
 
 
   rows.push(twoColRow("SNP:", link));
-  rows.push(twoColRow("Location:", start));
+  rows.push(twoColRow("Location:", end));
   if(gene) rows.push(twoColRow("Gene:", gene));
 
   if (isCoding == 1 || /yes/i.test(isCoding)) {
