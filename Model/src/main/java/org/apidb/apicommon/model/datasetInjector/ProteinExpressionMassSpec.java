@@ -35,6 +35,8 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
 
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
+      injectTemplate("jbrowseProteinExpressionMassSpec");
+
       setPropValue("gbrowseTrackName", "MassSpecPeptides_" + getDatasetName());
       injectTemplate("gbrowseTrackCategory");
       injectTemplate("pbrowseTrackCategory");
