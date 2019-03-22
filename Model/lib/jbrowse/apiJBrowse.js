@@ -553,3 +553,37 @@ function scaffoldDetails(track, feature) {
    
     return table(rows);
 }
+
+
+function genericEndFeatureTitle(track, feature, trackType) { 
+  var start = feature.data["start"];
+  var end  = feature.data["end"];
+  var length = end - start + 1;
+  var cname = feature.data["name"];
+
+  var rows = new Array();
+
+  rows.push(twoColRow("End-Sequenced " + trackType + ":", cname));
+  rows.push(twoColRow('Clone Size:', length));
+  rows.push(twoColRow('Clone Location:', start + ".." + end));
+  rows.push(twoColRow('<hr>', '<hr>'));
+
+  var count = 0;
+  feature.data["subfeatures"].forEach(function(element) {
+      console.log(element);
+
+    count = count + 1;
+    var name  = element.data['name']; 
+    var start = element.data['start']; 
+    var end = element.data['end']; 
+    var pct = element.data["pct"];
+    var score = element.data["score"];
+
+    rows.push(twoColRow(trackType + ' End:', name));
+    rows.push(twoColRow('Location:', start + ".." + end));
+    rows.push(twoColRow('Percent Identity:', pct + " %"));
+    rows.push(twoColRow('Score:', score));
+    if(count % 2) rows.push(twoColRow('<hr>', '<hr>'));
+  });
+   return table(rows);
+}
