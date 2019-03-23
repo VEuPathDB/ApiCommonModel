@@ -427,6 +427,49 @@ function snpTitle(track, feature, featureDiv) {
   return table(rows);
 }
 
+
+
+
+function spliceSiteTitle(track, feature, featureDiv) {
+  var rows = new Array();
+  var start = feature.data["start"];
+
+  var gene = feature.data["gene_id"];
+  var utr_len = feature.data["utr_length"];
+  if (!utr_len){
+    utr_len = "N/A (within CDS)";
+  }
+  var note = "The overall count is the sum of the count per million for each sample.";
+
+  var samples = feature.data["sample_name"];
+  var ctpm = feature.data["count_per_mill"];
+  var isUniq = feature.data["is_unique"];
+  var mismatch = feature.data["avg_mismatches"];
+
+  var html = "<table><tr><th>Sample</th><th>Count per million</th></tr>";
+  var count = 0;
+
+  var samples_arr = samples.split(',');
+  var ct_arr = ctpm.split(',');
+  var arrSize = samples_arr.length;
+  for (var i = 0; i < arrSize; i++) {
+    html = html + "<tr><td>"  + samples_arr[i] + "</td><td>" + ct_arr[i] + "</td></tr>";
+    count = count + Number(ct_arr[i]);
+  }
+  html = html + "</table>";
+
+  rows.push(twoColRow("Location:", start));
+  if (gene) {rows.push(twoColRow("Gene ID:", gene))};
+  rows.push(twoColRow("UTR Length:", utr_len));
+  rows.push(twoColRow("Count:", count));
+  rows.push(twoColRow("Note:", note));
+
+  rows.push(twoColRow(" ", html));
+  
+  return table(rows);
+}
+
+
 function gffKirkland(track, feature, featureDiv) {
   var rows = new Array();
 
