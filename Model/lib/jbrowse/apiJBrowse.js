@@ -646,19 +646,22 @@ function arrayElementTitle (track, feature, type) {
   return table(rows);
 }
 
-function gene_title_gff (tip, sourceId, utrs, cdss, totScore, fiveSample, fiveScore, threeSample, threeScore) {
+function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, totScore, fiveSample, fiveScore, threeSample, threeScore) {
 
   // format into html table rows
   var rows = new Array();
     if (sourceId != null) { rows.push(twoColRow('ID:', sourceId))};
     if (totScore != null || totScore != 'NaN') { rows.push(twoColRow('Score:', totScore))};
 
+  if(fiveUtr != null) {
+      rows.push(twoColRowVAlign('5\' UTR:', fiveUtr, 'top'));
+  }
   if(cdss != null) {
       rows.push(twoColRowVAlign('CDS:', cdss, 'top'));
   }
 
-  if(utrs != null) {
-      rows.push(twoColRowVAlign('UTR:', utrs, 'top'));
+  if(threeUtr != null) {
+      rows.push(twoColRowVAlign('3\' UTR:', threeUtr, 'top'));
   }
 
     //samples and scores for models
@@ -672,17 +675,21 @@ function gene_title_gff (tip, sourceId, utrs, cdss, totScore, fiveSample, fiveSc
 
 function gffGeneFeatureTitle(track, feature) { 
     
-    console.log(feature);
+//    console.log(feature);
     
     var sourceId = feature.data["name"];
     var strand = feature.data["strand"];
 
+/*
     var utrs = feature.data["subfeatures"].filter(function(sf) {
                                                   return sf.data["type"] === "UTR"
     }).map(x => (strand == "1" ? "" : "complement(") + x.data["start"] + ".." + x.data["end"] + (strand == "1" ? "" :")")).join("</br>");
     var cdss = feature.data["subfeatures"].filter(function(sf) {
                                                   return sf.data["type"] === "CDS"
     }).map(x => (strand == "1" ? "" : "complement(") + x.data["start"] + ".." + x.data["end"] + (strand == "1" ? "" :")")).join("</br>");
+*/
+    var model = new Array();
+    model = orientAndGetUtrsAndCDS(strand,feature.data["subfeatures"]);
 
     //  CRAIG samples and scores
     var five_sample = feature.data["FiveUTR_Sample"];
@@ -692,8 +699,47 @@ function gffGeneFeatureTitle(track, feature) {
     
     var totScore = feature.data["score"];
 
-    return gene_title_gff(this,sourceId,utrs,cdss,totScore,five_sample,five_score,three_sample,three_score);
+    return gene_title_gff(this,sourceId,model[0],model[1],model[2],totScore,five_sample,five_score,three_sample,three_score);
 
 }
 
 
+
+//will return oriented cds, 5pUtr and 3pUtr
+function orientAndGetUtrsAndCDS(strand, exons){
+    var utr = exons.filter(function(sf) { return sf.data["type"] === "UTR" });
+    var cds = exons.filter(function(sf) { return sf.data["type"] === "CDS" });
+    var ret = new Array();
+    if(strand == '-1'){
+        utr.reverse();
+        cds.reverse();
+        ret.push(getFiveUtr(strand,utr,cds[0].data["end"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
+        ret.push(cds.map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
+        ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["start"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
+    }else{
+        ret.push(getFiveUtr(strand,utr,cds[0].data["start"]).map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
+        ret.push(cds.map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
+        ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["end"]).map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
+    }
+    return(ret);
+}
+
+function getFiveUtr(strand,utr,cdsStart){
+    var five = new Array();
+    if(strand == '-1'){
+        five = utr.filter(function(sf) { return sf.data["start"] >= cdsStart });
+    }else{
+        five = utr.filter(function(sf) { return sf.data["end"] <= cdsStart });
+    }
+    return(five);
+}
+
+function getThreeUtr(strand,utr,cdsEnd){
+    var three = new Array();
+    if(strand == '-1'){
+        three = utr.filter(function(sf) { return sf.data["end"] <= cdsEnd });
+    }else{
+        three = utr.filter(function(sf) { return sf.data["start"] >= cdsEnd });
+    }
+    return(three);
+}
