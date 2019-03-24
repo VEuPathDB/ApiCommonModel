@@ -44,7 +44,7 @@ function titleCase(str) {
 /****** Pop-up functions for various record types ******/
 
 // Gene title
-function gene_title (tip, projectId, sourceId, chr, loc, soTerm, product, taxon, utr, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid ) {
+function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon, utrFive, utrThree, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid ) {
 
   // In ToxoDB, sequences of alternative gene models have to be returned
   var ignore_gene_alias = 0;
@@ -80,12 +80,16 @@ function gene_title (tip, projectId, sourceId, chr, loc, soTerm, product, taxon,
     exon_or_cds = 'CDS:';
   }
 
-  if(loc != null) {
-      rows.push(twoColRowVAlign(exon_or_cds, loc, 'top'));
+  if(utrFive != null && utrFive != '') {
+      rows.push(twoColRowVAlign('5\' UTR:', utrFive, 'top'));
   }
 
-  if(utr != null) {
-      rows.push(twoColRowVAlign('UTR:', utr, 'top'));
+  if(cds != null) {
+      rows.push(twoColRowVAlign(exon_or_cds, cds, 'top'));
+  }
+
+  if(utrThree != null && utrThree != '') {
+      rows.push(twoColRowVAlign('3\' UTR:', utrThree, 'top'));
   }
   // TO FIX for GUS4
   //  rows.push(twoColRow(GbrowsePopupConfig.saveRowTitle, getSaveRowLinks(projectId, sourceId)));
@@ -653,7 +657,7 @@ function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, cdsJoin, totSco
     if (sourceId != null) { rows.push(twoColRow('ID:', sourceId))};
     if (totScore != null || totScore != 'NaN') { rows.push(twoColRow('Score:', totScore))};
 
-  if(fiveUtr != null) {
+  if(fiveUtr != null && fiveUtr != '') {
       rows.push(twoColRowVAlign('5\' UTR:', fiveUtr, 'top'));
   }
   if(cdss != null) {
@@ -664,7 +668,7 @@ function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, cdsJoin, totSco
       rows.push(twoColRowVAlign('CDS:', cdsJoin, 'top'));
   }
 
-  if(threeUtr != null) {
+  if(threeUtr != null && threeUtr != '') {
       rows.push(twoColRowVAlign('3\' UTR:', threeUtr, 'top'));
   }
 
