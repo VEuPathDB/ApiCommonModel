@@ -646,7 +646,7 @@ function arrayElementTitle (track, feature, type) {
   return table(rows);
 }
 
-function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, totScore, fiveSample, fiveScore, threeSample, threeScore) {
+function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, cdsJoin, totScore, fiveSample, fiveScore, threeSample, threeScore) {
 
   // format into html table rows
   var rows = new Array();
@@ -658,6 +658,10 @@ function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, totScore, fiveS
   }
   if(cdss != null) {
       rows.push(twoColRowVAlign('CDS:', cdss, 'top'));
+  }
+
+  if(cdsJoin != null) {
+      rows.push(twoColRowVAlign('CDS:', cdsJoin, 'top'));
   }
 
   if(threeUtr != null) {
@@ -680,16 +684,7 @@ function gffGeneFeatureTitle(track, feature) {
     var sourceId = feature.data["name"];
     var strand = feature.data["strand"];
 
-/*
-    var utrs = feature.data["subfeatures"].filter(function(sf) {
-                                                  return sf.data["type"] === "UTR"
-    }).map(x => (strand == "1" ? "" : "complement(") + x.data["start"] + ".." + x.data["end"] + (strand == "1" ? "" :")")).join("</br>");
-    var cdss = feature.data["subfeatures"].filter(function(sf) {
-                                                  return sf.data["type"] === "CDS"
-    }).map(x => (strand == "1" ? "" : "complement(") + x.data["start"] + ".." + x.data["end"] + (strand == "1" ? "" :")")).join("</br>");
-*/
-    var model = new Array();
-    model = orientAndGetUtrsAndCDS(strand,feature.data["subfeatures"]);
+    var model = orientAndGetUtrsAndCDS(strand,feature.data["subfeatures"]);
 
     //  CRAIG samples and scores
     var five_sample = feature.data["FiveUTR_Sample"];
@@ -699,13 +694,13 @@ function gffGeneFeatureTitle(track, feature) {
     
     var totScore = feature.data["score"];
 
-    return gene_title_gff(this,sourceId,model[0],model[1],model[2],totScore,five_sample,five_score,three_sample,three_score);
+    return gene_title_gff(this,sourceId,model[0],model[1],model[2],model[3],totScore,five_sample,five_score,three_sample,three_score);
 
 }
 
 
 
-//will return oriented cds, 5pUtr and 3pUtr
+//will return oriented 5pUtr, cds and 3pUtr
 function orientAndGetUtrsAndCDS(strand, exons){
     var utr = exons.filter(function(sf) { return sf.data["type"] === "UTR" });
     var cds = exons.filter(function(sf) { return sf.data["type"] === "CDS" });
@@ -716,10 +711,12 @@ function orientAndGetUtrsAndCDS(strand, exons){
         ret.push(getFiveUtr(strand,utr,cds[0].data["end"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
         ret.push(cds.map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
         ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["start"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
+        ret.push("complement(" + (cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["end"] + '..' + x.data["start"])).join(", ") + (cds.length > 1 ? ")" : "") + ")");
     }else{
         ret.push(getFiveUtr(strand,utr,cds[0].data["start"]).map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
         ret.push(cds.map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
         ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["end"]).map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
+        ret.push((cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["start"] + ".." + x.data["end"])).join(", ") + (cds.length > 1 ? ")" : ""));
     }
     return(ret);
 }
