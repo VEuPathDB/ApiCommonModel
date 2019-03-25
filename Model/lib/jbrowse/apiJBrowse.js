@@ -650,22 +650,18 @@ function arrayElementTitle (track, feature, type) {
   return table(rows);
 }
 
-function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, cdsJoin, totScore, fiveSample, fiveScore, threeSample, threeScore) {
+function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, totScore, fiveSample, fiveScore, threeSample, threeScore) {
 
   // format into html table rows
   var rows = new Array();
     if (sourceId != null) { rows.push(twoColRow('ID:', sourceId))};
-    if (totScore != null || totScore != 'NaN') { rows.push(twoColRow('Score:', totScore))};
+    if (totScore != null && totScore != 'NaN') { rows.push(twoColRow('Score:', totScore))};
 
   if(fiveUtr != null && fiveUtr != '') {
       rows.push(twoColRowVAlign('5\' UTR:', fiveUtr, 'top'));
   }
   if(cdss != null) {
       rows.push(twoColRowVAlign('CDS:', cdss, 'top'));
-  }
-
-  if(cdsJoin != null) {
-      rows.push(twoColRowVAlign('CDS:', cdsJoin, 'top'));
   }
 
   if(threeUtr != null && threeUtr != '') {
@@ -698,7 +694,7 @@ function gffGeneFeatureTitle(track, feature) {
     
     var totScore = feature.data["score"];
 
-    return gene_title_gff(this,sourceId,model[0],model[1],model[2],model[3],totScore,five_sample,five_score,three_sample,three_score);
+    return gene_title_gff(this,sourceId,model[0],model[1],model[2],totScore,five_sample,five_score,three_sample,three_score);
 
 }
 
@@ -715,12 +711,12 @@ function orientAndGetUtrsAndCDS(strand, exons){
         ret.push(getFiveUtr(strand,utr,cds[0].data["end"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
         ret.push(cds.map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
         ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["start"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["start"] + ')')).join("</br>"));
-        ret.push("complement(" + (cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["end"] + '..' + x.data["start"])).join(", ") + (cds.length > 1 ? ")" : "") + ")");
+//        ret.push("complement(" + (cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["end"] + '..' + x.data["start"])).join(", ") + (cds.length > 1 ? ")" : "") + ")");
     }else{
         ret.push(getFiveUtr(strand,utr,cds[0].data["start"]).map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
         ret.push(cds.map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
         ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["end"]).map(x => (x.data["start"] + ".." + x.data["end"])).join("</br>"));
-        ret.push((cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["start"] + ".." + x.data["end"])).join(", ") + (cds.length > 1 ? ")" : ""));
+//        ret.push((cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["start"] + ".." + x.data["end"])).join(", ") + (cds.length > 1 ? ")" : ""));
     }
     return(ret);
 }
