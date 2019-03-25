@@ -451,6 +451,7 @@ function spliceSiteTitle(track, feature, featureDiv) {
 
   var samples = feature.data["sample_name"];
   var ctpm = feature.data["count_per_mill"];
+ 
   var isUniq = feature.data["is_unique"];
   var mismatch = feature.data["avg_mismatches"];
 
@@ -476,6 +477,38 @@ function spliceSiteTitle(track, feature, featureDiv) {
   
   return table(rows);
 }
+
+
+function colorSpliceSite(track, feature, featureDiv) {
+  var rows = new Array();
+  var samples = feature.data["sample_name"];
+  var ctpm = feature.data["count_per_mill"];
+  var strand = feature.data["strand"];
+
+  var samples_arr = samples.split(',');
+  var ct_arr = ctpm.split(',');
+  var arrSize = samples_arr.length;
+  var count = 0;
+
+  for (var i = 0; i < arrSize; i++) {
+    count = count + Number(ct_arr[i]);
+  }
+  if (strand == 1){
+    if (count < 2) return 'lightskyblue';
+    if (count < 10) return 'cornflowerblue';
+    if (count < 100) return 'blue';
+    if (count < 1000) return 'navy';
+    return 'black';
+  }
+  if (strand == 0){
+    if (count < 2) return '#FFCCCC';
+    if (count < 10) return 'pink';
+    if (count < 100) return 'orange';
+    if (count < 1000) return 'tomato';
+    return 'firebrick';
+  }
+}
+
 
 
 function gffKirkland(track, feature, featureDiv) {
