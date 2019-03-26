@@ -805,3 +805,41 @@ function getThreeUtr(strand,utr,cdsEnd){
     }
     return(three);
 }
+
+function haplotypeColor(feature) { 
+  boundary = feature.data['Boundary'];
+  if(boundary == 'Liberal') {
+      return 'darkseagreen';
+  }
+  return 'darkgreen';
+}
+
+
+function haplotypeTitle(track, feature, featureDiv) {
+    var accessn = feature.data["name"];
+    var start = feature.data["startm"];
+    var end = feature.data["end"];
+    var length = end - start + 1;
+    var boundary = feature.data['boundary'];
+    var name = feature.data['Name'];
+    var start_max = feature.data['start_max'];
+    var start_min = feature.data['start_min'];
+    var end_min = feature.data['end_min'];
+    var end_max = feature.data['end_max'];
+    var sequenceId = feature.data['SequenceId'];
+
+    var libContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_max + "&value%28start_point%29=" + start_min + "&weight=10'>Contained Genes</a>";
+    var consrvContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_min + "&value%28start_point%29=" + start_max + "&weight=10'>Contained Genes</a>";
+    var libAssoclink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByEQTL_Segments&value%28lod_score%29=1.5&value%28end_point_segment%29=" + end_max + "&value%28pf_seqid%29=" + sequenceId + "&value%28liberal_conservative%29=Liberal+Locations&value%28start_point%29=" + start_min + "&weight=10'>Associated Genes</a>";
+    var consrvAssoclink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByEQTL_Segments&value%28lod_score%29=1.5&value%28end_point_segment%29=" + end_min + "&value%28pf_seqid%29=" + sequenceId + "&value%28liberal_conservative%29=Conservative+Locations&value%28start_point%29=" + start_max + "&weight=10'>Associated Genes</a>";
+
+    var rows = new Array();
+    rows.push(twoColRow('Name (Centimorgan value appended):', name));
+    rows.push(twoColRow('Sequence Id:', sequenceId));
+    rows.push(twoColRow('Liberal Start-End:', start_min + ".." + end_max + "  (" + libAssoclink + ", " + libContlink + ")"));
+    rows.push(twoColRow('Conservative Start-End:', start_max + ".." + end_min + "   (" + consrvAssoclink + ", " + consrvContlink + ")"));
+    rows.push(twoColRow('Liberal Length:', Math.abs(end_max - start_min)));
+    rows.push(twoColRow('Conservative Length:', Math.abs(end_min - start_max)));
+
+    return table(rows);
+}
