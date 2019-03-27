@@ -10,6 +10,9 @@ function twoColRow(left, right) {
   return '<tr><td>' + left + '</td><td>' + right + '</td></tr>';
 }
 
+function twoColRowVAlign(left, right, valign) {
+    return '<tr' + (valign != null ? ' valign=' + valign : '') + '><td>' + left + '</td><td>' + right + '</td></tr>'; }
+
 function fiveColRow(one, two, three, four, five) {
   return '<tr><td>' + one + '</td><td>' + two + '</td><td>' + three + '</td><td>' + four + '</td><td>' + five + '</td></tr>';
 }
@@ -40,8 +43,36 @@ function titleCase(str) {
 
 /****** Pop-up functions for various record types ******/
 
+function microsatelliteTitle(track, feature, featDiv) {
+    var accessn      = feature.data["name"];
+    var genbankLink  = "<a target='_blank' href='http://www.ncbi.nlm.nih.gov/sites/entrez?db=unists&cmd=search&term=" + accessn + "'>" + accessn + "</a>";
+    var start        = feature.data["startm"];
+    var end         = feature.data["end"];
+    var length       = end - start + 1;
+    var name        = feature.data['Name'];
+    var sequenceId       = feature.data['SequenceId'];
+
+    container = dojo.create('div', { className: 'detail feature-detail feature-detail-'+track.name.replace(/\s+/g,'_').toLowerCase(), innerHTML: '' } );
+
+    var coreDetails = dojo.create('div', { className: 'core' }, container );
+
+    var fmt = dojo.hitch( track, 'renderDetailField', coreDetails );
+    coreDetails.innerHTML += '<h2 class="sectiontitle">Microsatellite</h2>';
+
+    fmt( 'Name', name, feature );
+    fmt( 'Genbank Accession', accessn, feature );
+    fmt('Position', positionNoStrandString(track.refSeq.name, feature.data["startm"], feature.data["end"]) ,feature);
+    fmt( 'ePCR Product Size', length, feature);
+
+    track._renderUnderlyingReferenceSequence( track, feature, featDiv, container );
+    return container;
+
+}
+
+
+
 // Gene title
-function gene_title (tip, projectId, sourceId, chr, loc, soTerm, product, taxon, utr, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid ) {
+function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon, utrFive, utrThree, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid ) {
 
   // In ToxoDB, sequences of alternative gene models have to be returned
   var ignore_gene_alias = 0;
@@ -65,11 +96,11 @@ function gene_title (tip, projectId, sourceId, chr, loc, soTerm, product, taxon,
 
   // format into html table rows
   var rows = new Array();
-    if (taxon != '') {rows.push(twoColRow('Species:', taxon))};
-    if (sourceId != '') { rows.push(twoColRow('ID:', sourceId))};
-    if (geneId != '') { rows.push(twoColRow('Gene ID:', geneId))};
-    if (soTerm != '') { rows.push(twoColRow('Gene Type:', soTerm))};
-    if (product != '') { rows.push(twoColRow('Description:', product))};
+    if (taxon != null) {rows.push(twoColRow('Species:', taxon))};
+    if (sourceId != null) { rows.push(twoColRow('ID:', sourceId))};
+    if (geneId != null) { rows.push(twoColRow('Gene ID:', geneId))};
+    if (soTerm != null) { rows.push(twoColRow('Gene Type:', soTerm))};
+    if (product != null) { rows.push(twoColRow('Description:', product))};
 
   var exon_or_cds = 'Exon:';
 
@@ -77,21 +108,26 @@ function gene_title (tip, projectId, sourceId, chr, loc, soTerm, product, taxon,
     exon_or_cds = 'CDS:';
   }
 
-  if (loc != '') {
-    rows.push(twoColRow(exon_or_cds, loc)) ;
+  if(utrFive != null && utrFive != '') {
+      rows.push(twoColRowVAlign('5\' UTR:', utrFive, 'top'));
   }
-  if(utr != '') {
-    rows.push(twoColRow('UTR:', utr));
+
+  if(cds != null) {
+      rows.push(twoColRowVAlign(exon_or_cds, cds, 'top'));
+  }
+
+  if(utrThree != null && utrThree != '') {
+      rows.push(twoColRowVAlign('3\' UTR:', utrThree, 'top'));
   }
   // TO FIX for GUS4
   //  rows.push(twoColRow(GbrowsePopupConfig.saveRowTitle, getSaveRowLinks(projectId, sourceId)));
   if (soTerm =='Protein Coding' && aaseqid) {
     rows.push(twoColRow('Download:', cdsLink + " | " + proteinLink));
-    if ( orthomcl != '') {
+    if ( orthomcl != null) {
       rows.push(twoColRow('OrthoMCL', orthomclLink));
     }
   }
-    if (geneId != '') { rows.push(twoColRow('Links:', gbLink + " | " + recordLink))};
+    if (geneId != null) { rows.push(twoColRow('Links:', gbLink + " | " + recordLink))};
 
   //tip.T_BGCOLOR = 'lightskyblue';
   //tip.T_TITLE = 'Annotated Gene ' + sourceId;
@@ -124,7 +160,7 @@ function gsnapUnifiedIntronJunctionTitle (track, feature, featureDiv) {
     var annotIntron = feature.data["AnnotatedIntron"]; 
     var gene_source_id = feature.data["GeneSourceId"]; 
 
-    var start = feature.data["start"];
+    var start = feature.data["startm"];
     var end = feature.data["end"];
 
     var exp_arr = exps.split('|');
@@ -304,7 +340,7 @@ function chipColor(feature) {
 function peakTitleChipSeq(track, feature, featureDiv) {
     var rows = new Array();
 
-    var start = feature.data["start"];
+    var start = feature.data["startm"];
     var end = feature.data["end"];
 
     rows.push(twoColRow('Start:', start));
@@ -338,6 +374,10 @@ function positionAndSequence( track, f, featDiv ) {
     track._renderUnderlyingReferenceSequence( track, f, featDiv, container );
     return container;
 }
+
+
+
+
 
 
 function snpBgFromIsCodingAndNonSyn(feature) {
@@ -378,7 +418,7 @@ function snpTitle(track, feature, featureDiv) {
   var source_id = feature.data["source_id"];
   var link_type = feature.data["type"];
 
-  var start = feature.data["start"];
+  var start = feature.data["startm"];
   var end = feature.data["end"];
 
   var revArray = { 'A' : 'T', 'C' : 'G', 'T' : 'A', 'G' : 'C' };
@@ -427,6 +467,82 @@ function snpTitle(track, feature, featureDiv) {
   return table(rows);
 }
 
+
+
+
+function spliceSiteTitle(track, feature, featureDiv) {
+  var rows = new Array();
+  var start = feature.data["startm"];
+
+  var gene = feature.data["gene_id"];
+  var utr_len = feature.data["utr_length"];
+  if (!utr_len){
+    utr_len = "N/A (within CDS)";
+  }
+  var note = "The overall count is the sum of the count per million for each sample.";
+
+  var samples = feature.data["sample_name"];
+  var ctpm = feature.data["count_per_mill"];
+ 
+  var isUniq = feature.data["is_unique"];
+  var mismatch = feature.data["avg_mismatches"];
+
+  var html = "<table><tr><th>Sample</th><th>Count per million</th></tr>";
+  var count = 0;
+
+  var samples_arr = samples.split(',');
+  var ct_arr = ctpm.split(',');
+  var arrSize = samples_arr.length;
+  for (var i = 0; i < arrSize; i++) {
+    html = html + "<tr><td>"  + samples_arr[i] + "</td><td>" + ct_arr[i] + "</td></tr>";
+    count = count + Number(ct_arr[i]);
+  }
+  html = html + "</table>";
+
+  rows.push(twoColRow("Location:", start));
+  if (gene) {rows.push(twoColRow("Gene ID:", gene))};
+  rows.push(twoColRow("UTR Length:", utr_len));
+  rows.push(twoColRow("Count:", count));
+  rows.push(twoColRow("Note:", note));
+
+  rows.push(twoColRow(" ", html));
+  
+  return table(rows);
+}
+
+
+function colorSpliceSite(track, feature, featureDiv) {
+  var rows = new Array();
+  var samples = feature.data["sample_name"];
+  var ctpm = feature.data["count_per_mill"];
+  var strand = feature.data["strand"];
+
+  var samples_arr = samples.split(',');
+  var ct_arr = ctpm.split(',');
+  var arrSize = samples_arr.length;
+  var count = 0;
+
+  for (var i = 0; i < arrSize; i++) {
+    count = count + Number(ct_arr[i]);
+  }
+  if (strand == 1){
+    if (count < 2) return 'lightskyblue';
+    if (count < 10) return 'cornflowerblue';
+    if (count < 100) return 'blue';
+    if (count < 1000) return 'navy';
+    return 'black';
+  }
+  if (strand == 0){
+    if (count < 2) return '#FFCCCC';
+    if (count < 10) return 'pink';
+    if (count < 100) return 'orange';
+    if (count < 1000) return 'tomato';
+    return 'firebrick';
+  }
+}
+
+
+
 function gffKirkland(track, feature, featureDiv) {
   var rows = new Array();
 
@@ -443,7 +559,7 @@ function repeatFamily(track, feature, featureDiv) {
   var rows = new Array();
 
   rows.push(twoColRow('Family:', feature.data["Family"] ));
-  rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
+  rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["startm"], feature.data["end"])));
 
   return table(rows);
 }
@@ -455,7 +571,7 @@ function transposon(track, feature, featureDiv) {
     rows.push(twoColRow('Transposable Element:', feature.data["name"] ));
     rows.push(twoColRow('Name:', feature.data["te_name"] ));
     rows.push(twoColRow('Size:', feature.data["alignLength"] ));
-    rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
+    rows.push(twoColRow('Position:', positionNoStrandString(track.refSeq.name, feature.data["startm"], feature.data["end"])));
 
     return table(rows);
 }
@@ -464,7 +580,7 @@ function bindingSiteTitle(track, feature, featureDiv) {
 
 //    console.log(feature);
     var name = feature.data["Name"];
-    var start = feature.data["start"];
+    var start = feature.data["startm"];
     var end  = feature.data["end"];
     var strand  = feature.data["strand"];
     var score = feature.data["Score"];
@@ -543,13 +659,13 @@ function scaffoldDetails(track, feature) {
 
     if(feature.data["Type"] == 'fgap') {
         feature.data["subfeatures"].forEach(function(element) {
-            rows.push(twoColRow('Gap Position:', positionNoStrandString(track.refSeq.name, element.data["start"], element.data["end"])));
+            rows.push(twoColRow('Gap Position:', positionNoStrandString(track.refSeq.name, element.data["startm"], element.data["end"])));
         });
 
     }
     else {
         rows.push(twoColRow('Name:', feature.data["name"]));
-        rows.push(twoColRow('Position:', positionString(track.refSeq.name, feature.data["start"], feature.data["end"], feature.data["strand"])));
+        rows.push(twoColRow('Position:', positionString(track.refSeq.name, feature.data["startm"], feature.data["end"], feature.data["strand"])));
     }
    
     return table(rows);
@@ -557,7 +673,7 @@ function scaffoldDetails(track, feature) {
 
 
 function genericEndFeatureTitle(track, feature, trackType) { 
-  var start = feature.data["start"];
+  var start = feature.data["startm"];
   var end  = feature.data["end"];
   var length = end - start + 1;
   var cname = feature.data["name"];
@@ -575,7 +691,7 @@ function genericEndFeatureTitle(track, feature, trackType) {
 
     count = count + 1;
     var name  = element.data['name']; 
-    var start = element.data['start']; 
+    var start = element.data["startm"]; 
     var end = element.data['end']; 
     var pct = element.data["pct"];
     var score = element.data["score"];
@@ -594,7 +710,136 @@ function arrayElementTitle (track, feature, type) {
 
   rows.push(twoColRow("Name:" , feature.data["SourceId"]));
   rows.push(twoColRow("Probe Type:" , type));
-  rows.push(twoColRow("Position:" , positionNoStrandString(track.refSeq.name, feature.data["start"], feature.data["end"])));
+  rows.push(twoColRow("Position:" , positionNoStrandString(track.refSeq.name, feature.data["startm"], feature.data["end"])));
 
   return table(rows);
+}
+
+function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, totScore, fiveSample, fiveScore, threeSample, threeScore) {
+
+  // format into html table rows
+  var rows = new Array();
+    if (sourceId != null) { rows.push(twoColRow('ID:', sourceId))};
+    if (totScore != null && totScore != 'NaN') { rows.push(twoColRow('Score:', totScore))};
+
+  if(fiveUtr != null && fiveUtr != '') {
+      rows.push(twoColRowVAlign('5\' UTR:', fiveUtr, 'top'));
+  }
+  if(cdss != null) {
+      rows.push(twoColRowVAlign('CDS:', cdss, 'top'));
+  }
+
+  if(threeUtr != null && threeUtr != '') {
+      rows.push(twoColRowVAlign('3\' UTR:', threeUtr, 'top'));
+  }
+
+    //samples and scores for models
+    if (fiveSample != null) { rows.push(twoColRow('5\' UTR Samples:', fiveSample))};
+    if (fiveScore != null) { rows.push(twoColRow('5\' UTR Scores:', fiveScore))};
+    if (threeSample != null) { rows.push(twoColRow('3\' UTR Samples:', threeSample))};
+    if (threeScore != null) { rows.push(twoColRow('3\' UTR Scores:', threeScore))};
+    
+  return table(rows);
+}
+
+function gffGeneFeatureTitle(track, feature) { 
+    
+//    console.log(feature);
+    
+    var sourceId = feature.data["name"];
+    var strand = feature.data["strand"];
+
+    var model = orientAndGetUtrsAndCDS(strand,feature.data["subfeatures"]);
+
+    //  CRAIG samples and scores
+    var five_sample = feature.data["FiveUTR_Sample"];
+    var five_score = feature.data["FiveUTR_Score"];
+    var three_sample = feature.data["ThreeUTR_Sample"];
+    var three_score = feature.data["ThreeUTR_Score"];
+    
+    var totScore = feature.data["score"];
+
+    return gene_title_gff(this,sourceId,model[0],model[1],model[2],totScore,five_sample,five_score,three_sample,three_score);
+
+}
+
+
+
+//will return oriented 5pUtr, cds and 3pUtr
+function orientAndGetUtrsAndCDS(strand, exons){
+    var utr = exons.filter(function(sf) { return sf.data["type"] === "UTR" });
+    var cds = exons.filter(function(sf) { return sf.data["type"] === "CDS" });
+    var ret = new Array();
+    if(strand == '-1'){
+        utr.reverse();
+        cds.reverse();
+        ret.push(getFiveUtr(strand,utr,cds[0].data["end"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["startm"] + ')')).join("</br>"));
+        ret.push(cds.map(x => ('complement(' + x.data["end"] + '..' + x.data["startm"] + ')')).join("</br>"));
+        ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["startm"]).map(x => ('complement(' + x.data["end"] + '..' + x.data["startm"] + ')')).join("</br>"));
+//        ret.push("complement(" + (cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["end"] + '..' + x.data["startm"])).join(", ") + (cds.length > 1 ? ")" : "") + ")");
+    }else{
+        ret.push(getFiveUtr(strand,utr,cds[0].data["startm"]).map(x => (x.data["startm"] + ".." + x.data["end"])).join("</br>"));
+        ret.push(cds.map(x => (x.data["startm"] + ".." + x.data["end"])).join("</br>"));
+        ret.push(getThreeUtr(strand,utr,cds[cds.length-1].data["end"]).map(x => (x.data["startm"] + ".." + x.data["end"])).join("</br>"));
+//        ret.push((cds.length > 1 ? "join(" : "") + cds.map(x => (x.data["startm"] + ".." + x.data["end"])).join(", ") + (cds.length > 1 ? ")" : ""));
+    }
+    return(ret);
+}
+
+function getFiveUtr(strand,utr,cdsStart){
+    var five = new Array();
+    if(strand == '-1'){
+        five = utr.filter(function(sf) { return sf.data["startm"] >= cdsStart });
+    }else{
+        five = utr.filter(function(sf) { return sf.data["end"] <= cdsStart });
+    }
+    return(five);
+}
+
+function getThreeUtr(strand,utr,cdsEnd){
+    var three = new Array();
+    if(strand == '-1'){
+        three = utr.filter(function(sf) { return sf.data["end"] <= cdsEnd });
+    }else{
+        three = utr.filter(function(sf) { return sf.data["startm"] >= cdsEnd });
+    }
+    return(three);
+}
+
+function haplotypeColor(feature) { 
+  boundary = feature.data['Boundary'];
+  if(boundary == 'Liberal') {
+      return 'darkseagreen';
+  }
+  return 'darkgreen';
+}
+
+
+function haplotypeTitle(track, feature, featureDiv) {
+    var accessn = feature.data["name"];
+    var start = feature.data["startm"];
+    var end = feature.data["end"];
+    var length = end - start + 1;
+    var boundary = feature.data['boundary'];
+    var name = feature.data['Name'];
+    var start_max = feature.data['start_max'];
+    var start_min = feature.data['start_min'];
+    var end_min = feature.data['end_min'];
+    var end_max = feature.data['end_max'];
+    var sequenceId = feature.data['SequenceId'];
+
+    var libContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_max + "&value%28start_point%29=" + start_min + "&weight=10'>Contained Genes</a>";
+    var consrvContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_min + "&value%28start_point%29=" + start_max + "&weight=10'>Contained Genes</a>";
+    var libAssoclink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByEQTL_Segments&value%28lod_score%29=1.5&value%28end_point_segment%29=" + end_max + "&value%28pf_seqid%29=" + sequenceId + "&value%28liberal_conservative%29=Liberal+Locations&value%28start_point%29=" + start_min + "&weight=10'>Associated Genes</a>";
+    var consrvAssoclink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByEQTL_Segments&value%28lod_score%29=1.5&value%28end_point_segment%29=" + end_min + "&value%28pf_seqid%29=" + sequenceId + "&value%28liberal_conservative%29=Conservative+Locations&value%28start_point%29=" + start_max + "&weight=10'>Associated Genes</a>";
+
+    var rows = new Array();
+    rows.push(twoColRow('Name (Centimorgan value appended):', name));
+    rows.push(twoColRow('Sequence Id:', sequenceId));
+    rows.push(twoColRow('Liberal Start-End:', start_min + ".." + end_max + "  (" + libAssoclink + ", " + libContlink + ")"));
+    rows.push(twoColRow('Conservative Start-End:', start_max + ".." + end_min + "   (" + consrvAssoclink + ", " + consrvContlink + ")"));
+    rows.push(twoColRow('Liberal Length:', Math.abs(end_max - start_min)));
+    rows.push(twoColRow('Conservative Length:', Math.abs(end_min - start_max)));
+
+    return table(rows);
 }

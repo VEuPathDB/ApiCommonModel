@@ -22,6 +22,7 @@ my $result = {"tracks" => [] };
 my $datasetProperties = &datasetProperties($dbh);
 
 &addChipChipTracks($dbh, $result, $datasetProperties);
+&addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 
 print encode_json($result);
 
@@ -33,6 +34,12 @@ sub datasetProperties {
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
 where dsp.name like '${organismAbbrev}%_chipChipExper%_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+UNION
+select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_smallNcRna_%_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id";
 
   my $sh = $dbh->prepare($sql);
@@ -47,6 +54,45 @@ and dsp.dataset_presenter_id = prop.dataset_presenter_id";
   return \%datasetProperties;
 }
 
+
+sub addSmallNcRnaSeq {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /smallNcRna/);
+
+    my $experimentName = $datasetProperties->{$dataset}->{experimentName};
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '${organismAbbrev}%_smallNcRnaSample_RSRC'";
+
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      my ($sampleName) = $sampleDataset =~ /${organismAbbrev}_${experimentName}_(.+)_smallNcRnaSample_RSRC/;
+
+      # Example: EhistolyticaHM1IMSS/bam/Singh_Small_RNA/Rahman/Rahman.bam
+      my $bamUrl = "/a/service/jbrowse/store?data=${nameForFileNames}/bam/$experimentName/${sampleName}/${sampleName}.bam";
+
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
+                       urlTemplate => $bamUrl,
+                           key => "${sampleName} Small Non-coding RNAs",
+                           label => "${sampleName} Small Non-coding RNAs",
+                           type => "SmallRNAPlugin/View/Track/smAlignments",
+                           category => "Transcriptomics",
+                           yScalePosition => "left",
+                           metadata => {
+                             subcategory => 'small non-coding RNA',
+                             dataset => $datasetDisplayName,
+                             track => 'Small RNA',
+                       },
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
+}
 
 sub addScaffolds {
   my ($dbh, $result) = @_;
