@@ -511,7 +511,7 @@ function spliceSiteTitle(track, feature, featureDiv) {
 }
 
 
-function colorSpliceSite(track, feature, featureDiv) {
+function colorSpliceSite(feature) {
   var rows = new Array();
   var samples = feature.data["sample_name"];
   var ctpm = feature.data["count_per_mill"];
@@ -525,6 +525,7 @@ function colorSpliceSite(track, feature, featureDiv) {
   for (var i = 0; i < arrSize; i++) {
     count = count + Number(ct_arr[i]);
   }
+
   if (strand == 1){
     if (count < 2) return 'lightskyblue';
     if (count < 10) return 'cornflowerblue';
