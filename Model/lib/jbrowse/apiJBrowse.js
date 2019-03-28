@@ -434,7 +434,7 @@ function snpTitle(track, feature, featureDiv) {
 
   var refAAString = ''; 
   if (isCoding == 1 || /yes/i.test(isCoding)) {
-     type = "Coding (" + (nonsense == 1 ? "nonsense)" : nonSyn ? "non-synonymous)" : "synonymous)");
+     type = "Coding (" + (nonsense == 1 ? "nonsense)" : nonSyn == 1 ? "non-synonymous)" : "synonymous)");
      refAAString = "&nbsp;&nbsp;&nbsp;&nbsp;AA=" + reference_aa;
      minor_product = nonsense == 1 || nonSyn == 1 ? minor_product : major_product;
    }else{
