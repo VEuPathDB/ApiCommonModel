@@ -382,7 +382,7 @@ function positionAndSequence( track, f, featDiv ) {
 
 function snpBgFromIsCodingAndNonSyn(feature) {
   var isCoding = feature.data["IsCoding"]; 
-  var color = 'white';
+  var color = '#ffe135';
   if (isCoding == 1 || /yes/i.test(isCoding)) {
     var nonSyn = feature.data["NonSyn"];
     var nonsense = feature.data["Nonsense"]; 
