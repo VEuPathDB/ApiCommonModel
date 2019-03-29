@@ -382,7 +382,7 @@ function positionAndSequence( track, f, featDiv ) {
 
 function snpBgFromIsCodingAndNonSyn(feature) {
   var isCoding = feature.data["IsCoding"]; 
-  var color = 'white';
+  var color = '#ffe135';
   if (isCoding == 1 || /yes/i.test(isCoding)) {
     var nonSyn = feature.data["NonSyn"];
     var nonsense = feature.data["Nonsense"]; 
@@ -434,7 +434,7 @@ function snpTitle(track, feature, featureDiv) {
 
   var refAAString = ''; 
   if (isCoding == 1 || /yes/i.test(isCoding)) {
-     type = "Coding (" + (nonsense == 1 ? "nonsense)" : nonSyn ? "non-synonymous)" : "synonymous)");
+     type = "Coding (" + (nonsense == 1 ? "nonsense)" : nonSyn == 1 ? "non-synonymous)" : "synonymous)");
      refAAString = "&nbsp;&nbsp;&nbsp;&nbsp;AA=" + reference_aa;
      minor_product = nonsense == 1 || nonSyn == 1 ? minor_product : major_product;
    }else{
@@ -511,7 +511,7 @@ function spliceSiteTitle(track, feature, featureDiv) {
 }
 
 
-function colorSpliceSite(track, feature, featureDiv) {
+function colorSpliceSite(feature) {
   var rows = new Array();
   var samples = feature.data["sample_name"];
   var ctpm = feature.data["count_per_mill"];
@@ -525,6 +525,7 @@ function colorSpliceSite(track, feature, featureDiv) {
   for (var i = 0; i < arrSize; i++) {
     count = count + Number(ct_arr[i]);
   }
+
   if (strand == 1){
     if (count < 2) return 'lightskyblue';
     if (count < 10) return 'cornflowerblue';
