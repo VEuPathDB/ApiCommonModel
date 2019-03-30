@@ -19,6 +19,16 @@ function fiveColRow(one, two, three, four, five) {
 
 /******  utilities ******/
 
+function datasetLink(name, display) {
+    return "<a href='/a/processQuestion.do?questionFullName=DatasetQuestions.DatasetsByDatasetNames&dataset_name=" + name + "&questionSubmit=Get+Answer'>" + display + "</a>";
+}
+
+function datasetDescription(summary, trackSpecificText) {
+    return "<p>" + trackSpecificText + "</p><p>" + summary + "</p>";
+}
+
+
+
 positionString = function(refseq, start, end, strand)  {
     var strandString = strand == 1 ? "(+ strand)" : "(- strand)";
     return refseq + ":" + start + ".." + end + " " + strandString;
