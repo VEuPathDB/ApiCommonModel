@@ -481,6 +481,68 @@ GROUP BY
         </sqlQuery>
 
 
+        <sqlQuery name="FungiOrgLinkouts">
+            <column name="source_id" />
+            <column name="project_id"/>
+            <column name="linkout_text" />
+            <column name="cgd_link" />
+            <column name="pombase_link"/>
+            <column name="sgd_link" />
+            <sql>
+              <![CDATA[
+SELECT gatt.source_id, '@PROJECT_ID@' AS project_id,
+  CASE WHEN (x.cgd_link is not null) THEN  'Links to few Model Organisms: ' ELSE '' END AS linkout_text,
+  x.cgd_link, x.pombase_link, x.sgd_link 
+FROM apidbtuning.geneattributes gatt,
+  (select source_id, '@PROJECT_ID@' as project_id, 
+       cgd_link,pombase_link, sgd_link from (
+SELECT 
+  ga.source_id,  --from links to self
+'<a href = "' || REPLACE(edr.id_url, 'EXTERNAL_ID_HERE', db.primary_identifier) || '">' || edd.dataset_presenter_display_name || '</a>' as link,
+  edd.dataset_presenter_display_name AS dataset
+FROM
+  sres.dbref db
+, DOTS.dbrefnafeature dbna
+, apidbtuning.ExternalDbDatasetPresenter edd
+, sres.externaldatabaserelease edr
+, apidbtuning.geneattributes ga
+WHERE
+  db.external_database_release_id = edd.external_database_release_id
+  AND edr.external_database_release_id = edd.external_database_release_id
+  AND dbna.db_ref_id = db.db_ref_id
+  AND ga.na_feature_id = dbna.na_feature_id
+  AND ga.organism IN ('Candida albicans SC5314', 'Saccharomyces cerevisiae S288c','Schizosaccharomyces pombe 972h-')
+  AND edd.dataset_presenter_display_name  IN ('SGD','PomBase','CGD')
+UNION  
+SELECT -- from orthologs
+ortho_source_id as source_id,
+'<a href = "' || REPLACE(edr.id_url, 'EXTERNAL_ID_HERE', db.primary_identifier) || '">' || edd.dataset_presenter_display_name || '</a>' as link,
+  edd.dataset_presenter_display_name AS dataset
+FROM
+  sres.dbref db
+, DOTS.dbrefnafeature dbna
+, apidbtuning.ExternalDbDatasetPresenter edd
+, sres.externaldatabaserelease edr
+, apidbtuning.geneattributes ga
+, apidbtuning.orthologousgenes og
+WHERE
+  db.external_database_release_id = edd.external_database_release_id
+  AND edr.external_database_release_id = edd.external_database_release_id
+  AND dbna.db_ref_id = db.db_ref_id
+  AND ga.na_feature_id = dbna.na_feature_id
+  AND ga.organism in ('Candida albicans SC5314', 'Saccharomyces cerevisiae S288c','Schizosaccharomyces pombe 972h-')
+  AND og.source_id = ga.source_id
+  ) PIVOT ( 
+    listagg(link, ';') WITHIN GROUP (ORDER BY dataset) AS link
+    FOR dataset IN ('CGD' cgd,  'PomBase' pombase,  'SGD' sgd)
+  )
+)x
+WHERE gatt.source_id = x.source_id(+)
+         ]]>
+            </sql>
+        </sqlQuery>
+
+
         <sqlQuery name="OrganismAbbrev">
             <column name="source_id"/>
             <column name="project_id"/>
