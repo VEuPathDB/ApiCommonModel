@@ -236,20 +236,20 @@ function gsnapUnifiedIntronJunctionTitle (track, feature, featureDiv) {
 
 function gsnapIntronWidthFromScore( feature ) {
     var sum = feature.data["TotalScore"]; 
-    if(sum <= 4096) return 4;
-    if(sum <= 16000) return 8;
-    return 12;
+    if(sum <= 4096) return 2;
+    if(sum <= 16000) return 3;
+    return 4;
 }
 
 function gsnapIntronHeightFromPercent ( feature ) {
     var goalHeight = gsnapIntronWidthFromScore(feature) * 2;
 
     var perc = feature.data["IntronPercent"]; 
-    if(perc <= 5) return goalHeight + 3;
-    if(perc <= 20) return goalHeight + 4;
-    if(perc <= 60) return goalHeight + 5;
-    if(perc <= 80) return goalHeight + 6;
-    return goalHeight + 7;
+    if(perc <= 5) return goalHeight + 2;
+    if(perc <= 20) return goalHeight + 3;
+    if(perc <= 60) return goalHeight + 4;
+    if(perc <= 80) return goalHeight + 5;
+    return goalHeight + 6;
 }
 
 function gsnapIntronColorFromStrandAndScore( feature ) {
