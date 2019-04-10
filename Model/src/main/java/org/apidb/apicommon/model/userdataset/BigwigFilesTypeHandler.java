@@ -93,7 +93,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
 	TwoTuple<String,Integer> tuple =  getOrganismAndBuildNumberFromDependencies(userDataset);
 	int currentBuild = getCurrentGenomeBuildNumber(tuple.getKey(), appDbDataSource);
 	logger.debug("CURRENT BUILD IS:" + currentBuild);
-	boolean match = currentBuild == tuple.getValue();
+	boolean match = currentBuild <= tuple.getValue();
 	return new UserDatasetCompatibility(match, new JSONObject().put("currentBuild", currentBuild),
 			match ? "" : "Genome build " + tuple.getValue() + " for organism " + tuple.getKey() + " is no longer supported. Current build " + currentBuild);
   }
