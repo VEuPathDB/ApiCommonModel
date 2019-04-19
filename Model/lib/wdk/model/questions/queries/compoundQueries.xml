@@ -286,7 +286,7 @@
         , two.value as two_value
         , one.min as one_min
         , two.min as two_min
-        , one.max as one_max
+	    , one.max as one_max
         , two.max as two_max
         , one.mean as one_mean
         , two.mean as two_mean
@@ -355,10 +355,166 @@
         ORDER BY fold_change
    	]]>
         </sql>
-    </sqlQuery>
+</sqlQuery>
+<!--RossNew
+	<sqlQuery name="CompoundsByFoldChange" 
+          includeProjects="TriTrypDB"
+          displayName="Metabolic compounds by fold change">
+    	<testParamValues includeProjects="TriTrypDB">
+	    	<paramValue name="samples_fc_comp">Log mean (compound_MassSpec)</paramValue>
+    	</testParamValues>
 
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.profileset" />
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.samples_fc_ref_generic" />
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.samples_fc_comp_generic" />
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.fold_change_compound"/>
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.regulated_dir"/>
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.min_max_avg_ref"/>
+    <paramRef groupRef="paramGroups.dynamicParams" ref="compoundParams.min_max_avg_comp"/>
+    <column name="source_id"/>
+    <column name="fold_change"/>
+    <column name="one_value"/>
+    <column name="two_value"/>
+    <column name="one_min"/>
+    <column name="two_min"/>
+    <column name="one_max"/>
+    <column name="two_max"/>
+    <column name="one_mean"/>
+    <column name="two_mean"/>
+    <column name="one_median"/>
+    <column name="two_median"/>
 
-
+    	<sql>
+  <![CDATA[
+   SELECT  CASE 
+        WHEN (round(one.value, 5) = 0 and two.value > 0) THEN 999999  
+        WHEN (round(two.value, 5) = 0 and one.value > 0) THEN 999999
+        WHEN (one.value >= two.value) THEN round(one.value/two.value,2)
+        WHEN (two.value >= one.value) THEN round(two.value/one.value,2)    
+        ELSE round(two.value/one.value,2)  
+        END AS fold_change
+    , round(one.value, 2) as one_value
+    , round(two.value, 2) as two_value
+    , round(one.min, 2) as one_min
+    , round(two.min, 2) as two_min
+    , round(one.max, 2) as one_max
+    , round(two.max, 2) as two_max
+    , round(one.mean, 2) as one_mean
+    , round(two.mean, 2) as two_mean
+    , round(one.median, 2) as one_median
+    , round(two.median, 2) as two_median
+    , ca.source_id
+FROM 
+    (SELECT round($$min_max_avg_ref$$(value), 6) as value
+    , round(min(value), 6) as min
+    , round(max(value), 6) as max
+    , round(avg(value), 6) as mean
+    , round(median(value), 6) as median
+    , compound_id
+    FROM (
+            select value, compound_id, protocol_app_node_id
+            from
+			( /* The union deals with isotopomers, the abundances are summed for isotopomers.
+                     For non-isotopomers and compounds with more than one abundance are summed, this was the case with one compound
+					 in the Llinas data set used for developing. */
+					 select value_temp + 0.000001 as value 
+					 /*apprently this needs to be wrapped for the addition to work, some abundances have 0 as value*/
+            , compound_id
+            , protocol_app_node_id
+            from
+                (select value_temp 
+                , compound_id
+                , protocol_app_node_id
+                from
+                    (select  sum(cmsr.value) as value_temp, cb.compound_id, protocol_app_node_id    
+                    from 
+                    apidb.compoundpeakschebi cb,
+                    apidb.compoundmassspecresult cmsr            
+                    where cb.isotopomer IS NOT NULL
+                    and cb.compound_id IS NOT NULL
+                    and cmsr.protocol_app_node_id in ($$samples_fc_ref_generic$$) /* (24257) ,24258)  (24285) (24286) */
+                    and cb.compound_peaks_id = cmsr.compound_peaks_id
+                    group by cb.compound_id, cmsr.protocol_app_node_id
+                    )
+                UNION 
+                    (select sum(cmsr.value) as value_temp, cb.compound_id, protocol_app_node_id
+                    from 
+                    apidb.compoundpeakschebi cb,
+                    apidb.compoundmassspecresult cmsr
+                    
+                    where cb.isotopomer IS NULL
+                    and cb.compound_id IS NOT NULL
+                    and cmsr.protocol_app_node_id in ($$samples_fc_ref_generic$$) /* (24257),24258) (24285)  (24286) */
+                    and cb.compound_peaks_id = cmsr.compound_peaks_id
+                    group by  cb.compound_id, cmsr.protocol_app_node_id
+                    )
+                )
+            )
+        )
+    GROUP BY compound_id
+) one,
+    (SELECT round($$min_max_avg_comp$$(value), 6) as value
+    , round(min(value), 6) as min
+    , round(max(value), 6) as max
+    , round(avg(value), 6) as mean
+    , round(median(value), 6) as median
+    , compound_id
+    FROM (
+            select value, compound_id, protocol_app_node_id
+            from
+            ( 
+                select value_temp + 0.000001 as value /* apprently this needs to be wrapped for the addition to work */
+            , compound_id
+            , protocol_app_node_id
+            from
+                (select value_temp 
+                , compound_id
+                , protocol_app_node_id
+                from
+                    (select  sum(cmsr.value) as value_temp, cb.compound_id, protocol_app_node_id    
+                    from 
+                    apidb.compoundpeakschebi cb,
+                    apidb.compoundmassspecresult cmsr            
+                    where cb.isotopomer IS NOT NULL
+                    and cb.compound_id IS NOT NULL
+                    and cmsr.protocol_app_node_id in ($$samples_fc_comp_generic$$) /* (24259) (24286)  (24286)  (24257,24258, 24259) */
+                    and cb.compound_peaks_id = cmsr.compound_peaks_id
+                    group by cb.compound_id, cmsr.protocol_app_node_id
+                    )
+                UNION 
+                    (select sum(cmsr.value) as value_temp, cb.compound_id, protocol_app_node_id
+                    from 
+                    apidb.compoundpeakschebi cb,
+                    apidb.compoundmassspecresult cmsr
+                    
+                    where cb.isotopomer IS NULL
+                    and cb.compound_id IS NOT NULL
+                    and cmsr.protocol_app_node_id in ($$samples_fc_comp_generic$$) /* (24259) (24286)  (24286)   (24257,24258, 24259) */
+                    and cb.compound_peaks_id = cmsr.compound_peaks_id
+                    group by  cb.compound_id, cmsr.protocol_app_node_id
+                    )
+                )
+            )
+        )
+    GROUP BY compound_id
+) two,
+apidbtuning.compoundAttributes ca
+WHERE one.compound_id = two.compound_id
+AND one.compound_id   = ca.id
+AND $$regulated_dir$$  (
+    CASE
+        WHEN (one.value >= two.value
+            AND two.value    > 0)
+            THEN -((one.value )/(two.value ))
+        WHEN (two.value > one.value
+            AND one.value   > 0)
+            THEN ((two.value )/(one.value ))
+END ) >= $$fold_change_compound$$
+ORDER BY fold_change 
+    ]]>
+        </sql>
+	</sqlQuery>
+	-->
    </querySet>
 
 </wdkModel>
