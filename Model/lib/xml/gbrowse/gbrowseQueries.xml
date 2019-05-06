@@ -869,7 +869,7 @@ SELECT
 <![CDATA[
 -- for: reference organism - gene
 SELECT
-       gattr.na_feature_id feature_id,
+       'refgene_' || gattr.na_feature_id feature_id,
        'gene' type, 
        'syntenyJBrowse' source, 
        gattr.source_id name, 
@@ -905,7 +905,7 @@ WHERE gattr.na_sequence_id = $srcfeature_id
 UNION
 -- for: reference organism - span
 SELECT
-        na_sequence_id feature_id,
+        'refseq_' || na_sequence_id feature_id,
         'gene' type, 
         'syntenyJBrowse' source, 
         source_id name, 
@@ -940,7 +940,7 @@ SELECT
 UNION
 -- for syntenic genes
 SELECT
-       gattr.na_feature_id feature_id,
+       sg.synteny_id || '_syngene_' || gattr.na_feature_id feature_id,
        'gene' type,
        'syntenyJBrowse' source,
        gattr.source_id name,
@@ -973,14 +973,12 @@ FROM
 WHERE sg.na_sequence_id = $srcfeature_id
   AND sg.start_min <= $rend
   AND sg.end_max >= $base_start
-  AND sg.start_min <= 1049890  
-  AND sg.end_max >= 1016651
   AND sg.syn_na_feature_id = gattr.na_feature_id
   AND gattr.organism = ostr.organism
 UNION
 -- for syntenic spans
 SELECT
-        sa.na_sequence_id feature_id,
+        s.synteny_id || '_synseq_' || sa.na_sequence_id feature_id,
         'gene' type,
         'syntenyJBrowse' source,
         sa.source_id name,
@@ -3749,6 +3747,52 @@ SELECT distinct ssf.segment_start as  feature_id,
     </sql>
   </sqlQuery>
 
+  <sqlQuery name="gene:syntenyJBrowse:bulksubfeatures" excludeProjects="TrichDB">
+
+     <sql>
+<![CDATA[
+SELECT
+       sg.synteny_id || '_synexons_' || sg.syn_na_feature_id feature_id,
+       'exon' type,
+       'syntenyJBrowse' source,
+       sg.syn_na_feature_id name,
+       '.' score,
+       sg.synteny_id || '_syngene_' || sg.syn_na_feature_id parent_id,
+       sg.start_min startm,
+       sg.end_max end,
+       decode(sg.is_reversed, 0, +1, 1, -1, +1) strand,
+       sg.tstarts TSTARTS,
+       sg.blocksizes BLOCKSIZES,
+       ' ' atts
+FROM
+       ApiDB.SyntenicGene sg
+WHERE sg.na_sequence_id = $srcfeature_id
+  AND sg.start_min <= $rend
+  AND sg.end_max >= $base_start
+UNION
+SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
+       'exon' type, 
+       'annotation' source, 
+       exon_loc.na_feature_id name,
+       '.' score,
+       'refgene_' || exon_loc.parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, +1, 1, -1, +1) strand,
+       '' tstarts,
+       '' blocksizes,
+       ' ' atts 
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  exon_loc.feature_type = 'ExonFeature'
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND rfe.exon_feature_id = exon_loc.na_feature_id
+  AND ta.na_feature_id = rfe.rna_feature_id
+]]>
+    </sql>
+  </sqlQuery>
 
   <sqlQuery name="gene:syntenyMC:bulksubfeatures" excludeProjects="TrichDB">
      <sql>
