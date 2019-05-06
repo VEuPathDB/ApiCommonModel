@@ -96,6 +96,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
       phylum.put("Fonsecaea","Eurotiomycetes");
       phylum.put("Fusarium","Sordariomycetes");
       phylum.put("Giardia","Diplomonadida");
+      phylum.put("Glomeromycetes","Oomycetes");
       phylum.put("Gregarina","Apicomplexa");
       phylum.put("Hamiltosporidium","Microsporidia");
       phylum.put("Hammondia","Apicomplexa");
