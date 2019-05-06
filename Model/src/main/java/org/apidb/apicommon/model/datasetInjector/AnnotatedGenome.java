@@ -133,6 +133,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
       phylum.put("Puccinia","Pucciniomycetes");
       phylum.put("Pythium","Oomycetes");
       phylum.put("Rhizopus","Zygomycetes");
+      phylum.put("Rhizophagus","Glomeromycetes");
       phylum.put("Saccharomyces","Saccharomycetes");
       phylum.put("Saprolegnia","Oomycetes");
       phylum.put("Sarcocystis","Apicomplexa");
