@@ -36,6 +36,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
       kingdom.put("Chytridiomycetes","Fungi");
       kingdom.put("Dothideomycetes","Fungi");
       kingdom.put("Eurotiomycetes","Fungi");
+      kingdom.put("Glomeromycetes","Fungi");
       kingdom.put("Leotiomycetes","Fungi");
       kingdom.put("Microsporidia","Fungi");
       //  kingdom.put("Oomycetes","Fungi");
@@ -96,7 +97,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
       phylum.put("Fonsecaea","Eurotiomycetes");
       phylum.put("Fusarium","Sordariomycetes");
       phylum.put("Giardia","Diplomonadida");
-      phylum.put("Glomeromycetes","Oomycetes");
       phylum.put("Gregarina","Apicomplexa");
       phylum.put("Hamiltosporidium","Microsporidia");
       phylum.put("Hammondia","Apicomplexa");
