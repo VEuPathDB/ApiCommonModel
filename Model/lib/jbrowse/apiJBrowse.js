@@ -252,6 +252,19 @@ function gsnapIntronHeightFromPercent ( feature ) {
     return goalHeight + 6;
 }
 
+
+function syntenyColor( feature ) {
+
+    if(feature.data["SynType"] == "span") {
+        var chr = feature.data["Chromosome"];
+        var col = feature.data["ChrColor"];
+        if(col) return col;
+        if(feature.data["strand"] == 1) return "orange" ;
+        return "darkseagreen";
+    }
+    return feature.data["strand"] == 1 ? "#000080" : "#aa3311"         
+}
+
 function gsnapIntronColorFromStrandAndScore( feature ) {
     var isReversed = feature.data["IsReversed"]; 
     var sum = feature.data["TotalScore"]; 
@@ -852,5 +865,108 @@ function haplotypeTitle(track, feature, featureDiv) {
     rows.push(twoColRow('Liberal Length:', Math.abs(end_max - start_min)));
     rows.push(twoColRow('Conservative Length:', Math.abs(end_min - start_max)));
 
+    return table(rows);
+}
+
+
+function syntenyTitle(track, feature, featureDiv) {
+    var syntype = feature.data["SynType"];
+    if(syntype == 'span') {
+        return synSpanTitle(track, feature);
+    } 
+    else {
+        return synGeneTitle(track, feature);
+    }
+}
+
+  
+function synGeneTitle(track, feature) {
+    var sourceId = feature.data["name"];
+    var taxon = feature.data["Taxon"];
+    var orgAbbrev = feature.data["OrgAbbrev"];
+    var desc = feature.data["Note"];
+
+    var soTerm = feature.data["SOTerm"];
+    var orthomclName = feature.data["orthomcl_name"];
+    var isPseudo = feature.data["IsPseudo"];
+    var isPseudoString = isPseudo == 1 ? "Pseudogenic " : "";
+
+    soTerm = soTerm.replace(/\_/g,' ')
+        .replace(/\b(\w)/g, function(x) {
+            return x.toUpperCase();
+        }) + isPseudoString;
+
+    var seqId = feature.data["Contig"];
+    var start = Number(feature.data["Start"]);
+    var end = Number(feature.data["End"]);
+    var window = 500; // width on either side of gene
+    var linkStart = start - window;
+    var linkStop = end + window;
+
+    var trunc = feature.data["Truncated"];
+    var truncString = "";
+    if(trunc) truncString =  " (truncated by syntenic region to " + trunc + ")";
+    var location = seqId + ": " +  start + " - " + end + truncString;
+
+    var linkPosition = seqId + ":" + linkStart + ".." + linkStop;
+    var highlightPosition = seqId + ":" + start + ".." + end;
+    var baseRecordUrl = "/a/app/record";
+
+    var dataRoot = track.browser.config.dataRoot;
+    var baseUrl = track.browser.config.baseUrl;
+
+    var recordLink = '<a href="' + baseRecordUrl + '/gene/' + sourceId + '">Gene Page</a>';
+    var gbLink = "<a href='" + baseUrl + "index.html?data=tracks/" + orgAbbrev + "&loc=" + linkPosition + "&highlight=" + highlightPosition + "'>JBrowse</a>";
+
+    // format into html table rows
+    var rows = new Array();
+    rows.push(twoColRow('Gene:', sourceId));
+    rows.push(twoColRow('Species:', taxon));
+    rows.push(twoColRow('Gene Type:', soTerm));
+    rows.push(twoColRow('Description:', desc));
+    rows.push(twoColRow('Location:', location));
+    //  TODO? rows.push(twoColRow(GbrowsePopupConfig.saveRowTitle, getSaveRowLinks(projectId, sourceId)));
+    rows.push(twoColRow('Links:', gbLink + ' | ' + recordLink));
+
+    if (soTerm == 'Protein Coding') {
+        rows.push(twoColRow('OrthoMCL', orthomclName));
+    }
+
+    return table(rows);
+}
+
+function synSpanTitle(track, feature) {
+    var chr = track.refSeq.name;
+    var strand = feature.data["strand"] == 1 ? "no" : "yes";
+    var refStart = feature.data["RefStart"];
+    var refEnd = feature.data["RefEnd"];
+    var refLength = refEnd - refStart;
+    var synStart = feature.data["SynStart"];
+    var synEnd = feature.data["SynEnd"];
+    var synLength = synEnd - synStart;
+    var contigLength = feature.data["ContigLength"];
+    var refContigLength = feature.data["RefContigLength"];
+    var contigSourceId = feature.data["Contig"];
+    var chromosome = feature.data["Chromosome"];
+    var taxon = feature.data["Taxon"];
+    var isRef = ( chr == contigSourceId ) ? 1 : 0;
+
+    var rows = new Array();
+
+    if(chromosome) rows.push(twoColRow('Chromosome:', chromosome));
+    rows.push(twoColRow('Species:', taxon));
+
+    if (!isRef){
+        rows.push(twoColRow('Syntenic Contig:', contigSourceId));
+        rows.push(twoColRow('Ref location:', refStart + "&nbsp;-&nbsp;" + refEnd + " (" + refLength + "&nbsp;bp)" ));
+        rows.push(twoColRow('Syn location:', synStart + "&nbsp;-&nbsp;" + synEnd + " (" + synLength + "&nbsp;bp)"));
+        rows.push(twoColRow('Reversed:', strand));
+        rows.push(twoColRow('Total Syn Contig Length:', contigLength));
+        rows.push(twoColRow('Total Ref Contig Length:', refContigLength));
+    } else {
+        rows.push(twoColRow('Contig:', contigSourceId));
+        rows.push(twoColRow('Location:', refStart + "&nbsp;-&nbsp;" + refEnd + " (" + refLength + "&nbsp;bp)"));
+        rows.push(twoColRow('Total Contig Length:', refContigLength));
+    }
     return table(rows);
 }
