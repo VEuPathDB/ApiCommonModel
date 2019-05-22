@@ -5,6 +5,8 @@ use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
+use URI::Escape;
+use Storable 'dclone';
 
 my ($organismAbbrev, $projectName) = @ARGV;
 
@@ -18,6 +20,7 @@ my $result = {"tracks" => [] };
 &addScaffolds($dbh, $result);
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
+&addSynteny($dbh, $result);
 
 my $datasetProperties = &datasetProperties($dbh);
 
@@ -76,7 +79,7 @@ sub addSmallNcRnaSeq {
       my ($sampleName) = $sampleDataset =~ /${organismAbbrev}_${experimentName}_(.+)_smallNcRnaSample_RSRC/;
 
       # Example: EhistolyticaHM1IMSS/bam/Singh_Small_RNA/Rahman/Rahman.bam
-      my $bamUrl = "/a/service/jbrowse/store?data=${nameForFileNames}/bam/$experimentName/${sampleName}/${sampleName}.bam";
+      my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bam/$experimentName/${sampleName}/${sampleName}.bam");
 
       my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
                        urlTemplate => $bamUrl,
@@ -104,7 +107,7 @@ sub addSmallNcRnaSeq {
 sub addScaffolds {
   my ($dbh, $result) = @_;
 
-  my $sql = "select count(*) from dots.virtualsequence vs, apidb.organism o where o.TAXON_ID = vs.taxon_id and public_abbrev = '${organismAbbrev}'";
+  my $sql = "select count(*) from dots.scaffoldgapfeature sgf, apidbtuning.genomicseqattributes sa, apidb.organism o where sa.source_id = sgf.source_id and o.taxon_id = sa.taxon_id and public_abbrev = '${organismAbbrev}'";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
@@ -116,7 +119,7 @@ sub addScaffolds {
                  baseUrl => "/a/service/jbrowse",
                  type => "JBrowse/View/Track/CanvasFeatures",
                  glyph => "function(feature){ return changeScaffoldType(feature)}",
-                 key => "Scaffolds",
+                 key => "Scaffolds (Gaps in Red when known)",
                  label => "Scaffolds",
                  category => "Sequence Analysis",
                  displayMode => "normal",
@@ -147,6 +150,104 @@ sub addScaffolds {
 
 
   }
+}
+
+sub addSynteny {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select otr.organism, otr.public_abbrev, otr.phylum, otr.genus, otr.species, otr.kingdom, otr.class, gt.gtracks
+            from APIDBTUNING.ORGANISMSELECTTAXONRANK otr
+               , APIDBTUNING.ORGANISMATTRIBUTES oa
+               , (select * from APIDBTUNING.GBROWSETRACKSORGANISM where type = 'synteny' ) gt
+            where oa.ORGANISM_NAME = otr.organism 
+            and oa.IS_ANNOTATED_GENOME = 1
+            and oa.PROJECT_ID = '${projectName}'
+            and oa.ORGANISM_NAME = gt.organism (+)";
+
+  my $hasSyntenyTracks = 0;
+
+  my $orgGTracks;
+  my %subtracks;
+  my %defaults;
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  while(my ($organism, $publicAbbrev, $phylum, $genus, $species, $kingdom, $class, $gTracks) = $sh->fetchrow_array()) {
+    if($publicAbbrev eq $organismAbbrev) {
+      $hasSyntenyTracks = 1;
+      $gTracks =~ s/^.+Synteny\///;
+      %defaults = map { $_ => 1 } split(/\+/, $gTracks);
+    }
+
+    $subtracks{$publicAbbrev} = {"featureFilters" => { "Taxon" => $organism},
+                                 "metadata" => {"Kingdom" => $kingdom,
+                                                "Phylum" => $phylum,
+                                                "Class" => $class,
+                                                "Genus" => $genus,
+                                                "Species" => $species 
+                                 },
+    };
+  }
+  $sh->finish();
+
+  if($hasSyntenyTracks) {
+    my $subtracksAr = [];
+    foreach my $key (keys %subtracks) {
+      foreach my $type ("gene", "span") {
+        my $clone = dclone $subtracks{$key};
+        $clone->{"featureFilters"}->{"SynType"} = $type;
+        $clone->{"label"} = "$key $type";
+        $clone->{"visible"} = $key eq $organismAbbrev || $defaults{"${key}_${type}"} ? 'true' : 'false';
+        push @$subtracksAr, $clone;
+      }
+    }
+
+    my $syntenyTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                        baseUrl => "/a/service/jbrowse",
+                        type => "EbrcTracks/View/Track/Synteny",
+#                        glyph => "function(f){return f.data['SynType'] === 'span' ? 'JBrowse/View/FeatureGlyph/Box' : 'JBrowse/View/FeatureGlyph/Segments'; }",
+                        glyph => "JBrowse/View/FeatureGlyph/Segments",
+                        key => "Syntenic Sequences and Genes (Shaded by Orthology)",
+                        label => "Syntenic Sequences and Genes (Shaded by Orthology)",
+                        region_feature_densities => "function(){return false}",
+                        category => "Comparative Genomics",
+                        geneGroupAttributeName => "orthomcl_name",
+                        displayMode => "normal",
+                        style => {
+                          color => "{syntenyColorFxn}",
+                          connectorColor => "{syntenyColorFxn}",
+                          connectorThickness => "function(f){return f.data['SynType'] === 'span' ? 3 : 1; }",
+                          showLabels => "function(){return false}",
+                          height => 5,
+                          marginBottom => 0,
+                       },
+                        metadata => {
+                          subcategory => "Orthology and Synteny",
+                          trackType => 'Segments',
+                        },
+                        query => {'feature' => "gene:syntenyJBrowse"
+                        },
+                        subtracks => $subtracksAr,
+                        onClick => {
+                          content => "{syntenyTitleFxn}",
+                        },
+                        menuTemplate => [
+                          {label => "View Details", 
+                           content => "{syntenyTitleFxn}",
+                          },
+                          {label => "View Gene or Sequence Page",
+                           title => "function(track,feature) { return feature.data['SynType'] == 'span' ? feature.data['Contig'] : feature.data['name']; }", 
+                           iconClass => "dijitIconDatabase", 
+                           action => "iframeDialog", 
+                           url => "function(track,feature) { return feature.data['SynType'] == 'span' ? '/a/app/record/genomic-sequence/' + feature.data['Contig'] : '/a/app/record/gene/' + feature.data['name'] }"}
+                            ],
+    };
+    
+    push @{$result->{tracks}}, $syntenyTrack;
+
+
+  }
+
 }
 
 sub addUnifiedSnp {
