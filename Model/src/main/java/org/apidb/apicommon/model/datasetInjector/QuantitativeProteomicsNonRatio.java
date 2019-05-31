@@ -60,16 +60,8 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
   @Override
   public void addModelReferences() {
       super.addModelReferences();
-      setDataType();
-      String myDataType = getDataType();
-
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
-      
-      if(getPropValueAsBoolean("hasPercentileData")) {
-	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-			  "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
-      }
 
   }
 
