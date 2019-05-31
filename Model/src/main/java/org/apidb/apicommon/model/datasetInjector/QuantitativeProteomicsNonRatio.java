@@ -8,7 +8,7 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
     protected void setProteinCodingProps() {
         setPropValue("defaultProteinCodingOnly", "no");
         setPropValue("proteinCodingParamVisible", "false");
-        setPropValue("hasPercentileData", "false");
+        setPropValue("hasPercentileData", "true");
     }
 
 
@@ -60,7 +60,17 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
   @Override
   public void addModelReferences() {
       super.addModelReferences();
+      setDataType();
+      String myDataType = getDataType();
+
+
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
+      
+      if(getPropValueAsBoolean("hasPercentileData")) {
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+			  "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
+      }
+
   }
 
 
