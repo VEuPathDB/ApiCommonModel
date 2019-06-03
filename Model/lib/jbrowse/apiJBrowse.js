@@ -275,6 +275,42 @@ function syntenyColor( feature ) {
     return feature.data["strand"] == 1 ? "#000080" : "#aa3311"         
 }
 
+
+function syntenyBorderColor( feature ) {
+
+    if(feature.data["type"] == 'exon') {
+        var scale = (feature._parent.data["end"] - feature._parent.data["start"]) / (Number(feature._parent.data["End"]) - Number(feature._parent.data["Start"]));        
+
+        if(scale < 0.25) {
+            return("yellow");
+        }
+    }
+
+
+}
+
+
+
+
+function syntenyHeight( feature ) {
+
+    if(feature.data["SynType"] == "span") {
+        return 5;
+    }
+
+
+    if(feature.data["type"] == 'exon') {
+        var scale = (feature._parent.data["end"] - feature._parent.data["start"]) / (Number(feature._parent.data["End"]) - Number(feature._parent.data["Start"]));        
+
+        if(scale < 0.25) {
+            return(15)
+        }
+    }
+
+    return 5;
+}
+
+
 function gsnapIntronColorFromStrandAndScore( feature ) {
     var isReversed = feature.data["IsReversed"]; 
     var sum = feature.data["TotalScore"]; 
