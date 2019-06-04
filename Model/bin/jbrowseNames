@@ -13,7 +13,7 @@ use WDK::Model::ModelConfig;
 use Data::Dumper;
 
 # TODO: remove gusHome from command line arg
-my ($gusHome, $projectId, $organismAbbrev, $isPartial, $query) = @ARGV;
+my ($gusHome, $projectId, $organismAbbrev, $type, $isPartial, $query) = @ARGV;
 
 
 my $modelConfig = new WDK::Model::ModelConfig($projectId);
@@ -35,14 +35,16 @@ if($query && lc $isPartial eq "false") {
 elsif($query && lc $isPartial eq "true") {
   $query = "%" . $query . "%";
   $operator = "like";
-
-
 }
 else {
   die "Invalid sourceId [$query] when isPartial=$isPartial";
 }
 
-my $sql = "select source_id
+
+my $sql;
+
+if($type eq 'genomic') {
+  $sql = "select source_id
      , product
      , name
      , sequence_id
@@ -56,6 +58,30 @@ where case when name is null
       end $operator lower('$query')
 and ga.taxon_id = o.taxon_id
 and o.abbrev = '$organismAbbrev'";
+}
+elsif($type eq 'protein') {
+  $sql = "select pa.source_id
+     , ga.product
+     , ga.name
+     , pa.source_id
+     , 1
+     , pa.protein_length
+from apidbtuning.proteinattributes pa
+   , apidbtuning.geneattributes ga
+   , apidb.organism o
+where case when ga.name is null 
+           then lower(pa.source_id) || ' - ' || lower(ga.product) 
+           else lower(pa.source_id) || ' - ' || lower(ga.product) || ' (' || lower(ga.name) || ')'
+      end $operator lower('$query')
+and pa.gene_source_id = ga.source_id
+and ga.taxon_id = o.taxon_id
+and o.abbrev = '$organismAbbrev'";
+}
+else {
+  die "only genomic or protein are valid types: found $type";
+}
+
+
 
 my $sh = $dbh->prepare($sql);
 $sh->execute();

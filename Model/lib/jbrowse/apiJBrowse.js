@@ -263,7 +263,16 @@ function syntenyColor( feature ) {
         return "darkseagreen";
     }
 
+    if(feature.data["type"] == 'minispan') {
+        if(feature.data["scale"] > 1.5) {
+            return "cyan";
+        }
+        if(feature.data["scale"] < -1.5) {
+            return "yellow";
+        }
+    }
 
+/**
     if(feature.data["type"] == 'exon') {
         var scale = (feature._parent.data["end"] - feature._parent.data["start"]) / (Number(feature._parent.data["End"]) - Number(feature._parent.data["Start"]));        
 
@@ -271,7 +280,7 @@ function syntenyColor( feature ) {
             return(feature.data["strand"] == 1 ? "skyblue" :  "pink")
         }
     }
-
+**/
     return feature.data["strand"] == 1 ? "#000080" : "#aa3311"         
 }
 

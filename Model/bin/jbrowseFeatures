@@ -14,7 +14,6 @@ use XML::Simple;
 
 use Data::Dumper;
 
-my $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
 
 
 my ($gusHome, $projectId, $refseqName, $start, $end, $feature, @queryParams) = @ARGV;
@@ -30,6 +29,15 @@ my $basesPerBin = $qp{basesPerBin} + 0;
 
 my $modelConfig = new WDK::Model::ModelConfig($projectId);
 
+
+my $gbrowseXmlFile;
+if($qp{seqType} eq 'protein') {
+  $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/pbrowseQueries.xml";
+}
+else {
+  $gbrowseXmlFile = $ENV{GUS_HOME} . "/lib/xml/gbrowse/gbrowseQueries.xml";
+}
+
 my $xml = XMLin($gbrowseXmlFile);
 
 my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
@@ -43,7 +51,13 @@ $dbh->{LongTruncOk} = 0;
 $dbh->{LongReadLen} = 10000000;
 ;
 
-my ($seqId) = $dbh->selectrow_array("select na_sequence_id from apidbtuning.genomicseqattributes where source_id = '$refseqName'");
+my $seqId;
+if($qp{seqType} eq 'protein') {
+  ($seqId) = $dbh->selectrow_array("select aa_sequence_id from apidbtuning.proteinattributes where source_id = '$refseqName'");
+}
+else {
+  ($seqId) = $dbh->selectrow_array("select na_sequence_id from apidbtuning.genomicseqattributes where source_id = '$refseqName'");
+}
 
 die "no seqId found for refseq $refseqName" unless($seqId);
 
@@ -51,17 +65,30 @@ my $result = {"features" => [] };
 
 my $featureSql;
 
-if($feature eq "ReferenceSequence") {
-  my $length = $end - $start; #interbase coordinates
 
-  $start = 0 if($start < 0);
+if($qp{seqType} eq 'protein') {
+  if($feature eq "ReferenceSequenceAa") {
+    my $length = $end - $start; #interbase coordinates
 
-  $featureSql = "select substr(sequence, $start, $length) as seq, $start as startm, $end as end, '$refseqName' as feature_id from apidbtuning.genomicsequencesequence where source_id = '$refseqName'"
+    $start = 0 if($start < 0);
+    $featureSql = "select substr(sequence, $start, $length) as seq, $start as startm, $end as end, '$refseqName' as feature_id from apidbtuning.proteinsequence where source_id = '$refseqName'";
+  }
+  else {
+    $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId, \@queryParams);
+  }
 }
 else {
-  $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId, \@queryParams);
-}
+  if($feature eq "ReferenceSequence") {
+    my $length = $end - $start; #interbase coordinates
 
+    $start = 0 if($start < 0);
+
+    $featureSql = "select substr(sequence, $start, $length) as seq, $start as startm, $end as end, '$refseqName' as feature_id from apidbtuning.genomicsequencesequence where source_id = '$refseqName'"
+  }
+  else {
+    $featureSql = &makeSql($xml->{module}->{'Segment.pm'}->{sqlQuery}->{$feature}->{sql}, $start, $end, $seqId, \@queryParams);
+  }
+}
 
 my $sh = $dbh->prepare($featureSql);
 $sh->execute();
