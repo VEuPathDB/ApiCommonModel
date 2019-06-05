@@ -262,8 +262,63 @@ function syntenyColor( feature ) {
         if(feature.data["strand"] == 1) return "orange" ;
         return "darkseagreen";
     }
+
+    if(feature.data["type"] == 'minispan') {
+        if(feature.data["scale"] > 1.5) {
+            return "cyan";
+        }
+        if(feature.data["scale"] < -1.5) {
+            return "yellow";
+        }
+    }
+
+/**
+    if(feature.data["type"] == 'exon') {
+        var scale = (feature._parent.data["end"] - feature._parent.data["start"]) / (Number(feature._parent.data["End"]) - Number(feature._parent.data["Start"]));        
+
+        if(scale < 0.25) {
+            return(feature.data["strand"] == 1 ? "skyblue" :  "pink")
+        }
+    }
+**/
     return feature.data["strand"] == 1 ? "#000080" : "#aa3311"         
 }
+
+
+function syntenyBorderColor( feature ) {
+
+    if(feature.data["type"] == 'exon') {
+        var scale = (feature._parent.data["end"] - feature._parent.data["start"]) / (Number(feature._parent.data["End"]) - Number(feature._parent.data["Start"]));        
+
+        if(scale < 0.25) {
+            return("yellow");
+        }
+    }
+
+
+}
+
+
+
+
+function syntenyHeight( feature ) {
+
+    if(feature.data["SynType"] == "span") {
+        return 5;
+    }
+
+
+    if(feature.data["type"] == 'exon') {
+        var scale = (feature._parent.data["end"] - feature._parent.data["start"]) / (Number(feature._parent.data["End"]) - Number(feature._parent.data["Start"]));        
+
+        if(scale < 0.25) {
+            return(15)
+        }
+    }
+
+    return 5;
+}
+
 
 function gsnapIntronColorFromStrandAndScore( feature ) {
     var isReversed = feature.data["IsReversed"]; 
@@ -881,6 +936,7 @@ function syntenyTitle(track, feature, featureDiv) {
 
   
 function synGeneTitle(track, feature) {
+    console.log(feature);
     var sourceId = feature.data["name"];
     var taxon = feature.data["Taxon"];
     var orgAbbrev = feature.data["OrgAbbrev"];
