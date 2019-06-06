@@ -7,7 +7,9 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
     protected void setProteinCodingProps() {
         setPropValue("defaultProteinCodingOnly", "no");
         setPropValue("proteinCodingParamVisible", "false");
-        setPropValue("hasPercentileData", "false");
+
+	String hasPercentileDataValue = getPropValue("hasPercentileData");
+        setPropValue("hasPercentileData", hasPercentileDataValue);
     }
 
     @Override
