@@ -51,6 +51,133 @@ function titleCase(str) {
    return splitStr.join(' '); 
 }
 
+
+function interproColors (feature) {
+    var colors = ["red", "green", "yellow", "blue", "khaki", "pink", "orange", "cyan", "purple", "black"];
+    /**
+       SQL> select name from sres.externaldatabase where row_alg_invocation_id = (select row_alg_invocation_id from sres.externaldatabase where name = 'SUPERFAMILY');
+    **/
+    var dbToColor = {'PRINTS' : 'red', 
+                     'SUPERFAMILY' : 'green', 
+                     'PRODOM' : 'yellow', 
+                     'PFAM' : 'blue', 
+                     'PROSITEPROFILES' : 'khaki', 
+                     'INTERPRO' : 'pink', 
+                     'PIRSF' : 'orange', 
+                     'SMART' : 'cyan', 
+                     'GENE3D' : 'purple', 
+                     'TIGRFAM' : 'black'
+                     };
+
+    return dbToColor[feature.data["Db"]];
+}
+
+function lowcomplexitySegTitle (track, feature, featDiv) {
+    var rows = new Array();
+    var sequence = feature.data["Sequence"];
+
+    rows.push(twoColRow('Coordinates:', feature.data["start"] + " .. " + feature.data["end"]));
+    rows.push(twoColRow('Sequence:', sequence));
+    return table(rows);
+}
+
+
+
+function blastpTitle (track, feature, featDiv) {
+  var name = feature.data["name"];
+  var desc = feature.data["note"];
+  if(!desc) {
+      desc = "<i>unavailable</i>";
+  }
+//  $desc =~ s/\001.*//;
+    var rows = new Array();
+
+    rows.push(twoColRow('Name:', name));
+    rows.push(twoColRow('Description:', desc));
+    rows.push(twoColRow('Expectation:', feature.data["Expect"]));
+    rows.push(twoColRow('% Identical:', feature.data["PercentIdentity"]));
+    rows.push(twoColRow('% Positive:', feature.data["PercentPositive"]));
+    rows.push(twoColRow('Coordinates:', feature.data["start"] + " .. " + feature.data["end"]));
+    return table(rows);
+}
+
+
+function tmhmmTitle (track, feature, featDiv) {
+    var desc = feature.data["Topology"];
+    var rows = new Array();
+
+    rows.push(twoColRow('Topology:', desc));
+    rows.push(twoColRow('Coordinates:', feature.data["start"] + " .. " + feature.data["end"]));
+    return table(rows);
+}
+
+
+function signalpTitle (track, feature, featDiv) {
+    var rows = new Array();
+    var d_score = feature.data["DScore"];
+    var signal_prob = feature.data["SignalProb"];
+    var conclusion_score = feature.data["ConclusionScore"];
+    var algorithm = feature.data["Algorithm"]; // 'SignalPhmm' or 'SignalPnn'
+    algorithm = (algorithm == 'SignalPhmm') ? 'SP-HMM' : 'SP-NN';
+
+    rows.push(twoColRow('Coordinates:', feature.data["start"] + " .. " + feature.data["end"]));
+    rows.push(twoColRow('NN Conclusion Score:', conclusion_score));
+    rows.push(twoColRow('NN D-Score:', d_score));
+    rows.push(twoColRow('HMM Signal Probability:', signal_prob));
+    rows.push(twoColRow('Algorithm:', algorithm));
+
+    return table(rows);
+}
+
+
+function interproTitle (track, feature, featDiv) {
+    var name = feature.data["name"];
+    var desc = feature.data["Note"];
+    var db = feature.data["Db"];
+    var url = feature.data["Url"];
+    var evalue = feature.data["Evalue"];
+    var interproId = feature.data["InterproId"];
+    //  $evalue = sprintf("%.2E", $evalue);
+
+    var rows = new Array();
+    rows.push(twoColRow('Accession:', name));
+    rows.push(twoColRow('Description:', desc));
+    rows.push(twoColRow('Database:', db));
+    rows.push(twoColRow('Coordinates:', feature.data["start"] + " .. " + feature.data["end"]));
+    rows.push(twoColRow('Evalue:', evalue));
+    rows.push(twoColRow('Interpro:', interproId));
+
+    return table(rows);
+}
+
+function interproLink (feature) {
+  var db = feature.data['Db'];
+  var pi = feature.data['Pi'];
+
+  var url;
+  if(db == 'INTERPRO') { 
+    url = "http://www.ebi.ac.uk/interpro/DisplayIproEntry?ac=" + pi;
+  } else if( db == 'PFAM') { 
+    url = "http://pfam.xfam.org/family?acc=" + pi;
+  } else if( db == 'PRINTS') {
+    url = "http://umber.sbs.man.ac.uk/cgi-bin/dbbrowser/sprint/searchprintss.cgi?prints_accn=" + pi + "&display_opts=Prints&category=None&queryform=false&regexpr=off";
+  } else if( db == 'PRODOM') {
+    url = "http://prodom.prabi.fr/prodom/current/cgi-bin/request.pl?question=DBEN&query=" + pi;
+  } else if( db == 'PROFILE') {
+    url = "http://www.expasy.org/prosite/" + pi;
+  } else if( db == 'SMART') {
+    url = "http://smart.embl-heidelberg.de/smart/do_annotation.pl?ACC=" + pi + "&BLAST=DUMMY"; 
+  } else if( db == 'SUPERFAMILY') { 
+    url = "http://supfam.org/SUPERFAMILY/cgi-bin/scop.cgi?ipid=" + pi;
+  } else {
+    url = "http://www.ebi.ac.uk/interpro/ISearch?query=" + pi + "&mode=all";
+  }
+
+  return url;
+}
+
+
+
 /****** Pop-up functions for various record types ******/
 
 function microsatelliteTitle(track, feature, featDiv) {
@@ -646,7 +773,7 @@ function repeatFamily(track, feature, featureDiv) {
 function transposon(track, feature, featureDiv) {
   var rows = new Array();
 
-    console.log(feature);
+
     rows.push(twoColRow('Transposable Element:', feature.data["name"] ));
     rows.push(twoColRow('Name:', feature.data["te_name"] ));
     rows.push(twoColRow('Size:', feature.data["alignLength"] ));
@@ -657,7 +784,6 @@ function transposon(track, feature, featureDiv) {
 
 function bindingSiteTitle(track, feature, featureDiv) {
 
-//    console.log(feature);
     var name = feature.data["Name"];
     var start = feature.data["startm"];
     var end  = feature.data["end"];
@@ -766,7 +892,6 @@ function genericEndFeatureTitle(track, feature, trackType) {
 
   var count = 0;
   feature.data["subfeatures"].forEach(function(element) {
-      console.log(element);
 
     count = count + 1;
     var name  = element.data['name']; 
@@ -822,8 +947,6 @@ function gene_title_gff (tip, sourceId, fiveUtr, cdss, threeUtr, totScore, fiveS
 }
 
 function gffGeneFeatureTitle(track, feature) { 
-    
-//    console.log(feature);
     
     var sourceId = feature.data["name"];
     var strand = feature.data["strand"];
@@ -936,7 +1059,7 @@ function syntenyTitle(track, feature, featureDiv) {
 
   
 function synGeneTitle(track, feature) {
-    console.log(feature);
+
     var sourceId = feature.data["name"];
     var taxon = feature.data["Taxon"];
     var orgAbbrev = feature.data["OrgAbbrev"];
