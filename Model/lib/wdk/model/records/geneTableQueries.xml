@@ -4087,34 +4087,63 @@ ORDER BY ggp.profile_graph_id,dataset_id, d.node_order_num, d.protocol_app_node_
             <column name="project_id"/>
             <column name="experiment"/>
             <column name="gene"/>
-            <column name="sample_name"/>
-            <column name="value"/>
+            <column name="sample1"/>
+            <column name="sample2"/>
+            <column name="sample1_value"/>
+            <column name="sample2_value"/>
+            <column name="fold_change"/>
+            <column name="diff"/>
+            <column name="threshold"/>
             <sql>
             <![CDATA[
-SELECT ggp.source_id 
-, ggp.profile_graph_id AS gene
-, SUBSTR(p.profile_set_name, 0, INSTR(p.profile_set_name, '[')-1) as experiment
-, d.sample_name
-, d.value
-, ga.project_id
-FROM apidbTuning.ExpressionGraphsData d, apidbTuning.DatasetNameTaxon dp,
-     apidbTuning.GeneGroupProfile ggp, apidbtuning.geneattributes ga,
-     apidbTuning.Profile p
-  where p.dataset_type = 'transcript_expression' 
-  and p.dataset_subtype = 'rnaseq' 
-  and p.profile_type = 'values' 
-  and p.profile_set_name not like '%nonunique%'
-  and (p.profile_set_name like '%firststrand%' 
-       or p.profile_set_name like '%unstranded%')
-  AND dp.name = p.dataset_name
-  AND dp.dataset_presenter_id = d.dataset_id
-  AND ggp.source_id = p.source_id
-  AND ggp.source_id = ga.source_id
-  AND dp.name = ggp.dataset_name
-  AND ggp.profile_graph_id = d.source_id
-  AND d.sample_name not like '%antisense%'
-  AND d.sample_name like '%unique%'
-ORDER BY ggp.profile_graph_id, experiment, d.node_order_num, d.protocol_app_node_id
+select source_id, gene, experiment, sample1, sample2, sample1_value, sample2_value, fold_change, project_id,
+CASE WHEN (fold_change > 2 or fold_change < -2) THEN 'yes'
+     ELSE 'no' end as diff,
+CASE WHEN (sample1_value > .01 and sample2_value > .01) THEN 'yes'
+     ELSE 'no' end as threshold
+from (
+  SELECT ggp.source_id 
+  , ggp.profile_graph_id AS gene
+  , SUBSTR(p.profile_set_name, 0, INSTR(p.profile_set_name, '[')-1) as experiment
+  , d.sample_name as sample1
+  , d2.sample_name as sample2
+  , CASE WHEN (d.value < .01) THEN .01
+         ELSE d.value end as sample1_value
+  , CASE WHEN (d2.value < .01) THEN .01
+         ELSE d2.value end as sample2_value
+  , CASE WHEN (d.value > d2.value) THEN 
+          CASE WHEN (d2.value < .01) THEN round(d.value/.01, 2)
+               ELSE round(d.value/d2.value, 2)
+          END
+         ELSE 
+          CASE WHEN (d.value < .01) THEN round(d2.value/.01, 2)
+               ELSE round(d2.value/d.value*-1, 2)
+          END
+    END AS fold_change
+  , ga.project_id
+  FROM apidbTuning.ExpressionGraphsData d, apidbTuning.ExpressionGraphsData d2,
+       apidbTuning.DatasetNameTaxon dp, apidbTuning.Profile p,
+       apidbTuning.GeneGroupProfile ggp, apidbtuning.geneattributes ga
+    where p.dataset_type = 'transcript_expression' 
+    and p.dataset_subtype = 'rnaseq' 
+    and p.profile_type = 'values' 
+    and p.profile_set_name not like '%nonunique%'
+    and (p.profile_set_name like '%firststrand%' 
+         or p.profile_set_name like '%unstranded%')
+    AND dp.name = p.dataset_name
+    AND dp.dataset_presenter_id = d.dataset_id
+    AND ggp.source_id = p.source_id
+    AND ggp.source_id = ga.source_id
+    AND dp.name = ggp.dataset_name
+    AND ggp.profile_graph_id = d.source_id
+    AND ggp.profile_graph_id = d2.source_id
+    AND d.sample_name not like '%antisense%'
+    AND d.sample_name like '%unique%'
+    AND d2.sample_name not like '%antisense%'
+    AND d2.sample_name like '%unique%'
+    and d.dataset_id = d2.dataset_id
+    and d.sample_name != d2.sample_name
+  ORDER BY ggp.profile_graph_id, experiment, fold_change) fc
              ]]>
             </sql>
           </sqlQuery>
