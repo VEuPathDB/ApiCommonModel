@@ -80,16 +80,6 @@ public class QuantitativeProteomicsDirectComparison extends ExpressionTwoChannel
   public void addModelReferences() {
       super.addModelReferences();
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
-
-
-      setDataType();
-      String myDataType = getDataType();
-
-      if(getPropValueAsBoolean("hasPercentileData")) {
-	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-			  "GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
-        }
-
   }
 
 
