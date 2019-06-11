@@ -68,7 +68,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         if(getPropValueAsBoolean("hasPercentileData")) {
 	    setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-percentile");
-	    injectTemplate("internalGeneSearchCategory");
+
 
 	    if (lcDataType.equals("proteomics")) {
 		injectTemplate("expressionPercentileQuestion");
@@ -82,6 +82,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 		setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName() + "Percentile");
 		injectTemplate("expressionPercentileQuestionDirect");
 	    }
+	    injectTemplate("internalGeneSearchCategory");
         }
 
     }
