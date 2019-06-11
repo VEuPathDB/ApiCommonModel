@@ -112,7 +112,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-	    if (lcDataType.equals("proteomics")) {
+	    if (myDataType.equals("Proteomics")) {
 		addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
 				"GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
 	    } else {
