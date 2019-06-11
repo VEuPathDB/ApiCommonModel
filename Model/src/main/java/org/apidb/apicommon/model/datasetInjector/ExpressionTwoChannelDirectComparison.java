@@ -120,8 +120,8 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 				"GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName() + "Percentile");
 
 	    }
+	}
     }
-
 
 
 
