@@ -175,6 +175,11 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
     if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
     String organismFullName = orgProps.get("organismFullName");
+
+    String runExportPred = orgProps.get("runExportPred");
+    if(runExportPred != null && runExportPred.toLowerCase().equals("true")) {
+        injectTemplate("jbrowseExportPredPbrowse");
+    }
     
     String[] orgs = organismFullName.split(" ");
 
