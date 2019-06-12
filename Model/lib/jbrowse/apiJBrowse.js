@@ -72,6 +72,15 @@ function interproColors (feature) {
     return dbToColor[feature.data["Db"]];
 }
 
+
+function exportPredTitle(track, feature) {
+    var rows = new Array();
+    var name = feature.data["DomainName"];
+    rows.push(twoColRow('Name:', name));
+    rows.push(twoColRow('Coordinates:', feature.data["start"] + " .. " + feature.data["end"]));
+    return table(rows);
+}
+
 function lowcomplexitySegTitle (track, feature, featDiv) {
     var rows = new Array();
     var sequence = feature.data["Sequence"];
