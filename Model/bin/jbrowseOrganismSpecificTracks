@@ -26,6 +26,7 @@ my $datasetProperties = &datasetProperties($dbh);
 
 &addChipChipTracks($dbh, $result, $datasetProperties);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
+&addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 
 print encode_json($result);
 
@@ -43,7 +44,19 @@ select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
 where dsp.name like '${organismAbbrev}%_smallNcRna_%_RSRC'
-and dsp.dataset_presenter_id = prop.dataset_presenter_id";
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+UNION
+select distinct dsp.name, prop.property, prop.value
+from apidbtuning.datasetnametaxon dnt,
+     apidbtuning.datasetproperty prop,
+     apidbtuning.datasetpresenter dsp,
+     apidb.organism o
+where dnt.taxon_id = o.taxon_id
+and o.public_abbrev = '${organismAbbrev}'
+and dnt.name like '%_massSpec%_RSRC'
+and dnt.dataset_presenter_id = prop.dataset_presenter_id
+and prop.dataset_presenter_id = dsp.dataset_presenter_id
+";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
@@ -57,6 +70,57 @@ and dsp.dataset_presenter_id = prop.dataset_presenter_id";
   return \%datasetProperties;
 }
 
+sub addProteinExpressionMassSpec {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /_massSpec_/);
+
+    my $experimentName = $datasetProperties->{$dataset}->{name};
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $category = $datasetProperties->{$dataset}->{datasetClassCategory};
+
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    my $massSpec = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                    baseUrl => "/a/service/jbrowse",
+                    type => "JBrowse/View/Track/CanvasFeatures",
+                    glyph => "JBrowse/View/FeatureGlyph/Segments",
+                    subParts => "Peptide",
+                    displayMode => "compact",
+                    query => {'feature' => "domain:MassSpecPeptide",
+                              'edName' => "like '${dataset}'",
+                    },
+                    key => "${datasetDisplayName}  MS/MS Peptides TEST",
+                    label => "${datasetDisplayName}  MS/MS Peptides TEST",
+                    category => "Proteomics",
+                    style => {'color' => "{massSpecColor}",
+                              'label' => "Sample,sample,name",
+                    },
+                    metadata => {
+                      subcategory => 'Protein Expression',
+                      dataset => $datasetDisplayName,
+                      trackType => 'Segments',
+                      attribution => $shortAttribution,
+                      description => $summary,
+                    },
+                    fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+                    onClick => {
+                      content => "{massSpecDetails}",
+                    },
+                    menuTemplate => [
+                      {label => "View Details", 
+                       content => "{massSpecDetails}",
+                      },
+                        ],
+    };
+
+    push @{$result->{tracks}}, $massSpec;
+  }
+}
 
 sub addSmallNcRnaSeq {
   my ($dbh, $result, $datasetProperties) = @_;
