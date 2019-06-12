@@ -389,6 +389,143 @@ function gsnapIntronHeightFromPercent ( feature ) {
 }
 
 
+function unifiedPostTranslationalModColor(feature) {
+  var ontology = feature.data['ModificationType'];
+
+  if(/phosphorylation_site/i.test(ontology)) {
+    return 'dodgerblue';
+  } else if (/modified_L_cysteine/i.test(ontology)) {
+    return 'deepskyblue';
+  } else if (/iodoacetamide_derivatized_residue/i.test(ontology)) {
+    return 'blueviolet';
+  } else if (/modified_L_methionine/i.test(ontology)) {
+    return 'steelblue';
+  }
+  return 'blue';
+}
+
+function unifiedPostTranslationalModTitle(track, feature) {
+    var experiments = feature.data['Experiments'];
+    var samples = feature.data['Samples'];
+
+    var pepSeqs = feature.data['PepSeqs'];
+    var pepNaFeatIds = feature.data['PepAAFeatIds'];
+    var mscounts = feature.data['MSCounts'];
+
+    var residueLocations = feature.data['ResidueLocs'];
+    var ontologys = feature.data['Ontologys'];
+
+    var aaStartMins = feature.data['AAStartMins'];
+
+    var location = feature.data["end"];
+    var featureName = feature.data["name"];
+
+    var rows = new Array();
+
+    var hash = {};
+
+    var exps = experiments.split('|');
+    var smpls = samples.split('|');
+    var pepseqs = pepSeqs.split('|');
+    var pepNaFeatIds = pepNaFeatIds.split('|');
+
+    var mscts = mscounts.split('|');
+    var onts = ontologys.split('|');
+    var resLocs = residueLocations.split('|');
+    var aaStartMins = aaStartMins.split('|');
+
+    for(var i = 0; i < exps.length; i++) {
+        var expt = exps[i];
+        var sample = smpls[i];
+        var pepSeq = pepseqs[i];
+        var pepNaFeatId = pepNaFeatIds[i];
+        var msct = mscts[i];
+        var allAaMin = aaStartMins[i];
+        var allOnt = onts[i];
+        var allResidueLoc = resLocs[i];
+        
+        var resLocsArr = allResidueLoc.split(',');
+        var ontArr = allOnt.split(',');
+        var aaMinArr = allAaMin.split(',');
+
+        var match = false;
+        resLocsArr.forEach(function(e) {
+            if(e == location) match = true ;
+        });
+
+        if(match) {
+            if(!hash[expt]) {
+                hash[expt] = {};
+            }
+            if(!hash[expt][sample]) {
+                hash[expt][sample] = {};
+            }
+            if(!hash[expt][sample][pepNaFeatId]) {
+                hash[expt][sample][pepNaFeatId] = [];
+            }
+            hash[expt][sample][pepNaFeatId].push({'pepSeq' :  pepSeq, 'mscount' : msct, 'residue_locations' : resLocsArr, 'ontology' : ontArr, 'aa_start' : aaMinArr});
+        }
+    }
+
+    rows.push(twoColRow('Residue: ', featureName));
+
+
+   for(var e in hash) {
+       rows.push(twoColRow('===========', "======================="));
+       rows.push(twoColRow('Experiment: ', e));
+
+      for(var s in hash[e]) {
+          rows.push(twoColRow('Sample: ', s));
+
+        for(var pi in hash[e][s]) {
+            hash[e][s][pi].forEach(function(peps){
+                
+                var pepSequence = peps['pepSeq'];
+                var msCount = peps['mscount'];
+
+                var residueLocations = peps['residue_locations'];
+                var ontology = peps['ontology']
+                var aaStarts = peps['aa_start'];
+
+                if(residueLocations) {
+
+                    var offset = 1;
+
+                    // residue locations are sorted in sql
+                    for(var i = 0; i < residueLocations.length; i++) {
+                        var rl = residueLocations[i];
+                        var type = ontology[i];
+                        var aaStart = aaStarts[i];
+
+                        var loc = rl - aaStart + 1 + offset;
+
+
+                        if(/phosphorylation/i.test(type)) {
+                            pepSequence = [pepSequence.slice(0, loc), '*', pepSequence.slice(loc)].join('');
+                        }
+                        if(/methionine/i.test(type)) {
+                            pepSequence = [pepSequence.slice(0, loc), '#', pepSequence.slice(loc)].join('');
+
+                        }
+                        if(/cysteine/i.test(type)) {
+                            pepSequence = [pepSequence.slice(0, loc), '^', pepSequence.slice(loc)].join('');
+                        }
+                        
+                        offset = offset + 1;
+                    }
+                }
+                    rows.push(twoColRow('Sequence: ', pepSequence + ' (' + msCount + ')'));
+            
+                });
+        }
+     }
+   }
+  
+  return table(rows);
+
+}
+
+
 function syntenyColor( feature ) {
 
     if(feature.data["SynType"] == "span") {
