@@ -35,7 +35,6 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
 
       injectTemplate("proteinExpressionMassSpecGBrowseTrack");
-      injectTemplate("jbrowseProteinExpressionMassSpec");
 
       setPropValue("gbrowseTrackName", "MassSpecPeptides_" + getDatasetName());
       injectTemplate("gbrowseTrackCategory");
@@ -43,11 +42,9 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
       if(getPropValueAsBoolean("hasPTMs")) {
           injectTemplate("proteinExpressionMassSpecPhosphoPBrowseTrack");
-          injectTemplate("jbrowseProteinExpressionMassSpecPhosphoPBrowse");
       }
       else {
           injectTemplate("proteinExpressionMassSpecPBrowseTrack");
-          injectTemplate("jbrowseProteinExpressionMassSpecPBrowse");
       }
   }
 
