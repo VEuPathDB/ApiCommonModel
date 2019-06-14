@@ -1019,6 +1019,217 @@ SELECT
     </sql>
   </sqlQuery>
 
+
+
+
+  <sqlQuery name="gene:syntenyJBrowseScaled" excludeProjects="TrichDB">
+     <sql>
+<![CDATA[
+-- for: reference organism - gene
+SELECT
+       'refgene_' || gattr.na_feature_id feature_id,
+       'gene' type, 
+       'syntenyJBrowseScaled' source, 
+       gattr.source_id name, 
+       '.' score, 
+       gattr.na_sequence_id parent_id,
+       gattr.start_min startm,
+       gattr.end_max end,
+       decode(is_reversed, 0, +1, 1, -1, +1) strand,
+       'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'SOTerm=' || gattr.so_term_name || '$dlm' ||
+       'Contig=' || gattr.sequence_id || '$dlm' ||
+       'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
+       'isDeprecated=' || gattr.is_deprecated || '$dlm' ||
+       'Start=' || gattr.start_min || '$dlm' ||
+       'End=' || gattr.end_max || '$dlm' ||
+       'isReversed=' || gattr.is_reversed || '$dlm' ||
+       'SynType=' || 'gene' ||  '$dlm' || 
+       'orthomcl_name=' || gattr.orthomcl_name || '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||  
+       'Phylum=' || ostr.phylum ||  '$dlm' ||  
+       'Genus=' || ostr.genus ||  '$dlm' ||  
+       'Species=' || ostr.species ||  '$dlm' || 
+       'Taxon=' || gattr.organism ||  '$dlm' || 
+       'OrgAbbrev=' || ostr.public_abbrev atts
+FROM 
+       ApidbTuning.GeneAttributes gattr,
+       apidbtuning.OrganismSelectTaxonRank ostr
+WHERE gattr.na_sequence_id = $srcfeature_id
+  AND start_min <= $rend
+  AND end_max >= $base_start
+  AND gattr.organism = ostr.organism
+UNION
+-- for: reference organism - span
+SELECT
+        'refseq_' || na_sequence_id feature_id,
+        'gene' type, 
+        'syntenyJBrowseScaled' source, 
+        source_id name, 
+        '.' score, 
+        null parent_id,
+        1 startm,
+        sa.length end, 
+        1 strand,
+       'RefStart=' || $base_start || '$dlm' ||
+       'RefEnd=' || $rend || '$dlm' ||
+       'RefContigLength=' || length || '$dlm' ||
+       'SynStart=' || $base_start || '$dlm' ||
+       'SynEnd=' || $rend || '$dlm' ||
+       'ContigLength=' || length || '$dlm' ||
+        'Contig=' || source_id || '$dlm' ||
+        'Chromosome=' || chromosome || '$dlm' ||
+        'ExtDBName=' || database_name || '$dlm' ||
+        'SynType=' || 'span' ||  '$dlm' ||
+        'Scale=1' ||  '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||  
+       'Phylum=' || ostr.phylum ||  '$dlm' ||  
+       'Genus=' || ostr.genus ||  '$dlm' ||  
+       'Species=' || ostr.species ||  '$dlm' || 
+       'Taxon=' || sa.organism  ||  '$dlm' || 
+       'OrgAbbrev=' || ostr.public_abbrev atts
+ FROM 
+       ApidbTuning.GenomicSeqAttributes sa,
+       apidbtuning.OrganismSelectTaxonRank ostr
+ WHERE  na_sequence_id = $srcfeature_id 
+ AND sa.organism=ostr.organism
+UNION
+-- for syntenic genes
+select * from (
+-- first get all genes in the visible region
+with syn_genes as (
+select sg.synteny_id
+     , ga.start_min syn_gene_start 
+     , ga.end_max syn_gene_end
+     , ga.na_sequence_id as syn_na_sequence_id
+     , ga.na_feature_id as syn_na_feature_id
+     , sg.syn_organism_abbrev
+     , sg.is_reversed as syn_gene_is_reversed
+     , sg.start_min ref_gene_start
+     , sg.end_max ref_gene_end
+     , sg.na_sequence_id ref_na_sequence_id
+from apidb.syntenicgene sg, 
+     apidbtuning.geneattributes ga
+where sg.na_sequence_id = $srcfeature_id
+  AND sg.start_min <=  $$visibleRegionEnd$$
+  AND sg.end_max >=  $$visibleRegionStart$$
+  AND sg.syn_na_feature_id = ga.na_feature_id
+),
+-- calc stats for scaling
+sscale as (
+select synteny_id
+     , min(syn_gene_start) syn_min
+     , max(syn_gene_end) syn_max
+     , max(syn_gene_end) - min(syn_gene_start) + 1 as syn_length
+     , min(ref_gene_start) ref_min
+     , max(ref_gene_end) ref_max
+     , max(ref_gene_end) - min(ref_gene_start) + 1 as ref_length
+from syn_genes
+group by synteny_id),
+-- calc gene coords in ref space
+scaled_syngenes as (
+select sg.syn_na_sequence_id
+     , sg.syn_na_feature_id
+     , sg.syn_organism_abbrev
+     , sg.synteny_id
+     , CASE WHEN s.is_reversed = 1 
+            THEN round(ref_max - (((syn_gene_end - syn_min + 1) / syn_length) * ref_length))
+            ELSE round(ref_min + (((syn_gene_start - syn_min + 1) / syn_length) * ref_length)) 
+        END as s
+     , CASE WHEN s.is_reversed = 1 
+            THEN round(ref_max - (((syn_gene_start - syn_min + 1) / syn_length) * ref_length))
+            ELSE round(ref_min + (((syn_gene_end - syn_min + 1) / syn_length) * ref_length))
+        END as e
+     , sg.syn_gene_is_reversed
+     , ref_na_sequence_id
+from syn_genes sg,
+     sscale ss,
+     apidb.synteny s
+where sg.synteny_id = s.synteny_id
+ and ss.synteny_id = s.synteny_id
+)
+SELECT
+       sg.synteny_id || '_syngene_' || gattr.na_feature_id feature_id,
+       'gene' type,
+       'syntenyJBrowseScaled' source,
+       gattr.source_id name,
+       '.' score,
+       sg.ref_na_sequence_id parent_id,
+       sg.s startm, 
+       sg.e end,
+       decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
+      'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'SOTerm=' || gattr.so_term_name || '$dlm' ||
+       'Contig=' || gattr.sequence_id || '$dlm' ||
+       'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
+       'isDeprecated=' || gattr.is_deprecated || '$dlm' ||
+       'Start=' || gattr.start_min || '$dlm' ||
+       'End=' || gattr.end_max || '$dlm' ||
+       'IsReversed=' || gattr.is_reversed || '$dlm' ||
+       'SynType=' || 'gene' ||  '$dlm' ||
+       'orthomcl_name=' || gattr.orthomcl_name || '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||
+       'Phylum=' || ostr.phylum ||  '$dlm' ||
+       'Genus=' || ostr.genus ||  '$dlm' ||
+       'Species=' || ostr.species ||  '$dlm' ||
+       'Taxon=' || gattr.organism  ||  '$dlm' ||
+       'OrgAbbrev=' || sg.syn_organism_abbrev atts
+FROM   scaled_syngenes sg,
+       ApidbTuning.GeneAttributes gattr,
+       apidbtuning.OrganismSelectTaxonRank ostr
+WHERE sg.ref_na_sequence_id = $srcfeature_id
+  AND sg.s <= $rend
+  AND sg.e >= $base_start
+  AND sg.syn_na_feature_id = gattr.na_feature_id
+  AND gattr.organism = ostr.organism 
+)
+UNION
+-- for syntenic spans
+SELECT
+        s.synteny_id || '_synseq_' || sa.na_sequence_id feature_id,
+        'gene' type,
+        'syntenyJBrowseScaled' source,
+        sa.source_id name,
+        '.' score,
+        null parent_id,
+        s.a_start startm,
+        s.a_end end,
+        decode(s.is_reversed, 0, +1, 1, -1, +1) strand,
+       'RefStart=' || s.a_start || '$dlm' ||
+       'RefEnd=' || s.a_end || '$dlm' ||
+       'RefContigLength=' || to_char(s.a_end-s.a_start+1)  || '$dlm' ||
+       'SynStart=' || s.b_start || '$dlm' ||
+       'SynEnd=' || s.b_end || '$dlm' ||
+       'ContigLength=' || sa.length || '$dlm' ||
+        'Contig=' || sa.source_id || '$dlm' ||
+        'Chromosome=' || sa.chromosome || '$dlm' ||
+        'ExtDBName=' || sa.database_name || '$dlm' ||
+        'SynType=' || 'span' ||  '$dlm' ||
+        'Scale=1' ||  '$dlm' ||
+       'Kingdom=' || ostr.kingdom ||  '$dlm' ||
+       'Class=' || ostr.class ||  '$dlm' ||
+       'Phylum=' || ostr.phylum ||  '$dlm' ||
+       'Genus=' || ostr.genus ||  '$dlm' ||
+       'Species=' || ostr.species ||  '$dlm' ||
+       'Taxon=' || sa.organism  ||  '$dlm' || 
+       'OrgAbbrev=' || ostr.public_abbrev atts
+ FROM
+       Apidb.Synteny s,
+       ApidbTuning.GenomicSeqAttributes sa,
+       apidbtuning.OrganismSelectTaxonRank ostr
+ WHERE  s.a_na_sequence_id = $srcfeature_id
+ AND s.a_start <= $rend
+ AND s.a_end >= $base_start
+ AND s.b_na_sequence_id = sa.na_sequence_id
+ AND sa.organism=ostr.organism
+
+]]>
+    </sql>
+  </sqlQuery>
+
   
   
   <sqlQuery name="lowcomplexity:dust">
