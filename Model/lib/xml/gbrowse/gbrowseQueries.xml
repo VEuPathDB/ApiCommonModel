@@ -4053,6 +4053,115 @@ SELECT
     </sql>
   </sqlQuery>
 
+
+
+
+  <sqlQuery name="gene:syntenyJBrowseScaled:bulksubfeatures" excludeProjects="TrichDB">
+
+     <sql>
+<![CDATA[
+-- for syntenic genes
+select * from (
+-- first get all exons in the visible region
+with syn_genes as (
+select sg.synteny_id
+     , fl.start_min syn_exon_start 
+     , fl.end_max syn_exon_end
+     , fl.na_sequence_id as syn_na_sequence_id
+     , fl.na_feature_id as syn_na_feature_id
+     , sg.syn_organism_abbrev
+     , sg.is_reversed as syn_gene_is_reversed
+     , sg.start_min ref_gene_start
+     , sg.end_max ref_gene_end
+     , sg.na_sequence_id ref_na_sequence_id
+     , fl.parent_id as gene_na_feature_id
+from apidb.syntenicgene sg, 
+     apidb.featurelocation fl
+where sg.na_sequence_id = $srcfeature_id
+  AND sg.start_min <=  $$visibleRegionEnd$$
+  AND sg.end_max >=  $$visibleRegionStart$$
+  AND sg.syn_na_feature_id = fl.parent_id
+  and fl.feature_type = 'ExonFeature'
+  and fl.is_top_level = 1
+),
+-- calc stats for scaling
+sscale as (
+select synteny_id
+     , min(syn_exon_start) syn_min
+     , max(syn_exon_end) syn_max
+     , max(syn_exon_end) - min(syn_exon_start) + 1 as syn_length
+     , min(ref_gene_start) ref_min
+     , max(ref_gene_end) ref_max
+     , max(ref_gene_end) - min(ref_gene_start) + 1 as ref_length
+from syn_genes
+group by synteny_id),
+-- calc exon coords in ref space
+scaled_syngenes as (
+select sg.syn_na_sequence_id
+     , sg.syn_na_feature_id
+     , sg.syn_organism_abbrev
+     , sg.synteny_id
+     , CASE WHEN s.is_reversed = 1 
+            THEN round(ref_max - (((syn_exon_end - syn_min + 1) / syn_length) * ref_length))
+            ELSE round(ref_min + (((syn_exon_start - syn_min + 1) / syn_length) * ref_length)) 
+        END as s
+     , CASE WHEN s.is_reversed = 1 
+            THEN round(ref_max - (((syn_exon_start - syn_min + 1) / syn_length) * ref_length))
+            ELSE round(ref_min + (((syn_exon_end - syn_min + 1) / syn_length) * ref_length))
+        END as e
+     , sg.syn_gene_is_reversed
+     , ref_na_sequence_id
+     , sg.gene_na_feature_id
+from syn_genes sg,
+     sscale ss,
+     apidb.synteny s
+where sg.synteny_id = s.synteny_id
+ and ss.synteny_id = s.synteny_id
+)
+SELECT sg.syn_na_feature_id || '_synexon' as feature_id,
+       'exon' type,
+       'syntenyJBrowseScaled' source,
+       sg.syn_na_feature_id name,
+       '.' score,
+       sg.synteny_id || '_syngene_' || sg.gene_na_feature_id parent_id,
+       sg.s startm,
+       sg.e end,
+       decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts
+FROM   scaled_syngenes sg,
+       ApidbTuning.GeneAttributes gattr,
+       apidbtuning.OrganismSelectTaxonRank ostr
+WHERE sg.ref_na_sequence_id = $srcfeature_id
+  AND sg.s <= $rend
+  AND sg.e >= $base_start
+  AND sg.gene_na_feature_id = gattr.na_feature_id
+  AND gattr.organism = ostr.organism 
+)
+UNION
+SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
+       'exon' type, 
+       'annotation' source, 
+       exon_loc.na_feature_id name,
+       '.' score,
+       'refgene_' || exon_loc.parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts 
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  exon_loc.feature_type = 'ExonFeature'
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND rfe.exon_feature_id = exon_loc.na_feature_id
+  AND ta.na_feature_id = rfe.rna_feature_id
+]]>
+    </sql>
+  </sqlQuery>
+
+
+
   <sqlQuery name="gene:syntenyMC:bulksubfeatures" excludeProjects="TrichDB">
      <sql>
 <![CDATA[
