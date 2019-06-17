@@ -3854,6 +3854,8 @@ GROUP BY
             <column name="has_signalp"/>
             <column name="has_tmhmm"/>
             <column name="protein_length"/>
+            <column name="organismAbbrev"/>
+            <column name="prot_info"/>
             <sql>
             <![CDATA[
 SELECT
@@ -3866,8 +3868,12 @@ SELECT
 , case when signalp_peptide is null then 'no' else 'yes' end as has_signalp
 , case when tm_count > 0 then 'yes' else 'no' end as has_tmhmm
 , protein_length
+, o.public_abbrev as organismAbbrev
+, protein_source_id || '%3A' || '1..' || protein_length as prot_info 
 FROM
-  apidbtuning.proteinattributes
+  apidbtuning.transcriptattributes ta, apidb.organism o
+WHERE protein_length >0
+AND o.taxon_id = ta.taxon_id
 ORDER BY
   transcript_source_id
              ]]>
@@ -3882,10 +3888,13 @@ ORDER BY
             <column name="lc_project_id"/>
             <column name="transcript_id"/>
             <column name="protein_gtracks"/>
+            <column name="protein_jbrowse_tracks"/>
             <column name="sum_sequence_count"/>
             <column name="unique_sequence_count"/>
             <column name="sum_spectrum_count"/>
             <column name="sample_count"/>
+            <column name="organismAbbrev"/>
+            <column name="prot_info"/>
             <sql>
             <![CDATA[
 SELECT
@@ -3894,13 +3903,17 @@ SELECT
 , ta.project_id
 , lower(ta.project_id) as lc_project_id
 , (apidb.tab_to_string( SET(CAST(collect(track_names ORDER BY order_num, track_names) AS apidb.varchartab)), '%1E')) AS protein_gtracks
+, (apidb.tab_to_string( SET(CAST(collect(jbrowse_track_names ORDER BY order_num, jbrowse_track_names) AS apidb.varchartab)), '%2C')) AS protein_jbrowse_tracks
 , mssum.sum_sequence_count
 , mssum.unique_sequence_count
 , mssum.sum_spectrum_count
 , mssum.sample_count
+, o.public_abbrev as organismAbbrev
+, ta.protein_source_id || '%3A' || '1..' || ta.protein_length as prot_info 
 FROM
   (select
     'MassSpecPeptides_' ||dsp.name AS track_names
+  , dsp.name AS jbrowse_track_names
   , ga.source_id
   , '1' AS order_num
   FROM
@@ -3924,6 +3937,7 @@ FROM
   UNION
   SELECT
     'UnifiedPostTraslationalMod' AS track_names
+  , 'UnifiedMassSpecPeptides' AS jbrowse_track_names
   , source_id
   , '2' AS order_num
   FROM
@@ -3941,17 +3955,23 @@ FROM
     source_id
   ) mssum
 , apidbtuning.transcriptattributes ta
+, apidb.organism o
 WHERE
   ta.source_id = tracks.source_id
   AND ta.source_id = mssum.source_id
+  AND o.taxon_id = ta.taxon_id
 GROUP BY
   ta.source_id
 , ta.gene_source_id
+, ta.protein_source_id
 , ta.project_id
 , mssum.sum_sequence_count
 , mssum.unique_sequence_count
 , mssum.sum_spectrum_count
 , mssum.sample_count
+, o.public_abbrev
+, protein_length
+
              ]]>
             </sql>
           </sqlQuery>
