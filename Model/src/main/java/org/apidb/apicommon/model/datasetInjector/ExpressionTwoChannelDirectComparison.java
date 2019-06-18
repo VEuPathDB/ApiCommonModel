@@ -16,7 +16,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
 
         String lcDataType = getPropValue("dataType").toLowerCase();
 
-	if(getPropValueAsBoolean("hasPercentileData")) {
+	if((getPropValueAsBoolean("hasPercentileData"))  && !(lcDataType.equals("proteomics"))) {
 	    String channelOnePctSampleDecode = makeDecodeMappingStrings(getPropValue("channelOnePctSampleMap"));
 	    String channelTwoPctSampleDecode = makeDecodeMappingStrings(getPropValue("channelTwoPctSampleMap"));
                 
@@ -67,18 +67,23 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            injectTemplate("expressionPctSamplesParamQueryDirect");
-            injectTemplate("expressionPctProfileSetParamQuery");
-
-            //            injectTemplate(lcDataType + "PercentileCategoriesDirect");
-            setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-percentile");
-            setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName() + "Percentile");
-            injectTemplate("internalGeneSearchCategory");
+	    setPropValue("searchCategory", "searchCategory-" + getSearchCategoryType() +"-percentile");
 
 
-            injectTemplate("expressionPercentileQuestionDirect");
+	    if (lcDataType.equals("proteomics")) {
+		injectTemplate("expressionPercentileQuestion");
+		//  injectTemplate(lcDataType + "PercentileCategories");
+		setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + getDatasetName() + "Percentile");
+	    } else {
+		injectTemplate("expressionPctSamplesParamQueryDirect");
+		injectTemplate("expressionPctProfileSetParamQuery");
+
+		// injectTemplate(lcDataType + "PercentileCategoriesDirect");
+		setPropValue("questionName", "GeneQuestions.GenesBy" + getDataType() + "Direct" + getDatasetName() + "Percentile");
+		injectTemplate("expressionPercentileQuestionDirect");
+	    }
+	    injectTemplate("internalGeneSearchCategory");
         }
-
 
     }
 
@@ -108,11 +113,16 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         }
 
         if(getPropValueAsBoolean("hasPercentileData")) {
-            addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                            "GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName() + "Percentile");
-        }
-    }
+	    if (myDataType.equals("Proteomics")) {
+		addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+				"GeneQuestions.GenesBy" + myDataType + getDatasetName() + "Percentile");
+	    } else {
+		addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+				"GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName() + "Percentile");
 
+	    }
+	}
+    }
 
 
 

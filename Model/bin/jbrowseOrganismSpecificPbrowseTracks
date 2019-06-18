@@ -1,0 +1,147 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+use Data::Dumper;
+use URI::Escape;
+use Storable 'dclone';
+
+my ($organismAbbrev, $projectName) = @ARGV;
+
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+
+my $dbh = $jbrowseUtil->getDbh();   
+
+my $result = {"tracks" => [] };
+
+my $datasetProperties = &datasetProperties($dbh);
+
+&addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
+
+print encode_json($result);
+
+sub datasetProperties {
+  my ($dbh) = @_;
+
+  my $sql = "
+select distinct dsp.name, prop.property, prop.value
+from apidbtuning.datasetnametaxon dnt,
+     apidbtuning.datasetproperty prop,
+     apidbtuning.datasetpresenter dsp,
+     apidb.organism o
+where dnt.taxon_id = o.taxon_id
+and o.public_abbrev = '${organismAbbrev}'
+and dnt.name like '%_massSpec%_RSRC'
+and dnt.dataset_presenter_id = prop.dataset_presenter_id
+and prop.dataset_presenter_id = dsp.dataset_presenter_id
+";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  my %datasetProperties;
+  while(my ($datasetName, $prop, $val) = $sh->fetchrow_array()) {
+    $datasetProperties{$datasetName}->{$prop} = $val;
+  }
+  $sh->finish();
+
+  return \%datasetProperties;
+}
+
+sub addProteinExpressionMassSpec {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+
+  my $hasPTMDataset;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /_massSpec_/);
+
+    my $experimentName = $datasetProperties->{$dataset}->{name};
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $category = $datasetProperties->{$dataset}->{datasetClassCategory};
+
+    my $hasPTMs = $datasetProperties->{$dataset}->{hasPTMs};
+
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    my $feature = "domain:MassSpecPeptide";
+
+    if(lc($hasPTMs) eq 'true') {
+      $feature = "domain:MassSpecPeptidePhospho";
+      $hasPTMDataset = 1;
+    }
+
+    my $massSpec = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                    baseUrl => "/a/service/jbrowse",
+                    type => "JBrowse/View/Track/CanvasFeatures",
+                    glyph => "JBrowse/View/FeatureGlyph/Box",
+                    subParts => "Peptide",
+                    displayMode => "compact",
+                    query => {'feature' => $feature,
+                              'edName' => "like '${dataset}'",
+                              'seqType' => "protein",
+                    },
+                    key => "${datasetDisplayName}  MS/MS Peptides  ${shortAttribution}",
+                    label => "${dataset}",
+                    category => "Proteomics",
+                    style => {'color' => "{massSpecColor}",
+                              'label' => "Sample,sample,name",
+                    },
+                    metadata => {
+                      dataset => $datasetDisplayName,
+                      trackType => 'Segments',
+                      attribution => $shortAttribution,
+                      description => $summary,
+                    },
+                    fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+                    onClick => {
+                      content => "{massSpecDetails}",
+                    },
+                    menuTemplate => [
+                      {label => "View Details", 
+                       content => "{massSpecDetails}",
+                      },
+                        ],
+    };
+
+    push @{$result->{tracks}}, $massSpec;
+  }
+
+  if($hasPTMDataset) {
+
+    my $unifiedPtm = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                    baseUrl => "/a/service/jbrowse",
+                    type => "JBrowse/View/Track/CanvasFeatures",
+                    glyph => "EbrcFeatureGlyphs/View/FeatureGlyph/Diamond",
+                    query => {'feature' => "domain:UnifiedPostTraslationalMod",
+                              'seqType' => "protein",
+                    },
+                    key => "Unified Post Translational Modification MassSpec",
+                    label => "UnifiedMassSpecPeptides",
+                    category => "Proteomics",
+                    style => {'color' => "{unifiedPostTranslationalModColorFxn}",
+                      labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+                    },
+                    metadata => {
+                      trackType => 'Diamond',
+                    },
+                    onClick => {
+                      content => "{unifiedPostTranslationalModTitleFxn}",
+                    },
+                    menuTemplate => [
+                      {label => "View Details", 
+                       content => "{unifiedPostTranslationalModTitleFxn}",
+                      },
+                        ],
+    };
+
+    push @{$result->{tracks}}, $unifiedPtm;
+  }
+
+}

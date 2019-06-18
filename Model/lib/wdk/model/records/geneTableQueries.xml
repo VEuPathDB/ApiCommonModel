@@ -3854,6 +3854,8 @@ GROUP BY
             <column name="has_signalp"/>
             <column name="has_tmhmm"/>
             <column name="protein_length"/>
+            <column name="organismAbbrev"/>
+            <column name="prot_info"/>
             <sql>
             <![CDATA[
 SELECT
@@ -3866,8 +3868,12 @@ SELECT
 , case when signalp_peptide is null then 'no' else 'yes' end as has_signalp
 , case when tm_count > 0 then 'yes' else 'no' end as has_tmhmm
 , protein_length
+, o.public_abbrev as organismAbbrev
+, protein_source_id || '%3A' || '1..' || protein_length as prot_info 
 FROM
-  apidbtuning.proteinattributes
+  apidbtuning.transcriptattributes ta, apidb.organism o
+WHERE protein_length >0
+AND o.taxon_id = ta.taxon_id
 ORDER BY
   transcript_source_id
              ]]>
@@ -3882,10 +3888,13 @@ ORDER BY
             <column name="lc_project_id"/>
             <column name="transcript_id"/>
             <column name="protein_gtracks"/>
+            <column name="protein_jbrowse_tracks"/>
             <column name="sum_sequence_count"/>
             <column name="unique_sequence_count"/>
             <column name="sum_spectrum_count"/>
             <column name="sample_count"/>
+            <column name="organismAbbrev"/>
+            <column name="prot_info"/>
             <sql>
             <![CDATA[
 SELECT
@@ -3894,13 +3903,17 @@ SELECT
 , ta.project_id
 , lower(ta.project_id) as lc_project_id
 , (apidb.tab_to_string( SET(CAST(collect(track_names ORDER BY order_num, track_names) AS apidb.varchartab)), '%1E')) AS protein_gtracks
+, (apidb.tab_to_string( SET(CAST(collect(jbrowse_track_names ORDER BY order_num, jbrowse_track_names) AS apidb.varchartab)), '%2C')) AS protein_jbrowse_tracks
 , mssum.sum_sequence_count
 , mssum.unique_sequence_count
 , mssum.sum_spectrum_count
 , mssum.sample_count
+, o.public_abbrev as organismAbbrev
+, ta.protein_source_id || '%3A' || '1..' || ta.protein_length as prot_info 
 FROM
   (select
     'MassSpecPeptides_' ||dsp.name AS track_names
+  , dsp.name AS jbrowse_track_names
   , ga.source_id
   , '1' AS order_num
   FROM
@@ -3924,6 +3937,7 @@ FROM
   UNION
   SELECT
     'UnifiedPostTraslationalMod' AS track_names
+  , 'UnifiedMassSpecPeptides' AS jbrowse_track_names
   , source_id
   , '2' AS order_num
   FROM
@@ -3941,17 +3955,23 @@ FROM
     source_id
   ) mssum
 , apidbtuning.transcriptattributes ta
+, apidb.organism o
 WHERE
   ta.source_id = tracks.source_id
   AND ta.source_id = mssum.source_id
+  AND o.taxon_id = ta.taxon_id
 GROUP BY
   ta.source_id
 , ta.gene_source_id
+, ta.protein_source_id
 , ta.project_id
 , mssum.sum_sequence_count
 , mssum.unique_sequence_count
 , mssum.sum_spectrum_count
 , mssum.sample_count
+, o.public_abbrev
+, protein_length
+
              ]]>
             </sql>
           </sqlQuery>
@@ -4099,51 +4119,73 @@ ORDER BY ggp.profile_graph_id,dataset_id, d.node_order_num, d.protocol_app_node_
 select source_id, gene, experiment, sample1, sample2, sample1_value, sample2_value, fold_change, project_id,
 CASE WHEN (fold_change > 2 or fold_change < -2) THEN 'yes'
      ELSE 'no' end as diff,
-CASE WHEN (sample1_value > .01 and sample2_value > .01) THEN 'yes'
+CASE WHEN (sample1_value > 1 and sample2_value > 1) THEN 'yes'
      ELSE 'no' end as threshold
-from (
-  SELECT ggp.source_id 
-  , ggp.profile_graph_id AS gene
-  , SUBSTR(p.profile_set_name, 0, INSTR(p.profile_set_name, '[')-1) as experiment
-  , d.sample_name as sample1
-  , d2.sample_name as sample2
-  , CASE WHEN (d.value < .01) THEN .01
-         ELSE d.value end as sample1_value
-  , CASE WHEN (d2.value < .01) THEN .01
-         ELSE d2.value end as sample2_value
-  , CASE WHEN (d.value > d2.value) THEN 
-          CASE WHEN (d2.value < .01) THEN round(d.value/.01, 2)
-               ELSE round(d.value/d2.value, 2)
-          END
-         ELSE 
-          CASE WHEN (d.value < .01) THEN round(d2.value/.01, 2)
-               ELSE round(d2.value/d.value*-1, 2)
-          END
-    END AS fold_change
-  , ga.project_id
-  FROM apidbTuning.ExpressionGraphsData d, apidbTuning.ExpressionGraphsData d2,
-       apidbTuning.DatasetNameTaxon dp, apidbTuning.Profile p,
-       apidbTuning.GeneGroupProfile ggp, apidbtuning.geneattributes ga
-    where p.dataset_type = 'transcript_expression' 
+from 
+(SELECT samples.source_id 
+, samples.gene
+, samples.experiment
+, samples.sample_name as sample1
+, samples2.sample_name as sample2
+, samples.value as sample1_value
+, samples2.value as sample2_value
+, CASE WHEN (samples.value > samples2.value) THEN round(samples.value/samples2.value, 2)
+       WHEN (samples.value <= samples2.value) THEN round(samples2.value/samples.value*-1, 2)
+  END AS fold_change
+, samples.project_id
+from
+    (SELECT distinct ggp.source_id 
+    , ggp.profile_graph_id AS gene
+    , SUBSTR(p.profile_set_name, 0, INSTR(p.profile_set_name, '[')-1) as experiment
+    , d.sample_name
+    , CASE WHEN (d.value < .01) THEN .01
+            ELSE d.value end as value
+    , ga.project_id
+    FROM apidbTuning.ExpressionGraphsData d,
+         apidbTuning.DatasetNameTaxon dp, apidbTuning.Profile p, apidbtuning.profilesamples ps,
+        apidbTuning.GeneGroupProfile ggp, apidbtuning.geneattributes ga
+     where p.dataset_type = 'transcript_expression' 
     and p.dataset_subtype = 'rnaseq' 
     and p.profile_type = 'values' 
-    and p.profile_set_name not like '%nonunique%'
-    and (p.profile_set_name like '%firststrand%' 
-         or p.profile_set_name like '%unstranded%')
     AND dp.name = p.dataset_name
     AND dp.dataset_presenter_id = d.dataset_id
     AND ggp.source_id = p.source_id
     AND ggp.source_id = ga.source_id
     AND dp.name = ggp.dataset_name
     AND ggp.profile_graph_id = d.source_id
-    AND ggp.profile_graph_id = d2.source_id
     AND d.sample_name not like '%antisense%'
     AND d.sample_name like '%unique%'
-    AND d2.sample_name not like '%antisense%'
-    AND d2.sample_name like '%unique%'
-    and d.dataset_id = d2.dataset_id
-    and d.sample_name != d2.sample_name
-  ORDER BY ggp.profile_graph_id, experiment, fold_change) fc
+    and p.profile_set_name = ps.study_name
+    and ps.protocol_app_node_id = d.protocol_app_node_id
+        ORDER BY ggp.profile_graph_id, value) samples,
+    (SELECT distinct ggp.source_id 
+    , ggp.profile_graph_id AS gene
+    , SUBSTR(p.profile_set_name, 0, INSTR(p.profile_set_name, '[')-1) as experiment
+    , d.sample_name
+    , CASE WHEN (d.value < .01) THEN .01
+            ELSE d.value end as value       
+     , ga.project_id
+    FROM apidbTuning.ExpressionGraphsData d,
+         apidbTuning.DatasetNameTaxon dp, apidbTuning.Profile p, apidbtuning.profilesamples ps,
+        apidbTuning.GeneGroupProfile ggp, apidbtuning.geneattributes ga
+    where p.dataset_type = 'transcript_expression' 
+    and p.dataset_subtype = 'rnaseq' 
+    and p.profile_type = 'values' 
+    AND dp.name = p.dataset_name
+    AND dp.dataset_presenter_id = d.dataset_id
+    AND ggp.source_id = p.source_id
+    AND ggp.source_id = ga.source_id
+    AND dp.name = ggp.dataset_name
+    AND ggp.profile_graph_id = d.source_id
+    AND d.sample_name not like '%antisense%'
+    AND d.sample_name like '%unique%'
+    and p.profile_set_name = ps.study_name
+    and ps.protocol_app_node_id = d.protocol_app_node_id
+        ORDER BY ggp.profile_graph_id, value) samples2
+where samples.experiment = samples2.experiment
+and samples.source_id = samples2.source_id
+and samples.sample_name != samples2.sample_name
+order by experiment, sample1, sample2)
              ]]>
             </sql>
           </sqlQuery>
