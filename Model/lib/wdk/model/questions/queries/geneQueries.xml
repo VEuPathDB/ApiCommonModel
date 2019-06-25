@@ -5304,13 +5304,17 @@ and ta.gene_source_id = one.source_id
             select ta.source_id, ta.project_id, ta.gene_source_id,
                    comm.comment_count, comm.min_comment_date, comm.max_comment_date, comm.headlines,
                   'Y' as matched_result
-            from (select stable_id, count(*) as comment_count,
-                         to_char(min(comment_date), 'yyyy-mm-dd hh24:mi:ss') as min_comment_date,
-                         to_char(max(comment_date), 'yyyy-mm-dd hh24:mi:ss') as max_comment_date,
-                         listagg(headline, ' | ') within group (order by comment_date desc) as headlines
-                  from @COMMENT_SCHEMA@MappedComment@COMMENT_DBLINK@
-                  where ('@PROJECT_ID@' = 'UniDB' OR project_name = '@PROJECT_ID@')
-                    and is_visible = 1
+            from (select stable_id, sum(comment_count) as comment_count,
+                         to_char(min(min_comment_date), 'yyyy-mm-dd hh24:mi:ss') as min_comment_date,
+                         to_char(max(max_comment_date), 'yyyy-mm-dd hh24:mi:ss') as max_comment_date,
+                         listagg(headline, ' | ') within group (order by max_comment_date desc) as headlines
+                  from (select stable_id, substr(headline, 1, 80) as headline, count(*) as comment_count,
+                               min(comment_date) as min_comment_date,
+                               max(comment_date) as max_comment_date
+                        from @COMMENT_SCHEMA@MappedComment@COMMENT_DBLINK@
+                        where ('@PROJECT_ID@' = 'UniDB' OR project_name = '@PROJECT_ID@')
+                                 and is_visible = 1
+                               group by stable_id, headline)
                   group by stable_id
                  ) comm,
                  apidbTuning.TranscriptAttributes ta
