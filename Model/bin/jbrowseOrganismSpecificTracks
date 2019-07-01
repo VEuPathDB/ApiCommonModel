@@ -6,7 +6,13 @@ use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 use URI::Escape;
+
 use Storable 'dclone';
+use Tie::IxHash;
+
+my %datasets;
+my $t = tie %datasets, 'Tie::IxHash';
+
 
 my ($organismAbbrev, $projectName) = @ARGV;
 
@@ -15,12 +21,14 @@ my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $proje
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $result = {"tracks" => [] };
-
+#my $result = {"tracks" => []};
 
 &addScaffolds($dbh, $result);
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
 &addSynteny($dbh, $result);
+
+&addDatasets($dbh, \%datasets);
 
 my $datasetProperties = &datasetProperties($dbh);
 
@@ -28,8 +36,27 @@ my $datasetProperties = &datasetProperties($dbh);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 
+$result->{datasets} = \%datasets;
+
 print encode_json($result);
 
+
+sub addDatasets {
+  my ($dbh) = @_;
+
+  my $sql = "select public_abbrev, organism_name FROM APidbtuning.organismattributes order by organism_name";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($abbrev, $name) = $sh->fetchrow_array()) {
+    $datasets{$abbrev}->{name} = $name;
+    $datasets{$abbrev}->{url} = "?data=tracks/${abbrev}";
+#    $result->{datasets}->{$abbrev}->{name} = $name;
+#    $result->{datasets}->{$abbrev}->{url} = "?data=tracks/${abbrev}";
+  }
+  $sh->finish();
+}
 
 sub datasetProperties {
   my ($dbh) = @_;
