@@ -1313,3 +1313,13 @@ function gffTssChabbert(track, feature) {
     }
     return table(rows);
 }
+
+function sequenceTitle(track, feature) {
+    var rows = new Array();
+
+    var sourceId = feature.data["name"];
+
+    rows.push(twoColRow('ID:', sourceId));
+    rows.push(twoColRow("Position:" , positionNoStrandString(track.refSeq.name, feature.data["startm"], feature.data["end"])));
+    return table(rows);
+}
