@@ -6,7 +6,13 @@ use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 use URI::Escape;
+
 use Storable 'dclone';
+use Tie::IxHash;
+
+my %datasets;
+my $t = tie %datasets, 'Tie::IxHash';
+
 
 my ($organismAbbrev, $projectName) = @ARGV;
 
@@ -15,12 +21,15 @@ my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $proje
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $result = {"tracks" => [] };
-
+#my $result = {"tracks" => []};
 
 &addScaffolds($dbh, $result);
+&addCentromere($dbh, $result);
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
 &addSynteny($dbh, $result);
+
+&addDatasets($dbh, \%datasets);
 
 my $datasetProperties = &datasetProperties($dbh);
 
@@ -28,8 +37,27 @@ my $datasetProperties = &datasetProperties($dbh);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 
+$result->{datasets} = \%datasets;
+
 print encode_json($result);
 
+
+sub addDatasets {
+  my ($dbh) = @_;
+
+  my $sql = "select public_abbrev, organism_name FROM APidbtuning.organismattributes order by organism_name";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($abbrev, $name) = $sh->fetchrow_array()) {
+    $datasets{$abbrev}->{name} = $name;
+    $datasets{$abbrev}->{url} = "?data=tracks/${abbrev}";
+#    $result->{datasets}->{$abbrev}->{name} = $name;
+#    $result->{datasets}->{$abbrev}->{url} = "?data=tracks/${abbrev}";
+  }
+  $sh->finish();
+}
 
 sub datasetProperties {
   my ($dbh) = @_;
@@ -168,6 +196,51 @@ sub addSmallNcRnaSeq {
   }
 }
 
+sub addCentromere {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select count(*) from apidbtuning.organismattributes where hasCentromere = 1 and  public_abbrev = '${organismAbbrev}'";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my $count = $sh->fetchrow_array();
+  $sh->finish();
+  if($count > 0) {
+
+    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                 baseUrl => "/a/service/jbrowse",
+                 type => "JBrowse/View/Track/CanvasFeatures",
+                 glyph => "JBrowse/View/FeatureGlyph/Box",
+                 key => "Centromere",
+                 label => "Centromere",
+                 category => "Sequence Analysis",
+                 displayMode => "normal",
+                 style => {
+                   color => "blue",
+                 },
+                 metadata => {
+                   subcategory => "Sequence sites, features and motifs",
+                   trackType => 'Segments',
+                 },
+                 query => {'feature' => "Centromere:overview",
+                 },
+                 onClick => {
+                   content => "{positionTitle}",
+                 },
+                 menuTemplate => [
+                   {label => "View Details", 
+                    content => "{positionTitle}",
+                   },
+                     ],
+    };
+
+    push @{$result->{tracks}}, $track;
+
+
+  }
+
+}
+
 sub addScaffolds {
   my ($dbh, $result) = @_;
 
@@ -205,7 +278,7 @@ sub addScaffolds {
                      },
                      menuTemplate => [
                        {label => "View Details", 
-                        content => "{massSpecDetails}",
+                        content => "function(track, feature){ return scaffoldDetails(track, feature)}",
                        },
                          ],
     };
@@ -234,6 +307,11 @@ sub addSynteny {
   my %subtracks;
   my %defaults;
 
+  my $taxonNamesToNode = {};
+  my $rootNode = _Tree->new({_name => 'root'});
+  my $refOrganism;
+
+
   my $sh = $dbh->prepare($sql);
   $sh->execute();
   while(my ($organism, $publicAbbrev, $phylum, $genus, $species, $kingdom, $class, $gTracks) = $sh->fetchrow_array()) {
@@ -241,30 +319,34 @@ sub addSynteny {
       $hasSyntenyTracks = 1;
       $gTracks =~ s/^.+Synteny\///;
       %defaults = map { $_ => 1 } split(/\+/, $gTracks);
+      $refOrganism = $organism;
     }
 
-    $subtracks{$publicAbbrev} = {"featureFilters" => { "Taxon" => $organism},
-                                 "metadata" => {"Kingdom" => $kingdom,
-                                                "Phylum" => $phylum,
-                                                "Class" => $class,
-                                                "Genus" => $genus,
-                                                "Species" => $species 
-                                 },
-    };
+    my $kingdomNode = &makeTreeNode($kingdom, $taxonNamesToNode, $rootNode);
+    my $phylumNode = &makeTreeNode($phylum, $taxonNamesToNode, $kingdomNode);
+    my $classNode = &makeTreeNode($class, $taxonNamesToNode, $phylumNode);
+    my $genusNode = &makeTreeNode($genus, $taxonNamesToNode, $classNode);
+    my $speciesNode = &makeTreeNode($species, $taxonNamesToNode, $genusNode);
+    my $strainNode = &makeTreeNode($organism, $taxonNamesToNode, $speciesNode);
+
+    # stuff these things in the leaf nodes
+    $strainNode->setAbbrev($publicAbbrev);
+    $strainNode->setFeatureFilters({ "Taxon" => $organism});
+    $strainNode->setMetadata({"Kingdom" => $kingdom,
+                              "Phylum" => $phylum,
+                              "Class" => $class,
+                              "Genus" => $genus,
+                              "Species" => $species 
+                             });
   }
   $sh->finish();
 
   if($hasSyntenyTracks) {
     my $subtracksAr = [];
-    foreach my $key (keys %subtracks) {
-      foreach my $type ("gene", "span") {
-        my $clone = dclone $subtracks{$key};
-        $clone->{"featureFilters"}->{"SynType"} = $type;
-        $clone->{"label"} = "$key $type";
-        $clone->{"visible"} = $key eq $organismAbbrev || $defaults{"${key}_${type}"} ? 'true' : 'false';
-        push @$subtracksAr, $clone;
-      }
-    }
+
+    my $refOrganismNode = $taxonNamesToNode->{$refOrganism};
+
+    &addSubtracks($subtracksAr, $refOrganismNode, $taxonNamesToNode, \%defaults, $organismAbbrev);
 
     my $syntenyTrack = {storeClass => "EbrcTracks/Store/SeqFeature/REST",
                         baseUrl => "/a/service/jbrowse",
@@ -316,6 +398,64 @@ sub addSynteny {
   }
 
 }
+
+
+
+sub addSubtracks {
+  my ($subtracks, $node, $taxonNamesToNode, $defaults, $organismAbbrev) = @_;
+
+  return if($node->getAlreadySeen());
+  return if($node->isRoot());
+
+  if($node->isLeaf()) {
+    my $abbrev = $node->getAbbrev();
+
+    foreach my $type ("gene", "span") {
+      my $metadataClone = dclone $node->getMetadata();
+      my $ffClone = dclone $node->getFeatureFilters();
+      $ffClone->{SynType} = $type;
+
+      my $label = "${abbrev}_${type}";
+
+      my $visible = $abbrev eq $organismAbbrev || $defaults->{$label} ? 'true' : 'false';
+
+      my $subtrack = {featureFilters => $ffClone,
+                      metadata => $metadataClone,
+                      label => "$abbrev $type",
+                      visible => $visible
+      };
+      push @$subtracks, $subtrack;
+    }
+  }
+  else {
+    my $children = $node->getChildren();
+
+    foreach my $child (@$children) {
+      &addSubtracks($subtracks, $child, $taxonNamesToNode, $defaults, $organismAbbrev);
+    }
+  }
+
+  $node->setAlreadySeen(1);
+
+  my $parent = $node->getParent();
+  
+  &addSubtracks($subtracks, $parent, $taxonNamesToNode, $defaults, $organismAbbrev);
+}
+
+sub makeTreeNode {
+  my ($name, $taxonNamesToNode, $parentNode) = @_;
+
+  my $node = $taxonNamesToNode->{$name};
+  unless($node) {
+    $node = _Tree->new({_parent => $parentNode, _name => $name});
+    $parentNode->addChild($node);
+  }
+  
+  $taxonNamesToNode->{$name} = $node;
+
+  return $node;
+}
+
 
 sub addUnifiedSnp {
   my ($dbh, $result) = @_;
@@ -548,3 +688,47 @@ sub makeChipChipSmoothed {
 }
 
 
+1; 
+
+package _Tree; 
+
+use strict;
+
+sub getName {$_[0]->{_name}}
+
+sub setAlreadySeen {$_[0]->{_seen} = $_[1]}
+sub getAlreadySeen {$_[0]->{_seen}}
+
+sub setAbbrev {$_[0]->{_abbrev} = $_[1]}
+sub getAbbrev {$_[0]->{_abbrev}}
+
+sub setFeatureFilters {$_[0]->{_feature_filters} = $_[1]}
+sub getFeatureFilters {$_[0]->{_feature_filters}}
+
+sub setMetadata {$_[0]->{_metadata} = $_[1]}
+sub getMetadata {$_[0]->{_metadata}}
+
+sub getParent {$_[0]->{_parent}}
+
+sub getChildren {$_[0]->{_children} || [] }
+
+sub addChild {push @{$_[0]->{_children}}, $_[1]}
+
+sub isLeaf {
+  my ($self) = @_;
+  my $children = $self->getChildren();
+  return scalar @$children == 0;
+}
+
+sub isRoot {
+  my ($self) = @_;
+  return !defined($self->getParent());
+}
+
+sub new {
+  my ($class, $args) = @_;
+
+  return bless $args, $class;
+}
+
+1;
