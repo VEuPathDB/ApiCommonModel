@@ -6,7 +6,13 @@ use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 use URI::Escape;
+
 use Storable 'dclone';
+use Tie::IxHash;
+
+my %datasets;
+my $t = tie %datasets, 'Tie::IxHash';
+
 
 my ($organismAbbrev, $projectName) = @ARGV;
 
@@ -15,12 +21,15 @@ my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $proje
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $result = {"tracks" => [] };
-
+#my $result = {"tracks" => []};
 
 &addScaffolds($dbh, $result);
+&addCentromere($dbh, $result);
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
 &addSynteny($dbh, $result);
+
+&addDatasets($dbh, \%datasets);
 
 my $datasetProperties = &datasetProperties($dbh);
 
@@ -28,8 +37,33 @@ my $datasetProperties = &datasetProperties($dbh);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 
+# other organism specific tracks
+if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
+  &addCnvArray($dbh, $result);
+}
+
+
+$result->{datasets} = \%datasets;
+
 print encode_json($result);
 
+
+sub addDatasets {
+  my ($dbh) = @_;
+
+  my $sql = "select public_abbrev, organism_name FROM APidbtuning.organismattributes order by organism_name";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  while(my ($abbrev, $name) = $sh->fetchrow_array()) {
+    $datasets{$abbrev}->{name} = $name;
+    $datasets{$abbrev}->{url} = "?data=tracks/${abbrev}";
+#    $result->{datasets}->{$abbrev}->{name} = $name;
+#    $result->{datasets}->{$abbrev}->{url} = "?data=tracks/${abbrev}";
+  }
+  $sh->finish();
+}
 
 sub datasetProperties {
   my ($dbh) = @_;
@@ -168,6 +202,51 @@ sub addSmallNcRnaSeq {
   }
 }
 
+sub addCentromere {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select count(*) from apidbtuning.organismattributes where hasCentromere = 1 and  public_abbrev = '${organismAbbrev}'";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my $count = $sh->fetchrow_array();
+  $sh->finish();
+  if($count > 0) {
+
+    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                 baseUrl => "/a/service/jbrowse",
+                 type => "JBrowse/View/Track/CanvasFeatures",
+                 glyph => "JBrowse/View/FeatureGlyph/Box",
+                 key => "Centromere",
+                 label => "Centromere",
+                 category => "Sequence Analysis",
+                 displayMode => "normal",
+                 style => {
+                   color => "blue",
+                 },
+                 metadata => {
+                   subcategory => "Sequence sites, features and motifs",
+                   trackType => 'Segments',
+                 },
+                 query => {'feature' => "Centromere:overview",
+                 },
+                 onClick => {
+                   content => "{positionTitle}",
+                 },
+                 menuTemplate => [
+                   {label => "View Details", 
+                    content => "{positionTitle}",
+                   },
+                     ],
+    };
+
+    push @{$result->{tracks}}, $track;
+
+
+  }
+
+}
+
 sub addScaffolds {
   my ($dbh, $result) = @_;
 
@@ -205,7 +284,7 @@ sub addScaffolds {
                      },
                      menuTemplate => [
                        {label => "View Details", 
-                        content => "{massSpecDetails}",
+                        content => "function(track, feature){ return scaffoldDetails(track, feature)}",
                        },
                          ],
     };
@@ -567,6 +646,52 @@ sub makeChipChipPeak {
   return $peaks;
 
 
+}
+
+sub addCnvArray {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select distinct pan.name
+from study.protocolappnode pan
+   , study.study s
+   , study.studylink sl
+where pan.PROTOCOL_APP_NODE_ID = sl.PROTOCOL_APP_NODE_ID
+and sl.study_id = s.study_id
+and s.name like 'tcruCLBrenerEsmeraldo-like_cghArrayExper_Tarelton_GSE23576_CNV_RSRC%'
+order by pan.name";
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  my $desc = "Comparative Genomic Hybridization to determine regions of significant Copy Number Variation in <i>T. cruzi</i> strains with strain CL Brener as reference. Type I strains used include: Brazil, Chinata, Colombiana, M78, Montalvania, PalDa1 (clone 9), SylvioX10/4, TCC, TEDa2 (clone 4), TEP6 (clone 5). Type II-VI strains used include: Esmeraldo, M5631, Tu18 (clone 1), Tulahuen, wtCL, Y. Scores from Type I strain is shown in Green and from Type II-VI are show in Brown. Score value represents the number of strains showing CNV , with a postive score implying amplification and a negative score implying deletion with respect to CL Brener. CNV criteria: minimum log2 ratio of signal intensities (test strain/reference) +/- 0.6, minimum number of probes 5. For more details refer the following manuscript: <a href=\"http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3060142/\">Widespread, focal copy number variations (CNV) and whole chromosome aneuploidies in Trypanosoma cruzi strains revealed by array comparative genomic hybridization</a> ";
+
+  while(my ($name) = $sh->fetchrow_array()) {
+
+
+    my $cnv = {storeClass => "JBrowse/Store/SeqFeature/REST",
+               baseUrl => "/a/service/jbrowse",
+               type => "JBrowse/View/Track/Wiggle/XYPlot",
+               key => $name,
+               label => $name,
+               category => "Genetic Variation",
+               metadata => {
+                 subcategory => "CGH Array",
+                 dataset => "Comparative Genomic Hybridizations of 33 strains",
+                 trackType => 'XYPlot',
+                 description => $desc,
+               },
+               fmtMetaValue_Dataset => "function() { return datasetLink('tcruCLBrenerEsmeraldo-like_cghArrayPlatform_GPL10781_RSRC', 'Comparative Genomic Hybridizations of 33 strains'); }",
+               fmtMetaValue_Description => "function() { return datasetDescription('${desc}', ''); }",
+               query => {'feature' => "cnv:ArrayJBrowse",
+                         'sample' => $name,
+               },
+               max_score => 3,
+               min_score => -3,
+               yScalePosition => "left"
+    };
+    push @{$result->{tracks}}, $cnv;
+
+  }
+  $sh->finish();
 }
 
 sub makeChipChipSmoothed {

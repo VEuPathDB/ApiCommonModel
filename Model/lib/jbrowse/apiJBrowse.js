@@ -1295,3 +1295,31 @@ function synSpanTitle(track, feature) {
     }
     return table(rows);
 }
+
+function gffTssChabbert(track, feature) {
+    var rows = new Array();
+
+    var assignedFeat = feature.data["AssignedFeat"];
+    var assignedFeature = feature.data["AssignedFeature"];
+
+    if(assignedFeat == "NewTranscript" || assignedFeature == "NewTranscript") {
+        rows.push(twoColRow('Assigned Feature:', "New Transcript"));
+    }
+    else {
+        var gene = assignedFeature ? assignedFeature : assignedFeat;
+
+        var link = "<a href='/a/app/record/gene/" + gene + "'>" + gene + "</a>";
+        rows.push(twoColRow('Assigned Feature:', link));
+    }
+    return table(rows);
+}
+
+function sequenceTitle(track, feature) {
+    var rows = new Array();
+
+    var sourceId = feature.data["name"];
+
+    rows.push(twoColRow('ID:', sourceId));
+    rows.push(twoColRow("Position:" , positionNoStrandString(track.refSeq.name, feature.data["startm"], feature.data["end"])));
+    return table(rows);
+}
