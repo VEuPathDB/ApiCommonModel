@@ -61,39 +61,59 @@
 <!--            <column name="haplogroup" includeProjects="ToxoDB"/> -->
             <sql>
             <![CDATA[
-SELECT snp.source_id, sa.project_id,
-       CASE WHEN var.strain = snp.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
-       CASE WHEN var.strain = snp.reference_strain THEN 1 ELSE 0 END AS is_reference,
+select sa.source_id, sa.project_id,
+       case
+         when var.strain = sa.reference_strain
+           then var.strain||' (reference)'
+           else var.strain
+       end as strain,
+       case
+         when var.strain = sa.reference_strain
+           then 1
+         else 0
+       end as is_reference,
        var.allele,
-       CASE WHEN sa.gene_strand = 'reverse' THEN apidb.reverse_complement(var.allele) 
-            WHEN sa.gene_source_id is null THEN ''
-            ELSE var.allele 
-       END as allele_gene_strand,
+       case
+         when sa.gene_strand = 'reverse'
+           then apidb.reverse_complement(var.allele)
+         when sa.gene_source_id is null
+           then ''
+         else var.allele 
+       end as allele_gene_strand,
        var.product,
        var.coverage, 
        var.read_percent as read_frequency,
-       CASE WHEN snp.gene_na_feature_id is null THEN ''
-            ELSE lower(sa.project_id) || 
-              '/?name=' || seq.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
-              ';l=' || d.name  || 
-              ';h_region=' || seq.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
-       END as view_align,
-       CASE WHEN var.coverage is null THEN '' ELSE 'view DNA-seq reads' END as has_align,
+       case
+         when sa.gene_na_feature_id is null
+           then ''
+         else lower(sa.project_id) || '/?name=' || seq.source_id || ':'
+              || to_char(sa.location - 50) || '..' || to_char(sa.location + 50)
+              || ';l=' || d.name  || ';h_region=' || seq.source_id || ':'
+              || to_char(sa.location) || '..' || to_char(sa.location + 1) || '@red'  
+       end as view_align,
+       case
+         when var.coverage is null
+           then ''
+         else 'view DNA-seq reads'
+        end as has_align,
         loc.value as geographic_location,
        so.name as sampleId
-FROM   apidb.SequenceVariation var, apidb.snp snp,apidbtuning.snpattributes sa,apidbtuning.genomicseqattributes seq,
-       (select PAN_Id,value from apidbtuning.InferredChars where property = 'Country') loc,
-      (select distinct name, output_pan_id from apidbtuning.SampleProcess sd ) so ,
-       sres.externaldatabase d, sres.externaldatabaserelease rel
-WHERE snp.na_sequence_id = var.ref_na_sequence_id
-and var.location = snp.location
-and snp.source_id = sa.source_id
-and snp.na_sequence_id = seq.na_sequence_id
-and var.external_database_release_id = rel.external_database_release_id
-and rel.external_database_id = d.external_database_id
-and var.protocol_app_node_id = loc.pan_id(+)
-and var.protocol_app_node_id = so.output_pan_id(+)
-ORDER BY is_reference DESC, geographic_location, strain
+from apidb.SequenceVariation var, apidbTuning.SnpAttributes sa,
+     apidbTuning.GenomicSeqAttributes seq,
+     (select pan_id, value
+      from apidbTuning.InferredChars
+      where property = 'Country') loc,
+     (select distinct name, output_pan_id
+      from apidbtuning.SampleProcess sd ) so,
+     sres.ExternalDatabase d, sres.ExternalDatabaseRelease rel
+where sa.na_sequence_id = var.ref_na_sequence_id
+  and var.location = sa.location
+  and sa.na_sequence_id = seq.na_sequence_id
+  and var.external_database_release_id = rel.external_database_release_id
+  and rel.external_database_id = d.external_database_id
+  and var.protocol_app_node_id = loc.pan_id(+)
+  and var.protocol_app_node_id = so.output_pan_id(+)
+order by is_reference desc, geographic_location, strain
              ]]>
            </sql>
         </sqlQuery>
@@ -113,50 +133,75 @@ ORDER BY is_reference DESC, geographic_location, strain
             <column name="other_allele"/>
             <sql>
                 <![CDATA[
-select source_id, project_id,geographic_location, total_strains,
-major_allele || ' ('||maj_freq||')' as major_allele,
-CASE WHEN minor_allele is not null THEN 
-   CASE WHEN other_allele is not null THEN minor_allele || ' ('||other_freq||')' ELSE minor_allele || ' ('||min_freq||')' END 
-ELSE null END as minor_allele,
-CASE WHEN other_allele is not null THEN other_allele || ' ('||min_freq||')' ELSE null END as other_allele
-from (
-select project_id, source_id,geographic_location,
-substr(listagg(allele, ', ') within group (order by count_strains desc),1,1) as major_allele,
-substr(listagg(allele, ', ') within group (order by count_strains desc),4,1) as minor_allele,
-substr(listagg(allele, ', ') within group (order by count_strains desc),7,1) as other_allele,
-sum(count_strains) as total_strains,
-round((max(count_strains) / sum(count_strains)),2) as maj_freq,
-round((min(count_strains) / sum(count_strains)),2) as min_freq,
-round((median(count_strains) / sum(count_strains)),2) as other_freq
-from (
-select source_id,project_id,geographic_location,allele,count(*) as count_strains,
-round(avg(coverage),2) as avg_cov,round(avg(read_frequency),2) as avg_freq
-from (
-SELECT snp.source_id, sa.project_id,
-       CASE WHEN var.strain = snp.reference_strain THEN var.strain||' (reference)' ELSE var.strain END as strain,
-       var.allele,
-       var.coverage, 
-       var.read_percent as read_frequency,
-       CASE WHEN snp.gene_na_feature_id is null THEN ''
-            ELSE lower(sa.project_id) || 
-              '/?name=' || seq.source_id || ':' || to_char(snp.location - 50) || '..' || to_char(snp.location + 50) || 
-              ';l=' || d.name  || 
-              ';h_region=' || seq.source_id || ':' || to_char(snp.location) || '..' || to_char(snp.location + 1) || '@red'  
-       END as view_align,
-       CASE WHEN var.coverage is null THEN '' ELSE 'view alignment' END as has_align,
-        nvl(loc.value,'unknown') as geographic_location
-FROM   apidb.SequenceVariation var, apidb.snp snp,apidbtuning.snpattributes sa,apidbtuning.genomicseqattributes seq,
-       (select PAN_Id,string_value as value from apidbtuning.metadata where property_source_id = 'OBI_0001627') loc,
-       sres.externaldatabase d, sres.externaldatabaserelease rel
-WHERE snp.na_sequence_id = var.ref_na_sequence_id
-and var.location = snp.location
-and snp.source_id = sa.source_id
-and snp.na_sequence_id = seq.na_sequence_id
-and var.external_database_release_id = rel.external_database_release_id
-and rel.external_database_id = d.external_database_id
-and var.protocol_app_node_id = loc.pan_id(+) )
-group by source_id,project_id,geographic_location,allele )
-group by source_id,project_id,geographic_location)
+select source_id, project_id, geographic_location, total_strains,
+       major_allele || ' (' || maj_freq || ')' as major_allele,
+       case
+         when minor_allele is not null
+           then
+             case
+               when other_allele is not null
+                 then minor_allele || ' (' || other_freq || ')'
+               else minor_allele || ' (' || min_freq || ')'
+             end
+           else null
+       end as minor_allele,
+       case
+         when other_allele is not null
+           then other_allele || ' (' || min_freq || ')'
+           else null
+       end as other_allele
+from (select project_id, source_id, geographic_location,
+             substr(listagg(allele, ', ') within group (order by count_strains desc),
+                    1, 1) as major_allele,
+             substr(listagg(allele, ', ') within group (order by count_strains desc),
+                    4, 1) as minor_allele,
+             substr(listagg(allele, ', ') within group (order by count_strains desc),
+                    7,1) as other_allele,
+             sum(count_strains) as total_strains,
+             round((max(count_strains) / sum(count_strains)), 2) as maj_freq,
+             round((min(count_strains) / sum(count_strains)), 2) as min_freq,
+             round((median(count_strains) / sum(count_strains)), 2) as other_freq
+      from (select source_id, project_id, geographic_location, allele,
+                   count(*) as count_strains,
+                   round(avg(coverage), 2) as avg_cov,
+                   round(avg(read_frequency), 2) as avg_freq
+            from (select sa.source_id, sa.project_id,
+                         case
+                           when var.strain = sa.reference_strain
+                             then var.strain || ' (reference)'
+                             else var.strain
+                         end as strain,
+                         var.allele, var.coverage, var.read_percent as read_frequency,
+                         case
+                           when sa.gene_na_feature_id is null
+                             then ''
+                             else lower(sa.project_id) || '/?name=' || seq.source_id
+                                  || ':' || to_char(sa.location - 50) || '..'
+                                  || to_char(sa.location + 50) || ';l=' || d.name
+                                  || ';h_region=' || seq.source_id || ':'
+                                  || to_char(sa.location) || '..'
+                                  || to_char(sa.location + 1) || '@red'  
+                         end as view_align,
+                         case
+                           when var.coverage is null
+                             then ''
+                             else 'view alignment'
+                         end as has_align,
+                         nvl(loc.value,'unknown') as geographic_location
+                  from apidb.SequenceVariation var,
+                       apidbTuning.SnpAttributes sa, apidbTuning.GenomicSeqAttributes seq,
+                       (select pan_id, string_value as value
+                        from apidbtuning.metadata
+                        where property_source_id = 'OBI_0001627') loc,
+                       sres.ExternalDatabase d, sres.ExternalDatabaseRelease rel
+                  where sa.na_sequence_id = var.ref_na_sequence_id
+                    and var.location = sa.location
+                    and sa.na_sequence_id = seq.na_sequence_id
+                    and var.external_database_release_id = rel.external_database_release_id
+                    and rel.external_database_id = d.external_database_id
+                    and var.protocol_app_node_id = loc.pan_id(+) )
+                  group by source_id,project_id,geographic_location, allele)
+      group by source_id, project_id, geographic_location)
 order by total_strains desc
                 ]]>
             </sql>
