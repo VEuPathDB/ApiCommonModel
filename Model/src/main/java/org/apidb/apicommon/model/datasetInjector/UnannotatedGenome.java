@@ -2,12 +2,28 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.gusdb.wdk.model.WdkRuntimeException;
 
 // Should really just be called Genome
 public class UnannotatedGenome extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+      String projectName = getPropValue("projectName");
+      String organismAbbrev = getPropValue("organismAbbrev");
+
+      Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
+      String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+      Map<String, String> orgProps = globalProps.get(orgPropsKey);
+      
+      if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
+      String organismNameForFiles = orgProps.get("organismNameForFiles");
+
+      setPropValue("organismNameForFiles", organismNameForFiles);
+
       injectTemplate("jbrowseCommon");
   }
 
