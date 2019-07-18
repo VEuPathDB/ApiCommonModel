@@ -226,6 +226,9 @@ function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon,
     ignore_gene_alias = 1;
   }
 
+ var dataRootRegex = /\/jbrowse\/.+Tracks\//;
+    dataRoot = dataRoot.replace(dataRootRegex, "/jbrowse/tracks/");
+
   // expand minimalist input data
   var cdsLink = "<a href='/cgi-bin/geneSrt?project_id=" + projectId
     + "&ids=" + sourceId
