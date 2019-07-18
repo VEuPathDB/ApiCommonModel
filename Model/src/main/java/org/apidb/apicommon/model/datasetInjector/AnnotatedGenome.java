@@ -15,6 +15,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
 
       injectTemplate("jbrowseAnnotatedGenome");
+      injectTemplate("jbrowseAnnotatedGeneDensity");
       injectTemplate("jbrowseCommonAa");
 
     // dataset presenters/dataset classes xml files do not have PHYLUM information
