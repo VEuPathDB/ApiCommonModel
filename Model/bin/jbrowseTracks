@@ -1,0 +1,91 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+
+my ($organism, $projectName, $isPbrowse, $subsetType) = @ARGV;
+
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+
+my $dbh = $jbrowseUtil->getDbh();   
+
+my $sql = "select public_abbrev, NAME_FOR_FILENAMES
+           from apidb.organism  
+           where abbrev = '$organism' OR NAME_FOR_FILENAMES = '$organism'";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute();
+
+my ($organismAbbrev, $organismNameForFiles) = $sh->fetchrow_array();
+$sh->finish();
+$dbh->disconnect();
+
+
+
+my (@include, $refSeqs, $namesUrl);
+
+if(lc($isPbrowse) eq 'true') {
+  $refSeqs = "/a/service/jbrowse/aaseq/${organismAbbrev}";
+  $namesUrl = "/a/service/jbrowse/aanames/${organismAbbrev}";
+
+  
+  if($subsetType eq 'proteinPropertyTracks') {
+    @include = ("/a/jbrowse/tracks/${organismAbbrev}/aa/tracks.conf");
+
+  }
+  elsif($subsetType eq 'proteomicsTracks') {
+    @include = ("/a/service/jbrowse/organismSpecificPbrowse/${organismAbbrev}");
+
+  }
+  else {
+    @include = ("/a/jbrowse/tracks/${organismAbbrev}/aa/tracks.conf",
+                "/a/service/jbrowse/organismSpecificPbrowse/${organismAbbrev}"
+        );
+  }
+
+}
+else {
+  $refSeqs = "/a/service/jbrowse/seq/${organismAbbrev}";
+  $namesUrl = "/a/service/jbrowse/names/${organismAbbrev}";
+
+  if($subsetType eq 'geneAnnotationTracks') {
+    @include = ("/a/jbrowse/tracks/${organismAbbrev}/tracks.conf",
+                "/a/service/jbrowse/rnaseqJunctions/${organismAbbrev}",
+        );
+  }
+  elsif($subsetType eq 'syntenyTracks' || $subsetType eq 'geneticVariationTracks') {
+    @include = ("/a/jbrowse/tracks/${organismAbbrev}/tracks.conf",
+                "/a/service/jbrowse/organismSpecific/${organismAbbrev}",
+        );
+  }
+  elsif($subsetType eq 'rnaseqTracks') {
+    @include = ("/a/jbrowse/tracks/${organismAbbrev}/tracks.conf",
+                "/a/service/jbrowse/rnaseq/${organismAbbrev}",
+        );
+  }
+  elsif($subsetType eq 'blatAlignmentTracks') {
+    @include = ("/a/jbrowse/tracks/${organismAbbrev}/tracks.conf");
+  }
+  else {
+  @include = ("/a/jbrowse/tracks/${organismAbbrev}/tracks.conf",
+              "/a/service/jbrowse/dnaseq/${organismAbbrev}",
+              "/a/service/jbrowse/rnaseq/${organismAbbrev}",
+              "/a/service/jbrowse/chipseq/${organismAbbrev}",
+              "/a/service/jbrowse/rnaseqJunctions/${organismAbbrev}",
+              "/a/service/jbrowse/organismSpecific/${organismAbbrev}",
+              "/a/service/users/current/user-datasets-jbrowse/${organismNameForFiles}"
+      );
+  }
+}
+
+my $result = {"names" => {"type" => "REST", 
+                          "url" => $namesUrl}, 
+              "tracks" => [], 
+              "refSeqs" => $refSeqs,
+              "include" => \@include,
+};
+
+print encode_json($result);
+
