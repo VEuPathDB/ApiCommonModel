@@ -155,7 +155,7 @@ public class MigrateUsers5 extends BaseCLI {
     String cutoffDate = (String) getOptionValue(ARG_CUTOFF_DATE);
     Date date;
     if (cutoffDate != null) {
-      date = FormatUtil.parseDate(cutoffDate);
+      date = FormatUtil.toDate(FormatUtil.parseDate(cutoffDate));
     }
     else { // default cutoff date is 2 days ago from now
       Calendar calendar = Calendar.getInstance();
