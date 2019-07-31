@@ -1,10 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-
-import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 import org.gusdb.wdk.model.WdkRuntimeException;
 
 // Should really just be called Genome
