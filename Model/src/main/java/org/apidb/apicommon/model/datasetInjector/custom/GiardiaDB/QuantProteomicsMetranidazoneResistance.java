@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
+package org.apidb.apicommon.model.datasetInjector.custom.GiardiaDB;
 
 import org.apidb.apicommon.model.datasetInjector.QuantitativeProteomicsDirectComparison;
 
