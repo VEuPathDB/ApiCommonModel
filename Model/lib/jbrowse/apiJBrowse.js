@@ -238,7 +238,7 @@ function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon,
     + "&ids=" + sourceId
     + "&ignore_gene_alias=" + ignore_gene_alias
     + "&type=protein&upstreamAnchor=Start&upstreamOffset=0&downstreamAnchor=End&downstreamOffset=0&endAnchor3=End&go=Get+Sequences' target='_blank'>protein</a>"
-  var recordLink = '<a target='_blank' href="' + baseRecordUrl + '/gene/' + geneId + '">Gene Page</a>';
+  var recordLink = '<a target="_blank" href="' + baseRecordUrl + '/gene/' + geneId + '">Gene Page</a>';
 
   var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=" + dataRoot + "&loc=" + position + "'>JBrowse</a>";
   var orthomclLink = "<a target='_blank' href='http://orthomcl.org/cgi-bin/OrthoMclWeb.cgi?rm=sequenceList&groupac=" + orthomcl + "'>" + orthomcl + "</a>";
