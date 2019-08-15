@@ -12,7 +12,7 @@ public class PhenotypePhiBasedPhenotype extends DatasetInjector {
   @Override
   public void addModelReferences() {
       String datasetName = getDatasetName();
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", datasetName + "_Phenotype");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC_Phenotype");
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC");
 
   }
