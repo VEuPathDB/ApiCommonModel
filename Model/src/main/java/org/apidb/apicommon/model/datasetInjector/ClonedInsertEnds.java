@@ -6,6 +6,8 @@ public class ClonedInsertEnds extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+
+      setPropValue("summary", getPropValue("summary").replaceAll("\"", "'"));
       injectTemplate("jbrowseClonedInsertEnds");
   }
 
