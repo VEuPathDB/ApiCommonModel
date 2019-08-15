@@ -20,7 +20,7 @@ function fiveColRow(one, two, three, four, five) {
 /******  utilities ******/
 
 function datasetLink(name, display) {
-    return "<a href='/a/processQuestion.do?questionFullName=DatasetQuestions.DatasetsByDatasetNames&dataset_name=" + name + "&questionSubmit=Get+Answer'>" + display + "</a>";
+    return "<a  target='_blank' href='/a/processQuestion.do?questionFullName=DatasetQuestions.DatasetsByDatasetNames&dataset_name=" + name + "&questionSubmit=Get+Answer'>" + display + "</a>";
 }
 
 function datasetDescription(summary, trackSpecificText) {
@@ -230,18 +230,18 @@ function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon,
     dataRoot = dataRoot.replace(dataRootRegex, "/jbrowse/tracks/");
 
   // expand minimalist input data
-  var cdsLink = "<a href='/cgi-bin/geneSrt?project_id=" + projectId
+  var cdsLink = "<a target='_blank' href='/cgi-bin/geneSrt?project_id=" + projectId
     + "&ids=" + sourceId
     + "&ignore_gene_alias=" + ignore_gene_alias
     + "&type=CDS&upstreamAnchor=Start&upstreamOffset=0&downstreamAnchor=End&downstreamOffset=0&go=Get+Sequences' target='_blank'>CDS</a>"
-  var proteinLink = "<a href='/cgi-bin/geneSrt?project_id=" + projectId
+  var proteinLink = "<a target='_blank' href='/cgi-bin/geneSrt?project_id=" + projectId
     + "&ids=" + sourceId
     + "&ignore_gene_alias=" + ignore_gene_alias
     + "&type=protein&upstreamAnchor=Start&upstreamOffset=0&downstreamAnchor=End&downstreamOffset=0&endAnchor3=End&go=Get+Sequences' target='_blank'>protein</a>"
-  var recordLink = '<a href="' + baseRecordUrl + '/gene/' + geneId + '">Gene Page</a>';
+  var recordLink = '<a target='_blank' href="' + baseRecordUrl + '/gene/' + geneId + '">Gene Page</a>';
 
-  var gbLink = "<a href='" + baseUrl + "index.html?data=" + dataRoot + "&loc=" + position + "'>JBrowse</a>";
-  var orthomclLink = "<a href='http://orthomcl.org/cgi-bin/OrthoMclWeb.cgi?rm=sequenceList&groupac=" + orthomcl + "'>" + orthomcl + "</a>";
+  var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=" + dataRoot + "&loc=" + position + "'>JBrowse</a>";
+  var orthomclLink = "<a target='_blank' href='http://orthomcl.org/cgi-bin/OrthoMclWeb.cgi?rm=sequenceList&groupac=" + orthomcl + "'>" + orthomcl + "</a>";
 
   // format into html table rows
   var rows = new Array();
@@ -744,7 +744,7 @@ function snpTitle(track, feature, featureDiv) {
 
   var revArray = { 'A' : 'T', 'C' : 'G', 'T' : 'A', 'G' : 'C' };
 
-  var link = "<a href='/a/app/record/" + link_type + "/" + source_id + "'>" + source_id + "</a>";
+  var link = "<a target='_blank' href='/a/app/record/" + link_type + "/" + source_id + "'>" + source_id + "</a>";
          
   var type = 'Non-coding';
   var refNA = gene_strand == -1 ? revArray[reference_na] : reference_na;
@@ -914,7 +914,7 @@ function bindingSiteTitle(track, feature, featureDiv) {
       strand = 'REVERSE';
   }
 
-    var link = "<a href='/a/images/pf_tfbs/"+ name + ".png'><img src='/a/images/pf_tfbs/" + name + ".png'  height='140' width='224' align=left/></a>";
+    var link = "<a target='_blank' href='/a/images/pf_tfbs/"+ name + ".png'><img src='/a/images/pf_tfbs/" + name + ".png'  height='140' width='224' align=left/></a>";
     var rows = new Array();
   rows.push(twoColRow('Name:', name));
   rows.push(twoColRow('Start:', start));
@@ -1210,8 +1210,8 @@ function synGeneTitle(track, feature) {
     var dataRoot = track.browser.config.dataRoot;
     var baseUrl = track.browser.config.baseUrl;
 
-    var recordLink = '<a href="' + baseRecordUrl + '/gene/' + sourceId + '">Gene Page</a>';
-    var gbLink = "<a href='" + baseUrl + "index.html?data=tracks/" + orgAbbrev + "&loc=" + linkPosition + "&highlight=" + highlightPosition + "'>JBrowse</a>";
+    var recordLink = '<a target="_blank" href="' + baseRecordUrl + '/gene/' + sourceId + '">Gene Page</a>';
+    var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=tracks/" + orgAbbrev + "&loc=" + linkPosition + "&highlight=" + highlightPosition + "'>JBrowse</a>";
 
     // format into html table rows
     var rows = new Array();
@@ -1278,7 +1278,7 @@ function gffTssChabbert(track, feature) {
     else {
         var gene = assignedFeature ? assignedFeature : assignedFeat;
 
-        var link = "<a href='/a/app/record/gene/" + gene + "'>" + gene + "</a>";
+        var link = "<a target='_blank' href='/a/app/record/gene/" + gene + "'>" + gene + "</a>";
         rows.push(twoColRow('Assigned Feature:', link));
     }
     return table(rows);
