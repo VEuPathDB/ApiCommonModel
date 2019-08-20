@@ -85,6 +85,7 @@ public class SpliceSites extends  DatasetInjector {
       injectTemplate("genePageGraphDescriptions") ;    
       injectTemplate("datasetExampleGraphDescriptions");
 
+      setPropValue("summary", getPropValue("summary").replaceAll("\"", "'"));
       injectTemplate("jbrowseSpliceSites");
   }
 
