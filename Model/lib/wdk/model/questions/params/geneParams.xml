@@ -1028,6 +1028,19 @@
             <help><![CDATA[Choose the average number of reads per gene for the &lsquo;floor.&rsquo;  The number of reads for a gene is used to calculate a gene's FPKM. In this search, a gene&rsquo;s change in expression value between two samples is represented as fold change (FC) such that FC =  FPKM<sub>comparison</sub> / FPKM<sub>reference</sub>.  Misleading FC values can result when one of those FPKM values is close to zero.  To avoid misleading FC values, we raise very low FPKM values to a default &lsquo;FPKM floor&rsquo; which represents 10 mapped reads for the average gene.  The FPKM value for the default floor changes for each data set based on the amount of sequencing data and the average transcript size in the organism; however, this default floor always corresponds to 10 reads per gene. Choosing a floor value greater than default effectively increases the expression threshold and may reduce the number of genes returned by the search.  If you choose multiple samples for either reference or comparison, we apply your chosen floor after calculating the average, min, max or median of the sample expression values. In some cases (e.g., scaled data), a default floor cannot be calculated and thus is set to 1 FPKM.  The floor can be adjusted with the pull-down menu.  In release 38 and earlier (before August 20, 2018), 1 FPKM was the floor for all RNA-seq datasets.  If you want to achieve results that are consistent with your previous work at our website, choose a floor that is closest to 1 FPKM.]]></help>
         </flatVocabParam>
 
+        <flatVocabParam name="antisense_floor_user_dataset"
+                     prompt="To calculate fold-changes, use a floor of: "
+                     multiPick="false"
+		     quote="false"
+		     queryRef="GeneVQ.antisenseFloorUserDataset"
+		     visible="true">
+
+<!--          dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic_antisense,userDatasetParams.samples_fc_ref_generic_antisense,userDatasetParams.samples_fc_comp_generic_antisense" -->
+
+        <noTranslation value="true" includeProjects="EuPathDB" />
+            <help><![CDATA[Choose the average number of reads per gene for the &lsquo;floor.&rsquo;  The number of reads for a gene is used to calculate a gene's FPKM. In this search, a gene&rsquo;s change in expression value between two samples is represented as fold change (FC) such that FC =  FPKM<sub>comparison</sub> / FPKM<sub>reference</sub>.  Misleading FC values can result when one of those FPKM values is close to zero.  To avoid misleading FC values, we raise very low FPKM values to a default &lsquo;FPKM floor&rsquo; which represents 10 mapped reads for the average gene.  The FPKM value for the default floor changes for each data set based on the amount of sequencing data and the average transcript size in the organism; however, this default floor always corresponds to 10 reads per gene. Choosing a floor value greater than default effectively increases the expression threshold and may reduce the number of genes returned by the search.  If you choose multiple samples for either reference or comparison, we apply your chosen floor after calculating the average, min, max or median of the sample expression values. In some cases (e.g., scaled data), a default floor cannot be calculated and thus is set to 1 FPKM.  The floor can be adjusted with the pull-down menu.  In release 38 and earlier (before August 20, 2018), 1 FPKM was the floor for all RNA-seq datasets.  If you want to achieve results that are consistent with your previous work at our website, choose a floor that is closest to 1 FPKM.]]></help>
+        </flatVocabParam>
+
         <stringParam name="fraction_change_antisense"
                      prompt="Change in antisense fraction >= "
                      number="true">
@@ -6063,6 +6076,37 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
           <suggest selectMode="none" />
       </flatVocabParam>
 
+       <flatVocabParam name="profileset_generic_antisense"
+                     queryRef="GeneVQ.rna_seq_profileset"
+                     prompt="Experiment"
+                     quote="false"
+                     multiPick="false"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset">
+            <help>Choose an Experiment</help> 
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_ref_generic_antisense"
+                     queryRef="GeneVQ.RnaSeqSamplesAntisense"
+                     prompt="Reference Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic_antisense">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_comp_generic_antisense"
+                     queryRef="GeneVQ.RnaSeqSamplesAntisense"
+                     prompt="Comparison Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic_antisense">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+      </flatVocabParam>
+
   </paramSet>
 
 
@@ -6536,6 +6580,35 @@ from dual
                      where udac.user_id = $$user_id$$ -- enforce dataset access
                        and udac.user_dataset_id = ps.user_dataset_id
                        and ps.profile_set_id = pan.profile_set_id
+                       and pan.protocol_app_node_id = nfe.protocol_app_node_id
+                    )
+             and (iud.is_invalid is null or iud.is_invalid = 0)
+        ) order by ordering, display
+             ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="StrandedRnaSeqUserDataset" isCacheable="false">
+           <paramRef ref="InternalParams.user_id"/>
+           <column name="internal"/>
+           <column name="term"/>
+           <column name="display"/>
+           <sql>
+           <![CDATA[
+   select term, internal, display
+   from (  select iud.user_dataset_id as term, iud.user_dataset_id as internal,
+                  iud.name as display, 2 as ordering
+           from apidbUserDatasets.InstalledUserDataset iud
+           where iud.user_dataset_id
+                 in (select udac.user_dataset_id
+                     from apidbUserDatasets.UserDatasetAccessControl udac,
+                          apidbUserDatasets.UD_ProfileSet ps,
+                          apidbUserDatasets.UD_ProtocolAppNode pan,
+                          apidbUserDatasets.UD_NaFeatureExpression nfe
+                     where udac.user_id = $$user_id$$ -- enforce dataset access
+                       and udac.user_dataset_id = ps.user_dataset_id
+                       and ps.profile_set_id = pan.profile_set_id
+                       and ps.name = 'sense'
                        and pan.protocol_app_node_id = nfe.protocol_app_node_id
                     )
              and (iud.is_invalid is null or iud.is_invalid = 0)
@@ -7104,8 +7177,6 @@ group by r.value
             <wsColumn name="display" width="300" wsName="display"/>
         </processQuery>
 
-
-
        <sqlQuery name="antisenseFloor" excludeProjects="EuPathDB">
             <paramRef ref="geneParams.samples_comp_antisense"/>
             <column name="internal" />
@@ -7144,6 +7215,50 @@ group by r.value
 
         <processQuery name="antisenseFloor" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
             <paramRef ref="geneParams.samples_comp_antisense"/>
+            <wsColumn name="internal" width="300" wsName="internal"/>
+            <wsColumn name="term" width="300" wsName="term"/>
+            <wsColumn name="display" width="300" wsName="display"/>
+        </processQuery>
+
+       <sqlQuery name="antisenseFloorUserDataset" excludeProjects="EuPathDB">
+            <!-- paramRef ref="userDatasetParams.samples_fc_comp_generic_antisense"/ -->
+            <column name="internal" />
+            <column name="term" />
+	    <column name="display" />
+            <sql>
+	      with fpkm as 
+	          (select nvl(round(power(10,10) / (num_reads * tx_length),2), 1) as value
+		   from (SELECT min(rs.avg_unique_reads) as num_reads, min(oa.avg_transcript_length) as tx_length
+		         FROM apidbTuning.ProfileSamples ps
+		              , apidbTuning.RnaSeqStats rs
+			      , apidbTuning.OrganismAttributes oa
+		         WHERE ps.study_id = rs.study_id
+			     and rs.taxon_id = oa.component_taxon_id
+			     and ps.profile_type = 'values'
+--			     and protocol_app_node_id in ($$samples_fc_comp_generic_antisense$$)
+                 ))
+	      select *
+	      from
+	          (select '10 reads (' || to_char(f.value) || ' FPKM)' as display, f.value as term, f.value as internal, 1 as num
+		   from fpkm f
+		   union
+		   select '5 reads (' || to_char(f.value/2) || ' FPKM)' as display, f.value/2 as term, f.value/2 as internal, 2 as num
+		   from fpkm f
+		   union
+		   select '20 reads (' || to_char(f.value*2) || ' FPKM)' as display, f.value*2 as term, f.value*2 as internal, 3 as num
+		   from fpkm f
+		   union
+		   select '50 reads (' || to_char(f.value*5) || ' FPKM)' as display, f.value*5 as term, f.value*5 as internal, 4 as num
+		   from fpkm f
+		   union
+		   select '100 reads (' || to_char(f.value*10) || ' FPKM)' as display, f.value*10 as term, f.value*10 as internal, 5 as num
+		   from fpkm f)
+	      order by num
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="antisenseFloorUserDataset" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <paramRef ref="geneParams.samples_fc_comp_generic"/>
             <wsColumn name="internal" width="300" wsName="internal"/>
             <wsColumn name="term" width="300" wsName="term"/>
             <wsColumn name="display" width="300" wsName="display"/>
@@ -8605,8 +8720,33 @@ ORDER BY pan2.node_order_num
                  )
          </sql>
       </sqlQuery>
+
       <processQuery name="RnaSeqSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
          <paramRef ref="userDatasetParams.profileset_generic"/>
+         <wsColumn name="internal" width="100" wsName="internal"/>
+         <wsColumn name="term" width="100" wsName="term"/>
+         <wsColumn name="display" width="100" wsName="display"/>
+      </processQuery>
+
+      <sqlQuery name="RnaSeqSamplesAntisense" excludeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.rna_seq_dataset"/>
+         <paramRef ref="userDatasetParams.profileset_generic_antisense"/>
+         <column name="internal"/>
+         <column name="term"/>
+         <column name="display"/>
+         <sql>
+	    SELECT protocol_app_node_id as internal, name as term,
+                   regexp_replace(regexp_replace(name, '-forward$', ''), '-reverse$', '') as display
+	    FROM (SELECT protocol_app_node_id, name, node_order_num
+                  FROM apidbUserDatasets.ud_ProtocolAppNode
+                  WHERE profile_set_id = '$$profileset_generic_antisense$$'
+                  ORDER BY node_order_num, protocol_app_node_id
+                 )
+         </sql>
+      </sqlQuery>
+
+      <processQuery name="RnaSeqSamplesAntisense" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.profileset_generic_antisense"/>
          <wsColumn name="internal" width="100" wsName="internal"/>
          <wsColumn name="term" width="100" wsName="term"/>
          <wsColumn name="display" width="100" wsName="display"/>
