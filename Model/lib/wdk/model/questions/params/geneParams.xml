@@ -6060,6 +6060,37 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
           <suggest selectMode="none" />
       </flatVocabParam>
 
+       <flatVocabParam name="profileset_generic_antisense"
+                     queryRef="GeneVQ.rna_seq_profileset"
+                     prompt="Experiment"
+                     quote="false"
+                     multiPick="false"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset">
+            <help>Choose an Experiment</help> 
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_ref_generic_antisense"
+                     queryRef="GeneVQ.RnaSeqSamplesAntisense"
+                     prompt="Reference Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic_antisense">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_comp_generic_antisense"
+                     queryRef="GeneVQ.RnaSeqSamplesAntisense"
+                     prompt="Comparison Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic_antisense">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+      </flatVocabParam>
+
   </paramSet>
 
 
@@ -6533,6 +6564,35 @@ from dual
                      where udac.user_id = $$user_id$$ -- enforce dataset access
                        and udac.user_dataset_id = ps.user_dataset_id
                        and ps.profile_set_id = pan.profile_set_id
+                       and pan.protocol_app_node_id = nfe.protocol_app_node_id
+                    )
+             and (iud.is_invalid is null or iud.is_invalid = 0)
+        ) order by ordering, display
+             ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="StrandedRnaSeqUserDataset" isCacheable="false">
+           <paramRef ref="InternalParams.user_id"/>
+           <column name="internal"/>
+           <column name="term"/>
+           <column name="display"/>
+           <sql>
+           <![CDATA[
+   select term, internal, display
+   from (  select iud.user_dataset_id as term, iud.user_dataset_id as internal,
+                  iud.name as display, 2 as ordering
+           from apidbUserDatasets.InstalledUserDataset iud
+           where iud.user_dataset_id
+                 in (select udac.user_dataset_id
+                     from apidbUserDatasets.UserDatasetAccessControl udac,
+                          apidbUserDatasets.UD_ProfileSet ps,
+                          apidbUserDatasets.UD_ProtocolAppNode pan,
+                          apidbUserDatasets.UD_NaFeatureExpression nfe
+                     where udac.user_id = $$user_id$$ -- enforce dataset access
+                       and udac.user_dataset_id = ps.user_dataset_id
+                       and ps.profile_set_id = pan.profile_set_id
+                       and ps.name = 'sense'
                        and pan.protocol_app_node_id = nfe.protocol_app_node_id
                     )
              and (iud.is_invalid is null or iud.is_invalid = 0)
@@ -7100,8 +7160,6 @@ group by r.value
             <wsColumn name="term" width="300" wsName="term"/>
             <wsColumn name="display" width="300" wsName="display"/>
         </processQuery>
-
-
 
        <sqlQuery name="antisenseFloor" excludeProjects="EuPathDB">
             <paramRef ref="geneParams.samples_comp_antisense"/>
@@ -8602,8 +8660,33 @@ ORDER BY pan2.node_order_num
                  )
          </sql>
       </sqlQuery>
+
       <processQuery name="RnaSeqSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
          <paramRef ref="userDatasetParams.profileset_generic"/>
+         <wsColumn name="internal" width="100" wsName="internal"/>
+         <wsColumn name="term" width="100" wsName="term"/>
+         <wsColumn name="display" width="100" wsName="display"/>
+      </processQuery>
+
+      <sqlQuery name="RnaSeqSamplesAntisense" excludeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.rna_seq_dataset"/>
+         <paramRef ref="userDatasetParams.profileset_generic_antisense"/>
+         <column name="internal"/>
+         <column name="term"/>
+         <column name="display"/>
+         <sql>
+	    SELECT protocol_app_node_id as internal, name as term,
+                   regexp_replace(regexp_replace(name, '-forward$', ''), '-reverse$', '') as display
+	    FROM (SELECT protocol_app_node_id, name, node_order_num
+                  FROM apidbUserDatasets.ud_ProtocolAppNode
+                  WHERE profile_set_id = '$$profileset_generic_antisense$$'
+                  ORDER BY node_order_num, protocol_app_node_id
+                 )
+         </sql>
+      </sqlQuery>
+
+      <processQuery name="RnaSeqSamplesAntisense" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.profileset_generic_antisense"/>
          <wsColumn name="internal" width="100" wsName="internal"/>
          <wsColumn name="term" width="100" wsName="term"/>
          <wsColumn name="display" width="100" wsName="display"/>
