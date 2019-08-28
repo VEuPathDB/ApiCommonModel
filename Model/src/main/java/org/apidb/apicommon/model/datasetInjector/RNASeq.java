@@ -261,7 +261,7 @@ public class RNASeq extends  DatasetInjector {
   
         setPropValue("isGraphCustom", "false");
           injectTemplate("genePageGraphDescriptions");
-
+	  injectTemplate("transcriptionSummaryGraph");
           injectTemplate("datasetExampleGraphDescriptions");
          
       }

@@ -31,14 +31,15 @@
         Select the algorithm for MetaCycle analysis
       </help>
       <enumList>   
-	<enumValue>
-          <term>ARSER</term>
-          <internal>ARSresult_</internal>
-        </enumValue>
         <enumValue>
           <term>JTK_Cycle</term>
           <internal>JTKresult_</internal>
         </enumValue>
+	<enumValue>
+          <term>ARSER</term>
+          <internal>ARSresult_</internal>
+        </enumValue>
+
       </enumList>   
     </enumParam>
     
@@ -54,23 +55,20 @@
    </numberRangeParam>
 
    
-   <numberRangeParam name="metacycle_amplitude"
-                      prompt="Amplitude Range"
-                      integer="false"
-                      min="0.01"
-                      max="10"
-                      step="0.1">
-      <help>Set the range of amplitude of interested rhythm that match your search criteria to restrict the number of genes returned.</help>
-      <suggest default="{'min': '0.01', 'max': '10'}" />
-   </numberRangeParam>
-
+   <stringParam name="metacycle_amplitude"
+                     prompt="Amplitude equals to or greater than (fpkm)"
+                     number="true">
+       <help>The amplitude value for this search.</help>
+       <suggest default="5"/>
+     </stringParam>
+     
 
      <stringParam name="metacycle_pvalue"
-                     prompt="P value less than or equal to"
+                     prompt="P value  equals to or less than"
                      number="true">
        <help>The p value cutoff for this search.                                                                                                        
        </help>
-       <suggest default="0.1"/>
+       <suggest default="0.05"/>
      </stringParam>
      
      
@@ -4397,6 +4395,17 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
        </filterParam>
 
 
+       <filterParam name="phiBasedPhenotypeProtocolAppNodes" includeProjects="FungiDB,UniDB"
+                      metadataQueryRef="GeneVQ.MetadataQuery_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC"
+                      backgroundQueryRef="GeneVQ.MetadataQuery_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC"
+                      ontologyQueryRef="GeneVQ.OntologyQuery_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC"
+                      prompt="Images"
+                      trimMetadataTerms="false">
+         <help>
+              Filter based on phenotype data
+         </help>
+       </filterParam>
+
 
        <filterParam name="phenoMutNAFeatureIds" includeProjects="FungiDB,UniDB"
                       metadataQueryRef="GeneVQ.MetadataQuery_ncraOR74A_phenotype_knockout_mutants_RSRC"
@@ -6054,6 +6063,37 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
           <suggest selectMode="none" />
       </flatVocabParam>
 
+       <flatVocabParam name="profileset_generic_antisense"
+                     queryRef="GeneVQ.rna_seq_profileset"
+                     prompt="Experiment"
+                     quote="false"
+                     multiPick="false"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset">
+            <help>Choose an Experiment</help> 
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_ref_generic_antisense"
+                     queryRef="GeneVQ.RnaSeqSamplesAntisense"
+                     prompt="Reference Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+        </flatVocabParam>
+
+       <flatVocabParam name="samples_fc_comp_generic_antisense"
+                     queryRef="GeneVQ.RnaSeqSamplesAntisense"
+                     prompt="Comparison Sample(s)"
+                     quote="false"
+                     displayType="checkBox"
+                     multiPick="true"
+                     dependedParamRef="userDatasetParams.rna_seq_dataset">
+            <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
+          <suggest selectMode="none" />
+      </flatVocabParam>
+
   </paramSet>
 
 
@@ -6368,13 +6408,15 @@ from dual
           <column name="string_value"/>
           <sql>
            <![CDATA[
-
-                    select distinct p.protocol_app_node_id as internal,
-                    p.property as ontology_term_name,
-                    cast(null as number(10)) as number_value,
-                    lower(p.value) as string_value,
-                    cast(null as date) as date_value
-                    from APIDB.NAFEATUREPHENOTYPE p
+                SELECT distinct p.protocol_app_node_id as internal
+                    , p.property as ontology_term_name
+                    , cast(null as number(10)) as number_value
+                    , lower(p.value) as string_value
+                    , cast(null as date) as date_value
+               FROM apidb.nafeaturephenotype p, study.study s, study.studylink sl
+               WHERE s.name = 'ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC'
+               AND s.study_id = sl.study_id
+               AND sl.protocol_app_node_id = p.protocol_app_node_id
            ]]>
             </sql>
         </sqlQuery>
@@ -6392,7 +6434,7 @@ from dual
           <column name="is_range"/>
           <sql>
            <![CDATA[
-                    select distinct p.property as ontology_term_name
+               SELECT distinct p.property as ontology_term_name
                     , cast(null as varchar(10)) as parent_ontology_term_name
                     , initcap(p.property) as display_name
                     , cast(null as varchar(10)) as description
@@ -6400,12 +6442,68 @@ from dual
                     , 'string' as type
                     , 0 as is_range
                     , 1 as precision
-                    from apidb.nafeaturephenotype p
-                    order by initcap(p.property)
+               FROM apidb.nafeaturephenotype p, study.study s, study.studylink sl
+               WHERE s.name = 'ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC'
+               AND s.study_id = sl.study_id
+               AND sl.protocol_app_node_id = p.protocol_app_node_id
+               ORDER BY initcap(p.property)
            ]]>
             </sql>
         </sqlQuery>
 
+
+	<sqlQuery name="MetadataQuery_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC" doNotTest="1">
+          <column name="ontology_term_name"/>
+          <column name="internal"/>
+          <column name="number_value"/>
+          <column name="date_value"/>
+          <column name="string_value"/>
+          <sql>
+           <![CDATA[
+                SELECT distinct p.protocol_app_node_id as internal
+                    , p.property as ontology_term_name
+                    , cast(null as number(10)) as number_value
+                    , lower(p.value) as string_value
+                    , cast(null as date) as date_value
+               FROM apidb.nafeaturephenotype p, study.study s, study.studylink sl
+               WHERE s.name like '%_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC'
+               AND s.study_id = sl.study_id
+               AND sl.protocol_app_node_id = p.protocol_app_node_id
+               AND p.property NOT IN ('Comments','Co-mutated gene(s)','Gene inducer','PMID')
+           ]]>
+            </sql>
+        </sqlQuery>
+
+
+
+	<sqlQuery name="OntologyQuery_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC" doNotTest="1">
+          <column name="ontology_term_name"/>
+          <column name="parent_ontology_term_name"/>
+          <column name="display_name"/>
+          <column name="description"/>
+          <column name="type"/>
+          <column name="units"/>
+          <column name="precision"/>
+          <column name="is_range"/>
+          <sql>
+           <![CDATA[
+               SELECT distinct p.property as ontology_term_name
+                    , cast(null as varchar(10)) as parent_ontology_term_name
+                    , initcap(p.property) as display_name
+                    , cast(null as varchar(10)) as description
+                    , cast(null as varchar(10)) as units
+                    , 'string' as type
+                    , 0 as is_range
+                    , 1 as precision
+               FROM apidb.nafeaturephenotype p, study.study s, study.studylink sl
+               WHERE s.name like '%_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC'
+               AND s.study_id = sl.study_id
+               AND sl.protocol_app_node_id = p.protocol_app_node_id
+               AND p.property NOT IN ('Comments','Co-mutated gene(s)','Gene inducer','PMID')
+               ORDER BY initcap(p.property)
+           ]]>
+            </sql>
+        </sqlQuery>
 
 
 
@@ -6469,6 +6567,35 @@ from dual
                      where udac.user_id = $$user_id$$ -- enforce dataset access
                        and udac.user_dataset_id = ps.user_dataset_id
                        and ps.profile_set_id = pan.profile_set_id
+                       and pan.protocol_app_node_id = nfe.protocol_app_node_id
+                    )
+             and (iud.is_invalid is null or iud.is_invalid = 0)
+        ) order by ordering, display
+             ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="StrandedRnaSeqUserDataset" isCacheable="false">
+           <paramRef ref="InternalParams.user_id"/>
+           <column name="internal"/>
+           <column name="term"/>
+           <column name="display"/>
+           <sql>
+           <![CDATA[
+   select term, internal, display
+   from (  select iud.user_dataset_id as term, iud.user_dataset_id as internal,
+                  iud.name as display, 2 as ordering
+           from apidbUserDatasets.InstalledUserDataset iud
+           where iud.user_dataset_id
+                 in (select udac.user_dataset_id
+                     from apidbUserDatasets.UserDatasetAccessControl udac,
+                          apidbUserDatasets.UD_ProfileSet ps,
+                          apidbUserDatasets.UD_ProtocolAppNode pan,
+                          apidbUserDatasets.UD_NaFeatureExpression nfe
+                     where udac.user_id = $$user_id$$ -- enforce dataset access
+                       and udac.user_dataset_id = ps.user_dataset_id
+                       and ps.profile_set_id = pan.profile_set_id
+                       and ps.name = 'sense'
                        and pan.protocol_app_node_id = nfe.protocol_app_node_id
                     )
              and (iud.is_invalid is null or iud.is_invalid = 0)
@@ -6855,6 +6982,24 @@ group by r.value
         </processQuery>
 
 
+ <sqlQuery name="ProfileTimeShiftBirkholtzGametocyte" includeProjects="PlasmoDB,UniDB">
+             <column name="internal"/>
+             <column name="term"/>
+             <column name="display"/>
+	  <sql>
+          <![CDATA[
+	    SELECT 0 AS internal, '0 hours' AS term, '0 hours' AS display
+	    FROM DUAL          ]]>
+          </sql>
+     </sqlQuery>
+
+       <processQuery name="ProfileTimeShiftBirkholtzGametocyte" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
+
+
         <!-- TODO UniDB Problem Here -->
      <sqlQuery name="ProfileProfileSet" includeProjects="ToxoDB,CryptoDB,PlasmoDB,FungiDB,HostDB,UniDB">
              <column name="display"/>
@@ -6921,6 +7066,25 @@ group by r.value
             <wsColumn name="display" width="100" wsName="display"/>
         </processQuery>
 
+
+
+     <sqlQuery name="ProfileProfileSetBirkholtzGametocyte" includeProjects="PlasmoDB,UniDB">
+             <column name="display"/>
+             <column name="internal"/>
+             <column name="term"/>
+          <sql>
+         select 'Pfal3D7 Gametocyte time course' as term,
+                'Pfal3D7 Gametocyte time course' as internal,
+                'Pfal3D7 Gametocyte time course' as display
+        from dual
+          </sql>
+        </sqlQuery>
+
+       <processQuery name="ProfileProfileSetBirkholtzGametocyte" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="term" width="100" wsName="term"/>
+            <wsColumn name="display" width="100" wsName="display"/>
+        </processQuery>
 
 
      <sqlQuery name="ProfileProfileSetFungiScer" includeProjects="FungiDB,UniDB">
@@ -7036,8 +7200,6 @@ group by r.value
             <wsColumn name="term" width="300" wsName="term"/>
             <wsColumn name="display" width="300" wsName="display"/>
         </processQuery>
-
-
 
        <sqlQuery name="antisenseFloor" excludeProjects="EuPathDB">
             <paramRef ref="geneParams.samples_comp_antisense"/>
@@ -8538,8 +8700,37 @@ ORDER BY pan2.node_order_num
                  )
          </sql>
       </sqlQuery>
+
       <processQuery name="RnaSeqSamples" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
          <paramRef ref="userDatasetParams.profileset_generic"/>
+         <wsColumn name="internal" width="100" wsName="internal"/>
+         <wsColumn name="term" width="100" wsName="term"/>
+         <wsColumn name="display" width="100" wsName="display"/>
+      </processQuery>
+
+      <sqlQuery name="RnaSeqSamplesAntisense" excludeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.rna_seq_dataset"/>
+         <column name="internal"/>
+         <column name="term"/>
+         <sql>
+	    select name as term,
+                   listagg(protocol_app_node_id, ',') within group (order by name)
+                     as internal
+	    from (select pan.protocol_app_node_id, pan.node_order_num,
+                         regexp_replace(regexp_replace(pan.name, '-forward$', ''),
+                                        '-reverse$', '')
+                           as name
+                  from apidbUserDatasets.ud_ProtocolAppNode pan, apidbUserDatasets.ud_ProfileSet ps
+                  where pan.profile_set_id = ps.profile_set_id
+                    and ps.user_dataset_id = $$rna_seq_dataset$$
+                 )
+            group by name
+            order by max(node_order_num), name
+         </sql>
+      </sqlQuery>
+
+      <processQuery name="RnaSeqSamplesAntisense" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+         <paramRef ref="userDatasetParams.rna_seq_dataset"/>
          <wsColumn name="internal" width="100" wsName="internal"/>
          <wsColumn name="term" width="100" wsName="term"/>
          <wsColumn name="display" width="100" wsName="display"/>

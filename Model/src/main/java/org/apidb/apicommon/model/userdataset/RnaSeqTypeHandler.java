@@ -59,8 +59,8 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
 
   @Override
   public String[] getRelevantQuestionNames() {
-      // TODO
-    String[] q = {"GeneQuestions.GenesByRNASeqUserDataset"};
+      // TODO: only stranded datasets get the antisense question
+      String[] q = {"GeneQuestions.GenesByRNASeqUserDataset", "GeneQuestions.GenesByUserDatasetAntisense"};
     return q;
   }
 
