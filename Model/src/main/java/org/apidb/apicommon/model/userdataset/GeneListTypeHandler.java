@@ -56,7 +56,7 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getRelevantQuestionNames() {
+  public String[] getRelevantQuestionNames(UserDataset userDataset) {
     String[] q = {"GeneQuestions.GenesByUserDatasetGeneList"};
     return q;
   }

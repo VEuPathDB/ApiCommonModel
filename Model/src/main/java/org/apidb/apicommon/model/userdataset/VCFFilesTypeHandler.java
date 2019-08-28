@@ -129,7 +129,7 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
 
   // There are no relevant questions
   @Override
-  public String[] getRelevantQuestionNames() {
+  public String[] getRelevantQuestionNames(UserDataset userDataset) {
     String[] q = {};
     return q;
   }
