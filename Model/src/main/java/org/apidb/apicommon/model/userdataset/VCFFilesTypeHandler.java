@@ -21,8 +21,10 @@ import org.apidb.apicommon.model.gbrowse.GBrowseTrackStatus;
 import org.apidb.apicommon.model.gbrowse.GBrowseUtils;
 import org.apidb.apicommon.model.gbrowse.UploadStatus;
 import org.gusdb.fgputil.Tuples.TwoTuple;
+import org.gusdb.fgputil.Wrapper;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.fgputil.db.runner.SQLRunner;
+import org.gusdb.fgputil.db.runner.SQLRunnerException;
 import org.gusdb.fgputil.json.JsonType;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -42,13 +44,13 @@ import org.json.JSONObject;
  * @author crisl-adm
  *
  */
-public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
+public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
 
-  private static final Logger logger = Logger.getLogger(BigwigFilesTypeHandler.class);
+  private static final Logger logger = Logger.getLogger(VCFFilesTypeHandler.class);
 
-  private final static String NAME = "BigwigFiles";
+  private final static String NAME = "VCFFiles";
   private final static String VERSION = "1.0";
-  private final static String DISPLAY = "Bigwig";
+  private final static String DISPLAY = "VCF";
 	
   //private static final int WINDOW = 200000;
   
@@ -229,41 +231,56 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    * @throws WdkModelException
    */
   protected Integer getCurrentGenomeBuildNumber(String taxonId, DataSource appDbDataSource) throws WdkModelException {
+    Wrapper<Integer> wrapper = new Wrapper<>();
     logger.debug("TAXONID:" + taxonId);
     try { 
-      return new SQLRunner(appDbDataSource, SELECT_CURRENT_GENOME_BUILD_SQL,
-          "select-current-genome-build-by-taxon").executeQuery(
+      String selectCurrentGenomeBuildSql = SELECT_CURRENT_GENOME_BUILD_SQL;
+      new SQLRunner(appDbDataSource, selectCurrentGenomeBuildSql, "select-current-genome-build-by-taxon").executeQuery(
         new Object[]{ taxonId },
         new Integer[]{ Types.VARCHAR },
-        resultSet -> resultSet.next() ? resultSet.getInt("current_build") : null
+        resultSet -> {
+          if (resultSet.next()) {
+            wrapper.set(resultSet.getInt("current_build"));
+          }
+        }
       );
+      return wrapper.get();
+    }
+    catch(SQLRunnerException sre) {
+      throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
     }
     catch(Exception e) {
-      return WdkModelException.unwrap(e);
+      throw new WdkModelException(e);
     }
   }
   
   /**
    * A SQL lookup needed to obtain the longest seq id for the organism provided.
-   * 
    * @param taxonId
    * @param appDb
    * @return
    * @throws WdkModelException
    */
   protected TwoTuple<String,Integer> getSequenceInfo(String taxonId, DatabaseInstance appDb) throws WdkModelException {
+    TwoTuple<String, Integer> tuple = new TwoTuple<>(null, null);
     try { 
-      return new SQLRunner(appDb.getDataSource(), SELECT_SEQUENCE_SQL,
-          "select-sequence-by-taxon").executeQuery(
+      String selectSequenceSql = SELECT_SEQUENCE_SQL;
+      new SQLRunner(appDb.getDataSource(), selectSequenceSql, "select-sequence-by-taxon").executeQuery(
         new Object[]{ taxonId },
         new Integer[]{ Types.VARCHAR },
-        resultSet -> resultSet.next() ?
-            new TwoTuple<>(resultSet.getString("seq_id"), resultSet.getInt("length")) :
-            new TwoTuple<>(null, null)
+        resultSet -> {
+          if (resultSet.next()) {
+            tuple.set(resultSet.getString("seq_id"), resultSet.getInt("length"));
+          }
+        }
       );
+      return tuple;
+    }
+    catch(SQLRunnerException sre) {
+      throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
     }
     catch(Exception e) {
-      return WdkModelException.unwrap(e);
+      throw new WdkModelException(e);
     }
   }
   

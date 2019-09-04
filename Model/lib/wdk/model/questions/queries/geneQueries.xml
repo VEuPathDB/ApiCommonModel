@@ -587,20 +587,22 @@ and ps.na_feature_id in ($$phenoPlasmogemScore$$)
         <column name="project_id"/>
         <column name="tfbs_distance"/>
         <column name="tfbs_count"/>
+        <column name="organismAbbrev"/>
        <sql>
              <![CDATA[
        select  ta.source_id, bg.gene_source_id, 'Y' as matched_result,
                ta.project_id,
                min(bg.distance) as tfbs_distance,
-               count(*) as tfbs_count
-       from   ApidbTuning.TFBSGene bg, ApidbTuning.TranscriptAttributes ta
+               count(*) as tfbs_count, org.public_abbrev as organismAbbrev
+       from  ApidbTuning.TFBSGene bg, ApidbTuning.TranscriptAttributes ta, apidb.organism org
        where bg.distance <= $$tfbs_distance$$ 
          and bg.organism in ($$organism$$)
          and bg.direction = '-'
          and exp(bg.primary_score) <= $$tfbs_pvalue$$
          and bg.name = $$tfbs_name$$
          and bg.gene_source_id = ta.gene_source_id
-       group by ta.project_id, ta.source_id, bg.gene_source_id
+         and org.taxon_id = ta.taxon_id
+       group by ta.project_id, ta.source_id, bg.gene_source_id, org.public_abbrev
        having count(*) >= $$tfbs_num_sites$$
           ]]>
        </sql>
@@ -3652,13 +3654,13 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 		       and ps.protocol_app_node_id in ($$samples_comp_antisense$$)
 		       and ps.profile_type = 'values')
 		  , ref1 as
-		  (select s.NA_FEATURE_ID, s.sample, s.value as sense_value, a.value as antisense_value  
+		  (select s.NA_FEATURE_ID, s.sample, s.value as sense_value, a.value as antisense_value
 		  from (select * from ref where study_name like '%' || '&&sense&&' || '%') s,
 		  (select * from ref where study_name like '%' || '&&antisense&&' || '%') a
 		  where s.sample = a.sample
 		       and s.NA_FEATURE_ID = a.NA_FEATURE_ID)
 		  , comp1 as
-		  (select s.NA_FEATURE_ID, s.sample, s.value as sense_value, a.value as antisense_value  
+		  (select s.NA_FEATURE_ID, s.sample, s.value as sense_value, a.value as antisense_value
 		  from (select * from comp where study_name like '%' || '&&sense&&' || '%') s,
 		  (select * from comp where study_name like '%' || '&&antisense&&' || '%') a
 		  where s.sample = a.sample
@@ -3907,16 +3909,12 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
       </testParamValues>
 
         <paramRef ref="userDatasetParams.rna_seq_dataset" queryRef="GeneVQ.StrandedRnaSeqUserDataset"/>
-        <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.profileset_generic_antisense"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.samples_fc_ref_generic_antisense"/>
-        <!-- not geneParams.samples_ref_antisense -->
         <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.samples_fc_comp_generic_antisense"/>
-        <!-- not geneParams.samples_comp_antisense -->
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_direction"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_fold_change"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.sense_direction"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.sense_fold_change"/>
-        <!-- paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_floor_user_dataset"/ -->
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
         <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.fraction_change_antisense"/>
 
@@ -3940,78 +3938,73 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
    
       <sql>
       <![CDATA[
-        with ref
-             as (select r.na_feature_id, ps.name as study_name, r.value,
-                        regexp_replace(regexp_replace(pan.name, '-forward$', ''), '-reverse$', '') as sample
-                 from apidbUserDatasets.ud_ProfileSet ps, apidbUserDatasets.ud_ProtocolAppNode pan,
-                      apidbUserDatasets.ud_NaFeatureExpression r
-                 where pan.protocol_app_node_id = r.protocol_app_node_id
-                   and pan.profile_set_id = ps.profile_set_id
-                   and ps.user_dataset_id
-                       in (select ps2.user_dataset_id
-                           from apidbUserDatasets.ud_ProfileSet ps2, apidbUserDatasets.ud_ProtocolAppNode pan2
-                           where pan2.profile_set_id = ps2.profile_set_id
-                             and pan2.protocol_app_node_id in ($$samples_fc_ref_generic_antisense$$)
-                          )
-                ),
-             comp
-             as (select r.na_feature_id, ps.name as study_name, r.value,
-                        regexp_replace(regexp_replace(pan.name, '-forward$', ''), '-reverse$', '') as sample
-                 from apidbUserDatasets.ud_ProfileSet ps, apidbUserDatasets.ud_ProtocolAppNode pan,
-                      apidbUserDatasets.ud_NaFeatureExpression r
-                 where pan.protocol_app_node_id = r.protocol_app_node_id
-                   and pan.profile_set_id = ps.profile_set_id
-                   and ps.user_dataset_id
-                       in (select ps2.user_dataset_id
-                           from apidbUserDatasets.ud_ProfileSet ps2, apidbUserDatasets.ud_ProtocolAppNode pan2
-                           where pan2.profile_set_id = ps2.profile_set_id
-                             and pan2.protocol_app_node_id in ($$samples_fc_comp_generic_antisense$$)
-                          )
-                ),
-             ref1
-             as (select s.na_feature_id, s.sample, s.value as sense_value, a.value as antisense_value  
-                 from (select * from ref where study_name = 'sense') s,
-                      (select * from ref where study_name = 'antisense') a
-                 where s.sample = a.sample
-                   and s.na_feature_id = a.na_feature_id),
-             comp1
-             as (select s.na_feature_id, s.sample, s.value as sense_value, a.value as antisense_value  
-		  from (select * from comp where study_name = 'sense') s,
-                       (select * from comp where study_name = 'antisense') a
-		  where s.sample = a.sample
-                    and s.na_feature_id = a.na_feature_id)
+        with pan
+             as (select ps.name as study_name, pan.protocol_app_node_id,
+                        regexp_replace(regexp_replace(pan.name, '-forward$', ''),
+                                       '-reverse$', '') as sample
+                 from apidbUserDatasets.ud_ProfileSet ps,
+                      apidbUserDatasets.ud_ProtocolAppNode pan
+                 where pan.profile_set_id = ps.profile_set_id
+                )
         select ga.source_id, ga.gene_source_id, 'Y' as matched_result, ga.project_id,
-               fin.sample_pairs, fin.max_FC_product, &&antisenseFloor&& as antisense_floor,
-               round($$antisense_direction$$ * log(2,$$antisense_fold_change$$),1) as antisense_fold_change,
-               round($$sense_direction$$ * log(2,$$sense_fold_change$$),1) as sense_fold_change
+               hits.sample_pairs, hits.max_fc_product, &&antisenseFloor&& as antisense_floor,
+               round($$antisense_direction$$ * log(2, $$antisense_fold_change$$), 1) as antisense_fold_change,
+               round($$sense_direction$$ * log(2, $$sense_fold_change$$), 1) as sense_fold_change
 	from apidbTuning.TranscriptAttributes ga,
-             (select na_feature_id, listagg(sample_pair, ', ') within group (order by na_feature_id) as sample_pairs,
-                     max(fc_product) as max_fc_product
-              from (select ref1.na_feature_id, ref1.sample || '->' || comp1.sample as sample_pair,
-                           round(  case
-                                     when comp1.sense_value / greatest(&&antisenseFloor&&,ref1.sense_value) > 1
-                                       then comp1.sense_value / greatest(&&antisenseFloor&&,ref1.sense_value)
-                                     else ref1.sense_value / greatest(&&antisenseFloor&&,comp1.sense_value)
-                                   end
-                                 * case
-                                     when comp1.antisense_value / greatest(&&antisenseFloor&&,ref1.antisense_value) > 1
-                                       then comp1.antisense_value / greatest(&&antisenseFloor&&,ref1.antisense_value)
-                                     else ref1.antisense_value / greatest(&&antisenseFloor&&,comp1.antisense_value)
-                                   end,
-                                 1) as fc_product
-                    from comp1, ref1
-                    where ref1.na_feature_id = comp1.na_feature_id
-                      and ref1.sample != comp1.sample
-                      and ((($$sense_direction$$ * comp1.sense_value / greatest(&&antisenseFloor&&,ref1.sense_value)) >= $$sense_fold_change$$)
-				  OR (($$sense_direction$$ * -1 * ref1.sense_value / greatest(&&antisenseFloor&&,comp1.sense_value)) >= $$sense_fold_change$$))
-				and ((($$antisense_direction$$ * comp1.antisense_value / greatest(&&antisenseFloor&&,ref1.antisense_value)) >= $$antisense_fold_change$$)
-				  OR (($$antisense_direction$$ * -1 * ref1.antisense_value / greatest(&&antisenseFloor&&,comp1.antisense_value)) >= $$antisense_fold_change$$))
-				and abs((comp1.antisense_value/greatest(2*&&antisenseFloor&&,(comp1.antisense_value+comp1.sense_value))) - (ref1.antisense_value/greatest(2*&&antisenseFloor&&,(ref1.antisense_value+ref1.sense_value))))>$$fraction_change_antisense$$)	  
-		    group by na_feature_id
-                    order by na_feature_id) fin
-        where ga.gene_na_feature_id = fin.na_feature_id
+             (select ref_sense_result.na_feature_id,
+                     listagg(ref_sense_pan.sample || '->' || comp_sense_pan.sample, ', ') within group (order by ref_sense_result.na_feature_id) as sample_pairs,
+                     max(round(  case
+                                   when comp_sense_result.value / greatest(1, ref_sense_result.value) > 1
+                                     then comp_sense_result.value / greatest(1, ref_sense_result.value)
+                                   else ref_sense_result.value / greatest(1, comp_sense_result.value)
+                                 end
+                               * case
+                                   when comp_antisense_result.value / greatest(1, ref_antisense_result.value) > 1
+                                     then comp_antisense_result.value / greatest(1, ref_antisense_result.value)
+                                   else ref_antisense_result.value / greatest(1, comp_antisense_result.value)
+                                 end, 1))
+                       as max_fc_product
+              from pan ref_sense_pan, pan ref_antisense_pan,
+                   pan comp_sense_pan, pan comp_antisense_pan,
+                   apidbUserDatasets.ud_NaFeatureExpression ref_sense_result,
+                   apidbUserDatasets.ud_NaFeatureExpression ref_antisense_result,
+                   apidbUserDatasets.ud_NaFeatureExpression comp_sense_result,
+                   apidbUserDatasets.ud_NaFeatureExpression comp_antisense_result
+              where ref_sense_pan.study_name = 'sense'
+                and ref_antisense_pan.study_name = 'antisense'
+                and ref_sense_pan.sample = ref_antisense_pan.sample
+                and ref_sense_pan.protocol_app_node_id
+                    in ($$samples_fc_ref_generic_antisense$$)
+                and comp_sense_pan.study_name = 'sense'
+                and comp_antisense_pan.study_name = 'antisense'
+                and comp_sense_pan.sample = comp_antisense_pan.sample
+                and comp_sense_pan.protocol_app_node_id
+                    in ($$samples_fc_comp_generic_antisense$$)
+                and ref_sense_pan.sample != comp_sense_pan.sample -- optimization (?)
+                and ref_sense_pan.protocol_app_node_id
+                    = ref_sense_result.protocol_app_node_id
+                and ref_antisense_pan.protocol_app_node_id
+                    = ref_antisense_result.protocol_app_node_id
+                and comp_sense_pan.protocol_app_node_id
+                    = comp_sense_result.protocol_app_node_id
+                and comp_antisense_pan.protocol_app_node_id
+                    = comp_antisense_result.protocol_app_node_id
+                and ref_sense_result.na_feature_id = ref_antisense_result.na_feature_id
+                and ref_sense_result.na_feature_id = comp_sense_result.na_feature_id
+                and comp_sense_result.na_feature_id = comp_antisense_result.na_feature_id
+                and ((($$sense_direction$$ * comp_sense_result.value / greatest(&&antisenseFloor&&, ref_sense_result.value)) >= $$sense_fold_change$$)
+                     or (($$sense_direction$$ * -1 * ref_sense_result.value / greatest(&&antisenseFloor&&,comp_sense_result.value)) >= $$sense_fold_change$$))
+                and ((($$antisense_direction$$ * comp_antisense_result.value / greatest(&&antisenseFloor&&, ref_antisense_result.value)) >= $$antisense_fold_change$$)
+                     or (($$antisense_direction$$ * -1 * ref_antisense_result.value / greatest(&&antisenseFloor&&, comp_antisense_result.value))
+                          >= $$antisense_fold_change$$))
+                and abs(  (comp_antisense_result.value
+                           / greatest(2*&&antisenseFloor&&, comp_antisense_result.value + comp_sense_result.value))
+                        - (ref_antisense_result.value
+                           / greatest(2*&&antisenseFloor&&, ref_antisense_result.value + ref_sense_result.value))
+                       ) > $$fraction_change_antisense$$
+                group by ref_sense_result.na_feature_id) hits
+        where ga.gene_na_feature_id = hits.na_feature_id
           and ( $$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$ )
-
       ]]>
       </sql>
 
@@ -4020,12 +4013,12 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
     <processQuery name="GenesByUserDatasetAntisense" includeProjects="EuPathDB"
         processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
         <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.rna_seq_dataset"/>
-        <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.profileset_generic_antisense" quote="false"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.samples_fc_ref_generic_antisense"/>
+        <paramRef groupRef="paramGroups.dynamicParams" ref="userDatasetParams.samples_fc_comp_generic_antisense"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_direction"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_fold_change"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.sense_direction"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.sense_fold_change"/>
-        <!-- paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_floor_user_dataset"/ -->
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.protein_coding_only"/>
         <paramRef groupRef="paramGroups.advancedParams" ref="geneParams.fraction_change_antisense"/>
 
