@@ -44,13 +44,13 @@ import org.json.JSONObject;
  * @author crisl-adm
  *
  */
-public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
+public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
 
-  private static final Logger logger = Logger.getLogger(BigwigFilesTypeHandler.class);
+  private static final Logger logger = Logger.getLogger(VCFFilesTypeHandler.class);
 
-  private final static String NAME = "BigwigFiles";
+  private final static String NAME = "VCFFiles";
   private final static String VERSION = "1.0";
-  private final static String DISPLAY = "Bigwig";
+  private final static String DISPLAY = "VCF";
 	
   //private static final int WINDOW = 200000;
   

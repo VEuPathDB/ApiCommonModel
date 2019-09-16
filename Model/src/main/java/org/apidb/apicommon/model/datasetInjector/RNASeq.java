@@ -219,10 +219,11 @@ public class RNASeq extends  DatasetInjector {
 	  }
 
           injectTemplate("rnaSeqPercentileQuestion");
-          //          injectTemplate("rnaSeqPercentileCategories");
+          //injectTemplate("rnaSeqPercentileCategories");
           setPropValue("searchCategory", "searchCategory-transcriptomics-percentile");
           setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
           injectTemplate("internalGeneSearchCategory");
+
 
 	  if(getPropValueAsBoolean("isDESeq")) {
 	      injectTemplate("rnaSeqDESeqQuestion");
@@ -366,6 +367,7 @@ public class RNASeq extends  DatasetInjector {
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+
       }
   }
   
