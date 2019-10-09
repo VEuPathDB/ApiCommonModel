@@ -43,6 +43,7 @@
       </enumList>   
     </enumParam>
     
+    
 
    <numberRangeParam name="metacycle_period"
                       prompt="Period Range"
@@ -71,6 +72,46 @@
        <suggest default="0.05"/>
      </stringParam>
      
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+  <!-- LOPIT params -->
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <enumParam name="lopit_method" prompt="Method" quote="false">
+      <noTranslation value="true" includeProjects="EuPathDB" />
+      <help>
+        Select the method for LOPIT probability computation
+      </help>
+      <enumList>   
+        <enumValue>
+          <term>Either</term>
+          <internal>LOPIT - MAP','LOPIT - MCMC</internal>
+        </enumValue>
+        <enumValue>
+          <term>MAP</term>
+          <internal>LOPIT - MAP</internal>
+        </enumValue>
+	<enumValue>
+          <term>MCMC</term>
+          <internal>LOPIT - MCMC</internal>
+        </enumValue>
+
+      </enumList>   
+    </enumParam>
+
+    
+    <filterParam name="lopit_filter" 
+                 ontologyQueryRef="GeneVQ.lopitOntologyQuery"
+                 metadataQueryRef="GeneVQ.lopitMetadataQuery"
+                 backgroundQueryRef="GeneVQ.lopitMetadataBkgQuery"
+                 countPredictsAnswerCount="true"
+                 filterDataTypeDisplayName="Subcellular location"
+                 prompt="Subcellular location probabilities"
+                 dependedParamRef="geneParams.lopit_method"
+                 trimMetadataTerms="true">
+      <help>
+        Select genes based on their predicted subcellular locations
+      </help>
+    </filterParam>
+    
      
 
 
@@ -4702,6 +4743,7 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
              a list of samples analyzed in that experiment. Individual samples can be queried.]]>
              
         </help>
+        <suggest selectMode="none"/>
       </flatVocabParam>
 
     <flatVocabParam name="ptm_assay" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,FungiDB,EuPathDB,UniDB"
@@ -6128,6 +6170,70 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
 
         <!-- TEMPLATE_ANCHOR rnaSeqMetaCycleParamQuery -->
 
+   <sqlQuery name="lopitOntologyQuery" isCacheable="true">
+     <column name="ontology_term_name"/>
+     <column name="parent_ontology_term_name"/>
+     <column name="display_name"/>
+     <column name="description"/>
+     <column name="type"/>
+     <column name="units"/>
+     <column name="precision"/>
+     <column name="is_range"/>
+    <sql>
+      <![CDATA[
+select distinct pan.name as ontology_term_name, cast(null as varchar2(1)) as parent_ontology_term_name, 
+replace(pan.name,' (lopit)','') as display_name, cast(null as varchar2(1)) as description, cast(null as varchar2(1)) as units, 
+'number' as type,1 as is_range,1 as precision, cast(null as varchar2(1)) as display_order
+from study.study s , study.studyLink sl, study.ProtocolAppNode pan, results.NaFeatureExpression nfe, apidbtuning.geneattributes ga
+where s.name in ('LOPIT - MAP') 
+and s.study_id = sl.study_id 
+and sl.protocol_app_node_id = pan.protocol_app_node_id
+and pan.protocol_app_node_id = nfe.protocol_app_node_id
+and ga.na_feature_id = nfe.na_feature_id
+order by ontology_term_name
+        ]]>
+    </sql>
+   </sqlQuery>
+
+    <sqlQuery name="lopitMetadataQuery" isCacheable="false">
+      <paramRef ref="geneParams.lopit_method" />  
+      <column name="ontology_term_name"/>
+      <column name="internal"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <column name="string_value"/>
+      <sql>
+        <![CDATA[
+select ga.source_id as internal, pan.name as ontology_term_name, round(nfe.value,2) as number_value, round(to_char(nfe.value),2) as string_value,cast(null as date) as date_value
+from study.study s , study.studyLink sl, study.ProtocolAppNode pan, results.NaFeatureExpression nfe, apidbtuning.geneattributes ga
+where s.name in ('$$lopit_method$$') 
+and s.study_id = sl.study_id 
+and sl.protocol_app_node_id = pan.protocol_app_node_id
+and pan.protocol_app_node_id = nfe.protocol_app_node_id
+and ga.na_feature_id = nfe.na_feature_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <sqlQuery name="lopitMetadataBkgQuery" isCacheable="false">
+      <column name="ontology_term_name"/>
+      <column name="internal"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <column name="string_value"/>
+      <sql>
+        <![CDATA[
+select ga.source_id as internal, pan.name as ontology_term_name, round(nfe.value,2) as number_value, round(to_char(nfe.value),2) as string_value,cast(null as date) as date_value
+from study.study s , study.studyLink sl, study.ProtocolAppNode pan, results.NaFeatureExpression nfe, apidbtuning.geneattributes ga
+where s.name in ('LOPIT - MAP','LOPIT - MCMC') 
+and s.study_id = sl.study_id 
+and sl.protocol_app_node_id = pan.protocol_app_node_id
+and pan.protocol_app_node_id = nfe.protocol_app_node_id
+and ga.na_feature_id = nfe.na_feature_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
 
 
 	<sqlQuery name="MetadataQuery_ncraOR74A_phenotype_knockout_mutants_RSRC" doNotTest="1">
@@ -6464,13 +6570,13 @@ from dual
                 SELECT distinct p.protocol_app_node_id as internal
                     , p.property as ontology_term_name
                     , cast(null as number(10)) as number_value
-                    , lower(p.value) as string_value
+                    , p.value as string_value
                     , cast(null as date) as date_value
                FROM apidb.nafeaturephenotype p, study.study s, study.studylink sl
                WHERE s.name like '%_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC'
                AND s.study_id = sl.study_id
                AND sl.protocol_app_node_id = p.protocol_app_node_id
-               AND p.property NOT IN ('Comments','Co-mutated gene(s)','Gene inducer','PMID')
+               AND p.property NOT IN ('Comments','Co-mutated gene(s)','Gene inducer','PHI-base entry','PMID')
            ]]>
             </sql>
         </sqlQuery>
@@ -6500,7 +6606,7 @@ from dual
                WHERE s.name like '%_PHI-base_curated_phenotype_NAFeaturePhenotypeGeneric_RSRC'
                AND s.study_id = sl.study_id
                AND sl.protocol_app_node_id = p.protocol_app_node_id
-               AND p.property NOT IN ('Comments','Co-mutated gene(s)','Gene inducer','PMID')
+               AND p.property NOT IN ('Comments','Co-mutated gene(s)','Gene inducer','PHI-base entry','PMID')
                ORDER BY initcap(p.property)
            ]]>
             </sql>
