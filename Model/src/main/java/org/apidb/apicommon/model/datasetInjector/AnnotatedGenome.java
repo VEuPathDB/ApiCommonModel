@@ -87,6 +87,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
       phylum.put("Cryptococcus","Tremellomycetes");
       phylum.put("Cryptosporidium","Apicomplexa");
       phylum.put("Cyclospora","Apicomplexa");
+      phylum.put("Cyphellophora","Eurotiomycetes");
       phylum.put("Cystoisospora","Apicomplexa");
       phylum.put("Cytauxzoon","Apicomplexa");
       phylum.put("Edhazardia","Microsporidia");
@@ -116,6 +117,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
       phylum.put("Malassezia","Ustilaginomycetes");
       phylum.put("Melampsora","Pucciniomycetes");
       phylum.put("Mitosporidium","Microsporidia");
+      phylum.put("Monocercomonoides","Diplomonadida");
       phylum.put("Mucor","Zygomycetes");
       phylum.put("Mus","Chordata");
       phylum.put("Bos","Chordata");

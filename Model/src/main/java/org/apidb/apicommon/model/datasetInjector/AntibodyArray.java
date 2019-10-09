@@ -5,8 +5,10 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class AntibodyArray extends DatasetInjector {
 
     protected void setGraphYAxisDescription() {
-        String yAxisDescription = "Log2 transform of signal intensity";
-        if(getPropValue("function").equals("arcsinh")) {
+        String yAxisDescription = "Signal intensity";
+	if(getPropValue("function").equals("log2")) {
+	    yAxisDescription = "Log2 transform of signal intensity";
+        } else if(getPropValue("function").equals("arcsinh")) {
             yAxisDescription = "Arcsinh(1+50x) transform of signal intensity";
         }
         setPropValue("graphYAxisDescription", yAxisDescription);
@@ -17,14 +19,16 @@ public class AntibodyArray extends DatasetInjector {
     }
 
     protected void setFunctionProperties() {
-        if(getPropValue("function").equals("")) {
-            setPropValue("function", "log2");
+        if(getPropValue("function").equals("log2")) {
+            setPropValue("function_display", "(log2)");
+            setPropValue("function_help","The log base 2 transform of the average intensity values for the");
         } else if(getPropValue("function").equals("arcsinh")) {
             setPropValue("function_display", "(arcsinh(1+50x))");
             setPropValue("function_help","The arcsinh(1+50x) transform of the average intensity values for the");
         } else {
-            setPropValue("function_display", "(log2)");
-            setPropValue("function_help","The log base 2 transform of the average intensity values for the");
+            setPropValue("function", "linear");
+            setPropValue("function_display", "(linear)");
+            setPropValue("function_help","The average intensity values for the");
         }
     }
     @Override
