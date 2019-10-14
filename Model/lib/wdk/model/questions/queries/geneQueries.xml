@@ -2729,10 +2729,12 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
             <paramValue name="ngsSnp_strain_meta">Tb-927</paramValue>
         </testParamValues>
         <paramRef ref="organismParams.organismSinglePick" displayType="select" queryRef="organismVQ.withNgsSNPdatasets" quote="false" noTranslation="true">
-          <help>The organism you choose will determine the organism from which to return genes.  That will also restrict the set of isolates you may choose as SNPs are identified by aligning the reads from those isolates to this genome.</help >
+          <help>The organism you choose will determine the strains/isolates from which you can identify SNPs.</help >
         </paramRef>
 
-        <paramRef ref="snpParams.ngsSnp_strain_meta" prompt="Samples"/>
+        <paramRef ref="snpParams.ngsSnp_strain_meta" prompt="Set of Samples">
+	  <help>SNPs are defined here as sequence differences between the selected strains. If you want to include sequence differences between the selected strains and the reference genome, then also include the reference strain in your search.</help>
+	</paramRef>
 	<paramRef ref="snpParams.WebServicesPath"/>
 	<paramRef ref="snpParams.ReadFrequencyPercent" />
 	<!-- <paramRef ref="snpParams.MinPercentMinorAlleles" groupRef="snpParamGroupSet.between_isolates"/>
@@ -4289,6 +4291,85 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
    </processQuery>
 
 
+    <sqlQuery name="GenesByLofflerNaturalInfectionWithMetaDataWiz" includeProjects="PlasmoDB,UniDB" 
+              isCacheable="true" doNotTest="true">
+
+<!-- <paramRef ref="geneParams.profileset_generic_all" quote="false" multiPick="true"/>  -->
+
+      <paramRef ref="geneParams.ref_samples_filter_metadata_loffler_wiz" groupRef="geneParamGroupSet.reference_samples"/>
+      <paramRef ref="geneParams.regulated_dir_immune_response" groupRef="geneParamGroupSet.direction"/>
+
+      <paramRef ref="geneParams.comp_samples_filter_metadata_loffler_wiz" groupRef="geneParamGroupSet.comparison_samples" />
+
+      <paramRef ref="geneParams.p_value" groupRef="geneParamGroupSet.significance" default="0.05"/>
+
+<!--      <paramRef ref="sharedParams.metadata_for_graph" quote="false"/> -->
+
+      <column name="project_id"/>
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="matched_result"/>
+
+<!--  <column name="difference"/> -->
+      <column name="p_value" sortingColumn="sorting_p_value"/>
+      <column name="sorting_p_value"/>
+      <column name="avg_group_one"/>
+      <column name="avg_group_two"/>
+
+      <sqlParamValue includeProjects="PlasmoDB,UniDB" name="isLogged">0</sqlParamValue>
+      <sqlParamValue includeProjects="PlasmoDB,UniDB" name="lowerBound">0.0001</sqlParamValue>
+      <sqlParamValue includeProjects="PlasmoDB,UniDB" name="function">'log2'</sqlParamValue>
+
+      <sql>
+        <![CDATA[
+          select ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
+                 round(case when (linear_avg_comp / linear_avg_ref) >= 1 then (linear_avg_comp / linear_avg_ref)
+                            else (-1 / (linear_avg_comp / linear_avg_ref)) end, 6) as difference,
+                 round(original_avg_comp, 6) as avg_group_one,
+                 round(original_avg_ref, 6) as avg_group_two,
+                 to_char( p_value, '9.99EEEE') as p_value,
+                 p_value sorting_p_value
+          from apidbTuning.transcriptAttributes ta,
+               (select na_feature_id,
+                       round(avg(decode(source_set, 'ref', linear_value, null)), 3) linear_avg_ref,
+                       round(avg(decode(source_set, 'comp', linear_value, null)), 3) linear_avg_comp,
+                       round(avg(decode(source_set, 'ref', original_value, null)), 3) original_avg_ref,
+                       round(avg(decode(source_set, 'comp', original_value, null)), 3) original_avg_comp,
+                       stats_t_test_indepu(source_set, linear_value) p_value
+                from (  select na_feature_id,
+			       avg(value) as original_value,
+		               avg(case when lower(&&function&&) = 'arcsinh' then apidb.arcsinh_to_linear(value)
+			                when lower(&&function&&) = 'log2' then power(2, value)
+					when lower(&&function&&) = 'linear' then value
+					else value end) as linear_value,
+			       'ref' as source_set
+                        from results.NaFeatureHostResponse
+                        where protocol_app_node_id in ($$ref_samples_filter_metadata_loffler_wiz$$)
+                        group by na_feature_id, protocol_app_node_id
+                      union
+                        select na_feature_id,
+			       avg(value) as original_value,
+		               avg(case when lower(&&function&&) = 'arcsinh' then apidb.arcsinh_to_linear(value)
+			                when lower(&&function&&) = 'log2' then power(2, value)
+					when lower(&&function&&) = 'linear' then value
+					else value end) as linear_value,
+			       'comp' as source_set
+                        from results.NaFeatureHostResponse
+                        where protocol_app_node_id in ($$comp_samples_filter_metadata_loffler_wiz$$)
+                        group by na_feature_id, protocol_app_node_id
+                     )
+                group by na_feature_id) one
+          where one.na_feature_id = ta.gene_na_feature_id
+            and p_value <= $$p_value$$
+            and ('$$regulated_dir_immune_response$$' = 'increased' and linear_avg_comp > linear_avg_ref
+                 or 
+                 '$$regulated_dir_immune_response$$' = 'decreased' and linear_avg_ref > linear_avg_comp)
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+
 
  <sqlQuery name="GenesByLofflerNaturalInfectionWithMetaData" includeProjects="PlasmoDB,UniDB" 
               isCacheable="true" doNotTest="true">
@@ -4344,7 +4425,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 					else value end) as linear_value,
 			       'ref' as source_set
                         from results.NaFeatureHostResponse
-                        where protocol_app_node_id in ($$ref_samples_filter_metadata_all$$)
+                        where protocol_app_node_id in ($$ref_samples_filter_metadata_loffler$$)
                         group by na_feature_id, protocol_app_node_id
                       union
                         select na_feature_id,
@@ -4355,7 +4436,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 					else value end) as linear_value,
 			       'comp' as source_set
                         from results.NaFeatureHostResponse
-                        where protocol_app_node_id in ($$comp_samples_filter_metadata_all$$)
+                        where protocol_app_node_id in ($$comp_samples_filter_metadata_loffler$$)
                         group by na_feature_id, protocol_app_node_id
                      )
                 group by na_feature_id) one
@@ -4449,7 +4530,6 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
                  '$$regulated_dir_immune_response$$' = 'decreased' and linear_avg_ref > linear_avg_comp)
         ]]>
       </sql>
-
     </sqlQuery>
 
  <sqlQuery name="GenesByHostResponseWithMetaData" includeProjects="PlasmoDB,UniDB" 
