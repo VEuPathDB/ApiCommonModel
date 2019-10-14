@@ -1209,9 +1209,12 @@ function synGeneTitle(track, feature) {
 
     var dataRoot = track.browser.config.dataRoot;
     var baseUrl = track.browser.config.baseUrl;
+    baseUrl = baseUrl.replace(/\/$/,'');
 
     var recordLink = '<a target="_blank" href="' + baseRecordUrl + '/gene/' + sourceId + '">Gene Page</a>';
-    var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=tracks/" + orgAbbrev + "&loc=" + linkPosition + "&highlight=" + highlightPosition + "'>JBrowse</a>";
+
+    var gbLink = "<a target='_blank' href='" + baseUrl + ".jsp?loc=" + linkPosition + "&data=/a/service/jbrowse/tracks/" + orgAbbrev +  "&tracks=gene" + "&highlight=" + highlightPosition + "'>JBrowse</a>";
+
 
     // format into html table rows
     var rows = new Array();
