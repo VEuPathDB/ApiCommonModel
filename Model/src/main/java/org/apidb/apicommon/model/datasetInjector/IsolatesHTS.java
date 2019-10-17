@@ -87,9 +87,8 @@ public class IsolatesHTS extends DatasetInjector {
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SNPsAlignment");
 
-      addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
-
       if(getPropValueAsBoolean("hasCNVData")) {
+      addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByPloidy");
 	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumber");
 	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCopyNumberComparison");
       }
