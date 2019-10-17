@@ -218,15 +218,15 @@ function microsatelliteTitle(track, feature, featDiv) {
 
 
 // Gene title
-function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon, utrFive, utrThree, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid ) {
+function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon, utrFive, utrThree, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid, feature ) {
 
   // In ToxoDB, sequences of alternative gene models have to be returned
   var ignore_gene_alias = 0;
   if (projectId == 'ToxoDB') {
     ignore_gene_alias = 1;
   }
-
- var dataRootRegex = /\/jbrowse\/.+Tracks\//;
+  var orgAbbrev = feature.get("orgabbrev");
+  var dataRootRegex = /\/jbrowse\/.+Tracks\//;
     dataRoot = dataRoot.replace(dataRootRegex, "/jbrowse/tracks/");
 
   // expand minimalist input data
@@ -240,7 +240,9 @@ function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon,
     + "&type=protein&upstreamAnchor=Start&upstreamOffset=0&downstreamAnchor=End&downstreamOffset=0&endAnchor3=End&go=Get+Sequences' target='_blank'>protein</a>"
   var recordLink = '<a target="_blank" href="' + baseRecordUrl + '/gene/' + geneId + '">Gene Page</a>';
 
-  var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=" + dataRoot + "&loc=" + position + "'>JBrowse</a>";
+    baseUrl = baseUrl.replace(/\/$/,'');
+    var gbLink = "<a target='_blank' href='" + baseUrl + ".jsp?loc=" + position + "&data=/a/service/jbrowse/tracks/" + orgAbbrev +  "&tracks=gene" + "'>JBrowse</a>";
+
   var orthomclLink = "<a target='_blank' href='http://orthomcl.org/cgi-bin/OrthoMclWeb.cgi?rm=sequenceList&groupac=" + orthomcl + "'>" + orthomcl + "</a>";
 
   // format into html table rows
