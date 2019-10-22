@@ -6584,6 +6584,357 @@ where url is not null
   </tuningTable>
 
 
+  <tuningTable name="NewProfile">
+    <!-- One profile per gene per dataset. Used for graphs
+      -->
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="CompoundAttributes"/>
+    <internalDependency name="PANResults"/>
+    <externalDependency name="apidb.OntologyTermResult"/>
+    <externalDependency name="apidb.Datasource"/>
+    <externalDependency name="apidb.NaFeatureMetacycle"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <externalDependency name="results.NaFeatureDiffResult"/>
+    <externalDependency name="results.CompoundMassSpec"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <sql>
+      <![CDATA[
+  create table NewProfile&1 nologging as
+  SELECT -- not "NO PARALLEL" (i.e. some parallel)
+         ds.name as dataset_name, ds.type as dataset_type,
+         ds.subtype as dataset_subtype, profile.profile_type,
+         profile.source_id, profile.study_id as profile_study_id,
+         ps.name as profile_set_name,
+         cast(case
+                when regexp_replace(ps.name, '\[.+\]', '') like '% - %' 
+                  then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), '.+ - ', '')
+                -- special cases for legacy datasets
+                when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%' 
+                  then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
+                when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%' 
+                  then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
+                when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %' 
+                  then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
+                when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA Seq data from Horn%' 
+                  then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA Seq data from Horn ', '')
+                else null
+              end as varchar2(50)
+             ) as profile_set_suffix,
+         profile.profile_as_string, profile.max_value, profile.min_value,
+         profile.max_timepoint, profile.min_timepoint
+  from apidb.DataSource ds, sres.ExternalDatabase d,
+       sres.ExternalDatabaseRelease r, study.Study ps, study.Study i,
+       (
+        -- gene profiles
+        select gene_profile.study_id, ga.source_id, gene_profile.profile_type,
+               gene_profile.profile_as_string, gene_profile.max_value, gene_profile.min_value,
+               gene_profile.max_timepoint, gene_profile.min_timepoint
+        from GeneAttributes ga,
+             (  select sl.study_id, result.na_feature_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.value) as max_value, min(result.value) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.value) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     (select na_feature_id, protocol_app_node_id, max(value) as value
+                      from results.NaFeatureHostResponse
+                      group by na_feature_id, protocol_app_node_id) result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.mean_phenotype, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.mean_phenotype) as max_value, min(result.mean_phenotype) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.mean_phenotype) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.mean_phenotype) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.CrisprPhenotype result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.score, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.score) as max_value, min(result.score) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.score) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.score) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.PhenotypeScore result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.relative_growth_rate, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.relative_growth_rate) as max_value, min(result.relative_growth_rate) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.relative_growth_rate) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.relative_growth_rate) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.PhenotypeGrowthRate result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.value) as max_value, min(result.value) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.value) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     results.NaFeatureExpression result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'channel1_percentiles' as profile_type,
+                       listagg(nvl(to_char(round(result.percentile_channel1, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.percentile_channel1) as max_value, min(result.percentile_channel1) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.percentile_channel1) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.percentile_channel1) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     results.NaFeatureExpression result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'channel2_percentiles' as profile_type,
+                       listagg(nvl(to_char(round(result.percentile_channel2, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.percentile_channel2) as max_value, min(result.percentile_channel2) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.percentile_channel2) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.percentile_channel2) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     results.NaFeatureExpression result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'standard_error' as profile_type,
+                       listagg(nvl(to_char(round(result.standard_error, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.standard_error) as max_value, min(result.standard_error) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.standard_error) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.standard_error) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     results.NaFeatureExpression result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'pvalue' as profile_type,
+                       listagg(nvl(to_char(round(result.pvalue, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.pvalue) as max_value, min(result.pvalue) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.pvalue) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.pvalue) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.NaFeatureMetacycle result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'amplitude' as profile_type,
+                       listagg(nvl(to_char(round(result.amplitude, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.amplitude) as max_value, min(result.amplitude) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.amplitude) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.amplitude) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.NaFeatureMetacycle result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'period' as profile_type,
+                       listagg(nvl(to_char(round(result.period, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       to_number(max(result.period)) as max_value, to_number(min(result.period)) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.period) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.period) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.NaFeatureMetacycle result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+              UNION ALL
+                select sl.study_id, result.na_feature_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       cast (null as number) as max_value,
+                       cast (null as number) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.value) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.HaplotypeResult result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.na_feature_id
+               ) gene_profile
+        where ga.na_feature_id = gene_profile.na_feature_id
+      UNION ALL
+        -- compound profiles
+        select compound_profile.study_id, 
+               case
+                 when compound_profile.isotopomer is null
+                   then ca.source_id
+                 else ca.source_id || '|' || compound_profile.isotopomer
+               end as source_id,
+               compound_profile.profile_type,
+               compound_profile.profile_as_string, compound_profile.max_value, compound_profile.min_value,
+               compound_profile.max_timepoint, compound_profile.min_timepoint
+        from CompoundAttributes ca,
+             (  select sl.study_id, result.compound_id, result.isotopomer, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.value) as max_value, min(result.value) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.value) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     (select max(value) as value, compound_id, protocol_app_node_id, isotopomer
+                      from results.CompoundMassSpec
+                      group by compound_id, protocol_app_node_id, isotopomer
+                     ) result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.compound_id, result.isotopomer
+              UNION ALL
+                select sl.study_id, cpc.compound_id, cpc.isotopomer, 'values' as profile_type,
+                       listagg(nvl(to_char(round(cmsr.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(cmsr.value) as max_value, min(cmsr.value) as min_value,
+                       max(pan.name) keep(dense_rank last order by cmsr.value) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY cmsr.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
+                     apidb.CompoundPeaksChebi cpc
+                     where cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                       and cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                       and cp.compound_peaks_id = cmsr.compound_peaks_id
+                       and cpc.compound_peaks_id = cp.compound_peaks_id
+                       and pan.name like '%mean%'
+                group by sl.study_id, cpc.compound_id, cpc.isotopomer
+             ) compound_profile
+        where ca.id = compound_profile.compound_id
+      UNION ALL
+        -- OntologyTermResult
+        select sl.study_id, ot.name as source_id, 'value' as profile_type,
+               listagg(nvl(to_char(round(otr.value, 2)), 'NA'), chr(9))
+                 within group (order by pan.node_order_num)
+                 as profile_as_string,
+               max(otr.value) as max_value, min(otr.value) as min_value,
+               max(pan.name) keep(dense_rank last order by otr.value) as max_timepoint,
+               max(pan.name) keep(dense_rank first order BY otr.value) as min_timepoint
+        from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+             apidb.OntologyTermResult otr, sres.OntologyTerm ot
+        where ot.ontology_term_id = otr.ontology_term_id
+          and otr.protocol_app_node_id = sl.protocol_app_node_id
+          and otr.protocol_app_node_id = pan.protocol_app_node_id
+          and sl.study_id = s.study_id
+          and s.investigation_id is not null
+        group by sl.study_id, ot.name
+      UNION ALL
+        -- SubjectResult
+        select sl.study_id, result.subject as source_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string,
+                       max(result.value) as max_value, min(result.value) as min_value,
+                       max(pan.name) keep(dense_rank last order by result.value) as max_timepoint,
+                       max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.SubjectResult result
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.subject
+       ) profile
+  where ds.name = d.name
+    and ps.investigation_id = i.study_id
+    and ds.version = r.version
+    and d.external_database_id = r.external_database_id
+    and r.external_database_release_id = i.external_database_release_id
+    and i.investigation_id is null
+    and profile.study_id = ps.study_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        UPDATE NewProfile&1
+        SET dataset_name = 'tbruTREU927_Rijo_Circadian_Regulation_rnaSeq_RSRC'
+        WHERE dataset_name= 'tbruTREU927_RNASeq_Rijo_Circadian_Regulation_RSRC'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        UPDATE NewProfile&1
+        SET profile_as_string = NULL
+        WHERE replace(profile_as_string, 'NA' || CHR(9), '') = 'NA'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index exprof_idx&1
+          on NewProfile&1 (source_id, profile_type, profile_set_name)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="ProfileType">
     <internalDependency name="Profile"/>
     <sql>
