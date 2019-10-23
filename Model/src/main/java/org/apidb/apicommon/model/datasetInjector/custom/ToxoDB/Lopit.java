@@ -23,7 +23,7 @@ public class Lopit extends DatasetInjector {
   @Override
   public void addModelReferences() {
       // addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPITtgonME49_lopit_LOPIT_RSRC"); 
-     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPIT" + getDatasetName()); 
+     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPIT"); 
  
   }
 
