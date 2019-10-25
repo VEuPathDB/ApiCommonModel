@@ -11,7 +11,7 @@ public class Lopit extends DatasetInjector {
       setPropValue("presenterId", "DS_eda79f81b5");
       setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_0140");
       setPropValue("includeProjectsExcludeEuPathDB", "ToxoDB,UniDB");
-      setPropValue("datasetDisplayName", "Hyper LOPIT Global mapping of protein subcellular location");
+      setPropValue("datasetDisplayName", "T. gondii ME49 Hyper LOPIT Global mapping of protein subcellular location");
       setShortAttribution();
       String organismAbbrevDisplay = ""; //getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
@@ -23,7 +23,7 @@ public class Lopit extends DatasetInjector {
   @Override
   public void addModelReferences() {
       // addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPITtgonME49_lopit_LOPIT_RSRC"); 
-     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPIT" + getDatasetName()); 
+     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPIT"); 
  
   }
 
