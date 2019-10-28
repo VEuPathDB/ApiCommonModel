@@ -951,7 +951,7 @@ if(strand == '+1') {
 }
 
 function changeScaffoldType(feature) {
-    if(feature.data['Type'] == 'fgap') {
+    if(feature.data['Type'] == 'sgap') {
         return 'JBrowse/View/FeatureGlyph/Segments'; 
     }
     return 'JBrowse/View/FeatureGlyph/Box';
@@ -969,7 +969,7 @@ function scaffoldColor(feature) {
 }
 
 function scaffoldHeight(feature) {
-    if(feature.data['type'] == 'gap' || feature.data['Type'] == 'fgap') {
+    if(feature.data['type'] == 'gap' || feature.data['Type'] == 'sgap') {
         return 25;
     }
 
@@ -980,7 +980,7 @@ function scaffoldHeight(feature) {
 function scaffoldDetails(track, feature) {
     var rows = new Array();
 
-    if(feature.get("type") == 'fgap') {
+    if(feature.get("type") == 'sgap') {
         feature.get("subfeatures").forEach(function(element) {
             rows.push(twoColRow('Gap Position:', positionNoStrandString(track.refSeq.name, element.get("startm"), element.get("end"))));
         });
