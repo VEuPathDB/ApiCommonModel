@@ -20,4 +20,8 @@ public class LofflerAntibodyArray extends AntibodyArray {
     return combinePropertiesDeclarations(exprDeclaration, propertiesDeclaration);
   }
 
+
+ @Override
+    public void injectTemplates() {
+ }
 }
