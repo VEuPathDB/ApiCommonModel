@@ -587,7 +587,7 @@ function gsnapIntronColorFromStrandAndScore( feature ) {
 }
 
 
-function colorSegmentByScoreFxn(feature) {
+function colorSegmentByScore(feature) {
     var score = feature.get("score");
     if (score > 60) return '#FF0000';
     if (score > 50) return '#FF8000';
@@ -599,59 +599,61 @@ function colorSegmentByScoreFxn(feature) {
 
 
 function chipColor(feature) { 
+    console.log(feature);
     var a = feature.get("antibody");
-
-    if(!a) {
-      a = feature.data["immunoglobulin complex, circulating"];
-    }
-    
     var t = feature.get("compound");
     var r = feature.get("replicate");
-    var g = feature.data['genotype information'];
-    var l = feature.data['life cycle stage'];
-    var anls = feature.data['sample_name'];
+    var g = feature.get("parasite genotype");
+    var l = feature.get("parasite lifecycle stage");
+    var anls = feature.get("sample_name");
 
+    /*Plasmo - Winzeler Westenberger*/
     if(anls == 'H4_schizonti_smoothed (ChIP-chip)') return '#D80000';
     if(anls == 'H4_trophozoite_smoothed (ChIP-chip)')  return '#006633';
     if(anls == 'H4_ring_smoothed (ChIP-chip)') return '#27408B';
     if(anls == 'H3K9ac_troph_smoothed (ChIP-chip)') return '#524818';
 
+    /*Toxo - Einstein centromeres*/
     if(/CenH3_H3K9me2/i.test(a)) return '#000080';
     if(/CenH3/i.test(a)) return '#B0E0E6';
 
-    if (/wild_type/i.test(g) && (/H3K/i.test(a) || /H4K/i.test(a))) return '#0A7D8C';
+    /*Plasmo - Artur Scherf*/
+    if (/Wild type/i.test(g) && (/H3K/i.test(a) || /H4K/i.test(a))) return '#0A7D8C';
     if (/sir2KO/i.test(g) && (/H3K/i.test(a) || /H4K/i.test(a))) return '#FF7C70';
 
+    /*Toxo - Einstein + Einstein ME1*/
     if(/H3K4me3/i.test(a) && r == 'Replicate 1') return '#00FF00';
     if(/H3K4me3/i.test(a) && r == 'Replicate 2') return '#00C896';
     if(/H3k4me1/i.test(a) && r == 'Replicate 1') return '#0033FF';
     if(/H3k4me1/i.test(a) && r == 'Replicate 2') return '#0066FF';
 
-
+    /*Not sure*/
     if(/H3K9/i.test(a) && r == 'Replicate 1') return '#C86400';
     if(/H3K9/i.test(a) && r == 'Replicate 2') return '#FA9600';
 
+    /*Toxo Hakimi Ali*/
     if(/DMSO/i.test(t)) return '#4B0082';
     if(/FR235222/i.test(t)) return '#F08080';
 
-    if(r == 'replicate1') return '#00C800';
-    if(r == 'replicate2') return '#FA9600';
-    if(r == 'replicate3') return '#884C00';
-
+    /*Tryp - Peter Myler*/
+    if(r == 'Replicate 1') return '#00C800';
+    if(r == 'Replicate 2') return '#FA9600';
+    if(r == 'Replicate 3') return '#884C00';
     if(/early-log promastigotes/i.test(l)) return '#B22222';
     if(/stationary promastigotes/i.test(l)) return '#4682B4'; 
 
+    /*Plasmo Artur Scherf - obsolete?*/
     if(/H3K4me3/i.test(a)) return '#00C800';
     if(/H3K9Ac/i.test(a)) return '#FA9600';
     if(/H3K9me3/i.test(a) ) return '#57178F';
     if(/H3/i.test(a) ) return '#E6E600';
     if(/H4K20me3/i.test(a)) return '#F00000';
 
+    /*Toxo - Hakimi Ali 2*/
     if(/SET8/i.test(a) && r == 'Replicate 1' ) return '#600000';
     if(/TBP1/i.test(a) && r == 'Replicate 1' ) return '#600000';
     if(/TBP2/i.test(a) && r == 'Replicate 1' ) return '#600000';
     if(/RPB9_RNA_pol_II/i.test(a) && r == 'Replicate 1' ) return '#600000';
-
     if(/SET8/i.test(a) && r == 'Replicate 2' ) return '#C00000';
     if(/TBP1/i.test(a) && r == 'Replicate 2' ) return '#C00000';
     if(/TBP2/i.test(a) && r == 'Replicate 2' ) return '#C00000';
@@ -661,7 +663,10 @@ function chipColor(feature) {
 }
 
 function peakTitleChipSeq(track, feature, featureDiv) {
+    console.log(feature);
     var rows = new Array();
+    var dataset = feature.get("data set");
+    rows.push(twoColRow('Experiment:', dataset));
 
     var start = feature.get("startm");
     var end = feature.get("end");
@@ -670,12 +675,12 @@ function peakTitleChipSeq(track, feature, featureDiv) {
     rows.push(twoColRow('End:', end));
 
     var ontologyTermToDisplayName = {'antibody' : 'Antibody', 
-                                     'immunoglobulin complex, circulating' : 'Antibody',
-                                     'genotype information' : 'Genotype', 
-                                     'compound based treatment' : 'Treatment',
+                                     'parasite genotype' : 'Genotype', 
+                                     'compound' : 'Treatment',
                                      'replicate' : 'Replicate',
-                                     'life cycle stage' : 'Lifecycle Stage',
-                                     'strain'   : 'Strain',
+                                     'parasite lifecycle stage' : 'Lifecycle Stage',
+                                     'parasite strain'   : 'Strain',
+                                     'score'    : 'Score',
                                      'tag_count' : 'Normalised Tag Count',
                                      'fold_change' : 'Fold Change',
                                      'p_value' : 'P Value'};

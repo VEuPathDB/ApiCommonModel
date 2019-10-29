@@ -2643,34 +2643,68 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                     AND sr.score1 > $$cutoff$$
                     )
                 SELECT d.*
-                , ppm.property || '=' || ppm.value as attr
-                , CASE WHEN ppm.property = '$$sub$$' THEN ppm.value END as subtrack
+                , m.property || '=' || m.string_value as attr
                 FROM data d
-                LEFT OUTER JOIN apidbtuning.InferredParams ppm ON
-                    (ppm.dataset_name = d.dataset_name
-                    AND ppm.pan_id = d.pan)
-                UNION
-                SELECT d.*
-                , pcm.property || '=' || pcm.value as attr
-                , CASE WHEN pcm.property = '$$sub$$' THEN pcm.value END as subtrack
-                FROM data d
-                LEFT OUTER JOIN apidbtuning.InferredChars pcm ON
-                    (pcm.dataset_name = d.dataset_name
-                    AND pcm.pan_id = d.pan)
-                UNION
-                SELECT d.*
-                , fbm.property || '=' || fbm.pan_name as attr
-                , CASE WHEN fbm.property = '$$sub$$' THEN fbm.pan_name END as subtrack
-                FROM data d
-                LEFT OUTER JOIN apidbtuning.DefaultChars fbm ON
-                    (fbm.dataset_name = d.dataset_name
-                    AND fbm.pan_id = d.pan
-                    AND fbm.pan_name like '%peaks%')
+                LEFT OUTER JOIN apidbtuning.metadata m ON
+                    (m.dataset_name = d.dataset_name
+                    AND m.pan_id = d.pan)
                 )
                 GROUP BY feature_id, type, source, score, parent_id, startm, end
             ]]>
     </sql>
+  </sqlQuery>  
+
+  <sqlQuery name="ChIP:ChIPchip_peaksjbrowse"  includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
+     <sql>
+        <![CDATA[
+            SELECT feature_id
+            , type
+            , source
+            , score
+            , parent_id
+            , startm
+            , end
+            , listagg (attr, '$dlm') within group (order by attr) as atts
+            , sample_name
+            FROM (
+                WITH data AS (
+                    SELECT DISTINCT sr.segment_result_id as feature_id
+                    , 'ChIPPeaks' as type
+                    , '$source' as source
+                    , sr.score1 as score
+                    , pan.name as parent_id
+                    , sr.segment_start as startm
+                    , sr.segment_end as end
+                    , '$$exp$$' as dataset_name
+                    , pan.protocol_app_node_id as pan
+                    , pan.name as sample_name
+                    FROM
+                    study.study s
+                    , study.studylink sl
+                    , study.protocolappnode pan
+                    , results.segmentresult sr
+                    WHERE s.name = '$$exp$$ - peaks'
+                    AND sl.study_id = s.study_id
+                    AND pan.protocol_app_node_id = sl.protocol_app_node_id
+                    AND sr.protocol_app_node_id = pan.protocol_app_node_id
+                    AND sr.na_sequence_id = $srcfeature_id
+                    AND sr.segment_start <= $rend
+                    AND sr.segment_end >= $base_start
+                    AND sr.score1 > $$cutoff$$
+                    AND pan.protocol_app_node_id = $$panId$$
+                    )
+                SELECT d.*
+                , m.property || '=' || m.string_value as attr
+                FROM data d
+                LEFT OUTER JOIN apidbtuning.metadata m ON
+                    (m.dataset_name = d.dataset_name
+                    AND m.pan_id = d.pan)
+                )
+                GROUP BY feature_id, type, source, score, parent_id, startm, end, sample_name
+            ]]>
+    </sql>
   </sqlQuery>
+
  
 
   <sqlQuery name="GeneticMarkers:Sibley"  includeProjects="ToxoDB">
@@ -2753,6 +2787,7 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
         , startm
         , end
         , listagg (attr, '$dlm') within group (order by attr) as atts
+        , sample_name
         FROM (
             WITH data AS (    
                 SELECT DISTINCT
@@ -2765,6 +2800,7 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
                 , sr.segment_end as end
                 , '$$exp$$' as dataset_name
                 , pan.protocol_app_node_id as pan
+                , pan.name as sample_name
                 FROM
                 study.study s
                 , study.studylink sl
@@ -2780,31 +2816,14 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
                 AND pan.protocol_app_node_id = $$panId$$
                 )
             SELECT d.*
-            , ppm.property || '=' || ppm.value as attr
-            , CASE WHEN ppm.property = '$$sub$$' THEN ppm.value END as subtrack
+            , m.property || '=' || m.string_value as attr
+            , CASE WHEN m.property = '$$sub$$' THEN m.string_value END as subtrack
             FROM data d
-            LEFT OUTER JOIN apidbtuning.InferredParams ppm on 
-                (ppm.dataset_name = d.dataset_name
-                AND ppm.pan_id = d.pan)
-            UNION
-            SELECT d.*
-            , pcm.property || '=' || pcm.value as attr
-            , CASE WHEN pcm.property = '$$sub$$' THEN pcm.value END as subtrack
-            FROM data d
-            LEFT OUTER JOIN apidbtuning.InferredChars pcm on
-                (pcm.dataset_name = d.dataset_name
-                AND pcm.pan_id = d.pan)
-            UNION
-            SELECT d.*
-            , 'sample_name=' || fbm.pan_name as attr
-            , CASE WHEN '$$sub$$' = 'name' THEN fbm.pan_name END as subtrack
-            FROM data d
-            LEFT OUTER JOIN apidbtuning.DefaultChars fbm ON
-              (fbm.dataset_name = d.dataset_name
-              AND fbm.pan_id = d.pan
-              AND fbm.pan_name like '%smoothed%')
+            LEFT OUTER JOIN apidbtuning.metadata m ON
+                (m.dataset_name = d.dataset_name
+                AND m.pan_id = d.pan)
             )
-        GROUP BY feature_id, type, source, score, parent_id, startm, end
+        GROUP BY feature_id, type, source, score, parent_id, startm, end, sample_name
         ]]>
     </sql>
   </sqlQuery>
@@ -4641,29 +4660,12 @@ WHERE fl.na_sequence_id = $srcfeature_id
                 AND sr.segment_end >= $base_start
                 )
             SELECT d.*
-            , ppm.property || '=' || ppm.value as attr
-            , CASE WHEN ppm.property = '$$sub$$' THEN ppm.value END as subtrack
+            , m.property || '=' || m.string_value as attr
+            , CASE WHEN m.property = '$$sub$$' THEN m.string_value END as subtrack
             FROM data d
-            LEFT OUTER JOIN apidbtuning.InferredParams ppm on 
-                (ppm.dataset_name = d.dataset_name
-                AND ppm.pan_id = d.pan)
-            UNION
-            SELECT d.*
-            , pcm.property || '=' || pcm.value as attr
-            , CASE WHEN pcm.property = '$$sub$$' THEN pcm.value END as subtrack
-            FROM data d
-            LEFT OUTER JOIN apidbtuning.InferredChars pcm on
-                (pcm.dataset_name = d.dataset_name
-                AND pcm.pan_id = d.pan)
-            UNION
-            SELECT d.*
-            , 'name=' || fbm.pan_name as attr
-            , CASE WHEN '$$sub$$' = 'name' THEN fbm.pan_name END as subtrack
-            FROM data d
-            LEFT OUTER JOIN apidbtuning.DefaultChars fbm ON
-              (fbm.dataset_name = d.dataset_name
-              AND fbm.pan_id = d.pan
-              AND fbm.pan_name like '%smoothed%')
+            LEFT OUTER JOIN apidbtuning.metadata m ON
+                (m.dataset_name = d.dataset_name
+                AND m.pan_id = d.pan)
             )
         GROUP BY feature_id, type, source, score, parent_id, startm, end
         ]]>
