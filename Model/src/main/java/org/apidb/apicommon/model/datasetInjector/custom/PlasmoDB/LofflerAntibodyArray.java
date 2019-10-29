@@ -9,7 +9,7 @@ public class LofflerAntibodyArray extends AntibodyArray {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByAntibodyArraypfal3D7_microarrayAntibody_Loffler_Natural_Infection");
     // addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Loffler::AbMicroarray");
 
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "HostResponseGraphs");
+    // addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "HostResponseGraphs");
   }
 
   // second column is for documentation
