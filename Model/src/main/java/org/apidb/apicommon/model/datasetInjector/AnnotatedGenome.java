@@ -255,7 +255,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
   public void addModelReferences() {
     super.addModelReferences();
 
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "InternalQuestions.GenesByOrthologs");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLocation");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySimilarity");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GeneByLocusTag");
