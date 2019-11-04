@@ -160,8 +160,8 @@ function interproTitle (track, feature, featDiv) {
 }
 
 function interproLink (feature) {
-  var db = feature.data['Db'];
-  var pi = feature.data['Pi'];
+  var db = feature.get("db");
+  var pi = feature.get("pi");
 
   var url;
   if(db == 'INTERPRO') { 
@@ -195,8 +195,8 @@ function microsatelliteTitle(track, feature, featDiv) {
     var start        = feature.get("startm");
     var end         = feature.get("end");
     var length       = end - start + 1;
-    var name        = feature.data['Name'];
-    var sequenceId       = feature.data['SequenceId'];
+    var name        = feature.get("name");
+    var sequenceId       = feature.get("sequenceid");
 
     container = dojo.create('div', { className: 'detail feature-detail feature-detail-'+track.name.replace(/\s+/g,'_').toLowerCase(), innerHTML: '' } );
 
@@ -395,7 +395,7 @@ function gsnapIntronHeightFromPercent ( feature ) {
 
 
 function unifiedPostTranslationalModColor(feature) {
-  var ontology = feature.data['ModificationType'];
+  var ontology = feature.get("modificationtype");
 
   if(/phosphorylation_site/i.test(ontology)) {
     return 'dodgerblue';
@@ -410,17 +410,17 @@ function unifiedPostTranslationalModColor(feature) {
 }
 
 function unifiedPostTranslationalModTitle(track, feature) {
-    var experiments = feature.data['Experiments'];
-    var samples = feature.data['Samples'];
+    var experiments = feature.get("experiments");
+    var samples = feature.get("samples");
 
-    var pepSeqs = feature.data['PepSeqs'];
-    var pepNaFeatIds = feature.data['PepAAFeatIds'];
-    var mscounts = feature.data['MSCounts'];
+    var pepSeqs = feature.get("pepseqs");
+    var pepNaFeatIds = feature.get("pepaafeatids");
+    var mscounts = feature.get("mscounts");
 
-    var residueLocations = feature.data['ResidueLocs'];
-    var ontologys = feature.data['Ontologys'];
+    var residueLocations = feature.get("residuelocs");
+    var ontologys = feature.get("ontologys");
 
-    var aaStartMins = feature.data['AAStartMins'];
+    var aaStartMins = feature.get("aastartmins");
 
     var location = feature.get("end");
     var featureName = feature.get("name");
@@ -684,7 +684,7 @@ function peakTitleChipSeq(track, feature, featureDiv) {
                                      'p_value' : 'P Value'};
 
     for (var key in ontologyTermToDisplayName) {
-        var value = feature.data[key];
+        var value = feature.get(key);
         var displayName = ontologyTermToDisplayName[key];
         if (value) {
             rows.push(twoColRow(displayName + ':', value));
@@ -953,11 +953,9 @@ if(strand == '+1') {
     
 }
 
+
 function changeScaffoldType(feature) {
-    if(feature.data['Type'] == 'sgap') {
-        return 'JBrowse/View/FeatureGlyph/Segments'; 
-    }
-    return 'JBrowse/View/FeatureGlyph/Box';
+    return 'JBrowse/View/FeatureGlyph/Segments'; 
 }
 
 function scaffoldColor(feature) {
@@ -972,7 +970,7 @@ function scaffoldColor(feature) {
 }
 
 function scaffoldHeight(feature) {
-    if(feature.data['type'] == 'gap' || feature.data['Type'] == 'sgap') {
+    if(feature.get("type") == 'gap' || feature.get("type") == 'sgap') {
         return 25;
     }
 
@@ -1015,9 +1013,9 @@ function genericEndFeatureTitle(track, feature, trackType) {
   feature.get("subfeatures").forEach(function(element) {
 
     count = count + 1;
-    var name  = element.data['name']; 
+    var name  = element.get("name"); 
     var start = element.get("startm"); 
-    var end = element.data['end']; 
+    var end = element.get("end"); 
     var pct = element.get("pct");
     var score = element.get("score");
 
@@ -1130,7 +1128,7 @@ function getThreeUtr(strand,utr,cdsEnd){
 }
 
 function haplotypeColor(feature) { 
-  boundary = feature.data['Boundary'];
+  boundary = feature.get("boundary");
   if(boundary == 'Liberal') {
       return 'darkseagreen';
   }
@@ -1143,13 +1141,13 @@ function haplotypeTitle(track, feature, featureDiv) {
     var start = feature.get("startm");
     var end = feature.get("end");
     var length = end - start + 1;
-    var boundary = feature.data['boundary'];
-    var name = feature.data['Name'];
-    var start_max = feature.data['start_max'];
-    var start_min = feature.data['start_min'];
-    var end_min = feature.data['end_min'];
-    var end_max = feature.data['end_max'];
-    var sequenceId = feature.data['SequenceId'];
+    var boundary = feature.get("boundary");
+    var name = feature.get("name");
+    var start_max = feature.get("start_max");
+    var start_min = feature.get("start_min");
+    var end_min = feature.get("end_min");
+    var end_max = feature.get("end_max");
+    var sequenceId = feature.get("sequenceid");
 
     var libContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_max + "&value%28start_point%29=" + start_min + "&weight=10'>Contained Genes</a>";
     var consrvContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_min + "&value%28start_point%29=" + start_max + "&weight=10'>Contained Genes</a>";
