@@ -599,7 +599,6 @@ function colorSegmentByScore(feature) {
 
 
 function chipColor(feature) { 
-    console.log(feature);
     var a = feature.get("antibody");
     var t = feature.get("compound");
     var r = feature.get("replicate");
@@ -663,7 +662,6 @@ function chipColor(feature) {
 }
 
 function peakTitleChipSeq(track, feature, featureDiv) {
-    console.log(feature);
     var rows = new Array();
     var dataset = feature.get("data set");
     rows.push(twoColRow('Experiment:', dataset));
