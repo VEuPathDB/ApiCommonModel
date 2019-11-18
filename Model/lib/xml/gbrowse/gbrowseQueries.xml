@@ -2533,7 +2533,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
             , name
             , startm
             , end
-            , tag_count || '$dlm' || fold_change || '$dlm' || p_value || '$dlm' || atts as atts
+            , tag_count || '$dlm' || fold_change || '$dlm' || p_value || '$dlm' || 'name=' || pan_name || '$dlm' || atts as atts
             FROM (
                 SELECT feature_id
                 , type
@@ -2541,6 +2541,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 , tag_count
                 , fold_change
                 , p_value
+                , pan_name
                 , parent_id
                 , ' ' as name
                 , startm
@@ -2560,6 +2561,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                         , sr.segment_end as end
                         , '$$exp$$' as dataset_name
                         , pan.protocol_app_node_id as pan
+                        , pan.name as pan_name
                         FROM
                         study.study s
                         , study.study i
@@ -2576,30 +2578,79 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                         AND sr.segment_end >= $base_start
                         )
                     SELECT d.*
-                    , ppm.property || '=' || ppm.value as attr
-                    , CASE WHEN ppm.property = '$$sub$$' THEN ppm.value END as subtrack
+                    , m.property || '=' || m.string_value as attr
+                    , CASE WHEN m. property = '$$sub$$' THEN m.string_value END as subtrack
                     FROM data d
-                    LEFT OUTER JOIN apidbtuning.InferredParams ppm ON
-                        (ppm.dataset_name = d.dataset_name
-                        AND ppm.pan_id = d.pan)
-                    UNION
-                    SELECT d.*
-                    , pcm.property || '=' || pcm.value as attr
-                    , CASE WHEN pcm.property = '$$sub$$' THEN pcm.value END as subtrack
+                    LEFT OUTER JOIN apidbtuning.metadata m ON
+                        (m.dataset_name = d.dataset_name
+                        AND m.pan_id = d.pan)
+                   )
+                GROUP BY feature_id, type, source, tag_count, fold_change, p_value, parent_id, startm, end, pan_name
+            )
+        ]]>
+    </sql>
+ </sqlQuery>
+
+ <sqlQuery name="ChIP:ChIPSeqPeaksjbrowse" includeProjects="PlasmoDB,ToxoDB">
+    <sql>
+        <![CDATA[
+            SELECT feature_id
+            , type
+            , source
+            , startm
+            , end
+            , tag_count || '$dlm' || fold_change || '$dlm' || p_value || '$dlm' || atts as atts
+            , sample_name
+            FROM (
+                SELECT feature_id
+                , type
+                , source
+                , tag_count
+                , fold_change
+                , p_value
+                , startm
+                , end
+                , LISTAGG(attr, '$dlm') WITHIN GROUP (ORDER BY attr) AS atts
+                , sample_name
+                FROM (
+                    WITH data AS (
+                        SELECT DISTINCT sr.segment_result_id as feature_id
+                        , 'ChIPSeqPeaks' as type
+                        , '$source' as source
+                        , 'tag_count=' || sr.score1 as tag_count
+                        , 'fold_change=' || sr.score2 as fold_change
+                        , CASE WHEN sr.p_value = 0 THEN 'p_value=' || to_char(p_value)
+                            ELSE 'p_value=' || to_char(p_value, '9.9EEEE') END as p_value
+                        , sr.segment_start as startm
+                        , sr.segment_end as end
+                        , '$$exp$$' as dataset_name
+                        , pan.protocol_app_node_id as pan
+                        , pan.name as sample_name
+                        FROM
+                        study.study s
+                        , study.study i
+                        , study.studylink sl
+                        , study.protocolappnode pan
+                        , results.segmentresult sr
+                        WHERE s.name = '$$exp$$'
+                        AND i.investigation_id = s.study_id
+                        AND sl.study_id = i.study_id
+                        AND pan.protocol_app_node_id = sl.protocol_app_node_id
+                        AND sr.protocol_app_node_id = pan.protocol_app_node_id
+                        AND sr.na_sequence_id = $srcfeature_id
+                        AND sr.segment_start <= $rend
+                        AND sr.segment_end >= $base_start
+                        AND pan.protocol_app_node_id = $$panId$$
+                        )
+                     SELECT d.*
+                    , m.property || '=' || m.string_value as attr
+                    , CASE WHEN m. property = '$$sub$$' THEN m.string_value END as subtrack
                     FROM data d
-                    LEFT OUTER JOIN apidbtuning.InferredChars pcm ON
-                        (pcm.dataset_name = d.dataset_name
-                        AND pcm.pan_id = d.pan)
-                    UNION
-                    SELECT d.*
-                    , 'name=' || fbm.pan_name as attr
-                    , CASE WHEN '$$sub$$' = 'name' THEN fbm.pan_name END as subtrack
-                    FROM data d
-                    LEFT OUTER JOIN apidbtuning.DefaultChars fbm ON
-                        (fbm.dataset_name = d.dataset_name
-                        AND fbm.pan_id = d.pan)
-                )
-                GROUP BY feature_id, type, source, tag_count, fold_change, p_value, parent_id, startm, end
+                    LEFT OUTER JOIN apidbtuning.metadata m ON
+                        (m.dataset_name = d.dataset_name
+                        AND m.pan_id = d.pan)
+                   )
+                GROUP BY feature_id, type, source, tag_count, fold_change, p_value, startm, end, sample_name
             )
         ]]>
     </sql>
