@@ -21,7 +21,6 @@ import org.apidb.apicommon.model.gbrowse.GBrowseTrackStatus;
 import org.apidb.apicommon.model.gbrowse.GBrowseUtils;
 import org.apidb.apicommon.model.gbrowse.UploadStatus;
 import org.gusdb.fgputil.Tuples.TwoTuple;
-import org.gusdb.fgputil.Wrapper;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.fgputil.db.runner.SQLRunner;
 import org.gusdb.fgputil.db.runner.SQLRunnerException;
@@ -231,20 +230,14 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
    * @throws WdkModelException
    */
   protected Integer getCurrentGenomeBuildNumber(String taxonId, DataSource appDbDataSource) throws WdkModelException {
-    Wrapper<Integer> wrapper = new Wrapper<>();
     logger.debug("TAXONID:" + taxonId);
     try { 
       String selectCurrentGenomeBuildSql = SELECT_CURRENT_GENOME_BUILD_SQL;
-      new SQLRunner(appDbDataSource, selectCurrentGenomeBuildSql, "select-current-genome-build-by-taxon").executeQuery(
+      return new SQLRunner(appDbDataSource, selectCurrentGenomeBuildSql, "select-current-genome-build-by-taxon").executeQuery(
         new Object[]{ taxonId },
         new Integer[]{ Types.VARCHAR },
-        resultSet -> {
-          if (resultSet.next()) {
-            wrapper.set(resultSet.getInt("current_build"));
-          }
-        }
+        resultSet -> resultSet.next() ? resultSet.getInt("current_build") : null
       );
-      return wrapper.get();
     }
     catch(SQLRunnerException sre) {
       throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());
@@ -262,19 +255,19 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
    * @throws WdkModelException
    */
   protected TwoTuple<String,Integer> getSequenceInfo(String taxonId, DatabaseInstance appDb) throws WdkModelException {
-    TwoTuple<String, Integer> tuple = new TwoTuple<>(null, null);
     try { 
       String selectSequenceSql = SELECT_SEQUENCE_SQL;
-      new SQLRunner(appDb.getDataSource(), selectSequenceSql, "select-sequence-by-taxon").executeQuery(
+      return new SQLRunner(appDb.getDataSource(), selectSequenceSql, "select-sequence-by-taxon").executeQuery(
         new Object[]{ taxonId },
         new Integer[]{ Types.VARCHAR },
         resultSet -> {
+          TwoTuple<String, Integer> tuple = new TwoTuple<>(null, null);
           if (resultSet.next()) {
             tuple.set(resultSet.getString("seq_id"), resultSet.getInt("length"));
           }
+          return tuple;
         }
       );
-      return tuple;
     }
     catch(SQLRunnerException sre) {
       throw new WdkModelException(sre.getCause().getMessage(), sre.getCause());

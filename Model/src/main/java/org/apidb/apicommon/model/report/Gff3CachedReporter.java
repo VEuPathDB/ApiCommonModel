@@ -18,8 +18,8 @@ import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
-import org.gusdb.wdk.model.report.ReporterRef;
 import org.gusdb.wdk.model.report.ReporterConfigException;
+import org.gusdb.wdk.model.report.ReporterInfo;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.json.JSONObject;
@@ -67,7 +67,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
   }
 
   @Override
-  public void setProperties(ReporterRef reporterRef) throws WdkModelException {
+  public void setProperties(ReporterInfo reporterRef) throws WdkModelException {
     super.setProperties(reporterRef);
 
     // check required properties
@@ -212,7 +212,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     writer.flush();
   }
 
-  private void writeRecords(PrintWriter writer) throws WdkModelException, WdkUserException {
+  private void writeRecords(PrintWriter writer) throws WdkModelException {
     // get primary key columns
     //RecordClass recordClass = getQuestion().getRecordClass();
     //String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
@@ -246,7 +246,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     }
   }
 
-  private void writeSequences(PrintWriter writer) throws WdkModelException, WdkUserException {
+  private void writeSequences(PrintWriter writer) throws WdkModelException {
     // get primary key columns
     //RecordClass recordClass = getQuestion().getRecordClass();
     //String[] pkColumns = recordClass.getPrimaryKeyAttributeField().getColumnRefs();
