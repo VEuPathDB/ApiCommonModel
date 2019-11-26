@@ -6,8 +6,6 @@ package org.apidb.apicommon.model.maintain.users5;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Properties;
@@ -76,7 +74,7 @@ public class MigrateUsers5Fungi extends BaseCLI {
 
     addSingleValueOption(ARG_CUTOFF_DATE, false, null, "Any guest user created by this date will be backed " +
         "up, and removed from the live schema defined in the model-config.xml. " +
-        "The data should be in this format: " + FormatUtil.STANDARD_DATE_FORMAT_SLASH);
+        "The data should be in this format: yyyy-mm-dd");
   }
 
   @Override
@@ -122,12 +120,11 @@ public class MigrateUsers5Fungi extends BaseCLI {
     }
   }
 
-  private Date getCutoffDate() throws ParseException {
+  private Date getCutoffDate() {
     String cutoffDate = (String) getOptionValue(ARG_CUTOFF_DATE);
     Date date;
     if (cutoffDate != null) {
-      SimpleDateFormat format = new SimpleDateFormat(FormatUtil.STANDARD_DATE_FORMAT_SLASH);
-      date = format.parse(cutoffDate);
+      date = FormatUtil.toDate(FormatUtil.parseDate(cutoffDate));
     }
     else { // default cutoff date is 2 days ago from now
       Calendar calendar = Calendar.getInstance();

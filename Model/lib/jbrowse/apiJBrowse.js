@@ -160,8 +160,8 @@ function interproTitle (track, feature, featDiv) {
 }
 
 function interproLink (feature) {
-  var db = feature.data['Db'];
-  var pi = feature.data['Pi'];
+  var db = feature.get("db");
+  var pi = feature.get("pi");
 
   var url;
   if(db == 'INTERPRO') { 
@@ -195,8 +195,8 @@ function microsatelliteTitle(track, feature, featDiv) {
     var start        = feature.get("startm");
     var end         = feature.get("end");
     var length       = end - start + 1;
-    var name        = feature.data['Name'];
-    var sequenceId       = feature.data['SequenceId'];
+    var name        = feature.get("name");
+    var sequenceId       = feature.get("sequenceid");
 
     container = dojo.create('div', { className: 'detail feature-detail feature-detail-'+track.name.replace(/\s+/g,'_').toLowerCase(), innerHTML: '' } );
 
@@ -218,15 +218,15 @@ function microsatelliteTitle(track, feature, featDiv) {
 
 
 // Gene title
-function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon, utrFive, utrThree, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid ) {
+function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon, utrFive, utrThree, position, orthomcl, geneId, dataRoot, baseUrl, baseRecordUrl, aaseqid, feature ) {
 
   // In ToxoDB, sequences of alternative gene models have to be returned
   var ignore_gene_alias = 0;
   if (projectId == 'ToxoDB') {
     ignore_gene_alias = 1;
   }
-
- var dataRootRegex = /\/jbrowse\/.+Tracks\//;
+  var orgAbbrev = feature.get("orgabbrev");
+  var dataRootRegex = /\/jbrowse\/.+Tracks\//;
     dataRoot = dataRoot.replace(dataRootRegex, "/jbrowse/tracks/");
 
   // expand minimalist input data
@@ -240,7 +240,9 @@ function gene_title (tip, projectId, sourceId, chr, cds, soTerm, product, taxon,
     + "&type=protein&upstreamAnchor=Start&upstreamOffset=0&downstreamAnchor=End&downstreamOffset=0&endAnchor3=End&go=Get+Sequences' target='_blank'>protein</a>"
   var recordLink = '<a target="_blank" href="' + baseRecordUrl + '/gene/' + geneId + '">Gene Page</a>';
 
-  var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=" + dataRoot + "&loc=" + position + "'>JBrowse</a>";
+    baseUrl = baseUrl.replace(/\/$/,'');
+    var gbLink = "<a target='_blank' href='" + baseUrl + ".jsp?loc=" + position + "&data=/a/service/jbrowse/tracks/" + orgAbbrev +  "&tracks=gene" + "'>JBrowse</a>";
+
   var orthomclLink = "<a target='_blank' href='http://orthomcl.org/cgi-bin/OrthoMclWeb.cgi?rm=sequenceList&groupac=" + orthomcl + "'>" + orthomcl + "</a>";
 
   // format into html table rows
@@ -393,7 +395,7 @@ function gsnapIntronHeightFromPercent ( feature ) {
 
 
 function unifiedPostTranslationalModColor(feature) {
-  var ontology = feature.data['ModificationType'];
+  var ontology = feature.get("modificationtype");
 
   if(/phosphorylation_site/i.test(ontology)) {
     return 'dodgerblue';
@@ -408,17 +410,17 @@ function unifiedPostTranslationalModColor(feature) {
 }
 
 function unifiedPostTranslationalModTitle(track, feature) {
-    var experiments = feature.data['Experiments'];
-    var samples = feature.data['Samples'];
+    var experiments = feature.get("experiments");
+    var samples = feature.get("samples");
 
-    var pepSeqs = feature.data['PepSeqs'];
-    var pepNaFeatIds = feature.data['PepAAFeatIds'];
-    var mscounts = feature.data['MSCounts'];
+    var pepSeqs = feature.get("pepseqs");
+    var pepNaFeatIds = feature.get("pepaafeatids");
+    var mscounts = feature.get("mscounts");
 
-    var residueLocations = feature.data['ResidueLocs'];
-    var ontologys = feature.data['Ontologys'];
+    var residueLocations = feature.get("residuelocs");
+    var ontologys = feature.get("ontologys");
 
-    var aaStartMins = feature.data['AAStartMins'];
+    var aaStartMins = feature.get("aastartmins");
 
     var location = feature.get("end");
     var featureName = feature.get("name");
@@ -585,7 +587,7 @@ function gsnapIntronColorFromStrandAndScore( feature ) {
 }
 
 
-function colorSegmentByScoreFxn(feature) {
+function colorSegmentByScore(feature) {
     var score = feature.get("score");
     if (score > 60) return '#FF0000';
     if (score > 50) return '#FF8000';
@@ -598,58 +600,59 @@ function colorSegmentByScoreFxn(feature) {
 
 function chipColor(feature) { 
     var a = feature.get("antibody");
-
-    if(!a) {
-      a = feature.data["immunoglobulin complex, circulating"];
-    }
-    
     var t = feature.get("compound");
     var r = feature.get("replicate");
-    var g = feature.data['genotype information'];
-    var l = feature.data['life cycle stage'];
-    var anls = feature.data['sample_name'];
+    var g = feature.get("parasite genotype");
+    var l = feature.get("parasite lifecycle stage");
+    var anls = feature.get("sample_name");
 
+    /*Plasmo - Winzeler Westenberger*/
     if(anls == 'H4_schizonti_smoothed (ChIP-chip)') return '#D80000';
     if(anls == 'H4_trophozoite_smoothed (ChIP-chip)')  return '#006633';
     if(anls == 'H4_ring_smoothed (ChIP-chip)') return '#27408B';
     if(anls == 'H3K9ac_troph_smoothed (ChIP-chip)') return '#524818';
 
+    /*Toxo - Einstein centromeres*/
     if(/CenH3_H3K9me2/i.test(a)) return '#000080';
     if(/CenH3/i.test(a)) return '#B0E0E6';
 
-    if (/wild_type/i.test(g) && (/H3K/i.test(a) || /H4K/i.test(a))) return '#0A7D8C';
+    /*Plasmo - Artur Scherf*/
+    if (/Wild type/i.test(g) && (/H3K/i.test(a) || /H4K/i.test(a))) return '#0A7D8C';
     if (/sir2KO/i.test(g) && (/H3K/i.test(a) || /H4K/i.test(a))) return '#FF7C70';
 
+    /*Toxo - Einstein + Einstein ME1*/
     if(/H3K4me3/i.test(a) && r == 'Replicate 1') return '#00FF00';
     if(/H3K4me3/i.test(a) && r == 'Replicate 2') return '#00C896';
     if(/H3k4me1/i.test(a) && r == 'Replicate 1') return '#0033FF';
     if(/H3k4me1/i.test(a) && r == 'Replicate 2') return '#0066FF';
 
-
+    /*Not sure*/
     if(/H3K9/i.test(a) && r == 'Replicate 1') return '#C86400';
     if(/H3K9/i.test(a) && r == 'Replicate 2') return '#FA9600';
 
+    /*Toxo Hakimi Ali*/
     if(/DMSO/i.test(t)) return '#4B0082';
     if(/FR235222/i.test(t)) return '#F08080';
 
-    if(r == 'replicate1') return '#00C800';
-    if(r == 'replicate2') return '#FA9600';
-    if(r == 'replicate3') return '#884C00';
-
+    /*Tryp - Peter Myler*/
+    if(r == 'Replicate 1') return '#00C800';
+    if(r == 'Replicate 2') return '#FA9600';
+    if(r == 'Replicate 3') return '#884C00';
     if(/early-log promastigotes/i.test(l)) return '#B22222';
     if(/stationary promastigotes/i.test(l)) return '#4682B4'; 
 
+    /*Plasmo Artur Scherf - obsolete?*/
     if(/H3K4me3/i.test(a)) return '#00C800';
     if(/H3K9Ac/i.test(a)) return '#FA9600';
     if(/H3K9me3/i.test(a) ) return '#57178F';
     if(/H3/i.test(a) ) return '#E6E600';
     if(/H4K20me3/i.test(a)) return '#F00000';
 
+    /*Toxo - Hakimi Ali 2*/
     if(/SET8/i.test(a) && r == 'Replicate 1' ) return '#600000';
     if(/TBP1/i.test(a) && r == 'Replicate 1' ) return '#600000';
     if(/TBP2/i.test(a) && r == 'Replicate 1' ) return '#600000';
     if(/RPB9_RNA_pol_II/i.test(a) && r == 'Replicate 1' ) return '#600000';
-
     if(/SET8/i.test(a) && r == 'Replicate 2' ) return '#C00000';
     if(/TBP1/i.test(a) && r == 'Replicate 2' ) return '#C00000';
     if(/TBP2/i.test(a) && r == 'Replicate 2' ) return '#C00000';
@@ -660,6 +663,8 @@ function chipColor(feature) {
 
 function peakTitleChipSeq(track, feature, featureDiv) {
     var rows = new Array();
+    var dataset = feature.get("data set");
+    rows.push(twoColRow('Experiment:', dataset));
 
     var start = feature.get("startm");
     var end = feature.get("end");
@@ -668,18 +673,18 @@ function peakTitleChipSeq(track, feature, featureDiv) {
     rows.push(twoColRow('End:', end));
 
     var ontologyTermToDisplayName = {'antibody' : 'Antibody', 
-                                     'immunoglobulin complex, circulating' : 'Antibody',
-                                     'genotype information' : 'Genotype', 
-                                     'compound based treatment' : 'Treatment',
+                                     'parasite genotype' : 'Genotype', 
+                                     'compound' : 'Treatment',
                                      'replicate' : 'Replicate',
-                                     'life cycle stage' : 'Lifecycle Stage',
-                                     'strain'   : 'Strain',
+                                     'parasite lifecycle stage' : 'Lifecycle Stage',
+                                     'parasite strain'   : 'Strain',
+                                     'score'    : 'Score',
                                      'tag_count' : 'Normalised Tag Count',
                                      'fold_change' : 'Fold Change',
                                      'p_value' : 'P Value'};
 
     for (var key in ontologyTermToDisplayName) {
-        var value = feature.data[key];
+        var value = feature.get(key);
         var displayName = ontologyTermToDisplayName[key];
         if (value) {
             rows.push(twoColRow(displayName + ':', value));
@@ -948,11 +953,9 @@ if(strand == '+1') {
     
 }
 
+
 function changeScaffoldType(feature) {
-    if(feature.data['Type'] == 'fgap') {
-        return 'JBrowse/View/FeatureGlyph/Segments'; 
-    }
-    return 'JBrowse/View/FeatureGlyph/Box';
+    return 'JBrowse/View/FeatureGlyph/Segments'; 
 }
 
 function scaffoldColor(feature) {
@@ -967,7 +970,7 @@ function scaffoldColor(feature) {
 }
 
 function scaffoldHeight(feature) {
-    if(feature.data['type'] == 'gap' || feature.data['Type'] == 'fgap') {
+    if(feature.get("type") == 'gap' || feature.get("type") == 'sgap') {
         return 25;
     }
 
@@ -978,7 +981,7 @@ function scaffoldHeight(feature) {
 function scaffoldDetails(track, feature) {
     var rows = new Array();
 
-    if(feature.get("type") == 'fgap') {
+    if(feature.get("type") == 'sgap') {
         feature.get("subfeatures").forEach(function(element) {
             rows.push(twoColRow('Gap Position:', positionNoStrandString(track.refSeq.name, element.get("startm"), element.get("end"))));
         });
@@ -1010,9 +1013,9 @@ function genericEndFeatureTitle(track, feature, trackType) {
   feature.get("subfeatures").forEach(function(element) {
 
     count = count + 1;
-    var name  = element.data['name']; 
+    var name  = element.get("name"); 
     var start = element.get("startm"); 
-    var end = element.data['end']; 
+    var end = element.get("end"); 
     var pct = element.get("pct");
     var score = element.get("score");
 
@@ -1125,7 +1128,7 @@ function getThreeUtr(strand,utr,cdsEnd){
 }
 
 function haplotypeColor(feature) { 
-  boundary = feature.data['Boundary'];
+  boundary = feature.get("boundary");
   if(boundary == 'Liberal') {
       return 'darkseagreen';
   }
@@ -1138,13 +1141,13 @@ function haplotypeTitle(track, feature, featureDiv) {
     var start = feature.get("startm");
     var end = feature.get("end");
     var length = end - start + 1;
-    var boundary = feature.data['boundary'];
-    var name = feature.data['Name'];
-    var start_max = feature.data['start_max'];
-    var start_min = feature.data['start_min'];
-    var end_min = feature.data['end_min'];
-    var end_max = feature.data['end_max'];
-    var sequenceId = feature.data['SequenceId'];
+    var boundary = feature.get("boundary");
+    var name = feature.get("name");
+    var start_max = feature.get("start_max");
+    var start_min = feature.get("start_min");
+    var end_min = feature.get("end_min");
+    var end_max = feature.get("end_max");
+    var sequenceId = feature.get("sequenceid");
 
     var libContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_max + "&value%28start_point%29=" + start_min + "&weight=10'>Contained Genes</a>";
     var consrvContlink = "<a target='_blank' href='/a/showQuestion.do?questionFullName=GeneQuestions.GenesByLocation&value%28sequenceId%29=" + sequenceId + "&value%28organism%29=Plasmodium+falciparum&value%28end_point%29=" + end_min + "&value%28start_point%29=" + start_max + "&weight=10'>Contained Genes</a>";
@@ -1209,9 +1212,12 @@ function synGeneTitle(track, feature) {
 
     var dataRoot = track.browser.config.dataRoot;
     var baseUrl = track.browser.config.baseUrl;
+    baseUrl = baseUrl.replace(/\/$/,'');
 
     var recordLink = '<a target="_blank" href="' + baseRecordUrl + '/gene/' + sourceId + '">Gene Page</a>';
-    var gbLink = "<a target='_blank' href='" + baseUrl + "index.html?data=tracks/" + orgAbbrev + "&loc=" + linkPosition + "&highlight=" + highlightPosition + "'>JBrowse</a>";
+
+    var gbLink = "<a target='_blank' href='" + baseUrl + ".jsp?loc=" + linkPosition + "&data=/a/service/jbrowse/tracks/" + orgAbbrev +  "&tracks=gene" + "&highlight=" + highlightPosition + "'>JBrowse</a>";
+
 
     // format into html table rows
     var rows = new Array();

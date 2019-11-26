@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.dataset.AbstractDatasetParser;
 import org.gusdb.wdk.model.dataset.DatasetFactory;
-import org.gusdb.wdk.model.dataset.WdkDatasetException;
 
 /**
  * @author jerric
@@ -28,13 +28,8 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
     setDescription("The input is GFF file format. Only the record rows will be parsed.");
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.dataset.DatasetParser#parse(java.lang.String)
-   */
   @Override
-  public List<String[]> parse(String content) throws WdkDatasetException {
+  public List<String[]> parse(String content) throws WdkUserException {
     Map<String, Integer> attributes = getAttributes();
     List<String[]> data = new ArrayList<>();
 
@@ -73,7 +68,7 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
       }
     }
     catch (IOException ex) {
-      throw new WdkDatasetException(ex);
+      throw new WdkUserException(ex);
     }
 
     return data;
@@ -87,7 +82,7 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
    * @return
    * @throws WdkDatasetException
    */
-  private Map<String, Integer> getAttributes() throws WdkDatasetException {
+  private Map<String, Integer> getAttributes() throws WdkUserException {
     String attrs = properties.get(PROP_ATTRIBUTES);
     Map<String, Integer> attributes = new HashMap<>();
     if (attrs == null)
@@ -100,7 +95,7 @@ public class GffSpanDatasetParser extends AbstractDatasetParser {
     }
     int allowedSize = DatasetFactory.MAX_VALUE_COLUMNS - 2;
     if (attributes.size() >= allowedSize)
-      throw new WdkDatasetException("Only " + allowedSize + " attributes are allowed, but " +
+      throw new WdkUserException("Only " + allowedSize + " attributes are allowed, but " +
           attributes.size() + " attributes are declared: " + attrs + " in datasetParam " +
           param.getFullName());
     return attributes;

@@ -20,10 +20,14 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
-import org.gusdb.wdk.model.question.Question;
+import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
+import org.gusdb.wdk.model.answer.spec.AnswerSpec;
+import org.gusdb.wdk.model.query.spec.QueryInstanceSpec;
+import org.gusdb.wdk.model.query.spec.QueryInstanceSpecBuilder;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.gusdb.wdk.model.report.util.ReporterFactory;
+import org.gusdb.wdk.model.user.StepContainer;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -148,16 +152,23 @@ public class Gff3Dumper {
     // prepare reporters
     logger.info("Preparing reporters....");
 
-    Map<String, String> params = new LinkedHashMap<String, String>();
+    QueryInstanceSpecBuilder params = QueryInstanceSpec.builder();
     params.put("gff_organism", organism);
 
     User user = wdkModel.getSystemUser();
-    Question seqQuestion = (Question) wdkModel.resolveReference("SequenceDumpQuestions.SequenceDumpQuestion");
-    AnswerValue sqlAnswer = seqQuestion.makeAnswerValue(user, params, true, 0);
+
+    AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(user,
+        AnswerSpec.builder(wdkModel)
+        .setQuestionFullName("SequenceDumpQuestions.SequenceDumpQuestion")
+        .setQueryInstanceSpec(params)
+        .buildRunnable(user, StepContainer.emptyContainer()));
     Gff3Reporter seqReport = (Gff3Reporter) ReporterFactory.getReporter(sqlAnswer, "gff3", config);
 
-    Question geneQuestion = (Question) wdkModel.resolveReference("GeneDumpQuestions.GeneDumpQuestion");
-    AnswerValue geneAnswer = geneQuestion.makeAnswerValue(user, params, true, 0);
+    AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(user,
+        AnswerSpec.builder(wdkModel)
+        .setQuestionFullName("GeneDumpQuestions.GeneDumpQuestion")
+        .setQueryInstanceSpec(params)
+        .buildRunnable(user, StepContainer.emptyContainer()));
 
     config.put(Gff3Reporter.FIELD_HAS_PROTEIN, "yes");
     Gff3Reporter geneReport = (Gff3Reporter) ReporterFactory.getReporter(geneAnswer, "gff3Dump", config);

@@ -16,6 +16,8 @@ import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
+import org.gusdb.wdk.model.answer.spec.AnswerSpec;
 import org.gusdb.wdk.model.query.Column;
 import org.gusdb.wdk.model.query.Query;
 import org.gusdb.wdk.model.query.QuerySet;
@@ -29,6 +31,7 @@ import org.gusdb.wdk.model.report.Reporter;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.FullRecordReporter;
 import org.gusdb.wdk.model.report.util.TableCache;
+import org.gusdb.wdk.model.user.StepContainer;
 import org.gusdb.wdk.model.user.User;
 
 /**
@@ -94,11 +97,6 @@ public class FullRecordFileCreator extends BaseCLI {
                 + " current location.");
     }
 
-    /*
-     * (non-Javadoc)
-     * 
-     * @see org.gusdb.fgputil.BaseCLI#invoke()
-     */
     @Override
     public void execute() throws Exception {
         long start = System.currentTimeMillis();
@@ -113,18 +111,19 @@ public class FullRecordFileCreator extends BaseCLI {
         try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
           String idSql = loadIdSql(sqlFile);
-          RecordClass recordClass = wdkModel.getRecordClass(recordClassName);
+          RecordClass recordClass = wdkModel.getRecordClassByName(recordClassName).orElseThrow(
+              () -> new WdkModelException("No record class exists with name '" + recordClassName + "'."));
   
           if (cacheTable == null)
               cacheTable = "wdk" + recordClass.getDisplayName() + "Dump";
           if (dumpFile == null)
               dumpFile = cacheTable + ".txt";
   
-          Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
           User user = wdkModel.getSystemUser();
-          Map<String, String> paramValues = new LinkedHashMap<String, String>();
-          AnswerValue answerValue = question
-                  .makeAnswerValue(user, paramValues, true, 0);
+          Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
+          AnswerValue answerValue = AnswerValueFactory.makeAnswer(user,
+              AnswerSpec.builder(wdkModel).setQuestionFullName(question.getFullName())
+                .buildRunnable(user, StepContainer.emptyContainer()));
   
           OutputStream out = new FileOutputStream(dumpFile);
           Reporter reporter = createReporter(answerValue, cacheTable);
@@ -155,16 +154,15 @@ public class FullRecordFileCreator extends BaseCLI {
     private Question createQuestion(WdkModel wdkModel, String projectId, RecordClass recordClass,
             String idSql) throws WdkModelException {
         String name = recordClass.getFullName().replaceAll("\\W", "_");
-        QuestionSet questionSet = wdkModel
-                .getQuestionSet(Utilities.INTERNAL_QUESTION_SET);
+        QuestionSet questionSet = wdkModel.getQuestionSet(Utilities.INTERNAL_QUESTION_SET).get();
         Query query = createQuery(wdkModel, recordClass, idSql);
         Question question = new Question();
         question.setName(name + "_dump");
         question.setRecordClass(recordClass);
-        question.setQuery(query);
-        questionSet.addQuestion(question);
+        question.setQueryRef(query.getFullName());
         question.excludeResources(projectId);
         question.resolveReferences(wdkModel);
+        questionSet.addQuestion(question);
         return question;
     }
 
@@ -191,7 +189,7 @@ public class FullRecordFileCreator extends BaseCLI {
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
             throws WdkUserException {
-        Question question = answerValue.getQuestion();
+        Question question = answerValue.getAnswerSpec().getQuestion();
         Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
         StringBuffer sbFields = new StringBuffer();
         for (String fieldName : fields.keySet()) {

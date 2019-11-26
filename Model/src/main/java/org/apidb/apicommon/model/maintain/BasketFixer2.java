@@ -305,9 +305,9 @@ public class BasketFixer2 extends BaseCLI {
     String dblink = wdkModel.getModelConfig().getAppDB().getUserDbLink();
     
     // get a snapshot of largest basket id. any newer ids are added by users during this run. we can ignore them.
-    Object[] args = {};
-    BasicResultSetHandler handler = new BasicResultSetHandler();
-    new SQLRunner(userDbDataSource, "select max(basket_id) as max_basket_id from " + userSchema + "user_baskets", "invalid-step-report-summary").executeQuery(args, handler);
+    String sql = "select max(basket_id) as max_basket_id from " + userSchema + "user_baskets";
+    BasicResultSetHandler handler = new SQLRunner(userDbDataSource, sql,
+        "invalid-step-report-summary").executeQuery(new Object[]{}, new BasicResultSetHandler());
     List<Map<String,Object>> results = handler.getResults();
     Map<String,Object> row = results.get(0);
     BigDecimal maxBasketId = (BigDecimal)row.get("MAX_BASKET_ID");

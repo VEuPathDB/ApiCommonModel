@@ -1,19 +1,12 @@
 package org.apidb.apicommon.model.userdataset;
 
 import java.nio.file.Path;
-import java.io.File;
-import java.io.FileReader;
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
-import org.gusdb.wdk.model.user.dataset.UserDatasetFile;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 
@@ -35,8 +28,13 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
 
   @Override
   public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
-    String[] cmd = {"installRnaSeqUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("manifest.txt").toString(), projectId};
-    return cmd;
+      Path manifestFile = fileNameToTempFileMap.get("manifest.txt");
+      if (manifestFile == null) {
+	  throw new RuntimeException("failed to get manifest.txt");
+      }
+      
+      String[] cmd = {"installRnaSeqUserDataset", userDataset.getUserDatasetId().toString(), manifestFile.toString(), projectId};
+      return cmd;
   }
 
   @Override
@@ -108,6 +106,7 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
       String[] qList;
       String[] unstrandedQList = {"GeneQuestions.GenesByRNASeqUserDataset"};
       String[] strandedQList = {"GeneQuestions.GenesByRNASeqUserDataset", "GeneQuestions.GenesByUserDatasetAntisense"};
+      // String[] strandedQList = {"GeneQuestions.GenesByRNASeqUserDataset"};
       if (isStranded) {
 	  qList = strandedQList;
       } else {

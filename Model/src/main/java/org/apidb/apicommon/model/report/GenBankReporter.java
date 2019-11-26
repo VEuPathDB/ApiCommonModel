@@ -13,6 +13,8 @@ import java.util.regex.Pattern;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
 import org.gusdb.wdk.model.answer.AnswerValue;
+import org.gusdb.wdk.model.answer.factory.AnswerValueFactory;
+import org.gusdb.wdk.model.answer.spec.AnswerSpec;
 import org.gusdb.wdk.model.answer.stream.PagedAnswerRecordStream;
 import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.question.Question;
@@ -82,8 +84,13 @@ public class GenBankReporter extends PagedAnswerReporter {
 
             String geneQuestionName = _properties.get(PROPERTY_GENE_QUESTION);
             Question geneQuestion = (Question) _wdkModel.resolveReference(geneQuestionName);
-            AnswerValue geneAnswer = geneQuestion.makeAnswerValue(_baseAnswer.getUser(), params, 0,
-                                                                  _pageSize, sorting, null, true, 0);
+            AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(_baseAnswer.getUser(),
+                AnswerSpec.builder(_wdkModel)
+                .setQuestionFullName(geneQuestion.getFullName())
+                .setParamValues(params)
+                .buildRunnable(_baseAnswer.getUser(),
+                    _baseAnswer.getAnswerSpec().getStepContainer()),
+                    0, _pageSize, sorting);
 
             // write non gene sequence features
             writeSequenceFeatures(record, writer);
