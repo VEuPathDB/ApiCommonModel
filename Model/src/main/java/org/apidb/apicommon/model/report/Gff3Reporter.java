@@ -71,11 +71,6 @@ public class Gff3Reporter extends PagedAnswerReporter {
     super(answerValue);
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.Reporter#getHttpContentType()
-   */
   @Override
   public String getHttpContentType() {
     if (fileType.equalsIgnoreCase("text")) {
@@ -86,11 +81,6 @@ public class Gff3Reporter extends PagedAnswerReporter {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.Reporter#getDownloadFileName()
-   */
   @Override
   public String getDownloadFileName() {
     logger.info("Internal format: " + fileType);
@@ -103,11 +93,6 @@ public class Gff3Reporter extends PagedAnswerReporter {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.IReporter#format(org.gusdb.wdk.model.Answer)
-   */
   @Override
   public void write(OutputStream out) throws WdkModelException {
     try {
@@ -156,11 +141,6 @@ public class Gff3Reporter extends PagedAnswerReporter {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.wdk.model.report.Reporter#configure(java.util.Map)
-   */
   @Override
   public Gff3Reporter configure(Map<String, String> newConfig) throws ReporterConfigException {
 
