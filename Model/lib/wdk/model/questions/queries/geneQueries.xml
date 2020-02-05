@@ -1241,8 +1241,58 @@ AND 1=0
         <wsColumn name="fields_matched" width="200"/>
     </processQuery>
 
+    <processQuery name="GenesBySolrSearch" includeProjects="CryptoDB,TriTrypDB,PlasmoDB,GiardiaDB,ToxoDB,TrichDB,AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB,PiroplasmaDB"
+          processName="org.apidb.apicomplexa.wsfplugin.solrsearch.SiteSearchPlugin">
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                update ##WDK_CACHE_TABLE##
+                set source_id = (select min(source_id)
+                                      from apidbTuning.transcriptAttributes
+                                      where gene_source_id = ##WDK_CACHE_TABLE##.gene_source_id)
+                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                  and source_id is null
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
 
-
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result, max_score)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select ta.source_id, ta.gene_source_id, max_score, ta.project_id
+                           from apidbTuning.transcriptAttributes ta, matches
+                           where ta.gene_source_id = matches.gene_source_id
+                         minus
+                           select source_id, gene_source_id, max_score, project_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'Y', max_score
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <paramRef ref="organismParams.solr_search_organism"/>
+       <paramRef ref="sharedParams.text_expression"/>
+       <paramRef ref="geneParams.solr_text_fields"/>
+       <!-- <paramRef ref="geneParams.max_pvalue" groupRef="paramGroups.advancedParams"/> -->
+       <!-- the parameter below caches the results for 30 minutes -->
+       <paramRef ref="sharedParams.timestamp" interval="1800" />
+       <wsColumn name="source_id" width="50"/>
+       <wsColumn name="gene_source_id" width="50"/>
+       <wsColumn name="project_id" width="20"/>
+       <wsColumn name="matched_result" width="1"/>
+       <wsColumn name="max_score" width="10" columnType="float"/>
+       <!-- <wsColumn name="fields_matched" width="200" wsName="Datasets"/> -->
+    </processQuery>
 
     <processQuery name="GenesByTextSearchPhenotype" includeProjects="PlasmoDB,FungiDB,UniDB,TriTrypDB"
           processName="org.apidb.apicomplexa.wsfplugin.textsearch.TranscriptSearchPlugin">
