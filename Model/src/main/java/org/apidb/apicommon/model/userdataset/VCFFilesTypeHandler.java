@@ -260,13 +260,7 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
       return new SQLRunner(appDb.getDataSource(), selectSequenceSql, "select-sequence-by-taxon").executeQuery(
         new Object[]{ taxonId },
         new Integer[]{ Types.VARCHAR },
-        resultSet -> {
-          TwoTuple<String, Integer> tuple = new TwoTuple<>(null, null);
-          if (resultSet.next()) {
-            tuple.set(resultSet.getString("seq_id"), resultSet.getInt("length"));
-          }
-          return tuple;
-        }
+        rs -> !rs.next() ? new TwoTuple<>() : new TwoTuple<>(rs.getString("seq_id"), rs.getInt("length"))
       );
     }
     catch(SQLRunnerException sre) {
