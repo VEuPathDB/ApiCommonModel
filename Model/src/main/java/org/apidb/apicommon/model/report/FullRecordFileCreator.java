@@ -111,7 +111,7 @@ public class FullRecordFileCreator extends BaseCLI {
         try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
 
           String idSql = loadIdSql(sqlFile);
-          RecordClass recordClass = wdkModel.getRecordClassByName(recordClassName).orElseThrow(
+          RecordClass recordClass = wdkModel.getRecordClassByFullName(recordClassName).orElseThrow(
               () -> new WdkModelException("No record class exists with name '" + recordClassName + "'."));
   
           if (cacheTable == null)
