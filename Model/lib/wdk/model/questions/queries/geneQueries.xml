@@ -925,6 +925,22 @@ FROM
   <!-- Gene type -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
+    <sqlQuery name="GenesByGeneModelChars" excludeProjects="EuPathDB" >
+        <paramRef ref="geneParams.gene_or_transcript"/>
+        <paramRef ref="geneParams.gene_model_char"/>
+        <column name="project_id"/>
+        <column name="source_id" />
+        <column name="gene_source_id"/>
+        <column name="matched_result"/>
+        <sql>
+            <![CDATA[
+            SELECT source_id, gene_source_id, 'Y' as matched_result, project_id
+            FROM ApidbTuning.TranscriptAttributes
+            WHERE source_id in ($$gene_model_char$$)
+           ]]>
+       </sql>
+    </sqlQuery>
+
     <sqlQuery name="GenesByGeneType" excludeProjects="EuPathDB" >
         <paramRef ref="organismParams.organism"/>
         <paramRef ref="geneParams.geneType"/>
@@ -1042,7 +1058,7 @@ AND 1=0
            <paramValue name="BlastQuerySequence">TATGCAATCAGGTATCTATCTCATCAATCCTTACGCTCAGCGCTGCCCAATTGGGAAGAGCAAATGTGGACCTGAGCATGATTCCACCCTAGGAAAGTGTGCCATGTACTCTGGTTG</paramValue>
 	   <paramValue name="BlastDatabaseOrganism">Babesia bovis T2Bo</paramValue>
         </testParamValues>
-        <testParamValues includeProjects="FungiDB,HostDB,SchistoDB,UniDB,InitDB">
+        <testParamValues includeProjects="FungiDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB">
            <paramValue name="BlastQuerySequence"></paramValue>
 	   <paramValue name="BlastDatabaseOrganism"></paramValue>
         </testParamValues>
@@ -1173,7 +1189,7 @@ AND 1=0
   <!-- text search (based on Oracle Text) -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <processQuery name="GenesByTextSearch" includeProjects="CryptoDB,TriTrypDB,PlasmoDB,GiardiaDB,ToxoDB,TrichDB,AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,SchistoDB,UniDB,InitDB,PiroplasmaDB"
+    <processQuery name="GenesByTextSearch" includeProjects="CryptoDB,TriTrypDB,PlasmoDB,GiardiaDB,ToxoDB,TrichDB,AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB,PiroplasmaDB"
           processName="org.apidb.apicomplexa.wsfplugin.textsearch.TranscriptSearchPlugin">
        <postCacheUpdateSql>
           <sql>
@@ -1241,8 +1257,58 @@ AND 1=0
         <wsColumn name="fields_matched" width="200"/>
     </processQuery>
 
+    <processQuery name="GenesBySolrSearch"
+          processName="org.apidb.apicomplexa.wsfplugin.solrsearch.SiteSearchPlugin">
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+                update ##WDK_CACHE_TABLE##
+                set source_id = (select min(source_id)
+                                      from apidbTuning.transcriptAttributes
+                                      where gene_source_id = ##WDK_CACHE_TABLE##.gene_source_id)
+                where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                  and source_id is null
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
 
-
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result, max_score)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select ta.source_id, ta.gene_source_id, max_score, ta.project_id
+                           from apidbTuning.transcriptAttributes ta, matches
+                           where ta.gene_source_id = matches.gene_source_id
+                         minus
+                           select source_id, gene_source_id, max_score, project_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'Y', max_score
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <paramRef ref="organismParams.solr_search_organism"/>
+       <paramRef ref="sharedParams.text_expression"/>
+       <paramRef ref="geneParams.solr_text_fields"/>
+       <!-- <paramRef ref="geneParams.max_pvalue" groupRef="paramGroups.advancedParams"/> -->
+       <!-- the parameter below caches the results for 30 minutes -->
+       <paramRef ref="sharedParams.timestamp" interval="1800" />
+       <wsColumn name="source_id" width="50"/>
+       <wsColumn name="gene_source_id" width="50"/>
+       <wsColumn name="project_id" width="20"/>
+       <wsColumn name="matched_result" width="1"/>
+       <wsColumn name="max_score" width="10" columnType="float"/>
+       <!-- <wsColumn name="fields_matched" width="200" wsName="Datasets"/> -->
+    </processQuery>
 
     <processQuery name="GenesByTextSearchPhenotype" includeProjects="PlasmoDB,FungiDB,UniDB,TriTrypDB"
           processName="org.apidb.apicomplexa.wsfplugin.textsearch.TranscriptSearchPlugin">
@@ -1650,7 +1716,7 @@ AND 1=0
   <!-- Signal Peptide -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesWithSignalPeptide" excludeProjects="EuPathDB" >
+    <sqlQuery name="GenesWithSignalPeptide" excludeProjects="EuPathDB,VectorBase" >
         <paramRef ref="organismParams.organism"/>
         <paramRef ref="geneParams.min_sigp_sum_score" groupRef="paramGroups.advancedParams"/>
         <paramRef ref="geneParams.min_sigp_d_score" groupRef="paramGroups.advancedParams"/>
@@ -1681,6 +1747,24 @@ AND 1=0
                    spf.means_conclusion ) >= $$min_sigp_sum_score$$ 
               $$any_or_all_sigp$$ ((spf.means_score + spf.maxy_score) / 2) >= $$min_sigp_d_score$$
               $$any_or_all_sigp$$ spf.signal_probability >= $$min_sigp_signal_probability$$)
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <sqlQuery name="GenesWithSignalPeptide" includeProjects="VectorBase" >
+        <paramRef ref="organismParams.organism"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="gene_source_id"/>
+        <column name="matched_result"/>
+        <sql>
+            <![CDATA[
+            SELECT DISTINCT ta.source_id, ta.gene_source_id, 'Y' as matched_result,
+             ta.project_id
+            FROM ApidbTuning.TranscriptAttributes ta, 
+                 dots.SignalPeptideFeature spf
+            WHERE ta.taxon_id in ($$organism$$) 
+              AND ta.aa_sequence_id = spf.aa_sequence_id
            ]]>
        </sql>
     </sqlQuery>
@@ -1854,7 +1938,7 @@ AND 1=0
 
     <sqlQuery name="GenesByOrthologPattern" excludeProjects="EuPathDB"    >
 
-        <testParamValues includeProjects="FungiDB,HostDB,SchistoDB,UniDB,InitDB">
+        <testParamValues includeProjects="FungiDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB">
           <paramValue name="included_species">FILL</paramValue>
           <paramValue name="excluded_species">FILL</paramValue>
           <paramValue name="organism">FILL</paramValue>
@@ -1949,7 +2033,7 @@ AND 1=0
                 FROM ApidbTuning.TranscriptAttributes ta
                WHERE ta.gene_ortholog_number = 0 
                  AND ta.gene_paralog_number = 0 
-                 AND ta.gene_type = 'protein coding'
+                 AND (ta.gene_type = 'protein coding' OR ta.gene_type = 'protein coding gene')
                  AND ta.taxon_id in ($$organism$$)
                  AND $$profile_pattern$$ not like '%:Y%'
                UNION
@@ -2267,7 +2351,7 @@ from (with genesample
   <!-- GenesOrthologousToAGivenGene   COULD HAVE SQL ERRORS FOR APIDB -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesOrthologousToAGivenGene" includeProjects="CryptoDB,PlasmoDB,ToxoDB,TriTrypDB,GiardiaDB,AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,SchistoDB,UniDB,InitDB,PiroplasmaDB,EuPathDB"    >
+    <sqlQuery name="GenesOrthologousToAGivenGene" includeProjects="CryptoDB,PlasmoDB,ToxoDB,TriTrypDB,GiardiaDB,AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB,PiroplasmaDB,EuPathDB"    >
 
         <testParamValues includeProjects="PlasmoDB">
           <paramValue name="single_gene_id">PVX_092275</paramValue>
@@ -2330,10 +2414,10 @@ from (with genesample
 
       <!-- TODO:  check this param.  not there in trunk when merged-->
 
-        <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.withChromosomes" displayType="select" includeProjects="TriTrypDB,ToxoDB,PlasmoDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,UniDB" quote="true"> <help>Select the organism you wish to query against.</help></paramRef>
+        <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.withChromosomes" displayType="select" includeProjects="TriTrypDB,ToxoDB,PlasmoDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,VectorBase,UniDB" quote="true"> <help>Select the organism you wish to query against.</help></paramRef>
         <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.withChromosomes" displayType="select" includeProjects="CryptoDB" quote="true" default="Cryptosporidium parvum Iowa II"> <help>Select the organism you wish to query against.</help></paramRef>
 
-        <paramRef ref="sharedParams.chromosomeOptional" includeProjects="UniDB,PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB"  queryRef="SharedVQ.ChromosomeOrderNum"/>
+        <paramRef ref="sharedParams.chromosomeOptional" includeProjects="UniDB,PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,VectorBase"  queryRef="SharedVQ.ChromosomeOrderNum"/>
         <paramRef ref="sharedParams.sequenceId"/>
         <paramRef ref="sharedParams.start_point"/>
         <paramRef ref="sharedParams.end_point"/>
@@ -2343,7 +2427,7 @@ from (with genesample
         <column name="matched_result"/>
         <column name="dynamic_location"/>
 
-        <sql includeProjects="TriTrypDB,MicrosporidiaDB,PlasmoDB,CryptoDB,ToxoDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB">
+        <sql includeProjects="TriTrypDB,MicrosporidiaDB,PlasmoDB,CryptoDB,ToxoDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,VectorBase">
             <![CDATA[
             SELECT gatr.source_id as source_id, 'Y' as matched_result,
                   gatr.project_id, gatr.gene_source_id,
@@ -2981,7 +3065,7 @@ SELECT q.*, 'Y' as matched_result FROM
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Expression Percentiles ToxoDB -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="GenesByGenericPercentile" includeProjects="AmoebaDB,CryptoDB,ToxoDB,TriTrypDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,UniDB">
+    <sqlQuery name="GenesByGenericPercentile" includeProjects="AmoebaDB,CryptoDB,ToxoDB,TriTrypDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,VectorBase,UniDB">
 
         <testParamValues>
          <paramValue name="samples_percentile_generic" selectMode="first"/>
@@ -3024,7 +3108,7 @@ SELECT q.*, 'Y' as matched_result FROM
                  ) profile_min_max
 	    WHERE ta.gene_na_feature_id = PROFILE.na_feature_id
               AND ta.gene_na_feature_id = profile_min_max.na_feature_id
-              AND ('no' = $$protein_coding_only$$ OR ta.gene_type = 'protein coding')
+              AND ('no' = $$protein_coding_only$$ OR ta.gene_type = 'protein coding' OR ta.gene_type = 'protein coding gene')
             GROUP BY ta.gene_source_id,ta.source_id, ta.project_id
 	    HAVING 'any' = $$any_or_all$$
                    OR count(*) = (SELECT count(*)
@@ -3459,7 +3543,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
     </processQuery>				
 						   
 
-    <sqlQuery name="GenesByGenericFoldChange" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,UniDB"  >
+    <sqlQuery name="GenesByGenericFoldChange" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,VectorBase,UniDB"  >
 
         <testParamValues>
           <paramValue name="samples_fc_ref_generic" selectMode="all"/>
@@ -5802,7 +5886,7 @@ and ta.gene_source_id = one.source_id
         <wsColumn name="comment_count"/>
         <wsColumn name="min_comment_date"/>
         <wsColumn name="max_comment_date"/>
-        <wsColumn name="headlines" width="1000"/>
+        <wsColumn name="headlines" width="4000"/>
     </processQuery>
 
 
