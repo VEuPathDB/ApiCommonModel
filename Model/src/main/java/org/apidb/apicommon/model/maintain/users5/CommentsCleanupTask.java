@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.maintain.users5;
 
 import org.apache.ibatis.session.SqlSession;
@@ -17,7 +14,7 @@ public class CommentsCleanupTask implements MigrationTask {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apidb.apicommon.model.maintain.users5.MigrationTask#getDisplay()
    */
   @Override
@@ -27,7 +24,7 @@ public class CommentsCleanupTask implements MigrationTask {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apidb.apicommon.model.maintain.users5.MigrationTask#isBatchEnabled()
    */
   @Override
@@ -37,7 +34,7 @@ public class CommentsCleanupTask implements MigrationTask {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see
    * org.apidb.apicommon.model.maintain.users5.MigrationTask#execute(org.apache.ibatis.session.SqlSession)
    */
