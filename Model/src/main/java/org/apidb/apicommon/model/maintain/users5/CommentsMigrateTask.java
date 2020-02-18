@@ -1,6 +1,3 @@
-/**
- * 
- */
 package org.apidb.apicommon.model.maintain.users5;
 
 import org.apache.ibatis.session.SqlSession;
@@ -37,42 +34,42 @@ public class CommentsMigrateTask implements MigrationTask {
   @Override
   public void execute(SqlSession session) throws Exception {
     MigrateCommentsMapper mapper = session.getMapper(MigrateCommentsMapper.class);
-    
+
     LOG.info("Migrating comments from comments2 to userlogins5...");
-    
+
     int count = mapper.insertReviewStatus();
     LOG.debug(count + " review status migrated.");
-    
+
     count = mapper.insertTargets();
     LOG.debug(count + " targets migrated.");
-    
+
     count = mapper.insertComments();
     LOG.debug(count + " comments migrated.");
-    
+
     count = mapper.insertTargetCategories();
     LOG.debug(count + " categories migrated.");
-    
+
     count = mapper.insertCommentTargetCategories();
     LOG.debug(count + " comment categories migrated.");
-    
+
     count = mapper.insertExternalDBs();
     LOG.debug(count + " external DBs migrated.");
-    
+
     count = mapper.insertLocations();
     LOG.debug(count + " locations migrated.");
 
     count = mapper.insertCommentExternalDBs();
     LOG.debug(count + " comment external DBs migrated.");
-    
+
     count = mapper.insertReferences();
     LOG.debug(count + " references migrated.");
-    
+
     count = mapper.insertSequences();
     LOG.debug(count + " sequences migrated.");
-    
+
     count = mapper.insertFiles();
     LOG.debug(count + " files migrated.");
-    
+
     count = mapper.insertStableIds();
     LOG.debug(count + " stable ids migrated.");
   }
