@@ -102,115 +102,15 @@ ORDER BY
     <query name="gsnap:unifiedintronjunction">
      
        <![CDATA[
-with valid as (
-SELECT na_sequence_id,segment_start,segment_end,is_reversed
-FROM apidbtuning.geneintronjunction
-  WHERE  segment_start <= $rend
-     AND segment_end >= $base_start
-     AND na_sequence_id = $srcfeature_id 
-     AND segment_end - segment_start <= $$intronSizeLimit$$
-     AND unique_reads >= $$minReadsMaxSample$$
-     AND sample_multiplier <= $$maxIsrpmMult$$
-     AND total_cons_mult_ratio >= $$isrpmRatio$$ 
-     AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
-       OR (external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-     GROUP BY na_sequence_id,segment_start,segment_end,is_reversed,is_contained, annotated_intron
-     HAVING max(CASE WHEN is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) keep (dense_rank first order by isrpm desc) >= 
-                CASE WHEN is_contained = 1 THEN $$minContainedRatio$$ ELSE $$minNonContainedRatio$$ END
-          OR annotated_intron = 'Yes' /* this may be a bit dodgy but should show evidence for annotated intron if it exists even if ratio too low */
-) -- end valid
-,inwindow as (
-SELECT ij.*
-FROM apidbtuning.geneintronjunction ij, valid v
-  WHERE  v.segment_start = ij.segment_start
-     AND v.segment_end = ij.segment_end
-     AND v.na_sequence_id = ij.na_sequence_id 
-     AND v.is_reversed = ij.is_reversed
-     AND ij.unique_reads >= 1
-     AND ij.sample_multiplier <= $$maxIsrpmMult$$
-     AND ij.total_cons_mult_ratio >= $$isrpmRatio$$
-     AND (('$$externalDatabaseName$$' = 'ALL' and ij.include_unified_junctions = 'true')
-       OR (ij.external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-)
-, distids as (
-select distinct gene_source_id from inwindow
-)
-, genesample as (
-SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_unique,max(ij.isrpm) as sample_isrpm
-  FROM apidbtuning.geneintronjunction ij, distids
-  WHERE ij.gene_source_id = distids.gene_source_id
-  AND ij.matches_gene_strand = 1
-  AND ij.segment_end - ij.segment_start <= $$intronSizeLimit$$
-  AND ij.unique_reads >= 1
-  AND ij.sample_multiplier <= $$maxIsrpmMult$$
-  AND ij.total_cons_mult_ratio >= $$isrpmRatio$$
-  AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
-   OR (ij.external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-  GROUP By ij.protocol_app_node_id,ij.gene_source_id)
-, genetotal as (
-SELECT gene_source_id,max(tot_unique) as max_gene_unique,max(tot_isrpm) as max_gene_isrpm
-FROM (
-SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot_isrpm
-  FROM apidbtuning.geneintronjunction ij, distids
-  WHERE ij.gene_source_id = distids.gene_source_id
-  AND ij.matches_gene_strand = 1
-  AND ij.segment_end - ij.segment_start <= $$intronSizeLimit$$
-  AND ij.unique_reads >= 1
-  AND ij.sample_multiplier <= $$maxIsrpmMult$$
-  AND ij.total_cons_mult_ratio >= $$isrpmRatio$$
-  AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
-   OR (ij.external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-  GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
-  GROUP by gene_source_id
-)
-SELECT * from (
-SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
-CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END as percent_max,
-sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
-'Exps=' || rtrim(xmlagg(XMLELEMENT(e,display_name,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'Samples=' || rtrim(xmlagg(XMLELEMENT(e,samples,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'IsrCovRatio=' || rtrim(xmlagg(XMLELEMENT(e,isr_cov_ratios,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'IsrAvgCovRatio=' || rtrim(xmlagg(XMLELEMENT(e,isr_avg_cov_ratios,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'PerMaxSample=' || rtrim(xmlagg(XMLELEMENT(e,percent_max_samples,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'URS=' || rtrim(xmlagg(XMLELEMENT(e,unique_reads,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'ISRPM=' || rtrim(xmlagg(XMLELEMENT(e,isrpm,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'TotalScore=' || sum(total_reads) || '$dlm' ||
-'MatchesGeneStrand=' || matches_gene_strand || '$dlm' ||
-'IsReversed=' || is_reversed || '$dlm' ||
-'AnnotatedIntron=' || annotated_intron || '$dlm' ||
-'IntronPercent=' || CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END || '$dlm' ||
-'GeneSourceId=' || gene_source_id || '$dlm' ||
-'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
-FROM (
-SELECT segment_start || '_' || segment_end || '_' || is_reversed as feature_id,
-         'gsnap' type, 
-         '$source' source, 
-         na_sequence_id parent_id, 
-         segment_start startm, 
-         segment_end end, 
-         sum(unique_reads) as sum_exp_score, 
-         exp_name as display_name, is_contained as contained,
-         matches_gene_strand, is_reversed, annotated_intron, gt.gene_source_id,
-         listagg(sample_name, ',') within group (order by iw.protocol_app_node_id) as samples,
-         listagg(unique_reads, ',') within group (order by iw.protocol_app_node_id) unique_reads,
-         listagg(isrpm, ',') within group (order by iw.protocol_app_node_id) isrpm,
-         listagg(isr_coverage_ratio, ',') within group (order by iw.protocol_app_node_id) as isr_cov_ratios,  
-         listagg(isr_avgcoverage_ratio, ',') within group (order by iw.protocol_app_node_id) as isr_avg_cov_ratios,  
-         listagg(round(unique_reads / nvl(gs.sample_unique,-1) * 100,1), ',') within group (order by iw.protocol_app_node_id) as percent_max_samples,
-         sum(unique_reads) as total_reads, sum(isrpm) as total_isrpm, max(isrpm) as max_isrpm,
-         avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp,gt.max_gene_isrpm,
-         max(CASE WHEN iw.is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) as best_sample_ratio
-FROM inwindow iw, genesample gs, genetotal gt
-WHERE iw.gene_source_id = gt.gene_source_id(+)
-AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
-and iw.gene_source_id = gs.gene_source_id(+)
-GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron)
-GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
-  HAVING sum(total_reads) >=  CASE WHEN contained = 1 THEN $$minContainedScore$$ ELSE $$minNonContainedScore$$ END )
-WHERE (contained = 1
-       AND percent_max >= $$minIntronPercent$$ )
-OR contained = 0
-  order by startm
+                select *
+                from ApidbTuning.GeneIntronJunction
+                where parent_id = $srcfeature_id
+                AND startm <= $rend
+                AND end >= $base_start
+                AND score >=  CASE WHEN contained = 1 THEN $$minContainedScore$$ ELSE $$minNonContainedScore$$ END
+                AND (contained = 0 or percent_max >= $$minIntronPercent$$)
+                -- AND score_exp_ratio >= CASE WHEN contained = 1 THEN $$minContainedRatio$$ ELSE $$minNonContainedRatio$$ END
+                and end - startm <= $$intronSizeLimit$$
        ]]>
     
   </query>
