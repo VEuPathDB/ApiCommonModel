@@ -9,7 +9,7 @@ public class MicroarrayOneChannelRmaMetaCycle extends MicroarrayOneChannelRma {
 
       super.injectTemplates();
 
-      setPropValue("searchCategory", "searchCategory-transcriptomics-VBmetacycle");
+      setPropValue("searchCategory", "searchCategory-transcriptomics-metacycle");
 
       injectTemplate("internalGeneSearchCategory");
 
