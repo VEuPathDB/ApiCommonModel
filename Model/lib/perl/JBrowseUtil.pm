@@ -116,7 +116,7 @@ sub intronJunctionsQueryParams {
                                                    },
                                     },
                        'VectorBase' => { 'refined' => { feature => "gsnap:unifiedintronjunction",
-                                                     intronSizeLimit => 100000,
+                                                     intronSizeLimit => 200000,
                                                      minIntronPercent => .05,
                                                      minNonContainedRatio => .02,
                                                      minContainedRatio => .2,
@@ -129,7 +129,7 @@ sub intronJunctionsQueryParams {
                                                    },
                                       'inclusive' => {
                                                      feature => "gsnap:unifiedintronjunction",
-                                                     intronSizeLimit => 100000,
+                                                     intronSizeLimit => 300000,
                                                      minIntronPercent => .001,
                                                      minNonContainedRatio => .0001,
                                                      minContainedRatio => .0001,
