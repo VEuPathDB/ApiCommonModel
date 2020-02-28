@@ -2700,35 +2700,73 @@ FROM
             <column name="evidence_code_parameter" includeProjects="FungiDB,TriTrypDB"/>
             <sql>
             <![CDATA[
-
-
-WITH evids AS (
-  SELECT DISTINCT gaiec.go_evidence_code_id, ot.name
-  FROM  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
-  WHERE ot.ontology_term_id = gaiec.go_evidence_code_id)
-SELECT
-  ta.gene_source_id AS source_id
-, tp.product
-, ta.project_id
-, LISTAGG(source_id, ', ') WITHIN GROUP(ORDER BY source_id) AS transcript_ids
-, LISTAGG(publication, ', ') WITHIN GROUP(ORDER BY source_id) AS reference
-, e.name AS evidence_code
-, tp.with_from AS evidence_code_parameter
-FROM
-  apidb.transcriptproduct tp
-, apidbtuning.transcriptattributes ta
-, evids e
-WHERE
-  ta.na_feature_id = tp.na_feature_id
-  AND tp.is_preferred = 1
-  AND tp.evidence_code = e.go_evidence_code_id(+)
-GROUP BY
-  gene_source_id
-, ta.project_id
-, tp.product
-, tp.is_preferred
-, e.name
-, tp.with_from
+              -- PreferredProducts: check apidb.TranscriptProduct and
+              -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
+              -- (and only if) that turns up nothing, check the PRODUCT column of
+              -- dots.GeneFeature and dots.Transcript
+              with evids
+                   as (select distinct gaiec.go_evidence_code_id, ot.name
+                       from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                       where ot.ontology_term_id = gaiec.go_evidence_code_id)
+                select ta.gene_source_id as source_id, tp.product, ta.project_id,
+                       listagg(source_id, ', ') within group(order by source_id)
+                         as transcript_ids,
+                       listagg(publication, ', ') within group(order by source_id)
+                         as reference,
+                       e.name as evidence_code,
+                       tp.with_from AS evidence_code_parameter
+                from apidb.TranscriptProduct tp,
+                     apidbTuning.TranscriptAttributes ta, evids e
+                where ta.na_feature_id = tp.na_feature_id
+                  and tp.is_preferred = 1
+                  and tp.evidence_code = e.go_evidence_code_id(+)
+                group by gene_source_id, ta.project_id, tp.product,
+                         e.name, tp.with_from
+              union
+                select ga.source_id, gfp.product, ga.project_id,
+                       cast (null as varchar2(1)) as transcript_ids,
+                       cast (null as varchar2(1)) as reference,
+                       cast (null as varchar2(1)) as evidence_code,
+                       cast (null as varchar2(1)) as evidence_code_parameter
+                from apidb.GeneFeatureProduct gfp,
+                     apidbTuning.GeneAttributes ga
+                where ga.na_feature_id = gfp.na_feature_id
+                  and gfp.is_preferred = 1
+                group by source_id, ga.project_id, gfp.product
+              union
+                select *
+                from (select ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
+                             listagg(source_id, ', ') within group(order by source_id)
+                               as transcript_ids,
+                             cast (null as varchar2(1)) as reference,
+                             cast (null as varchar2(1)) as evidence_code,
+                             cast (null as varchar2(1)) as evidence_code_parameter
+                      from apidbTuning.TranscriptAttributes ta
+                      where ta.transcript_product is not null
+                      group by ta.gene_source_id, ta.transcript_product, ta.project_id
+                     )
+                where source_id
+                      in (  select *
+                            from (  select source_id
+                                    from dots.GeneFeature
+                                    where product is not null
+                                  union
+                                    select ga.source_id
+                                    from dots.Transcript t, apidbTuning.GeneAttributes ga
+                                    where t.product is not null
+                                      and t.parent_id = ga.na_feature_id
+                                 )
+                          minus
+                            select *
+                            from (  select ta.gene_source_id
+                                    from apidb.TranscriptProduct tp, apidbTuning.TranscriptAttributes ta
+                                    where tp.na_feature_id = ta.na_feature_id
+                                  union
+                                    select ga.source_id
+                                    from apidb.GeneFeatureProduct gfp, apidbTuning.GeneAttributes ga
+                                    where gfp.na_feature_id = ga.na_feature_id
+                                 )
+                         )
             ]]>
             </sql>
         </sqlQuery> 
