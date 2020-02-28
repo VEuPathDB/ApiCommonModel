@@ -357,6 +357,46 @@ ORDER BY
     </sql>
   </sqlQuery>
 
+
+
+  <sqlQuery name="gene:annotation2">
+     <sql>
+<![CDATA[
+ SELECT
+       ga.na_feature_id feature_id,
+       'gene' type,
+       'annotation' source,
+       ga.source_id name,
+       '1' phase, 
+       '.' score,
+       ga.na_sequence_id parent_id,
+       ga.start_min startm,
+       ga.end_max end,
+       decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'Note=' || ga.product  || '$dlm' ||
+       'soTerm=' || ga.so_term_name || '$dlm' ||
+       'geneId=' || ga.source_id || '$dlm' ||
+       'gName=' || ga.name || '$dlm' ||
+       'Contig=' || ga.sequence_id || '$dlm' ||
+       'product=' || replace(ga.product,'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'taxon=' || ga.organism || '$dlm' ||
+       'isDeprecated=' || ga.is_deprecated || '$dlm' ||
+       'orthomcl_name=' || ga.orthomcl_name || '$dlm' ||
+       'isPseudo=' || ga.is_pseudo || '$dlm' ||
+       'ProjectId=' || ga.project_id || '$dlm' ||
+       'OrgAbbrev=' || o.public_abbrev atts
+FROM
+       ApidbTuning.GeneAttributes ga,
+       apidb.organism o
+WHERE  ga.na_sequence_id = $srcfeature_id
+  AND  ga.start_min <= $rend
+  AND  ga.end_max >= $base_start
+  AND  ga.taxon_id = o.taxon_id
+]]>
+    </sql>
+  </sqlQuery>
+
+
   <sqlQuery name="piggyBac:TransposableElement" includeProjects="PlasmoDB">
      <sql>
 <![CDATA[
@@ -3568,10 +3608,91 @@ from dual
 
 
 
+  <sqlQuery name="gene:annotation2:bulksubfeatures">
+     <sql>
+<![CDATA[
+select * from (
+ SELECT
+       ta.na_feature_id feature_id,
+       ta.transcript_type type,
+       'annotation' source,
+       ta.source_id name,
+       '1' phase, 
+       ta.gene_na_feature_id parent_id,
+       fl.start_min startm,
+       fl.end_max end,
+       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'soTerm=' || ta.so_term_name || '$dlm' ||
+       'geneId=' || ta.gene_source_id || '$dlm' ||
+       'Contig=' || ta.sequence_id || '$dlm' ||
+       'taxon=' || ta.organism || '$dlm' ||
+       'isDeprecated=' || ta.is_deprecated || '$dlm' ||
+       'isPseudo=' || ta.is_pseudo || '$dlm' ||
+       'ProjectId=' || ta.project_id || '$dlm' ||
+       'aaSeqId=' || ta.aa_sequence_id ||  '$dlm' || 
+       'OrgAbbrev=' || o.public_abbrev atts,
+       1 as has_children
+FROM
+       ApidbTuning.TranscriptAttributes ta,
+       apidb.FeatureLocation fl, apidb.organism o
+WHERE  fl.na_sequence_id = $srcfeature_id
+  AND  fl.feature_type = 'Transcript'
+  AND  fl.na_feature_id = ta.na_feature_id
+  AND  fl.start_min <= $rend
+  AND  fl.end_max >= $base_start
+  AND  fl.is_top_level = 1
+  AND  ta.taxon_id = o.taxon_id
+UNION
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       'nc_exon' type,
+       'annotation' source, 
+       ta.source_id name,
+       '1' phase, 
+       ta.na_feature_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts ,
+       0 as has_children
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  exon_loc.feature_type = 'ExonFeature'
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND  ta.na_feature_id = rfe.rna_feature_id
+  AND  rfe.EXON_FEATURE_ID = exon_loc.na_feature_id
+  AND  ta.AA_SEQUENCE_ID is null
+UNION
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       exon_loc.feature_type type, 
+       'annotation' source, 
+       ta.source_id name,
+       '1' phase, 
+       exon_loc.parent_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts ,
+       0 as has_children
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  (exon_loc.feature_type = 'CDS'
+     OR exon_loc.feature_type = 'UTR')
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND ta.na_feature_id = exon_loc.parent_id
+) order by has_children desc
+]]>
+    </sql>
+  </sqlQuery>
+
+
   <sqlQuery name="gene:annotation:bulksubfeatures">
      <sql>
 <![CDATA[
-SELECT distinct ta.na_feature_id feature_id, 
+SELECT distinct exon_loc.feature_location_id feature_id, 
        'nc_exon' type,
        'annotation' source, 
        ta.na_feature_id name,
@@ -3591,7 +3712,7 @@ WHERE  exon_loc.na_sequence_id = $srcfeature_id
   AND  rfe.EXON_FEATURE_ID = exon_loc.na_feature_id
   AND  ta.AA_SEQUENCE_ID is null
 UNION
-SELECT distinct ta.na_feature_id feature_id, 
+SELECT distinct exon_loc.feature_location_id feature_id, 
        exon_loc.feature_type type, 
        'annotation' source, 
        ta.na_feature_id name,
