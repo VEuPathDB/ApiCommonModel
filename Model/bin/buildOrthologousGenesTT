@@ -47,6 +47,7 @@ $dbh->do(<<SQL) or die "creating table";
       ortho_source_id     varchar2(80),
       ortho_na_feature_id number(12),
       ortho_product       varchar2(600),
+      ortho_name          varchar2(60),
       ortho_organism      varchar2(320),
       syntenic            varchar2(3)
    ) nologging
@@ -103,12 +104,13 @@ print STDERR "Finished reading $syntenyCount Synteny records in " . (time - $syn
 # prepare (main) query against GeneAttributes
 my $geneQ = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
      select orthomcl_name, source_id, project_id, na_feature_id,
-           na_sequence_id, start_min, end_max, organism, species,
-           case
-             when length(product) <= 600
-               then product
-             else substr(product, 1, 597) || '...'
-           end as product
+            na_sequence_id, start_min, end_max, organism, species,
+            case
+              when length(product) <= 600
+                then product
+              else substr(product, 1, 597) || '...'
+            end as product,
+            name
      from GeneAttributes
      order by orthomcl_name, source_id
 SQL
@@ -120,19 +122,19 @@ my $ortholog_count = 0; # of genes in current ortholog group
 my $current_group = "no such group"; # so the very first record is seen as the start of a group
 
 my (@source_ids, @na_feature_ids, @na_sequence_ids, @start_mins, @end_maxes,
-    @organisms, @species, @products, @project_ids);
+    @organisms, @species, @products, @names, @project_ids);
 
 print STDERR "Iterating through gene records\n";
 while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
            $na_sequence_id, $start_min, $end_max, $organism, $species,
-           $product)
+           $product, $name)
           = $geneQ->fetchrow_array()) {
 
   if ($orthomcl_name ne $current_group) {
     # we have seen a whole ortholog group
 
     # start of sub
-    storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@start_mins, \@end_maxes, \@na_feature_ids, \@products, \@organisms, $syntenyCount, \@a_na_sequence_id, \@a_start, \@a_end, \@b_na_sequence_id, \@b_start, \@b_end, \%sequenceFirstRecord, \$insertCount);
+    storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@start_mins, \@end_maxes, \@na_feature_ids, \@products, \@names, \@organisms, $syntenyCount, \@a_na_sequence_id, \@a_start, \@a_end, \@b_na_sequence_id, \@b_start, \@b_end, \%sequenceFirstRecord, \$insertCount);
   # end of sub
 
     # reset for next ortholog group
@@ -151,6 +153,7 @@ while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
   $organisms[$ortholog_count] = $organism;
   $species[$ortholog_count] = $species;
   $products[$ortholog_count] = $product;
+  $names[$ortholog_count] = $name;
   $project_ids[$ortholog_count] = $project_id;
   $ortholog_count++;
 } # while fetchrow of gene query
@@ -158,7 +161,7 @@ while (my ($orthomcl_name, $source_id, $project_id, $na_feature_id,
 $geneQ->finish();
 
 # process last group
-storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@start_mins, \@end_maxes, \@na_feature_ids, \@products, \@organisms, $syntenyCount, \@a_na_sequence_id, \@a_start, \@a_end, \@b_na_sequence_id, \@b_start, \@b_end, \%sequenceFirstRecord, \$insertCount);
+storeGroup($ortholog_count, \@source_ids, \@project_ids, \@na_sequence_ids, \@start_mins, \@end_maxes, \@na_feature_ids, \@products, \@names, \@organisms, $syntenyCount, \@a_na_sequence_id, \@a_start, \@a_end, \@b_na_sequence_id, \@b_start, \@b_end, \%sequenceFirstRecord, \$insertCount);
 
 print STDERR "Inserted $insertCount records in " . (time - $startTime) . " seconds\n"
   if $insertCount;
@@ -170,7 +173,7 @@ print STDERR "creating index\n";
 $dbh->do(<<SQL) or die "creating index";
     create index ogix$suffix
         on OrthologousGenes$suffix
-        (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_organism)
+        (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_name, ortho_organism)
         tablespace indx
 SQL
 
@@ -179,7 +182,7 @@ print STDERR "finished creating index\n";
 $dbh->disconnect();
 
 sub storeGroup {
-  my ($ortholog_count, $source_ids_ref, $project_ids_ref, $na_sequence_ids_ref, $start_mins_ref, $end_maxes_ref, $na_feature_ids_ref, $products_ref, $organisms_ref, $syntenyCount, $a_na_sequence_id_ref, $a_start_ref, $a_end_ref, $b_na_sequence_id_ref, $b_start_ref, $b_end_ref, $sequenceFirstRecord_ref, $insertCount_ref) = @_;
+  my ($ortholog_count, $source_ids_ref, $project_ids_ref, $na_sequence_ids_ref, $start_mins_ref, $end_maxes_ref, $na_feature_ids_ref, $products_ref, $names_ref, $organisms_ref, $syntenyCount, $a_na_sequence_id_ref, $a_start_ref, $a_end_ref, $b_na_sequence_id_ref, $b_start_ref, $b_end_ref, $sequenceFirstRecord_ref, $insertCount_ref) = @_;
 
     # insert a row for each pair of different genes
     for (my $i = 0; $i < $ortholog_count; $i++) {
@@ -221,8 +224,9 @@ sub storeGroup {
 
 	# insert OrthologousGenes row
 	my @ogRow = (${$source_ids_ref}[$i], ${$project_ids_ref}[$i], ${$na_feature_ids_ref}[$i],
-			  ${$source_ids_ref}[$j], ${$na_feature_ids_ref}[$j], ${$products_ref}[$j], ${$organisms_ref}[$j],
-			  $syntenic ? "yes" : "no");
+		     ${$source_ids_ref}[$j], ${$na_feature_ids_ref}[$j], ${$products_ref}[$j],
+		     ${$names_ref}[$j], ${$organisms_ref}[$j],
+		     $syntenic ? "yes" : "no");
 
 	print $dataFh join($END_OF_COLUMN_DELIMITER, @ogRow) . $END_OF_RECORD_DELIMITER;
 
@@ -294,6 +298,7 @@ TRAILING NULLCOLS
  ortho_source_id char(80),
  ortho_na_feature_id char(12),
  ortho_product char(600),
+ ortho_name char(60),
  ortho_organism char(320),
  syntenic char(3)
 )
