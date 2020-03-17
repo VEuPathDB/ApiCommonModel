@@ -1,10 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-//import org.apidb.apicommon.model.datasetInjector.RNASeq;
-
 public class RNASeqEbi extends RNASeq {
-  
+
   /*
    * getPropValues() gets the property values provided by the datasetPresenter
    * xml file. they are validated against the names provided in
@@ -17,7 +14,6 @@ public class RNASeqEbi extends RNASeq {
     @Override
     protected void setProfileSamplesHelp() {
         String profileSamplesHelp = "Transcript abundance in Transcripts per Million (TPM)";
-
         setPropValue("profileSamplesHelp", profileSamplesHelp);
     }
 
