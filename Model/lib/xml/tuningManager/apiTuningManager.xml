@@ -1243,6 +1243,20 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
                                   AND NOT  REGEXP_LIKE (dr.primary_identifier, '\D') )
         AND  NOT edr.id_type = 'synonym'
      UNION
+      SELECT dr.primary_identifier AS id, 
+             gf.source_id AS gene,
+             'DbRef.primary_identifier' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier */
+      FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+           sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+           sres.ExternalDatabase ed
+      WHERE dr.primary_identifier IS NOT NULL
+        AND gf.na_feature_id = drnf.na_feature_id
+        AND drnf.db_ref_id = dr.db_ref_id
+        AND dr.external_database_release_id
+              = edr.external_database_release_id
+        AND edr.external_database_id = ed.external_database_id
+        and ed.name in ('VB_Community_Annotation', 'VB_Community_Symbol') /* vectorbase alt names  */
+     UNION
      SELECT dr.primary_identifier AS id, 
              gf.source_id AS gene,
              'synonym' as union_member, ed.name as database_name
@@ -1721,6 +1735,7 @@ SELECT pi.name as project_id,
               WHERE spf.aa_sequence_id = s.aa_sequence_id 
               and  aal.aa_feature_id = spf.aa_feature_id
               and (spf.signal_probability >= .5
+              or spf.signal_probability is null
               or ((spf.means_score + spf.maxy_score) / 2) >= .5
               or ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) >= 3)
               group by spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
@@ -5978,7 +5993,7 @@ and sdi.sample = replace (pep.sample ,' (MS Summary)', '')
     <sql>
       <![CDATA[
         create table AnnotatedGenomeSummary&1 nologging as
-        select dsp.name as external_db_name, ga.organism, ga.taxon_id,
+        select ga.external_db_name as external_db_name, ga.organism, ga.taxon_id,
                o.is_reference_strain,
                (select value
                 from DatasetProperty 
@@ -6001,8 +6016,8 @@ and sdi.sample = replace (pep.sample ,' (MS Summary)', '')
                dsp.release_policy
         from DatasetPresenter dsp, apidb.Organism o,
              (select distinct external_db_name, taxon_id, organism from GeneAttributes) ga
-        where dsp.name like '%_primary_genome_RSRC'
-          and dsp.name = ga.external_db_name
+        where ga.external_db_name like '%_primary_genome_RSRC'
+          and dsp.name (+) = ga.external_db_name
           and o.taxon_id = ga.taxon_id
       ]]>
     </sql>

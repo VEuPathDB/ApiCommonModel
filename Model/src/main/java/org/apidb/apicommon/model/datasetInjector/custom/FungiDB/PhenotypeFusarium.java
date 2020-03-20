@@ -13,7 +13,7 @@ public class PhenotypeFusarium extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_fgraPH-1_phenotype_Fusarium_Pheno_RSRC"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotypeText");
   }
 
   // second column is for documentation
