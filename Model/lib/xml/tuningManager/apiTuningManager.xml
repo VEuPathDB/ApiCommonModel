@@ -173,12 +173,35 @@ WHERE
     <externalDependency name="dots.AaSequenceEnzymeClass"/>
     <externalDependency name="sres.EnzymeClass"/>
     <sql>
+        <![CDATA[
+     create table TranscriptPathway&1 ( 
+        SOURCE_ID	                VARCHAR2(80),
+        GENE_SOURCE_ID	                VARCHAR2(80),
+        PROJECT_ID	                VARCHAR2(20),
+        PATHWAY_SOURCE_ID	        VARCHAR2(50),
+        PATHWAY_NAME	                VARCHAR2(150),
+        EC_NUMBER_GENE	                VARCHAR2(16),
+        WILDCARD_COUNT_GENE	        NUMBER,
+        EC_NUMBER_PATHWAY	        VARCHAR2(16),
+        WILDCARD_COUNT_PATHWAY	        NUMBER,
+        EXACT_MATCH	                NUMBER,
+        COMPLETE_EC	                NUMBER,
+        PATHWAY_ID	                NUMBER(12,0),
+        PATHWAY_SOURCE	                VARCHAR2(200),
+        EXTERNAL_DATABASE_RELEASE_ID	NUMBER(10,0)
+     )
+      ]]>
+    </sql>
+    <sql>
       <![CDATA[
-      create table TranscriptPathway&1 nologging as
-      select --+ NO_PARALLEL
-             *
-      from (
-        with transcript_ec
+  BEGIN
+  FOR idlist IN (
+    SELECT  distinct organism 
+      from apidbtuning.geneattributes
+    )
+  LOOP
+   insert into TranscriptPathway&1
+       with transcript_ec
         as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
                    case when ec_number_1 is null then 1 else 0 end
                    + case when ec_number_2 is null then 1 else 0 end
@@ -240,12 +263,16 @@ WHERE
         , ec_match
         , dots.AaSequenceEnzymeClass asec
         , TranscriptAttributes ga
-        where pa.pathway_id = pec.pathway_id
+        where ga.organism = idlist.organism
+        and pa.pathway_id = pec.pathway_id
         and p.pathway_id = pa.pathway_id
         and pec.enzyme_class_id = ec_match.pathway_enzyme_class_id
         and asec.enzyme_class_id = ec_match.transcript_enzyme_class_id
         and ga.aa_sequence_id  = asec.aa_sequence_id
-       )
+;
+    commit;
+   END LOOP;
+  END;
       ]]>
     </sql>
     <sql>
@@ -4268,9 +4295,9 @@ tablespace indx
       <![CDATA[
    create table core (
        intron_junction_id               number(10), 
-       exp_name                         varchar(500), 
-       external_database_name           varchar(500),
-       sample_name                      varchar(500), 
+       exp_name                         varchar2(500), 
+       external_database_name           varchar2(500),
+       sample_name                      varchar2(500), 
        protocol_app_node_id             number(10), 
        na_sequence_id                   number(10),
        segment_start                    number(10), 
@@ -4279,18 +4306,18 @@ tablespace indx
        isrpm                            number(10),
        nu_reads                         number(10),
        value                            number(10),
-       switch_strands                   varchar(10), 
-       strand                           varchar(20),
+       switch_strands                   varchar2(10), 
+       strand                           varchar2(20),
        exp_ratio                        number(10),
        isrpm_exp_ratio                  number(10),
        avg_coverage                     number(10),
        isr_coverage_ratio               number(10),
        is_reversed                      number(3),
        matches_gene_strand              number(1),
-       gene_source_id                   varchar(100),
-       annotated_intron                 varchar(10),
-       include_unified_junctions        varchar(10),
-       show_intron_junctions            varchar(10)
+       gene_source_id                   varchar2(100),
+       annotated_intron                 varchar2(10),
+       include_unified_junctions        varchar2(10),
+       show_intron_junctions            varchar2(10)
    )
       ]]>
     </sql>
@@ -4442,14 +4469,14 @@ declare
    create table IntronJunctionTmp (
       intron_junction_id                number(10),       
       protocol_app_node_id              number(10), 
-      exp_name                          varchar(500), 
-      external_database_name            varchar(500),
-      sample_name                       varchar(500), 
+      exp_name                          varchar2(500), 
+      external_database_name            varchar2(500),
+      sample_name                       varchar2(500), 
       na_sequence_id                    number(10), 
       segment_start                     number(10), 
       segment_end                       number(10), 
       is_reversed                       number(1), 
-      strand                            varchar(20),
+      strand                            varchar2(20),
       unique_reads                      number(10), 
       isrpm                             number(10), 
       nu_reads                          number(10), 
@@ -4463,9 +4490,9 @@ declare
       percent_max_total                 number(10),
       total_ratio                       number(10),
       matches_gene_strand               number(1), 
-      annotated_intron                  varchar(10),
+      annotated_intron                  varchar2(10),
       is_contained                      number(1), 
-      gene_source_id                    varchar(100),
+      gene_source_id                    varchar2(100),
       intron_sample_avgexp_ratio        number(10), 
       isrpm_sample_avgexp_ratio         number(10), 
       intron_sample_medexp_ratio        number(10),
@@ -4476,8 +4503,8 @@ declare
       sample_multiplier                 number(10),
       consistent_multiplier             number(10), 
       total_cons_mult_ratio             number(10),
-      include_unified_junctions         varchar(10), 
-      show_intron_junctions             varchar(10)
+      include_unified_junctions         varchar2(10), 
+      show_intron_junctions             varchar2(10)
     )
       ]]>
     </sql>
@@ -4501,7 +4528,7 @@ declare
 )
    LOOP
    insert into IntronJunctionTmp
-    select intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
+    select distinct intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
        sample_name, na_sequence_id, segment_start, segment_end, is_reversed, strand,
        unique_reads, isrpm, nu_reads, round(value, 4) as exp_value,
        round(exp_ratio, 4) as intron_exp_ratio, round(isrpm_exp_ratio, 4) as isrpm_exp_ratio,
@@ -4734,10 +4761,10 @@ SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot
     <sql>
       <![CDATA[
 create table GeneIntronJunction&1 (
-    feature_id              varchar(100),
-    type                    varchar(10),
-    source                  varchar(10),
-    name                    varchar(100),
+    feature_id              varchar2(100),
+    type                    varchar2(10),
+    source                  varchar2(10),
+    name                    varchar2(100),
     parent_id               number(10),
     startm                  number(10),
     end                     number(10),
@@ -4746,7 +4773,7 @@ create table GeneIntronJunction&1 (
     percent_max             number(10),
     score                   number(10),
     score_exp_ratio         number(10),
-    annotated_intron        varchar(5),
+    annotated_intron        varchar2(5),
     atts                    clob
 )
       ]]>
