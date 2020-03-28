@@ -7219,8 +7219,31 @@ where url is not null
     <externalDependency name="study.StudyLink"/>
     <sql>
       <![CDATA[
-  create table Profile&1 nologging as
-  SELECT -- not "NO PARALLEL" (i.e. some parallel)
+               create table Profile&1 (
+               DATASET_NAME	        VARCHAR2(200),
+               DATASET_TYPE	        VARCHAR2(50),
+               DATASET_SUBTYPE	        VARCHAR2(50),
+               PROFILE_TYPE	        VARCHAR2(20),
+               SOURCE_ID	        VARCHAR2(500),
+               PROFILE_STUDY_ID	        NUMBER(5),
+               PROFILE_SET_NAME	        VARCHAR2(400),
+               PROFILE_SET_SUFFIX	VARCHAR2(50),
+               PROFILE_AS_STRING	VARCHAR2(4000),
+               MAX_VALUE	        NUMBER,
+               MIN_VALUE	        NUMBER,
+               MAX_TIMEPOINT	        VARCHAR2(200),
+               MIN_TIMEPOINT	        VARCHAR2(200)
+               )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+ declare
+  ctrows number := 0;
+  commit_after number := 10000;
+ BEGIN
+  FOR pf_rows IN (
+  SELECT
          ds.name as dataset_name, ds.type as dataset_type,
          ds.subtype as dataset_subtype, profile.profile_type,
          profile.source_id, profile.study_id as profile_study_id,
@@ -7242,7 +7265,7 @@ where url is not null
              ) as profile_set_suffix,
          CASE WHEN replace(profile.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN 'NULL' ELSE profile.profile_as_string END as profile_as_string, 
          profile.max_value, profile.min_value,
-         profile.max_timepoint, profile.min_timepoint
+         profile.max_timepoint, profile.min_timepoint 
   from apidb.DataSource ds, sres.ExternalDatabase d,
        sres.ExternalDatabaseRelease r, study.Study ps, study.Study i,
        (
@@ -7526,6 +7549,23 @@ where url is not null
     and r.external_database_release_id = i.external_database_release_id
     and i.investigation_id is null
     and profile.study_id = ps.study_id
+    )
+  LOOP
+    ctrows := ctrows + 1;
+    insert into Profile&1
+        (DATASET_NAME, DATASET_TYPE, DATASET_SUBTYPE, PROFILE_TYPE, SOURCE_ID, PROFILE_STUDY_ID, PROFILE_SET_NAME, 
+        PROFILE_SET_SUFFIX, PROFILE_AS_STRING, MAX_VALUE, MIN_VALUE, MAX_TIMEPOINT, MIN_TIMEPOINT) 
+        values
+        (pf_rows.DATASET_NAME, pf_rows.DATASET_TYPE, pf_rows.DATASET_SUBTYPE, pf_rows.PROFILE_TYPE, pf_rows.SOURCE_ID, pf_rows.PROFILE_STUDY_ID, pf_rows.PROFILE_SET_NAME, 
+        pf_rows.PROFILE_SET_SUFFIX, pf_rows.PROFILE_AS_STRING, pf_rows.MAX_VALUE, pf_rows.MIN_VALUE, pf_rows.MAX_TIMEPOINT, pf_rows.MIN_TIMEPOINT);
+    IF ctrows >= commit_after
+      THEN
+         COMMIT;  
+         ctrows := 0;  
+    END IF;  
+    END LOOP;
+  commit;
+  END;
       ]]>
     </sql>
     <sql>
@@ -7542,15 +7582,6 @@ where url is not null
         WHERE dataset_name= 'tbruTREU927_RNASeq_Rijo_Circadian_Regulation_RSRC'
       ]]>
     </sql>
-<!-- note doing this in table creation rather than via update
-    <sql>
-      <![CDATA[
-        UPDATE Profile&1
-        SET profile_as_string = NULL
-        WHERE replace(profile_as_string, 'NA' || CHR(9), '') = 'NA'
-      ]]>
-    </sql>
--->
   </tuningTable>
 
 
