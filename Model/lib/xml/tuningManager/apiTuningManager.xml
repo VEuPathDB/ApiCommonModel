@@ -173,12 +173,35 @@ WHERE
     <externalDependency name="dots.AaSequenceEnzymeClass"/>
     <externalDependency name="sres.EnzymeClass"/>
     <sql>
+        <![CDATA[
+     create table TranscriptPathway&1 ( 
+        SOURCE_ID	                VARCHAR2(80),
+        GENE_SOURCE_ID	                VARCHAR2(80),
+        PROJECT_ID	                VARCHAR2(20),
+        PATHWAY_SOURCE_ID	        VARCHAR2(50),
+        PATHWAY_NAME	                VARCHAR2(150),
+        EC_NUMBER_GENE	                VARCHAR2(16),
+        WILDCARD_COUNT_GENE	        NUMBER,
+        EC_NUMBER_PATHWAY	        VARCHAR2(16),
+        WILDCARD_COUNT_PATHWAY	        NUMBER,
+        EXACT_MATCH	                NUMBER,
+        COMPLETE_EC	                NUMBER,
+        PATHWAY_ID	                NUMBER(12,0),
+        PATHWAY_SOURCE	                VARCHAR2(200),
+        EXTERNAL_DATABASE_RELEASE_ID	NUMBER(10,0)
+     )
+      ]]>
+    </sql>
+    <sql>
       <![CDATA[
-      create table TranscriptPathway&1 nologging as
-      select --+ NO_PARALLEL
-             *
-      from (
-        with transcript_ec
+  BEGIN
+  FOR idlist IN (
+    SELECT  distinct organism 
+      from apidbtuning.geneattributes
+    )
+  LOOP
+   insert into TranscriptPathway&1
+       with transcript_ec
         as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
                    case when ec_number_1 is null then 1 else 0 end
                    + case when ec_number_2 is null then 1 else 0 end
@@ -240,12 +263,16 @@ WHERE
         , ec_match
         , dots.AaSequenceEnzymeClass asec
         , TranscriptAttributes ga
-        where pa.pathway_id = pec.pathway_id
+        where ga.organism = idlist.organism
+        and pa.pathway_id = pec.pathway_id
         and p.pathway_id = pa.pathway_id
         and pec.enzyme_class_id = ec_match.pathway_enzyme_class_id
         and asec.enzyme_class_id = ec_match.transcript_enzyme_class_id
         and ga.aa_sequence_id  = asec.aa_sequence_id
-       )
+;
+    commit;
+   END LOOP;
+  END;
       ]]>
     </sql>
     <sql>
@@ -4268,9 +4295,9 @@ tablespace indx
       <![CDATA[
    create table core (
        intron_junction_id               number(10), 
-       exp_name                         varchar(500), 
-       external_database_name           varchar(500),
-       sample_name                      varchar(500), 
+       exp_name                         varchar2(500), 
+       external_database_name           varchar2(500),
+       sample_name                      varchar2(500), 
        protocol_app_node_id             number(10), 
        na_sequence_id                   number(10),
        segment_start                    number(10), 
@@ -4279,40 +4306,39 @@ tablespace indx
        isrpm                            number(10),
        nu_reads                         number(10),
        value                            number(10),
-       switch_strands                   varchar(10), 
-       strand                           varchar(20),
+       switch_strands                   varchar2(10), 
+       strand                           varchar2(20),
        exp_ratio                        number(10),
        isrpm_exp_ratio                  number(10),
        avg_coverage                     number(10),
        isr_coverage_ratio               number(10),
        is_reversed                      number(3),
        matches_gene_strand              number(1),
-       gene_source_id                   varchar(100),
-       annotated_intron                 varchar(10),
-       include_unified_junctions        varchar(10),
-       show_intron_junctions            varchar(10)
+       gene_source_id                   varchar2(100),
+       annotated_intron                 varchar2(10),
+       include_unified_junctions        varchar2(10),
+       show_intron_junctions            varchar2(10)
    )
       ]]>
     </sql>
     <sql>
   <![CDATA[
 declare
-  i number := 0;
+  iter_length number := 199999;
+  i_first_pos number := 1;
+  i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    SELECT  gs.na_sequence_id, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
+    SELECT  gs.na_sequence_id, gs.length, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
-      group by gs.na_sequence_id, gs.organism
+      group by gs.na_sequence_id, gs.length, gs.organism
       order by gs.organism
     )
   LOOP
-   FOR intron IN (
-        select na_sequence_id,segment_start,segment_end,is_reversed,count(*) 
-        from apidb.intronjunction
-        where na_sequence_id = idlist.na_sequence_id
-        group by na_sequence_id,segment_start,segment_end,is_reversed
-)
-   LOOP
+  i_first_pos := 1;
+  i_last_pos := i_first_pos + iter_length;
+WHILE i_first_pos < idlist.length
+LOOP
    insert into core
    select junc.intron_junction_id, nm.exp_name, nm.external_database_name,
               nm.sample_name, junc.protocol_app_node_id, junc.na_sequence_id,
@@ -4352,10 +4378,9 @@ declare
               nm.show_intron_junctions
        from apidb.IntronJunction junc, GeneAttributes ga, results.NaFeatureExpression nafe,
             NameMapping nm, isrmult isrm, annot, MappingStats ms
-       where junc.na_sequence_id = intron.na_sequence_id
-         and junc.segment_start = intron.segment_start
-         and junc.segment_end = intron.segment_end
-         and junc.is_reversed = intron.is_reversed
+       where junc.na_sequence_id = idlist.na_sequence_id
+         and junc.segment_start >= i_first_pos 
+         and junc.segment_start <= i_last_pos
          and nm.junctions_pan_id = junc.protocol_app_node_id
          and nafe.protocol_app_node_id = nm.exp_pan_id
          and Nm.Junctions_Pan_Id = Ms.Junctions_Pan_Id
@@ -4377,15 +4402,12 @@ declare
                 annot.feature_type, nm.include_unified_junctions,
                 nm.show_intron_junctions, ms.read_length, ms.mapped_reads
 ;
-      i := i + 1;
-      if i > 50 then
-         commit;
-         i := 0;
-      end if;
-    END LOOP;
     commit;
+    i_first_pos := i_last_pos + 1;
+    i_last_pos := i_first_pos + iter_length;
+    END LOOP;
    END LOOP;
-  END;
+   END;
       ]]>
     </sql>
     <sql>
@@ -4442,14 +4464,14 @@ declare
    create table IntronJunctionTmp (
       intron_junction_id                number(10),       
       protocol_app_node_id              number(10), 
-      exp_name                          varchar(500), 
-      external_database_name            varchar(500),
-      sample_name                       varchar(500), 
+      exp_name                          varchar2(500), 
+      external_database_name            varchar2(500),
+      sample_name                       varchar2(500), 
       na_sequence_id                    number(10), 
       segment_start                     number(10), 
       segment_end                       number(10), 
       is_reversed                       number(1), 
-      strand                            varchar(20),
+      strand                            varchar2(20),
       unique_reads                      number(10), 
       isrpm                             number(10), 
       nu_reads                          number(10), 
@@ -4463,9 +4485,9 @@ declare
       percent_max_total                 number(10),
       total_ratio                       number(10),
       matches_gene_strand               number(1), 
-      annotated_intron                  varchar(10),
+      annotated_intron                  varchar2(10),
       is_contained                      number(1), 
-      gene_source_id                    varchar(100),
+      gene_source_id                    varchar2(100),
       intron_sample_avgexp_ratio        number(10), 
       isrpm_sample_avgexp_ratio         number(10), 
       intron_sample_medexp_ratio        number(10),
@@ -4476,32 +4498,31 @@ declare
       sample_multiplier                 number(10),
       consistent_multiplier             number(10), 
       total_cons_mult_ratio             number(10),
-      include_unified_junctions         varchar(10), 
-      show_intron_junctions             varchar(10)
+      include_unified_junctions         varchar2(10), 
+      show_intron_junctions             varchar2(10)
     )
       ]]>
     </sql>
     <sql>
       <![CDATA[
 declare
-  i number := 0;
+  iter_length number := 199999;
+  i_first_pos number := 1;
+  i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    SELECT  gs.na_sequence_id, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
+    SELECT  gs.na_sequence_id, gs.length, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
-      group by gs.na_sequence_id, gs.organism
+      group by gs.na_sequence_id, gs.length, gs.organism
       order by gs.organism
     )
   LOOP
-   FOR intron IN (
-        select na_sequence_id,segment_start,segment_end,is_reversed,count(*) 
-        from apidb.intronjunction
-        where na_sequence_id = idlist.na_sequence_id
-        group by na_sequence_id,segment_start,segment_end,is_reversed
-)
-   LOOP
+  i_first_pos := 1;
+  i_last_pos := i_first_pos + iter_length;
+WHILE i_first_pos < idlist.length
+LOOP
    insert into IntronJunctionTmp
-    select intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
+    select distinct intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
        sample_name, na_sequence_id, segment_start, segment_end, is_reversed, strand,
        unique_reads, isrpm, nu_reads, round(value, 4) as exp_value,
        round(exp_ratio, 4) as intron_exp_ratio, round(isrpm_exp_ratio, 4) as isrpm_exp_ratio,
@@ -4567,23 +4588,20 @@ isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consisten
   CASE WHEN sum(value) > 0 THEN sum(unique_reads) / sum(value) ELSE null END as total_ratio,
   CASE WHEN sum(value) > 0 THEN sum(isrpm) / sum(value) ELSE null END as isrpm_total_ratio
   from core
-  where na_sequence_id = intron.na_sequence_id
-         and segment_start = intron.segment_start
-         and segment_end = intron.segment_end
-         and is_reversed = intron.is_reversed
+  where na_sequence_id = idlist.na_sequence_id
+         and segment_start >= i_first_pos 
+         and segment_start <= i_last_pos
   group by core.gene_source_id) gene_tot, 
   (select protocol_app_node_id, gene_source_id, max(unique_reads) as max_sample_unique, max(isrpm) as max_sample_isrpm 
   from core
-    where na_sequence_id = intron.na_sequence_id
-         and segment_start = intron.segment_start
-         and segment_end = intron.segment_end
-         and is_reversed = intron.is_reversed
+    where na_sequence_id = idlist.na_sequence_id
+         and segment_start >= i_first_pos 
+         and segment_start <= i_last_pos
     group by protocol_app_node_id, gene_source_id) sample_tot,
   core c, totalexpression te, isrmult, isrmultcons, mappingstats ms, ratiostats nr
-  where c.na_sequence_id = intron.na_sequence_id
-         and segment_start = intron.segment_start
-         and segment_end = intron.segment_end
-         and is_reversed = intron.is_reversed
+  where c.na_sequence_id = idlist.na_sequence_id
+         and c.segment_start >= i_first_pos 
+         and c.segment_start <= i_last_pos
   AND gene_tot.gene_source_id = c.gene_source_id
   AND c.protocol_app_node_id = ms.junctions_pan_id
   AND sample_tot.protocol_app_node_id = c.protocol_app_node_id
@@ -4620,16 +4638,14 @@ CASE WHEN ms.avg_mapping_coverage > 0 and nr.median_isr_coverage_ratio > 0 THEN 
 -1 as norm_isr_coverage_ratio,
 isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consistent_multiplier
 FROM (select intron_junction_id
-from apidb.intronjunction where na_sequence_id = intron.na_sequence_id
-         and segment_start = intron.segment_start
-         and segment_end = intron.segment_end
-         and is_reversed = intron.is_reversed
+from apidb.intronjunction where na_sequence_id = idlist.na_sequence_id
+         and segment_start >= i_first_pos 
+         and segment_start <= i_last_pos
 MINUS
 select intron_junction_id
-from core where na_sequence_id = intron.na_sequence_id
-         and segment_start = intron.segment_start
-         and segment_end = intron.segment_end
-         and is_reversed = intron.is_reversed) mi,
+from core where na_sequence_id = idlist.na_sequence_id
+         and segment_start >= i_first_pos 
+         and segment_start <= i_last_pos) mi,
 namemapping names, totalexpression te, isrmult, isrmultcons, apidb.intronjunction introns, mappingstats ms, ratiostats nr
 where introns.intron_junction_id = mi.intron_junction_id
 AND introns.protocol_app_node_id = names.junctions_pan_id
@@ -4637,16 +4653,14 @@ AND te.junctions_pan_id = introns.protocol_app_node_id
 AND introns.protocol_app_node_id = isrmult.protocol_app_node_id
 AND introns.protocol_app_node_id = isrmultcons.protocol_app_node_id
 AND introns.protocol_app_node_id = nr.protocol_app_node_id
-AND ms.junctions_pan_id = introns.protocol_app_node_id);
-      i := i + 1;
-      if i > 50 then
-         commit;
-         i := 0;
-      end if;
-    END LOOP;
+AND ms.junctions_pan_id = introns.protocol_app_node_id)
+;
     commit;
+    i_first_pos := i_last_pos + 1;
+    i_last_pos := i_first_pos + iter_length;
+END LOOP;
    END LOOP;
-  END;
+   END;
       ]]>
     </sql>
     <sql>
@@ -4734,10 +4748,10 @@ SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot
     <sql>
       <![CDATA[
 create table GeneIntronJunction&1 (
-    feature_id              varchar(100),
-    type                    varchar(10),
-    source                  varchar(10),
-    name                    varchar(100),
+    feature_id              varchar2(100),
+    type                    varchar2(10),
+    source                  varchar2(10),
+    name                    varchar2(100),
     parent_id               number(10),
     startm                  number(10),
     end                     number(10),
@@ -4746,7 +4760,7 @@ create table GeneIntronJunction&1 (
     percent_max             number(10),
     score                   number(10),
     score_exp_ratio         number(10),
-    annotated_intron        varchar(5),
+    annotated_intron        varchar2(5),
     atts                    clob
 )
       ]]>
@@ -4754,30 +4768,28 @@ create table GeneIntronJunction&1 (
     <sql>
       <![CDATA[
 declare
-  i number := 0;
+  iter_length number := 99999;
+  i_first_pos number := 1;
+  i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    SELECT  gs.na_sequence_id, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
+    SELECT  gs.na_sequence_id, gs.length, gs.organism from valid ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
-      group by gs.na_sequence_id, gs.organism
+      group by gs.na_sequence_id, gs.length, gs.organism
       order by gs.organism
     )
   LOOP
-   FOR intron IN (
-        select na_sequence_id,segment_start,segment_end,is_reversed,count(*) 
-        from valid
-        where na_sequence_id = idlist.na_sequence_id
-        group by na_sequence_id,segment_start,segment_end,is_reversed
-)
-   LOOP
+  i_first_pos := 1;
+  i_last_pos := i_first_pos + iter_length;
+WHILE i_first_pos < idlist.length
+LOOP
    insert into GeneIntronJunction&1
 with inwindow as (
 SELECT ij.*
 FROM apidbtuning.IntronJunctionTmp ij, valid v
-  WHERE  v.na_sequence_id = intron.na_sequence_id
-     and v.segment_start = intron.segment_start
-     and v.segment_end = intron.segment_end
-     and v.is_reversed = intron.is_reversed
+  WHERE  v.na_sequence_id = idlist.na_sequence_id
+     and v.segment_start >= i_first_pos 
+     and v.segment_start <= i_last_pos
      AND v.segment_start = ij.segment_start
      AND v.segment_end = ij.segment_end
      AND v.na_sequence_id = ij.na_sequence_id 
@@ -4836,16 +4848,14 @@ GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contain
 WHERE (contained = 1
        AND percent_max >= 0.001 )
 OR contained = 0
-order by startm;
-      i := i + 1;
-      if i > 100 then
-         commit;
-         i := 0;
-      end if;
-    END LOOP;
+order by startm
+;
     commit;
+    i_first_pos := i_last_pos + 1;
+    i_last_pos := i_first_pos + iter_length;
+END LOOP;
    END LOOP;
-  END;
+   END;
       ]]>
     </sql>
     <sql>
@@ -5400,7 +5410,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   </tuningTable>
 
 
-  <tuningTable name="CompoundProperties"  prefixEnabled="true" alwaysUpdate="true">
+  <tuningTable name="CompoundProperties"  prefixEnabled="true">
     <comment> Properties table for ChEBI Compounds.
     </comment>
     <!-- externalDependency name="chebi.Compounds"/ -->
@@ -5437,7 +5447,7 @@ GROUP BY c.ID, c.chebi_accession, c.parent_id, c.name, c.definition, m.mass
   </tuningTable>
 
 
-  <tuningTable name="CompoundAttributes"  prefixEnabled="true" alwaysUpdate="true">
+  <tuningTable name="CompoundAttributes"  prefixEnabled="true">
     <comment> The BFMV for the compound WDK record type. Used by the model for the
          compound record and queries, as well as in the creation of the
          PathwayCompounds tuning table. Propagated to portal instances.
@@ -6509,8 +6519,8 @@ and mss.aa_sequence_id = ga.aa_sequence_id
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk) as url
-from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id
+       replace(replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk),'DEFAULT_ORG_ABBREV', def_seq.public_abbrev) as url
+from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id, oa.public_abbrev
       from DatasetPresenter dsp, DatasetNameTaxon nt, OrganismAttributes oa, sequences os
       where dsp.dataset_presenter_id = nt.dataset_presenter_id
       and nt.taxon_id = os.taxon_id
@@ -6527,11 +6537,13 @@ UNION
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id) as url
-from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id
-      from DatasetPresenter dsp, DatasetNameTaxon dsnt, proteomicsgenes pg
+       replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id),'DEFAULT_PROTEOMICS_SEQUENCE', def_prot.sequence_id || ':' || def_prot.zoom_context_start || '..' || def_prot.zoom_context_end),'DEFAULT_ORG_ABBREV', def_prot.public_abbrev) as url
+from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id, oa.public_abbrev, ga.sequence_id, ga.zoom_context_start, ga.zoom_context_end
+      from DatasetPresenter dsp, DatasetNameTaxon dsnt, proteomicsgenes pg, GeneAttributes ga, OrganismAttributes oa
       where pg.name = dsnt.name
       and pg.rn = 1
+      and pg.source_id = ga.source_id
+      and ga.organism = oa.organism_name
       and dsnt.dataset_presenter_id = dsp.dataset_presenter_id
       ) def_prot,
       DatasetPresenter dsp, DatasetHyperLink hl
@@ -6540,25 +6552,29 @@ and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
 and dsp.type = 'protein_expression'
 and dsp.subtype is null
 and hl.url is not null
-and ((hl.url like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is not null)
-     or (hl.url not like '%DEFAULT_PROTEOMICS_GENE%'))
+and ((hl.url like '%DEFAULT_PROTEOMICS%' and def_prot.source_id is not null)
+     or (hl.url not like '%DEFAULT_PROTEOMICS%'))
 UNION
 -- Get the RNASeq Ones
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id) as url
+       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_DISPLAY_NAME', dsp.display_name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
 from DatasetExampleSourceId esi,
       DatasetPresenter dsp, DatasetHyperLink hl,
-      DatasetNameTaxon dnt
+      DatasetNameTaxon dnt,
+      GeneAttributes ga,
+      OrganismAttributes oa
 where dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
 and dsp.dataset_presenter_id = dnt.dataset_presenter_id (+)
 and esi.dataset = dnt.name
+and esi.example_source_id = ga.source_id
+and ga.organism = oa.organism_name
 and dsp.type = 'transcript_expression'
 and dsp.subtype = 'rnaseq'
 and hl.url is not null
-and ((hl.url like '%DEFAULT_RNASEQ_GENE%' and esi.example_source_id is not null)
-     or (hl.url not like '%DEFAULT_RNASEQ_GENE%'))
+and ((hl.url like '%DEFAULT_RNASEQ%' and esi.example_source_id is not null)
+     or (hl.url not like '%DEFAULT_RNASEQ%'))
 UNION
  -- Get the remaining ones
 select dataset_id, dataset_name, text, description, url 
