@@ -12,7 +12,7 @@ public class PhenotypeAspergillus extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_phenotype_DATA_RSRC"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearchPhenotype");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotypeText");
   }
 
   // second column is for documentation

@@ -173,12 +173,35 @@ WHERE
     <externalDependency name="dots.AaSequenceEnzymeClass"/>
     <externalDependency name="sres.EnzymeClass"/>
     <sql>
+        <![CDATA[
+     create table TranscriptPathway&1 ( 
+        SOURCE_ID	                VARCHAR2(80),
+        GENE_SOURCE_ID	                VARCHAR2(80),
+        PROJECT_ID	                VARCHAR2(20),
+        PATHWAY_SOURCE_ID	        VARCHAR2(50),
+        PATHWAY_NAME	                VARCHAR2(150),
+        EC_NUMBER_GENE	                VARCHAR2(16),
+        WILDCARD_COUNT_GENE	        NUMBER,
+        EC_NUMBER_PATHWAY	        VARCHAR2(16),
+        WILDCARD_COUNT_PATHWAY	        NUMBER,
+        EXACT_MATCH	                NUMBER,
+        COMPLETE_EC	                NUMBER,
+        PATHWAY_ID	                NUMBER(12,0),
+        PATHWAY_SOURCE	                VARCHAR2(200),
+        EXTERNAL_DATABASE_RELEASE_ID	NUMBER(10,0)
+     )
+      ]]>
+    </sql>
+    <sql>
       <![CDATA[
-      create table TranscriptPathway&1 nologging as
-      select --+ NO_PARALLEL
-             *
-      from (
-        with transcript_ec
+  BEGIN
+  FOR idlist IN (
+    SELECT  distinct organism 
+      from apidbtuning.geneattributes
+    )
+  LOOP
+   insert into TranscriptPathway&1
+       with transcript_ec
         as (select ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
                    case when ec_number_1 is null then 1 else 0 end
                    + case when ec_number_2 is null then 1 else 0 end
@@ -240,12 +263,16 @@ WHERE
         , ec_match
         , dots.AaSequenceEnzymeClass asec
         , TranscriptAttributes ga
-        where pa.pathway_id = pec.pathway_id
+        where ga.organism = idlist.organism
+        and pa.pathway_id = pec.pathway_id
         and p.pathway_id = pa.pathway_id
         and pec.enzyme_class_id = ec_match.pathway_enzyme_class_id
         and asec.enzyme_class_id = ec_match.transcript_enzyme_class_id
         and ga.aa_sequence_id  = asec.aa_sequence_id
-       )
+;
+    commit;
+   END LOOP;
+  END;
       ]]>
     </sql>
     <sql>
@@ -1243,6 +1270,20 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
                                   AND NOT  REGEXP_LIKE (dr.primary_identifier, '\D') )
         AND  NOT edr.id_type = 'synonym'
      UNION
+      SELECT dr.primary_identifier AS id, 
+             gf.source_id AS gene,
+             'DbRef.primary_identifier' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier */
+      FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+           sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+           sres.ExternalDatabase ed
+      WHERE dr.primary_identifier IS NOT NULL
+        AND gf.na_feature_id = drnf.na_feature_id
+        AND drnf.db_ref_id = dr.db_ref_id
+        AND dr.external_database_release_id
+              = edr.external_database_release_id
+        AND edr.external_database_id = ed.external_database_id
+        and ed.name in ('VB_Community_Annotation', 'VB_Community_Symbol') /* vectorbase alt names  */
+     UNION
      SELECT dr.primary_identifier AS id, 
              gf.source_id AS gene,
              'synonym' as union_member, ed.name as database_name
@@ -1721,6 +1762,7 @@ SELECT pi.name as project_id,
               WHERE spf.aa_sequence_id = s.aa_sequence_id 
               and  aal.aa_feature_id = spf.aa_feature_id
               and (spf.signal_probability >= .5
+              or spf.signal_probability is null
               or ((spf.means_score + spf.maxy_score) / 2) >= .5
               or ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) >= 3)
               group by spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
@@ -4093,23 +4135,35 @@ tablespace indx
     </sql>
   </tuningTable>
 
-<!--  
   <tuningTable name="GeneIntronJunction">
     <comment>
       Contained introns from Gsnap with percentages of max intron score and ratios vs expression
     </comment>
+<!-- Note: commenting out as is expensive and want to only build when done manually ... 
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="InferredParams"/>
     <externalDependency name="apidb.IntronJunction"/>
+    <externalDependency name="apidb.IntronLocation"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.StudyLink"/>
     <externalDependency name="study.Study"/>
+-->
     <intermediateTable name="JunExp"/>
     <intermediateTable name="NameMapping"/>
+    <intermediateTable name="mappingstats "/>
+    <intermediateTable name="isrmult"/>
+    <intermediateTable name="annot"/>
+    <intermediateTable name="core"/>
+    <intermediateTable name="totalexpression"/>
+    <intermediateTable name="ratiostats"/>
+    <intermediateTable name="isrmultcons"/>
     <intermediateTable name="IntronJunctionTmp"/>
+    <intermediateTable name="valid"/>
+    <intermediateTable name="genesample"/>
+    <intermediateTable name="genetotal"/>
     <sql>
       <![CDATA[
 create table JunExp NOLOGGING AS
@@ -4147,7 +4201,12 @@ select distinct junc.protocol_app_node_id as junctions_pan_id, assay.name as jun
       ]]>
     </sql>
     <sql>
-
+      <![CDATA[
+create index junexp_ix on JunExp (junctions_pan_id, exp_pan_id, second_strand )
+tablespace indx
+      ]]>
+    </sql>
+    <sql>
       <![CDATA[
 create table NameMapping NOLOGGING AS
 select distinct edp.dataset_presenter_display_name as exp_name,
@@ -4174,10 +4233,24 @@ where sl.protocol_app_node_id = junexp.junctions_pan_id
     </sql>
     <sql>
       <![CDATA[
-create table IntronJunctionTmp NOLOGGING AS
-with
-   mappingstats
-   as (select junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
+create index nmmap_ix on NameMapping (junctions_pan_id, exp_pan_id)
+tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table mappingstats (
+    junctions_pan_id,
+    read_length,
+    mapped_reads,
+    avg_mapping_coverage,
+    num_replicates,
+    CONSTRAINT mpstats_pk_ix PRIMARY KEY (junctions_pan_id,read_length,mapped_reads,avg_mapping_coverage,num_replicates) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
               round(avg(number_mapped_reads),1) as mapped_reads,
               round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
                 as avg_mapping_coverage,
@@ -4203,28 +4276,101 @@ with
                and otc.source_id = 'EUPATH_0000454'  /* lower(otc.name) = 'average mapping coverage' */
                )
        group by Junctions_Pan_Id
-      ),
-   /* end of mappingstats */
-   isrmult
-   as (select protocol_app_node_id, 'total' as type, count(*) as total_junctions,
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table isrmult (
+    protocol_app_node_id,
+    type,
+    total_junctions,
+    total_reads,
+    multiplier,
+    CONSTRAINT isrmulttmp_pk_ix PRIMARY KEY (protocol_app_node_id,type,total_junctions,total_reads,multiplier) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select protocol_app_node_id, 'total' as type, count(*) as total_junctions,
               sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
        from apidb.IntronJunction
        where unique_reads >= 1
        group by protocol_app_node_id
-      ), 
-   /* end of isrmult */
-   annot
-   as (select distinct gene.feature_source_id as genesource_id, intron.feature_type,
-                       intron.na_sequence_id, intron.start_min, intron.end_max, intron.is_reversed
-       from apidb.FeatureLocation intron,  apidb.FeatureLocation trans, apidb.FeatureLocation gene
-       where intron.feature_type = 'Intron'
-         and intron.is_top_level = 1
-         and trans.na_feature_id = intron.parent_id
-         and gene.na_feature_id = trans.parent_id
-      ),
-   /* end of annot = annotated introns */
-   core
-   as (select junc.intron_junction_id, nm.exp_name, nm.external_database_name,
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table annot (
+    na_sequence_id,
+    start_min,
+    end_max,
+    is_reversed,
+    feature_type,
+    CONSTRAINT annottmp_pk_ix PRIMARY KEY (na_sequence_id,start_min,end_max,is_reversed,feature_type) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select il.na_sequence_id, il.start_min,il.end_max, il.is_reversed, 'Intron' as feature_type
+   from  apidb.IntronLocation il, dots.nafeature naf
+   where naf.na_feature_id = il.parent_id
+   group by il.na_sequence_id, il.start_min,il.end_max,il.is_reversed
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+   create table core (
+       intron_junction_id               number(10), 
+       exp_name                         varchar2(500), 
+       external_database_name           varchar2(500),
+       sample_name                      varchar2(500), 
+       protocol_app_node_id             number(10), 
+       na_sequence_id                   number(10),
+       segment_start                    number(10), 
+       segment_end                      number(10), 
+       unique_reads                     number(10),
+       isrpm                            number(10),
+       nu_reads                         number(10),
+       value                            number(10),
+       switch_strands                   varchar2(10), 
+       strand                           varchar2(20),
+       exp_ratio                        number(10),
+       isrpm_exp_ratio                  number(10),
+       avg_coverage                     number(10),
+       isr_coverage_ratio               number(10),
+       is_reversed                      number(3),
+       matches_gene_strand              number(1),
+       gene_source_id                   varchar2(100),
+       annotated_intron                 varchar2(10),
+       include_unified_junctions        varchar2(10),
+       show_intron_junctions            varchar2(10)
+   )
+      ]]>
+    </sql>
+    <sql>
+  <![CDATA[
+ declare
+  ctrows number := 0;
+  commit_after number := 100;
+ BEGIN
+  FOR idlist IN (
+    SELECT  gs.na_sequence_id, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
+      where gs.na_sequence_id = ij.na_sequence_id 
+      group by gs.na_sequence_id, gs.organism
+      order by gs.organism
+    )
+  LOOP
+   FOR intron IN (
+        select na_sequence_id,segment_start,segment_end,is_reversed,count(*) 
+        from apidb.intronjunction
+        where na_sequence_id = idlist.na_sequence_id
+        group by na_sequence_id,segment_start,segment_end,is_reversed
+        order by segment_start
+)
+   LOOP
+   ctrows := ctrows + 1;
+   insert into core
+   select junc.intron_junction_id, nm.exp_name, nm.external_database_name,
               nm.sample_name, junc.protocol_app_node_id, junc.na_sequence_id,
               junc.segment_start, junc.segment_end, junc.unique_reads,
               round(junc.unique_reads * isrm.multiplier,2) as isrpm,
@@ -4247,7 +4393,6 @@ with
                   ELSE -1
               END as isr_coverage_ratio,
               junc.is_reversed,
-              /* note:  need to deal with datasets that are unstranded; this assumes always stranded. */
               CASE
                 WHEN max(ga.is_reversed) keep (dense_rank first order by nafe.value desc) = junc.is_reversed 
                   THEN 1
@@ -4263,12 +4408,17 @@ with
               nm.show_intron_junctions
        from apidb.IntronJunction junc, GeneAttributes ga, results.NaFeatureExpression nafe,
             NameMapping nm, isrmult isrm, annot, MappingStats ms
-       where nafe.protocol_app_node_id = nm.exp_pan_id
+       where junc.na_sequence_id = intron.na_sequence_id
+         and junc.segment_start = intron.segment_start
+         and junc.segment_end = intron.segment_end
+         and junc.is_reversed = intron.is_reversed
          and nm.junctions_pan_id = junc.protocol_app_node_id
+         and nafe.protocol_app_node_id = nm.exp_pan_id
          and Nm.Junctions_Pan_Id = Ms.Junctions_Pan_Id
          and isrm.protocol_app_node_id = junc.protocol_app_node_id
          and nafe.na_feature_id = ga.na_feature_id
-         and ga.na_sequence_id = junc.na_sequence_id
+         and ga.na_sequence_id = junc.na_sequence_id 
+         and junc.unique_reads >= 1
          and ga.start_min <= junc.segment_start
          and ga.end_max >= junc.segment_end
          and ga.is_reversed = junc.is_reversed
@@ -4282,35 +4432,164 @@ with
                 nm.switch_strands, junc.is_reversed, isrm.multiplier, nm.strand,
                 annot.feature_type, nm.include_unified_junctions,
                 nm.show_intron_junctions, ms.read_length, ms.mapped_reads
-      ),  
-   /* end of core */
-   ratiostats
-   as (select protocol_app_node_id, exp_name, sample_name,
-              avg(isr_coverage_ratio) as avg_isr_coverage_ratio,
-              median(isr_coverage_ratio) as median_isr_coverage_ratio,
-              count(*) as total_introns_averaged
-       from core
-       where annotated_intron = 'Yes'
-         and isr_coverage_ratio != -1
-         and unique_reads >= 10 
-       group by protocol_app_node_id, exp_name, sample_name
-      ), /* end of ratiostats */
-   isrmultcons
-   as (select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions,
-              sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
-       from core
-       where unique_reads >= 1
-         and matches_gene_strand = 1
-       group by protocol_app_node_id
-      ),
-   totalexpression
-   as (select Nm.Junctions_Pan_Id, avg(nafe.value) as avg_expression, median(value) as median_expression
+;
+    IF ctrows >= commit_after
+      THEN
+         COMMIT;  
+         ctrows := 0;  
+    END IF;  
+    END LOOP;
+     commit;
+   END LOOP;
+  END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index core_loc_ix on core (na_sequence_id,segment_start,segment_end,is_reversed) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index core_panid_ix on core (protocol_app_node_id, gene_source_id) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index core_gnsrcid_ix on core (gene_source_id) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table totalexpression (
+    Junctions_Pan_Id,
+    avg_expression,
+    median_expression,
+    CONSTRAINT tot_exp_pk_ix PRIMARY KEY (junctions_pan_id,avg_expression,median_expression) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select Nm.Junctions_Pan_Id, avg(nafe.value) as avg_expression, median(value) as median_expression
        from results.NaFeatureExpression nafe, namemapping nm
        where nm.exp_pan_id = nafe.protocol_app_node_id
        group by nm.Junctions_Pan_Id
-  )
-  /* end of WITH clause; start of main query */
-select intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table ratiostats (
+    protocol_app_node_id,
+    exp_name,
+    sample_name,
+    avg_isr_coverage_ratio,
+    median_isr_coverage_ratio,
+    total_introns_averaged,
+    CONSTRAINT rat_stat_pk_ix PRIMARY KEY (protocol_app_node_id, exp_name, sample_name) 
+)
+  ORGANIZATION index
+  nologging
+  as
+           select protocol_app_node_id, exp_name, sample_name,
+           avg(isr_coverage_ratio) as avg_isr_coverage_ratio,
+           median(isr_coverage_ratio) as median_isr_coverage_ratio,
+           count(*) as total_introns_averaged
+           from core
+           where annotated_intron = 'Yes'
+           and isr_coverage_ratio != -1
+           and unique_reads >= 10 
+           group by protocol_app_node_id, exp_name, sample_name
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create table isrmultcons (
+                  protocol_app_node_id,
+                  type,
+                  total_junctions,
+                  total_reads,
+                  multiplier,
+                  CONSTRAINT isr_mult_pk_ix PRIMARY KEY (protocol_app_node_id) 
+               )
+               ORGANIZATION index
+               nologging
+               as
+               select protocol_app_node_id, 'consistent' as type, count(*) as total_junctions,
+               sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+               from core
+               where unique_reads >= 1
+               and matches_gene_strand = 1
+               group by protocol_app_node_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+   create table IntronJunctionTmp (
+      intron_junction_id                number(10),       
+      protocol_app_node_id              number(10), 
+      exp_name                          varchar2(500), 
+      external_database_name            varchar2(500),
+      sample_name                       varchar2(500), 
+      na_sequence_id                    number(10), 
+      segment_start                     number(10), 
+      segment_end                       number(10), 
+      is_reversed                       number(1), 
+      strand                            varchar2(20),
+      unique_reads                      number(10), 
+      isrpm                             number(10), 
+      nu_reads                          number(10), 
+      exp_value                         number(10),
+      intron_exp_ratio                  number(10), 
+      isrpm_exp_ratio                   number(10),
+      avg_coverage                      number(10), 
+      isr_coverage_ratio                number(10), 
+      norm_isr_coverage_ratio           number(10),
+      percent_max_sample                number(10),
+      percent_max_total                 number(10),
+      total_ratio                       number(10),
+      matches_gene_strand               number(1), 
+      annotated_intron                  varchar2(10),
+      is_contained                      number(1), 
+      gene_source_id                    varchar2(100),
+      intron_sample_avgexp_ratio        number(10), 
+      isrpm_sample_avgexp_ratio         number(10), 
+      intron_sample_medexp_ratio        number(10),
+      isrpm_sample_medexp_ratio         number(10),
+      isr_avgcoverage_ratio             number(10), 
+      norm_isr_avgcoverage_ratio        number(10),
+      sample_total_junctions            number(10), 
+      sample_multiplier                 number(10),
+      consistent_multiplier             number(10), 
+      total_cons_mult_ratio             number(10),
+      include_unified_junctions         varchar2(10), 
+      show_intron_junctions             varchar2(10)
+    )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+ declare
+  ctrows number := 0;
+  commit_after number := 100;
+ BEGIN
+  FOR idlist IN (
+    SELECT  gs.na_sequence_id, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
+      where gs.na_sequence_id = ij.na_sequence_id 
+      group by gs.na_sequence_id, gs.organism
+      order by gs.organism
+    )
+  LOOP
+   FOR intron IN (
+        select na_sequence_id,segment_start,segment_end,is_reversed,count(*) 
+        from apidb.intronjunction
+        where na_sequence_id = idlist.na_sequence_id
+        group by na_sequence_id,segment_start,segment_end,is_reversed
+        order by segment_start
+)
+   LOOP
+   ctrows := ctrows + 1;
+   insert into IntronJunctionTmp
+    select intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
        sample_name, na_sequence_id, segment_start, segment_end, is_reversed, strand,
        unique_reads, isrpm, nu_reads, round(value, 4) as exp_value,
        round(exp_ratio, 4) as intron_exp_ratio, round(isrpm_exp_ratio, 4) as isrpm_exp_ratio,
@@ -4323,9 +4602,10 @@ select intron_junction_id, protocol_app_node_id, exp_name, external_database_nam
        isrpm_sample_medexp_ratio,isr_avgcoverage_ratio, norm_isr_avgcoverage_ratio,
        total_junctions as sample_total_junctions, multiplier as sample_multiplier,
        consistent_multiplier, 
-       round(multiplier / consistent_multiplier, 4) as total_cons_mult_ratio,
+       CASE WHEN consistent_multiplier > 0 THEN round(multiplier / consistent_multiplier, 4) ELSE 0 END as total_cons_mult_ratio,
        include_unified_junctions, show_intron_junctions
-from (select c.*, gene_tot.total_ratio, gene_tot.isrpm_total_ratio,
+       from
+       (select distinct c.*, gene_tot.total_ratio, gene_tot.isrpm_total_ratio,
       CASE
         WHEN gene_tot.max_total_unique >= 1
           THEN c.unique_reads / gene_tot.max_total_unique
@@ -4362,14 +4642,12 @@ CASE
     ELSE 0
 END as isr_avgcoverage_ratio,
 CASE
-  WHEN ms.avg_mapping_coverage > 0
+  WHEN ms.avg_mapping_coverage > 0 and nr.median_isr_coverage_ratio > 0
     THEN round(
-/*     CASE WHEN c.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio > 1 THEN 1
-          ELSE */ c.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio /* END  */
+         c.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio /* END  */
                                                  , 4) ELSE 0 END as norm_isr_avgcoverage_ratio,
-CASE WHEN ms.avg_mapping_coverage > 0 THEN round(
-/*     CASE WHEN c.isr_coverage_ratio / nr.median_isr_coverage_ratio > 1 THEN 1
-          ELSE */ c.isr_coverage_ratio / nr.median_isr_coverage_ratio /* END*/
+CASE WHEN nr.median_isr_coverage_ratio > 0 THEN round(
+         c.isr_coverage_ratio / nr.median_isr_coverage_ratio /* END*/
                                                  , 4) ELSE 0 END as norm_isr_coverage_ratio,
 isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consistent_multiplier
   from
@@ -4377,12 +4655,24 @@ isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consisten
   CASE WHEN sum(value) > 0 THEN sum(unique_reads) / sum(value) ELSE null END as total_ratio,
   CASE WHEN sum(value) > 0 THEN sum(isrpm) / sum(value) ELSE null END as isrpm_total_ratio
   from core
+  where na_sequence_id = intron.na_sequence_id
+         and segment_start = intron.segment_start
+         and segment_end = intron.segment_end
+         and is_reversed = intron.is_reversed
   group by core.gene_source_id) gene_tot, 
   (select protocol_app_node_id, gene_source_id, max(unique_reads) as max_sample_unique, max(isrpm) as max_sample_isrpm 
   from core
-  group by protocol_app_node_id, gene_source_id) sample_tot,
+    where na_sequence_id = intron.na_sequence_id
+         and segment_start = intron.segment_start
+         and segment_end = intron.segment_end
+         and is_reversed = intron.is_reversed
+    group by protocol_app_node_id, gene_source_id) sample_tot,
   core c, totalexpression te, isrmult, isrmultcons, mappingstats ms, ratiostats nr
-  where gene_tot.gene_source_id = c.gene_source_id
+  where c.na_sequence_id = intron.na_sequence_id
+         and segment_start = intron.segment_start
+         and segment_end = intron.segment_end
+         and is_reversed = intron.is_reversed
+  AND gene_tot.gene_source_id = c.gene_source_id
   AND c.protocol_app_node_id = ms.junctions_pan_id
   AND sample_tot.protocol_app_node_id = c.protocol_app_node_id
   AND sample_tot.gene_source_id = c.gene_source_id
@@ -4394,7 +4684,7 @@ isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consisten
 /* union this with intronjunction that are not in core adding in exp_name, sample_name */
 /* first do minus to get missing junctions and join to names. */
 /* need to add in the isrpm stuff as is above.  Will need to join to isrmult */
-select introns.intron_junction_id, names.exp_name, names.external_database_name, names.sample_name, introns.Protocol_App_Node_Id, introns.na_sequence_id, introns.segment_start, introns.segment_end, 
+select distinct introns.intron_junction_id, names.exp_name, names.external_database_name, names.sample_name, introns.Protocol_App_Node_Id, introns.na_sequence_id, introns.segment_start, introns.segment_end, 
 introns.unique_reads, round(introns.unique_reads * isrmult.multiplier, 2) as isrpm, introns.nu_reads,
 -1 as value, names.switch_strands, names.strand, -1 as exp_ratio, -1 as isrpm_exp_ratio, -1 as avg_coverage, -1 as isr_coverage_ratio,
 CASE WHEN names.switch_strands = 'false'
@@ -4412,17 +4702,22 @@ CASE WHEN te.avg_expression > 0 THEN round(introns.unique_reads*isrmult.multipli
 CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads/te.median_expression, 4) ELSE 0 END as intron_sample_medexp_ratio,
 CASE WHEN te.median_expression > 0 THEN round(introns.unique_reads*isrmult.multiplier/te.median_expression, 4) ELSE 0 END as isrpm_sample_medexp_ratio,
 CASE WHEN ms.avg_mapping_coverage > 0 THEN round(introns.unique_reads/ms.avg_mapping_coverage, 4) ELSE 0 END as isr_avgcoverage_ratio,
-CASE WHEN ms.avg_mapping_coverage > 0 THEN round(
-/*     CASE WHEN introns.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio > 1 THEN 1 
-          ELSE */ introns.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio /* END */
+CASE WHEN ms.avg_mapping_coverage > 0 and nr.median_isr_coverage_ratio > 0 THEN round(
+         introns.unique_reads/ms.avg_mapping_coverage / nr.median_isr_coverage_ratio /* END */
                                                  , 4) ELSE 0 END as norm_isr_avgcoverage_ratio,
 -1 as norm_isr_coverage_ratio,
 isrmult.total_junctions, isrmult.multiplier, isrmultcons.multiplier as consistent_multiplier
 FROM (select intron_junction_id
-from apidb.intronjunction
+from apidb.intronjunction where na_sequence_id = intron.na_sequence_id
+         and segment_start = intron.segment_start
+         and segment_end = intron.segment_end
+         and is_reversed = intron.is_reversed
 MINUS
 select intron_junction_id
-from core) mi,
+from core where na_sequence_id = intron.na_sequence_id
+         and segment_start = intron.segment_start
+         and segment_end = intron.segment_end
+         and is_reversed = intron.is_reversed) mi,
 namemapping names, totalexpression te, isrmult, isrmultcons, apidb.intronjunction introns, mappingstats ms, ratiostats nr
 where introns.intron_junction_id = mi.intron_junction_id
 AND introns.protocol_app_node_id = names.junctions_pan_id
@@ -4431,11 +4726,21 @@ AND introns.protocol_app_node_id = isrmult.protocol_app_node_id
 AND introns.protocol_app_node_id = isrmultcons.protocol_app_node_id
 AND introns.protocol_app_node_id = nr.protocol_app_node_id
 AND ms.junctions_pan_id = introns.protocol_app_node_id)
+;
+    IF ctrows >= commit_after
+      THEN
+         COMMIT;  
+         ctrows := 0;  
+    END IF;  
+    END LOOP;
+     commit;
+   END LOOP;
+  END;
       ]]>
     </sql>
     <sql>
       <![CDATA[
-create index IntronJunc_ix on IntronJunctionTmp (na_sequence_id, segment_start, segment_end)
+create index IntronJunc_ix on IntronJunctionTmp (na_sequence_id, segment_start, segment_end,is_reversed)
 tablespace indx
       ]]>
     </sql>
@@ -4447,24 +4752,124 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
-create table GeneIntronJunction&1 NOLOGGING AS
-with valid as (
-SELECT na_sequence_id,segment_start,segment_end,is_reversed
+create table valid (
+    na_sequence_id,
+    segment_start,
+    segment_end,
+    is_reversed,
+    CONSTRAINT valid_pk_ix PRIMARY KEY (na_sequence_id,segment_start,segment_end,is_reversed) 
+)
+  ORGANIZATION index
+  nologging
+  as
+SELECT distinct na_sequence_id,segment_start,segment_end,is_reversed
 FROM apidbtuning.IntronJunctionTmp
-  WHERE segment_end - segment_start <= 200000  /* very long for host */
-     AND unique_reads >= 1  /* at least one unique read */
+WHERE unique_reads >= 1  /* at least one unique read */
      AND sample_multiplier <= 20
      AND total_cons_mult_ratio >= 0.1 
      AND include_unified_junctions = 'true'
      GROUP BY na_sequence_id,segment_start,segment_end,is_reversed,is_contained, annotated_intron
      HAVING max(CASE WHEN is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) keep (dense_rank first order by isrpm desc) >= 
-                CASE WHEN is_contained = 1 THEN 0.2 ELSE 0.02 END
-          OR annotated_intron = 'Yes' /* this may be a bit dodgy but should show evidence for annotated intron if it exists even if ratio too low */
-) /* end valid */
-, inwindow as (
+                CASE WHEN is_contained = 1 THEN 0.1 ELSE 0.01 END
+          OR annotated_intron = 'Yes'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table genesample (
+    protocol_app_node_id,
+    gene_source_id,
+    sample_unique,
+    sample_isrpm,
+    CONSTRAINT genesample_pk_ix PRIMARY KEY (protocol_app_node_id,gene_source_id,sample_unique,sample_isrpm) 
+)
+  ORGANIZATION index
+  nologging
+  as 
+SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_unique,max(ij.isrpm) as sample_isrpm
+  FROM apidbtuning.IntronJunctionTmp ij
+  WHERE ij.matches_gene_strand = 1
+  AND ij.unique_reads >= 1
+  AND ij.sample_multiplier <= 20
+  AND ij.total_cons_mult_ratio >= 0.1
+  AND include_unified_junctions = 'true'
+  GROUP By ij.protocol_app_node_id,ij.gene_source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE TABLE genetotal (
+    gene_source_id,
+    max_gene_unique,
+    max_gene_isrpm,
+    CONSTRAINT genetotal_pk_ix PRIMARY KEY (gene_source_id,max_gene_unique,max_gene_isrpm) 
+)
+  ORGANIZATION index
+  nologging
+  as  
+SELECT gene_source_id,max(tot_unique) as max_gene_unique,max(tot_isrpm) as max_gene_isrpm
+FROM (
+SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot_isrpm
+  FROM apidbtuning.IntronJunctionTmp ij
+  WHERE ij.matches_gene_strand = 1
+  AND ij.unique_reads >= 1
+  AND ij.sample_multiplier <= 20
+  AND ij.total_cons_mult_ratio >= 0.1
+  AND include_unified_junctions = 'true'
+  GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
+  GROUP by gene_source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create table GeneIntronJunction&1 (
+    feature_id              varchar2(100),
+    type                    varchar2(10),
+    source                  varchar2(10),
+    name                    varchar2(100),
+    parent_id               number(10),
+    startm                  number(10),
+    end                     number(10),
+    contained               number(1),
+    matches_gene_strand     number(1),
+    percent_max             number(10),
+    score                   number(10),
+    score_exp_ratio         number(10),
+    annotated_intron        varchar2(5),
+    atts                    clob
+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+ declare
+  ctrows number := 0;
+  commit_after number := 1000;
+ BEGIN
+  FOR idlist IN (
+    SELECT  gs.na_sequence_id, gs.organism from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
+      where gs.na_sequence_id = ij.na_sequence_id 
+      group by gs.na_sequence_id, gs.organism
+      order by gs.organism
+    )
+  LOOP
+   FOR intron IN (
+        select na_sequence_id,segment_start,segment_end,is_reversed,count(*) 
+        from valid
+        where na_sequence_id = idlist.na_sequence_id
+        group by na_sequence_id,segment_start,segment_end,is_reversed
+)
+   LOOP
+   ctrows := ctrows + 1;
+   insert into GeneIntronJunction&1
+with inwindow as (
 SELECT ij.*
 FROM apidbtuning.IntronJunctionTmp ij, valid v
-  WHERE  v.segment_start = ij.segment_start
+  WHERE  v.na_sequence_id = intron.na_sequence_id
+     and v.segment_start = intron.segment_start
+     and v.segment_end = intron.segment_end
+     and v.is_reversed = intron.is_reversed
+     AND v.segment_start = ij.segment_start
      AND v.segment_end = ij.segment_end
      AND v.na_sequence_id = ij.na_sequence_id 
      AND v.is_reversed = ij.is_reversed
@@ -4473,39 +4878,10 @@ FROM apidbtuning.IntronJunctionTmp ij, valid v
      AND ij.total_cons_mult_ratio >= 0.1
      AND ij.include_unified_junctions = 'true'
 )
-, distids as (
-select distinct gene_source_id from inwindow
-)
-, genesample as (
-SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_unique,max(ij.isrpm) as sample_isrpm
-  FROM apidbtuning.IntronJunctionTmp ij, distids
-  WHERE ij.gene_source_id = distids.gene_source_id
-  AND ij.matches_gene_strand = 1
-  AND ij.segment_end - ij.segment_start <= 200000
-  AND ij.unique_reads >= 1
-  AND ij.sample_multiplier <= 20
-  AND ij.total_cons_mult_ratio >= 0.1
-  AND include_unified_junctions = 'true'
-  GROUP By ij.protocol_app_node_id,ij.gene_source_id)
-, genetotal as (
-SELECT gene_source_id,max(tot_unique) as max_gene_unique,max(tot_isrpm) as max_gene_isrpm
-FROM (
-SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot_isrpm
-  FROM apidbtuning.IntronJunctionTmp ij, distids
-  WHERE ij.gene_source_id = distids.gene_source_id
-  AND ij.matches_gene_strand = 1
-  AND ij.segment_end - ij.segment_start <= 200000
-  AND ij.unique_reads >= 1
-  AND ij.sample_multiplier <= 20
-  AND ij.total_cons_mult_ratio >= 0.1
-  AND include_unified_junctions = 'true'
-  GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
-  GROUP by gene_source_id
-)
 SELECT *
 from (
 SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
-CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END as percent_max,
+CASE WHEN max_gene_isrpm > 0 THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END as percent_max,
 sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio, annotated_intron,
 'Exps=' || rtrim(xmlagg(XMLELEMENT(e,display_name,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || ';' ||
 'Samples=' || rtrim(xmlagg(XMLELEMENT(e,samples,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || ';' ||
@@ -4518,7 +4894,7 @@ sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio, a
 'MatchesGeneStrand=' || matches_gene_strand || ';' ||
 'IsReversed=' || is_reversed || ';' ||
 'AnnotatedIntron=' || annotated_intron || ';' ||
-'IntronPercent=' || CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END || ';' ||
+'IntronPercent=' || CASE WHEN max_gene_isrpm > 0 THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END || ';' ||
 'GeneSourceId=' || gene_source_id || ';' ||
 'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
 FROM (
@@ -4544,13 +4920,24 @@ FROM inwindow iw, genesample gs, genetotal gt
 WHERE iw.gene_source_id = gt.gene_source_id(+)
 AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
 and iw.gene_source_id = gs.gene_source_id(+)
-GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron)
+GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, 
+iw.is_reversed,iw.annotated_intron)
 GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
-  HAVING sum(total_reads) >= 1 )
+  HAVING sum(total_reads) >= 1 ) 
 WHERE (contained = 1
        AND percent_max >= 0.001 )
 OR contained = 0
-  order by startm
+order by startm
+;
+    IF ctrows >= commit_after
+      THEN
+         COMMIT;  
+         ctrows := 0;  
+    END IF;  
+    END LOOP;
+     commit;
+   END LOOP;
+  END;
       ]]>
     </sql>
     <sql>
@@ -4559,7 +4946,6 @@ OR contained = 0
       ]]>
     </sql>
   </tuningTable>
--->
 
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
@@ -4676,10 +5062,6 @@ tablespace indx
 		SELECT 'HostDB' AS project_id,
 		           'Chordata' AS taxon_node
 		FROM dual
-		UNION
-		SELECT 'VectorBase' AS project_id,
-                       'Protostomia' AS taxon_node
-		FROM dual
         ) p,
         (select distinct project_id, organism from GenomicSeqAttributes) s
         where p.project_id = s.project_id
@@ -4764,11 +5146,33 @@ tablespace indx
                   s.organism like 'Mucor%' or
                   s.organism like 'Phycomyces%')
             then 'Zygomycetes'
+            when (s.organism like 'Ixodes%')
+            then 'Ixodida'
+            when (s.organism like 'Pediculus%')
+            then 'Phthiraptera'
+            when (s.organism like 'Leptotrombidium%')
+            then 'Trombidiformes'
+            when s.organism like 'Sarcoptes%'
+            then 'Sarcoptiformes'
+            when (s.organism like 'Cimex%' or
+                  s.organism like 'Rhodnius%')
+            then 'Hemiptera'
+            when (s.organism like 'Aedes%' or
+                  s.organism like 'Anopheles%' or
+                  s.organism like 'Glossina%' or
+                  s.organism like 'Culex%' or
+                  s.organism like 'Lutzomyia%' or
+                  s.organism like 'Musca%' or
+                  s.organism like 'Phlebotomus%' or
+                  s.organism like 'Stomoxys%')
+            then 'Diptera'
+            when (s.organism like 'Biomphalaria%')
+            then 'Gastropoda'
             else 'Missing ProjectIdTaxonLevel'
           end as taxon_node,
           s.organism as organism
         from GenomicSeqAttributes s
-        where s.project_id = 'FungiDB'
+        where s.project_id in ('FungiDB', 'VectorBase')
       ]]>
     </sql>
   </tuningTable>
@@ -5088,7 +5492,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   </tuningTable>
 
 
-  <tuningTable name="CompoundProperties"  prefixEnabled="true" alwaysUpdate="true">
+  <tuningTable name="CompoundProperties"  prefixEnabled="true">
     <comment> Properties table for ChEBI Compounds.
     </comment>
     <!-- externalDependency name="chebi.Compounds"/ -->
@@ -5125,7 +5529,7 @@ GROUP BY c.ID, c.chebi_accession, c.parent_id, c.name, c.definition, m.mass
   </tuningTable>
 
 
-  <tuningTable name="CompoundAttributes"  prefixEnabled="true" alwaysUpdate="true">
+  <tuningTable name="CompoundAttributes"  prefixEnabled="true">
     <comment> The BFMV for the compound WDK record type. Used by the model for the
          compound record and queries, as well as in the creation of the
          PathwayCompounds tuning table. Propagated to portal instances.
@@ -5965,7 +6369,7 @@ and sdi.sample = replace (pep.sample ,' (MS Summary)', '')
     <sql>
       <![CDATA[
         create table AnnotatedGenomeSummary&1 nologging as
-        select dsp.name as external_db_name, ga.organism, ga.taxon_id,
+        select ga.external_db_name as external_db_name, ga.organism, ga.taxon_id,
                o.is_reference_strain,
                (select value
                 from DatasetProperty 
@@ -5988,8 +6392,8 @@ and sdi.sample = replace (pep.sample ,' (MS Summary)', '')
                dsp.release_policy
         from DatasetPresenter dsp, apidb.Organism o,
              (select distinct external_db_name, taxon_id, organism from GeneAttributes) ga
-        where dsp.name like '%_primary_genome_RSRC'
-          and dsp.name = ga.external_db_name
+        where ga.external_db_name like '%_primary_genome_RSRC'
+          and dsp.name (+) = ga.external_db_name
           and o.taxon_id = ga.taxon_id
       ]]>
     </sql>
@@ -6197,8 +6601,8 @@ and mss.aa_sequence_id = ga.aa_sequence_id
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk) as url
-from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id
+       replace(replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk),'DEFAULT_ORG_ABBREV', def_seq.public_abbrev) as url
+from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id, oa.public_abbrev
       from DatasetPresenter dsp, DatasetNameTaxon nt, OrganismAttributes oa, sequences os
       where dsp.dataset_presenter_id = nt.dataset_presenter_id
       and nt.taxon_id = os.taxon_id
@@ -6215,11 +6619,13 @@ UNION
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id) as url
-from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id
-      from DatasetPresenter dsp, DatasetNameTaxon dsnt, proteomicsgenes pg
+       replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id),'DEFAULT_PROTEOMICS_SEQUENCE', def_prot.sequence_id || ':' || def_prot.zoom_context_start || '..' || def_prot.zoom_context_end),'DEFAULT_ORG_ABBREV', def_prot.public_abbrev) as url
+from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id, oa.public_abbrev, ga.sequence_id, ga.zoom_context_start, ga.zoom_context_end
+      from DatasetPresenter dsp, DatasetNameTaxon dsnt, proteomicsgenes pg, GeneAttributes ga, OrganismAttributes oa
       where pg.name = dsnt.name
       and pg.rn = 1
+      and pg.source_id = ga.source_id
+      and ga.organism = oa.organism_name
       and dsnt.dataset_presenter_id = dsp.dataset_presenter_id
       ) def_prot,
       DatasetPresenter dsp, DatasetHyperLink hl
@@ -6228,25 +6634,29 @@ and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
 and dsp.type = 'protein_expression'
 and dsp.subtype is null
 and hl.url is not null
-and ((hl.url like '%DEFAULT_PROTEOMICS_GENE%' and def_prot.source_id is not null)
-     or (hl.url not like '%DEFAULT_PROTEOMICS_GENE%'))
+and ((hl.url like '%DEFAULT_PROTEOMICS%' and def_prot.source_id is not null)
+     or (hl.url not like '%DEFAULT_PROTEOMICS%'))
 UNION
 -- Get the RNASeq Ones
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id) as url
+       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_DISPLAY_NAME', dsp.display_name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
 from DatasetExampleSourceId esi,
       DatasetPresenter dsp, DatasetHyperLink hl,
-      DatasetNameTaxon dnt
+      DatasetNameTaxon dnt,
+      GeneAttributes ga,
+      OrganismAttributes oa
 where dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
 and dsp.dataset_presenter_id = dnt.dataset_presenter_id (+)
 and esi.dataset = dnt.name
+and esi.example_source_id = ga.source_id
+and ga.organism = oa.organism_name
 and dsp.type = 'transcript_expression'
 and dsp.subtype = 'rnaseq'
 and hl.url is not null
-and ((hl.url like '%DEFAULT_RNASEQ_GENE%' and esi.example_source_id is not null)
-     or (hl.url not like '%DEFAULT_RNASEQ_GENE%'))
+and ((hl.url like '%DEFAULT_RNASEQ%' and esi.example_source_id is not null)
+     or (hl.url not like '%DEFAULT_RNASEQ%'))
 UNION
  -- Get the remaining ones
 select dataset_id, dataset_name, text, description, url 
@@ -6794,8 +7204,7 @@ where url is not null
 
 
   <tuningTable name="Profile">
-    <!-- One profile per gene per dataset. Used for graphs
-      -->
+    <!-- One profile per gene per dataset. Used for graphs -->
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="CompoundAttributes"/>
     <internalDependency name="PANResults"/>
@@ -6812,8 +7221,31 @@ where url is not null
     <externalDependency name="study.StudyLink"/>
     <sql>
       <![CDATA[
-  create table Profile&1 nologging as
-  SELECT -- not "NO PARALLEL" (i.e. some parallel)
+               create table Profile&1 (
+               DATASET_NAME	        VARCHAR2(200),
+               DATASET_TYPE	        VARCHAR2(50),
+               DATASET_SUBTYPE	        VARCHAR2(50),
+               PROFILE_TYPE	        VARCHAR2(20),
+               SOURCE_ID	        VARCHAR2(500),
+               PROFILE_STUDY_ID	        NUMBER(5),
+               PROFILE_SET_NAME	        VARCHAR2(400),
+               PROFILE_SET_SUFFIX	VARCHAR2(50),
+               PROFILE_AS_STRING	VARCHAR2(4000),
+               MAX_VALUE	        NUMBER,
+               MIN_VALUE	        NUMBER,
+               MAX_TIMEPOINT	        VARCHAR2(200),
+               MIN_TIMEPOINT	        VARCHAR2(200)
+               )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+ declare
+  ctrows number := 0;
+  commit_after number := 10000;
+ BEGIN
+  FOR pf_rows IN (
+  SELECT
          ds.name as dataset_name, ds.type as dataset_type,
          ds.subtype as dataset_subtype, profile.profile_type,
          profile.source_id, profile.study_id as profile_study_id,
@@ -6833,8 +7265,9 @@ where url is not null
                 else null
               end as varchar2(50)
              ) as profile_set_suffix,
-         profile.profile_as_string, profile.max_value, profile.min_value,
-         profile.max_timepoint, profile.min_timepoint
+         CASE WHEN replace(profile.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN 'NULL' ELSE profile.profile_as_string END as profile_as_string, 
+         profile.max_value, profile.min_value,
+         profile.max_timepoint, profile.min_timepoint 
   from apidb.DataSource ds, sres.ExternalDatabase d,
        sres.ExternalDatabaseRelease r, study.Study ps, study.Study i,
        (
@@ -7118,20 +7551,23 @@ where url is not null
     and r.external_database_release_id = i.external_database_release_id
     and i.investigation_id is null
     and profile.study_id = ps.study_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        UPDATE Profile&1
-        SET dataset_name = 'tbruTREU927_Rijo_Circadian_Regulation_rnaSeq_RSRC'
-        WHERE dataset_name= 'tbruTREU927_RNASeq_Rijo_Circadian_Regulation_RSRC'
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        UPDATE Profile&1
-        SET profile_as_string = NULL
-        WHERE replace(profile_as_string, 'NA' || CHR(9), '') = 'NA'
+    )
+  LOOP
+    ctrows := ctrows + 1;
+    insert into Profile&1
+        (DATASET_NAME, DATASET_TYPE, DATASET_SUBTYPE, PROFILE_TYPE, SOURCE_ID, PROFILE_STUDY_ID, PROFILE_SET_NAME, 
+        PROFILE_SET_SUFFIX, PROFILE_AS_STRING, MAX_VALUE, MIN_VALUE, MAX_TIMEPOINT, MIN_TIMEPOINT) 
+        values
+        (pf_rows.DATASET_NAME, pf_rows.DATASET_TYPE, pf_rows.DATASET_SUBTYPE, pf_rows.PROFILE_TYPE, pf_rows.SOURCE_ID, pf_rows.PROFILE_STUDY_ID, pf_rows.PROFILE_SET_NAME, 
+        pf_rows.PROFILE_SET_SUFFIX, pf_rows.PROFILE_AS_STRING, pf_rows.MAX_VALUE, pf_rows.MIN_VALUE, pf_rows.MAX_TIMEPOINT, pf_rows.MIN_TIMEPOINT);
+    IF ctrows >= commit_after
+      THEN
+         COMMIT;  
+         ctrows := 0;  
+    END IF;  
+    END LOOP;
+  commit;
+  END;
       ]]>
     </sql>
     <sql>
@@ -7139,6 +7575,13 @@ where url is not null
         create index exprof_idx&1
           on Profile&1 (source_id, profile_type, profile_set_name)
         tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        UPDATE Profile&1
+        SET dataset_name = 'tbruTREU927_Rijo_Circadian_Regulation_rnaSeq_RSRC'
+        WHERE dataset_name= 'tbruTREU927_RNASeq_Rijo_Circadian_Regulation_RSRC'
       ]]>
     </sql>
   </tuningTable>
@@ -7909,7 +8352,10 @@ tablespace indx
                          sres.ExternalDatabaseRelease xdr3, sres.ExternalDatabase xd3,
                          sres.DbRef dr, dots.DbRefAaFeature draf, dots.DomainFeature df,
                          dots.DomainFeature df2
-                    where xd3.name in ('InterproscanData_RSRC', 'INTERPRO')
+                    where xd3.name
+                          in ('InterproscanData_RSRC', 'INTERPRO',
+                              'PFAM', 'PIRSF', 'PROSITEPROFILES',
+                              'SMART', 'SUPERFAMILY', 'TIGRFAM')
                       and ta.aa_sequence_id = df.aa_sequence_id
                       and df.aa_feature_id = draf.aa_feature_id
                       and df.aa_feature_id = al.aa_feature_id
