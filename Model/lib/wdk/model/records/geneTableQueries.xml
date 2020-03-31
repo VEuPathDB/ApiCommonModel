@@ -60,7 +60,7 @@
                <paramValue name="project_id">HostDB</paramValue>
             </defaultTestParamValues>
 
-            <defaultTestParamValues includeProjects="FungiDB,SchistoDB,UniDB,InitDB">
+            <defaultTestParamValues includeProjects="FungiDB,SchistoDB,UniDB,VectorBase,InitDB">
                <paramValue name="source_id"></paramValue>
                <paramValue name="project_id"></paramValue>
             </defaultTestParamValues>
@@ -362,7 +362,7 @@ order by goslim.source_id, goslim.ontology, goslim.go_id
        <!-- Expression Graphs -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB,PlasmoDB,FungiDB,PiroplasmaDB,CryptoDB,MicrosporidiaDB,HostDB,UniDB">
+       <sqlQuery name="ExpressionGraphs" includeProjects="TriTrypDB,GiardiaDB,AmoebaDB,ToxoDB,PlasmoDB,FungiDB,PiroplasmaDB,CryptoDB,MicrosporidiaDB,HostDB,UniDB,VectorBase">
             <column name="source_id" />
             <column name="project_id" />
             <column name="project_id_url" />
@@ -576,13 +576,18 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
        'RNASeq' as module,
        'Rank of each gene by its ratio' as x_axis,
        'Ratio of RPKM values (calculated from unique reads that mapped to each gene CDS).<br>
-        This ratio is proportional to the fitness observed upon RNAi-induced knockdown.<br>
+       This ratio is proportional to the fitness observed upon RNAi-induced knockdown.<br>
         The particular samples and ratios are indicated in the gray bar above each graph:<br>
         - No_Tet: uninduced control<br>
 	- BFD3: bloodstream-form cells grown for 3 days<br>
 	- BFD6: bloodstream-form cells grown for 6 days<br>
 	- PF: insect/procyclic-form cells<br>
-	- DIF: cells induced throughout growth as bloodstream forms, differentiation and growth as procyclic forms.<br>' as y_axis,
+	- DIF: cells induced throughout growth as bloodstream forms, differentiation and growth as procyclic forms.<br><br>
+	FPKM Ratio (relative fitness):<br>
+	BFD3/NoTet = <br>BFD3 cds coordinates - unique / No_Tet cds coordinates - unique<br>                              
+	BFD6/NoTet = <br>BFD6 cds coordinates - unique / No_Tet cds coordinates - unique<br>                              
+	DIF/NoTet = <br>DIF cds coordinates - unique / No_Tet cds coordinates - unique<br>                            
+	PF/NoTet = <br>PF cds coordinates - unique / No_Tet cds coordinates - unique<br><br>' as y_axis,
        'false' as is_graph_custom,
        1 as order_num
        from dual
@@ -1453,7 +1458,7 @@ FROM
 , dots.DomainFeature df
 , dots.DomainFeature df2
 WHERE
-  xd3.name IN('InterproscanData_RSRC', 'INTERPRO')
+  xd3.name IN('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP', 'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF', 'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan', 'PFAM', 'SMART', 'CDD', 'PANTHER')
   AND ta.aa_sequence_id = df.aa_sequence_id
   AND df.aa_feature_id = draf.aa_feature_id
   AND df.aa_feature_id = al.aa_feature_id
@@ -1463,6 +1468,7 @@ WHERE
   AND df.external_database_release_id = xdr3.external_database_release_id
   AND xdr3.external_database_id = xd3.external_database_id
   and df.parent_id = df2.aa_feature_id (+)
+  and dr.primary_identifier is not null
 group by ta.project_id, ta.gene_source_id, xd1.name, dr.primary_identifier, dr.secondary_identifier, dr.remark, al.start_min, al.end_min, df.e_value, df2.source_id
 order by
 transcript_ids
@@ -1645,7 +1651,7 @@ ORDER BY
        <!-- Signal Peptides -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="SignalP" isCacheable="false">
+       <sqlQuery name="SignalP" isCacheable="false" excludeProjects="VectorBase">
 
             <testParamValues includeProjects="CryptoDB">
                <paramValue name="source_id">cgd7_110</paramValue>
@@ -1700,6 +1706,29 @@ WHERE t.aa_sequence_id = spf.aa_sequence_id
             </sql>
         </sqlQuery>
 
+       <sqlQuery name="SignalP" isCacheable="false" includeProjects="VectorBase">
+            <column name="source_id"/>
+            <column name="transcript_id"/>
+            <column name="project_id"/>
+            <column name="spf_start_min"/>
+            <column name="spf_end_max"/>
+            <sql>
+            <![CDATA[
+SELECT DISTINCT
+  t.source_id AS transcript_id
+, t.gene_source_id AS source_id
+, t.project_id
+, 1 AS spf_start_min
+, aal.end_max AS spf_end_max
+FROM
+  dots.aalocation aal
+, apidbtuning.transcriptAttributes t
+, dots.signalpeptidefeature spf
+WHERE t.aa_sequence_id = spf.aa_sequence_id
+  AND spf.aa_feature_id = aal.aa_feature_id
+               ]]>
+            </sql>
+        </sqlQuery>
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- BlastP Hits -->  
@@ -2676,35 +2705,73 @@ FROM
             <column name="evidence_code_parameter" includeProjects="FungiDB,TriTrypDB"/>
             <sql>
             <![CDATA[
-
-
-WITH evids AS (
-  SELECT DISTINCT gaiec.go_evidence_code_id, ot.name
-  FROM  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
-  WHERE ot.ontology_term_id = gaiec.go_evidence_code_id)
-SELECT
-  ta.gene_source_id AS source_id
-, tp.product
-, ta.project_id
-, LISTAGG(source_id, ', ') WITHIN GROUP(ORDER BY source_id) AS transcript_ids
-, LISTAGG(publication, ', ') WITHIN GROUP(ORDER BY source_id) AS reference
-, e.name AS evidence_code
-, tp.with_from AS evidence_code_parameter
-FROM
-  apidb.transcriptproduct tp
-, apidbtuning.transcriptattributes ta
-, evids e
-WHERE
-  ta.na_feature_id = tp.na_feature_id
-  AND tp.is_preferred = 1
-  AND tp.evidence_code = e.go_evidence_code_id(+)
-GROUP BY
-  gene_source_id
-, ta.project_id
-, tp.product
-, tp.is_preferred
-, e.name
-, tp.with_from
+              -- PreferredProducts: check apidb.TranscriptProduct and
+              -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
+              -- (and only if) that turns up nothing, check the PRODUCT column of
+              -- dots.GeneFeature and dots.Transcript
+              with evids
+                   as (select distinct gaiec.go_evidence_code_id, ot.name
+                       from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                       where ot.ontology_term_id = gaiec.go_evidence_code_id)
+                select ta.gene_source_id as source_id, tp.product, ta.project_id,
+                       listagg(source_id, ', ') within group(order by source_id)
+                         as transcript_ids,
+                       listagg(publication, ', ') within group(order by source_id)
+                         as reference,
+                       e.name as evidence_code,
+                       tp.with_from AS evidence_code_parameter
+                from apidb.TranscriptProduct tp,
+                     apidbTuning.TranscriptAttributes ta, evids e
+                where ta.na_feature_id = tp.na_feature_id
+                  and tp.is_preferred = 1
+                  and tp.evidence_code = e.go_evidence_code_id(+)
+                group by gene_source_id, ta.project_id, tp.product,
+                         e.name, tp.with_from
+              union
+                select ga.source_id, gfp.product, ga.project_id,
+                       cast (null as varchar2(1)) as transcript_ids,
+                       cast (null as varchar2(1)) as reference,
+                       cast (null as varchar2(1)) as evidence_code,
+                       cast (null as varchar2(1)) as evidence_code_parameter
+                from apidb.GeneFeatureProduct gfp,
+                     apidbTuning.GeneAttributes ga
+                where ga.na_feature_id = gfp.na_feature_id
+                  and gfp.is_preferred = 1
+                group by source_id, ga.project_id, gfp.product
+              union
+                select *
+                from (select ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
+                             listagg(source_id, ', ') within group(order by source_id)
+                               as transcript_ids,
+                             cast (null as varchar2(1)) as reference,
+                             cast (null as varchar2(1)) as evidence_code,
+                             cast (null as varchar2(1)) as evidence_code_parameter
+                      from apidbTuning.TranscriptAttributes ta
+                      where ta.transcript_product is not null
+                      group by ta.gene_source_id, ta.transcript_product, ta.project_id
+                     )
+                where source_id
+                      in (  select *
+                            from (  select source_id
+                                    from dots.GeneFeature
+                                    where product is not null
+                                  union
+                                    select ga.source_id
+                                    from dots.Transcript t, apidbTuning.GeneAttributes ga
+                                    where t.product is not null
+                                      and t.parent_id = ga.na_feature_id
+                                 )
+                          minus
+                            select *
+                            from (  select ta.gene_source_id
+                                    from apidb.TranscriptProduct tp, apidbTuning.TranscriptAttributes ta
+                                    where tp.na_feature_id = ta.na_feature_id
+                                  union
+                                    select ga.source_id
+                                    from apidb.GeneFeatureProduct gfp, apidbTuning.GeneAttributes ga
+                                    where gfp.na_feature_id = ga.na_feature_id
+                                 )
+                         )
             ]]>
             </sql>
         </sqlQuery> 
@@ -2840,7 +2907,7 @@ WHERE
         <sqlParamValue name="brcName" includeProjects="CryptoDB">ApiDB_CryptoDB</sqlParamValue>
         <sqlParamValue name="brcName" includeProjects="ToxoDB">ApiDB_ToxoDB</sqlParamValue>
         <sqlParamValue name="brcName" includeProjects="FungiDB">FungiDB</sqlParamValue>
-        <sqlParamValue name="brcName" includeProjects="GiardiaDB,TrichDB,EuPathDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,HostDB,SchistoDB,UniDB,InitDB,PiroplasmaDB">ApiDB</sqlParamValue>
+        <sqlParamValue name="brcName" includeProjects="GiardiaDB,TrichDB,EuPathDB,TriTrypDB,AmoebaDB,MicrosporidiaDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB,PiroplasmaDB">ApiDB</sqlParamValue>
         <sql>
           <![CDATA[
             SELECT source_id, gene_source_id, '@PROJECT_ID@' as project_id,
@@ -2927,6 +2994,7 @@ WHERE
                    '@PROJECT_ID@' as gff_source,
                    decode(so.name,
                           'protein_coding', 'mRNA',
+                          'protein_coding_gene', 'mRNA',
                           'repeat_region', 'mRNA',
                           'rRNA_encoding', 'rRNA',
                           'snRNA_encoding', 'snRNA',
@@ -3534,6 +3602,46 @@ WHERE
   AND lower(edd.dataset_presenter_name) NOT LIKE '%nafeature_aliases%'
   AND edd.dataset_presenter_name NOT LIKE '%dbxref_simple_gene2HagaiPathway%'
   AND lower(edd.dataset_presenter_name) NOT LIKE '%pubmed%'
+UNION
+SELECT d.name as dataset
+, ga.gene_source_id
+, ga.project_id
+, dbr.primary_identifier AS ext_id
+, REPLACE(eru.id_url, '###ID###', dbr.primary_identifier) AS link_url
+
+FROM
+   sres.dbref dbr
+, DOTS.dbrefnafeature dbrf
+, sres.externaldatabaserelease r
+, sres.externaldatabase d
+, ApidbTuning.transcriptAttributes ga
+, APIDB.EXTERNALRESOURCEURL eru
+WHERE dbr.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and dbr.db_ref_id = dbrf.db_ref_id
+and dbrf.na_feature_id = ga.na_feature_id
+and upper(d.name) = eru.database_name
+and d.name not in ('PUBMED')
+UNION
+SELECT d.name as dataset
+, ga.source_id
+, ga.project_id
+, dbr.primary_identifier AS ext_id
+, REPLACE(eru.id_url, '###ID###', dbr.primary_identifier) AS link_url
+
+FROM
+   sres.dbref dbr
+, DOTS.dbrefnafeature dbrf
+, sres.externaldatabaserelease r
+, sres.externaldatabase d
+, ApidbTuning.geneAttributes ga
+, APIDB.EXTERNALRESOURCEURL eru
+WHERE dbr.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and dbr.db_ref_id = dbrf.db_ref_id
+and dbrf.na_feature_id = ga.na_feature_id
+and upper(d.name) = eru.database_name
+and d.name not in ('PUBMED')
 )
   ORDER BY dataset
                 ]]>
@@ -3852,7 +3960,7 @@ GROUP BY
   <!--======================Metabolic Pathways - Enzymes Compounds Table=================-->
   <!--===========================================================================-->
 
-      <sqlQuery name="CompoundsFromMetabolicPathways" excludeProjects="EuPathDB">
+      <sqlQuery name="MetabolicPathwayReactions" excludeProjects="EuPathDB">
             <testParamValues includeProjects="PlasmoDB">
                <paramValue name="source_id">PF3D7_1435300</paramValue>
             </testParamValues>
@@ -4005,7 +4113,7 @@ ORDER BY
 
 
 
-          <sqlQuery name="ProteinExpressionPBrowse" isCacheable="false" excludeProjects="EuPathDB">
+          <sqlQuery name="ProteinExpressionPBrowse" isCacheable="false" excludeProjects="EuPathDB,VectorBase">
             <column name="source_id"/>
             <column name="project_id"/>
             <column name="lc_project_id"/>
@@ -4230,13 +4338,19 @@ ORDER BY ggp.profile_graph_id,dataset_id, d.node_order_num, d.protocol_app_node_
             <column name="project_id"/>
             <sql>
             <![CDATA[
-            select ga.source_id
-                 , ga.project_id 
-            from apidbtuning.organismattributes oa
-               , apidbtuning.geneattributes ga
-            where ga.organism = oa.organism_name
-            and oa.RNASEQCOUNT > 0
-             ]]>
+select distinct p.source_id,
+     		ga.project_id
+from apidbtuning.profile p, 
+     apidbtuning.profilesamples ps, 
+     apidbtuning.geneattributes ga,
+     apidbtuning.datasetmodelref dmr,
+     apidbtuning.datasetpresenter dp
+where p.dataset_type = 'transcript_expression' 
+and p.dataset_subtype = 'rnaseq' 
+and p.source_id = ga.source_id
+and p.profile_set_name = ps.study_name
+and p.dataset_name = dp.name
+and dp.DATASET_PRESENTER_ID = dmr.DATASET_PRESENTER_ID]]>
             </sql>
           </sqlQuery>
 
