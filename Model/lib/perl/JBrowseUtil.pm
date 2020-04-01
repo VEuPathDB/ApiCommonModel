@@ -48,6 +48,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .05,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 3,
+                                                      annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
                                                      feature => "gsnap:unifiedintronjunction",
@@ -61,6 +62,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .05,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 1,
+                                                      annotated_intron => "ALL",
                                                    },
                                     },
                        'HostDB' => { 'refined' => { feature => "gsnap:unifiedintronjunction",
@@ -74,6 +76,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .5,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 3,
+                                                      annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
                                                      feature => "gsnap:unifiedintronjunction",
@@ -87,6 +90,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .5,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 1,
+                                                      annotated_intron => "ALL",
                                                    },
                                     },
                        'GiardiaDB' => { 'refined' => { feature => "gsnap:unifiedintronjunction",
@@ -100,6 +104,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .01,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 3,
+                                                      annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
                                                      feature => "gsnap:unifiedintronjunction",
@@ -113,6 +118,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .01,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 1,
+                                                      annotated_intron => "ALL",
                                                    },
                                     },
                        'VectorBase' => { 'refined' => { feature => "gsnap:unifiedintronjunction",
@@ -126,6 +132,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .5,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 3,
+                                                      annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
                                                      feature => "gsnap:unifiedintronjunction",
@@ -139,6 +146,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .5,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 1,
+                                                      annotated_intron => "ALL",
                                                    },
                                     },
                        'default' => { 'refined' => { feature => "gsnap:unifiedintronjunction",
@@ -152,6 +160,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .5,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 3,
+                                                      annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
                                                      feature => "gsnap:unifiedintronjunction",
@@ -165,6 +174,7 @@ sub intronJunctionsQueryParams {
                                                      isrpmRatio => .5,
                                                      externalDatabaseName => "ALL",
                                                      minReadsMaxSample => 1,
+                                                      annotated_intron => "ALL",
                                                    },
                                     },
   };
