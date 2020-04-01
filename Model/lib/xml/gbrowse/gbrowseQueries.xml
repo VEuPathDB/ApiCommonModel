@@ -357,6 +357,46 @@ ORDER BY
     </sql>
   </sqlQuery>
 
+
+
+  <sqlQuery name="gene:annotation2">
+     <sql>
+<![CDATA[
+ SELECT
+       ga.na_feature_id feature_id,
+       'gene' type,
+       'annotation' source,
+       ga.source_id name,
+       '1' phase, 
+       '.' score,
+       ga.na_sequence_id parent_id,
+       ga.start_min startm,
+       ga.end_max end,
+       decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'Note=' || ga.product  || '$dlm' ||
+       'soTerm=' || ga.so_term_name || '$dlm' ||
+       'geneId=' || ga.source_id || '$dlm' ||
+       'gName=' || ga.name || '$dlm' ||
+       'Contig=' || ga.sequence_id || '$dlm' ||
+       'product=' || replace(ga.product,'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'taxon=' || ga.organism || '$dlm' ||
+       'isDeprecated=' || ga.is_deprecated || '$dlm' ||
+       'orthomcl_name=' || ga.orthomcl_name || '$dlm' ||
+       'isPseudo=' || ga.is_pseudo || '$dlm' ||
+       'ProjectId=' || ga.project_id || '$dlm' ||
+       'OrgAbbrev=' || o.public_abbrev atts
+FROM
+       ApidbTuning.GeneAttributes ga,
+       apidb.organism o
+WHERE  ga.na_sequence_id = $srcfeature_id
+  AND  ga.start_min <= $rend
+  AND  ga.end_max >= $base_start
+  AND  ga.taxon_id = o.taxon_id
+]]>
+    </sql>
+  </sqlQuery>
+
+
   <sqlQuery name="piggyBac:TransposableElement" includeProjects="PlasmoDB">
      <sql>
 <![CDATA[
@@ -390,115 +430,16 @@ ORDER BY
     <sqlQuery name="gsnap:unifiedintronjunction">
      <sql>
        <![CDATA[
-with valid as (
-SELECT na_sequence_id,segment_start,segment_end,is_reversed
-FROM apidbtuning.geneintronjunction
-  WHERE  segment_start <= $rend
-     AND segment_end >= $base_start
-     AND na_sequence_id = $srcfeature_id 
-     AND segment_end - segment_start <= $$intronSizeLimit$$
-     AND unique_reads >= $$minReadsMaxSample$$
-     AND sample_multiplier <= $$maxIsrpmMult$$
-     AND total_cons_mult_ratio >= $$isrpmRatio$$ 
-     AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
-       OR (external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-     GROUP BY na_sequence_id,segment_start,segment_end,is_reversed,is_contained, annotated_intron
-     HAVING max(CASE WHEN is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) keep (dense_rank first order by isrpm desc) >= 
-                CASE WHEN is_contained = 1 THEN $$minContainedRatio$$ ELSE $$minNonContainedRatio$$ END
-          OR annotated_intron = 'Yes' /* this may be a bit dodgy but should show evidence for annotated intron if it exists even if ratio too low */
-) -- end valid
-,inwindow as (
-SELECT ij.*
-FROM apidbtuning.geneintronjunction ij, valid v
-  WHERE  v.segment_start = ij.segment_start
-     AND v.segment_end = ij.segment_end
-     AND v.na_sequence_id = ij.na_sequence_id 
-     AND v.is_reversed = ij.is_reversed
-     AND ij.unique_reads >= 1
-     AND ij.sample_multiplier <= $$maxIsrpmMult$$
-     AND ij.total_cons_mult_ratio >= $$isrpmRatio$$
-     AND (('$$externalDatabaseName$$' = 'ALL' and ij.include_unified_junctions = 'true')
-       OR (ij.external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-)
-, distids as (
-select distinct gene_source_id from inwindow
-)
-, genesample as (
-SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_unique,max(ij.isrpm) as sample_isrpm
-  FROM apidbtuning.geneintronjunction ij, distids
-  WHERE ij.gene_source_id = distids.gene_source_id
-  AND ij.matches_gene_strand = 1
-  AND ij.segment_end - ij.segment_start <= $$intronSizeLimit$$
-  AND ij.unique_reads >= 1
-  AND ij.sample_multiplier <= $$maxIsrpmMult$$
-  AND ij.total_cons_mult_ratio >= $$isrpmRatio$$
-  AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
-   OR (ij.external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-  GROUP By ij.protocol_app_node_id,ij.gene_source_id)
-, genetotal as (
-SELECT gene_source_id,max(tot_unique) as max_gene_unique,max(tot_isrpm) as max_gene_isrpm
-FROM (
-SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot_isrpm
-  FROM apidbtuning.geneintronjunction ij, distids
-  WHERE ij.gene_source_id = distids.gene_source_id
-  AND ij.matches_gene_strand = 1
-  AND ij.segment_end - ij.segment_start <= $$intronSizeLimit$$
-  AND ij.unique_reads >= 1
-  AND ij.sample_multiplier <= $$maxIsrpmMult$$
-  AND ij.total_cons_mult_ratio >= $$isrpmRatio$$
-  AND (('$$externalDatabaseName$$' = 'ALL' and include_unified_junctions = 'true')
-   OR (ij.external_database_name = '$$externalDatabaseName$$' and show_intron_junctions = 'true'))
-  GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
-  GROUP by gene_source_id
-)
-SELECT * from (
-SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
-CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END as percent_max,
-sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio,
-'Exps=' || rtrim(xmlagg(XMLELEMENT(e,display_name,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'Samples=' || rtrim(xmlagg(XMLELEMENT(e,samples,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'IsrCovRatio=' || rtrim(xmlagg(XMLELEMENT(e,isr_cov_ratios,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'IsrAvgCovRatio=' || rtrim(xmlagg(XMLELEMENT(e,isr_avg_cov_ratios,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'PerMaxSample=' || rtrim(xmlagg(XMLELEMENT(e,percent_max_samples,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'URS=' || rtrim(xmlagg(XMLELEMENT(e,unique_reads,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'ISRPM=' || rtrim(xmlagg(XMLELEMENT(e,isrpm,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || '$dlm' ||
-'TotalScore=' || sum(total_reads) || '$dlm' ||
-'MatchesGeneStrand=' || matches_gene_strand || '$dlm' ||
-'IsReversed=' || is_reversed || '$dlm' ||
-'AnnotatedIntron=' || annotated_intron || '$dlm' ||
-'IntronPercent=' || CASE WHEN max_gene_isrpm is not null THEN round(sum(total_isrpm) / max_gene_isrpm * 100,1) ELSE null END || '$dlm' ||
-'GeneSourceId=' || gene_source_id || '$dlm' ||
-'IntronRatio=' || round(avg(avg_exp_ratio_exp),4) atts
-FROM (
-SELECT segment_start || '_' || segment_end || '_' || is_reversed as feature_id,
-         'gsnap' type, 
-         '$source' source, 
-         na_sequence_id parent_id, 
-         segment_start startm, 
-         segment_end end, 
-         sum(unique_reads) as sum_exp_score, 
-         exp_name as display_name, is_contained as contained,
-         matches_gene_strand, is_reversed, annotated_intron, gt.gene_source_id,
-         listagg(sample_name, ',') within group (order by iw.protocol_app_node_id) as samples,
-         listagg(unique_reads, ',') within group (order by iw.protocol_app_node_id) unique_reads,
-         listagg(isrpm, ',') within group (order by iw.protocol_app_node_id) isrpm,
-         listagg(isr_coverage_ratio, ',') within group (order by iw.protocol_app_node_id) as isr_cov_ratios,  
-         listagg(isr_avgcoverage_ratio, ',') within group (order by iw.protocol_app_node_id) as isr_avg_cov_ratios,  
-         listagg(round(unique_reads / nvl(gs.sample_unique,-1) * 100,1), ',') within group (order by iw.protocol_app_node_id) as percent_max_samples,
-         sum(unique_reads) as total_reads, sum(isrpm) as total_isrpm, max(isrpm) as max_isrpm,
-         avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp,gt.max_gene_isrpm,
-         max(CASE WHEN iw.is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) as best_sample_ratio
-FROM inwindow iw, genesample gs, genetotal gt
-WHERE iw.gene_source_id = gt.gene_source_id(+)
-AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
-and iw.gene_source_id = gs.gene_source_id(+)
-GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, iw.is_reversed,iw.annotated_intron)
-GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
-  HAVING sum(total_reads) >=  CASE WHEN contained = 1 THEN $$minContainedScore$$ ELSE $$minNonContainedScore$$ END )
-WHERE (contained = 1
-       AND percent_max >= $$minIntronPercent$$ )
-OR contained = 0
-  order by startm
+                select *
+                from ApidbTuning.GeneIntronJunction
+                where parent_id = $srcfeature_id
+                AND startm <= $rend
+                AND end >= $base_start
+                AND (annotated_intron = 'Yes'
+                OR (score >=  CASE WHEN contained = 1 THEN $$minContainedScore$$ ELSE $$minNonContainedScore$$ END
+                    AND (contained = 0 or percent_max >= $$minIntronPercent$$)
+                    AND score_exp_ratio >= CASE WHEN contained = 1 THEN $$minContainedRatio$$ ELSE $$minNonContainedRatio$$ END
+                    AND end - startm <= $$intronSizeLimit$$))
        ]]>
     </sql>
   </sqlQuery>
@@ -3557,20 +3498,98 @@ from dual
 
 
 
-  <sqlQuery name="gene:annotation:bulksubfeatures">
+  <sqlQuery name="gene:annotation2:bulksubfeatures">
      <sql>
 <![CDATA[
 select * from (
-SELECT distinct exon_loc.na_feature_id feature_id, 
-       'exon' type, 
-       'annotation' source, 
-       exon_loc.na_feature_id name,
+ SELECT
+       ta.na_feature_id feature_id,
+       case when so_term_name like 'protein_coding%' OR so_term_name = 'pseudogene' then 'processed_transcript' else 'nc_transcript' end as type,
+       'annotation' source,
+       ta.source_id name,
        '1' phase, 
-       rfe.rna_feature_id parent_id,
-       CASE WHEN exon_loc.is_reversed = 0 THEN
-       exon_loc.start_min ELSE exon_loc.end_max END as startm,
-       CASE WHEN exon_loc.is_reversed = 0 THEN
-       exon_loc.end_max ELSE exon_loc.start_min END as end,
+       ta.gene_na_feature_id parent_id,
+       fl.start_min startm,
+       fl.end_max end,
+       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'soTerm=' || ta.transcript_type || '$dlm' ||
+       'geneId=' || ta.gene_source_id || '$dlm' ||
+       'Contig=' || ta.sequence_id || '$dlm' ||
+       'taxon=' || ta.organism || '$dlm' ||
+       'isDeprecated=' || ta.is_deprecated || '$dlm' ||
+       'isPseudo=' || ta.is_pseudo || '$dlm' ||
+       'ProjectId=' || ta.project_id || '$dlm' ||
+       'aaSeqId=' || ta.aa_sequence_id ||  '$dlm' || 
+       'OrgAbbrev=' || o.public_abbrev atts,
+       1 as has_children
+FROM
+       ApidbTuning.TranscriptAttributes ta,
+       apidb.FeatureLocation fl, apidb.organism o
+WHERE  fl.na_sequence_id = $srcfeature_id
+  AND  fl.feature_type = 'Transcript'
+  AND  fl.na_feature_id = ta.na_feature_id
+  AND  fl.start_min <= $rend
+  AND  fl.end_max >= $base_start
+  AND  fl.is_top_level = 1
+  AND  ta.taxon_id = o.taxon_id
+UNION
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       'nc_exon' type,
+       'annotation' source, 
+       ta.source_id name,
+       '1' phase, 
+       ta.na_feature_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts ,
+       0 as has_children
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  exon_loc.feature_type = 'ExonFeature'
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND  ta.na_feature_id = rfe.rna_feature_id
+  AND  rfe.EXON_FEATURE_ID = exon_loc.na_feature_id
+  AND  ta.AA_SEQUENCE_ID is null
+UNION
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       exon_loc.feature_type type, 
+       'annotation' source, 
+       ta.source_id name,
+       '1' phase, 
+       exon_loc.parent_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts ,
+       0 as has_children
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  (exon_loc.feature_type = 'CDS'
+     OR exon_loc.feature_type = 'UTR')
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND ta.na_feature_id = exon_loc.parent_id
+) order by has_children desc
+]]>
+    </sql>
+  </sqlQuery>
+
+
+  <sqlQuery name="gene:annotation:bulksubfeatures">
+     <sql>
+<![CDATA[
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       'nc_exon' type,
+       'annotation' source, 
+       ta.na_feature_id name,
+       '1' phase, 
+       ta.na_feature_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
        decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'isDeprecated=' ||  ta.is_deprecated atts 
 FROM   
@@ -3579,11 +3598,11 @@ WHERE  exon_loc.na_sequence_id = $srcfeature_id
   AND  exon_loc.feature_type = 'ExonFeature'
   AND  exon_loc.start_min <= $rend
   AND  exon_loc.end_max >= $base_start
-  AND rfe.exon_feature_id = exon_loc.na_feature_id
-  AND ta.na_feature_id = rfe.rna_feature_id
-  AND ta.gene_type != 'protein coding'
+  AND  ta.na_feature_id = rfe.rna_feature_id
+  AND  rfe.EXON_FEATURE_ID = exon_loc.na_feature_id
+  AND  ta.AA_SEQUENCE_ID is null
 UNION
-SELECT distinct ta.na_feature_id feature_id, 
+SELECT distinct exon_loc.feature_location_id feature_id, 
        exon_loc.feature_type type, 
        'annotation' source, 
        ta.na_feature_id name,
@@ -3601,7 +3620,6 @@ WHERE  exon_loc.na_sequence_id = $srcfeature_id
   AND  exon_loc.start_min <= $rend
   AND  exon_loc.end_max >= $base_start
   AND ta.na_feature_id = exon_loc.parent_id
-) order by startm
 ]]>
     </sql>
   </sqlQuery>
@@ -4191,6 +4209,7 @@ SELECT
 <![CDATA[
 -- for syntenic genes
 select * from (
+select * from (
 -- first get all exons in the visible region
 with syn_genes as (
 select sg.synteny_id
@@ -4203,14 +4222,38 @@ select sg.synteny_id
      , sg.start_min ref_gene_start
      , sg.end_max ref_gene_end
      , sg.na_sequence_id ref_na_sequence_id
-     , fl.parent_id as gene_na_feature_id
+     , fl.parent_id
+     , fl.feature_type
 from apidb.syntenicgene sg, 
      apidb.featurelocation fl
 where sg.na_sequence_id = $srcfeature_id
   AND sg.start_min <=  $$visibleRegionEnd$$
   AND sg.end_max >=  $$visibleRegionStart$$
   AND sg.syn_na_feature_id = fl.parent_id
-  and fl.feature_type = 'ExonFeature'
+  and fl.feature_type in ('Transcript')
+  and fl.is_top_level = 1
+UNION
+select sg.synteny_id
+     , fl.start_min syn_exon_start 
+     , fl.end_max syn_exon_end
+     , fl.na_sequence_id as syn_na_sequence_id
+     , fl.na_feature_id as syn_na_feature_id
+     , sg.syn_organism_abbrev
+     , sg.is_reversed as syn_gene_is_reversed
+     , sg.start_min ref_gene_start
+     , sg.end_max ref_gene_end
+     , sg.na_sequence_id ref_na_sequence_id
+     , fl.parent_id
+     , fl.feature_type
+from apidb.syntenicgene sg, 
+     apidb.featurelocation fl, 
+     apidbtuning.transcriptattributes ta
+where sg.na_sequence_id = $srcfeature_id
+  AND sg.start_min <=  $$visibleRegionEnd$$
+  AND sg.end_max >=  $$visibleRegionStart$$
+  AND sg.syn_na_feature_id = ta.gene_na_feature_id
+  and fl.feature_type in ('CDS', 'UTR')
+  and ta.na_feature_id = fl.parent_id
   and fl.is_top_level = 1
 ),
 -- calc stats for scaling
@@ -4240,51 +4283,111 @@ select sg.syn_na_sequence_id
         END as e
      , sg.syn_gene_is_reversed
      , ref_na_sequence_id
-     , sg.gene_na_feature_id
+     , sg.parent_id
+     , sg.feature_type
 from syn_genes sg,
      sscale ss,
      apidb.synteny s
 where sg.synteny_id = s.synteny_id
  and ss.synteny_id = s.synteny_id
 )
-SELECT sg.syn_na_feature_id || '_synexon' as feature_id,
-       'exon' type,
+-- SynTranscripts
+SELECT sg.synteny_id || '_syntranscript_' || sg.syn_na_feature_id as feature_id,
+       case when so_term_name like 'protein_coding%' OR so_term_name = 'pseudogene' then 'processed_transcript' else 'nc_transcript' end as type,
        'syntenyJBrowseScaled' source,
        sg.syn_na_feature_id name,
        '.' score,
-       sg.synteny_id || '_syngene_' || sg.gene_na_feature_id parent_id,
+       sg.synteny_id || '_syngene_' || sg.parent_id parent_id,
        sg.s startm,
        sg.e end,
        decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
-       ' ' atts
+       ' ' atts,
+       1 as has_children
 FROM   scaled_syngenes sg,
-       ApidbTuning.GeneAttributes gattr,
-       apidbtuning.OrganismSelectTaxonRank ostr
-WHERE sg.ref_na_sequence_id = $srcfeature_id
+       ApidbTuning.TranscriptAttributes gattr
+WHERE sg.feature_type = 'Transcript'
+  AND sg.ref_na_sequence_id = $srcfeature_id
   AND sg.s <= $rend
   AND sg.e >= $base_start
-  AND sg.gene_na_feature_id = gattr.na_feature_id
-  AND gattr.organism = ostr.organism 
+  AND sg.syn_na_feature_id = gattr.na_feature_id
+UNION
+-- Syn UTR/CDS
+SELECT sg.syn_na_feature_id || '_syncdsorutr' as feature_id,
+       sg.feature_type type,
+       'syntenyJBrowseScaled' source,
+       sg.syn_na_feature_id name,
+       '.' score,
+       sg.synteny_id || '_syntranscript_' || sg.parent_id parent_id,
+       sg.s startm,
+       sg.e end,
+       decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts,
+       0 as has_children
+FROM   scaled_syngenes sg
+WHERE sg.feature_type in ('CDS', 'UTR')
+  AND sg.ref_na_sequence_id = $srcfeature_id
+  AND sg.s <= $rend
+  AND sg.e >= $base_start
 )
 UNION
-SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
-       'exon' type, 
+-- Transcipts
+SELECT distinct loc.na_feature_id || '_reftranscript' feature_id, 
+       case when ta.so_term_name like 'protein_coding%' OR ta.so_term_name = 'pseudogene' then 'processed_transcript' else 'nc_transcript' end as type,
        'annotation' source, 
-       exon_loc.na_feature_id name,
+       loc.na_feature_id name,
        '.' score,
-       'refgene_' || exon_loc.parent_id,
-       exon_loc.start_min as startm,
-       exon_loc.end_max as end,
-       decode (exon_loc.is_reversed, 0, +1, 1, -1, +1) strand,
-       ' ' atts 
+       'refgene_' || loc.parent_id as parent,
+       loc.start_min as startm,
+       loc.end_max as end,
+       decode (loc.is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts ,
+       1 as has_children
 FROM   
-       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
-WHERE  exon_loc.na_sequence_id = $srcfeature_id
-  AND  exon_loc.feature_type = 'ExonFeature'
-  AND  exon_loc.start_min <= $rend
-  AND  exon_loc.end_max >= $base_start
-  AND rfe.exon_feature_id = exon_loc.na_feature_id
-  AND ta.na_feature_id = rfe.rna_feature_id
+       apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta
+WHERE  loc.na_sequence_id = $srcfeature_id
+  AND  loc.feature_type = 'Transcript'
+  AND  loc.start_min <= $rend
+  AND  loc.end_max >= $base_start
+  AND loc.na_feature_id = ta.na_feature_id
+UNION
+-- UTR / CDS
+SELECT distinct loc.feature_location_id || '_refexon' feature_id, 
+       loc.feature_type type, 
+       'annotation' source, 
+       loc.na_feature_id name,
+       '.' score,
+       loc.parent_id || '_reftranscript' as parent,
+       loc.start_min as startm,
+       loc.end_max as end,
+       decode (loc.is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts ,
+      0 as has_children
+FROM   
+       apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta
+WHERE  loc.na_sequence_id = $srcfeature_id
+  AND  loc.feature_type in ( 'CDS', 'UTR')
+  AND  loc.start_min <= $rend
+  AND  loc.end_max >= $base_start
+  AND  ta.na_feature_id = loc.parent_id
+) order by has_children desc
+--SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
+--       'exon' type, 
+--       'annotation' source, 
+--       exon_loc.na_feature_id name,
+--       '.' score,
+--       'refgene_' || exon_loc.parent_id,
+--       exon_loc.start_min as startm,
+--       exon_loc.end_max as end,
+--       decode (exon_loc.is_reversed, 0, +1, 1, -1, +1) strand,
+--       ' ' atts 
+--FROM   
+--       apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+--WHERE  exon_loc.na_sequence_id = $srcfeature_id
+--  AND  exon_loc.feature_type = 'ExonFeature'
+--  AND  exon_loc.start_min <= $rend
+--  AND  exon_loc.end_max >= $base_start
+--  AND rfe.exon_feature_id = exon_loc.na_feature_id
+--  AND ta.na_feature_id = rfe.rna_feature_id
 ]]>
     </sql>
   </sqlQuery>
