@@ -5395,6 +5395,121 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   </tuningTable>
 
 
+  <tuningTable name="NewOrganismTree">
+    <comment>
+         Group species by higher level taxonomy. Each row associates a taxon of
+         interest with one of its ancestors in the taxon tree. Used in parameter
+         queries that have to know about the taxon tree. Propagated to portal
+         instances.
+      </comment>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="sres.Taxon"/>
+    <intermediateTable name="TaxonLink"/>
+    <intermediateTable name="DistinctTaxonLink"/>
+    <sql>
+      <![CDATA[
+        create table TaxonLink nologging as
+        with datasets_taxon
+             as (select taxon_id
+                 from GenomicSeqAttributes
+                )
+        select taxon_id, rank, parent_id, level as tree_level,
+               case
+                 when taxon_id
+                      in (select taxon_id from datasets_taxon)
+                   then 'has data'
+                 when rank
+                      in ('kingdom', 'phylum', 'class', 'order', 'family',
+                          'genus', 'species')
+                   then 'major rank'
+                 when taxon_id
+                      in (select taxon_id
+                          from sres.TaxonName
+                          where name
+                                in ('Amoebozoa',
+                                    'end of hardwired taxon list'))
+                   then 'hardwired'
+                 else 'none'
+               end as display_reason
+        from sres.Taxon
+        start with taxon_id
+                   in (select taxon_id from datasets_taxon)
+        connect by taxon_id = prior parent_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create table DistinctTaxonLink nologging as
+        select taxon_id, max(rank) as rank, max(parent_id) as parent_id,
+               max(tree_level) as tree_level,
+               max(display_reason) as display_reason
+        from TaxonLink
+        group by taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create unique index dtl_ix&1
+        on DistinctTaxonLink (taxon_id)
+        tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        BEGIN
+          FOR skiplist
+              IN (select taxon_id, max(parent_id) as parent_id, max(tree_level)
+                  from DistinctTaxonLink
+                  where display_reason = 'none'
+                  group by taxon_id
+                  order by max(tree_level) desc
+                 )
+            LOOP
+
+              update DistinctTaxonLink
+              set parent_id
+                  = (select max(parent_id)
+                     from DistinctTaxonLink
+                     where taxon_id = skiplist.taxon_id)
+              where parent_id = skiplist.taxon_id;
+
+              commit;
+            END LOOP;
+        END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        delete from DistinctTaxonLink where display_reason = 'none'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create table NewOrganismTree&1 nologging as
+        select leaf_name.name as organism, tn.name as term,
+               parent_name.name as parentterm, dtl.taxon_id as internal,
+               apidb.project_id(leaf_name.name) as project_id
+        from (select connect_by_root taxon_id as leaf_taxon_id, taxon_id,
+                     parent_id
+              from DistinctTaxonLink
+              start with display_reason = 'has data'
+              connect by taxon_id = prior parent_id
+             ) dtl,
+             sres.TaxonName leaf_name, sres.TaxonName tn,
+             (select taxon_id, name
+              from sres.TaxonName
+              where name_class = 'scientific name') parent_name
+        where dtl.leaf_taxon_id = leaf_name.taxon_id
+          and leaf_name.name_class = 'scientific name'
+          and dtl.taxon_id = tn.taxon_id
+          and tn.name_class = 'scientific name'
+          and dtl.parent_id = parent_name.taxon_id(+)
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="OrganismAbbreviationBlast">
     <comment> Each record maps an organism to its BLAST abbreviation. Used by
          BLAST-query parameters. Propagated to portal instances.
