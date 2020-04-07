@@ -17,8 +17,8 @@ public class ChIPChip extends DatasetInjector {
     }
     injectTemplate("chipChipSmoothed");
 
-    setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipSmoothed");
-    injectTemplate("gbrowseTrackCategory");
+    //    setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipSmoothed");
+    //    injectTemplate("gbrowseTrackCategory");
 
     if (getPropValueAsBoolean("hasCalledPeaks")) {
         if (getPropValue("cutoff") == null) {
@@ -30,8 +30,8 @@ public class ChIPChip extends DatasetInjector {
         }
 
 
-        setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipPeaks");
-        injectTemplate("gbrowseTrackCategory");
+        //        setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipPeaks");
+        //        injectTemplate("gbrowseTrackCategory");
     }
 
   }
