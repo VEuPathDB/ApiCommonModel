@@ -14,8 +14,8 @@ public class Sequences extends DatasetInjector {
 
       injectTemplate("sequenceGBrowseTrack");
 
-      setPropValue("gbrowseTrackName", "Sequences_" + getDatasetName() );
-      injectTemplate("gbrowseTrackCategory");
+      //      setPropValue("gbrowseTrackName", "Sequences_" + getDatasetName() );
+      //      injectTemplate("gbrowseTrackCategory");
 
   }
 
