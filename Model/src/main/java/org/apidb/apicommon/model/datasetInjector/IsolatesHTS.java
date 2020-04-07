@@ -36,8 +36,8 @@ public class IsolatesHTS extends DatasetInjector {
           injectTemplate("htsSnpSampleDatabase");
           injectTemplate("htsSnpSampleCoverageXYTrack");
 
-          setPropValue("gbrowseTrackName", gbrowseDBName);
-          injectTemplate("gbrowseTrackCategory");
+          //          setPropValue("gbrowseTrackName", gbrowseDBName);
+          //          injectTemplate("gbrowseTrackCategory");
 
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
@@ -52,8 +52,8 @@ public class IsolatesHTS extends DatasetInjector {
               injectTemplate("copyNumberVariationsDatabase");
               injectTemplate("copyNumberVariationsTrack");
 
-              setPropValue("gbrowseTrackName", getPropValue("datasetName") + getPropValue("sampleName"));
-              injectTemplate("gbrowseTrackCategory");
+              //              setPropValue("gbrowseTrackName", getPropValue("datasetName") + getPropValue("sampleName"));
+              //              injectTemplate("gbrowseTrackCategory");
           }       
 
       }
