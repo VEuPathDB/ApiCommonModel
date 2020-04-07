@@ -277,12 +277,12 @@ public class RNASeq extends  DatasetInjector {
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
 
       injectTemplate("rnaSeqCoverageTrack");
-      setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
-      injectTemplate("gbrowseTrackCategory");
+      //      setPropValue("gbrowseTrackName", getDatasetName() + "Coverage");
+      //      injectTemplate("gbrowseTrackCategory");
 
       injectTemplate("rnaSeqCoverageTrackUnlogged");
-      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
-      injectTemplate("gbrowseTrackCategory");
+      //      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+      //      injectTemplate("gbrowseTrackCategory");
 
 
 
@@ -325,8 +325,8 @@ public class RNASeq extends  DatasetInjector {
           }
 
           injectTemplate("rnaSeqJunctionsTrack");
-          setPropValue("gbrowseTrackName", getDatasetName() + "Junctions");
-          injectTemplate("gbrowseTrackCategory");
+          //          setPropValue("gbrowseTrackName", getDatasetName() + "Junctions");
+          //          injectTemplate("gbrowseTrackCategory");
       }
 
 

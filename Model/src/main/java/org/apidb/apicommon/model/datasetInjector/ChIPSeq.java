@@ -10,16 +10,16 @@ public class ChIPSeq extends DatasetInjector {
       setOrganismAbbrevFromDatasetName();
 
       injectTemplate("chipSeqCoverageTrackUnlogged");
-      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
-      injectTemplate("gbrowseTrackCategory");
+      //      setPropValue("gbrowseTrackName", getDatasetName() + "CoverageUnlogged");
+      //      injectTemplate("gbrowseTrackCategory");
 
       if (getPropValueAsBoolean("hasCalledPeaks")) {
         String featureName = getPropValue("datasetDisplayName").replace(' ', '_');
         setPropValue ("featureName", featureName);
         injectTemplate("chipSeqPeaks");
 
-        setPropValue("gbrowseTrackName", getDatasetName() + "_chipSeqPeaks");
-        injectTemplate("gbrowseTrackCategory");
+        //        setPropValue("gbrowseTrackName", getDatasetName() + "_chipSeqPeaks");
+        //        injectTemplate("gbrowseTrackCategory");
     }
 
 

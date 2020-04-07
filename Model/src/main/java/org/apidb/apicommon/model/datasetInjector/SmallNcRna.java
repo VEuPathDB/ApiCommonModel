@@ -28,8 +28,8 @@ public class SmallNcRna extends  DatasetInjector {
           injectTemplate("smallNcRnaSampleDatabase");
           injectTemplate("smallNcRnaSampleTrack");
 
-          setPropValue("gbrowseTrackName", getDatasetName() + sampleName);
-          injectTemplate("gbrowseTrackCategory");
+          //          setPropValue("gbrowseTrackName", getDatasetName() + sampleName);
+          //          injectTemplate("gbrowseTrackCategory");
       }
 
   }
