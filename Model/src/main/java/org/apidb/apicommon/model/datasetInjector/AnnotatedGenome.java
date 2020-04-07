@@ -277,8 +277,11 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
 
-    addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
 
+    // not for VectorBase
+    if (!(getPropValue("projectName").equals("VectorBase"))){
+	addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
+	}
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "Reference");
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "AlignmentInfo");
 
