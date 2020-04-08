@@ -16,8 +16,8 @@ public class MicroarrayProbes extends DatasetInjector {
       setPropValue("summary", getPropValue("summary").replaceAll("\"", "'"));
       injectTemplate("jbrowseMicroarrayProbes");
 
-      setPropValue("gbrowseTrackName", "MicroarrayProbes_" + getDatasetName() );
-      injectTemplate("gbrowseTrackCategory");
+      //      setPropValue("gbrowseTrackName", "MicroarrayProbes_" + getDatasetName() );
+      //      injectTemplate("gbrowseTrackCategory");
 
   }
 
