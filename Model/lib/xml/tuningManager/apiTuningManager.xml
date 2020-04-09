@@ -1043,7 +1043,7 @@ select genomestat.taxon_id,
     <sql>
       <![CDATA[
 CREATE TABLE OrganismAttributes&1 NOLOGGING AS
-SELECT oa.*, tn2.name as species,
+SELECT oa.*, tn2.name as species, t.ncbi_tax_id as species_ncbi_tax_id,
        ltrim(replace(oa.organism_name, tn2.name)) as strain
 FROM
 (
@@ -2629,6 +2629,13 @@ create index GeneAttr_ids_ix&1
 tablespace indx
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+create index GeneAttr_loc_intjunc_ix&1
+       ON &prefixGeneAttributes&1 (NA_SEQUENCE_ID, START_MIN, IS_REVERSED, END_MAX)
+tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
 
 
@@ -3896,7 +3903,7 @@ tablespace indx
          taxon-tree ancestor whose rank is "species". Used by
          buildAnnotationChangeTT and by gene queries, and as an input in the
          creation of several tuning tables, including GeneAttributes and
-         OrganismTree.
+         OldOrganismTree.
     </comment>
     <internalDependency name="GenomicSeqAttributes"/>
     <externalDependency name="sres.Taxon"/>
@@ -4136,28 +4143,27 @@ tablespace indx
     </sql>
   </tuningTable>
 
+<!--
   <tuningTable name="GeneIntronJunction">
     <comment>
       Introns from RNASeq with percentages of max intron score and ratios vs expression
     </comment>
-<!--
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="InferredParams"/>
--->
     <externalDependency name="apidb.IntronJunction"/>
     <externalDependency name="apidb.IntronLocation"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.StudyLink"/>
     <externalDependency name="study.Study"/>
-    <intermediateTable name="JunctionDensity"/>
     <intermediateTable name="JunExp"/>
     <intermediateTable name="NameMapping"/>
     <intermediateTable name="mappingstats "/>
     <intermediateTable name="isrmult"/>
     <intermediateTable name="annot"/>
+    <intermediateTable name="GeneIdLoc"/>
     <intermediateTable name="core"/>
     <intermediateTable name="totalexpression"/>
     <intermediateTable name="ratiostats"/>
@@ -4321,6 +4327,29 @@ create table annot (
     </sql>
     <sql>
       <![CDATA[
+create table GeneIdLoc (
+    na_sequence_id,
+    start_min,
+    is_reversed,
+    end_max,
+    na_feature_id,
+    source_id,
+    CONSTRAINT gnattidloc_pk_ix PRIMARY KEY (na_sequence_id,start_min,is_reversed,end_max,na_feature_id,source_id) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select na_sequence_id,start_min,is_reversed,end_max,na_feature_id,source_id 
+   from  GeneAttributes
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index gnidloc_nafid_ix on GeneIdLoc (na_feature_id) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
    create table core (
        intron_junction_id               number(10), 
        exp_name                         varchar2(500), 
@@ -4328,20 +4357,20 @@ create table annot (
        sample_name                      varchar2(500), 
        protocol_app_node_id             number(10), 
        na_sequence_id                   number(10),
-       segment_start                    number(10), 
-       segment_end                      number(10), 
-       unique_reads                     number(10),
-       isrpm                            number(10),
-       nu_reads                         number(10),
-       value                            number(10),
+       segment_start                    number, 
+       segment_end                      number, 
+       unique_reads                     number,
+       isrpm                            number,
+       nu_reads                         number,
+       value                            number,
        switch_strands                   varchar2(10), 
        strand                           varchar2(20),
-       exp_ratio                        number(10),
-       isrpm_exp_ratio                  number(10),
-       avg_coverage                     number(10),
-       isr_coverage_ratio               number(10),
-       is_reversed                      number(3),
-       matches_gene_strand              number(1),
+       exp_ratio                        number,
+       isrpm_exp_ratio                  number,
+       avg_coverage                     number,
+       isr_coverage_ratio               number,
+       is_reversed                      number,
+       matches_gene_strand              number,
        gene_source_id                   varchar2(100),
        annotated_intron                 varchar2(10),
        include_unified_junctions        varchar2(10),
@@ -4352,7 +4381,7 @@ create table annot (
     <sql>
   <![CDATA[
 declare
-  ctrows number := 0;
+  ctrows number := 1;
   commit_after number := 200;  
   iter_length number := 4999;
   i_first_pos number := 1;
@@ -4409,7 +4438,7 @@ declare
               decode(annot.feature_type,'Intron','Yes','No') as annotated_intron,
               nm.include_unified_junctions,
               nm.show_intron_junctions
-       from apidb.IntronJunction junc, GeneAttributes ga, results.NaFeatureExpression nafe,
+       from apidb.IntronJunction junc, GeneIdLoc ga, results.NaFeatureExpression nafe,
             NameMapping nm, isrmult isrm, annot, MappingStats ms
        where junc.na_sequence_id = idlist.na_sequence_id
          and junc.segment_start between i_first_pos and i_last_pos
@@ -4447,10 +4476,13 @@ declare
     IF ctrows >= commit_after
       THEN
          COMMIT;  
-         ctrows := 0;  
+         ctrows := 1;  
+      ELSE  
+         ctrows := ctrows + 1;  
     END IF;  
     END LOOP;
     commit;
+    ctrows := 1;  
     i_first_pos := i_last_pos + 1;
     i_last_pos := i_first_pos + iter_length;
    END LOOP;
@@ -4470,7 +4502,14 @@ END;
     </sql>
     <sql>
       <![CDATA[
-               create index core_gnsrcid_ix on core (gene_source_id) tablespace indx
+               create index core_gnsrc_loc_ix on CORE("GENE_SOURCE_ID","NA_SEQUENCE_ID","SEGMENT_START") 
+               tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index core_loc_injunid_ix on CORE("NA_SEQUENCE_ID","SEGMENT_START","INTRON_JUNCTION_ID")
+               tablespace indx
       ]]>
     </sql>
     <sql>
@@ -4545,36 +4584,36 @@ create table ratiostats (
       external_database_name            varchar2(500),
       sample_name                       varchar2(500), 
       na_sequence_id                    number(10), 
-      segment_start                     number(10), 
-      segment_end                       number(10), 
-      is_reversed                       number(1), 
+      segment_start                     number, 
+      segment_end                       number, 
+      is_reversed                       number, 
       strand                            varchar2(20),
-      unique_reads                      number(10), 
-      isrpm                             number(10), 
-      nu_reads                          number(10), 
-      exp_value                         number(10),
-      intron_exp_ratio                  number(10), 
-      isrpm_exp_ratio                   number(10),
-      avg_coverage                      number(10), 
-      isr_coverage_ratio                number(10), 
-      norm_isr_coverage_ratio           number(10),
-      percent_max_sample                number(10),
-      percent_max_total                 number(10),
-      total_ratio                       number(10),
-      matches_gene_strand               number(1), 
+      unique_reads                      number, 
+      isrpm                             number, 
+      nu_reads                          number, 
+      exp_value                         number,
+      intron_exp_ratio                  number, 
+      isrpm_exp_ratio                   number,
+      avg_coverage                      number, 
+      isr_coverage_ratio                number, 
+      norm_isr_coverage_ratio           number,
+      percent_max_sample                number,
+      percent_max_total                 number,
+      total_ratio                       number,
+      matches_gene_strand               number, 
       annotated_intron                  varchar2(10),
-      is_contained                      number(1), 
+      is_contained                      number, 
       gene_source_id                    varchar2(100),
-      intron_sample_avgexp_ratio        number(10), 
-      isrpm_sample_avgexp_ratio         number(10), 
-      intron_sample_medexp_ratio        number(10),
-      isrpm_sample_medexp_ratio         number(10),
-      isr_avgcoverage_ratio             number(10), 
-      norm_isr_avgcoverage_ratio        number(10),
-      sample_total_junctions            number(10), 
-      sample_multiplier                 number(10),
-      consistent_multiplier             number(10), 
-      total_cons_mult_ratio             number(10),
+      intron_sample_avgexp_ratio        number, 
+      isrpm_sample_avgexp_ratio         number, 
+      intron_sample_medexp_ratio        number,
+      isrpm_sample_medexp_ratio         number,
+      isr_avgcoverage_ratio             number, 
+      norm_isr_avgcoverage_ratio        number,
+      sample_total_junctions            number, 
+      sample_multiplier                 number,
+      consistent_multiplier             number, 
+      total_cons_mult_ratio             number,
       include_unified_junctions         varchar2(10), 
       show_intron_junctions             varchar2(10)
     )
@@ -4583,7 +4622,7 @@ create table ratiostats (
     <sql>
       <![CDATA[
 declare
-  ctrows number := 0;
+  ctrows number := 1;
   commit_after number := 200;  
   iter_length number := 4999;
   i_first_pos number := 1;
@@ -4751,10 +4790,13 @@ AND ms.junctions_pan_id = introns.protocol_app_node_id)
     IF ctrows >= commit_after
       THEN
          COMMIT;  
-         ctrows := 0;  
+         ctrows := 1;  
+      ELSE  
+         ctrows := ctrows + 1;  
     END IF;  
     END LOOP;
     commit;
+    ctrows := 1;  
     i_first_pos := i_last_pos + 1;
     i_last_pos := i_first_pos + iter_length;
    END LOOP;
@@ -4790,6 +4832,7 @@ SELECT distinct na_sequence_id,segment_start,segment_end,is_reversed
 FROM apidbtuning.IntronJunctionTmp
 WHERE unique_reads >= 1
      AND sample_multiplier <= 40
+     AND total_cons_mult_ratio >= 0.001
      AND include_unified_junctions = 'true'
      GROUP BY na_sequence_id,segment_start,segment_end,is_reversed,is_contained, annotated_intron
      HAVING max(CASE WHEN is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) keep (dense_rank first order by isrpm desc) >= 
@@ -4813,7 +4856,8 @@ SELECT ij.protocol_app_node_id,ij.gene_source_id,max(ij.unique_reads) as sample_
   FROM apidbtuning.IntronJunctionTmp ij
   WHERE ij.matches_gene_strand = 1
   AND ij.unique_reads >= 1
-  AND sample_multiplier <= 40
+  AND ij.sample_multiplier <= 40
+  AND ij.total_cons_mult_ratio >= 0.001
   AND include_unified_junctions = 'true'
   GROUP By ij.protocol_app_node_id,ij.gene_source_id
       ]]>
@@ -4835,7 +4879,8 @@ SELECT ij.gene_source_id,sum(ij.unique_reads) as tot_unique,sum(ij.isrpm) as tot
   FROM apidbtuning.IntronJunctionTmp ij
   WHERE ij.matches_gene_strand = 1
   AND ij.unique_reads >= 1
-  AND sample_multiplier <= 40
+  AND ij.sample_multiplier <= 40
+  AND ij.total_cons_mult_ratio >= 0.001
   AND include_unified_junctions = 'true'
   GROUP by ij.gene_source_id,ij.segment_start,ij.segment_end)
   GROUP by gene_source_id
@@ -4849,16 +4894,16 @@ create table GeneIntronJunction&1 (
     source                     varchar2(10),
     name                       varchar2(100),
     parent_id                  number(10),
-    startm                     number(10),
-    end                        number(10),
-    contained                  number(1),
-    matches_gene_strand        number(1),
-    percent_max                number(10),
-    score                      number(10),
-    score_exp_ratio            number(10),
+    startm                     number,
+    end                        number,
+    contained                  number,
+    matches_gene_strand        number,
+    percent_max                number,
+    score                      number,
+    score_exp_ratio            number,
     annotated_intron           varchar2(5),
-    min_sample_multiplier      number(10),
-    max_total_cons_mult_ratio  number(10),
+    min_sample_multiplier      number,
+    max_total_cons_mult_ratio  number,
     atts                       clob
 )
       ]]>
@@ -4866,7 +4911,7 @@ create table GeneIntronJunction&1 (
     <sql>
       <![CDATA[
 declare
-  ctrows number := 0;
+  ctrows number := 1;
   commit_after number := 200;  
   iter_length number := 4999;
   i_first_pos number := 1;
@@ -4897,13 +4942,14 @@ FROM apidbtuning.IntronJunctionTmp ij, valid v
      AND v.na_sequence_id = ij.na_sequence_id 
      AND v.is_reversed = ij.is_reversed
      AND ij.unique_reads >= 1
-     AND sample_multiplier <= 40
+     AND ij.sample_multiplier <= 40
+     AND ij.total_cons_mult_ratio >= 0.001
      AND ij.include_unified_junctions = 'true'
-)
+   )
 SELECT *
 from (
 SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
-CASE WHEN max_gene_isrpm > 0 THEN sum(total_isrpm) / max_gene_isrpm ELSE null END as percent_max,
+CASE WHEN max_gene_isrpm > 0 THEN round(sum(total_isrpm) / max_gene_isrpm * 100,2) ELSE null END as percent_max,
 sum(total_reads) as score, round(avg(avg_exp_ratio_exp),4) as score_exp_ratio, annotated_intron,
 round(min(sample_multiplier),4) as min_sample_multiplier, round(max(total_cons_mult_ratio),4) as max_total_cons_mult_ratio,
 'Exps=' || rtrim(xmlagg(XMLELEMENT(e,display_name,'|').EXTRACT('//text()') ORDER BY display_name).GetClobVal(), '|') || ';' ||
@@ -4933,19 +4979,19 @@ SELECT segment_start || '_' || segment_end || '_' || is_reversed as feature_id,
          listagg(sample_name, ',') within group (order by iw.protocol_app_node_id) as samples,
          listagg(unique_reads, ',') within group (order by iw.protocol_app_node_id) unique_reads,
          listagg(isrpm, ',') within group (order by iw.protocol_app_node_id) isrpm,
-         listagg(isr_coverage_ratio, ',') within group (order by iw.protocol_app_node_id) as isr_cov_ratios,  
-         listagg(isr_avgcoverage_ratio, ',') within group (order by iw.protocol_app_node_id) as isr_avg_cov_ratios,  
+         listagg(round(isr_coverage_ratio,2), ',') within group (order by iw.protocol_app_node_id) as isr_cov_ratios,  
+         listagg(round(isr_avgcoverage_ratio,2), ',') within group (order by iw.protocol_app_node_id) as isr_avg_cov_ratios,  
          listagg(round(unique_reads / nvl(gs.sample_unique,-1) * 100,1), ',') within group (order by iw.protocol_app_node_id) as percent_max_samples,
          sum(unique_reads) as total_reads, sum(isrpm) as total_isrpm, max(isrpm) as max_isrpm,
          avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp,gt.max_gene_isrpm,
          max(CASE WHEN iw.is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) as best_sample_ratio,
-         iw.sample_multiplier, total_cons_mult_ratio
+         min(iw.sample_multiplier) as sample_multiplier, max(total_cons_mult_ratio) as total_cons_mult_ratio
 FROM inwindow iw, genesample gs, genetotal gt
 WHERE iw.gene_source_id = gt.gene_source_id(+)
 AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
 and iw.gene_source_id = gs.gene_source_id(+)
 GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end, iw.exp_name, iw.is_contained, gt.max_gene_isrpm, iw.matches_gene_strand, 
-iw.is_reversed,iw.annotated_intron, iw.sample_multiplier, total_cons_mult_ratio)
+iw.is_reversed,iw.annotated_intron)
 GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
   HAVING sum(total_reads) >= 1 ) 
 WHERE (contained = 1
@@ -4964,10 +5010,13 @@ order by startm
     IF ctrows >= commit_after
       THEN
          COMMIT;  
-         ctrows := 0;  
+         ctrows := 1;  
+      ELSE  
+         ctrows := ctrows + 1;  
     END IF;  
     END LOOP;
     commit;
+    ctrows := 1;  
     i_first_pos := i_last_pos + 1;
     i_last_pos := i_first_pos + iter_length;
    END LOOP;
@@ -4981,6 +5030,7 @@ END;
       ]]>
     </sql>
   </tuningTable>
+-->
 
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
@@ -5050,7 +5100,7 @@ tablespace indx
 
   <tuningTable name="ProjectIdTaxonLevel">
     <comment> Groups projects by higher level taxonomy. Used in the creation of the
-         OrganismTree tuning table.
+         OldOrganismTree tuning table.
       </comment>
     <internalDependency name="GenomicSeqAttributes"/>
     <sql>
@@ -5212,7 +5262,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="OrganismTree">
+  <tuningTable name="OldOrganismTree">
     <comment> Group species by higher level taxonomy. Each row associates a taxon of
          interest with one of its ancestors in the taxon tree. Used in parameter
          queries that have to know about the taxon tree, as well as
@@ -5368,7 +5418,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
     </sql>
     <sql>
       <![CDATA[
-        CREATE TABLE OrganismTree&1 NOLOGGING AS
+        CREATE TABLE OldOrganismTree&1 NOLOGGING AS
          SELECT organism,term,parentTerm, internal,project_id
          FROM (
                SELECT * from StrainTree
@@ -5386,6 +5436,129 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                  AND stn.name_class = 'scientific name'
                  AND st.organism != st.term
           )
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="OrganismTree">
+    <comment>
+         Group species by higher level taxonomy. Each row associates a taxon of
+         interest with one of its ancestors in the taxon tree. Used in parameter
+         queries that have to know about the taxon tree. Propagated to portal
+         instances.
+      </comment>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="sres.Taxon"/>
+    <intermediateTable name="TaxonLink"/>
+    <intermediateTable name="DistinctTaxonLink"/>
+    <sql>
+      <![CDATA[
+        create table TaxonLink nologging as
+        with datasets_taxon
+             as (select taxon_id
+                 from GenomicSeqAttributes
+                )
+        select taxon_id, rank, parent_id, level as tree_level,
+               case
+                 when taxon_id
+                      in (select taxon_id from datasets_taxon)
+                   then 'has data'
+                 when rank
+                      in ('kingdom', 'phylum', 'class', 'order', 'family',
+                          'genus', 'species')
+                   then 'major rank'
+                 when taxon_id
+                      in (select taxon_id
+                          from sres.TaxonName
+                          where name
+                                in ('Amoebozoa',
+                                    'end of hardwired taxon list'))
+                   then 'hardwired'
+                 else 'none'
+               end as display_reason
+        from sres.Taxon
+        start with taxon_id
+                   in (select taxon_id from datasets_taxon)
+        connect by taxon_id = prior parent_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create table DistinctTaxonLink nologging as
+        select taxon_id, max(rank) as rank, max(parent_id) as parent_id,
+               max(tree_level) as tree_level,
+               max(display_reason) as display_reason
+        from TaxonLink
+        group by taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create unique index dtl_ix&1
+        on DistinctTaxonLink (taxon_id)
+        tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        BEGIN
+          FOR skiplist
+              IN (select taxon_id, max(parent_id) as parent_id, max(tree_level)
+                  from DistinctTaxonLink
+                  where display_reason = 'none'
+                  group by taxon_id
+                  order by max(tree_level) desc
+                 )
+            LOOP
+
+              update DistinctTaxonLink
+              set parent_id
+                  = (select max(parent_id)
+                     from DistinctTaxonLink
+                     where taxon_id = skiplist.taxon_id)
+              where parent_id = skiplist.taxon_id;
+
+              commit;
+            END LOOP;
+        END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        delete from DistinctTaxonLink where display_reason = 'none'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create table OrganismTree&1 nologging as
+        select leaf_name.name as organism,
+               tn.name || ' (' || dtl.rank || ')' as term,
+               case
+                 when parent_name.name is null
+                   then null
+                 else parent_name.name || ' (' || parent.rank || ')'
+               end as parentterm,
+               dtl.taxon_id as internal,
+               apidb.project_id(leaf_name.name) as project_id, dtl.rank
+        from (select connect_by_root taxon_id as leaf_taxon_id, taxon_id,
+                     parent_id, rank
+              from DistinctTaxonLink
+              start with display_reason = 'has data'
+                         or rank = 'species'
+              connect by taxon_id = prior parent_id
+             ) dtl,
+             sres.TaxonName leaf_name, sres.TaxonName tn, sres.Taxon parent,
+             (select taxon_id, name
+              from sres.TaxonName
+              where name_class = 'scientific name') parent_name
+        where dtl.leaf_taxon_id = leaf_name.taxon_id
+          and leaf_name.name_class = 'scientific name'
+          and dtl.taxon_id = tn.taxon_id
+          and tn.name_class = 'scientific name'
+          and dtl.parent_id = parent_name.taxon_id(+)
+          and dtl.parent_id = parent.taxon_id(+)
       ]]>
     </sql>
   </tuningTable>
@@ -5417,7 +5590,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   select distinct sp.name as organism,
                   ot.parentTerm as parent,
                   REGEXP_REPLACE(org.name_for_filenames, org.strain_abbrev,'', 1, 1) as abbreviation 
-  from sres.TaxonName sp, taxonspecies ts, apidb.Organism org, organismtree ot,
+  from sres.TaxonName sp, taxonspecies ts, apidb.Organism org, organismTree ot,
        estattributes ea, sres.TaxonName etn, taxonspecies ets
   where org.taxon_id = ts.taxon_id
   and ts.species_taxon_id = sp.taxon_id
