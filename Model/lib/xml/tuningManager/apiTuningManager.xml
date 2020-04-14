@@ -5032,6 +5032,43 @@ END;
   </tuningTable>
 -->
 
+  <tuningTable name="GeneIntJuncStats">
+    <comment> Stores statistics for annotated introns used for configuring JBrowse tracks based on organism.
+     </comment>
+<!--
+    <internalDependency name="GeneIntronJunction"/>
+-->
+    <sql>
+      <![CDATA[
+create table GeneIntJuncStats&1 nologging as
+with org_tot as (
+select gs.organism, 
+min(gij.score) as min_annot_score, PERCENTILE_cont(0.005) within group (order by gij.score asc) as perc005_annot_score, 
+PERCENTILE_cont(0.01) within group (order by gij.score asc) as perc01_annot_score,
+min(gij.percent_max) as min_annot_percent_max, PERCENTILE_cont(0.0001) within group (order by gij.percent_max asc) as perc0001_annot_percent_max,
+PERCENTILE_cont(0.0005) within group (order by gij.percent_max asc) as perc0005_annot_percent_max,
+min(gij.score_exp_ratio) as min_annot_score_ratio, PERCENTILE_cont(0.05) within group (order by gij.score_exp_ratio asc) as perc05_score_exp_ratio, 
+PERCENTILE_cont(0.1) within group (order by gij.score_exp_ratio asc) as perc1_score_exp_ratio, 
+floor(max(gij.end - gij.startm) * 1.25) as max_intron_length
+from geneintronjunction gij, genomicseqattributes gs
+where gs.na_sequence_id = gij.parent_id
+and gij.annotated_intron = 'Yes'
+--and gij.percent_max between 0 and 1
+group by gs.organism
+)
+select gs.na_sequence_id, gs.source_id, ot.*
+from genomicseqattributes gs, org_tot ot
+where gs.organism = ot.organism
+and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjunction)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index GeneIntJuncStat_ix&1 on GeneIntJuncStats&1 (na_sequence_id) tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
          relevant attribute query of the WDK popset record, as well as by
@@ -5501,7 +5538,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
           FOR skiplist
               IN (select taxon_id, max(parent_id) as parent_id, max(tree_level)
                   from DistinctTaxonLink&1
-                  where display_reason = 'none'
+                  where display_reason in ('none', 'has data')
                   group by taxon_id
                   order by max(tree_level) desc
                  )
