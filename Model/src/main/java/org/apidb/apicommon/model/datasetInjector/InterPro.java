@@ -12,7 +12,7 @@ public class InterPro extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGoTerm"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByInterproDomain"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTextSearch"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByText"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GoTerms"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterPro"); 
   }
