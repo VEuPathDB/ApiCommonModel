@@ -349,6 +349,7 @@ public class RNASeq extends  DatasetInjector {
 	      } */
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
               addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
+              addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "TranscriptionSummary");
       
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
@@ -372,6 +373,8 @@ public class RNASeq extends  DatasetInjector {
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+
+          //addWdkReference("GeneRecordClasses.GeneRecordClass", "question","DatasetQuestions.DatasetsByReferenceName");
 
       }
   }
