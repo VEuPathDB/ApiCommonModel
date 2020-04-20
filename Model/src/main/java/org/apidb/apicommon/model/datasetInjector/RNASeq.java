@@ -373,6 +373,8 @@ public class RNASeq extends  DatasetInjector {
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
 
+          //addWdkReference("GeneRecordClasses.GeneRecordClass", "question","DatasetQuestions.DatasetsByReferenceName");
+
       }
   }
   
