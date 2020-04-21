@@ -6,7 +6,9 @@ public class AnnotatedGenomeWithNonNuclear extends AnnotatedGenome {
   public void addModelReferences() {
       // add all references from AnnotatedGenome first
       super.addModelReferences();
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNonnuclearLocation");
+      if (!(getPropValue("projectName").equals("TriTrypDB"))){
+        addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNonnuclearLocation");
+      }
   }
 
 }

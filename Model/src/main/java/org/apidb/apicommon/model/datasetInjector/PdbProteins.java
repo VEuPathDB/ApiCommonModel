@@ -12,6 +12,7 @@ public class PdbProteins extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPdbSimilarity"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PdbSimilarities"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Ssgcid"); 
   }
 
   @Override
