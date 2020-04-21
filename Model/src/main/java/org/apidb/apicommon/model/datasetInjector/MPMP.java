@@ -9,6 +9,7 @@ public class MPMP extends DBXRefs {
 
   @Override
   public void addModelReferences() {
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ECNumbers");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEcNumber");
   }
 
