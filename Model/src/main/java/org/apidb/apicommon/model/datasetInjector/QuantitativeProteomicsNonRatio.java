@@ -8,7 +8,7 @@ public class QuantitativeProteomicsNonRatio extends ExpressionOneChannelAndRefer
     protected void setProteinCodingProps() {
         setPropValue("defaultProteinCodingOnly", "no");
         setPropValue("proteinCodingParamVisible", "false");
-        setPropValue("hasPercentileData", "true");
+	// setPropValue("hasPercentileData", "true");
     }
 
 
