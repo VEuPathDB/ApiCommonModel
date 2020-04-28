@@ -8,7 +8,7 @@ public class RNASeqGalinskiMmulatta extends RNASeq {
   public void addModelReferences() {
     super.addModelReferences();
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                    "GeneQuestions.GenesByRNASeq" + getDatasetName());
+                    "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
   }
 
   @Override
