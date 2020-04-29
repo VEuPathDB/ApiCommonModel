@@ -10,7 +10,9 @@ public class NonNuclearGenome extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNonnuclearLocation");
+    if (!(getPropValue("projectName").equals("TriTrypDB"))){
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNonnuclearLocation");
+    }
   }
 
   // second column is for documentation

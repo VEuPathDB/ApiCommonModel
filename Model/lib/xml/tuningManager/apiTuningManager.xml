@@ -3239,8 +3239,14 @@ tablespace indx
     <sql>
       <![CDATA[
         create unique index PopsetAttr_sourceId_idx&1
-        on PopsetAttributes&1 (source_id)
+        on PopsetAttributes&1 (source_id,PROJECT_ID)
         tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index PopsetAttr_org_idx&1 on POPSETATTRIBUTES&1("ORGANISM")
+               tablespace indx
       ]]>
     </sql>
   </tuningTable>
@@ -4146,7 +4152,7 @@ tablespace indx
 <!--
   <tuningTable name="GeneIntronJunction">
     <comment>
-      Introns from RNASeq with percentages of max intron score and ratios vs expression
+      Introns from RNA-Seq with percentages of max intron score and ratios vs expression
     </comment>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
@@ -6080,21 +6086,23 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             , reactions_with_reversibility AS
             (SELECT DISTINCT spr.pathway_relationship_id
             , max(tpr.is_reversible) as is_reversible
+            , tpr.reaction_source_id
             FROM sres.pathwayrelationship spr
             , apidb.pathwayreactionrel prr
             , PathwayReactions tpr
             WHERE prr.pathway_relationship_id = spr.pathway_relationship_id
             AND tpr.reaction_id = prr.pathway_reaction_id
-            group by spr.pathway_relationship_id
+            group by spr.pathway_relationship_id, tpr.reaction_source_id
             )
             , enzyme_edges as
-            (SELECT nodes_with_types.pathway_id AS pathway_id
+            (SELECT distinct nodes_with_types.pathway_id AS pathway_id
             , nodes_with_types.pathway_node_id AS e_id
             , nodes_with_types.type
             , i.associated_node_id as m1_id
-            , rri.is_reversible AS ir1
+            , rri.is_reversible
             , o.node_id AS m2_id
-            , rro.is_reversible as ir2
+            --, rro.is_reversible as ir2
+            , rri.reaction_source_id
             FROM sres.pathwayrelationship i
             , sres.pathwayrelationship o
             , nodes_with_types
@@ -6104,53 +6112,57 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             AND o.associated_node_id = nodes_with_types.pathway_node_id
             AND i.pathway_relationship_id = rri.pathway_relationship_id
             AND o.pathway_relationship_id = rro.pathway_relationship_id
+            AND rri.is_reversible = rro.is_reversible
+            AND rri.reaction_source_id = rro.reaction_source_id
             AND nodes_with_types.type = 'enzyme'
             )
             , parents AS
-            (SELECT m1_id || '_' || ir1 AS incoming
-            , m2_id || '_' || ir2 AS outgoing
+            (SELECT reaction_source_id
+            , m1_id AS incoming --|| '_' || ir1 AS incoming
+            , m2_id AS outgoing --|| '_' || ir2 AS outgoing
             , listagg(e_id, '_') WITHIN GROUP (ORDER BY e_id) AS parent
             , pathway_id
             FROM enzyme_edges
             GROUP BY pathway_id
             , m1_id
             , m2_id
-            , ir1
-            , ir2
+            , reaction_source_id
+            --, ir1
+            --, ir2
             HAVING COUNT (*) > 1
             )
           SELECT DISTINCT enzyme_edges.pathway_id
           , parents.parent AS source
           , to_char(enzyme_edges.m1_id) AS target
-          , enzyme_edges.ir1 AS is_reversible
+          , enzyme_edges.is_reversible --ir1 AS is_reversible
           FROM enzyme_edges
           , parents
-          WHERE m1_id || '_' || ir1 = parents.incoming
+          WHERE m1_id = parents.incoming --|| '_' || ir1 = parents.incoming
           UNION
           SELECT DISTINCT enzyme_edges.pathway_id
           , to_char(enzyme_edges.m2_id) AS source
           , parents.parent AS target
-          , enzyme_edges.ir2 AS is_reversible
+          , enzyme_edges.is_reversible -- AS is_reversible
           FROM enzyme_edges
           , parents
-          WHERE m2_id || '_' || ir2 = parents.outgoing
+          WHERE m2_id = parents.outgoing --|| '_' || ir2 = parents.outgoing
           UNION
           SELECT enzyme_edges.pathway_id
           , to_char(e_id) AS source
           , to_char(enzyme_edges.m1_id) AS target
-          , enzyme_edges.ir1  AS is_reversible
+          , enzyme_edges.is_reversible --ir1  AS is_reversible
           FROM enzyme_edges
           , parents
-          WHERE m1_id || '_' || ir1 = parents.incoming (+)
+          WHERE m1_id = parents.incoming (+) --|| '_' || ir1 = parents.incoming (+)
           AND parents.outgoing IS NULL
           UNION
           SELECT enzyme_edges.pathway_id
           , to_char(enzyme_edges.m2_id) AS source
           , to_char(e_id) AS target
-          , enzyme_edges.ir2 AS is_reversible
+          , enzyme_edges.is_reversible --ir2 AS is_reversible
           FROM enzyme_edges
           , parents
-          WHERE m2_id || '_' || ir2 = parents.outgoing (+)
+          WHERE m2_id = parents.outgoing (+) --|| '_' || ir2 = parents.outgoing (+)
           AND parents.incoming IS NULL
           UNION
           SELECT pn1.pathway_id
@@ -6290,6 +6302,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         CREATE TABLE ReactionsWithReversibility&1 NOLOGGING AS
             SELECT DISTINCT spr.pathway_relationship_id
             , tpr.is_reversible
+            , tpr.reaction_source_id
             FROM sres.pathwayrelationship spr
             , apidb.pathwayreactionrel prr
             , PathwayReactions tpr
@@ -6304,10 +6317,11 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             SELECT DISTINCT nwt.pathway_id AS pathway_id
             , nwt.pathway_node_id AS e_id
             , nwt.type
-            , i.associated_node_id AS m1_id
-            , rri.is_reversible as ir1
-            , o.node_id AS m2_id
-            , rro.is_reversible AS ir2
+            --, i.associated_node_id AS m1_id
+            , rri.is_reversible
+            , rri.reaction_source_id
+            --, o.node_id AS m2_id
+            --, rro.is_reversible AS ir2
             FROM sres.pathwayrelationship i
             , sres.pathwayrelationship o
             , NodesWithTypes&1 nwt
@@ -6318,21 +6332,24 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             AND i.pathway_relationship_id = rri.pathway_relationship_id
             AND o.pathway_relationship_id = rro.pathway_relationship_id
             AND nwt.type = 'enzyme'
+            AND rri.is_reversible = rro.is_reversible
+            AND rri.reaction_source_id = rro.reaction_source_id
       ]]>
     </sql>
 
     <sql>
       <![CDATA[
         CREATE TABLE ParentNodes&1 NOLOGGING AS
-            SELECT m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 as io
+            SELECT reaction_source_id --m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 as io
             , listagg(e_id, '_') WITHIN GROUP (ORDER BY e_id) AS parent
             , pathway_id
             FROM EnzymeEdges&1
             GROUP BY pathway_id
-            , m1_id
-            , m2_id
-            , ir1
-            , ir2
+            , reaction_source_id
+            --, m1_id
+            --, m2_id
+            --, ir1
+            --, ir2
             HAVING COUNT (*) > 1
       ]]>
     </sql>
@@ -6346,7 +6363,8 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             , ee.pathway_id
             FROM EnzymeEdges&1 ee
             , ParentNodes&1 np
-            WHERE m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = np.io
+            WHERE ee.reaction_source_id = np.reaction_source_id --m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = np.io
+            AND np.pathway_id = ee.pathway_id
       ]]>
     </sql>
 
@@ -6870,7 +6888,7 @@ and hl.url is not null
 and ((hl.url like '%DEFAULT_PROTEOMICS%' and def_prot.source_id is not null)
      or (hl.url not like '%DEFAULT_PROTEOMICS%'))
 UNION
--- Get the RNASeq Ones
+-- Get the RNA-Seq Ones
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
@@ -7107,8 +7125,8 @@ where url is not null
                       then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
                     when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %' 
                       then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
-                    when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA Seq data from Horn%' 
-                      then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA Seq data from Horn ', '')
+                    when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%' 
+                      then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA-Seqdata from Horn ', '')
                     else null
                   end as varchar2(50)
                  ) as profile_set_suffix,
@@ -7244,8 +7262,8 @@ where url is not null
                       then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
                     when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %' 
                       then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
-                    when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA Seq data from Horn%' 
-                      then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA Seq data from Horn ', '')
+                    when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%' 
+                      then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA-Seqdata from Horn ', '')
                     else null
                   end as varchar2(50)
                  ) as profile_set_suffix,
@@ -7493,8 +7511,8 @@ where url is not null
                   then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
                 when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %' 
                   then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
-                when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA Seq data from Horn%' 
-                  then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA Seq data from Horn ', '')
+                when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%' 
+                  then regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(ps.name, '\[.+ nonunique\]', ''), '\[.+ unique\]', ' - unique'), '\[.+\]', ''), 'aligned with cds coordinates ', 'cds coordinates'), 'T.brucei paired end RNA-Seqdata from Horn ', '')
                 else null
               end as varchar2(50)
              ) as profile_set_suffix,
@@ -8343,7 +8361,7 @@ where url is not null
 
   <tuningTable name="DatasetGeneList">
     <comment>
-    For each RNASeq Dataset, compute the top 500 ratios of max/min gene expression.
+    For each RNA-Seq Dataset, compute the top 500 ratios of max/min gene expression.
     </comment>
     <internalDependency name="Profile"/>
     <internalDependency name="DatasetPresenter"/>

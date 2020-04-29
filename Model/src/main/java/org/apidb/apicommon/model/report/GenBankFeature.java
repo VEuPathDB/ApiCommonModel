@@ -97,7 +97,7 @@ public class GenBankFeature {
         if(this.name != null && !this.name.equals("")) {
            rv = rv + "\t\t\tgene\t" + this.name + "\n";
 
-           // in EuPathDB product is the concatenation of product with gene name, e.g. rifin (RIF)
+           // in VEuPathDB product is the concatenation of product with gene name, e.g. rifin (RIF)
            // remove gene name from product if a gene name is available
            product = product.replace("("+ name + ")", "");
         }

@@ -14,7 +14,7 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
 
   private final static String NAME = "RnaSeq";
   private final static String VERSION = "1.0";
-  private final static String DISPLAY = "RNASeq";
+  private final static String DISPLAY = "RNA-Seq";
 
   @Override
   public UserDatasetType getUserDatasetType() {
