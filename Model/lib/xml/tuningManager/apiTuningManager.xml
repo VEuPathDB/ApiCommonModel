@@ -6042,7 +6042,8 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
   <tuningTable name="PathwayEdges">
     <comment>Edges for pathway maps</comment>
     <internalDependency name="PathwayAttributes"/>
-    <internalDependency name="PathwayReactions"/>
+    <!--<internalDependency name="PathwayReactions"/>-->
+    <internalDependency name="PathwayNodes"/>
     <sql>
       <![CDATA[
         CREATE TABLE PathwayEdges&1 NOLOGGING AS
@@ -6050,113 +6051,66 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
         , pa.pathway_source
         , rel.*
         FROM (
-          WITH
-            nodes_with_types AS
-            (SELECT pn.pathway_id
-            , pn.pathway_node_id
-            , ot.name AS type
-            FROM sres.pathwaynode pn
-            , sres.ontologyterm ot
-            WHERE pn.pathway_node_type_id = ot.ontology_term_id
-            )
-            , reactions_with_reversibility AS
-            (SELECT DISTINCT spr.pathway_relationship_id
-            , max(tpr.is_reversible) as is_reversible
-            , tpr.reaction_source_id
-            FROM sres.pathwayrelationship spr
-            , apidb.pathwayreactionrel prr
-            , PathwayReactions tpr
-            WHERE prr.pathway_relationship_id = spr.pathway_relationship_id
-            AND tpr.reaction_id = prr.pathway_reaction_id
-            group by spr.pathway_relationship_id, tpr.reaction_source_id
-            )
-            , enzyme_edges as
-            (SELECT distinct nodes_with_types.pathway_id AS pathway_id
-            , nodes_with_types.pathway_node_id AS e_id
-            , nodes_with_types.type
-            , i.associated_node_id as m1_id
-            , rri.is_reversible
-            , o.node_id AS m2_id
-            --, rro.is_reversible as ir2
-            , rri.reaction_source_id
-            FROM sres.pathwayrelationship i
-            , sres.pathwayrelationship o
-            , nodes_with_types
-            , reactions_with_reversibility rri
-            , reactions_with_reversibility rro
-            WHERE i.node_id = nodes_with_types.pathway_node_id
-            AND o.associated_node_id = nodes_with_types.pathway_node_id
-            AND i.pathway_relationship_id = rri.pathway_relationship_id
-            AND o.pathway_relationship_id = rro.pathway_relationship_id
-            AND rri.is_reversible = rro.is_reversible
-            AND rri.reaction_source_id = rro.reaction_source_id
-            AND nodes_with_types.type = 'enzyme'
-            )
-            , parents AS
-            (SELECT reaction_source_id
-            , m1_id AS incoming --|| '_' || ir1 AS incoming
-            , m2_id AS outgoing --|| '_' || ir2 AS outgoing
-            , listagg(e_id, '_') WITHIN GROUP (ORDER BY e_id) AS parent
-            , pathway_id
-            FROM enzyme_edges
-            GROUP BY pathway_id
-            , m1_id
-            , m2_id
-            , reaction_source_id
-            --, ir1
-            --, ir2
-            HAVING COUNT (*) > 1
-            )
-          SELECT DISTINCT enzyme_edges.pathway_id
-          , parents.parent AS source
-          , to_char(enzyme_edges.m1_id) AS target
-          , enzyme_edges.is_reversible --ir1 AS is_reversible
-          FROM enzyme_edges
-          , parents
-          WHERE m1_id = parents.incoming --|| '_' || ir1 = parents.incoming
-          UNION
-          SELECT DISTINCT enzyme_edges.pathway_id
-          , to_char(enzyme_edges.m2_id) AS source
-          , parents.parent AS target
-          , enzyme_edges.is_reversible -- AS is_reversible
-          FROM enzyme_edges
-          , parents
-          WHERE m2_id = parents.outgoing --|| '_' || ir2 = parents.outgoing
-          UNION
-          SELECT enzyme_edges.pathway_id
-          , to_char(e_id) AS source
-          , to_char(enzyme_edges.m1_id) AS target
-          , enzyme_edges.is_reversible --ir1  AS is_reversible
-          FROM enzyme_edges
-          , parents
-          WHERE m1_id = parents.incoming (+) --|| '_' || ir1 = parents.incoming (+)
-          AND parents.outgoing IS NULL
-          UNION
-          SELECT enzyme_edges.pathway_id
-          , to_char(enzyme_edges.m2_id) AS source
-          , to_char(e_id) AS target
-          , enzyme_edges.is_reversible --ir2 AS is_reversible
-          FROM enzyme_edges
-          , parents
-          WHERE m2_id = parents.outgoing (+) --|| '_' || ir2 = parents.outgoing (+)
-          AND parents.incoming IS NULL
-          UNION
-          SELECT pn1.pathway_id
-          , to_char(pr.node_id)
-          , to_char(pr.associated_node_id)
-          , pr.is_reversible
-          FROM sres.pathwayrelationship pr
-          , sres.pathwaynode pn1
-          , sres.pathwaynode pn2
-          , sres.ontologyterm ot1
-          , sres.ontologyterm ot2
-          WHERE pr.node_id = pn1.pathway_node_id
-          AND pr.associated_node_id = pn2.pathway_node_id
-          AND pn1.pathway_node_type_id = ot1.ontology_term_id
-          AND pn2.pathway_node_type_id  = ot2.ontology_term_id
-          AND ot1.name != 'enzyme'
-          AND ot2.name != 'enzyme'
-          ) rel
+            WITH parents AS (
+                SELECT ee.e_id
+                , ee.m1_id
+                , ee.ir1
+                , ee.m2_id
+                , ee.ir2
+                , np.parent
+                FROM EnzymeEdges&1
+                , NodesWithParents&1
+                WHERE ee.e_id = np.pathway_node_id
+                )
+            SELECT DISTINCT ee.pathway_id
+            , parents.parent AS source
+            , to_char(ee.m1_id) AS target
+            , ee.ir1 AS is_reversible
+            FROM EnzymeEdges&1 ee
+            , parents
+            WHERE  ee.m1_id = parents.m1_id
+            UNION
+            SELECT DISTINCT ee.pathway_id
+            , to_char(ee.m2_id) AS source
+            , ee.ir2 AS is_reversible
+            FROM EnzymeEdges&1 ee
+            , parents
+            WHERE ee.m2_id = parents.m2_id
+            UNION
+            SELECT ee.pathway_id
+            , to_char(ee.e_id) AS source
+            , to_char(ee.m1_id) AS target
+            , ee.ir1 AS is_reversible
+            FROM EnzymeEdges&1 ee
+            , parents
+            WHERE ee.m1_id = parents.m1_id (+)
+            AND parents.m2_id IS NULL
+            UNION
+            SELECT ee.pathway_id
+            , to_char(ee.m2_id) AS source
+            , to_char(ee.e_id) AS target
+            , ee.ir2 AS is_reversible
+            FROM EnzymeEdges&1
+            , parents
+            WHERE ee.m2_id = parents.m2_id (+) 
+            AND parents.m1_id IS NULL
+            UNION
+            SELECT pn1.pathway_id
+            , to_char(pr.node_id) AS source
+            , to_char(pr.associated_node_id) AS target
+            , pr.is_reversible
+            FROM sres.pathwayrelationship pr
+            , sres.pathwaynode pn1
+            , sres.pathwaynode pn2
+            , sres.ontologyterm ot1
+            , sres.ontologyterm ot2
+            WHERE pr.node_id = pn1.pathway_node_id
+            AND pr.associated_node_id = pn2.pathway_node_id
+            AND pn1.pathway_node_type_id = ot1.ontology_term_id
+            AND pn2.pathway_node_type_id = ot2.ontology_term_id
+            AND ot1.name != 'enzyme'
+            AND ot2.name != 'enzyme'
+            ) rel
         , PathwayAttributes pa
         WHERE pa.pathway_id = rel.pathway_id
       ]]>
@@ -6293,11 +6247,13 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             SELECT DISTINCT nwt.pathway_id AS pathway_id
             , nwt.pathway_node_id AS e_id
             , nwt.type
-            --, i.associated_node_id AS m1_id
-            , rri.is_reversible
-            , rri.reaction_source_id
-            --, o.node_id AS m2_id
-            --, rro.is_reversible AS ir2
+            , i.associated_node_id AS m1_id
+            , rri.is_reversible AS ir1
+            --, rri.reaction_source_id AS rs1
+            , o.node_id AS m2_id
+            , rro.is_reversible AS ir2
+            --, rro.reaction_source_id AS rs2
+            , i.associated_node_id || '_' || o.node_id || '_' || rri.is_reversible || '_' || rro.is_reversible as io
             FROM sres.pathwayrelationship i
             , sres.pathwayrelationship o
             , NodesWithTypes&1 nwt
@@ -6316,16 +6272,20 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
     <sql>
       <![CDATA[
         CREATE TABLE ParentNodes&1 NOLOGGING AS
-            SELECT reaction_source_id --m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 as io
+            WITH AllEnzymeEdges AS (
+                SELECT listagg(io, ',') WITHIN GROUP (ORDER BY io) AS all_edges
+                , e_id
+                , pathway_id
+                FROM EnzymeEdges&1
+                GROUP BY pathway_id
+                , e_id
+            )
+            SELECT pathway_id
+            , all_edges
             , listagg(e_id, '_') WITHIN GROUP (ORDER BY e_id) AS parent
-            , pathway_id
-            FROM EnzymeEdges&1
+            FROM AllEnzymeEdges
             GROUP BY pathway_id
-            , reaction_source_id
-            --, m1_id
-            --, m2_id
-            --, ir1
-            --, ir2
+            , all_edges
             HAVING COUNT (*) > 1
       ]]>
     </sql>
@@ -6333,14 +6293,18 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
     <sql>
       <![CDATA[
         CREATE TABLE NodesWithParents&1 NOLOGGING AS
-            SELECT e_id as pathway_node_id
-            , np.parent
-            , ee.type as node_type
+            WITH pn as (SELECT regexp_substr(parent, '[^_]+', 1, level) AS children
+            , parent
+            , pathway_id
+            FROM ParentNodes&1
+            CONNECT BY regexp_substr(parent, '[^_]+', 1, level) IS NOT NULL)
+            SELECT DISTINCT ee.e_id AS pathway_node_id
+            , pn.parent
+            , ee.type AS node_type
             , ee.pathway_id
             FROM EnzymeEdges&1 ee
-            , ParentNodes&1 np
-            WHERE ee.reaction_source_id = np.reaction_source_id --m1_id || '_' || m2_id || '_' || ir1 || '_' || ir2 = np.io
-            AND np.pathway_id = ee.pathway_id
+            , pn
+            WHERE ee.e_id IN pn.children
       ]]>
     </sql>
 
