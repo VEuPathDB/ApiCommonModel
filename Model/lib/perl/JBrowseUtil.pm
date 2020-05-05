@@ -51,7 +51,7 @@ sub intronJunctionsQueryParams {
                                                       annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
-                                                     feature => "gsnap:unifiedintronjunction",
+                                                     feature => "gsnap:unifiedintronjunctioninclusive",
                                                      intronSizeLimit => 5000,
                                                      minIntronPercent => .001,
                                                      minNonContainedRatio => .0001,
@@ -79,7 +79,7 @@ sub intronJunctionsQueryParams {
                                                       annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
-                                                     feature => "gsnap:unifiedintronjunction",
+                                                     feature => "gsnap:unifiedintronjunctioninclusive",
                                                      intronSizeLimit => 500000,
                                                      minIntronPercent => .001,
                                                      minNonContainedRatio => .0001,
@@ -107,7 +107,7 @@ sub intronJunctionsQueryParams {
                                                       annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
-                                                     feature => "gsnap:unifiedintronjunction",
+                                                     feature => "gsnap:unifiedintronjunctioninclusive",
                                                      intronSizeLimit => 5000,
                                                      minIntronPercent => .00001,
                                                      minNonContainedRatio => .000001,
@@ -135,7 +135,7 @@ sub intronJunctionsQueryParams {
                                                       annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
-                                                     feature => "gsnap:unifiedintronjunction",
+                                                     feature => "gsnap:unifiedintronjunctioninclusive",
                                                      intronSizeLimit => 600000,
                                                      minIntronPercent => .001,
                                                      minNonContainedRatio => .0001,
@@ -163,7 +163,7 @@ sub intronJunctionsQueryParams {
                                                       annotated_intron => "ALL",
                                                    },
                                       'inclusive' => {
-                                                     feature => "gsnap:unifiedintronjunction",
+                                                     feature => "gsnap:unifiedintronjunctioninclusive",
                                                      intronSizeLimit => 30000,
                                                      minIntronPercent => .001,
                                                      minNonContainedRatio => .0001,
