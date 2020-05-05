@@ -5607,38 +5607,51 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
     <sql>
       <![CDATA[
        create table OrganismAbbreviationBlast&1 nologging as
-       select organism, parent, abbreviation, project_id from OrganismAbbreviationWS
-         union
-      /* All familes for popsets */
-      select distinct family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent, family_name_for_files as abbreviation, project_name as project_id
-      from apidb.Organism 
-       where family_name_for_files is not null
-       and abbrev || '_isolates_genbank_RSRC' in (SELECT DISTINCT external_db_name  AS db_name FROM apidbtuning.PopsetAttributes)
-       and family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
+         select organism, parent, abbreviation, substr(project_id, 1, 20) as project_id
+         from OrganismAbbreviationWS
        union
-       select special.organism, special.parent, special.abbreviation, ot.project_id from OrganismTree ot,
-       (
-  /* All species and speciesAbbreviations from apidb.Organism where we have ests */
-  select distinct sp.name as organism,
-                  ot.parentTerm as parent,
-                  REGEXP_REPLACE(org.name_for_filenames, org.strain_abbrev,'', 1, 1) as abbreviation 
-  from sres.TaxonName sp, taxonspecies ts, apidb.Organism org, organismTree ot,
-       estattributes ea, sres.TaxonName etn, taxonspecies ets
-  where org.taxon_id = ts.taxon_id
-  and ts.species_taxon_id = sp.taxon_id
-  and sp.name_class = 'scientific name'
-  and ot.term = sp.name
-  and org.strain_abbrev is not null
-  and org.name_for_filenames is not null
-  and ets.species_taxon_id = sp.taxon_id
-  and (ets.taxon_id = etn.taxon_id OR ets.species_taxon_id = etn.taxon_id)
-  and etn.name = ea.organism
-  union
-  /* TrichDB EST Legacy */
-/*  select 'Trichomonas vaginalis' as organism, 'Trichomonas' as parent, 'Tvaginalis' as abbreviation from dual union   */
-  /* */
-  select 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism, 'Cryptosporidium' as parent, 'CryptosporidiidaeReference' as abbreviation from dual
-) special
+         -- all familes for popsets
+         select distinct family_name_for_files
+                           || ' Popset/Genbank Isolates' as organism, '' as parent,
+                         family_name_for_files as abbreviation,
+                         substr(project_name, 1, 20) as project_id
+         from apidb.Organism 
+         where family_name_for_files is not null
+           and abbrev || '_isolates_genbank_RSRC'
+               in (select external_db_name  as db_name
+                   from PopsetAttributes)
+           and family_name_for_files
+                 not in ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
+       union
+         select special.organism, special.parent, special.abbreviation,
+                substr(ot.project_id, 1, 20) as project_id
+         from OrganismTree ot,
+              ( -- all species and speciesAbbreviations from apidb.Organism where we have ests
+                 select sp.name as organism, ot.parentTerm as parent,
+                                 regexp_replace(org.name_for_filenames,
+                                                org.strain_abbrev,'', 1, 1)
+                                   as abbreviation
+                 from sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org,
+                      OrganismTree ot, sres.TaxonName etn,
+                      TaxonSpecies ets
+                 where org.taxon_id = ts.taxon_id
+                   and ts.species_taxon_id = sp.taxon_id
+                   and sp.name_class = 'scientific name'
+                   and ot.term = sp.name
+                   and org.strain_abbrev is not null
+                   and org.name_for_filenames is not null
+                   and ets.species_taxon_id = sp.taxon_id
+                   and (ets.taxon_id = etn.taxon_id OR ets.species_taxon_id = etn.taxon_id)
+                   and etn.name in (select organism from EstAttributes)
+          --   TrichDB EST legacy
+          --   union
+          --     select 'Trichomonas vaginalis' as organism, 'Trichomonas' as parent, 'Tvaginalis' as abbreviation
+          --     from dual
+               union
+                 select 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism,
+                        'Cryptosporidium' as parent, 'CryptosporidiidaeReference' as abbreviation
+                 from dual
+              ) special
       where special.parent = ot.term
       ]]>
     </sql>
