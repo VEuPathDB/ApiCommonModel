@@ -620,9 +620,10 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
             <!--column name="profile_set_display_name"/-->
             <column name="sample_name"/>
             <column name="value"/>
+            <column name="unit"/>
             <sql>
             <![CDATA[
-select ga.source_id, ga.project_id, ps.user_dataset_id as dataset_id, pan.name as sample_name, naf.value
+select ga.source_id, ga.project_id, ps.user_dataset_id as dataset_id, pan.name as sample_name, naf.value, ps.unit
 from apidbtuning.geneattributes ga
    , apidbuserdatasets.USERDATASETACCESSCONTROL ac
    , apidbuserdatasets.ud_profileset ps
@@ -667,33 +668,35 @@ and naf.na_feature_id = ga.na_feature_id
             <column name="template"/>
             <sql>
             <![CDATA[
-select distinct g.*, decode('@PROJECT_ID@', 'UniDB', 'EuPathDB', g.project_id) as project_id_url, decode(lower(is_graph_custom), 'false', 1, 0) as template, regexp_substr(graph_ids, '[^,]*') as default_graph_id
-from (select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_species ,
-             i.name as dataset_name, ga.source_id as graph_ids,
-             case when ga.source_id is null then 0 else 1 end as has_graph_data,
-             ga.organism as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
-             'FALSE' has_meta_data, '' as meta_data_categories,
-             graph_descrip.*, '' as summary, '' as short_attribution, i.name as display_name, '' as description, 'RNA-Seq' as assay_type, i.user_dataset_id as dataset_id
-      from apidbtuning.geneattributes ga,
+SELECT DISTINCT g.*, DECODE('@PROJECT_ID@', 'UniDB', 'EuPathDB', g.project_id) AS project_id_url, 
+       DECODE(LOWER(is_graph_custom), 'false', 1, 0) AS template, regexp_substr(graph_ids, '[^,]*') as default_graph_id
+FROM (SELECT DECODE(ps.unit,'TPM','Transcript levels in TPM (transcripts per million).',
+             'FPKM','Transcript levels in FPKM (fragments per kilobase of exon model per million mapped reads).') AS y_axis,
+	     ga.source_id, ga.project_id,
+             ga.organism AS gene_organism, ga.genus_species, i.name AS dataset_name, ga.source_id AS graph_ids,
+             CASE WHEN ga.source_id IS NULL THEN 0 ELSE 1 END AS has_graph_data, ga.organism AS graph_organism,
+	     'TRUE' AS mainOpen, 'FALSE' AS dataOpen, 'FALSE' AS has_meta_data, '' AS meta_data_categories,
+             graph_descrip.*, '' AS summary, '' AS short_attribution, i.name AS display_name, '' AS description,
+	     'RNA-Seq' AS assay_type, i.user_dataset_id AS dataset_id
+      FROM apidbtuning.geneattributes ga,
            APIDBUSERDATASETS.INSTALLEDUSERDATASET i,
            APIDBUSERDATASETS.USERDATASETACCESSCONTROL ac,
            APIDBUSERDATASETS.UD_NAFEATUREEXPRESSION naf,
            APIDBUSERDATASETS.UD_PROTOCOLAPPNODE pan,
            APIDBUSERDATASETS.UD_PROFILESET ps,
-           (select 'UserDatasets::RNASeq' as module,
-                   'Stage/Sample' as x_axis,
-                   'Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM). ' y_axis,
-                   'true' as is_graph_custom,
-                   1 as order_num
-            from dual
+           (SELECT 'UserDatasets::RNASeq' AS module,
+                   'Stage/Sample' AS x_axis,
+                   'true' AS is_graph_custom,
+                   1 AS order_num
+            FROM dual
            ) graph_descrip
-        where i.user_dataset_id = ps.user_dataset_id
-          and (i.is_invalid is null or i.is_invalid = 0)
-          and ac.user_dataset_id = i.user_dataset_id
-          and ac.user_id = $$user_id$$
-          and ps.profile_set_id = pan.profile_set_id
-          and pan.protocol_app_node_id = naf.protocol_app_node_id
-          and naf.na_feature_id = ga.na_feature_id
+        WHERE i.user_dataset_id = ps.user_dataset_id
+          AND (i.is_invalid is null or i.is_invalid = 0)
+          AND ac.user_dataset_id = i.user_dataset_id
+          AND ac.user_id = $$user_id$$
+          AND ps.profile_set_id = pan.profile_set_id
+          AND pan.protocol_app_node_id = naf.protocol_app_node_id
+          AND naf.na_feature_id = ga.na_feature_id
 ) g 
              ]]>
             </sql>
@@ -953,6 +956,33 @@ pivot (
 
         </sqlQuery>
 
+
+       <sqlQuery name="TF_KO_PhenotypeImages" includeProjects="FungiDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="uri"/>
+            <column name="physiology"/>
+            <column name="Media"/>
+            <column name="Timepoint"/>
+            <column name="Temperature"/>
+            <sql>
+
+<![CDATA[ 
+select * from (
+select ga.source_id, ga.project_id, pan.uri, r.property, r.value
+from APIDB.NAFEATUREPHENOTYPE r, apidbtuning.geneattributes ga,
+study.protocolappnode pan
+where pan.PROTOCOL_APP_NODE_ID = r.PROTOCOL_APP_NODE_ID
+and r.NA_FEATURE_ID = ga.NA_FEATURE_ID
+)
+pivot ( 
+ listagg(value, '</br>') within group (order by value)
+   for property in ( 'Temperature' Temperature, 'Timepoint' Timepoint, 'Media' Media)
+ ) 
+ ]]>
+       </sql>
+
+        </sqlQuery> 
 
 
        <sqlQuery name="NcrassaKOPhenotype" includeProjects="FungiDB,UniDB">
