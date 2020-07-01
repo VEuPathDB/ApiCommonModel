@@ -14,7 +14,10 @@ public class PhenotypeImages extends DatasetInjector {
       String datasetName = getDatasetName();
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", datasetName + "_PhenotypeImages");
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC");
+
+      if(!datasetName.contains("TF_KO_Image")) {
+        addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_ncraOR74A_phenotype_GeneImage_NAFeaturePhenotypeImage_RSRC");
+      }
 
   }
 
