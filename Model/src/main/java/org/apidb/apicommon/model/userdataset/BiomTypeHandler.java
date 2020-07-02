@@ -6,15 +6,13 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
-import org.json.JSONObject;
-
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.UserDataset;
-import org.gusdb.wdk.model.user.dataset.UserDatasetMeta;
 import org.gusdb.wdk.model.user.dataset.UserDatasetCompatibility;
 import org.gusdb.wdk.model.user.dataset.UserDatasetType;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeFactory;
 import org.gusdb.wdk.model.user.dataset.UserDatasetTypeHandler;
+import org.json.JSONObject;
 
 public class BiomTypeHandler extends UserDatasetTypeHandler {
 
