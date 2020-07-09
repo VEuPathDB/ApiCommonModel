@@ -3,26 +3,23 @@
 use strict;
 
 use lib $ENV{GUS_HOME} . "/lib/perl";
-
 use JSON;
-use DBI;
-use DBD::Oracle;
-
-use WDK::Model::ModelConfig;
+use ApiCommonModel::Model::JBrowseUtil;
 
 use Data::Dumper;
 
 # TODO: remove gusHome from command line arg
-my ($gusHome, $projectId, $organismAbbrev, $type) = @ARGV;
+my ($gusHome, $projectName, $organismAbbrev, $type) = @ARGV;
 
-my $modelConfig = new WDK::Model::ModelConfig($projectId);
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_refSeqsCache.json", type => $type });
 
-my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
-                        $modelConfig->getAppDbLogin(),
-                        $modelConfig->getAppDbPassword()
-    )
-    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+# we're done if we can get from cache file
+if($jbrowseUtil->printFromCache()) {
+  exit 0;
+}
+open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 
+my $dbh = $jbrowseUtil->getDbh();   
 
 my $sql;
 
@@ -69,5 +66,6 @@ while(my ($sourceId, $length) = $sh->fetchrow_array()) {
 $dbh->disconnect();
 
 print encode_json($result);
-
+print CACHE encode_json($result);
+close CACHE;
 
