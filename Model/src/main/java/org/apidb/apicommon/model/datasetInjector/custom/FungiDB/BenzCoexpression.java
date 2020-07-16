@@ -10,7 +10,7 @@ public class BenzCoexpression extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByBenzCoexpression"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNeurosporaCoexpression"); 
   }
 
   // second column is for documentation
