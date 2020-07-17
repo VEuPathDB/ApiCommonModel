@@ -37,6 +37,7 @@ my $datasetProperties = &datasetProperties($dbh);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 &addVCF($dbh, $result, $datasetProperties);
+&addGFF($dbh, $result, $datasetProperties);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -79,6 +80,12 @@ select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
 where dsp.name like '${organismAbbrev}%_ebi_VCF_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+UNION
+select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_ebi_GFF3_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
 UNION
 select dsp.name, prop.property, prop.value
@@ -161,6 +168,48 @@ sub addVCF {
   }
 }
 
+sub addGFF {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /GFF/);
+
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;;
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      my ($sampleName) = $sampleDataset;
+      my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
+      my $keyName = $gffFileName;
+         $keyName =~ s/_/ /g;
+      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+                       urlTemplate => $gffUrl,
+                           key => "$keyName GFF",
+                           label => "${sampleName} GFF",
+                           type => "CanvasFeatures",
+                           category => "Gene Models",
+                           metadata => {
+                             subcategory => 'GFF3',
+                             dataset => $datasetDisplayName,
+                             attribution => $shortAttribution,
+                             description => $summary,
+                           },
+                          fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
+}
 
 sub addProteinExpressionMassSpec {
   my ($dbh, $result, $datasetProperties) = @_;
