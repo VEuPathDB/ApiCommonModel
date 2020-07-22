@@ -10,24 +10,38 @@ use DBD::Oracle;
 use WDK::Model::ModelConfig;
 
 sub getDbh {$_[0]->{_dbh}}
+sub getCacheFile {$_[0]->{_cache_file}}
 
 sub new {
   my ($class, $args) = @_;
 
-  my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
-
-  my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
-                          $modelConfig->getAppDbLogin(),
-                          $modelConfig->getAppDbPassword()
-      )
-      || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
-  
-  $dbh->{LongTruncOk} = 0;
-  $dbh->{LongReadLen} = 10000000;
-
   my $self = bless($args, $class);
 
-  $self->{_dbh} = $dbh;
+  my $organismAbbrev = $args->{organismAbbrev};
+  my $fileName = $args->{fileName};
+  my $type = $args->{type};
+
+  my $cacheFile = $type && $type eq 'protein' 
+      ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 
+      : $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$fileName";;
+
+  if($organismAbbrev && $fileName) {
+    $self->{_cache_file} = $cacheFile;
+  }
+
+  unless($organismAbbrev && $fileName && -e $cacheFile) {
+    my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
+
+    my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                            $modelConfig->getAppDbLogin(),
+                            $modelConfig->getAppDbPassword()
+        )
+        || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+    
+    $dbh->{LongTruncOk} = 0;
+    $dbh->{LongReadLen} = 10000000;
+    $self->{_dbh} = $dbh;
+  }
 
   return $self;
 }
@@ -184,6 +198,20 @@ sub intronJunctionsQueryParams {
   }
 
   return $querieParams->{default}->{$level};
+}
+
+sub printFromCache {
+  my ($self) = @_;
+
+  my $cacheFile = $self->getCacheFile();
+
+  if(-e $cacheFile) {
+    open(FILE, $cacheFile) or die "Cannot open file $cacheFile for reading: $!";
+    print <FILE>;
+    close FILE;
+    return 1
+  }
+  return 0;
 }
 
 1;

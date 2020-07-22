@@ -36,6 +36,7 @@ my $datasetProperties = &datasetProperties($dbh);
 &addChipChipTracks($dbh, $result, $datasetProperties);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
+&addVCF($dbh, $result, $datasetProperties);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -109,6 +110,57 @@ and prop.dataset_presenter_id = dsp.dataset_presenter_id
 
   return \%datasetProperties;
 }
+
+sub addVCF {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /VCF/);
+    
+    #my $experimentName = $datasetProperties->{$dataset}->{experimentName};
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;;
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    #my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '${organismAbbrev}%_ebi_VCF_RSRC'";
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      #my ($sampleName) = $sampleDataset =~ /${organismAbbrev}_${experimentName}_(.+)_ebi_VCF_RSRC/;
+      my ($sampleName) = $sampleDataset;
+      my ($vcfFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
+      my $keyName = $vcfFileName;
+ 	 $keyName =~ s/_/ /g;
+      #my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/$VCFfileName");
+      my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
+                       urlTemplate => $vcfUrl,
+                           #key => "${vcfFileName} SNPs from VCF",
+                           key => "$keyName SNPs from VCF",
+                           label => "${sampleName} SNPs",
+                           type => "JBrowse/View/Track/CanvasVariants",
+                           glyph => "EbrcFeatureGlyphs/View/FeatureGlyph/Diamond",
+                           category => "Genetic Variation",
+                           metadata => {
+                             subcategory => 'DNA polymorphism',
+                             dataset => $datasetDisplayName,
+                             trackType => 'Diamond',
+                             attribution => $shortAttribution,
+                             description => $summary,
+                           },
+                          fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
+}
+
 
 sub addProteinExpressionMassSpec {
   my ($dbh, $result, $datasetProperties) = @_;

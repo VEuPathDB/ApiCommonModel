@@ -1,6 +1,6 @@
 <jbrowse>
+
   <query name="new:Segment">
-     
 <![CDATA[
 SELECT etn.na_sequence_id srcfeature_id, 
        1 startm, 
@@ -12,26 +12,21 @@ FROM   ApidbTuning.GenomicSeqAttributes etn, ApidbTuning.GenomicSequenceId si
 WHERE  etn.source_id = si.id 
  and lower(si.id) = lower('$name') 
 ]]>
-
   </query>
   
   <query name="get_sequence">
-    
 <![CDATA[ 
 SELECT ens.sequence 
 FROM   DOTS.NASEQUENCE ens 
 WHERE  ens.na_sequence_id = $srcfeature_id 
 ]]>
-    
   </query>
   
-  
   <query name="gene:annotation">
-     
 <![CDATA[
  SELECT
        ta.na_feature_id feature_id,
-       'gene' type,
+       ta.so_term_name type,
        'annotation' source,
        ta.source_id name,
        '1' phase, 
@@ -66,11 +61,44 @@ WHERE  fl.na_sequence_id = $srcfeature_id
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
 
-  <query name="piggyBac:TransposableElement">
-     
+  <query name="gene:annotation2">
+<![CDATA[
+ SELECT
+       ga.na_feature_id feature_id,
+       'gene' type,
+       'annotation' source,
+       ga.source_id name,
+       '1' phase, 
+       '.' score,
+       ga.na_sequence_id parent_id,
+       ga.start_min startm,
+       ga.end_max end,
+       decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'Note=' || ga.product  || '$dlm' ||
+       'soTerm=' || ga.so_term_name || '$dlm' ||
+       'geneId=' || ga.source_id || '$dlm' ||
+       'gName=' || ga.name || '$dlm' ||
+       'Contig=' || ga.sequence_id || '$dlm' ||
+       'product=' || replace(ga.product,'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'taxon=' || ga.organism || '$dlm' ||
+       'isDeprecated=' || ga.is_deprecated || '$dlm' ||
+       'orthomcl_name=' || ga.orthomcl_name || '$dlm' ||
+       'isPseudo=' || ga.is_pseudo || '$dlm' ||
+       'ProjectId=' || ga.project_id || '$dlm' ||
+       'OrgAbbrev=' || o.public_abbrev atts
+FROM
+       ApidbTuning.GeneAttributes ga,
+       apidb.organism o
+WHERE  ga.na_sequence_id = $srcfeature_id
+  AND  ga.start_min <= $rend
+  AND  ga.end_max >= $base_start
+  AND  ga.taxon_id = o.taxon_id
+]]>
+  </query>
+
+  <query name="piggyBac:TransposableElement" includeProjects="PlasmoDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'piggyBac' type, 
@@ -96,28 +124,105 @@ WHERE  blat.query_na_sequence_id = nas.na_sequence_id
 ORDER BY 
    blat.target_start
 ]]>
-    
   </query>
 
     <query name="gsnap:unifiedintronjunction">
-     
        <![CDATA[
-                select *
-                from ApidbTuning.GeneIntronJunction
-                where parent_id = $srcfeature_id
-                AND startm <= $rend
-                AND end >= $base_start
-                AND (annotated_intron = 'Yes'
-                OR (score >=  CASE WHEN contained = 1 THEN $$minContainedScore$$ ELSE $$minNonContainedScore$$ END
-                    AND (contained = 0 or percent_max >= $$minIntronPercent$$)
-                    AND score_exp_ratio >= CASE WHEN contained = 1 THEN $$minContainedRatio$$ ELSE $$minNonContainedRatio$$ END
-                    AND end - startm <= $$intronSizeLimit$$))
+                select gij.*
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                where gij.parent_id = $srcfeature_id
+                AND gij.startm <= $rend
+                AND gij.end >= $base_start
+                and gij.parent_id = stats.na_sequence_id
+                AND gij.end - gij.startm <= stats.max_intron_length * 2
+                AND gij.end - gij.startm <= ($rend - $base_start) * 12
+--                AND gij.end - gij.startm <= $$visibleRegionEnd$$ - $$visibleRegionStart$$
+                AND (gij.annotated_intron = 'Yes'
+                OR (gij.score >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+                    AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.min_annot_score_ratio ELSE stats.perc05_score_exp_ratio END
+--                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.perc05_score_exp_ratio ELSE 5*stats.perc05_score_exp_ratio END
+                    ))
        ]]>
-    
+  </query>
+
+    <query name="gsnap:unifiedintronjunctioninclusive">
+       <![CDATA[
+                select gij.*
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                where gij.parent_id = $srcfeature_id
+                AND gij.startm <= $rend
+                AND gij.end >= $base_start
+                and gij.parent_id = stats.na_sequence_id
+                AND gij.end - gij.startm <= stats.max_intron_length * 4
+                AND gij.end - gij.startm <= ($rend - $base_start) * 20
+                AND (gij.annotated_intron = 'Yes'
+                OR (gij.score >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+                    AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.min_annot_score_ratio ELSE 5*stats.min_annot_score_ratio END
+                    ))
+       ]]>
+  </query>
+
+    <query name="gsnap:unifiedintronjunctionApollo">
+       <![CDATA[
+              select FEATURE_ID,
+                     TYPE,
+                     SOURCE,
+                     NAME,
+                     PARENT_ID,
+                     STARTM - 10 as startm,
+                     END + 10 as end,
+                     CONTAINED,
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     SCORE,
+                     SCORE_EXP_RATIO,
+                     ANNOTATED_INTRON,
+                     MIN_SAMPLE_MULTIPLIER,
+                     MAX_TOTAL_CONS_MULT_RATIO,
+                     to_char(startm - 10) || ',' || to_char(end + 1) as tstarts,
+                     to_char(10) || ',' || to_char(10) as blocksizes,
+                     ATTS
+              from (
+                select gij.*
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                where gij.parent_id = $srcfeature_id
+                AND gij.startm <= $rend
+                AND gij.end >= $base_start
+                and gij.parent_id = stats.na_sequence_id
+                AND gij.end - gij.startm <= stats.max_intron_length 
+                AND (gij.annotated_intron = 'Yes'
+                OR (gij.score >=  CASE WHEN contained = 1 THEN stats.perc005_annot_score ELSE 5*stats.perc005_annot_score END
+                    AND (gij.contained = 0 or gij.percent_max >= stats.perc0001_annot_percent_max)
+                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.perc05_score_exp_ratio ELSE 5*stats.perc05_score_exp_ratio END
+                    AND (gij.contained = 0 or gij.matches_gene_strand = 1)
+                    ))
+                    ) where 'ALL' = '$$annotated_intron$$' OR annotated_intron = '$$annotated_intron$$'
+       ]]>
+  </query>
+
+    <query name="gsnap:unifiedintronjunctioninclusiveApollo">
+       <![CDATA[
+              select * from (
+                select gij.*
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                where gij.parent_id = $srcfeature_id
+                AND gij.startm <= $rend
+                AND gij.end >= $base_start
+                and gij.parent_id = stats.na_sequence_id
+                AND gij.end - gij.startm <= stats.max_intron_length 
+                AND (gij.annotated_intron = 'Yes'
+                OR (gij.score >=  CASE WHEN contained = 1 THEN stats.min_annot_score + 1 ELSE 5*stats.min_annot_score END
+                    AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.min_annot_score_ratio ELSE 5*stats.min_annot_score_ratio END
+                    AND (gij.contained = 0 or gij.matches_gene_strand = 1)
+                    ))
+                    ) where 'ALL' = '$$annotated_intron$$' OR annotated_intron = '$$annotated_intron$$'
+       ]]>
   </query>
 
   <query name="alignment:ORFlength">
-     
 <![CDATA[
  SELECT na_feature_id feature_id, 
              'alignment' type, 
@@ -137,11 +242,9 @@ ORDER BY
         AND  end_max - start_min + 1 >= $$minLength$$
       ORDER BY start_min
 ]]>
-    
   </query>
   
     <query name="alignment:ORF">
-     
 <![CDATA[
  SELECT na_feature_id feature_id, 
              'alignment' type, 
@@ -160,11 +263,9 @@ ORDER BY
         AND  feature_type='Miscellaneous'
       ORDER BY start_min
 ]]>
-    
   </query>
   
   <query name="alignment:EST">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id, 
        'alignment' type, 
@@ -196,12 +297,9 @@ WHERE
        blat.is_best_alignment = 1
 ORDER BY blat.target_start asc, blat.score desc
 ]]>
-    
   </query>
   
-  
   <query name="match:WU_BLASTX">
-     
 <![CDATA[
 select * from (
 SELECT b.similarity_id feature_id, 'match' type, 'WU_BLASTX' source, 
@@ -217,12 +315,9 @@ ORDER BY
        b.pvalue asc
 ) where rownum < 4000
 ]]>
-    
   </query>
   
-  
-  <query name="alignment:DoTSAssemblies">
-     
+  <query name="alignment:DoTSAssemblies" excludeProjects="TrichDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id, 
        'alignment' type, 
@@ -248,12 +343,9 @@ WHERE
 ORDER BY 
        blat.target_start
 ]]>
-    
   </query>
 
-
-  <query name="gene:syntenyMC">
-     
+  <query name="gene:syntenyMC" excludeProjects="TrichDB">
 <![CDATA[
 select feature_id, type, source, name, score, parent_id, startm, end, strand, atts  from (
 select
@@ -466,20 +558,9 @@ SELECT
  WHERE  na_sequence_id = $srcfeature_id 
  AND sa.organism=ostr.organism
 ]]>
-    
   </query>
 
-
-
-
-
-
-
-
-
-
-  <query name="gene:syntenyJBrowse">
-     
+  <query name="gene:syntenyJBrowse" excludeProjects="TrichDB">
 <![CDATA[
 -- for: reference organism - gene
 SELECT
@@ -630,14 +711,9 @@ SELECT
  AND sa.organism=ostr.organism
 
 ]]>
-    
   </query>
 
-
-
-
-  <query name="gene:syntenyJBrowseScaled">
-     
+  <query name="gene:syntenyJBrowseScaled" excludeProjects="TrichDB">
 <![CDATA[
 -- for: reference organism - gene
 SELECT
@@ -841,13 +917,9 @@ SELECT
  AND sa.organism=ostr.organism
 
 ]]>
-    
   </query>
 
-  
-  
   <query name="lowcomplexity:dust">
-     
 <![CDATA[
 SELECT
        lc.na_feature_id feature_id,
@@ -871,12 +943,9 @@ WHERE
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
   
-  
   <query name="match:TGI" excludeProjects="TriTrypDB,CryptoDB,GiardiaDB,TrichDB">
-     
 <![CDATA[
 SELECT
        sim.similarity_id feature_id,
@@ -907,12 +976,9 @@ WHERE  sim.min_subject_start <= $rend and
 ORDER BY 
        sim.min_subject_start
 ]]>
-    
   </query>
   
-  
-  <query name="MicroArrayProbes:expressionH" >
-     
+  <query name="MicroArrayProbes:expressionH"  includeProjects="PlasmoDB">
        <![CDATA[
 SELECT $srcfeature_id as feature_id,
        'MicroArrayProbes' as type, 
@@ -922,11 +988,9 @@ SELECT $srcfeature_id as feature_id,
        $rend             as end 
 FROM   dual 
        ]]>
-    
   </query>
 
-  <query name="cnv:ArrayJBrowse" >
-     
+  <query name="cnv:ArrayJBrowse"  includeProjects="TriTrypDB">
        <![CDATA[
 select ri.reporter_intensity_id as feature_id
      , 'cnv' as type
@@ -945,15 +1009,9 @@ AND rl.na_sequence_id = $srcfeature_id
 AND rl.reporter_start <= $rend
 AND rl.reporter_end >= $base_start
        ]]>
-    
   </query> 
 
-
-
-
-
-  <query name="cnv:Array" >
-     
+  <query name="cnv:Array"  includeProjects="TriTrypDB">
        <![CDATA[
 SELECT a.name      as feature_id,
        'cnv'       as type, 
@@ -966,11 +1024,9 @@ FROM   rad.protocol p,
 WHERE p.protocol_id = a.protocol_id
   AND p.name ='dna_array_simple'
        ]]>
-    
   </query> 
 
   <query name="MicroArrayProbes:expressionProbes" includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
-       
 <![CDATA[
 SELECT rl.reporter_location_id as feature_id,
        'MicroArrayProbes' type, 
@@ -992,11 +1048,9 @@ WHERE  edr.external_database_id = ed.external_database_id
 
 
        ]]>
-    
   </query> 
 
   <query name="MicroArrayProbes:expressionD" includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
-       
 <![CDATA[
 SELECT fl.na_feature_id as feature_id,
        'MicroArrayProbes' type, 
@@ -1015,12 +1069,9 @@ WHERE  edr.external_database_id = ed.external_database_id
   AND  fl.start_min <= $rend
   AND  fl.end_max >= $base_start
   AND  fl.na_sequence_id = $srcfeature_id]]>
-     
   </query>
-  
 
-      <query name="splice:curated">
-     
+      <query name="splice:curated" includeProjects="TriTrypDB">
 <![CDATA[
 SELECT 
        ra.nextgenseq_align_id feature_id,
@@ -1044,11 +1095,9 @@ WHERE d.name = 'Tbrucei_RNASeq_Splice_Leader_And_Poly_A_Sites_George_Cross_RSRC'
  AND  ra.start_a >= $base_start 
  AND  ra.end_a <= $rend
 ]]>
-    
   </query>
 
-      <query name="polya:curated">
-     
+      <query name="polya:curated" includeProjects="TriTrypDB">
 <![CDATA[
 SELECT 
        ra.nextgenseq_align_id feature_id,
@@ -1072,11 +1121,9 @@ WHERE d.name = 'Tbrucei_RNASeq_Splice_Leader_And_Poly_A_Sites_George_Cross_RSRC'
  AND  ra.start_a >= $base_start 
  AND  ra.end_a <= $rend
 ]]>
-    
   </query>
 
-      <query name="splice:alignseq">
-     
+      <query name="splice:alignseq" includeProjects="TriTrypDB">
 <![CDATA[
 SELECT min(feature_id) as feature_id, parent_id, startm, startm as end,
         'splice' type, 'alignseq' source,
@@ -1102,11 +1149,9 @@ FROM
    AND  ra.end_a <= $rend )
 GROUP BY parent_id,sample,strand,startm
 ]]>
-    
   </query>
 
-      <query name="polya:alignseq">
-     
+      <query name="polya:alignseq" includeProjects="TriTrypDB">
 <![CDATA[
 SELECT min(feature_id) as feature_id, parent_id, startm, startm as end,
         'polya' type, 'alignseq' source,
@@ -1129,11 +1174,9 @@ FROM
    AND  ra.end_a <= $rend)
 GROUP BY parent_id,strand,startm
 ]]>
-    
   </query>
 
   <query name="domain:spliceSites" includeProjects="TriTrypDB,FungiDB">
-    
 <![CDATA[
 SELECT distinct ssf.segment_start as  feature_id, 'domain' type,   '$source' as source,  
        ssf.segment_start as startm, ssf.segment_start as end,
@@ -1173,11 +1216,9 @@ SELECT distinct ssf.segment_start as  feature_id, 'domain' type,   '$source' as 
   GROUP BY  ssf.segment_start, ssf.strand, gtable.source_id,gtable.utr_len, gtable.dist_to_first_atg, ssf.type
   order by  ssf.segment_start
 ]]>
-    
   </query>
 
-  <query name="domain:polyASites">
-    
+  <query name="domain:polyASites" includeProjects="TriTrypDB">
 <![CDATA[
 SELECT 
        splice_site_feature_id feature_id,
@@ -1220,12 +1261,9 @@ FROM (
    AND NOT (gtable.count=1 AND gtable.is_dominant is null)
    )
 ]]>
-    
   </query>
 
-
   <query name="domain:MassSpecPeptide">
-    
 <![CDATA[
 select feature_id, type, source, parent_id, min(startm) as startm, max(end) as end, name, atts from (
 select msf.aa_feature_id as feature_id,
@@ -1271,14 +1309,9 @@ and msf.AA_FEATURE_ID = aaloc.aa_feature_id
 )
 group by feature_id, type, source, parent_id, name, atts
 ]]>
-    
   </query>
 
-
-  
-  
   <query name="domain:UnifiedMassSpecPeptides">
-      
 <![CDATA[
 select feature_id, type, source, parent_id, min(startm) as startm, max(end) as end, name, atts from (
 select msf.aa_feature_id as feature_id,
@@ -1323,11 +1356,9 @@ and msf.AA_FEATURE_ID = aaloc.aa_feature_id
 )
 group by feature_id, type, source, parent_id, name, atts
 ]]>
-    
   </query>
   
   <query name="UnifiedMassSpecPeptides:density">
-   
 <![CDATA[
 SELECT etn.na_sequence_id feature_id,
        'UnifiedMassSpecPeptides' type,
@@ -1335,11 +1366,9 @@ SELECT etn.na_sequence_id feature_id,
 FROM   dots.NASEQUENCE etn
 WHERE  etn.na_sequence_id = $srcfeature_id
 ]]>
-    
   </query>
 
   <query name="alignment:BLAT">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id, 
        'alignment' type, 
@@ -1372,12 +1401,9 @@ WHERE
 ORDER BY 
        blat.target_start
 ]]>
-    
   </query>
   
-
   <query name="proteinAlignment:BLAT">
-     
 <![CDATA[
 SELECT blat.blat_protein_alignment_id feature_id, 
        'proteinAlignment' type, 
@@ -1402,12 +1428,9 @@ WHERE
 ORDER BY 
        blat.target_start
 ]]>
-    
   </query>
   
-  
-<query name="alignment:TransposableElements">
-     
+<query name="alignment:TransposableElements" includeProjects="TrichDB">
 <![CDATA[
 select l.na_feature_id as feature_id
      , 'alignment' as type
@@ -1426,11 +1449,9 @@ and l.na_sequence_id = $srcfeature_id
 and l.start_min >= $base_start - 1 
 and l.end_max <= $rend
 ]]>
-    
   </query>
 
   <query name="alignment:GenericEndFeature">
-     
 <![CDATA[
 select * from (
 select f.feature_id, 
@@ -1474,12 +1495,9 @@ where (startm >= $base_start  -1 and startm <= $rend )
    OR (end <= $rend and end >= $base_start - 1)
    OR (startm < $base_start - 1 and end > $rend)
 ]]>
-    
   </query>
-
   
   <query name="annotation:density">
-     
 <![CDATA[
 SELECT etn.na_sequence_id feature_id, 
        'annotation' type, 
@@ -1487,11 +1505,9 @@ SELECT etn.na_sequence_id feature_id,
 FROM   dots.NASEQUENCE etn 
 WHERE  etn.na_sequence_id = $srcfeature_id 
 ]]>
-    
   </query>
   
   <query name = "ORF:density"> 
-     
 <![CDATA[ 
 SELECT etn.na_sequence_id feature_id, 
        'ORF' type, 
@@ -1499,38 +1515,9 @@ SELECT etn.na_sequence_id feature_id,
 FROM   dots.NASEQUENCE etn 
 WHERE  etn.na_sequence_id = $srcfeature_id 
 ]]>
-    
   </query>
   
-<!--
-  <query name = "ORF300:density"> 
-     
-<![CDATA[ 
-SELECT etn.na_sequence_id feature_id, 
-       'ORF300' type, 
-       'density' source 
-FROM   dots.NASEQUENCE etn 
-WHERE  etn.na_sequence_id = $srcfeature_id 
-]]>
-    
-  </query>
-  
-  <query name = "ORF600:density"> 
-     
-<![CDATA[ 
-SELECT etn.na_sequence_id feature_id, 
-       'ORF' type, 
-       'density' source 
-FROM   dots.NASEQUENCE etn 
-WHERE  etn.na_sequence_id = $srcfeature_id 
-]]>
-    
-  </query>
-
--->
-
   <query name="Centromere:overview"  includeProjects="PlasmoDB,ToxoDB">
-     
 <![CDATA[
 SELECT fl.na_sequence_id feature_id,
        'Centromere' type,
@@ -1542,11 +1529,9 @@ WHERE fl.na_sequence_id = $srcfeature_id
   AND ot.ontology_term_id = fl.sequence_ontology_id 
   AND ot.name='centromere'    
 ]]> 
-     
   </query>
 
   <query name="repeat:RepeatElements">
-     
 <![CDATA[
 SELECT rpt.na_feature_id feature_id,
        'repeat' type,
@@ -1571,12 +1556,9 @@ WHERE  fl.na_sequence_id = $srcfeature_id
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
-
  
   <query name="TandemRepeat:TRF">
-     
 <![CDATA[
  SELECT
        fl.na_feature_id feature_id,
@@ -1601,12 +1583,9 @@ WHERE
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
 
-
   <query name="feature:BindingSite">
-     
 <![CDATA[
  SELECT
        fl.na_feature_id feature_id,
@@ -1641,14 +1620,9 @@ WHERE
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
-
  
-
- 
-  <query name="repeat_region:Genbank">
-  
+  <query name="repeat_region:Genbank" includeProjects="TrichDB">
 <![CDATA[ 
 SELECT gf.na_feature_id feature_id,
        'repeat_region' type, 
@@ -1674,11 +1648,9 @@ WHERE  ga.so_term_name = 'repeat_region'
    AND gf.source_id = ga.source_id
    AND gf.na_sequence_id = $srcfeature_id 
 ]]>
-    
   </query>    
   
   <query name="alignment:dbEST">
-     
 <![CDATA[
  SELECT blat.blat_alignment_id feature_id, 
        'alignment' type, 
@@ -1711,44 +1683,9 @@ WHERE
 ORDER BY 
        blat.target_start
 ]]>
-    
   </query>
   
-  
-  
-<!-- 
-  <query name="clusteralignment:EstCluster">
-     
-<![CDATA[
- SELECT blat.blat_alignment_id feature_id, 
-       'clusteralignment' type, 
-       'EstCluster' source, 
-       a.source_id name, 
-       blat.score || '' score, 
-       blat.target_na_sequence_id parent_id, 
-       blat.target_start startm, 
-       blat.target_end end, 
-       decode (blat.is_reversed, 0, '+1', 1, '-1', '.') strand, 
-       'PercentIdentity=' || blat.percent_identity || '$dlm' ||
-       'Count=' || a.number_of_contained_sequences atts 
-FROM   
-       dots.BlatAlignment blat, 
-       dots.Assembly a
-WHERE  
-       blat.query_na_sequence_id = a.na_sequence_id and 
-       blat.target_start <= $rend and 
-       blat.target_end >= $base_start and 
-       blat.is_best_alignment = 1 and
-       blat.target_na_sequence_id = $srcfeature_id
-ORDER BY 
-       blat.target_start
-]]>
-    
-  </query>
- --> 
-  
-  <query name="Microsatellite:sts">
-     
+  <query name="Microsatellite:sts" includeProjects="PlasmoDB">
 <![CDATA[
  SELECT S.na_feature_id as feature_id,
        'Microsatellite' type, 
@@ -1769,12 +1706,9 @@ ORDER BY
         AND  s.sequence_ontology_id = ot.ontology_term_id
         AND ot.name = 'microsatellite'
 ]]>
-    
   </query>
   
-  
   <query name="Haplotype:Block">
-     
 <![CDATA[
 SELECT  cef.na_feature_id feature_id,
        'Haplotype' type, 
@@ -1792,15 +1726,9 @@ FROM DoTS.ChromosomeElementFeature cef, Dots.NaLocation nl, DoTS.ExternalNASeque
          AND    nl.start_min <= $rend
          AND    nl.end_max >= $base_start
 ]]>
-    
   </query>
  
- 
- 
-  
-<!-- NOTE: externalDatabase.name list specified in query, for Crypto AND Plasmo -->
   <query name="match:IsolatePopset">
-    
 <![CDATA[
 SELECT distinct sim.similarity_id feature_id, 
        'match' type, 
@@ -1840,12 +1768,9 @@ ORDER BY
        sim.max_subject_end asc, 
        pvalue asc
 ]]>
-    
   </query>
   
-  
   <query name="scaffold:genome" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,GiardiaDB,FungiDB">
-     
 <![CDATA[
  SELECT 's.' || piece_na_sequence_id as feature_id, 
      'scaffold' type,
@@ -1901,12 +1826,9 @@ SELECT 'g.' || $srcfeature_id as feature_id,
 FROM apidbtuning.genomicseqattributes
 where na_sequence_id =   $srcfeature_id
 ]]>
-    
   </query>
   
-  
   <query name="gene:AlternateModels">
-     
 <![CDATA[
 SELECT
        gf.na_feature_id feature_id,
@@ -1953,11 +1875,9 @@ WHERE  fl.na_sequence_id = $srcfeature_id
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
 
   <query name="gff:basic" includeProjects="PlasmoDB,ToxoDB,CryptoDB,FungiDB">
-    
 <![CDATA[ 
 SELECT g3.gff3_feature_id feature_id,
        'gff' type,
@@ -1978,11 +1898,9 @@ WHERE g3.external_database_release_id = edr.external_database_release_id
   AND g3.mapping_end >= $base_start
   AND  ed.name = $$edName$$
 ]]>
-    
   </query>
 
   <query name="gff:processedTranscript" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
-    
 <![CDATA[ 
 SELECT g3.id_attr feature_id,
        'gff' type,
@@ -2006,12 +1924,9 @@ WHERE g3.external_database_release_id = edr.external_database_release_id
   AND g3.mapping_end >= $base_start
   AND  ed.name = $$edName$$
 ]]>
-    
   </query>
 
-
   <query name="gene:OldModels" includeProjects="PlasmoDB,ToxoDB">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'gene' type, 
@@ -2043,12 +1958,9 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
   AND  enas.source_id = gi.id
   AND ga.source_id = gi.gene
 ]]>
-      
   </query>
 
-
   <query name="alignment:sequence" includeProjects="CryptoDB,TriTrypDB,ToxoDB">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'alignment' type, 
@@ -2075,11 +1987,9 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
   AND  edr.external_database_id = ed.external_database_id
   AND  ed.name = $$edName$$
 ]]>
-      
   </query>
   
   <query name="SNP:density"  includeProjects="ToxoDB,AmoebaDB,TriTrypDB,CryptoDB,PlasmoDB,FungiDB">
-     
 <![CDATA[
  SELECT etn.na_sequence_id feature_id, 
        'SNP' type, 
@@ -2087,11 +1997,9 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
 FROM   dots.NASEQUENCE etn 
 WHERE  etn.na_sequence_id = $srcfeature_id 
 ]]>
-    
   </query>
 
   <query name="ChIP:ChIPSeqPeaks" includeProjects="PlasmoDB,ToxoDB">
-    
         <![CDATA[
             SELECT feature_id
             , type
@@ -2155,11 +2063,9 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 GROUP BY feature_id, type, source, tag_count, fold_change, p_value, parent_id, startm, end, pan_name
             )
         ]]>
-    
  </query>
 
  <query name="ChIP:ChIPSeqPeaksjbrowse" includeProjects="PlasmoDB,ToxoDB">
-    
         <![CDATA[
             SELECT feature_id
             , type
@@ -2220,11 +2126,9 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 GROUP BY feature_id, type, source, tag_count, fold_change, p_value, startm, end, sample_name
             )
         ]]>
-    
   </query>
 
   <query name="ChIP:ChIPchip_peaks"  includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
-     
         <![CDATA[
             SELECT feature_id
             , type
@@ -2269,11 +2173,9 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 )
                 GROUP BY feature_id, type, source, score, parent_id, startm, end
             ]]>
-    
   </query>  
 
   <query name="ChIP:ChIPchip_peaksjbrowse"  includeProjects="PlasmoDB,ToxoDB,TriTrypDB">
-     
         <![CDATA[
             SELECT feature_id
             , type
@@ -2320,13 +2222,9 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 )
                 GROUP BY feature_id, type, source, score, parent_id, startm, end, sample_name
             ]]>
-    
   </query>
 
- 
-
-  <query name="GeneticMarkers:Sibley" >
-     
+  <query name="GeneticMarkers:Sibley"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT 
        sa.na_feature_id           as feature_id,
@@ -2359,11 +2257,9 @@ WHERE  fl.na_sequence_id = $srcfeature_id
   AND  fl.na_feature_id = sa.na_feature_id
   AND  sa.dataset = 'tgonME49_SNP_Sibley_Tg10x_31_gff_RSRC'
 ]]>
-    
   </query>
   
-  <query name="GeneticMarkers:overview" >
-     
+  <query name="GeneticMarkers:overview"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT
        sv.na_feature_id as feature_id,
@@ -2384,12 +2280,9 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
  AND   l.na_sequence_id = $srcfeature_id
  AND  sv.parent_id=l.na_feature_id
 ]]>
-    
   </query>
-  
 
   <query name="ChIP:ChIPchip_smoothedjbrowse">
-    
         <![CDATA[
         SELECT
         feature_id
@@ -2438,12 +2331,9 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
             )
         GROUP BY feature_id, type, source, score, parent_id, startm, end, sample_name
         ]]>
-    
   </query>
 
-
   <query name="ChIP:ChIPchip_smoothed" includeProjects = "PlasmoDB,ToxoDB, TriTrypDB">
-    
         <![CDATA[
         SELECT DISTINCT 
         CASE WHEN term = '$$sub$$' THEN feature_id || '_' || value 
@@ -2501,12 +2391,9 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
         )
         WHERE term = '$$sub$$' OR 'no_sub' = '$$sub$$'
         ]]>
-    
   </query>
  
-  
-  <query name="AffymetrixProbes:Probes" >
-    
+  <query name="AffymetrixProbes:Probes"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT 
        f.na_feature_id        as feature_id,
@@ -2534,12 +2421,9 @@ WHERE  ed.name = $$edname$$
   AND  l.start_min <= $rend
   AND  l.end_max >= $base_start
 ]]>
-    
   </query>
   
-  
-  <query name="AffymetrixProbes:TBLASTNTranscriptDiscovery" >
-     
+  <query name="AffymetrixProbes:TBLASTNTranscriptDiscovery"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT 
        f.na_feature_id            as feature_id,
@@ -2566,12 +2450,9 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - TBLASTN-TranscriptDiscovery'
   AND  l.start_min <= $rend
   AND  l.end_max >= $base_start
 ]]>
-    
   </query>
   
-  
-  <query name="AffymetrixProbes:ESTTranscriptDiscovery" >
-     
+  <query name="AffymetrixProbes:ESTTranscriptDiscovery"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT 
        f.na_feature_id            as feature_id,
@@ -2598,12 +2479,9 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - EST-TranscriptDiscovery'
   AND  l.start_min <= $rend
   AND  l.end_max >= $base_start
 ]]>
-    
   </query>
   
-  
-  <query name="AffymetrixProbes:BLASTXTranscriptDiscovery" >
-     
+  <query name="AffymetrixProbes:BLASTXTranscriptDiscovery"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT 
        f.na_feature_id            as feature_id,
@@ -2630,12 +2508,9 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - BLASTX-TranscriptDiscovery'
   AND  l.start_min <= $rend
   AND  l.end_max >= $base_start
 ]]>
-    
   </query>
   
-  
-  <query name="AffymetrixProbes:NuclearNonCoding" >
-     
+  <query name="AffymetrixProbes:NuclearNonCoding"  includeProjects="ToxoDB">
 <![CDATA[
  SELECT 
        f.na_feature_id            as feature_id,
@@ -2663,11 +2538,9 @@ WHERE  ed.name = 'Affymetrix Probes from Amit - Expression-NuclearNonCoding'
   AND  l.start_min <= $rend
   AND  l.end_max >= $base_start
 ]]>
-    
   </query>
   
   <query name="SNP:Population"  includeProjects="ToxoDB,AmoebaDB,TriTrypDB,CryptoDB,PlasmoDB,FungiDB,PiroplasmaDB">
-     
 <![CDATA[
  SELECT 
        sa.source_id              as feature_id,
@@ -2706,11 +2579,9 @@ WHERE  sa.na_sequence_id = $srcfeature_id
   AND  sa.location <= $rend
   AND  sa.location >= $base_start
 ]]>
-    
   </query>
  
-  <query name="SNP:Genotyping" >
-     
+  <query name="SNP:Genotyping"  includeProjects="PlasmoDB">
 <![CDATA[
 SELECT 
        sa.na_feature_id          as feature_id,
@@ -2747,12 +2618,9 @@ WHERE  sa.na_sequence_id = $srcfeature_id
   AND  sa.start_min <= $rend
   AND  sa.start_min >= $base_start
 ]]>
-    
   </query> 
 
-
   <query name="SNP:Diversity">
-     
 <![CDATA[
 SELECT etn.na_sequence_id feature_id, 
        'SNP' type, 
@@ -2760,11 +2628,9 @@ SELECT etn.na_sequence_id feature_id,
 FROM   dots.NASEQUENCE etn 
 WHERE  etn.na_sequence_id = $srcfeature_id 
 ]]>
-    
   </query>
 
   <query name="SNP:DiversityJbrowse"  includeProjects="PlasmoDB,ToxoDB">
-     
 <![CDATA[
 SELECT 
        gff3.gff3_feature_id          as feature_id,
@@ -2785,12 +2651,9 @@ WHERE  ed.name = $$edname$$
   AND  gff3.mapping_start <= $rend
   AND  gff3.mapping_end >= $base_start
 ]]>
-    
   </query> 
 
-
-  <query name="domain:tssJBrowse">
-    
+  <query name="domain:tssJBrowse" includeProjects="FungiDB">
 <![CDATA[
 SELECT distinct ssf.segment_start as  feature_id,
        'domain' type, 
@@ -2817,12 +2680,9 @@ SELECT distinct ssf.segment_start as  feature_id,
    and ssf.strand = '$$strand$$'
   GROUP BY  ssf.segment_start, ssf.strand, ssf.na_sequence_id
 ]]>
-    
   </query>
 
-
   <query name="domain:tss">
-     
 <![CDATA[
 SELECT distinct ssf.na_sequence_id  || '-' as  feature_id,
        'domain' type, 
@@ -2846,13 +2706,9 @@ SELECT distinct ssf.na_sequence_id  || '+' as  feature_id,
 FROM   apidb.spliceSiteFeature ssf 
 WHERE  ssf.na_sequence_id =  $srcfeature_id
 ]]>
-    
   </query>
-
   
-  
-  <query name="match:BergmanVaidyaOligos" >
-     
+  <query name="match:BergmanVaidyaOligos"  includeProjects="PlasmoDB">
 <![CDATA[
  SELECT
        sim.similarity_id feature_id,
@@ -2897,12 +2753,9 @@ WHERE
 ORDER BY 
        sim.min_query_start
 ]]>
-    
   </query>
   
-  
-  <query name="mapp:promoters" >
-     
+  <query name="mapp:promoters"  includeProjects="PlasmoDB">
 <![CDATA[
 SELECT $srcfeature_id || '_-1'  as feature_id,
   'mapp'  as type, 
@@ -2922,13 +2775,9 @@ SELECT $srcfeature_id || '_1'  as feature_id,
   '' as atts
 from dual
 ]]>
-    
   </query>
 
-<!-- RNA-Seq queries. Need one / track as too much data to use filters -->
-
-  <query name="rnaseq:gcpfwt" >
-     
+  <query name="rnaseq:gcpfwt"  includeProjects="TriTrypDB">
        <![CDATA[
         SELECT 'gcpfwt_id' as feature_id,
                'rnaseq' type,
@@ -2937,11 +2786,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:gcbfall" >
-     
+  <query name="rnaseq:gcbfall"  includeProjects="TriTrypDB">
        <![CDATA[
         SELECT 'gcbfall_id' as feature_id,
                'rnaseq' type,
@@ -2950,11 +2797,9 @@ from dual
                 $rend       as end
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_three_samples" >
-     
+  <query name="rnaseq:cn_three_samples"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'cn_three_sample' as feature_id,
                'rnaseq' type,
@@ -2970,11 +2815,9 @@ from dual
          AND rc.location >= $base_start - 1
          GROUP BY rc.sample
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_four_samples" >
-     
+  <query name="rnaseq:cn_four_samples"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'cn_four_sample' as feature_id,
                'rnaseq' type,
@@ -2990,11 +2833,9 @@ from dual
          AND rc.location >= $base_start - 1
          GROUP BY rc.sample
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf0h_lin" >
-     
+  <query name="rnaseq:cn_pf0h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_0h_lin' as feature_id,
                'rnaseq' type,
@@ -3003,11 +2844,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf8h_lin" >
-     
+  <query name="rnaseq:cn_pf8h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_8h_lin' as feature_id,
                'rnaseq' type,
@@ -3016,11 +2855,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf16h_lin" >
-     
+  <query name="rnaseq:cn_pf16h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_16h_lin' as feature_id,
                'rnaseq' type,
@@ -3029,11 +2866,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf24h_lin" >
-     
+  <query name="rnaseq:cn_pf24h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_24h_lin' as feature_id,
                'rnaseq' type,
@@ -3042,11 +2877,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf32h_lin" >
-     
+  <query name="rnaseq:cn_pf32h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_32h_lin' as feature_id,
                'rnaseq' type,
@@ -3055,11 +2888,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf40h_lin" >
-     
+  <query name="rnaseq:cn_pf40h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_40h_lin' as feature_id,
                'rnaseq' type,
@@ -3068,11 +2899,9 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
   </query>
 
-  <query name="rnaseq:cn_pf48h_lin" >
-     
+  <query name="rnaseq:cn_pf48h_lin"  includeProjects="PlasmoDB">
        <![CDATA[
         SELECT 'rnaseq_48h_lin' as feature_id,
                'rnaseq' type,
@@ -3081,23 +2910,171 @@ from dual
                 $rend       as end 
         FROM   dual
        ]]>
-    
+  </query>
+
+    <query name="gsnap:unifiedintronjunctioninclusiveApollo:bulksubfeatures">
+       <![CDATA[
+              select FEATURE_ID,
+                     TYPE,
+                     SOURCE,
+                     NAME,
+                     feature_id as PARENT_ID,
+                     STARTM - 10 as startm,
+                     END + 10 as end,
+                     CONTAINED,
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     SCORE,
+                     SCORE_EXP_RATIO,
+                     ANNOTATED_INTRON,
+                     MIN_SAMPLE_MULTIPLIER,
+                     MAX_TOTAL_CONS_MULT_RATIO,
+                     to_char(startm - 10) || ',' || to_char(end + 1) as tstarts,
+                     to_char(10) || ',' || to_char(10) as blocksizes,
+                     ATTS
+              from (
+                select gij.*
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                where gij.parent_id = $srcfeature_id
+                AND gij.startm <= $rend
+                AND gij.end >= $base_start
+                and gij.parent_id = stats.na_sequence_id
+                AND gij.end - gij.startm <= stats.max_intron_length 
+                AND (gij.annotated_intron = 'Yes'
+                OR (gij.score >=  CASE WHEN contained = 1 THEN stats.min_annot_score + 1 ELSE 5*stats.min_annot_score END
+                    AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.min_annot_score_ratio ELSE 5*stats.min_annot_score_ratio END
+                    AND (gij.contained = 0 or gij.matches_gene_strand = 1)
+                    ))
+                    ) where 'ALL' = '$$annotated_intron$$' OR annotated_intron = '$$annotated_intron$$'
+       ]]>
+  </query>
+
+    <query name="gsnap:unifiedintronjunctionApollo:bulksubfeatures">
+       <![CDATA[
+              select FEATURE_ID,
+                     TYPE,
+                     SOURCE,
+                     NAME,
+                     feature_id as PARENT_ID,
+                     STARTM - 10 as startm,
+                     END + 10 as end,
+                     CONTAINED,
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     SCORE,
+                     SCORE_EXP_RATIO,
+                     ANNOTATED_INTRON,
+                     MIN_SAMPLE_MULTIPLIER,
+                     MAX_TOTAL_CONS_MULT_RATIO,
+                     to_char(startm - 10) || ',' || to_char(end + 1) as tstarts,
+                     to_char(10) || ',' || to_char(10) as blocksizes,
+                     ATTS
+              from (
+                select gij.*
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                where gij.parent_id = $srcfeature_id
+                AND gij.startm <= $rend
+                AND gij.end >= $base_start
+                and gij.parent_id = stats.na_sequence_id
+                AND gij.end - gij.startm <= stats.max_intron_length 
+                AND (gij.annotated_intron = 'Yes'
+                OR (gij.score >=  CASE WHEN contained = 1 THEN stats.perc005_annot_score ELSE 5*stats.perc005_annot_score END
+                    AND (gij.contained = 0 or gij.percent_max >= stats.perc0001_annot_percent_max)
+                    AND gij.score_exp_ratio >= CASE WHEN contained = 1 THEN stats.perc05_score_exp_ratio ELSE 5*stats.perc05_score_exp_ratio END
+                    AND (gij.contained = 0 or gij.matches_gene_strand = 1)
+                    ))
+                    ) where 'ALL' = '$$annotated_intron$$' OR annotated_intron = '$$annotated_intron$$'
+       ]]>
+  </query>
+
+  <query name="gene:annotation2:bulksubfeatures">
+<![CDATA[
+select * from (
+ SELECT
+       ta.na_feature_id feature_id,
+       case when so_term_name like 'protein_coding%' OR so_term_name = 'pseudogene' then 'processed_transcript' else 'nc_transcript' end as type,
+       'annotation' source,
+       ta.source_id name,
+       '1' phase, 
+       ta.gene_na_feature_id parent_id,
+       fl.start_min startm,
+       fl.end_max end,
+       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'soTerm=' || ta.transcript_type || '$dlm' ||
+       'geneId=' || ta.gene_source_id || '$dlm' ||
+       'Contig=' || ta.sequence_id || '$dlm' ||
+       'taxon=' || ta.organism || '$dlm' ||
+       'isDeprecated=' || ta.is_deprecated || '$dlm' ||
+       'isPseudo=' || ta.is_pseudo || '$dlm' ||
+       'ProjectId=' || ta.project_id || '$dlm' ||
+       'aaSeqId=' || ta.aa_sequence_id ||  '$dlm' || 
+       'OrgAbbrev=' || o.public_abbrev atts,
+       1 as has_children
+FROM
+       ApidbTuning.TranscriptAttributes ta,
+       apidb.FeatureLocation fl, apidb.organism o
+WHERE  fl.na_sequence_id = $srcfeature_id
+  AND  fl.feature_type = 'Transcript'
+  AND  fl.na_feature_id = ta.na_feature_id
+  AND  fl.start_min <= $rend
+  AND  fl.end_max >= $base_start
+  AND  fl.is_top_level = 1
+  AND  ta.taxon_id = o.taxon_id
+UNION
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       case when ta.aa_sequence_id is null then 'nc_exon' else 'exon' end type,
+       'annotation' source, 
+       ta.source_id name,
+       '1' phase, 
+       ta.na_feature_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts ,
+       0 as has_children
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  exon_loc.feature_type = 'ExonFeature'
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND  ta.na_feature_id = rfe.rna_feature_id
+  AND  rfe.EXON_FEATURE_ID = exon_loc.na_feature_id
+UNION
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       exon_loc.feature_type type, 
+       'annotation' source, 
+       ta.source_id name,
+       '1' phase, 
+       exon_loc.parent_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
+       decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'isDeprecated=' ||  ta.is_deprecated atts ,
+       0 as has_children
+FROM   
+       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
+WHERE  exon_loc.na_sequence_id = $srcfeature_id
+  AND  (exon_loc.feature_type = 'CDS'
+     OR exon_loc.feature_type = 'UTR')
+  AND  exon_loc.start_min <= $rend
+  AND  exon_loc.end_max >= $base_start
+  AND ta.na_feature_id = exon_loc.parent_id
+) order by has_children desc
+]]>
   </query>
 
   <query name="gene:annotation:bulksubfeatures">
-     
 <![CDATA[
-select * from (
-SELECT distinct exon_loc.na_feature_id feature_id, 
-       'exon' type, 
+SELECT distinct exon_loc.feature_location_id feature_id, 
+       'exon' type,
        'annotation' source, 
-       exon_loc.na_feature_id name,
+       ta.na_feature_id name,
        '1' phase, 
-       rfe.rna_feature_id parent_id,
-       CASE WHEN exon_loc.is_reversed = 0 THEN
-       exon_loc.start_min ELSE exon_loc.end_max END as startm,
-       CASE WHEN exon_loc.is_reversed = 0 THEN
-       exon_loc.end_max ELSE exon_loc.start_min END as end,
+       ta.na_feature_id parent_id,
+       exon_loc.start_min as startm,
+       exon_loc.end_max as end,
        decode (exon_loc.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'isDeprecated=' ||  ta.is_deprecated atts 
 FROM   
@@ -3106,12 +3083,10 @@ WHERE  exon_loc.na_sequence_id = $srcfeature_id
   AND  exon_loc.feature_type = 'ExonFeature'
   AND  exon_loc.start_min <= $rend
   AND  exon_loc.end_max >= $base_start
-  AND rfe.exon_feature_id = exon_loc.na_feature_id
-  AND ta.na_feature_id = rfe.rna_feature_id
-  AND ta.gene_type != 'protein coding'
-  AND ta.gene_type != 'protein coding gene'
+  AND  ta.na_feature_id = rfe.rna_feature_id
+  AND  rfe.EXON_FEATURE_ID = exon_loc.na_feature_id
 UNION
-SELECT distinct ta.na_feature_id feature_id, 
+SELECT distinct exon_loc.feature_location_id feature_id, 
        exon_loc.feature_type type, 
        'annotation' source, 
        ta.na_feature_id name,
@@ -3124,18 +3099,14 @@ SELECT distinct ta.na_feature_id feature_id,
 FROM   
        apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
 WHERE  exon_loc.na_sequence_id = $srcfeature_id
-  AND  (exon_loc.feature_type = 'CDS'
-     OR exon_loc.feature_type = 'UTR')
+  AND  (exon_loc.feature_type = 'CDS' or exon_loc.feature_type = 'UTR')
   AND  exon_loc.start_min <= $rend
   AND  exon_loc.end_max >= $base_start
   AND ta.na_feature_id = exon_loc.parent_id
-) order by startm
 ]]>
-    
   </query>
 
   <query name="gff:processedTranscript:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB,CryptoDB">
-    
 <![CDATA[ 
 SELECT g3.id_attr feature_id,
        so.name type,
@@ -3162,12 +3133,9 @@ WHERE g3.external_database_release_id = edr.external_database_release_id
   AND g3.mapping_end >= $base_start
   AND  ed.name = $$edName$$
 ]]>
-    
   </query>
-  
 
-  <query name="gene:syntenyMC:attribute:Ortholog">
-    
+  <query name="gene:syntenyMC:attribute:Ortholog" excludeProjects="TrichDB">
 <![CDATA[
 select ga2.source_id 
 from ApidbTuning.GeneAttributes ga1, ApidbTuning.GeneAttributes ga2
@@ -3175,12 +3143,9 @@ where ga1.source_id = '$name'
 and ga1.orthomcl_name = ga2.orthomcl_name
 and not ga2.source_id = ga1.source_id
 ]]>
- 
  </query>
 
-
-  <query name="gene:syntenyJBrowse:attribute:Ortholog">
-    
+  <query name="gene:syntenyJBrowse:attribute:Ortholog" excludeProjects="TrichDB">
 <![CDATA[
 select ga2.source_id 
 from ApidbTuning.GeneAttributes ga1, ApidbTuning.GeneAttributes ga2
@@ -3188,14 +3153,9 @@ where ga1.source_id = '$name'
 and ga1.orthomcl_name = ga2.orthomcl_name
 and not ga2.source_id = ga1.source_id
 ]]>
- 
  </query>
 
-
-  
-  
-  <query name="alignment:DoTSAssemblies:bulksubfeatures">
-     
+  <query name="alignment:DoTSAssemblies:bulksubfeatures" excludeProjects="TrichDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type,
@@ -3222,12 +3182,9 @@ WHERE
 ORDER BY
        blat.target_start
 ]]>
-    
   </query>
   
-  
   <query name="alignment:EST:bulksubfeatures">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type,
@@ -3257,12 +3214,9 @@ WHERE
        etn.na_sequence_id = $srcfeature_id 
        ORDER BY blat.target_start
 ]]>
-    
   </query>
   
-  
-  <query name="gene:annotation:attribute:Ortholog">
-    
+  <query name="gene:annotation:attribute:Ortholog" excludeProjects="TrichDB">
 <![CDATA[
 select ga2.source_id 
 from ApidbTuning.GeneAttributes ga1, ApidbTuning.GeneAttributes ga2
@@ -3270,15 +3224,9 @@ where ga1.source_id = '$name'
 and ga1.orthomcl_name = ga2.orthomcl_name
 and not ga2.source_id = ga1.source_id
 ]]>
-  
  </query>
 
-
-
-
-
   <query name="domain:UnifiedMassSpecPeptides:bulksubfeatures">
-     
 <![CDATA[
 SELECT  msf.aa_feature_id || fl.start_min || fl.end_max as feature_id,
         'Peptide' type,
@@ -3297,12 +3245,9 @@ SELECT  msf.aa_feature_id || fl.start_min || fl.end_max as feature_id,
   AND  msf.external_database_release_id = edr.external_database_release_id
   AND  edr.external_database_id = ed.external_database_id
 ]]>
-    
   </query>
 
-
   <query name="domain:MassSpecPeptide:bulksubfeatures">
-     
 <![CDATA[
 SELECT  msf.aa_feature_id || fl.start_min || fl.end_max as feature_id,
         'Peptide' type,
@@ -3322,11 +3267,9 @@ SELECT  msf.aa_feature_id || fl.start_min || fl.end_max as feature_id,
   AND  edr.external_database_id = ed.external_database_id
   AND  ed.name $$edName$$
 ]]>
-    
   </query>
 
    <query name="UnifiedMassSpecPeptides:density:bulksubfeatures"> 
-    
 <![CDATA[ 
 SELECT interval feature_id, 
        na_sequence_id as parent_id,
@@ -3350,11 +3293,9 @@ FROM ( SELECT ceil(nal.start_min /50) interval, nal.na_sequence_id
  ORDER BY nal.start_min)
 GROUP BY interval, na_sequence_id
 ]]> 
-     
   </query>
  
   <query name="match:TGI:bulksubfeatures" excludeProjects="TriTrypDB,CryptoDB,GiardiaDB,TrichDB">
-     
 <![CDATA[
  SELECT
        hsp.similarity_span_id feature_id,
@@ -3380,12 +3321,9 @@ WHERE
        hit.max_subject_end >= $base_start and 
        hit.subject_id = $srcfeature_id
 ]]>
-    
   </query>
   
-  
   <query name="alignment:BLAT:bulksubfeatures">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type,
@@ -3412,13 +3350,9 @@ WHERE  blat.query_na_sequence_id = asbl.na_sequence_id and
        blat.is_best_alignment = 1 and
        etn.na_sequence_id = $srcfeature_id
 ]]>
-    
   </query>
-  
-
 
     <query name="proteinAlignment:BLAT:bulksubfeatures">
-     
 <![CDATA[
 SELECT blat.blat_protein_alignment_id feature_id,
        'block' type, 
@@ -3441,12 +3375,9 @@ WHERE  blat.query_aa_sequence_id = eaas.aa_sequence_id and
        (blat.target_end - blat.target_start ) < 5000 and 
        blat.target_na_sequence_id = $srcfeature_id
 ]]>
-    
   </query>
 
-
   <query name="alignment:GenericEndFeature:bulksubfeatures">
-     
        <![CDATA[
                 SELECT blat.blat_alignment_id feature_id, 
                        'generic_end' type,
@@ -3471,12 +3402,9 @@ WHERE  blat.query_aa_sequence_id = eaas.aa_sequence_id and
                  AND edr.external_database_release_id = etn.external_database_release_id
                  AND ed.name in ($$edName$$)
        ]]>
-     
   </query>
 
-
   <query name="annotation:density:subfeatures">
-     
 <![CDATA[
 SELECT interval feature_id, 
        $parent_id as parent_id,
@@ -3494,11 +3422,9 @@ FROM (
       ORDER BY fl.start_min) 
 GROUP BY interval 
 ]]>
-    
   </query>
 
   <query name="ORF:density:bulksubfeatures" excludeProjects="ToxoDB,CryptoDB,GiardiaDB"> 
-     
 <![CDATA[ 
 SELECT interval feature_id, 
        na_sequence_id as parent_id,
@@ -3518,13 +3444,9 @@ FROM (
 ORDER BY start_min)
 GROUP BY interval, na_sequence_id
 ]]> 
-     
   </query> 
 
-
-
   <query name="SNP:Diversity:bulksubfeatures"  includeProjects="PlasmoDB,ToxoDB">
-     
 <![CDATA[
 SELECT 
        gff3.gff3_feature_id          as feature_id,
@@ -3545,11 +3467,9 @@ WHERE  ed.name = $$edname$$
   AND  gff3.mapping_start <= $rend
   AND  gff3.mapping_end >= $base_start
 ]]>
-    
   </query> 
 
-  <query name="domain:tss:bulksubfeatures">
-    
+  <query name="domain:tss:bulksubfeatures" includeProjects="FungiDB">
 <![CDATA[
 SELECT distinct ssf.segment_start as  feature_id,
        'domain' type, 
@@ -3575,12 +3495,10 @@ SELECT distinct ssf.segment_start as  feature_id,
    and ssf.count_per_million > $$minCntPerMill$$
   GROUP BY  ssf.segment_start, ssf.strand, ssf.na_sequence_id
 ]]>
-    
   </query>
 
-  <query name="gene:syntenyJBrowse:bulksubfeatures">
+  <query name="gene:syntenyJBrowse:bulksubfeatures" excludeProjects="TrichDB">
 
-     
 <![CDATA[
 SELECT
        sg.synteny_id || '_synexons_' || sg.syn_na_feature_id feature_id,
@@ -3643,17 +3561,13 @@ SELECT
  AND ss.end_max >= $base_start
  and abs(ss.scale) > 1.5
 ]]>
-    
   </query>
 
+  <query name="gene:syntenyJBrowseScaled:bulksubfeatures" excludeProjects="TrichDB">
 
-
-
-  <query name="gene:syntenyJBrowseScaled:bulksubfeatures">
-
-     
 <![CDATA[
 -- for syntenic genes
+select * from (
 select * from (
 -- first get all exons in the visible region
 with syn_genes as (
@@ -3667,14 +3581,38 @@ select sg.synteny_id
      , sg.start_min ref_gene_start
      , sg.end_max ref_gene_end
      , sg.na_sequence_id ref_na_sequence_id
-     , fl.parent_id as gene_na_feature_id
+     , fl.parent_id
+     , fl.feature_type
 from apidb.syntenicgene sg, 
      apidb.featurelocation fl
 where sg.na_sequence_id = $srcfeature_id
   AND sg.start_min <=  $$visibleRegionEnd$$
   AND sg.end_max >=  $$visibleRegionStart$$
   AND sg.syn_na_feature_id = fl.parent_id
-  and fl.feature_type = 'ExonFeature'
+  and fl.feature_type in ('Transcript')
+  and fl.is_top_level = 1
+UNION
+select sg.synteny_id
+     , fl.start_min syn_exon_start 
+     , fl.end_max syn_exon_end
+     , fl.na_sequence_id as syn_na_sequence_id
+     , fl.na_feature_id as syn_na_feature_id
+     , sg.syn_organism_abbrev
+     , sg.is_reversed as syn_gene_is_reversed
+     , sg.start_min ref_gene_start
+     , sg.end_max ref_gene_end
+     , sg.na_sequence_id ref_na_sequence_id
+     , fl.parent_id
+     , fl.feature_type
+from apidb.syntenicgene sg, 
+     apidb.featurelocation fl, 
+     apidbtuning.transcriptattributes ta
+where sg.na_sequence_id = $srcfeature_id
+  AND sg.start_min <=  $$visibleRegionEnd$$
+  AND sg.end_max >=  $$visibleRegionStart$$
+  AND sg.syn_na_feature_id = ta.gene_na_feature_id
+  and fl.feature_type in ('CDS', 'UTR')
+  and ta.na_feature_id = fl.parent_id
   and fl.is_top_level = 1
 ),
 -- calc stats for scaling
@@ -3704,59 +3642,115 @@ select sg.syn_na_sequence_id
         END as e
      , sg.syn_gene_is_reversed
      , ref_na_sequence_id
-     , sg.gene_na_feature_id
+     , sg.parent_id
+     , sg.feature_type
 from syn_genes sg,
      sscale ss,
      apidb.synteny s
 where sg.synteny_id = s.synteny_id
  and ss.synteny_id = s.synteny_id
 )
-SELECT sg.syn_na_feature_id || '_synexon' as feature_id,
-       'exon' type,
+-- SynTranscripts
+SELECT sg.synteny_id || '_syntranscript_' || sg.syn_na_feature_id as feature_id,
+       case when so_term_name like 'protein_coding%' OR so_term_name = 'pseudogene' then 'processed_transcript' else 'nc_transcript' end as type,
        'syntenyJBrowseScaled' source,
        sg.syn_na_feature_id name,
        '.' score,
-       sg.synteny_id || '_syngene_' || sg.gene_na_feature_id parent_id,
+       sg.synteny_id || '_syngene_' || sg.parent_id parent_id,
        sg.s startm,
        sg.e end,
        decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
-       ' ' atts
+       ' ' atts,
+       1 as has_children
 FROM   scaled_syngenes sg,
-       ApidbTuning.GeneAttributes gattr,
-       apidbtuning.OrganismSelectTaxonRank ostr
-WHERE sg.ref_na_sequence_id = $srcfeature_id
+       ApidbTuning.TranscriptAttributes gattr
+WHERE sg.feature_type = 'Transcript'
+  AND sg.ref_na_sequence_id = $srcfeature_id
   AND sg.s <= $rend
   AND sg.e >= $base_start
-  AND sg.gene_na_feature_id = gattr.na_feature_id
-  AND gattr.organism = ostr.organism 
+  AND sg.syn_na_feature_id = gattr.na_feature_id
+UNION
+-- Syn UTR/CDS
+SELECT sg.syn_na_feature_id || '_syncdsorutr' as feature_id,
+       sg.feature_type type,
+       'syntenyJBrowseScaled' source,
+       sg.syn_na_feature_id name,
+       '.' score,
+       sg.synteny_id || '_syntranscript_' || sg.parent_id parent_id,
+       sg.s startm,
+       sg.e end,
+       decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts,
+       0 as has_children
+FROM   scaled_syngenes sg
+WHERE sg.feature_type in ('CDS', 'UTR')
+  AND sg.ref_na_sequence_id = $srcfeature_id
+  AND sg.s <= $rend
+  AND sg.e >= $base_start
 )
 UNION
-SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
-       'exon' type, 
+-- Transcipts
+SELECT distinct loc.na_feature_id || '_reftranscript' feature_id, 
+       case when ta.so_term_name like 'protein_coding%' OR ta.so_term_name = 'pseudogene' then 'processed_transcript' else 'nc_transcript' end as type,
        'annotation' source, 
-       exon_loc.na_feature_id name,
+       loc.na_feature_id name,
        '.' score,
-       'refgene_' || exon_loc.parent_id,
-       exon_loc.start_min as startm,
-       exon_loc.end_max as end,
-       decode (exon_loc.is_reversed, 0, +1, 1, -1, +1) strand,
-       ' ' atts 
+       'refgene_' || loc.parent_id as parent,
+       loc.start_min as startm,
+       loc.end_max as end,
+       decode (loc.is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts ,
+       1 as has_children
 FROM   
-       apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
-WHERE  exon_loc.na_sequence_id = $srcfeature_id
-  AND  exon_loc.feature_type = 'ExonFeature'
-  AND  exon_loc.start_min <= $rend
-  AND  exon_loc.end_max >= $base_start
-  AND rfe.exon_feature_id = exon_loc.na_feature_id
-  AND ta.na_feature_id = rfe.rna_feature_id
+       apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta
+WHERE  loc.na_sequence_id = $srcfeature_id
+  AND  loc.feature_type = 'Transcript'
+  AND  loc.start_min <= $rend
+  AND  loc.end_max >= $base_start
+  AND loc.na_feature_id = ta.na_feature_id
+UNION
+-- UTR / CDS
+SELECT distinct loc.feature_location_id || '_refexon' feature_id, 
+       loc.feature_type type, 
+       'annotation' source, 
+       loc.na_feature_id name,
+       '.' score,
+       loc.parent_id || '_reftranscript' as parent,
+       loc.start_min as startm,
+       loc.end_max as end,
+       decode (loc.is_reversed, 0, +1, 1, -1, +1) strand,
+       ' ' atts ,
+      0 as has_children
+FROM   
+       apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta
+WHERE  loc.na_sequence_id = $srcfeature_id
+  AND  loc.feature_type in ( 'CDS', 'UTR')
+  AND  loc.start_min <= $rend
+  AND  loc.end_max >= $base_start
+  AND  ta.na_feature_id = loc.parent_id
+) order by has_children desc
+--SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
+--       'exon' type, 
+--       'annotation' source, 
+--       exon_loc.na_feature_id name,
+--       '.' score,
+--       'refgene_' || exon_loc.parent_id,
+--       exon_loc.start_min as startm,
+--       exon_loc.end_max as end,
+--       decode (exon_loc.is_reversed, 0, +1, 1, -1, +1) strand,
+--       ' ' atts 
+--FROM   
+--       apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta, dots.rnafeatureexon rfe
+--WHERE  exon_loc.na_sequence_id = $srcfeature_id
+--  AND  exon_loc.feature_type = 'ExonFeature'
+--  AND  exon_loc.start_min <= $rend
+--  AND  exon_loc.end_max >= $base_start
+--  AND rfe.exon_feature_id = exon_loc.na_feature_id
+--  AND ta.na_feature_id = rfe.rna_feature_id
 ]]>
-    
   </query>
 
-
-
-  <query name="gene:syntenyMC:bulksubfeatures">
-     
+  <query name="gene:syntenyMC:bulksubfeatures" excludeProjects="TrichDB">
 <![CDATA[
 SELECT
 * FROM (SELECT
@@ -3827,14 +3821,9 @@ WHERE startm <= $rend
   AND end >= $base_start
 
 ]]>
-    
   </query>
   
-  
-
-
   <query name="match:WU_BLASTX:bulksubfeatures">
-     
 <![CDATA[
  SELECT sim.similarity_span_id feature_id, 
        sim.similarity_id as parent_id,
@@ -3854,11 +3843,9 @@ AND    to_number(sim.pvalue_mant || 'e' || sim.pvalue_exp) < 1e-10
 AND    sim.min_query_start >= $base_start 
 AND    sim.max_query_end <= $rend
 ]]>
-    
   </query>
   
   <query name="alignment:dbEST:bulksubfeatures">
-     
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type,
@@ -3884,55 +3871,17 @@ WHERE  blat.target_start <= $rend
 ORDER BY
        blat.target_start
 ]]>
-    
   </query>
   
-  
   <query name="alignment:BLAT:seq" excludeProjects="PlasmoDB,TriTrypDB,ToxoDB">
-     
 <![CDATA[
 SELECT est.na_sequence_id, est.source_id, est.sequence
 FROM   DOTS.NASEQUENCE est
 WHERE  est.source_id = '$name'
 ]]>
-    
   </query>
-  
-<!--  
-  <query name="clusteralignment:EstCluster:bulksubfeatures">
-     
-<![CDATA[
-SELECT blat.blat_alignment_id feature_id, 
-       'block' type, 
-       'EstCluster' source, 
-       a.source_id name, 
-       blat.score || '' score,
-       blat.blat_alignment_id parent_id,
-       blat.target_start startm,
-       blat.target_end end,
-       decode (blat.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       blat.tstarts TSTARTS,
-       blat.blocksizes BLOCKSIZES,
-       ' ' atts
-FROM
-       dots.BlatAlignment blat,
-       dots.Assembly a
-WHERE
-       blat.query_na_sequence_id = a.na_sequence_id and 
-       blat.target_start <= $rend and 
-       blat.target_end >= $base_start and 
-       (blat.target_end - blat.target_start ) < 5000 and 
-       blat.is_best_alignment = 1 and
-       blat.target_na_sequence_id = $srcfeature_id
-ORDER BY
-       blat.target_start
-]]>
-    
-  </query>
-  -->
   
   <query name="scaffold:genome:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,GiardiaDB,FungiDB">
-     
 <![CDATA[
 SELECT sp.piece_na_sequence_id as feature_id,
        'gap' type,
@@ -3970,12 +3919,9 @@ WHERE  fl.na_feature_id = sg.na_feature_id
    AND fl.start_min < $rend 
    AND fl.end_max > $base_start
 ]]>
-    
   </query>
-
   
   <query name="gene:AlternateModels:bulksubfeatures">
-     
 <![CDATA[
 SELECT
        fl.na_feature_id feature_id, 
@@ -4011,11 +3957,9 @@ WHERE  fl.na_sequence_id = $srcfeature_id
 ORDER BY 
        fl.start_min
 ]]>
-    
   </query>
   
   <query name="gene:OldModels:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB">
-  
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type, 
@@ -4044,12 +3988,9 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
   AND  ed.name like '%_old_transcript_sequences_RSRC%'
 ORDER BY blat.target_start
 ]]>
-    
   </query>
 
-
   <query name="alignment:sequence:bulksubfeatures" includeProjects="CryptoDB,TriTrypDB,ToxoDB">
-  
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type, 
@@ -4070,7 +4011,7 @@ FROM   dots.BlatAlignment blat,
 WHERE  blat.query_na_sequence_id = enas.na_sequence_id
   AND  blat.target_na_sequence_id = etn.na_sequence_id
   AND  blat.target_start <= $rend
-  AND  blat.target_end >= $base_start
+/  AND  blat.target_end >= $base_start
   AND  blat.is_best_alignment = 1
   AND  etn.na_sequence_id = $srcfeature_id
   AND  enas.external_database_release_id = edr.external_database_release_id
@@ -4078,14 +4019,9 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
   AND  ed.name = $$edName$$
 ORDER BY blat.target_start
 ]]>
-    
   </query>
   
-  
-
-  
   <query name="SNP:density:subfeatures"  includeProjects="ToxoDB,AmoebaDB,TriTrypDB,CryptoDB,PlasmoDB,FungiDB">
-     
 <![CDATA[
  SELECT interval feature_id, 
       'SNP' type, 
@@ -4102,11 +4038,9 @@ FROM (
       ORDER BY sa.location )
 GROUP BY interval
 ]]>
-    
   </query>
   
-  <query name="GeneticMarkers:Sibley:bulkAttribute" >
-     
+  <query name="GeneticMarkers:Sibley:bulkAttribute"  includeProjects="ToxoDB">
 <![CDATA[
 SELECT    sa.na_feature_id as feature_id,
           var.strain,
@@ -4125,12 +4059,9 @@ WHERE fl.na_sequence_id = $srcfeature_id
  ORDER BY var.strain
  
 ]]>
-    
   </query>
- 
 
   <query name="ChIP:ChIPchip_smoothed:bulksubfeatures" includeProjects="PlasmoDB, ToxoDB, TriTrypDB">
-    
         <![CDATA[
         SELECT
         feature_id
@@ -4176,12 +4107,9 @@ WHERE fl.na_sequence_id = $srcfeature_id
             )
         GROUP BY feature_id, type, source, score, parent_id, startm, end
         ]]>
-    
   </query>
 
-
-  <query name="cnv:Array:bulksubfeatures" >
-     
+  <query name="cnv:Array:bulksubfeatures"  includeProjects="TriTrypDB">
 <![CDATA[
      SELECT interval as feature_id,
             'cnv_sub' as type,
@@ -4210,12 +4138,9 @@ WHERE fl.na_sequence_id = $srcfeature_id
      )
      GROUP BY interval,parent_id,atts 
    ]]>
-    
   </query> 
   
-
-  <query name="mapp:promoters:bulksubfeatures" >
-     
+  <query name="mapp:promoters:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT location feature_id, 
              'mapp' type, 
@@ -4232,13 +4157,9 @@ WHERE fl.na_sequence_id = $srcfeature_id
          AND location <= $rend
          AND location >= $base_start - 1 
 ]]>
-    
   </query>
  
-  
-  
   <query name="SNP:Population:bulkAttribute"  includeProjects="ToxoDB,AmoebaDB,TriTrypDB,CryptoDB,PlasmoDB,FungiDB">
-     
 <![CDATA[
 SELECT sa.source_id as feature_id, var.strain, var.allele, var.product
 FROM ApidbTuning.SnpAttributes sa,
@@ -4251,13 +4172,9 @@ WHERE sa.dataset = $$edname$$
   AND var.ref_na_sequence_id = sa.na_sequence_id
 ORDER BY var.strain
 ]]>
-    
   </query>
   
-
-
-   <query name="MicroArrayProbes:expressionH:bulksubfeatures" >
-     
+   <query name="MicroArrayProbes:expressionH:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
 SELECT interval as feature_id,
        $srcfeature_id as parent_id,
@@ -4280,14 +4197,9 @@ FROM
 ) 
 GROUP BY interval
 ]]>
-    
   </query>
 
-
-<!-- RNA-Seq bulksubfeature queries. Need one / track as too much data to use filters -->
-
-    <query name="rnaseq:gcsample_blat:bulksubfeatures" >
-     
+    <query name="rnaseq:gcsample_blat:bulksubfeatures"  includeProjects="TriTrypDB">
 <![CDATA[
       SELECT rc.location feature_id, 
              'rnaseq' type, 
@@ -4306,11 +4218,9 @@ GROUP BY interval
          AND rc.location <= $rend
          AND rc.location >= $base_start - 1
 ]]>
-    
   </query>
 
-    <query name="rnaseq:gcpfwt:bulksubfeatures" >
-     
+    <query name="rnaseq:gcpfwt:bulksubfeatures"  includeProjects="TriTrypDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4329,11 +4239,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval,multiple
 ]]>
-    
   </query>
 
-    <query name="rnaseq:gcbfall:bulksubfeatures" >
-     
+    <query name="rnaseq:gcbfall:bulksubfeatures"  includeProjects="TriTrypDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4352,11 +4260,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval,multiple
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_three_samples:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_three_samples:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT sample||interval feature_id, 
              'rnaseq' type, 
@@ -4375,11 +4281,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval,sample
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_four_samples:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_four_samples:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT sample||interval feature_id, 
              'rnaseq' type, 
@@ -4398,11 +4302,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval,sample
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf0h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf0h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4420,11 +4322,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf8h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf8h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4442,11 +4342,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf16h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf16h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4464,11 +4362,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf24h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf24h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4486,11 +4382,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf32h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf32h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4508,11 +4402,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf40h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf40h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4530,11 +4422,9 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
-    <query name="rnaseq:cn_pf48h_lin:bulksubfeatures" >
-     
+    <query name="rnaseq:cn_pf48h_lin:bulksubfeatures"  includeProjects="PlasmoDB">
 <![CDATA[
       SELECT interval feature_id, 
              'rnaseq' type, 
@@ -4552,12 +4442,10 @@ GROUP BY interval
          AND rc.location >= $base_start - 1)
        GROUP BY interval
 ]]>
-    
   </query>
 
   
   <query name="Haplotype:Block:bulksubfeatures">
-     
 <![CDATA[
 SELECT  cef.source_id feature_id, 
        'Haplotype_Inner' type, 
@@ -4575,7 +4463,6 @@ FROM    DoTS.ChromosomeElementFeature cef, Dots.NaLocation nl, DoTS.ExternalNASe
          AND    nl.start_max <= $rend
          AND    nl.end_min >= $base_start
 ]]>
-    
   </query>
-</jbrowse>
 
+</jbrowse>
