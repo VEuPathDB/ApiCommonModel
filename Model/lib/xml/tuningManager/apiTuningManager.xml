@@ -2259,6 +2259,8 @@ ORDER BY tn.taxon_id
 
 
 <!--
+
+these updates are used for assigning non-coding genes to ortholog groups
     <sql>
       <![CDATA[
 update &prefixTranscriptAttributes&1 ga
@@ -2270,15 +2272,25 @@ where ga.organism like 'Toxo%'
 and ga.orthomcl_name is null
       ]]>
     </sql>
--->
     <sql>
       <![CDATA[
         update &prefixTranscriptAttributes&1
-        set orthomcl_name = 'ORTH_' || gene_id || '.tmp'
+        set orthomcl_name = 'NonCodingOrthoGroup_' || gene_id
+        where orthomcl_name is null
+        and gene_id is not null
+        and gene_type not like 'protein%'
+	and gene_type not like 'pseudo%'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update &prefixTranscriptAttributes&1
+        set orthomcl_name = 'CodingOrthoGroup_' || gene_id
         where orthomcl_name is null
         and gene_id is not null
       ]]>
     </sql>
+
     <sql>
       <![CDATA[
         update &prefixTranscriptAttributes&1
@@ -2286,6 +2298,8 @@ and ga.orthomcl_name is null
         where orthomcl_name is null
       ]]>
     </sql>
+-->
+
     <sql>
       <![CDATA[
        update &prefixTranscriptAttributes&1 gaup
@@ -4168,17 +4182,19 @@ tablespace indx
     <comment>
       Introns from RNA-Seq with percentages of max intron score and ratios vs expression
     </comment>
+<!--
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="InferredParams"/>
     <internalDependency name="PANParamValues"/>
-    <externalDependency name="apidb.IntronJunction"/>
-    <externalDependency name="apidb.IntronLocation"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.StudyLink"/>
     <externalDependency name="study.Study"/>
+-->
+    <externalDependency name="apidb.IntronJunction"/>
+    <externalDependency name="apidb.IntronLocation"/>
     <intermediateTable name="JunExp"/>
     <intermediateTable name="NameMapping"/>
     <intermediateTable name="mappingstats "/>
@@ -4409,8 +4425,8 @@ declare
   i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    select na_sequence_id, length, organism, CASE WHEN step_mult > 300000 THEN 300000 ELSE step_mult END as seq_step_mult from (
-    select gs.na_sequence_id, gs.length, gs.organism, 2500 * (1 + floor(gs.length/count(*))) as step_mult 
+    select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
       from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
@@ -4650,8 +4666,8 @@ declare
   i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    select na_sequence_id, length, organism, CASE WHEN step_mult > 300000 THEN 300000 ELSE step_mult END as seq_step_mult from (
-    select gs.na_sequence_id, gs.length, gs.organism, 2500 * (1 + floor(gs.length/count(*))) as step_mult 
+    select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
       from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
@@ -4939,8 +4955,8 @@ declare
   i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    select na_sequence_id, length, organism, CASE WHEN step_mult > 300000 THEN 300000 ELSE step_mult END as seq_step_mult from (
-    select gs.na_sequence_id, gs.length, gs.organism, 2500 * (1 + floor(gs.length/count(*))) as step_mult 
+    select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
       from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
@@ -5072,7 +5088,6 @@ floor(max(gij.end - gij.startm) * 1.25) as max_intron_length
 from geneintronjunction gij, genomicseqattributes gs
 where gs.na_sequence_id = gij.parent_id
 and gij.annotated_intron = 'Yes'
---and gij.percent_max between 0 and 1
 group by gs.organism
 )
 select gs.na_sequence_id, gs.source_id, ot.*
@@ -6465,7 +6480,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             GROUP BY tp.gene_source_id, tp.project_id, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
             )
         GROUP BY gene_source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
-        ORDER BY pathway_source_id, pathway_source
+        ORDER BY pathway_source, lower(pathway_name)
       ]]>
     </sql>
 <!-- now in CREATE TABLE
@@ -6870,7 +6885,7 @@ UNION
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_DISPLAY_NAME', dsp.display_name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
+       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_NAME', dsp.name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
 from DatasetExampleSourceId esi,
       DatasetPresenter dsp, DatasetHyperLink hl,
       DatasetNameTaxon dnt,

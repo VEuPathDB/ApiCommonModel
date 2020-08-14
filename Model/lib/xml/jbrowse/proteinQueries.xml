@@ -1,9 +1,27 @@
-<jbrowse>
+<staticQueries>
 
 
-<!-- ORIGINALLY FROM: crypto -->
+  <query name="get_feature_by_name">
+<![CDATA[
+SELECT regexp_replace(trp.source_id, '-1$', '') ctg_name, 
+       tas.aa_sequence_id feature_id, 
+       tas.aa_sequence_id parent_id, 
+       'protein' type, 
+       'annotation' source, 
+       trp.protein_id name, 
+       1  startm, 
+       tas.length end
+FROM   dots.translatedaasequence tas,
+       dots.translatedaafeature taf,
+       dots.transcript trp
+WHERE  tas.aa_sequence_id = taf.aa_sequence_id and
+       taf.na_feature_id = trp.na_feature_id and
+        ( trp.source_id = '$name' or trp.source_id like '$name-%')
+]]>
+  </query>
+
+
   <query name="new:Segment">
-      
 <![CDATA[
 SELECT ta.aa_sequence_id srcfeature_id, 
        1 startm, 
@@ -14,23 +32,19 @@ SELECT ta.aa_sequence_id srcfeature_id,
 FROM   ApidbTuning.TranscriptAttributes ta
 WHERE  ta.source_id like '%$name%'
 ]]>
-      
     </query>
 
     <query name="get_sequence">
-      
 <![CDATA[
 SELECT tas.sequence 
 FROM   DoTS.TranslatedAASequence tas 
 WHERE  tas.aa_sequence_id = $srcfeature_id
 ]]>
-      
     </query>
 
 
 
     <query name="domain:UnifiedPostTraslationalMod">
-      
 <![CDATA[
 with peptides as (
 select ms.sample
@@ -71,13 +85,9 @@ where peptides.PEPTIDE_AA_FEATURE_ID = ms.peptide_aa_feature_id
     AND ms.aa_end_max >= $base_start
 group by ms.residue_location, ms.residue, ms.aa_sequence_id, ms.modification_type
     ]]>
-    
   </query>
 
-
-
     <query name="domain:MassSpecPeptidePhospho">
-      
 <![CDATA[
     SELECT
        mps.peptide_aa_feature_id as feature_id
@@ -105,10 +115,9 @@ group by ms.residue_location, ms.residue, ms.aa_sequence_id, ms.modification_typ
     GROUP BY mps.aa_sequence_id, mps.source_id, mps.aa_start_min, mps.aa_end_max, mps.experiment, mps.spectrum_count
     ,mps.html_color, mps.peptide_sequence, mps.peptide_aa_feature_id, mps.sample, mps.sample_display_name
     ]]>
-    
   </query>
+
     <query name="domain:MassSpecPeptide">
-     
 <![CDATA[
       SELECT msps.aa_sequence_id || '_' || msps.aa_start_min || '_' || msps.aa_end_max || '_' || msps.sample as feature_id,
        'domain' type,
@@ -126,12 +135,9 @@ FROM  apidbtuning.mspeptidesummary msps
 Where msps.aa_sequence_id =  $srcfeature_id
       and msps.external_database_name $$edName$$
     ]]>
-    
    </query>
 
-
  <query name="lowcomplexity:seg">
-      
 <![CDATA[ 
 SELECT lc.aa_feature_id feature_id,
        'lowcomplexity' type, 
@@ -152,11 +158,9 @@ WHERE  lc.aa_feature_id = aal.aa_feature_id and
        lc.aa_sequence_id = $srcfeature_id 
 ORDER BY aal.start_min
 ]]>
-      
     </query>
 
     <query name="get_2d_struc">
-       
 <![CDATA[
 SELECT ssc.structure_type, ssc.call_confidence 
 FROM   DoTS.SecondaryStructure ss,
@@ -164,11 +168,9 @@ FROM   DoTS.SecondaryStructure ss,
 WHERE  ss.aa_sequence_id = $srcfeature_id and
        ss.secondary_structure_id = ssc.secondary_structure_id
 ]]>
-      
     </query>
 
     <query name="get_2d_struc_jbrowse">
-       
 <![CDATA[
 with t as (SELECT ssc.call_confidence
 FROM   DoTS.SecondaryStructure ss,
@@ -181,13 +183,9 @@ select SUBSTR(call_confidence, level, 1) score, level as startm, level as end
 FROM t
 CONNECT BY LEVEL <= LENGTH(call_confidence)
 ]]>
-      
     </query>
 
-
-
     <query name="hydropathy_jbrowse">
-       
 <![CDATA[
 select * from (
 with t as (SELECT sequence
@@ -220,14 +218,9 @@ FROM t
 CONNECT BY LEVEL <= LENGTH(sequence)
 ) where score is not null
 ]]>
-      
     </query>
 
-
-
-<!-- Was only in: plasmo -->
-    <query name="domain:ExportPred" >
-      
+    <query name="domain:ExportPred" includeProjects="PlasmoDB">
 <![CDATA[
 SELECT DISTINCT df.aa_feature_id feature_id,
        'domain' type,
@@ -249,12 +242,9 @@ WHERE  df.algorithm_name = 'exportpred' and
        df.aa_feature_id = aal.aa_feature_id
 GROUP BY df.aa_feature_id, df.parent_id, df.name
 ]]>
-      
     </query>
 
-<!-- ORIGINALLY FROM: plasmo,toxo,tritryp -->
   <query name="domain:SignalP">
-     
 <![CDATA[
 SELECT
        spf.aa_feature_id feature_id,
@@ -275,30 +265,23 @@ SELECT
                spf.means_conclusion) as  atts
 FROM
        dots.signalpeptidefeature spf,
-       dots.aalocation aal,
-       apidbtuning.proteinAttributes pa
+       dots.aalocation aal
 WHERE
        spf.aa_sequence_id = $srcfeature_id and
        aal.aa_feature_id = spf.aa_feature_id and
-       spf.aa_sequence_id = pa.aa_sequence_id and
-       ( (( spf.maxy_conclusion +
-           spf.maxc_conclusion +
-           spf.maxs_conclusion +
-           spf.means_conclusion
-         ) >= 3
-         OR ((spf.means_score + spf.maxy_score) / 2) >= 0.5
-         OR spf.signal_probability >= 0.5
-        )
-      OR pa.project_id = 'VectorBase' ) 
+       (( spf.maxy_conclusion +
+         spf.maxc_conclusion +
+         spf.maxs_conclusion +
+         spf.means_conclusion
+       ) >= 3
+       OR ((spf.means_score + spf.maxy_score) / 2) >= 0.5
+       OR spf.signal_probability >= 0.5
+       OR spf.signal_probability is null
+      ) 
 ]]>
-      
     </query>
 
-
-
-<!-- ORIGINALLY FROM: giardia,trich,tritryp -->
     <query name="domain:TMHMM">
-    
 <![CDATA[
 SELECT
       tmf.aa_feature_id || '_' ||aal.start_min feature_id,
@@ -318,11 +301,9 @@ WHERE
        tmf.aa_sequence_id = $srcfeature_id and
        tmf.aa_feature_id = aal.aa_feature_id
 ]]>
-      
     </query>
 
   <query name="domain:interpro">
-      
 <![CDATA[
 SELECT df.aa_feature_id feature_id, 
        'domain' type, 
@@ -346,19 +327,23 @@ SELECT df.aa_feature_id feature_id,
              sres.dbref dr,
              dots.DbRefAAFeature draf,
              dots.domainfeature df,
-             dots.genefeature gf,
-             dots.transcript t,
-             dots.translatedaafeature taf,
-             dots.translatedaasequence tas,
+--           dots.genefeature gf,
+--           dots.transcript t,
+--           dots.translatedaafeature taf,
+--           dots.translatedaasequence tas,
              dots.domainfeature df2
              where  df.aa_sequence_id = $srcfeature_id 
              and al.end_max > $base_start
              and al.start_min < $rend 
-             and xd3.name in ('INTERPRO','InterproscanData_RSRC')
-             and gf.na_feature_id = t.parent_id
-             and t.na_feature_id = taf.na_feature_id
-             and taf.aa_sequence_id = tas.aa_sequence_id
-             and tas.aa_sequence_id = df.aa_sequence_id
+             and xd3.name
+                 in ('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP',
+                     'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF',
+                     'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan',
+                     'PFAM', 'SMART', 'CDD', 'PANTHER')
+--           and gf.na_feature_id = t.parent_id
+--           and t.na_feature_id = taf.na_feature_id
+--           and taf.aa_sequence_id = tas.aa_sequence_id
+--           and tas.aa_sequence_id = df.aa_sequence_id
              and df.aa_feature_id = draf.aa_feature_id
              and df.aa_feature_id = al.aa_feature_id
              and draf.db_ref_id = dr.db_ref_id
@@ -367,12 +352,11 @@ SELECT df.aa_feature_id feature_id,
              and df.external_database_release_id = xdr3.external_database_release_id
              and xdr3.external_database_id = xd3.external_database_id
              and df.parent_id = df2.aa_feature_id (+)
+             and dr.primary_identifier is not null
       ]]> 
-      
   </query>
 
     <query name="match:BLASTP">
-      
 <![CDATA[ 
 SELECT * FROM 
 (SELECT sim.similarity_id feature_id,
@@ -407,82 +391,9 @@ ORDER BY
 
 ) WHERE RowNum < 6
 ]]>
-      
     </query>
-
-
-
-<!--
-    <query name="domain:TMHMM:subfeatures">
-      
-<![CDATA[ 
-SELECT
-       aal.aa_location_id feature_id,
-       'subdomain' type,
-       'TMHMM' source,
-       aal.aa_location_id name,
-       aal.aa_feature_id parent_id,
-       aal.start_min startm,
-       aal.end_max end,
-       'Topology=' || tmf.topology atts
-FROM
-     DoTS.transmembraneaafeature tmf,
-     DoTS.aalocation aal,
-     Core.algorithm alg
-WHERE
-       tmf.aa_feature_id = aal.aa_feature_id and
-       tmf.aa_sequence_id = $parent_id and
-       tmf.prediction_algorithm_id = alg.algorithm_id AND
-       alg.name = 'TMHMM'
-ORDER BY aal.start_min
-]]>
-      
-    </query>
-
-
-
-    <query name="domain:interpro:bulksubfeatures">
-      
-<![CDATA[ 
-SELECT 
-       aal.aa_location_id feature_id,
-       'subdomain' type, 
-       'interpro' source, 
-       dr.primary_identifier name, 
-       df.score score, 
-       df.aa_feature_id parent_id, 
-       aal.start_min startm, 
-       aal.end_max end,
-       '.' strand
-FROM
-       dots.DomainFeature df,
-       dots.DbRefAaFeature draf,
-       dots.AaLocation aal,
-       sres.DbRef dr,
-       sres.ExternalDatabaseRelease edr,
-       sres.ExternalDatabase ed,
-       core.AlgorithmInvocation ainv,
-       core.AlgorithmImplementation aimp
-WHERE
-       df.aa_sequence_id = $srcfeature_id and
-       aal.end_max > $base_start and
-       aal.start_min < $rend and
-       aal.aa_feature_id = df.aa_feature_id and
-       df.aa_feature_id = draf.aa_feature_id and
-       draf.db_ref_id = dr.db_ref_id and
-       dr.external_database_release_id = edr.external_database_release_id and
-       edr.external_database_id = ed.external_database_id and
-       df.row_alg_invocation_id = ainv.algorithm_invocation_id and
-       ainv.algorithm_implementation_id = aimp.algorithm_implementation_id and
-       aimp.executable = 'ApiCommonData::Load::Plugin::InsertInterproscanResults'
-]]>
-      
-    </query>
-
--->
 
     <query name="match:BLASTP:subfeatures">
-      
 <![CDATA[ 
 SELECT simp.similarity_span_id feature_id, 
        'HSP' type, 
@@ -498,9 +409,6 @@ FROM   dots.similarity sim, dots.similarityspan simp
 WHERE  sim.similarity_id = simp.similarity_id and 
        sim.similarity_id  = $parent_id
 ]]>
-       
     </query>   
 
-
-</jbrowse>
-
+</staticQueries>

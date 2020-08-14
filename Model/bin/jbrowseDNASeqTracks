@@ -10,7 +10,14 @@ use URI::Escape;
 
 my ($organismAbbrev, $projectName) = @ARGV;
 
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_dnaSeqCache.json"});
+
+# we're done if we can get from cache file
+if($jbrowseUtil->printFromCache()) {
+  exit 0;
+}
+open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
+
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $nffSh = $dbh->prepare("select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'");
@@ -56,6 +63,7 @@ while(my ($studyDisplayName, $dsName, $hasCnvData, $shortAttribution, $summary) 
 
     my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
                      urlTemplate => $bamUrl,
+                     chunkSizeLimit => 50000000,
                      key => "$sampleName Coverage and Alignments",
                      label => "$sampleName Coverage and Alignments",
                      type => "JBrowse/View/Track/Alignments2",
@@ -115,6 +123,8 @@ $dsSh->finish();
 $dbh->disconnect();
 
 print encode_json($result);
+print CACHE encode_json($result);
+close CACHE;
 
 1;
 

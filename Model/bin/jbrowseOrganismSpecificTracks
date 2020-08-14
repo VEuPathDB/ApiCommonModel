@@ -36,6 +36,8 @@ my $datasetProperties = &datasetProperties($dbh);
 &addChipChipTracks($dbh, $result, $datasetProperties);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
+&addVCF($dbh, $result, $datasetProperties);
+&addGFF($dbh, $result, $datasetProperties);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -77,6 +79,18 @@ UNION
 select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_ebi_VCF_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+UNION
+select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_ebi_GFF3_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+UNION
+select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
 where dsp.name like '${organismAbbrev}%_smallNcRna_%_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
 UNION
@@ -102,6 +116,100 @@ and prop.dataset_presenter_id = dsp.dataset_presenter_id
   $sh->finish();
 
   return \%datasetProperties;
+}
+
+sub addVCF {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /VCF/);
+    
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;;
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      my ($sampleName) = $sampleDataset;
+      my ($vcfFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
+      my $keyName = $vcfFileName;
+ 	 $keyName =~ s/_/ /g;
+      my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
+                       urlTemplate => $vcfUrl,
+                           #key => "${vcfFileName} SNPs from VCF",
+                           key => "$keyName SNPs from VCF",
+                           label => "${sampleName} SNPs",
+                           type => "JBrowse/View/Track/CanvasVariants",
+                           glyph => "EbrcFeatureGlyphs/View/FeatureGlyph/Diamond",
+                           category => "Genetic Variation",
+                           metadata => {
+                             subcategory => 'DNA polymorphism',
+                             dataset => $datasetDisplayName,
+                             trackType => 'VCF from VectorBase',
+                             attribution => $shortAttribution,
+                             description => $summary,
+                           },
+                          fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
+}
+
+sub addGFF {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /GFF/);
+
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;;
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      my ($sampleName) = $sampleDataset;
+      my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
+      my $keyName = $datasetDisplayName;
+      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+                       urlTemplate => $gffUrl,
+                           key => "$keyName",
+                           label => "${sampleName}",
+                           category => "Gene Models",
+#                           type => "CanvasFeatures",
+			   type => "NeatCanvasFeatures/View/Track/NeatFeatures",
+#			   transcriptType => "processed_transcript",
+			   noncodingType => "nc_transcript",
+			   subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
+			   impliedUTRs => "true",
+                           metadata => {
+                             subcategory => "Annotation Updates",
+                             dataset => $datasetDisplayName,
+                             trackType => "Community Updates from Apollo",
+                             attribution => $shortAttribution,
+                             description => $summary,
+                           },
+                          fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
 }
 
 sub addProteinExpressionMassSpec {
@@ -497,7 +605,7 @@ sub addUnifiedSnp {
                     },
                     metadata => {
                       subcategory => "DNA polymorphism",
-                      trackType => 'Diamond',
+                      trackType => 'Unified SNPs',
                     },
                     query => {'feature' => "SNP:Population",
                               'edname' => 'InsertSnps.pm NGS SNPs INTERNAL'
