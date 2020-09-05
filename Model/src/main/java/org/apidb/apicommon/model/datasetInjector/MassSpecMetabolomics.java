@@ -28,12 +28,18 @@ public class MassSpecMetabolomics extends DatasetInjector {
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
       injectTemplate("metaboliteGraphTextAttributeCategory");*/
+
+      setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange");
+
   }
 
   @Override
   public void addModelReferences() {
+
       //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile");
       //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
   }
