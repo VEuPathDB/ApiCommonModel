@@ -25,9 +25,14 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
 
-      //setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
+      setPropValue("searchCategory", "searchCategory-metabolomics-fc");
       //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange");
-
+      
+      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByPercentile");
+      
+      
+      
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
