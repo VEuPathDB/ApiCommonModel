@@ -32,6 +32,9 @@ public class MassSpecMetabolomics extends DatasetInjector {
       setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
       setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangeBarrett");
 
+      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentileBarrett");
+
   }
 
   @Override
@@ -39,7 +42,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
       //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangeBarrett");
-      //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentileBarrett");
       //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
   }
