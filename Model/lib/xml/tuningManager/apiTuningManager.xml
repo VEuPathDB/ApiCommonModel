@@ -123,6 +123,46 @@ WHERE
   </tuningTable>
 
 
+  <tuningTable name="TaxonPairSummary">
+    <comment>synteny stats for each reference-taxon / comparison-taxon pair
+    </comment>
+    <externalDependency name="apidb.Synteny"/>
+    <externalDependency name="apidb.SyntenicGene"/>
+    <externalDependency name="dots.NaSequence"/>
+    <sql>
+      <![CDATA[
+        create table TaxonPairSummary&1 as
+        select ref_taxon_id, comp_taxon_id,
+               count(*) as syntenic_span_count,
+               sum(ref_length) as ref_coverage,
+               avg(ref_length) as average_span_length,
+               avg(gene_count) as average_gene_count
+        from (select ref_seq.taxon_id as ref_taxon_id,
+                     comp_seq.taxon_id as comp_taxon_id,
+                     synteny.a_end - synteny.a_start + 1 as ref_length,
+                     nvl(sg_summary.gene_count, 0) as gene_count
+              from apidb.Synteny, dots.NaSequence ref_seq,
+                   dots.NaSequence comp_seq,
+                   (select synteny_id, count(*) as gene_count
+                    from apidb.SyntenicGene
+                    group by synteny_id) sg_summary
+              where synteny.a_na_sequence_id = ref_seq.na_sequence_id
+                and synteny.b_na_sequence_id = comp_seq.na_sequence_id
+                and synteny.synteny_id = sg_summary.synteny_id
+             )
+        group by ref_taxon_id, comp_taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index tps_ix&1
+          on TaxonPairSummary&1 (ref_taxon_id, comp_taxon_id)
+          tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="FallbackOrganism">
     <comment>
       Taxon metadata for reference SNPs
