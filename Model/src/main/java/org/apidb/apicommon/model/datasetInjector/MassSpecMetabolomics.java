@@ -7,7 +7,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
   @Override
   public void injectTemplates() {
 
-/*      String description = getPropValue("summary");
+      String description = getPropValue("summary");
       if (description.equals("")) {
 	  description = getPropValue("datasetDescrip");
       } 
@@ -27,7 +27,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
-      injectTemplate("metaboliteGraphTextAttributeCategory");*/
+      injectTemplate("metaboliteGraphTextAttributeCategory");
 
       setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
       setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
@@ -40,7 +40,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
   @Override
   public void addModelReferences() {
 
-      //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
@@ -50,11 +50,11 @@ public class MassSpecMetabolomics extends DatasetInjector {
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-      String[][] propertiesDeclaration = {};/*    {"graphModule", ""},
+      String[][] propertiesDeclaration = {    {"graphModule", ""},
                                               {"graphXAxisSamplesDescription", ""},
                                               {"graphYAxisDescription", ""},
                                               {"graphPriorityOrderGrouping", ""},
-      };*/
+      };
 
     return propertiesDeclaration;
   }
