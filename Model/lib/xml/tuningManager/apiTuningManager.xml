@@ -1096,6 +1096,7 @@ SELECT o.project_name as project_id,
          else 'NCBITAXON_' || t.ncbi_tax_id
        end as source_id,
        o.public_abbrev,
+       o.orthomcl_abbrev,
        o.family_name_for_files,
        tn.name as organism_name,
        o.genome_source,
@@ -7766,15 +7767,18 @@ where url is not null
         -- compound profiles
         select compound_profile.study_id, 
                case
-                 when compound_profile.isotopomer is null
-                   then ca.source_id
-                 else ca.source_id || '|' || compound_profile.isotopomer
-               end as source_id,
+                 WHEN compound_profile.isotopomer IS NOT NULL
+                    THEN ca.source_id || '|' || compound_profile.isotopomer
+                 WHEN compound_profile.mass IS NOT NULL
+                    THEN ca.source_id || '|' || compound_profile.mass || '|' || compound_profile.retention_time
+                 ELSE ca.source_id
+               END as source_id,
                compound_profile.profile_type,
                compound_profile.profile_as_string, compound_profile.max_value, compound_profile.min_value,
                compound_profile.max_timepoint, compound_profile.min_timepoint
         from CompoundAttributes ca,
              (  select sl.study_id, result.compound_id, result.isotopomer, 'values' as profile_type,
+                       NULL as compound_peaks_id, NULL as mass, NULL as retention_time,
                        listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
                          within group (order by pan.node_order_num)
                          as profile_as_string,
@@ -7793,6 +7797,7 @@ where url is not null
                 group by sl.study_id, result.compound_id, result.isotopomer
               UNION ALL
                 select sl.study_id, cpc.compound_id, cpc.isotopomer, 'values' as profile_type,
+                       cpc.compound_peaks_id, cp.mass, cp.retention_time,
                        listagg(nvl(to_char(round(cmsr.value, 2)), 'NA'), chr(9))
                          within group (order by pan.node_order_num)
                          as profile_as_string,
@@ -7809,9 +7814,10 @@ where url is not null
                        and cp.compound_peaks_id = cmsr.compound_peaks_id
                        and cpc.compound_peaks_id = cp.compound_peaks_id
                        and pan.name like '%mean%'
-                group by sl.study_id, cpc.compound_id, cpc.isotopomer
+                group by sl.study_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
               UNION ALL
                 select sl.study_id, cpc.compound_id, cpc.isotopomer, 'percentiles' as profile_type,
+                    cpc.compound_peaks_id, cp.mass, cp.retention_time,
                     listagg(nvl(to_char(round(cmsr.percentile, 2)), 'NA'), chr(9))
                         within group (order by pan.node_order_num) as profile_as_string,
                     max(cmsr.percentile) as max_value, min(cmsr.percentile) as min_value,
@@ -7827,7 +7833,7 @@ where url is not null
                     and cp.compound_peaks_id = cmsr.compound_peaks_id
                     and cpc.compound_peaks_id = cp.compound_peaks_id
                     and pan.name like '%mean%'
-                group by sl.study_id, cpc.compound_id, cpc.isotopomer
+                group by sl.study_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
              ) compound_profile
         where ca.id = compound_profile.compound_id
       UNION ALL
