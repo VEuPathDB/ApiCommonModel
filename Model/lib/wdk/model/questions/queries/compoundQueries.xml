@@ -349,7 +349,7 @@ ORDER BY fold_change
 
 
 
-    <sqlQuery name="CompoundsByPercentile" 
+    <sqlQuery name="CompoundsByPercentileDeprecated" 
               includeProjects="PlasmoDB"
               displayName="Compounds by percentile">
       <testParamValues includeProjects="PlasmoDB">
@@ -360,8 +360,8 @@ ORDER BY fold_change
       <paramRef ref="compoundParams.samples_percentile" />
       <paramRef ref="compoundParams.min_percentile" default="80"/>
       <paramRef ref="compoundParams.max_percentile" default="100"/>
-      <paramRef ref="compoundParams.any_or_all"/>
       <paramRef ref="compoundParams.is_preferred_compound"/>
+      <paramRef ref="compoundParams.any_or_all"/>
 
       <column name="source_id"/>
       <column name="matched_result"/>
@@ -408,57 +408,119 @@ FROM apidbtuning.compoundAttributes ca ,
     
 
 
-    <sqlQuery name="CompoundsByPercentilePurineStarvation" 
-              includeProjects="TriTrypDB"
+    <sqlQuery name="CompoundsByPercentile" 
+              includeProjects="PlasmoDB,TriTrypDB"
               displayName="Compounds by percentile">
-      <testParamValues includeProjects="TriTrypDB">
+      <testParamValues includeProjects="PlasmoDB,TriTrypDB">
 	    <paramValue name="samples_percentile_comp">Log mean (compound_MassSpec)</paramValue>
       </testParamValues>
 
       <paramRef ref="compoundParams.profileset" />
-      <paramRef ref="compoundParams.samples_fc_ref_generic" />
+      <paramRef ref="compoundParams.samples_percentile" />
       <paramRef ref="compoundParams.min_percentile" default="80"/>
       <paramRef ref="compoundParams.max_percentile" default="100"/>
-      <paramRef ref="compoundParams.any_or_all"/>
-
+      <paramRef ref="compoundParams.any_or_all_percentile_compound_peaks"/>
+      <paramRef ref="compoundParams.is_preferred_compound"/>
+      
       <column name="source_id"/>
       <column name="matched_result"/>
-      <column name="max_percentile_chosen" />
-      <column name="min_percentile_chosen" />
+      <column name="max_max_percentile" />
+      <column name="max_min_percentile" />
       
       <sql>
 	<![CDATA[
-SELECT distinct ca.source_id,  'Y' as matched_result, max(round(profile_min_max.max_value, 1)) as max_percentile_chosen, 
-min(round(profile_min_max.min_value, 1)) as min_percentile_chosen                                                              
-FROM apidbtuning.compoundAttributes ca ,
+WITH samples AS ( 
+    select percentile
+    , min(percentile) as min_percentile
+    , max(percentile) as max_percentile
+    , compound_id
+    , nvl(compound_peaks_id, mass || '|' || retention_time) as compound_peaks_id
+    , mass
+    , retention_time
+    from (
+        select sum(cmsr.percentile) as percentile 
+        , chebi.compound_id
+        , min(cp.mass) as mass
+        , cp.retention_time
+        , CASE WHEN chebi.isotopomer IS NOT NULL
+            THEN NULL
+            ELSE to_char(chebi.compound_peaks_id)
+            END as compound_peaks_id
+        from 
+        apidb.compoundpeakschebi chebi
+        , apidb.compoundmassspecresult cmsr  
+        , APIDB.compoundpeaks cp
+        where chebi.compound_id IS NOT NULL
+        and cmsr.protocol_app_node_id in ($$samples_percentile$$) --$$samples_percentile$$ 
+        and chebi.compound_peaks_id = cmsr.compound_peaks_id
+        and cp.compound_peaks_id = chebi.compound_peaks_id
+        and chebi.is_preferred_compound in ($$is_preferred_compound$$) 
+        group by chebi.compound_id
+        
+        , cmsr.protocol_app_node_id
+        , cp.retention_time
+        , CASE WHEN chebi.isotopomer IS NOT NULL
+            THEN NULL
+            ELSE to_char(chebi.compound_peaks_id) END
+        )
+        group by compound_id, compound_peaks_id, mass, retention_time, percentile
+)
+, peaksPerCompound as ( --total number of peaks per compound for this experiment
+    select  compound_id
+    , count (*) as peak_count
+    FROM (
+        select distinct chebi.compound_id
+        , chebi.compound_peaks_id
+        , cmsr.protocol_app_node_id
+        from apidb.compoundpeakschebi chebi
+        , APIDB.compoundmassspecresult cmsr
+        where cmsr.protocol_app_node_id in ($$samples_percentile$$) 
+        and chebi.compound_peaks_id = cmsr.compound_peaks_id
+    )
+    group by  compound_id
+)
+, diff_exp_peaks as ( --peaks which are differentially expressed
+    select ca.source_id
+    , ca.id
+    , samples.compound_peaks_id
+    , samples.mass
+    , samples.retention_time
+    , samples.percentile 
+    , samples.min_percentile
+    , samples.max_percentile
+    from samples
+    , apidbtuning.compoundattributes ca
+    WHERE samples.compound_id   = ca.id
+    AND  samples.percentile BETWEEN $$min_percentile$$ AND  $$max_percentile$$   
+)
 
-   (SELECT chebi.compound_id, res.protocol_app_node_id                                                        
-   FROM apidb.CompoundMassSpecResult  res, apidb.CompoundPeaksChEBI chebi                                                      
-   WHERE  res.protocol_app_node_id in ($$samples_fc_ref_generic$$)  
-   AND res.compound_peaks_id = chebi.compound_peaks_id
-   AND res.percentile BETWEEN $$min_percentile$$ AND $$max_percentile$$                                                          
-   GROUP BY chebi.compound_id, res.protocol_app_node_id                                     
-   ) profile,                                                                                                        
-   (SELECT chebi.compound_id, min(res.percentile) as  min_value,                                 
-   max(res.percentile) as max_value                                                                                       
-   FROM apidb.CompoundMassSpecResult  res, apidb.CompoundPeaksChEBI chebi                                            
-   WHERE  res.protocol_app_node_id in ($$samples_fc_ref_generic$$) 
-   AND res.compound_peaks_id = chebi.compound_peaks_id
-   AND res.percentile                                                                                                     
-   BETWEEN $$min_percentile$$ AND $$max_percentile$$                                                   
-   GROUP BY chebi.compound_id, res.protocol_app_node_id                                     
-   ) profile_min_max                                                                                                 
-  
-  WHERE ca.id = PROFILE.compound_id                                                                                  
-  AND PROFILE.compound_id = profile_min_max.compound_id                                                              
-  GROUP BY ca.source_id , profile.protocol_app_node_id 
-  
-  HAVING 'any' = $$any_or_all$$                                                                                      
-  OR count(*) = (SELECT count(*)                                                                                     
-  FROM study.ProtocolAppNode                                                                                        
-  WHERE protocol_app_node_id IN ($$samples_fc_ref_generic$$))
-
-		 
+, diff_exp_compounds as ( --aggregated peak values for compounds which are differentially expressed 
+    select dep.source_id
+    , max(dep.percentile) KEEP (DENSE_RANK LAST ORDER BY dep.percentile) as max_percentile
+    , max(dep.min_percentile) KEEP (DENSE_RANK LAST ORDER BY dep.percentile) as max_min_percentile
+    , max(dep.max_percentile) KEEP (DENSE_RANK LAST ORDER BY dep.percentile) as max_max_percentile
+    , max(dep.mass) KEEP (DENSE_RANK LAST ORDER BY dep.percentile) as max_mass
+    , max(dep.retention_time) KEEP (DENSE_RANK LAST ORDER BY dep.percentile) as max_retention_time
+    from diff_exp_peaks   dep
+    , apidbtuning.compoundattributes ca
+    where dep.source_id = ca.source_id
+    group by dep.source_id
+)
+, anyOrAll as ( --handles any or all peaks
+    select dep.source_id
+    from diff_exp_peaks dep
+    , peaksPerCompound ppc
+    WHERE ppc.compound_id = dep.id
+    HAVING ('any' = $$any_or_all_percentile_compound_peaks$$
+        OR count(*) = ppc.peak_count)
+    GROUP BY dep.source_id, ppc.peak_count
+)
+select dec.*, 'Y' as matched_result
+from anyOrAll aoa
+, diff_exp_compounds dec
+, APIDBTUNING.compoundattributes ca
+where aoa.source_id = dec.source_id
+and ca.source_id = aoa.source_id
 		 
    	]]>
       </sql>
@@ -671,64 +733,6 @@ and ca.source_id = aoa.source_id
     ]]>
         </sql>
 	</sqlQuery>
-
-
-<sqlQuery name="CompoundsByPercentileAmphotericinB" 
-              includeProjects="TriTrypDB"
-              displayName="Compounds by percentile">
-      <testParamValues includeProjects="TriTrypDB">
-	    <paramValue name="samples_percentile_comp">WT_mean</paramValue>
-      </testParamValues>
-
-      <paramRef ref="compoundParams.profileset"/>
-      <paramRef ref="compoundParams.samples_fc_ref_generic" />
-      <paramRef ref="compoundParams.min_percentile" default="80"/>
-      <paramRef ref="compoundParams.max_percentile" default="100"/>
-      <paramRef ref="compoundParams.any_or_all"/>
-
-      <column name="source_id"/>
-      <column name="matched_result"/>
-      <column name="max_percentile_chosen" />
-      <column name="min_percentile_chosen" />
-      
-      <sql>
-	<![CDATA[
-SELECT distinct ca.source_id,  'Y' as matched_result, max(round(profile_min_max.max_value, 1)) as max_percentile_chosen, 
-min(round(profile_min_max.min_value, 1)) as min_percentile_chosen                                                              
-FROM apidbtuning.compoundAttributes ca ,
-
-   (SELECT chebi.compound_id, res.protocol_app_node_id                                                        
-   FROM apidb.CompoundMassSpecResult  res, apidb.CompoundPeaksChEBI chebi                                                      
-   WHERE  res.protocol_app_node_id in ($$samples_fc_ref_generic$$)  
-   AND res.compound_peaks_id = chebi.compound_peaks_id
-   AND res.percentile BETWEEN $$min_percentile$$ AND $$max_percentile$$                                                          
-   GROUP BY chebi.compound_id, res.protocol_app_node_id                                     
-   ) profile,                                                                                                        
-   (SELECT chebi.compound_id, min(res.percentile) as  min_value,                                 
-   max(res.percentile) as max_value                                                                                       
-   FROM apidb.CompoundMassSpecResult  res, apidb.CompoundPeaksChEBI chebi                                            
-   WHERE  res.protocol_app_node_id in ($$samples_fc_ref_generic$$) 
-   AND res.compound_peaks_id = chebi.compound_peaks_id
-   AND res.percentile                                                                                                     
-   BETWEEN $$min_percentile$$ AND $$max_percentile$$                                                   
-   GROUP BY chebi.compound_id, res.protocol_app_node_id                                     
-   ) profile_min_max                                                                                                 
-  
-  WHERE ca.id = PROFILE.compound_id                                                                                  
-  AND PROFILE.compound_id = profile_min_max.compound_id                                                              
-  GROUP BY ca.source_id , profile.protocol_app_node_id 
-  
-  HAVING 'any' = $$any_or_all$$                                                                                      
-  OR count(*) = (SELECT count(*)                                                                                     
-  FROM study.ProtocolAppNode                                                                                        
-  WHERE protocol_app_node_id IN ($$samples_fc_ref_generic$$))
-
-		 
-		 
-   	]]>
-      </sql>
-    </sqlQuery>
-    
 
 
 
