@@ -36,10 +36,10 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
 
       setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName());
+      //      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName());
 
       //setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
-      //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangeAmphotericinB");
 
       setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
       setPropValue("questionName", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
@@ -51,14 +51,11 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
 
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName()); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangeAmphotericinB"); 
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
-
-      //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
-
 
   }
 
