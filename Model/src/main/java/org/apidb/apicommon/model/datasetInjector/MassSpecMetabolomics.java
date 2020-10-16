@@ -42,7 +42,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
       setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangeAmphotericinB");
 
       setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentileAmphotericinB");
 
   }
 
@@ -53,7 +53,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangeAmphotericinB"); 
 
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      baddWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentileAmphotericinB");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
 
