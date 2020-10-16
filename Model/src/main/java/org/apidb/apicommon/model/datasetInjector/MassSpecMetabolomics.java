@@ -37,13 +37,16 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
 
       setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
-      //      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName());
+      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName());
 
       //setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
 
       setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
+
+      // setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
 
   }
 
@@ -52,9 +55,12 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
 
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangePurineStarvation"); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName()); 
 
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      // addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangePurineStarvation"); 
+
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
+      //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
 
