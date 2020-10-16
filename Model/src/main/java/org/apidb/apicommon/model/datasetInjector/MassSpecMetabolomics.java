@@ -31,6 +31,7 @@ public class MassSpecMetabolomics extends DatasetInjector {
 
 
       injectTemplate("compoundsFoldChangeQuestion");
+      injectTemplate("compoundsPercentileQuestion");
       injectTemplate("compoundsProfileSetParamQuery");
 
 

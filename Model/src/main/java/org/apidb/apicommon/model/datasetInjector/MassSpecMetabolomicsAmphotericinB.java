@@ -31,6 +31,7 @@ public class MassSpecMetabolomicsAmphotericinB extends DatasetInjector {
 
 
       injectTemplate("compoundsFoldChangeQuestion");
+      injectTemplate("compoundsPercentileQuestion");
       injectTemplate("compoundsProfileSetParamQuery");
 
 
