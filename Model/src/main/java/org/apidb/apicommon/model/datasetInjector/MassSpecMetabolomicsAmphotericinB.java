@@ -60,7 +60,7 @@ public class MassSpecMetabolomicsAmphotericinB extends DatasetInjector {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
 
-      //addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentileAmphotericinB");
+      
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
 

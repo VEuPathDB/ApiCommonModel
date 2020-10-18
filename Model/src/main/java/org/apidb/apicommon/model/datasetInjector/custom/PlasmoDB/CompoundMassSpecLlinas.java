@@ -24,19 +24,25 @@ public class CompoundMassSpecLlinas extends DatasetInjector {
       String projectName = getPropValue("projectName");
       setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
-
-      setPropValue("searchCategory", "searchCategory-metabolomics-fc");
-      //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangeLlinas");
-      
-      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
-      //setPropValue("questionName", "CompoundQuestions.CompoundsByPercentileLlinas");
-      
-      
-      
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
       injectTemplate("metaboliteGraphTextAttributeCategory");
+
+      injectTemplate("compoundsFoldChangeQuestion");
+      injectTemplate("compoundsPercentileQuestion");
+      injectTemplate("compoundsProfileSetParamQuery");
+
+      setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName());
+
+
+      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
+
+      
+      
+      
 
   }
 
@@ -44,8 +50,9 @@ public class CompoundMassSpecLlinas extends DatasetInjector {
   public void addModelReferences() {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangeLlinas");
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentileLlinas");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName()); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
+
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
   
