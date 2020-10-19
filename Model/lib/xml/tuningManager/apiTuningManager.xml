@@ -1781,7 +1781,8 @@ SELECT pi.name as project_id,
        go.predicted_go_id_process,
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
        0 AS has_seqedit,
-       row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript
+       row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript,
+       uniprot.uniprot_ids
       FROM  dots.GeneFeature gf, dots.Transcript t, core.ProjectInfo pi,
             dots.TranslatedAaFeature taf,
             dots.TranslatedAaSequence tas,
@@ -1831,7 +1832,18 @@ SELECT pi.name as project_id,
                    FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
                    WHERE ec.enzyme_class_id = asec.enzyme_class_id
 		   AND asec.evidence_code = 'OrthoMCLDerived')
-             GROUP BY aa_sequence_id) ecDerived
+             GROUP BY aa_sequence_id) ecDerived,
+            (select af.aa_sequence_id,
+                    listagg(dbref.primary_identifier,',')
+                      within group(order by dbref.primary_identifier) as uniprot_ids
+             from sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
+                  sres.DbRef, dots.DbRefAaFeature daf, dots.AaFeature af
+             where d.name like 'Uniprot%'
+               and d.external_database_id = r.external_database_id
+               and r.external_database_release_id = dbref.external_database_release_id
+               and dbref.db_ref_id = daf.db_ref_id
+               and daf.aa_feature_id = af.aa_feature_id
+             group by af.aa_sequence_id) uniprot
       WHERE gf.na_feature_id = t.parent_id
         AND t.row_project_id = pi.project_id
         AND t.na_feature_id = taf.na_feature_id
@@ -1845,6 +1857,7 @@ SELECT pi.name as project_id,
         AND tas.aa_sequence_id = ec.aa_sequence_id(+)
         AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)
         AND tas.aa_sequence_id = go.aa_sequence_id(+)
+        AND tas.aa_sequence_id = uniprot.aa_sequence_id(+)
       ]]>
     </sql>
     <sql>
