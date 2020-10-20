@@ -19,6 +19,8 @@ public class Origins extends  DatasetInjector {
 
       setPropValue ("organismAbbrevDisplay", getOrganismAbbrevDisplayFromDatasetName());
 
+      setOrganismAbbrevFromDatasetName();
+
       List<String> sampleNames = getSampleList();
       
       for (int i=0; i<sampleNames.size(); i++){
