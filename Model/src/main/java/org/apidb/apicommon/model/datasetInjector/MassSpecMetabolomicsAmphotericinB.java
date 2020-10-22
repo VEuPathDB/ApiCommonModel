@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class MassSpecMetabolomics extends DatasetInjector {
+public class MassSpecMetabolomicsAmphotericinB extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -30,10 +30,10 @@ public class MassSpecMetabolomics extends DatasetInjector {
       injectTemplate("metaboliteGraphTextAttributeCategory");
 
       setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangeAmphotericinB");
 
       setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentileAmphotericinB");
 
   }
 
@@ -41,8 +41,8 @@ public class MassSpecMetabolomics extends DatasetInjector {
   public void addModelReferences() {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangeAmphotericinB");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentileAmphotericinB");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
   }

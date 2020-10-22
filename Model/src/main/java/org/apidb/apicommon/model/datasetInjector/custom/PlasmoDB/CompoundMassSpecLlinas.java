@@ -1,8 +1,8 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.PlasmoDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class MassSpecMetabolomics extends DatasetInjector {
+public class CompoundMassSpecLlinas extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
@@ -24,16 +24,19 @@ public class MassSpecMetabolomics extends DatasetInjector {
       String projectName = getPropValue("projectName");
       setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
+
+      setPropValue("searchCategory", "searchCategory-metabolomics-fc");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangeLlinas");
+      
+      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByPercentileLlinas");
+      
+      
+      
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
       injectTemplate("metaboliteGraphTextAttributeCategory");
-
-      setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
-
-      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
-      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
 
   }
 
@@ -41,11 +44,12 @@ public class MassSpecMetabolomics extends DatasetInjector {
   public void addModelReferences() {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangePurineStarvation");
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentilePurineStarvation");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChangeLlinas");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentileLlinas");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
-  }
+  
+}
 
   // second column is for documentation
   @Override

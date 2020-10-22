@@ -37,6 +37,8 @@ my $datasetProperties = &datasetProperties($dbh);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 &addVCF($dbh, $result, $datasetProperties);
+&addGFF($dbh, $result, $datasetProperties);
+&addTRNA($dbh, $result, $datasetProperties);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -75,10 +77,18 @@ from apidbtuning.datasetpresenter dsp
 where dsp.name like '${organismAbbrev}%_chipChipExper%_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
 UNION
+select dnt.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+   , apidbtuning.datasetnametaxon dnt
+where dnt.name like '${organismAbbrev}%_ebi_VCF_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+and dsp.dataset_presenter_id = dnt.dataset_presenter_id
+UNION
 select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
-where dsp.name like '${organismAbbrev}%_ebi_VCF_RSRC'
+where dsp.name like '${organismAbbrev}%_ebi_GFF3_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
 UNION
 select dsp.name, prop.property, prop.value
@@ -117,25 +127,21 @@ sub addVCF {
   foreach my $dataset (keys %$datasetProperties) {
     next unless($dataset =~ /VCF/);
     
-    #my $experimentName = $datasetProperties->{$dataset}->{experimentName};
     my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;;
     my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
     my $summary = $datasetProperties->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
 
-    #my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '${organismAbbrev}%_ebi_VCF_RSRC'";
     my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
     my $sh = $dbh->prepare($sql);
     $sh->execute();
 
     while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
-      #my ($sampleName) = $sampleDataset =~ /${organismAbbrev}_${experimentName}_(.+)_ebi_VCF_RSRC/;
       my ($sampleName) = $sampleDataset;
       my ($vcfFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
       my $keyName = $vcfFileName;
  	 $keyName =~ s/_/ /g;
-      #my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/$VCFfileName");
       my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
       my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
                        urlTemplate => $vcfUrl,
@@ -143,12 +149,12 @@ sub addVCF {
                            key => "$keyName SNPs from VCF",
                            label => "${sampleName} SNPs",
                            type => "JBrowse/View/Track/CanvasVariants",
-                           glyph => "EbrcFeatureGlyphs/View/FeatureGlyph/Diamond",
+                           glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
                            category => "Genetic Variation",
                            metadata => {
                              subcategory => 'DNA polymorphism',
                              dataset => $datasetDisplayName,
-                             trackType => 'Diamond',
+                             trackType => 'VCF from VectorBase',
                              attribution => $shortAttribution,
                              description => $summary,
                            },
@@ -161,6 +167,97 @@ sub addVCF {
   }
 }
 
+sub addGFF {
+  my ($dbh, $result, $datasetProperties) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /GFF/);
+
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;;
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    my %lookup = (aaegLVP_AGWG => 'Aedes aegypti LVP_AGWG %5BAaegL5.2%5D',
+                  aalbSTECLA => 'Anopheles albimanus STECLA %5BAalbS2.6%5D',
+                  aaraDongola => 'Anopheles arabiensis Dongola %5BAaraD1.11%5D',
+                  aatrEBRO => 'Anopheles atroparvus EBRO %5BAatrE3.1%5D',
+                  achrACHKN1017 => 'Anopheles christyi ACHKN1017 %5BAchrA1.7%5D',
+                  acolNgousso => 'Anopheles coluzzii Ngousso %5BAcolN1.0%5D',
+                  'aculA-37' => 'Anopheles culicifacies A-37 %5BAculA1.6%5D',
+                  adarCoari => 'Anopheles darlingi Coari %5BAdarC3.8%5D',
+                  adirWRAIR2 => 'Anopheles dirus WRAIR2 %5BAdirW1.8%5D',
+                  aepiEpiroticus2 => 'Anopheles epiroticus Epiroticus2 %5BAepiE1.7%5D',
+                  afarFAR1 => 'Anopheles farauti FAR1 %5BAfarF2.6%5D',
+                  afunFUMOZ => 'Anopheles funestus FUMOZ %5BAfunF3.1%5D',
+                  agamPEST => 'Anopheles gambiae str. PEST %5BAgamP4.12%5D',
+                  amacmaculatus3 => 'Anopheles maculatus maculatus3 %5BAmacM1.5%5D',
+                  amelCM1001059 => 'Anopheles melas CM1001059_A %5BAmelC2.6%5D',
+                  amerMAF => 'Anopheles merus MAF %5BAmerM2.9%5D',
+                  aminMINIMUS1 => 'Anopheles minimus MINIMUS1 %5BAminM1.8%5D',
+                  aquaSANGWE => 'Anopheles quadriannulatus SANGWE %5BAquaS1.11%5D',
+                  asinSINENSIS => 'Anopheles sinensis SINENSIS %5BAsinS2.5%5D',
+                  'asteSDA-500' => 'Anopheles stephensi SDA-500 %5BAsteS1.7%5D',
+                  bglaBB02 => 'Biomphalaria glabrata BB02 %5BBglaB1.6%5D',
+                  cquiJohannesburg => 'Culex quinquefasciatus Johannesburg %5BCpipJ2.4%5D',
+                  gausTTRI => 'Glossina austeni TTRI %5BGausT1.7%5D',
+                  gfusIAEA => 'Glossina fuscipes IAEA %5BGfusI1.7%5D',
+                  gmorYale => 'Glossina morsitans Yale %5BGmorY1.9%5D',
+                  gpalIAEA => 'Glossina pallidipes IAEA %5BGpalI1.7%5D',
+                  gpapIAEA => 'Glossina palpalis IAEA %5BGpapI1.4%5D',
+                  iscaWikel => 'Ixodes scapularis Wikel %5BIscaW1.6%5D',
+                  llonJacobina => 'Lutzomyia longipalpis Jacobina %5BLlonJ1.5%5D',
+                  mdomaabys => 'Musca domestica aabys %5BMdomA1.3%5D',
+                  phumUSDA => 'Pediculus humanus USDA %5BPhumU2.4%5D',
+                  ppapIsrael => 'Phlebotomus papatasi Israel %5BPpapI1.5%5D',
+                  rproCDC => 'Rhodnius prolixus CDC %5BRproC3.3%5D',
+                  scalUSDA => 'Stomoxys calcitrans USDA %5BScalU1.5%5D',
+                  );
+
+    my $organismLookup = $lookup{${organismAbbrev}};
+    my $organismUrl = $organismLookup;
+    $organismUrl =~ s/ /%20/g;
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      my ($sampleName) = $sampleDataset;
+      my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
+      my $keyName = $datasetDisplayName;
+      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+                       urlTemplate => $gffUrl,
+                           key => "$keyName",
+                           label => "${sampleName}",
+                           category => "Gene Models",
+			   type => "NeatCanvasFeatures/View/Track/NeatFeatures",
+			   menuTemplate => [ 
+			   {label =>  'Open {name} in Apollo', 
+			    iconClass => 'dijitIconDatabase' ,
+			    action => 'iframeDialog',
+			    url => "function(track,feature,featureDiv) {return 'https://apollo.veupathdb.org/annotator/loadLink?loc='  + feature.get('seq_id') +  ':' + feature.get('start') + '..' + feature.get('end') + '&organism=$organismLookup&tracks=' }" } ],
+			   noncodingType => "nc_transcript",
+			   subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
+			   impliedUTRs => "true",
+                           metadata => {
+                             subcategory => "Annotation Updates",
+                             dataset => $datasetDisplayName,
+                             trackType => "Community Updates from Apollo",
+                             attribution => $shortAttribution,
+                             description => $summary,
+                             apollo => '',
+                           },
+                          fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+                          fmtMetaValue_Apollo => "function() { return '<a href=https://apollo.veupathdb.org/annotator/loadLink?organism=$organismUrl&tracks= target=_blank>Add annotations in Apollo</a>'; }"
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
+}
 
 sub addProteinExpressionMassSpec {
   my ($dbh, $result, $datasetProperties) = @_;
@@ -541,7 +638,7 @@ sub addUnifiedSnp {
     my $snpTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
                     baseUrl => "/a/service/jbrowse",
                     type => "JBrowse/View/Track/CanvasFeatures",
-                    glyph => "EbrcFeatureGlyphs/View/FeatureGlyph/Diamond",
+                    glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
                     key => "SNPs by coding potential",
                     label => "SNPs by coding potential",
                     maxFeatureScreenDensity => 0.01,
@@ -555,7 +652,7 @@ sub addUnifiedSnp {
                     },
                     metadata => {
                       subcategory => "DNA polymorphism",
-                      trackType => 'Diamond',
+                      trackType => 'Unified SNPs',
                     },
                     query => {'feature' => "SNP:Population",
                               'edname' => 'InsertSnps.pm NGS SNPs INTERNAL'
@@ -800,6 +897,51 @@ sub makeChipChipSmoothed {
 
   return $smoothed;
 }
+
+sub addTRNA {
+  my ($dbh, $result) = @_;
+
+  my $sql = "select count(*) from dots.rnafeature rnaf, sres.ontologyterm ot
+where ot.ontology_term_id = rnaf.sequence_ontology_id
+and ot.name ='tRNA'";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my $count = $sh->fetchrow_array();
+  $sh->finish();
+  if($count > 0) {
+
+    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                 baseUrl => "/a/service/jbrowse",
+                 type => "JBrowse/View/Track/CanvasFeatures",
+                 glyph => "JBrowse/View/FeatureGlyph/Box",
+                 key => "tRNAscan",
+                 label => "tRNAscan",
+                 category => "Sequence Analysis",
+                 displayMode => "normal",
+                 style => {
+                   color => "white",
+		   borderColor => "{processedTranscriptBorderColor}"
+                 },
+                 metadata => {
+                   subcategory => "Sequence sites, features and motifs",
+                   trackType => 'Segments',
+                 },
+                 query => {'feature' => "domain:tRNA",
+                 },
+                 onClick => {
+                   content => "{positionTitle}",
+                 },
+                 menuTemplate => [
+                   {label => "View Details",
+                    content => "{positionTitle}",
+                   },
+                     ],
+    };
+    push @{$result->{tracks}}, $track;
+  }
+}
+
 
 
 1; 

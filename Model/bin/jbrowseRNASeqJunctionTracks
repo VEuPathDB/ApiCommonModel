@@ -9,15 +9,53 @@ use Storable 'dclone';
 
 my ($organismAbbrev, $projectName, $isApollo) = @ARGV;
 
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_junctionsCache.json"});
+my $jbrowseUtil;
+
+if($isApollo) {
+  $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev});
+}
+else {
+  $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_junctionsCache.json"});
+}
 
 # we're done if we can get from cache file (unless we are making apollo config)
 if(!$isApollo && $jbrowseUtil->printFromCache()) {
   exit 0;
 }
-open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 
-my $refinedQueryParams = $jbrowseUtil->intronJunctionsQueryParams('refined');
+my $methodDescription = "<h1><u>Definitions</u>:</h1>
+
+<p><b>Contained intron</b> is an intron that is contained within the endpoints of a gene model and on the same strand as the gene. All others are not contained: opposite strand to gene, overlapping but not contained within gene boundaries, not overlapping with gene.</p>
+
+<p><b>Score</b>: the sum of all unique read alignments for all samples.</p>
+
+<p><b>Score expression ratio</b>: ratio of the score / average coverage (read depth) across the gene.  For not contained introns, the average coverage is the average coverage across the entire genome.  Note that this is computed per sample (both the score and coverage).</p>
+
+<h1><u>Thresholds used (all are applied)</u>:</h1>
+
+<ol>
+<li>Intron length must  be less than 2.5 times the maximum length of any annotated intron for this genome.  For example, if the maximum intron length is 100 KB then all introns shown must be less than 250 KB.</li>
+
+<li>The score >=</li>
+
+<ul>
+<li>contained intron: first percentile of all annotated intron scores</li>
+
+<li>not contained: 5 times the first percentile of annotated intron scores</li>
+</ul>
+<li>For contained introns: score must be >= 2 percent of the score of the intron in this gene with the highest score.</li>
+
+<li>score expression ratio must be greater than or equal to</li>
+
+<ul>
+<li>contained intron: minimum (annotated score expression ratio)</li>
+<li>not contained: 5th percentile of the annotated score expression ratio.</li>
+</ul>
+</ol>
+ ";
+$methodDescription =~ s/\n//g;
+
+
 my $inclusiveQueryParams = $jbrowseUtil->intronJunctionsQueryParams('inclusive');
 
 my $dbh = $jbrowseUtil->getDbh();   
@@ -42,27 +80,61 @@ $sh->finish();
 my $result = {"tracks" => [] };
 if($count > 0) {
 
+
+
   my $inclusive = {storeClass => "JBrowse/Store/SeqFeature/REST",
                    baseUrl => "/a/service/jbrowse",
-#                   type => "JBrowse/View/Track/HTMLFeatures",
-                   type => "EbrcTracks/View/Track/IntronJunction",
-                   key => "RNA-Seq Evidence for Introns (Inclusive)",
-                   label => "RNA-Seq Evidence for Introns (Inclusive)",
+                   type => "EbrcTracks/View/Track/CanvasSubtracks",
+#                   type => "JBrowse/View/Track/CanvasFeatures",
+                   key => "RNA-Seq Evidence for Introns",
+                         glyph => "EbrcTracks/View/FeatureGlyph/AnchoredSegment",
+                   label => "RNA-Seq Evidence for Introns",
                    category => "Transcriptomics",
                    maxFeatureScreenDensity => 0.5,
+                   fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
                    metadata => {
                      subcategory => 'RNA-Seq',
                      trackType => 'Predicted Intron Junctions',
+                     description => $methodDescription,
                    },
-                   hooks => {
-                     modify => "{gsnapUnifiedIntronJunctionHooksModify}",
-                   },
+                   subtracks => [
+                     {featureFilters => {
+                       annotated_intron => "Yes",
+                       evidence => "Stronger Evidence",
+                      },
+                      visible => 1,
+                      label => "Matches Annotation",
+                      metadata => {},
+                     },
+                     {featureFilters => {
+                       annotated_intron => "No",
+                       evidence => "Stronger Evidence",
+                      },
+                      visible => 1,
+                      label => "Novel with Stronger Evidence",
+                      metadata => {},
+                     },
+                     {featureFilters => {
+                       annotated_intron => "No",
+                       evidence => "Weaker Evidence",
+                      },
+                      visible => 0,
+                      label => "Novel with Weaker Evidence",
+                      metadata => {},
+                     },
+                       ],
+                   displayMode => "compact",
                    style => {
-                     className => "ibeam",
-#                     showLabels => "function(){return false}",                     
-#                     labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+                     postHeight => "{gsnapIntronPostHeight}",
+                     lineThickness => "{gsnapIntronLineThickness}",
+                     color => "{gsnapIntronColorFromStrandAndScore}",
+                     showLabels => "function(){return false}",
+                     label => "function(f){return \"Reads=\" + f.get(\"score\");}",
                    },
-                   query => $inclusiveQueryParams,
+
+                   query => {
+                     feature => "gsnap:unifiedintronjunction",
+                   },
                    onClick => {
                      content => "{gsnapUnifiedIntronJunctionTitleFxn}",
                    },
@@ -75,83 +147,41 @@ if($count > 0) {
   };
 
 
-  my $refined = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                   baseUrl => "/a/service/jbrowse",
-#                   type => "JBrowse/View/Track/HTMLFeatures",
-                   type => "EbrcTracks/View/Track/IntronJunction",
-                   key => "RNA-Seq Evidence for Introns (Refined)",
-                   label => "RNA-Seq Evidence for Introns (Refined)",
-                   category => "Transcriptomics",
-                   maxFeatureScreenDensity => 0.5,
-                   metadata => {
-                     subcategory => 'RNA-Seq',
-                     trackType => 'Predicted Intron Junctions',
-                   },
-                   hooks => {
-                     modify => "{gsnapUnifiedIntronJunctionHooksModify}",
-                   },
-                   style => {
-                     className => "ibeam",
-                     labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
-                   },
-                   query => $refinedQueryParams,
-                   onClick => {
-                     content => "{gsnapUnifiedIntronJunctionTitleFxn}",
-                   },
-                   menuTemplate => [
-                     {label => "View Details", 
-                      content => "{gsnapUnifiedIntronJunctionTitleFxn}",
-                     },
-                     {label => "Highlight this Feature"},
-                       ],
-  };
 
 
-  push @{$result->{tracks}}, $refined;
   push @{$result->{tracks}}, $inclusive;
 
   if($isApollo) {
-    my $refinedNovel = dclone $refined;
+
+    my $refinedNovel = dclone $inclusive;
     $refinedNovel->{category} = "Draggable Annotation";
     $refinedNovel->{type} = "JBrowse/View/Track/HTMLFeatures";
-    $refinedNovel->{key} = $refinedNovel->{key} . " Novel";
-    $refinedNovel->{label} = $refinedNovel->{label} . " Novel";
+    $refinedNovel->{key} = $refinedNovel->{key} . " Novel with Stronger Evidence";
+    $refinedNovel->{label} = $refinedNovel->{label} . " Novel with Stronger Evidence";
     $refinedNovel->{query}->{annotated_intron} = "No";
-    $refinedNovel->{query}->{feature} = $refinedNovel->{query}->{feature} . "Apollo";
+    $refinedNovel->{query}->{feature} = "gsnap:unifiedintronjunctionHCOnly";
     delete $refinedNovel->{onClick};
-
-    my $refinedKnown = dclone $refined;
-    $refinedKnown->{category} = "Draggable Annotation";
-    $refinedKnown->{type} = "JBrowse/View/Track/HTMLFeatures";
-    $refinedKnown->{key} = $refinedKnown->{key} . " Match Transcript Annotation";
-    $refinedKnown->{label} = $refinedKnown->{label} . " Match Transcript Annotation";
-    $refinedKnown->{query}->{annotated_intron} = "Yes";
-    $refinedKnown->{query}->{feature} = $refinedKnown->{query}->{feature} . "Apollo";
-    delete $refinedKnown->{onClick};
-
 
     my $inclusiveNovel = dclone $inclusive;
     $inclusiveNovel->{category} = "Draggable Annotation";
     $inclusiveNovel->{type} = "JBrowse/View/Track/HTMLFeatures";
-    $inclusiveNovel->{key} = $inclusiveNovel->{key} . " Novel";
-    $inclusiveNovel->{label} = $inclusiveNovel->{label} . " Novel";
+    $inclusiveNovel->{key} = $inclusiveNovel->{key} . " Novel with Weaker Evidence";
+    $inclusiveNovel->{label} = $inclusiveNovel->{label} . " Novel with Weaker Evidence";
     $inclusiveNovel->{query}->{annotated_intron} = "No";
-    $inclusiveNovel->{query}->{feature} = $inclusiveNovel->{query}->{feature} . "Apollo";
+    $inclusiveNovel->{query}->{feature} = "gsnap:unifiedintronjunctionLCOnly";
     delete $inclusiveNovel->{onClick};
 
     my $inclusiveKnown = dclone $inclusive;
     $inclusiveKnown->{category} = "Draggable Annotation";
     $inclusiveKnown->{type} = "JBrowse/View/Track/HTMLFeatures";
-    $inclusiveKnown->{key} = $inclusiveKnown->{key} . " Match Transcript Annotation";
-    $inclusiveKnown->{label} = $inclusiveKnown->{label} . " Match Transcript Annotation";
+    $inclusiveKnown->{key} = $inclusiveKnown->{key} . " Matches Transcript Annotation";
+    $inclusiveKnown->{label} = $inclusiveKnown->{label} . " Matches Transcript Annotation";
     $inclusiveKnown->{query}->{annotated_intron} = "Yes";
-    $inclusiveKnown->{query}->{feature} = $inclusiveKnown->{query}->{feature} . "Apollo";
+    $inclusiveKnown->{query}->{feature} = "gsnap:unifiedintronjunctionAnnotatedOnly";
     delete $inclusiveKnown->{onClick};
 
 
     push @{$result->{tracks}}, $refinedNovel;
-    push @{$result->{tracks}}, $refinedKnown;
-
     push @{$result->{tracks}}, $inclusiveNovel;
     push @{$result->{tracks}}, $inclusiveKnown;
   }
@@ -159,8 +189,11 @@ if($count > 0) {
 
 $dbh->disconnect();
 print encode_json($result);
-print CACHE encode_json($result);
-close CACHE;
 
+unless($isApollo) {
+  open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
+  print CACHE encode_json($result);
+  close CACHE;
+}
 
 1;

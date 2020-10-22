@@ -24,19 +24,32 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       String projectName = getPropValue("projectName");
       setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
+
+      setPropValue("searchCategory", "searchCategory-metabolomics-fc");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange");
+      
+      setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
+      //setPropValue("questionName", "CompoundQuestions.CompoundsByPercentile");
+      
+      
+      
       injectTemplate("compoundPageGraphDescriptions");
       injectTemplate("datasetExampleGraphDescriptions");
       injectTemplate("metabolomicsGraphAttributes");
       injectTemplate("metaboliteGraphTextAttributeCategory");
+
   }
 
   @Override
   public void addModelReferences() {
+
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
-  }
+  
+}
 
   // second column is for documentation
   @Override

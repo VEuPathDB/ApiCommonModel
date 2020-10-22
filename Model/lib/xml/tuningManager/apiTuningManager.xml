@@ -123,6 +123,46 @@ WHERE
   </tuningTable>
 
 
+  <tuningTable name="TaxonPairSummary">
+    <comment>synteny stats for each reference-taxon / comparison-taxon pair
+    </comment>
+    <externalDependency name="apidb.Synteny"/>
+    <externalDependency name="apidb.SyntenicGene"/>
+    <externalDependency name="dots.NaSequence"/>
+    <sql>
+      <![CDATA[
+        create table TaxonPairSummary&1 as
+        select ref_taxon_id, comp_taxon_id,
+               count(*) as syntenic_span_count,
+               sum(ref_length) as ref_coverage,
+               avg(ref_length) as average_span_length,
+               avg(gene_count) as average_gene_count
+        from (select ref_seq.taxon_id as ref_taxon_id,
+                     comp_seq.taxon_id as comp_taxon_id,
+                     synteny.a_end - synteny.a_start + 1 as ref_length,
+                     nvl(sg_summary.gene_count, 0) as gene_count
+              from apidb.Synteny, dots.NaSequence ref_seq,
+                   dots.NaSequence comp_seq,
+                   (select synteny_id, count(*) as gene_count
+                    from apidb.SyntenicGene
+                    group by synteny_id) sg_summary
+              where synteny.a_na_sequence_id = ref_seq.na_sequence_id
+                and synteny.b_na_sequence_id = comp_seq.na_sequence_id
+                and synteny.synteny_id = sg_summary.synteny_id
+             )
+        group by ref_taxon_id, comp_taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index tps_ix&1
+          on TaxonPairSummary&1 (ref_taxon_id, comp_taxon_id)
+          tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="FallbackOrganism">
     <comment>
       Taxon metadata for reference SNPs
@@ -1056,6 +1096,7 @@ SELECT o.project_name as project_id,
          else 'NCBITAXON_' || t.ncbi_tax_id
        end as source_id,
        o.public_abbrev,
+       o.orthomcl_abbrev,
        o.family_name_for_files,
        tn.name as organism_name,
        o.genome_source,
@@ -1739,6 +1780,7 @@ SELECT pi.name as project_id,
        go.predicted_go_id_function,
        go.predicted_go_id_process,
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
+       0 AS has_seqedit,
        row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript
       FROM  dots.GeneFeature gf, dots.Transcript t, core.ProjectInfo pi,
             dots.TranslatedAaFeature taf,
@@ -1803,6 +1845,13 @@ SELECT pi.name as project_id,
         AND tas.aa_sequence_id = ec.aa_sequence_id(+)
         AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)
         AND tas.aa_sequence_id = go.aa_sequence_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       update &prefixProteinAttributes&1 gaup
+       set has_seqedit  = 1 
+       where source_id in (select source_id from apidb.seqedit)
       ]]>
     </sql>
     <sql>
@@ -1938,7 +1987,9 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        pa.cds_start as coding_start,
        pa.cds_end as coding_end,
        pa.cds_length, 
-       pa.protein_length, pa.tm_count,
+       pa.protein_length, 
+       pa.has_seqedit,
+       pa.tm_count,
        pa.molecular_weight,
        pa.isoelectric_point, 
        pa.signalp_scores, pa.signalp_peptide,
@@ -2259,6 +2310,8 @@ ORDER BY tn.taxon_id
 
 
 <!--
+
+these updates are used for assigning non-coding genes to ortholog groups
     <sql>
       <![CDATA[
 update &prefixTranscriptAttributes&1 ga
@@ -2270,15 +2323,25 @@ where ga.organism like 'Toxo%'
 and ga.orthomcl_name is null
       ]]>
     </sql>
--->
     <sql>
       <![CDATA[
         update &prefixTranscriptAttributes&1
-        set orthomcl_name = 'ORTH_' || gene_id || '.tmp'
+        set orthomcl_name = 'NonCodingOrthoGroup_' || gene_id
+        where orthomcl_name is null
+        and gene_id is not null
+        and gene_type not like 'protein%'
+	and gene_type not like 'pseudo%'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        update &prefixTranscriptAttributes&1
+        set orthomcl_name = 'CodingOrthoGroup_' || gene_id
         where orthomcl_name is null
         and gene_id is not null
       ]]>
     </sql>
+
     <sql>
       <![CDATA[
         update &prefixTranscriptAttributes&1
@@ -2286,6 +2349,8 @@ and ga.orthomcl_name is null
         where orthomcl_name is null
       ]]>
     </sql>
+-->
+
     <sql>
       <![CDATA[
        update &prefixTranscriptAttributes&1 gaup
@@ -4164,23 +4229,23 @@ tablespace indx
   </tuningTable>
 
 
-<!-- COMMENT: Takes too long to run, and broken too 
-
   <tuningTable name="GeneIntronJunction">
     <comment>
       Introns from RNA-Seq with percentages of max intron score and ratios vs expression
     </comment>
+<!--
     <internalDependency name="DatasetPresenter"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="InferredParams"/>
     <internalDependency name="PANParamValues"/>
-    <externalDependency name="apidb.IntronJunction"/>
-    <externalDependency name="apidb.IntronLocation"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.StudyLink"/>
     <externalDependency name="study.Study"/>
+-->
+    <externalDependency name="apidb.IntronJunction"/>
+    <externalDependency name="apidb.IntronLocation"/>
     <intermediateTable name="JunExp"/>
     <intermediateTable name="NameMapping"/>
     <intermediateTable name="mappingstats "/>
@@ -4411,8 +4476,8 @@ declare
   i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    select na_sequence_id, length, organism, CASE WHEN step_mult > 300000 THEN 300000 ELSE step_mult END as seq_step_mult from (
-    select gs.na_sequence_id, gs.length, gs.organism, 2500 * (1 + floor(gs.length/count(*))) as step_mult 
+    select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
       from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
@@ -4652,8 +4717,8 @@ declare
   i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    select na_sequence_id, length, organism, CASE WHEN step_mult > 300000 THEN 300000 ELSE step_mult END as seq_step_mult from (
-    select gs.na_sequence_id, gs.length, gs.organism, 2500 * (1 + floor(gs.length/count(*))) as step_mult 
+    select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
       from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
@@ -4941,8 +5006,8 @@ declare
   i_last_pos number := i_first_pos + iter_length;
  BEGIN
   FOR idlist IN (
-    select na_sequence_id, length, organism, CASE WHEN step_mult > 300000 THEN 300000 ELSE step_mult END as seq_step_mult from (
-    select gs.na_sequence_id, gs.length, gs.organism, 2500 * (1 + floor(gs.length/count(*))) as step_mult 
+    select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
       from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
@@ -5074,7 +5139,6 @@ floor(max(gij.end - gij.startm) * 1.25) as max_intron_length
 from geneintronjunction gij, genomicseqattributes gs
 where gs.na_sequence_id = gij.parent_id
 and gij.annotated_intron = 'Yes'
- - - and gij.percent_max between 0 and 1
 group by gs.organism
 )
 select gs.na_sequence_id, gs.source_id, ot.*
@@ -5089,7 +5153,6 @@ and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjuncti
       ]]>
     </sql>
   </tuningTable>
---> 
 
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
@@ -6468,7 +6531,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
             GROUP BY tp.gene_source_id, tp.project_id, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
             )
         GROUP BY gene_source_id, project_id, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
-        ORDER BY pathway_source_id, pathway_source
+        ORDER BY pathway_source, lower(pathway_name)
       ]]>
     </sql>
 <!-- now in CREATE TABLE
@@ -6873,7 +6936,7 @@ UNION
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
        nvl(hl.text, hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_DISPLAY_NAME', dsp.display_name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
+       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_NAME', dsp.name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
 from DatasetExampleSourceId esi,
       DatasetPresenter dsp, DatasetHyperLink hl,
       DatasetNameTaxon dnt,
@@ -6890,6 +6953,22 @@ and hl.url is not null
 and ((hl.url like '%DEFAULT_RNASEQ%' and esi.example_source_id is not null)
      or (hl.url not like '%DEFAULT_RNASEQ%'))
 UNION
+-- for Chip-Seq
+select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name,
+       nvl(hl.text, hl.url) as text,
+       hl.description,
+         replace( replace( replace(replace(hl.url, 'DEFAULT_PROJECT', os.project_id), 'DEFAULT_SEQUENCE', os.source_id), 'DEFAULT_ORG_ABBREV', oa.public_abbrev), '=gene', '=gene,' || dsp.name) as url
+
+from DatasetPresenter dsp, DatasetHyperLink hl,DatasetNameTaxon nt,
+     OrganismAttributes oa, sequences os
+where dsp.dataset_presenter_id = nt.dataset_presenter_id
+      and nt.taxon_id = os.taxon_id
+      and nt.taxon_id = oa.component_taxon_id
+      and os.rn = 1
+and dsp.dataset_presenter_id = hl.dataset_presenter_id (+)
+and dsp.type = 'transcript_expression'
+and dsp.subtype = 'chipseq'
+UNION
  -- Get the remaining ones
 select dataset_id, dataset_name, text, description, url 
 from (select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
@@ -6901,7 +6980,9 @@ from (select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, n
       where dsp.dataset_presenter_id = ln.dataset_presenter_id
       and ((dsp.type = 'genome')
         OR (dsp.type = 'protein_expression' and subtype is null)
-        OR (dsp.type = 'transcript_expression' and subtype = 'rnaseq')
+        OR (dsp.type = 'transcript_expression' and (subtype = 'rnaseq' or dsp.subtype = 'chipseq'))
+        OR (dsp.type = 'feature' and subtype is null)
+        OR (dsp.type is null and subtype is null)
         )
       )
 where url is not null
@@ -7696,15 +7777,18 @@ where url is not null
         -- compound profiles
         select compound_profile.study_id, 
                case
-                 when compound_profile.isotopomer is null
-                   then ca.source_id
-                 else ca.source_id || '|' || compound_profile.isotopomer
-               end as source_id,
+                 WHEN compound_profile.isotopomer IS NOT NULL
+                    THEN ca.source_id || '|' || compound_profile.isotopomer
+                 WHEN compound_profile.mass IS NOT NULL
+                    THEN ca.source_id || '|' || compound_profile.mass || '|' || compound_profile.retention_time
+                 ELSE ca.source_id
+               END as source_id,
                compound_profile.profile_type,
                compound_profile.profile_as_string, compound_profile.max_value, compound_profile.min_value,
                compound_profile.max_timepoint, compound_profile.min_timepoint
         from CompoundAttributes ca,
              (  select sl.study_id, result.compound_id, result.isotopomer, 'values' as profile_type,
+                       NULL as compound_peaks_id, NULL as mass, NULL as retention_time,
                        listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
                          within group (order by pan.node_order_num)
                          as profile_as_string,
@@ -7723,6 +7807,7 @@ where url is not null
                 group by sl.study_id, result.compound_id, result.isotopomer
               UNION ALL
                 select sl.study_id, cpc.compound_id, cpc.isotopomer, 'values' as profile_type,
+                       cpc.compound_peaks_id, cp.mass, cp.retention_time,
                        listagg(nvl(to_char(round(cmsr.value, 2)), 'NA'), chr(9))
                          within group (order by pan.node_order_num)
                          as profile_as_string,
@@ -7739,7 +7824,26 @@ where url is not null
                        and cp.compound_peaks_id = cmsr.compound_peaks_id
                        and cpc.compound_peaks_id = cp.compound_peaks_id
                        and pan.name like '%mean%'
-                group by sl.study_id, cpc.compound_id, cpc.isotopomer
+                group by sl.study_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
+              UNION ALL
+                select sl.study_id, cpc.compound_id, cpc.isotopomer, 'percentiles' as profile_type,
+                    cpc.compound_peaks_id, cp.mass, cp.retention_time,
+                    listagg(nvl(to_char(round(cmsr.percentile, 2)), 'NA'), chr(9))
+                        within group (order by pan.node_order_num) as profile_as_string,
+                    max(cmsr.percentile) as max_value, min(cmsr.percentile) as min_value,
+                    max(pan.name) keep(dense_rank last order by cmsr.value) as max_timepoint,
+                    max(pan.name) keep(dense_rank first order BY cmsr.value) as min_timepoint
+                from study.protocolAppNode pan, study.studylink sl, study.study s,
+                    apidb.compoundmassspecresult cmsr, apidb.compoundpeaks cp,
+                    apidb.compoundpeakschebi cpc
+                where cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                    and cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                    and sl.study_id = s.study_id
+                    and s.investigation_id is not null
+                    and cp.compound_peaks_id = cmsr.compound_peaks_id
+                    and cpc.compound_peaks_id = cp.compound_peaks_id
+                    and pan.name like '%mean%'
+                group by sl.study_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
              ) compound_profile
         where ca.id = compound_profile.compound_id
       UNION ALL
