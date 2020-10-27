@@ -107,9 +107,11 @@ public class GenBankReporter extends PagedAnswerReporter {
 
     private void writeTableFormat(AnswerValue geneAnswer, PrintWriter writer, String sequenceId)
             throws WdkModelException, WdkUserException {
-        for (RecordInstance record : new PagedAnswerRecordStream(geneAnswer, _pageSize)) {
+      try (RecordStream records = new PagedAnswerRecordStream(geneAnswer, _pageSize)) {
+        for (RecordInstance record : records) {
           writeGeneFeature(record, writer, sequenceId);
         }
+      }
     }
 
     private void writeSequenceFeatures(RecordInstance record, PrintWriter writer)
