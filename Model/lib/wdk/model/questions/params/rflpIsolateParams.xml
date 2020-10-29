@@ -11,6 +11,19 @@
             <suggest default="EUSTDY0040-1.727,EUSTDY0040-1.360,EUSMPL0041-1.1"/>
          </datasetParam>
 
+
+    <filterParam name="rflp_char" 
+                 ontologyQueryRef="rflpGenotypeVQ.rflpOntology"
+                 metadataQueryRef="rflpGenotypeVQ.rflpMetadata"
+                 backgroundQueryRef="rflpGenotypeVQ.rflpMetadata"
+                 countPredictsAnswerCount="true"
+                 filterDataTypeDisplayName="Samples"
+                 prompt="RFLP Sample Details"
+                 trimMetadataTerms="true">
+      <help>
+      </help> 
+    </filterParam>
+
         <flatVocabParam name="genotype" 
             queryRef="rflpGenotypeVQ.withIsolates"
             prompt="Genotype #"
@@ -107,6 +120,77 @@
 
   <querySet name="rflpGenotypeVQ" queryType="vocab" isCacheable="true">
 
+
+    <sqlQuery name="rflpOntology" isCacheable="true">
+      <column name="ontology_term_name"/>
+      <column name="parent_ontology_term_name"/>
+      <column name="display_name"/>
+      <column name="description"/>
+      <column name="type"/>
+      <column name="units"/>
+      <column name="precision"/>
+      <column name="is_range"/>
+      <sql>
+        <![CDATA[
+select distinct o.ontology_term_name, o.PARENT_ONTOLOGY_TERM_NAME, decode(o.display_name, 'data set', 'Data Set', o.display_name) as display_name, o.description, o.type, o.units, o.PRECISION, o.is_range 
+from APIDBTUNING.metadata md, apidbtuning.ontology o
+where md.DATASET_NAME like '%RFLP_RSRC'
+and o.ontology_term_source_id = md.property_source_id
+and o.ontology_term_name = 'data set'
+UNION
+select 'locus' as ontology_term_name, cast(null as varchar2(1)) as parent_ontology_term_name,                                                                                     
+               'Genetic Markers' as display_name, 'Loci' as description, 
+               null as type, null as units, 1 as precision, 0 as is_range
+               from dual      
+UNION
+select distinct locus_tag as ontology_term_name, 'locus' as parent_ontology_term_name,                                                                                     
+               locus_tag as display_name, 'Locus' as description, 
+               'string' as type, null as units, 1 as precision, 0 as is_range
+               from apidb.rflpgenotype 
+               where locus_tag != 'Origin' -- this is not a locus
+/**
+UNION
+select distinct p.ontology_term_name, p.PARENT_ONTOLOGY_TERM_NAME, p.display_name, p.description, p.type, p.units, p.PRECISION, p.is_range 
+from APIDBTUNING.metadata md, apidbtuning.ontology o, apidbtuning.ontology p
+where md.DATASET_NAME like '%RFLP_RSRC'
+and o.ontology_term_source_id = md.property_source_id
+and o.PARENT_ONTOLOGY_TERM_NAME = p.ONTOLOGY_TERM_NAME
+**/
+         ]]>
+    </sql>
+   </sqlQuery>
+
+
+   <sqlQuery name="rflpMetadata" isCacheable="false">
+     <column name="ontology_term_name"/>
+     <column name="internal"/>
+     <column name="number_value"/>
+     <column name="date_value"/>
+     <column name="string_value"/>
+     <sql>
+       <![CDATA[
+                select md.pan_id as internal, md.property as ontology_term_name, md.string_value, md.number_value, cast(null as date) as date_value
+                FROM ApidbTuning.Metadata md, apidb.rflpgenotype rg
+                where md.DATASET_NAME like '%RFLP_RSRC'
+                and md.pan_id = rg.protocol_app_node_id
+                UNION
+                select protocol_app_node_id as internal, locus_tag as ontology_term_name, genotype as string_value, cast(null as number) as number_value, cast(null as date) as date_value
+                From apidb.rflpgenotype where locus_tag != 'Origin' -- this is not a locus
+          ]]>
+    </sql>
+    </sqlQuery>
+
+
+
+
+
+
+
+
+
+
+
+
     <sqlQuery name="withIsolates" excludeProjects="EuPathDB">
     <column name="display"/>
     <column name="internal"/>
@@ -123,6 +207,15 @@ order by to_number(replace(replace(replace(genotype_number, 'III', '3'),
     ]]>
     </sql>
     </sqlQuery>
+
+
+
+
+
+
+
+
+
 
     <processQuery name="withIsolates" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="100" wsName="internal"/>
