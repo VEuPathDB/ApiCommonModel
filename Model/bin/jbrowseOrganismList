@@ -11,30 +11,35 @@ my ($projectName) = @ARGV;
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
 my $dbh = $jbrowseUtil->getDbh();   
 
-my $sql = "select distinct o.public_abbrev as organism_abbrev
-     , o.name_for_filenames
-     , o.strain_abbrev
-     , o.IS_REFERENCE_STRAIN
-     , tn.name
-     , t.NCBI_TAX_ID as species_ncbi_tax_id
-     , d.genome_source
-     , d.annotation_source
-     , d.ANNOTATION_VERSION
-     , d.genome_version
+my $sql = "select o.public_abbrev as organism_abbrev                                                                                                                                                    , o.name_for_filenames
+, o.strain_abbrev
+, o.IS_REFERENCE_STRAIN
+, tn.name
+, t.NCBI_TAX_ID as species_ncbi_tax_id
+, dh.genome_source
+, dh.annotation_source
+, dh.ANNOTATION_VERSION
+, dh.genome_version
+, dh.build_number
 from apidb.organism o
-     , sres.taxonname tn
-     , apidbtuning.taxonspecies ts
-     , sres.taxon t
-     , (select taxon_id, genome_source, genome_version, annotation_source, annotation_version
-        from apidbtuning.datasethistory h, apidbtuning.datasetnametaxon nt
-        where h.dataset_presenter_id = nt.dataset_presenter_id
-        and nt.name like '%primary_genome_RSRC'
-        and h.annotation_version is not null) d
-where o.taxon_id = tn.taxon_id
+, sres.taxonname tn
+, apidbtuning.taxonspecies ts
+, sres.taxon t
+, apidbtuning.datasethistory dh
+, apidbtuning.datasetnametaxon dnt
+where dh.dataset_history_id in (
+    select distinct max(dh.dataset_history_id) KEEP (DENSE_RANK FIRST ORDER BY dh.build_number desc) OVER (PARTITION BY dnt.taxon_id) dataset_history_id
+    from apidbtuning.datasethistory dh
+    , apidbtuning.datasetnametaxon dnt
+    where dh.dataset_presenter_id = dnt.dataset_presenter_id
+    and dnt.name like '%primary_genome_RSRC'
+    and dh.annotation_version is not null)
+and dnt.dataset_presenter_id = dh.dataset_presenter_id
+and o.taxon_id = tn.taxon_id
 and tn.name_class = 'scientific name'
+and o.taxon_id = dnt.taxon_id
 and ts.species_taxon_id = t.taxon_id
 and ts.taxon_id = o.taxon_id
-and o.taxon_id = d.taxon_id
 ";
 
 
