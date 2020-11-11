@@ -22,8 +22,8 @@ public class MicroarrayDeRisiTimeSeries extends MicroarrayTwoChannelReferenceDes
       super.addModelReferences();
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProfileSimilarity"); 
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarraypfal3D7_microarrayExpression_Derisi_HB3_TimeSeries_RSRC"); 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarraypfal3D7_microarrayExpression_Derisi_HB3_TimeSeries_RSRCPercentile"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarraypfal3D7_microarrayExpression_Derisi_TimeSeries_RSRC"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarraypfal3D7_microarrayExpression_Derisi_TimeSeries_RSRCPercentile"); 
 
   }
 
