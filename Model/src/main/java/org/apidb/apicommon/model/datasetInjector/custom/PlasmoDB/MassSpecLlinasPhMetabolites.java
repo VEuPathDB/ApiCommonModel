@@ -25,11 +25,13 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
 
-      setPropValue("searchCategory", "searchCategory-metabolomics-fc");
-      //setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange");
-      
+      setPropValue("searchCategory", "searchCategory-metabolomics-fold-change");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName());
+
+
       setPropValue("searchCategory", "searchCategory-metabolomics-percentile");
-      //setPropValue("questionName", "CompoundQuestions.CompoundsByPercentile");
+      setPropValue("questionName", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
+
       
       
       
@@ -38,14 +40,20 @@ public class MassSpecLlinasPhMetabolites extends DatasetInjector {
       injectTemplate("metabolomicsGraphAttributes");
       injectTemplate("metaboliteGraphTextAttributeCategory");
 
+
+      injectTemplate("compoundsFoldChangeQuestion");
+      injectTemplate("compoundsPercentileQuestion");
+      injectTemplate("compoundsProfileSetParamQuery");
+
   }
 
   @Override
   public void addModelReferences() {
 
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "profile_graph", getPropValue("graphModule"));
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange");
-      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile");
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByFoldChange" + getDatasetName()); 
+      addWdkReference("CompoundRecordClasses.CompoundRecordClass", "question", "CompoundQuestions.CompoundsByPercentile" + getDatasetName());
+
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphs");
       addWdkReference("CompoundRecordClasses.CompoundRecordClass", "table", "MassSpecGraphsDataTable");
   

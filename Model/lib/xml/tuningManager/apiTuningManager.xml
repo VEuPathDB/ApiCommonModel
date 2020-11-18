@@ -1407,7 +1407,26 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
       where n.na_feature_id = gf.na_feature_id
         and gf.external_database_release_id =r.external_database_release_id
         and r.external_database_id = d.external_database_id
-        and n.is_preferred = 1) mapping,
+        and n.is_preferred = 1
+     UNION
+      select dr.primary_identifier as id,
+             gf.source_id as gene,
+             'AA feature DbRef primary ID' as union_member,
+             ed.name as database_name /* DbRef.primary_identifier mapped through DbRefAaFeature */
+      from dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf,
+           dots.DbRefAaFeature draf,  sres.DbRef dr,
+           sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+      where gf.na_feature_id = t.parent_id
+        and t.na_feature_id = taf.na_feature_id
+        and taf.aa_feature_id = draf.aa_feature_id
+        and draf.db_ref_id = dr.db_ref_id
+        and dr.external_database_release_id = edr.external_database_release_id
+        and edr.external_database_id = ed.external_database_id
+        and ed.name
+            not in ('INTERPRO', 'PFAM', 'PIRSF', 'PRODOM', 'PROSITEPROFILES',
+                    'SMART', 'SUPERFAMILY', 'TIGRFAM', 'CDD','HAMAP','HMMPANTHER',
+                    'PRINTS','SCANPROSITE','SFLD')
+    ) mapping,
       dots.GeneFeature gf, dots.NaSequence ns
 where mapping.gene = gf.source_id
   and gf.na_sequence_id = ns.na_sequence_id
@@ -1781,7 +1800,8 @@ SELECT pi.name as project_id,
        go.predicted_go_id_process,
        SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
        0 AS has_seqedit,
-       row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript
+       row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript,
+       uniprot.uniprot_ids
       FROM  dots.GeneFeature gf, dots.Transcript t, core.ProjectInfo pi,
             dots.TranslatedAaFeature taf,
             dots.TranslatedAaSequence tas,
@@ -1831,7 +1851,18 @@ SELECT pi.name as project_id,
                    FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
                    WHERE ec.enzyme_class_id = asec.enzyme_class_id
 		   AND asec.evidence_code = 'OrthoMCLDerived')
-             GROUP BY aa_sequence_id) ecDerived
+             GROUP BY aa_sequence_id) ecDerived,
+            (select af.aa_sequence_id,
+                    listagg(dbref.primary_identifier,',')
+                      within group(order by dbref.primary_identifier) as uniprot_ids
+             from sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
+                  sres.DbRef, dots.DbRefAaFeature daf, dots.AaFeature af
+             where d.name like 'Uniprot%'
+               and d.external_database_id = r.external_database_id
+               and r.external_database_release_id = dbref.external_database_release_id
+               and dbref.db_ref_id = daf.db_ref_id
+               and daf.aa_feature_id = af.aa_feature_id
+             group by af.aa_sequence_id) uniprot
       WHERE gf.na_feature_id = t.parent_id
         AND t.row_project_id = pi.project_id
         AND t.na_feature_id = taf.na_feature_id
@@ -1845,6 +1876,7 @@ SELECT pi.name as project_id,
         AND tas.aa_sequence_id = ec.aa_sequence_id(+)
         AND tas.aa_sequence_id = ecDerived.aa_sequence_id(+)
         AND tas.aa_sequence_id = go.aa_sequence_id(+)
+        AND tas.aa_sequence_id = uniprot.aa_sequence_id(+)
       ]]>
     </sql>
     <sql>
@@ -2414,6 +2446,13 @@ and ga.orthomcl_name is null
         TABLESPACE INDX
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNIQUE INDEX TranscriptAttr_genenaf&1
+        ON &prefixTranscriptAttributes&1 (gene_na_feature_id, gene_source_id, source_id, project_id)
+        TABLESPACE INDX
+      ]]>
+    </sql>
   </tuningTable>
 
   <tuningTable name="GeneModelCharMD" prefixEnabled="true">
@@ -2819,52 +2858,6 @@ tablespace indx
     <sql>
       <![CDATA[
 create index SnpVariantIx&1 on &prefixSnpAttributes&1 (dataset, source_id, gene_source_id, location, position_in_protein)
-tablespace indx
-      ]]>
-    </sql>
-  </tuningTable>
-
-
-  <tuningTable name="OrfAttributes">
-    <comment> Each record represents an ORF. Used by the model and the sequence
-         retrieval tool for ORF-related queries.
-     </comment>
-    <externalDependency name="apidb.FeatureLocation"/>
-    <internalDependency name="GenomicSeqAttributes"/>
-    <externalDependency name="sres.OntologyTerm"/>
-    <sql>
-      <![CDATA[
-CREATE TABLE OrfAttributes&1 NOLOGGING AS
-select gs.project_id,
-       SUBSTR(nl.feature_source_id, 1, 60) AS source_id,
-       lower(substr(nl.feature_source_id, 1, 60)) as lowercase_source_id,
-       gs.organism,
-       gs.ncbi_tax_id,
-       gs.source_id AS nas_id,
-       (nl.end_max - nl.start_min + 1)/3 as length,
-       nl.start_min, nl.end_max, nl.is_reversed,
-       gs.chromosome,
-       gs.chromosome_order_num,
-       gs.na_sequence_id,
-       nl.na_feature_id
-from  sres.OntologyTerm oterm
-    , apidb.Featurelocation nl
-    , GenomicSeqAttributes gs
-WHERE gs.na_sequence_id = nl.na_sequence_id
-  AND nl.sequence_ontology_id = oterm.ontology_term_id
-  AND nl.is_top_level = 1
-  AND oterm.name = 'ORF'
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create unique index OrfAttr_source_id&1 ON OrfAttributes&1 (source_id)
-tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index OrfAttr_location_idx&1 ON OrfAttributes&1 (na_sequence_id, start_min, end_max, is_reversed)
 tablespace indx
       ]]>
     </sql>
@@ -4162,36 +4155,6 @@ WHERE sa.na_sequence_id = ns.na_sequence_id
     <sql>
       <![CDATA[
 create index GenomicSeq_ix&1 on GenomicSequenceSequence&1 (source_id, project_id)
-tablespace indx
-      ]]>
-    </sql>
-  </tuningTable>
-
-
-  <tuningTable name="OrfSequence">
-    <comment> Each record stores the amino-acid sequence of an ORF. Used by the
-         relevant attribute query of the WDK ORF record, as well as by the
-         sequence retrieval tool. Propagated to portal instances.
-     </comment>
-    <externalDependency name="dots.TranslatedAaSequence"/>
-    <externalDependency name="dots.TranslatedAaFeature"/>
-    <internalDependency name="OrfAttributes"/>
-    <sql>
-      <![CDATA[
-CREATE TABLE OrfSequence&1 NOLOGGING AS
-SELECT oa.source_id,
-       oa.project_id,
-       ts.sequence
-FROM dots.TranslatedAaSequence ts
-            , dots.TranslatedAaFeature tf
-            , OrfAttributes oa
- WHERE oa.na_feature_id = tf.na_feature_id
-   AND tf.aa_sequence_id = ts.aa_sequence_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-create index OrfSeq_ix&1 on OrfSequence&1 (source_id, project_id)
 tablespace indx
       ]]>
     </sql>
@@ -5774,19 +5737,19 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
   /* Standard GENOME */
   select distinct organism, project_id, type 
   from GenomicSeqAttributes,
-       (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual)
+       (select 'Genome' as type from dual)
   UNION
   /* Mitochondrial GENES and GENOME */
   select distinct organism || ' mitochondrial', project_id, type 
   from GenomicSeqAttributes,       
-  (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
+  (select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where so_id = 'SO:0000819'
   and not project_id='PlasmoDB' 
   UNION
   /* Plastid GENES and GENOME */
   select distinct organism || ' plastid' as organism, project_id, type 
   from GenomicSeqAttributes,       
-  (select 'ORFs_AA' as type from dual union select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
+  (select 'Genome' as type from dual union select 'AnnotatedTranscripts' as type from dual union select 'AnnotatedProteins' as type from dual)
   where so_id = 'SO:0001259'
   and not project_id='PlasmoDB' 
   UNION
@@ -6894,10 +6857,10 @@ and mss.aa_sequence_id = ga.aa_sequence_id
 -- MAIN QUERY STARTS HERE
  -- first query handles genomes... replace needed macros
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
-       nvl(hl.text, hl.url) as text,
+       nvl(replace(hl.text,'DEFAULT_PROJECT',def_seq.project_id),hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk),'DEFAULT_ORG_ABBREV', def_seq.public_abbrev) as url
-from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id, oa.public_abbrev
+       replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_PROJECT', def_seq.project_id), 'DEFAULT_LC_PROJECT', lower(def_seq.project_id)), 'DEFAULT_SEQUENCE', def_seq.source_id), 'ORGANISM_PK', def_seq.organismpk),'DEFAULT_ORG_ABBREV', def_seq.public_abbrev),'ORGANISM_FILE_NAME', def_seq.name_for_filenames) as url
+from (select dsp.dataset_presenter_id, os.source_id, oa.source_id as organismpk, os.project_id, oa.public_abbrev, oa.name_for_filenames
       from DatasetPresenter dsp, DatasetNameTaxon nt, OrganismAttributes oa, sequences os
       where dsp.dataset_presenter_id = nt.dataset_presenter_id
       and nt.taxon_id = os.taxon_id
@@ -6912,10 +6875,10 @@ and hl.url is not null
 UNION
  -- this query handles proteomics... replace needed macros
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
-       nvl(hl.text, hl.url) as text,
+       nvl(replace(hl.text,'DEFAULT_PROJECT',def_prot.project_id),hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id),'DEFAULT_PROTEOMICS_SEQUENCE', def_prot.sequence_id || ':' || def_prot.zoom_context_start || '..' || def_prot.zoom_context_end),'DEFAULT_ORG_ABBREV', def_prot.public_abbrev) as url
-from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id, oa.public_abbrev, ga.sequence_id, ga.zoom_context_start, ga.zoom_context_end
+       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(def_prot.project_id)), 'DEFAULT_PROTEOMICS_GENE', def_prot.source_id),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', def_prot.project_id),'DEFAULT_PROTEOMICS_SEQUENCE', def_prot.sequence_id || ':' || def_prot.zoom_context_start || '..' || def_prot.zoom_context_end),'DEFAULT_ORG_ABBREV', def_prot.public_abbrev),'ORGANISM_FILE_NAME',def_prot.name_for_filenames) as url
+from (select dsp.dataset_presenter_id, pg.source_id, pg.project_id, oa.public_abbrev, ga.sequence_id, ga.zoom_context_start, ga.zoom_context_end, oa.name_for_filenames
       from DatasetPresenter dsp, DatasetNameTaxon dsnt, proteomicsgenes pg, GeneAttributes ga, OrganismAttributes oa
       where pg.name = dsnt.name
       and pg.rn = 1
@@ -6934,9 +6897,9 @@ and ((hl.url like '%DEFAULT_PROTEOMICS%' and def_prot.source_id is not null)
 UNION
 -- Get the RNA-Seq Ones
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, 
-       nvl(hl.text, hl.url) as text,
+       nvl(replace(hl.text,'DEFAULT_PROJECT',esi.project_id),hl.url) as text,
        hl.description,
-       replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_NAME', dsp.name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end) as url
+       replace(replace(replace(replace(replace(replace(replace(replace(hl.url, 'DEFAULT_LC_PROJECT', lower(esi.project_id)), 'DEFAULT_RNASEQ_GENE', esi.example_source_id),'DEFAULT_DATASET_NAME', dsp.name),'DEFAULT_DATASET', dsp.name), 'DEFAULT_PROJECT', esi.project_id),'DEFAULT_ORG_ABBREV', oa.public_abbrev),'DEFAULT_RNASEQ_SEQUENCE', esi.sequence_id || ':' || ga.zoom_context_start || '..' || ga.zoom_context_end),'ORGANISM_FILE_NAME', oa.name_for_filenames) as url
 from DatasetExampleSourceId esi,
       DatasetPresenter dsp, DatasetHyperLink hl,
       DatasetNameTaxon dnt,
@@ -6955,9 +6918,9 @@ and ((hl.url like '%DEFAULT_RNASEQ%' and esi.example_source_id is not null)
 UNION
 -- for Chip-Seq
 select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name,
-       nvl(hl.text, hl.url) as text,
+       nvl(replace(hl.text,'DEFAULT_PROJECT',os.project_id),hl.url) as text,
        hl.description,
-         replace( replace( replace(replace(hl.url, 'DEFAULT_PROJECT', os.project_id), 'DEFAULT_SEQUENCE', os.source_id), 'DEFAULT_ORG_ABBREV', oa.public_abbrev), '=gene', '=gene,' || dsp.name) as url
+         replace( replace( replace( replace(replace(hl.url, 'DEFAULT_PROJECT', os.project_id), 'DEFAULT_SEQUENCE', os.source_id), 'DEFAULT_ORG_ABBREV', oa.public_abbrev), '=gene', '=gene,' || dsp.name), 'ORGANISM_FILE_NAME', oa.name_for_filenames) as url
 
 from DatasetPresenter dsp, DatasetHyperLink hl,DatasetNameTaxon nt,
      OrganismAttributes oa, sequences os
@@ -6971,19 +6934,22 @@ and dsp.subtype = 'chipseq'
 UNION
  -- Get the remaining ones
 select dataset_id, dataset_name, text, description, url 
-from (select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
-      from DatasetHyperLink ln, DatasetPresenter dsp
+from (select distinct dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(replace(ln.text,'DEFAULT_PROJECT', oa.project_id), ln.url) as text, ln.url, ln.description
+      from DatasetHyperLink ln, DatasetPresenter dsp, DatasetNameTaxon nt, OrganismAttributes oa
       where dsp.dataset_presenter_id = ln.dataset_presenter_id
+            and dsp.dataset_presenter_id = nt.dataset_presenter_id
+	    and nt.taxon_id = oa.component_taxon_id
       minus
-      select dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(ln.text, ln.url) as text, ln.url, ln.description
-      from DatasetHyperLink ln, DatasetPresenter dsp
+      select distinct dsp.dataset_presenter_id as dataset_id, dsp.name as dataset_name, nvl(replace(ln.text,'DEFAULT_PROJECT', oa.project_id), ln.url) as text, ln.url, ln.description
+      from DatasetHyperLink ln, DatasetPresenter dsp, DatasetNameTaxon nt, OrganismAttributes oa
       where dsp.dataset_presenter_id = ln.dataset_presenter_id
-      and ((dsp.type = 'genome')
-        OR (dsp.type = 'protein_expression' and subtype is null)
-        OR (dsp.type = 'transcript_expression' and (subtype = 'rnaseq' or dsp.subtype = 'chipseq'))
-        OR (dsp.type = 'feature' and subtype is null)
-        OR (dsp.type is null and subtype is null)
-        )
+            and dsp.dataset_presenter_id = nt.dataset_presenter_id                                                                                          and nt.taxon_id = oa.component_taxon_id 
+            and ((dsp.type = 'genome')
+                  OR (dsp.type = 'protein_expression' and subtype is null)
+                  OR (dsp.type = 'transcript_expression' and (subtype = 'rnaseq' or dsp.subtype = 'chipseq'))
+                  OR (dsp.type = 'feature' and subtype is null)
+                  OR (dsp.type is null and subtype is null)
+                )
       )
 where url is not null
       ]]>

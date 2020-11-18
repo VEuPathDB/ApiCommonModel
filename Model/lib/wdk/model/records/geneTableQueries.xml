@@ -1393,6 +1393,38 @@ where knockdown.source_id <> results.source_id or knockdown.source_id is null
         </sqlQuery>
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Seqedits -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+        <sqlQuery name="Seqedits" includeProjects="AmoebaDB,PiroplasmaDB,ToxoDB,VectorBase,UniDB"  isCacheable="false">
+            <column name="source_id"/>
+            <column name="transcript_source_id"/>
+            <column name="project_id"/>
+            <column name="length_diff"/>
+            <column name="type"/>
+            <column name="location"/>
+            <column name="diff"/>
+            <sql>
+            <![CDATA[
+SELECT ta.gene_source_id AS source_id, ta.source_id AS transcript_source_id, ta.project_id
+   --, se.trans_start, se.trans_end, se.start_min, se.end_max,
+   , se.length_diff,  ot.name as type
+   , ta.sequence_id || ':' || (se.start_min -50) || '..' || (se.end_max+50) as location
+   , CASE WHEN (length(se.sequence)=1) 
+          THEN  dbms_lob.substr(se.orig_sequence)||' -> '||dbms_lob.substr(se.sequence) 
+          ELSE dbms_lob.substr(se.orig_sequence,10) ||'...'|| ' -> ' || dbms_lob.substr(se.sequence,10)||'...'   END as diff
+--   , sequence, orig_sequenece
+FROM APIDBTUNING.transcriptattributes ta, APIDB.seqedit se, SRES.ontologyterm ot
+WHERE ta.has_seqedit = 1
+AND ta.protein_source_id = se.source_id
+AND ot.ontology_term_id = se.sequence_ontology_id
+ORDER BY se.trans_start
+            ]]>
+            </sql>
+        </sqlQuery>
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- HTS SNPs Alignment -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
@@ -1666,7 +1698,7 @@ ORDER BY
                WHERE tb.gene_id = ga.gene_id
                  AND tb.project_id = c.project_name(+)
                  AND tb.aa_sequence_id = ms.aa_sequence_id(+)
-                 AND tb.source_id = c.stable_id(+)
+                 AND tb.gene_source_id = c.stable_id(+)
                  AND tb.gene_na_feature_id = p1.na_feature_id(+)
                  AND tb.gene_na_feature_id = p2.na_feature_id(+)
                  AND tb.gene_na_feature_id = p3.na_feature_id(+)
@@ -2149,6 +2181,10 @@ ORDER BY
                        || rpad(lower(og.ortho_source_id), 80) as sort_key
               FROM apidbTuning.OrthologousGenes og
                    LEFT OUTER JOIN comments ON og.ortho_source_id = comments.stable_id
+                   , apidbtuning.organismAttributes oa
+              WHERE og.ortho_organism = oa.organism_name
+              AND   oa.is_reference_strain = 1
+
             ]]>
             </sql>
        </sqlQuery>
@@ -3303,6 +3339,7 @@ WHERE
 
          <column name="source_id"/>
          <column name="other_source_id"/>
+         <column name="other_product"/>
          <column name="other_gene_source_id"/>
          <column name="project_id"/>
          <column name="bait_start"/>
@@ -3319,6 +3356,7 @@ WHERE
 SELECT
   bf.source_id
 , pf.source_id AS other_source_id
+, pf.product AS other_product
 , bait_start
 , bait_end
 , prey_start
@@ -3340,6 +3378,7 @@ UNION
 SELECT
   pf.source_id
 , bf.source_id AS other_source_id
+, bf.product AS other_product
 , bait_start
 , bait_end
 , prey_start
@@ -3672,6 +3711,27 @@ and dbr.db_ref_id = dbrf.db_ref_id
 and dbrf.na_feature_id = ga.na_feature_id
 and upper(d.name) = eru.database_name
 and d.name not in ('PUBMED')
+UNION
+SELECT d.name as dataset
+, ta.gene_source_id as source_id
+, ta.project_id
+, dbr.primary_identifier AS ext_id
+, REPLACE(eru.id_url, '###ID###', dbr.primary_identifier) AS link_url
+FROM
+   sres.dbref dbr
+, DOTS.dbrefaafeature dbrf
+, Dots.aafeature aaf
+, sres.externaldatabaserelease r
+, sres.externaldatabase d
+, ApidbTuning.transcriptAttributes ta
+, APIDB.EXTERNALRESOURCEURL eru
+WHERE dbr.external_database_release_id = r.external_database_release_id
+and r.external_database_id = d.external_database_id
+and dbr.db_ref_id = dbrf.db_ref_id
+and dbrf.aa_feature_id = aaf.aa_feature_id
+and aaf.aa_sequence_id = ta.aa_sequence_id
+and upper(d.name) = eru.database_name
+and eru.database_name  not IN ('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP', 'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF', 'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan', 'PFAM', 'SMART', 'CDD', 'PANTHER')  
 )
   ORDER BY dataset
                 ]]>
@@ -4366,10 +4426,12 @@ ORDER BY ggp.profile_graph_id,dataset_id, d.node_order_num, d.protocol_app_node_
           <sqlQuery name="TranscriptionSummary" isCacheable="false" excludeProjects="EuPathDB">
             <column name="source_id"/>
             <column name="project_id"/>
+            <column name="display_name"/>
             <sql>
             <![CDATA[
 select distinct p.source_id,
-     		ga.project_id
+     		ga.project_id,
+                dp.display_name || decode(p.profile_set_suffix, null, '', ' - ' || p.profile_set_suffix) || ', ' || dp.short_attribution as display_name
 from apidbtuning.profile p, 
      apidbtuning.profilesamples ps, 
      apidbtuning.geneattributes ga,

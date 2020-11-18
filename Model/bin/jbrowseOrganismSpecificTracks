@@ -38,7 +38,12 @@ my $datasetProperties = &datasetProperties($dbh);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 &addVCF($dbh, $result, $datasetProperties);
 &addGFF($dbh, $result, $datasetProperties);
+
+
 &addTRNA($dbh, $result, $datasetProperties);
+&addNrdbProteinAlignments($dbh, $result, $datasetProperties, $projectName);
+
+
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -417,16 +422,14 @@ sub addScaffolds {
     my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
                  baseUrl => "/a/service/jbrowse",
                  type => "JBrowse/View/Track/CanvasFeatures",
-                 glyph => "JBrowse/View/FeatureGlyph/Segments",
+                 glyph => "JBrowse/View/FeatureGlyph/Box",
 #                 glyph => "function(feature){ return changeScaffoldType(feature)}",
-                 key => "Scaffolds (Gaps in Red when known)",
+                 key => "Scaffolds and Gaps",
                  label => "Scaffolds",
                  category => "Sequence Analysis",
                  displayMode => "normal",
                  subParts => "sgap",
                     style => {
-                      connectorColor => 'white',
-                      connectorThickness => '0',
                       color => "function( feature, variableName, glyphObject, track ){ var c = track.browser.config; return c.scaffoldColor(feature)}",
                       height => "function(feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldHeight(feature)}",
                     },
@@ -896,6 +899,88 @@ sub makeChipChipSmoothed {
 
 
   return $smoothed;
+}
+
+
+sub addNrdbProteinAlignments {
+  my ($dbh, $result, $datasetProperties, $projectName) = @_;
+
+  my $proteinAlignTrack;
+  if($projectName eq 'PiroplasmaDB' || $projectName eq 'ToxoDB' || $projectName eq 'VectorBase' || $projectName eq 'AmoebaDB') {
+
+
+    my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+    my ($nameForFileNames) = $sh->fetchrow_array();
+    $sh->finish();
+
+    my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
+
+    my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
+
+    $proteinAlignTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+                          urlTemplate => $gffUrl,
+                          key => "NRDB Protein Alignments",
+                          label => "NRDB Protein Alignments",
+                          category => "Sequence Analysis",
+                          type => "JBrowse/View/Track/CanvasFeatures",
+                          glyph => "JBrowse/View/FeatureGlyph/Segments",
+                          fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
+                          metadata => {
+                            subcategory => "BLAT and Blast Alignments",
+                            trackType => 'Segments',
+                            description => $methodDescription,
+                          },
+                          onClick => {
+                            content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",
+                          },
+                          menuTemplate => [
+                            {label =>  "View Details", content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",}, 
+                            {label => "View in Genbank",title => "Genbank {name}", iconClass => "dijitIconDatabase", action => "newWindow", url => "https://www.ncbi.nlm.nih.gov/protein/{name}"}
+                              ],
+                          style => {
+                            color => "{nrdbColor}",
+                            borderColor => "{processedTranscriptBorderColor}"
+                          },
+                          displayMode => "compact",
+
+      };
+  }
+  else {
+    $proteinAlignTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
+                          baseUrl => "/a/service/jbrowse",
+                          type => "JBrowse/View/Track/CanvasFeatures",
+                          glyph => "JBrowse/View/FeatureGlyph/Segments",
+                          key => "NRDB Protein Alignments",
+                          label => "NRDB Protein Alignments",
+                          category => "Sequence Analysis",
+                          displayMode => "compact",
+                          style => {
+                            color => "{nrdbColor}",
+                            borderColor => "{processedTranscriptBorderColor}"
+                          },
+                                metadata => {
+                                  subcategory => "BLAT and Blast Alignments",
+                                  trackType => 'Segments',
+                            },
+                          query => {'feature' => "proteinAlignment:BLAT",
+                          },
+                          onClick => {
+                            content => "{nrdbDetails}",
+                          },
+                          menuTemplate => [
+                            {label =>  "View Details", content => "{nrdbDetails}"}, 
+                            {label => "View in Genbank",title => "Genbank {name}", iconClass => "dijitIconDatabase", action => "newWindow", url => "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?db=protein&val={name}"}
+                              ],
+                          maxFeatureScreenDensity => 0.03,
+                          region_feature_densities => JSON::true,
+
+    };
+
+  }
+    push @{$result->{tracks}}, $proteinAlignTrack;
+
 }
 
 sub addTRNA {
