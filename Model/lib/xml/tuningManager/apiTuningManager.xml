@@ -7490,6 +7490,7 @@ where url is not null
     <externalDependency name="apidb.OntologyTermResult"/>
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
+    <externalDependency name="apidb.LopitResults"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="results.NaFeatureDiffResult"/>
     <externalDependency name="results.CompoundMassSpec"/>
@@ -7730,6 +7731,51 @@ where url is not null
                        and s.investigation_id is not null
                 group by sl.study_id, result.na_feature_id
               UNION ALL
+	      select sl.study_id, lr.na_feature_id, 'probability_mean' as profile_type,                                    
+	             listagg(nvl(to_char(round(lr.probability_mean, 2)), 'NA'), chr(9))           
+		       within group (order by pan.node_order_num)                                                                 
+		       as profile_as_string,                                                                                      
+                     max(lr.probability_mean) as max_value, min(lr.probability_mean) as min_value,                             
+		     max(pan.name) keep(dense_rank last order by lr.probability_mean) as max_timepoint,         
+		     max(pan.name) keep(dense_rank first order BY lr.probability_mean) as min_timepoint                        
+	      from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,                                                  
+                   apidb.LopitResults lr                                                                            
+		   where lr.protocol_app_node_id = sl.protocol_app_node_id                                                  
+		     and lr.protocol_app_node_id = pan.protocol_app_node_id                                                   
+                     and sl.study_id = s.study_id                                                                                 
+                     and s.investigation_id is not null                                                                           
+                group by sl.study_id, lr.na_feature_id   
+              UNION ALL
+	      select sl.study_id, lr.na_feature_id, 'lower_CI' as profile_type,                                    
+	             listagg(nvl(to_char(round(lr.lower_CI, 2)), 'NA'), chr(9))           
+		       within group (order by pan.node_order_num)                                                                 
+		       as profile_as_string,                                                                                      
+                     max(lr.lower_CI) as max_value, min(lr.lower_CI) as min_value,                             
+		     max(pan.name) keep(dense_rank last order by lr.lower_CI) as max_timepoint,         
+		     max(pan.name) keep(dense_rank first order BY lr.lower_CI) as min_timepoint                        
+	      from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,                                                  
+                   apidb.LopitResults lr                                                                            
+		   where lr.protocol_app_node_id = sl.protocol_app_node_id                                                  
+		     and lr.protocol_app_node_id = pan.protocol_app_node_id                                                   
+                     and sl.study_id = s.study_id                                                                                 
+                     and s.investigation_id is not null                                                                           
+                group by sl.study_id, lr.na_feature_id   
+              UNION ALL
+	      select sl.study_id, lr.na_feature_id, 'upper_CI' as profile_type,                                    
+	             listagg(nvl(to_char(round(lr.upper_CI, 2)), 'NA'), chr(9))           
+		       within group (order by pan.node_order_num)                                                                 
+		       as profile_as_string,                                                                                      
+                     max(lr.upper_CI) as max_value, min(lr.upper_CI) as min_value,                             
+		     max(pan.name) keep(dense_rank last order by lr.upper_CI) as max_timepoint,         
+		     max(pan.name) keep(dense_rank first order BY lr.upper_CI) as min_timepoint                        
+	      from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,                                                  
+                   apidb.LopitResults lr                                                                            
+		   where lr.protocol_app_node_id = sl.protocol_app_node_id                                                  
+		     and lr.protocol_app_node_id = pan.protocol_app_node_id                                                   
+                     and sl.study_id = s.study_id                                                                                 
+                     and s.investigation_id is not null                                                                           
+                group by sl.study_id, lr.na_feature_id   
+              UNION ALL
                 select sl.study_id, result.na_feature_id, 'values' as profile_type,
                        listagg(nvl(result.value, 'NA'), chr(9))
                          within group (order by pan.node_order_num)
@@ -7934,7 +7980,7 @@ where url is not null
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id
-	AND pt.profile_type not in ('pvalue', 'period', 'amplitude')
+	AND pt.profile_type not in ('pvalue', 'period', 'amplitude', 'probability_mean','lower_CI','upper_CI')
       UNION
 	SELECT DISTINCT s.name AS study_name, s.study_id, 
           REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
@@ -7944,6 +7990,20 @@ where url is not null
           pt.profile_set_suffix
         FROM apidbtuning.profileType pt, study.study s, study.studyLink sl, 
           study.protocolAppNode pan, apidb.NAFeatureMetacycle r
+        WHERE pt.profile_study_id = s.study_id
+        AND sl.study_id = s.study_id
+        AND sl.protocol_app_node_id = pan.protocol_app_node_id
+        AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        AND pt.profile_type not in ('values', 'channel1_percentiles', 'channel2_percentiles', 'standard_error')
+      UNION
+	SELECT DISTINCT s.name AS study_name, s.study_id, 
+          REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                         ' \(.+\)', '')AS protocol_app_node_name,
+          pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+          pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+          pt.profile_set_suffix
+        FROM apidbtuning.profileType pt, study.study s, study.studyLink sl, 
+          study.protocolAppNode pan, apidb.LopitResults r
         WHERE pt.profile_study_id = s.study_id
         AND sl.study_id = s.study_id
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
