@@ -479,7 +479,7 @@
                    CASE WHEN (bfmv.gene_type not like 'protein%' AND bfmv.gene_type not like 'pseudo%')
 		          THEN 'N/A (orthology only determined for protein-coding genes)'
 		          WHEN (bfmv.orthomcl_name LIKE 'OG6%' AND bfmv.orthomcl_name NOT LIKE '%|%')
-                          THEN '<a href="https://orthomcl.org/cgi-bin/OrthoMclWeb.cgi?rm=sequenceList&groupac='
+                          THEN '<a href="https://orthomcl.org/orthomcl/app/record/group/'
 				    || orthomcl_name || '">' || orthomcl_name || '</a>'
 		          ELSE 'N/A (orthology not determined because poor protein quality)'
 		          END AS orthomcl_link,
@@ -1768,45 +1768,25 @@ WHERE ta.gene_source_id = res.gene_id (+)
             <sql>
               <![CDATA[
 
-select mmap.source_id, mmap.gene_source_id, mmap.project_id, mmap.prob_MAP, mmap.MAP_location, mcmc.prob_MCMC, mcmc.MCMC_location, 'Y' as matched_result from (
-   select ta.source_id, ta.gene_source_id, ta.project_id, replace(pan.name,' (lopit)','') as MAP_location, lr.PROBABILITY_MEAN as prob_MAP
-   from study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbTuning.TranscriptAttributes ta 
-   where s.name = 'TAGM-MAP-Final-Probability'                                                                                  
-   and s.study_id = sl.study_id                                                                                            
-   and sl.protocol_app_node_id = pan.protocol_app_node_id                                                                  
-   and pan.protocol_app_node_id = lr.protocol_app_node_id                                                                 
-   and ta.gene_na_feature_id = lr.na_feature_id  
-   ) mmap,
-   (select tt3.source_id,tt3.gene_source_id,tt3.project_id, tt3.prob_MCMC, tt4.MCMC_location                                       
-   from (                                                                                                                          
-      select t3.source_id,t3.project_id, t3.gene_source_id,max(t3.probability_MCMC) as prob_MCMC                                  
-      from (                                                                                                                      
-        select ta.source_id, ta.gene_source_id, ta.project_id, lr.PROBABILITY_MEAN as probability_MCMC                             
-	from study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbTuning.TranscriptAttributes ta                                                                                                                 
-	where s.name in ('TAGM-MCMC-Joint-Probability')                                                                        
-	and s.study_id = sl.study_id                                                                                            
-	and sl.protocol_app_node_id = pan.protocol_app_node_id                                                                  
-	and pan.protocol_app_node_id = lr.protocol_app_node_id                                                                 
-	and ta.gene_na_feature_id = lr.na_feature_id                                                                           
-	)t3                                                                                                                     
-	group by t3.gene_source_id, t3.project_id, t3.source_id                                                                 
-    )tt3,                                                                                                                       
-   (select ta.source_id, ta.gene_source_id, replace(pan.name,' (lopit)','') as MCMC_location, lr.PROBABILITY_MEAN as probability_MCMC    
-   from study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbTuning.TranscriptAttributes ta 
-   where s.name in ('TAGM-MCMC-Joint-Probability')                                                                            
-   and s.study_id = sl.study_id                                                                                                
-   and sl.protocol_app_node_id = pan.protocol_app_node_id                                                                      
-   and pan.protocol_app_node_id = lr.protocol_app_node_id                                                                     
-   and ta.gene_na_feature_id = lr.na_feature_id                                                                               
-   )tt4                                                                                                                        
-   
-   where tt3.gene_source_id = tt4.gene_source_id                                                                                   
-   and tt3.prob_MCMC = tt4.probability_MCMC                                                                                        
-   and tt3.source_id = tt4.source_id                                                                                               
-   )mcmc   
- 
-where mmap.source_id  = mcmc.source_id                                                                                            
-and mmap.gene_source_id = mcmc.gene_source_id 
+with mapD as (                                                                                                                 
+select  source_id, max_value as prob_MAP , REPLACE(max_timepoint,' (lopit)','')   as MAP_location                                 
+from apidbtuning.profile p                                                                                                        
+where p.dataset_name = 'tgonME49_lopit_LOPIT_RSRC'                                                                                
+and p.profile_set_name = 'TAGM-MAP-Final-Probability'                                                                             
+and p.profile_type(+) ='probability_mean'                                                                                         
+),                                                                                                                                
+mcmcD as (                                                                                                                        
+select  source_id, max_value as prob_MCMC , REPLACE(max_timepoint,' (lopit)','')  as MCMC_location,'Y' as matched_result         
+from apidbtuning.profile p                                                                                                       
+where p.dataset_name = 'tgonME49_lopit_LOPIT_RSRC'                                                                               
+and p.profile_set_name = 'TAGM-MCMC-Joint-Probability'                                                                           
+and p.profile_type(+) ='probability_mean'                                                                                        
+)                                                                                                                                
+
+select ta.source_id, ta.gene_source_id, ta.project_id, m1.prob_map, m1.map_location, m2.prob_mcmc, m2.mcmc_location             
+from mapD m1, mcmcD m2, APIDBTUNING.transcriptattributes ta                                                                     
+where m1.source_id = m2.source_id (+)                                                                                           
+and ta.gene_source_id = m1.source_id(+) 
 
 ]]>
 
