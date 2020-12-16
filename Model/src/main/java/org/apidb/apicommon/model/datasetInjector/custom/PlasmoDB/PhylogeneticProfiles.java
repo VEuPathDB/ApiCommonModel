@@ -10,7 +10,7 @@ public class PhylogeneticProfiles extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhyleticProfile"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByOrthologPattern"); 
   }
 
   // second column is for documentation
