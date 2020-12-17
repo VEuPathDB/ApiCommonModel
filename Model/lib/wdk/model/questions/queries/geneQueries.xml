@@ -1224,6 +1224,124 @@ AND 1=0
         <wsColumn name="score" columnType="float" />
     </processQuery>
 
+
+    <processQuery name="GenesByMultiBlast" 
+             processName="org.apidb.apicomplexa.wsfplugin.blast.GeneBlastPlugin">
+
+       <postCacheUpdateSql>
+          <sql>
+             <![CDATA[
+               -- map any protein IDs to their transcript ID
+               update ##WDK_CACHE_TABLE## qr
+               set source_id = (select transcript_source_id
+                                from ApidbTuning.ProteinAttributes
+                                where source_id = qr.source_id)
+               where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
+                 and source_id in (select source_id
+                                   from ApidbTuning.ProteinAttributes)
+                 and source_id not in (select source_id
+                                       from ApidbTuning.TranscriptAttributes)
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+       <postCacheUpdateSql>
+          <sql>
+          <![CDATA[
+                -- insert missing transcripts of included genes
+                insert into ##WDK_CACHE_TABLE## -- query-specific version
+                            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
+                with matches
+                     as (select *
+                         from ##WDK_CACHE_TABLE##
+                         where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##),
+                     row_offset
+                     as (select max(wdk_row_id) as the_max from matches),
+                     mismatches
+                     as (  select source_id, gene_source_id, project_id
+                           from apidbTuning.transcriptAttributes
+                           where gene_source_id in (select gene_source_id from matches)
+AND 1=0
+                         minus
+                           select source_id, gene_source_id, project_id
+                           from matches)
+                select ##WDK_CACHE_INSTANCE_ID##,
+                       rownum + the_max, 0, source_id, gene_source_id,  project_id, 'N'
+                from row_offset, mismatches
+             ]]>
+          </sql>
+       </postCacheUpdateSql>
+
+        <testParamValues includeProjects="CryptoDB">
+            <paramValue name="BlastQuerySequence">AACCCTAATCATTCCAACTTTGTTTCCAATTCCA</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="ToxoDB">
+            <paramValue name="BlastQuerySequence">CTGCAAATCGTCAATGTCTTGTCTGCACAAGCAAACAGCCTCGGAGGCGGCGAAACACTCCGGGGCGAGCGCCTTGTTGACGCTAGCACCTTTCTGGTGATGGCGATCGGCATTCGCGGC</paramValue>
+	   <paramValue name="BlastDatabaseOrganism">Toxoplasma gondii ME49</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="PlasmoDB">
+           <paramValue name="BlastQuerySequence">GCAGGAAATATGATTCCAGATAATGATAAAAATTCAAATTATAAATATCCAGCTGTTTATGATGACAAAGATAAAAAGTGTCATATATTATATATTGCAGCTCAAGAAAATAATGGTCCT</paramValue>
+            <paramValue name="BlastDatabaseOrganism">Plasmodium falciparum 3D7</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="GiardiaDB">
+           <paramValue name="BlastQuerySequence">CTTAGAGACAAGTATGGCAGTATAGAAGGTCTAGCAAAAGAATTGGGGTCTGACCCTGCCACAGGCCTTTTGAAACCTACCGTTTTGCTCCATCGAAAAACCTATGGTAGCAATACAATG</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="TrichDB">
+           <paramValue name="BlastQuerySequence">AAGACACTCGCTGAATTAAGAAAGCGCAAATTAGAGGGTGTTGTTCTCATCTACGGCTTCCCAGAGCCAACACGCGCCCACTGCGACTTCGAACCAGTCTTCCGCCAGGAATCCTGCTTC</paramValue>
+            <paramValue name="BlastDatabaseOrganism">Trichomonas vaginalis G3</paramValue>
+        </testParamValues>
+        <!--TODO revisit the BLAST sequence..it was picked from Sanger-->
+        <testParamValues includeProjects="TriTrypDB,EuPathDB">
+           <paramValue name="BlastQuerySequence">ATGCAACTCCAAAGGTTGGGTGCTCCACTACTTAAAAGGCTTGTGGGGGGATGCATACGC</paramValue>
+            <paramValue name="BlastDatabaseOrganism">Trypanosoma brucei TREU927</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="AmoebaDB">
+           <paramValue name="BlastQuerySequence">ACCGATAGTATTTATTCCAGGGATTCTTGCGTCTATGTTAGAAGGGGATATTAATATAAAAGATATCAGTAAAACACCACTTCCAGAGAAATGTGATACACAAGTAGAATATGAAAGACTTTGGG</paramValue>
+	   <paramValue name="BlastDatabaseOrganism">Entamoeba dispar SAW760</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="MicrosporidiaDB">
+           <paramValue name="BlastQuerySequence">GTTTTGGCAGACGGTATGTTTAACAGGAAAATCTCCCATGAATCTGACGGGAATATTCATAGTATTGATTTCCATGGCCTAACCATGTGTGATATTCCGGTGATAAAAAGAGACAGATATAC</paramValue>
+	   <paramValue name="BlastDatabaseOrganism">Encephalitozoon cuniculi GB-M1</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="PiroplasmaDB">
+           <paramValue name="BlastQuerySequence">TATGCAATCAGGTATCTATCTCATCAATCCTTACGCTCAGCGCTGCCCAATTGGGAAGAGCAAATGTGGACCTGAGCATGATTCCACCCTAGGAAAGTGTGCCATGTACTCTGGTTG</paramValue>
+	   <paramValue name="BlastDatabaseOrganism">Babesia bovis T2Bo</paramValue>
+        </testParamValues>
+        <testParamValues includeProjects="FungiDB,HostDB,SchistoDB,UniDB,VectorBase,InitDB">
+           <paramValue name="BlastQuerySequence"></paramValue>
+	   <paramValue name="BlastDatabaseOrganism"></paramValue>
+        </testParamValues>
+
+
+	<!--The order of these params has changed for multi-blast. Thus the param query refs need to change accordingly-->
+       <paramRef ref="sharedParams.BlastDatabaseType" quote="false" noTranslation="false" default="Transcripts"/>
+       <paramRef ref="sharedParams.BlastAlgorithm" quote="false" noTranslation="false" />
+       <paramRef ref="sharedParams.BlastDatabaseOrganism" quote="false" noTranslation="false" default="%%primaryOrthoOrganism%%" />
+       <paramRef ref="sharedParams.BlastQuerySequence"/>
+
+       <!--Do we need this param for multi-blast or can we get from BlastDatabaseType?-->
+       <paramRef ref="sharedParams.BlastRecordClass" default="TranscriptRecordClasses.TranscriptRecordClass" />
+
+       <paramRef groupRef="paramGroups.advancedParams" ref="sharedParams.ExpectationValue"/>
+       <paramRef groupRef="paramGroups.advancedParams" ref="sharedParams.NumQueryResults"/>
+       <paramRef groupRef="paramGroups.advancedParams" ref="sharedParams.MaxMatchesQueryRange"/>
+       <paramRef groupRef="paramGroups.advancedParams" ref="sharedParams.WordSize"/>
+
+       <paramRef ref="sharedParams.-filter" quote="false" />
+
+
+
+        <wsColumn name="source_id" width="50" wsName="identifier"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="summary" width="3000"/>
+        <wsColumn name="alignment" columnType="clob"/>
+        <wsColumn name="evalue_mant" columnType="float" />
+        <wsColumn name="evalue_exp" columnType="number" />
+        <wsColumn name="score" columnType="float" />
+    </processQuery>
+
+
 <!--
                      
     <processQuery name="GenesBySimilarity" includeProjects="EuPathDB" 
