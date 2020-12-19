@@ -318,6 +318,32 @@ For each reward/penalty pair, a number of different gap costs are supported. A g
               </help>
      </flatVocabParam>
 
+   <flatVocabParam name="CompAdjust"
+                   prompt="Compositional adjustments"
+                   queryRef="SharedVQ.CompAdjust"
+                   multiPick="false"
+                   dependedParamRef="sharedParams.BlastAlgorithm">
+             <help>
+                <![CDATA[
+Amino acid substitution matrices may be adjusted in various ways to compensate for the amino acid compositions of the sequences being compared. The simplest adjustment is to scale all substitution scores by an analytically determined constant, while leaving the gap scores fixed; this procedure is called "composition-based statistics" (Schaffer et al., 2001). The resulting scaled scores yield more accurate E-values than standard, unscaled scores. A more sophisticated approach adjusts each score in a standard substitution matrix separately to compensate for the compositions of the two sequences being compared (Yu et al., 2003; Yu and Altschul, 2005; Altschul et al., 2005). Such "compositional score matrix adjustment" may be invoked only under certain specific conditions for which it has been empirically determined to be beneficial (Altschul et al., 2005); under all other conditions, composition-based statistics are used. Alternatively, compositional adjustment may be invoked universally.
+                ]]>
+              </help>
+     </flatVocabParam>
+
+   <flatVocabParam name="FilterLowComplex"
+                   prompt="Low complexity regions"
+                   queryRef="SharedVQ.FilterLowComplex"
+                   multiPick="false"
+                   dependedParamRef="sharedParams.BlastAlgorithm,sharedParams.CompAdjust">
+             <help>
+                <![CDATA[
+This function mask off segments of the query sequence that have low compositional complexity, as determined by the SEG program of Wootton and Federhen (Computers and Chemistry, 1993) or, for BLASTN, by the DUST program of Tatusov and Lipman. Filtering can eliminate statistically significant but biologically uninteresting reports from the blast output (e.g., hits against common acidic-, basic- or proline-rich regions), leaving the more biologically interesting regions of the query sequence available for specific matching against database sequences.
+Filtering is only applied to the query sequence (or its translation products), not to database sequences. Default filtering is DUST for BLASTN, SEG for other programs.
+It is not unusual for nothing at all to be masked by SEG, when applied to sequences in SWISS-PROT or refseq, so filtering should not be expected to always yield an effect. Furthermore, in some cases, sequences are masked in their entirety, indicating that the statistical significance of any matches reported against the unfiltered query sequence should be suspect. This will also lead to search error when default setting is used.
+                ]]>
+              </help>
+     </flatVocabParam>
+
 
    <enumParam name="BlastDatabaseType"
                       prompt="Target Data Type"
@@ -2105,6 +2131,59 @@ ORDER BY num ASC
             </sql>
         </sqlQuery>
 
+
+        <sqlQuery name="CompAdjust">
+            <paramRef ref="sharedParams.BlastAlgorithm"/>
+            <column name="internal" />
+            <column name="term" />
+            <sql>
+                <![CDATA[
+SELECT term,internal FROM (
+     SELECT term,internal,num FROM (
+           SELECT 'none' AS term, 'none' AS internal, '-blastn-tblastx-' AS algorithm, 1 AS num FROM dual
+	   UNION
+           SELECT 'Conditional compositional score matrix adjustment (default)' AS term, '2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 1 AS num FROM dual
+	   UNION
+           SELECT 'No adjustment' AS term, '0' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 2 AS num FROM dual
+	   UNION
+           SELECT 'Composition-based statistics' AS term, '1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 3 AS num FROM dual
+	   UNION
+           SELECT 'Universal compositional score matrix adjustment' AS term, '3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 4 AS num FROM dual
+     ) WHERE algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%')
+ORDER BY num ASC
+                ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="FilterLowComplex">
+            <paramRef ref="sharedParams.BlastAlgorithm"/>
+            <paramRef ref="sharedParams.CompAdjust"/>
+            <column name="internal" />
+            <column name="term" />
+            <sql>
+                <![CDATA[
+SELECT term,internal FROM (
+     SELECT term,internal,num FROM (
+           SELECT 'dust (default)' AS term, 'dust' AS internal, '-blastn-' AS algorithm, '-none-' AS compadjust, 1 AS num FROM dual
+	   UNION
+           SELECT 'no filter' AS term, 'no' AS internal, '-blastn-' AS algorithm, '-none-' AS compadjust, 2 AS num FROM dual
+	   UNION
+           SELECT 'no filter (default)' AS term, 'no' AS internal, '-blastp-' AS algorithm, '-none-1-2-3-' AS compadjust, 1 AS num FROM dual
+	   UNION
+           SELECT 'seg' AS term, 'seg' AS internal, '-blastp-' AS algorithm, '-none-1-2-3-' AS compadjust, 2 AS num FROM dual
+	   UNION
+           SELECT 'seg (default)' AS term, 'seg' AS internal, '-blastp-' AS algorithm, '-0-' AS compadjust, 1 AS num FROM dual
+	   UNION
+           SELECT 'no filter' AS term, 'no' AS internal, '-blastp-' AS algorithm, '-0-' AS compadjust, 2 AS num FROM dual
+	   UNION
+           SELECT 'seg (default)' AS term, 'seg' AS internal, '-blastx-tblastn-tblastx-' AS algorithm, '-none-0-1-2-3-' AS compadjust, 1 AS num FROM dual
+	   UNION
+           SELECT 'no filter' AS term, 'no' AS internal, '-blastx-tblastn-tblastx-' AS algorithm, '-none-0-1-2-3-' AS compadjust, 2 AS num FROM dual
+     ) WHERE ( algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%' ) AND ( compadjust LIKE '%-' || $$CompAdjust$$ || '-%' ) )
+ORDER BY num ASC
+                ]]>
+            </sql>
+        </sqlQuery>
 
 
  <processQuery name="chromosomeOptional"  processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="parentTerm,term ASC" includeProjects="EuPathDB">
