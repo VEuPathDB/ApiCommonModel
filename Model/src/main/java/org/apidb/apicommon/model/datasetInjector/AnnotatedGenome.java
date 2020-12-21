@@ -239,15 +239,15 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
     setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
-    // inject templates
-    injectTemplate("geneFilter");
-    injectTemplate("geneFilterLayout");
+    // old organism filters, unused
+    //  injectTemplate("geneFilter");
+    //  injectTemplate("geneFilterLayout");
     // Only if reference strain - set distinct gene instance
-    if (hasFilters && orgProps.get("isReferenceStrain").equals("true")) {
-      setPropValue("species", species);
-      injectTemplate("distinctGeneFilterLayout");
-      injectTemplate("distinctGeneFilter"); 
-    }
+    //  if (hasFilters && orgProps.get("isReferenceStrain").equals("true")) {
+    //  setPropValue("species", species);
+    //  injectTemplate("distinctGeneFilterLayout");
+    //  injectTemplate("distinctGeneFilter"); 
+    // }
 
   }
 
