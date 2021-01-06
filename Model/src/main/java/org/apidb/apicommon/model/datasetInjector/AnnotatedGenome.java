@@ -18,6 +18,10 @@ public class AnnotatedGenome extends UnannotatedGenome {
       injectTemplate("jbrowseAnnotatedGeneDensity");
       injectTemplate("jbrowseCommonAa");
 
+      // TODO: determine if any of the code in this method below this point is
+      //   needed.  It is all related to old organism filter fields; need to see
+      //   if it is used by any other code or can just be deleted.
+
     // dataset presenters/dataset classes xml files do not have PHYLUM information
     // hack until we have filters reading from datatabase (instead of relying on dataset xml files)
     // key value pairs obtained by running SQLs below in a EUPA database (e.g.: eupa-inc)
@@ -187,7 +191,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     
     String[] orgs = organismFullName.split(" ");
 
-    String speciesWithSpaces, species, familySpecies;
+    String speciesWithSpaces, familySpecies;//, species;
     // Strings "species" and "familySpecies" should be called: "genusSpeciesDisplayName" and "orgFilterName" respectively
     //    "species" MAY contain spaces (eg: "sp. 1")
     //    "familySpecies" CANNOT contain spaces so we replace space by = (eg: "sp.=1")
@@ -206,12 +210,12 @@ public class AnnotatedGenome extends UnannotatedGenome {
     // if optionalSpecies -coming from presenters- contains a value, it is a species value that includes spaces or any of the above chars; otherwise empty
     if( getPropValue("optionalSpecies") != null && !getPropValue("optionalSpecies").isEmpty() ) {
       speciesWithSpaces = getPropValue("optionalSpecies");
-      species = orgs[0] + " " + speciesWithSpaces;
+      //species = orgs[0] + " " + speciesWithSpaces;
       speciesWithSpaces = speciesWithSpaces.replaceAll("-", "=-");
       speciesWithSpaces = speciesWithSpaces.replaceAll("_", "=_");
       familySpecies = orgs[0] + "-" + speciesWithSpaces.replaceAll(" ", "=");
     } else {
-      species = orgs[0] + " " + orgs[1];  // for popup on distinct filter
+      //species = orgs[0] + " " + orgs[1];  // for popup on distinct filter
       orgs[1] = orgs[1].replaceAll("-", "==");
       orgs[1] = orgs[1].replaceAll("_", "===");
       familySpecies = orgs[0] + "-" + orgs[1];  // for filter name
