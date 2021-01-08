@@ -16,6 +16,7 @@ use EbrcModelCommon::Model::tmUtils;
 use CBIL::Util::Utils;
 use JSON;
 use Date::Manip;
+use XML::Simple;
 
 my $dateCmd = "date";
 my $dateStr1 = &runCmd($dateCmd);
@@ -26,20 +27,24 @@ my $NASequenceID;
 my $json;
 my %apolloID;
 
-my ($propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd );
-GetOptions("propfile=s" => \$propfile,
+my ($propFile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd );
+GetOptions("propfile=s" => \$propFile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
            "suffix=s" => \$suffix,
            "prefix=s" => \$prefix,
            "filterValue=s" => \$filterValue,
            "debug!" => \$debug,
-	   "username=s" => \$username,
-	   "passwd=s" => \$passwd,
 	  );
-die "required parameter missing" unless ($propfile && $instance && $schema && $username && $passwd);
+die "required parameter missing" unless ($propFile && $instance && $schema);
+#Extract username and password from propfile
+my $xmlParser = new XML::Simple();
+my $props = $xmlParser->XMLin($propFile);
+my $passwd = $props->{apolloPassword};
+my $username = $props->{apolloUserId};
+die "required parameters userID and password missing from propfile" unless ($passwd && $username);
 
-my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propFile);
 
 #Create Apollo ID table
 createApolloIdTable($dbh, $prefix, $suffix);
@@ -72,49 +77,20 @@ print $organismIdCmd."\n";
     insertApolloIdTable($dbh, $prefix, $suffix,  $veupathId, $organism, $organismId);
     $dbh->commit() or print STDERR $dbh->errstr;
     }
- 
-    my ($annotationVersion) = $organism =~ /\[(.*?)\]/;
-    #Calculate number of days since release of annotation version
-    my $releaseDate = getReleaseDate($dbh, $annotationVersion);
-    if ($releaseDate ne ""){
-	$releaseDate =~ s/-/\//g;
-	my $date1 = ParseDate($dateStr1);
-	my $date2 = ParseDate($releaseDate);
-	my @delta = split(/:/, DateCalc($date2,$date1));
-	my $numberDays = int (($delta[4] / 24));
 	push (@filteredOrganisms, $organism);
-	$daysSinceRelease{$organism} = $numberDays;
     }
-    }
-
-chomp @filteredOrganisms;
 
 foreach(@filteredOrganisms){
 
 my $organismName = $_;
 my ($org, $abbrev) = split (/\[/, $organismName, 2);
-my $daysVal = $daysSinceRelease{$organismName};
 #extract annotations from the last 24 hours
-my $updateCmd = "curl -X POST -H \"Content-Type: application/json\" --data '\{'username':'".$username."','password':'".$passwd."','days':".$daysVal."}' https://apollo-api\.veupathdb\.org/annotationEditor/getRecentAnnotations | jq \.  | grep \"".$org."\" ";
-print $updateCmd;
+#my $updateCmd = "curl -X POST -H \"Content-Type: application/json\" --data '\{'username':'".$username."','password':'".$passwd."','days':100}' https://apollo-api\.veupathdb\.org/annotationEditor/getRecentAnnotations | jq \.  | grep \"".$org."\" ";
+#print $updateCmd;
 
-#Parse features from JSON response and write GFF feature to file
-my $updateJSONResponse = `$updateCmd`;
-if ($updateJSONResponse ne ""){
-$updateJSONResponse =~ s/,\s*$//;
-$updateJSONResponse = "\{".$updateJSONResponse."\}";
-
-my $parsed_json = decode_json($updateJSONResponse);
-
-
-my @jsonArray;
-
-foreach my $key(keys %$parsed_json) {
-my $jsonString = "{\"uniquename\":\"".$key."\"}";
-push @jsonArray,$jsonString;
-}
-my $jsonArrayString = join(',', @jsonArray);
-    my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '\{'username':'".$username."','password':'".$passwd."','features':\[".$jsonArrayString."]}' https://apollo-api\.veupathdb\.org/annotationEditor/getGff3";
+    #my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '\{'username':'".$username."','password':'".$passwd."','features':\[".$jsonArrayString."]}' https://apollo-api\.veupathdb\.org/annotationEditor/getGff3";
+    my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','type':'GFF3','organism':\"".$organismName."\",'output':'text'}' https://apollo-api\.veupathdb\.org/IOService/write";
+print $getGFFCmd;
 
 open (GFF, "$getGFFCmd|") or die "Can't open $getGFFCmd\n";
 
@@ -161,8 +137,8 @@ while (<GFF>) {
         $dbh->commit() or print STDERR $dbh->errstr;
         }
         else{ 
-        print "Error: Could not find NA_Sequence_ID\n";
-        die;
+        #print "Error: Could not find NA_Sequence_ID\n";
+        next;
         }
     }
     }
@@ -170,7 +146,7 @@ while (<GFF>) {
     }
     }
     close GFF;
-}
+
 }
 $dbh->disconnect;
 
