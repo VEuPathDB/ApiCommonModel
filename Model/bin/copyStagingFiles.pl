@@ -43,7 +43,7 @@ close (IN);
 
 # for each specified project
 foreach my $p (@projects) {
-    print "\nHandling PROJECT = $p\n"; #BB
+    print "\nHandling PROJECT = $p\n";
     die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
 
     umask 002; # resulting files will have mode 0644, directories 0755
@@ -65,7 +65,7 @@ foreach my $p (@projects) {
     print "Fixing file permissions \n";
     find(\&fixPerm, $destDir);
 
-    print "\n$p - DONE\n";
+    print "\nDone with PROJECT $p\n";
 }
 
 
