@@ -74,7 +74,9 @@ foreach my $dataset (keys %$dbProfiles) {
         close $legacyFh;
       }
 
-      # TODO: call R Script Here;  pass it $file and $legacyFile
+      my $outputFile = "$orgDirectory/corrlations_${studyId}";
+      my $cmd = "Rscript rnaSeqCorrTwoExpts $file $legacyFile $outputFile";
+      system($cmd);
     }
   }
 }
