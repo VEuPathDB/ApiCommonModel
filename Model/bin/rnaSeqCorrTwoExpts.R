@@ -18,22 +18,24 @@ fileName2 <- arguments[2];
 outFile <- arguments[3];
 
 expt1 <- read.table(arguments[1],header=TRUE,sep="\t");
+expt1[2:ncol(expt1)] <- expt1[,order(colnames(expt1)[2:ncol(expt1)])];
 expt2 <- read.table(arguments[2],header=TRUE,sep="\t");
+expt2[2:ncol(expt2)] <- expt2[,order(colnames(expt2)[2:ncol(expt2)])];
 
 numSamples1 <- ncol(expt1) - 1;
 numSamples2 <- ncol(expt2) - 1;
 
 colnames(expt1)[1] <- "gene_id";
 colnames(expt2)[1] <- "gene_id";
+colnames(expt1)[2:(numSamples1+1)] <- paste0(rep("Expt1_",numSamples1),colnames(expt1)[2:(numSamples1+1)]);
+colnames(expt2)[2:(numSamples2+1)] <- paste0(rep("Expt2_",numSamples2),colnames(expt2)[2:(numSamples2+1)]);
 
 merged <- merge(expt1,expt2,by="gene_id");
 merged <- merged[,-1]
-numColumns <- ncol(merged);
-merged <- merged[,order(colnames(merged))];
 
 results <- matrix(0,nrow=numSamples1,ncol=numSamples2);
-rownames(results) <- colnames(merged)[1:numSamples1];
-colnames(results) <- colnames(merged)[(numSamples1+1):numColumns];
+rownames(results) <- colnames(expt1)[2:(numSamples1+1)];
+colnames(results) <- colnames(expt2)[2:(numSamples2+1)];
 
 for (a in 1:numSamples1) {
   for (b in 1:numSamples2) {
