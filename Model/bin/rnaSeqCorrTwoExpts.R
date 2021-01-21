@@ -25,8 +25,6 @@ numSamples2 <- ncol(expt2) - 1;
 
 colnames(expt1)[1] <- "gene_id";
 colnames(expt2)[1] <- "gene_id";
-colnames(expt1)[2:(numSamples1+1)] <- paste0(rep("Expt1_",numSamples1),colnames(expt1)[2:(numSamples1+1)]);
-colnames(expt2)[2:(numSamples2+1)] <- paste0(rep("Expt2_",numSamples2),colnames(expt2)[2:(numSamples2+1)]);
 
 merged <- merge(expt1,expt2,by="gene_id");
 merged <- merged[,-1]
