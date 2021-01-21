@@ -67,10 +67,10 @@ foreach my $dataset (keys %$dbProfiles) {
         my $isStrandedInLegacyDb = $legacyDbStrandedDatasets->{$dataset} ? 'stranded' : 'unstranded';
 
         if($isStrandedInDb ne $isStrandedInLegacyDb) {
-          print STDERR "WARN:  Dataset $dataset is $isStrandedInDb in first instance but $isStrandedInLegacyDb in legacy db\n";
+          print STDERR "WARN:  Dataset $dataset is $isStrandedInDb in first instance but $isStrandedInLegacyDb in legacy db\n\n";
         }
         else {
-          print STDERR "WARN:  Could not find a matching dataset for dataset=$dataset and profile=$profile\n";
+          print STDERR "WARN:  Could not find a matching dataset for dataset=$dataset and profile=$profile\n\n";
         }
         next;
       }
@@ -121,7 +121,7 @@ sub makeReportFromOutputFile {
   
   open(FILE, $file) or die "Cannot open file $file for reading: $!";
 
-  print STDERR "\nReporting on dataset $dataset\n";
+  print STDERR "Reporting on dataset $dataset\n";
 #  print STDERR "FILE=$file\n";
 
   my $header = <FILE>;
@@ -152,7 +152,7 @@ sub makeReportFromOutputFile {
       print STDERR "Ok.";
     }
   }
-
+  print STDERR "\n\n";
 }
 
 
