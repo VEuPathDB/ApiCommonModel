@@ -83,7 +83,7 @@ foreach my $dataset (keys %$dbProfiles) {
         close $legacyFh;
       }
 
-      my $outputFile = "$orgDirectory/corrlations_${studyId}";
+      my $outputFile = "$orgDirectory/correlations_${studyId}.txt";
       my $cmd = "rnaSeqCorrTwoExpts.R $file $legacyFile $outputFile";
       system($cmd);
 
@@ -121,7 +121,7 @@ sub makeReportFromOutputFile {
   
   open(FILE, $file) or die "Cannot open file $file for reading: $!";
 
-  print STDERR "Reporting on dataset $dataset\n";
+  print STDERR "Reporting on dataset $dataset (file $file)\n";
 #  print STDERR "FILE=$file\n";
 
   my $header = <FILE>;
@@ -145,12 +145,14 @@ sub makeReportFromOutputFile {
 
     my $maxValue = CBIL::Util::V::max(@a);
 
-    unless($value == $maxValue) {
-      print STDERR "\nERROR:  Sample $sampleName was not the best match to itself for dataset $dataset\n";
-    }
-    else {
+    my $threshold = 0.9;
+   if ($value != $maxValue) {
+      print STDERR "\nERROR:  Sample '$sampleName' self-correlation is $value but the max pairwise correlation is $maxValue.\n";
+   } elsif ($value < $threshold) {
+       print STDERR "\nERROR:  Sample '$sampleName' self-correlation of $value is below the threshold of $threshold.\n";
+   } else {
       print STDERR "Ok.";
-    }
+   }
   }
   print STDERR "\n\n";
 }
