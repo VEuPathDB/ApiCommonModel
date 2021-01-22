@@ -227,6 +227,19 @@
           </help>
         </flatVocabParam>
 
+ <flatVocabParam name="MultiBlastDatabaseOrganism"
+                     queryRef="SharedVQ.MultiBlastOrganismFiles"
+                     prompt="Target Organism"
+                     displayType="treeBox" 
+                     multiPick="true"
+                     suppressNode="false"
+                     dependedParamRef="sharedParams.BlastDatabaseType"
+                     >
+          <help>
+               Select the Organism(s) (genomes) that you wish to query your Input Sequence against.
+          </help>
+        </flatVocabParam>
+
 
 
 
@@ -1757,6 +1770,38 @@ by the sequence generator.</help>
            ( ot.organism is not null and ot.term = files.term)) then files.abbreviation
            else '-1'
       end as internal
+From apidbtuning.organismtree ot, (
+    select distinct abbrev.organism as term,
+            abbrev.parent as parentTerm,
+           '@WEBSERVICEMIRROR@' || '/' || orgs.project_id || '/build-%%buildNumber%%/' || abbreviation || '/blast/' || abbreviation as abbreviation
+     from orgs, apidbtuning.organismabbreviationblast abbrev
+     where orgs.organism = abbrev.organism
+      and orgs.type = '$$BlastDatabaseType$$'
+      and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
+      -- need to hard-code this constraint till the org. name has a strain -- redmine #15623 
+      AND NOT (abbreviation like 'GniphandrodesUnknown' and orgs.type = 'ESTs')
+     ) files
+where files.term = ot.organism (+)  
+order by term
+                ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="MultiBlastOrganismFiles">
+            <paramRef ref="sharedParams.BlastDatabaseType"/>
+            <column name="internal" />
+            <column name="term" />
+            <column name="parentTerm" />
+            <sql>
+                <![CDATA[
+ WITH orgs as ( 
+ select distinct organism, project_id, type from apidbtuning.blasttypes
+  ) 
+     select case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term))
+                 then files.abbreviation else '-1' end as term,
+            case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+	    case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term))
+                 then files.abbreviation else '-1' end as internal
 From apidbtuning.organismtree ot, (
     select distinct abbrev.organism as term,
             abbrev.parent as parentTerm,
