@@ -1083,8 +1083,10 @@ select genomestat.taxon_id,
     <sql>
       <![CDATA[
 CREATE TABLE OrganismAttributes&1 NOLOGGING AS
-SELECT oa.*, tn2.name as species, t.ncbi_tax_id as species_ncbi_tax_id --,
---       ltrim(replace(oa.organism_name, tn2.name)) as strain
+SELECT oa.*, tn2.name as species, t.ncbi_tax_id as species_ncbi_tax_id
+       , CASE  WHEN ltrim(replace(oa.organism_name, tn2.name))= oa.organism_name 
+               THEN strain_abbrev
+               ELSE ltrim(replace(oa.organism_name, tn2.name)) END AS strain
 FROM
 (
 SELECT o.project_name as project_id,
@@ -1100,7 +1102,7 @@ SELECT o.project_name as project_id,
        o.family_name_for_files,
        tn.name as organism_name,
        o.genome_source,
-       o.strain_abbrev as strain,
+       o.strain_abbrev,
        o.is_annotated_genome,
        o.is_reference_strain,
        o.is_family_representative,
@@ -7492,6 +7494,7 @@ where url is not null
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
+    <externalDependency name="apidb.WGCNAResults"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="results.NaFeatureDiffResult"/>
     <externalDependency name="results.CompoundMassSpec"/>
@@ -7506,7 +7509,7 @@ where url is not null
                DATASET_NAME	        VARCHAR2(200),
                DATASET_TYPE	        VARCHAR2(50),
                DATASET_SUBTYPE	        VARCHAR2(50),
-               PROFILE_TYPE	        VARCHAR2(20),
+               PROFILE_TYPE	        VARCHAR2(30),
                SOURCE_ID	        VARCHAR2(500),
                PROFILE_STUDY_ID	        NUMBER(5),
                PROFILE_SET_NAME	        VARCHAR2(400),
@@ -7792,6 +7795,22 @@ where url is not null
                      and s.investigation_id is not null                                                                           
                 group by sl.study_id, lr.na_feature_id   
 
+             UNION ALL
+	           select sl.study_id, lr.na_feature_id, 'correlation_coefficient' as profile_type,                              
+		          listagg(nvl(to_char(round(lr.correlation_coefficient, 2)), 'NA'), chr(9))           
+			    within group (order by pan.node_order_num)                                                           
+			    as profile_as_string,                                                                               
+			  max(lr.correlation_coefficient) as max_value, min(lr.correlation_coefficient) as min_value,        
+			  max(pan.name) keep(dense_rank last order by lr.correlation_coefficient) as max_timepoint,         
+			  max(pan.name) keep(dense_rank first order BY lr.correlation_coefficient) as min_timepoint                
+		   from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,                                       
+		        apidb.WGCNAResults lr                                                                            
+			where lr.protocol_app_node_id = sl.protocol_app_node_id                                                  
+			   and lr.protocol_app_node_id = pan.protocol_app_node_id                                              
+			   and sl.study_id = s.study_id                                                                        
+			   and s.investigation_id is not null                                                                 
+		     group by sl.study_id, lr.na_feature_id 
+
               UNION ALL
                 select sl.study_id, result.na_feature_id, 'values' as profile_type,
                        listagg(nvl(result.value, 'NA'), chr(9))
@@ -7997,7 +8016,7 @@ where url is not null
 	AND sl.study_id = s.study_id
 	AND sl.protocol_app_node_id = pan.protocol_app_node_id
 	AND  pan.protocol_app_node_id =r.protocol_app_node_id
-	AND pt.profile_type not in ('pvalue', 'period', 'amplitude', 'probability_mean','sd','lower_CI','upper_CI')
+	AND pt.profile_type not in ('pvalue', 'period', 'amplitude', 'probability_mean','sd','lower_CI','upper_CI','correlation_coefficient')
       UNION
 	SELECT DISTINCT s.name AS study_name, s.study_id, 
           REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
@@ -8026,6 +8045,22 @@ where url is not null
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
         AND  pan.protocol_app_node_id =r.protocol_app_node_id
         AND pt.profile_type not in ('values', 'channel1_percentiles', 'channel2_percentiles', 'standard_error')
+
+       UNION
+       SELECT DISTINCT s.name AS study_name, s.study_id, 
+          REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                         ' \(.+\)', '')AS protocol_app_node_name,
+          pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+          pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+          pt.profile_set_suffix
+        FROM apidbtuning.profileType pt, study.study s, study.studyLink sl, 
+          study.protocolAppNode pan, apidb.WGCNAResults r
+        WHERE pt.profile_study_id = s.study_id
+        AND sl.study_id = s.study_id
+        AND sl.protocol_app_node_id = pan.protocol_app_node_id
+        AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        AND pt.profile_type not in ('values', 'channel1_percentiles')
+
 
       UNION
 	SELECT DISTINCT s.name AS study_name, s.study_id, 
