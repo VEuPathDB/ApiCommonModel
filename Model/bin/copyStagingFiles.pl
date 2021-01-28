@@ -5,9 +5,8 @@ use File::Find;
 use File::Basename;
 use Getopt::Long;
 
-my ($help, $configFile, $outputDir, $includeProjects, $buildNumber, $mercator);
+my ($help, $configFile, $outputDir, $includeProjects, $buildNumber);
 &GetOptions('help|h' => \$help,
-	    'mercator=s' => \$mercator,
             'configFile=s' => \$configFile,
 	    'includeProjects=s' => \$includeProjects,
 	    'buildNumber=s' => \$buildNumber,
@@ -44,7 +43,7 @@ close (IN);
 
 # for each specified project
 foreach my $p (@projects) {
-    print "\nHandling PROJECT = $p\n"; #BB
+    print "\nHandling PROJECT = $p\n";
     die "ERROR: No entry in config file for $p\n" if !($stagingDir{$p});
 
     umask 002; # resulting files will have mode 0644, directories 0755
@@ -56,23 +55,8 @@ foreach my $p (@projects) {
     #system ("mkdir $destDir");
 
     foreach my $f (@files) {
-      if ( $f ne 'mercator_pairwise'){
-	print "rsync DIR: $f\n";
-	#system("mkdir $destDir/$f");
-	system ("rsync -T /eupath/data/apiSiteFiles/.lsyncd_ignore -rvL -pt --delete --log-format='%i %M %f  %b'  $stagingDir{$p}/$f $destDir;");
-      }
-      elsif ($mercator ne "no") {
-	print "FOR Mercator files\n";
-	system ("mkdir $destDir/$f") unless(-e ($destDir ."/".$f));
-	print "dir is $stagingDir{$p}/$f\n\n\n\n";
-
-	system ("rsync -T /eupath/data/apiSiteFiles/.lsyncd_ignore -rvL -pt --delete --log-format='%i %M %f  %b' --prune-empty-dirs --include '*/' --include 'map' --include '*.agp' --exclude '*' $stagingDir{$p}/$f $destDir;");
-
-
-	system("find $stagingDir{$p}${f}  -type f | grep -e '[.]mfa\$' | while read ; do DN=`dirname \$REPLY | sed 's|$stagingDir{$p}||'`;FN=`basename \$REPLY`; mkdir -p $destDir/\$DN; gzip < \$REPLY > $destDir/\$DN/\$FN.gz; done;");
-
-	print "END\n";
-      }
+      print "rsync DIR: $f\n";
+      system ("rsync -T /eupath/data/apiSiteFiles/.lsyncd_ignore -rvL -pt --delete --log-format='%i %M %f  %b'  $stagingDir{$p}/$f $destDir;");
     }
     closedir $dir;
 
@@ -81,7 +65,7 @@ foreach my $p (@projects) {
     print "Fixing file permissions \n";
     find(\&fixPerm, $destDir);
 
-    print "\n$p - DONE\n";
+    print "\nDone with PROJECT $p\n";
 }
 
 
