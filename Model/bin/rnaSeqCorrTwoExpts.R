@@ -22,20 +22,22 @@ expt2 <- read.table(arguments[2],header=TRUE,sep="\t");
 
 numSamples1 <- ncol(expt1) - 1;
 numSamples2 <- ncol(expt2) - 1;
+samples1 <- colnames(expt1)[2:(numSamples1+1)];
+samples2 <- colnames(expt2)[2:(numSamples2+1)];
 
 colnames(expt1)[1] <- "gene_id";
 colnames(expt2)[1] <- "gene_id";
+
+results <- matrix(0,nrow=numSamples1,ncol=numSamples2);
+rownames(results) <- samples1[order(samples1)];
+colnames(results) <- samples2[order(samples2)];
+
 colnames(expt1)[2:(numSamples1+1)] <- paste0(rep("Expt1_",numSamples1),colnames(expt1)[2:(numSamples1+1)]);
 colnames(expt2)[2:(numSamples2+1)] <- paste0(rep("Expt2_",numSamples2),colnames(expt2)[2:(numSamples2+1)]);
 
 merged <- merge(expt1,expt2,by="gene_id");
-merged <- merged[,-1]
-numColumns <- ncol(merged);
+merged <- merged[,-1];
 merged <- merged[,order(colnames(merged))];
-
-results <- matrix(0,nrow=numSamples1,ncol=numSamples2);
-rownames(results) <- colnames(merged)[1:numSamples1];
-colnames(results) <- colnames(merged)[(numSamples1+1):numColumns];
 
 for (a in 1:numSamples1) {
   for (b in 1:numSamples2) {
@@ -43,4 +45,4 @@ for (a in 1:numSamples1) {
   }
 }
 
-write.table(results,file=outFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE)
+write.table(results,file=outFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);

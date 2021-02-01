@@ -7,6 +7,8 @@ use DBD::Oracle;
 
 use Getopt::Long;
 
+use CBIL::Util::V;
+
 use Data::Dumper;
 
 my ($help, $databaseInstance, $legacyDatabaseInstance, $workingDir);
@@ -23,17 +25,20 @@ my $legacyDatabaseDirectory = "$workingDir/$legacyDatabaseInstance";
 
 &makeDirectoryUnlessExists($databaseDirectory);
 my $dbh = &connectToDb($databaseInstance);
-my $dbProfiles = &queryForProfiles($dbh);
+my ($dbProfiles, $dbStrandedDatasets) = &queryForProfiles($dbh);
 
-my ($legacyDbh, $legacyDbProfiles);
+my ($legacyDbh, $legacyDbProfiles, $legacyDbStrandedDatasets);
 if($legacyDatabaseInstance) {
 
   &makeDirectoryUnlessExists($legacyDatabaseDirectory);
   $legacyDbh = &connectToDb($legacyDatabaseInstance);
-  $legacyDbProfiles = &queryForProfiles($legacyDbh);
-
+  ($legacyDbProfiles, $legacyDbStrandedDatasets) = &queryForProfiles($legacyDbh);
 }
 
+my $numProfiles=0;
+my $numProfilesStrandError=0;
+my $numProfilesMatchingError=0;
+my $numProfilesSampleError=0;
 foreach my $dataset (keys %$dbProfiles) {
   my @da = split("_", $dataset);
   my $orgAbbrev = $da[0];
@@ -45,6 +50,8 @@ foreach my $dataset (keys %$dbProfiles) {
   &makeDirectoryUnlessExists($legacyOrgDirectory) if($legacyDatabaseInstance);
   
   foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
+    $numProfiles++;
+
     my $studyId = $dbProfiles->{$dataset}->{$profile};
     my $file = "$orgDirectory/${studyId}.txt";
 
@@ -62,7 +69,17 @@ foreach my $dataset (keys %$dbProfiles) {
       my $legacyFile = "$legacyOrgDirectory/${legacyStudyId}.txt";
 
       unless($legacyStudyId) {
-        print STDERR "WARNING:  Could not find a matching dataset for dataset=$dataset and profile=$profile\n";
+        my $isStrandedInDb = $dbStrandedDatasets->{$dataset} ? 'stranded' : 'unstranded';
+        my $isStrandedInLegacyDb = $legacyDbStrandedDatasets->{$dataset} ? 'stranded' : 'unstranded';
+
+        if($isStrandedInDb ne $isStrandedInLegacyDb) {
+          print STDERR "WARN:  Dataset $dataset is $isStrandedInDb in first instance but $isStrandedInLegacyDb in legacy db\n\n";
+	  $numProfilesStrandError++;
+        }
+        else {
+          print STDERR "WARN:  Could not find a matching dataset for dataset=$dataset and profile=$profile\n\n";
+	  $numProfilesMatchingError++;
+        }
         next;
       }
 
@@ -74,9 +91,11 @@ foreach my $dataset (keys %$dbProfiles) {
         close $legacyFh;
       }
 
-      my $outputFile = "$orgDirectory/corrlations_${studyId}";
-      my $cmd = "Rscript rnaSeqCorrTwoExpts $file $legacyFile $outputFile";
+      my $outputFile = "$orgDirectory/correlations_${studyId}.txt";
+      my $cmd = "rnaSeqCorrTwoExpts.R $file $legacyFile $outputFile";
       system($cmd);
+
+      $numProfilesSampleError += makeReportFromOutputFile($outputFile, $dataset);
     }
   }
 }
@@ -85,6 +104,14 @@ $dbh->disconnect();
 if($legacyDatabaseInstance) {
   $legacyDbh->disconnect();
 }
+
+my $numProfilesPassedTests = $numProfiles - $numProfilesStrandError - $numProfilesMatchingError - $numProfilesSampleError;
+print STDERR "\n\n================SUMMARY================\n";
+print STDERR "Number of profiles: $numProfiles,  Number passed test: $numProfilesPassedTests\n\n";
+print STDERR "Number of profiles with strand error: $numProfilesStrandError\n";
+print STDERR "Number of profiles without corresponding legacy profile: $numProfilesMatchingError\n";
+print STDERR "Number of profiles with poor sample correlation: $numProfilesSampleError\n";
+
 
 sub printData {
   my ($studyId, $fh, $dbh) = @_;
@@ -102,6 +129,54 @@ order by ga.source_id";
   while(my @a = $sh->fetchrow_array()) {
     print $fh join("\t", @a) . "\n";
   }
+}
+
+
+sub makeReportFromOutputFile {
+  my ($file, $dataset) = @_;
+
+  my $failedTest=0;  
+
+  open(FILE, $file) or die "Cannot open file $file for reading: $!";
+
+  print STDERR "Reporting on dataset $dataset (file $file)\n";
+
+  my $header = <FILE>;
+  chomp $header;
+  my @headers = split(/\t/, $header);
+
+  my %sampleIndexes;
+
+  for(my $i = 1; $i < scalar @headers; $i++) {
+    my $sampleName = $headers[$i];
+    $sampleIndexes{$sampleName} = $i;
+  }
+
+  while(<FILE>) {
+    chomp;
+    my @a = split(/\t/, $_);
+    my $sampleName = shift @a; 
+
+    my $index = $sampleIndexes{$sampleName} - 1;
+    my $value = $a[$index];
+
+    my $maxValue = CBIL::Util::V::max(@a);
+
+    my $threshold = 0.9;
+    my $selfThreshold = 0.99;
+   if ($value != $maxValue && $value < $selfThreshold) {
+      print STDERR "\nERROR:  Sample '$sampleName' self-correlation is $value but the max pairwise correlation is $maxValue.\n";
+      $failedTest=1;
+   } elsif ($value < $threshold) {
+       print STDERR "\nERROR:  Sample '$sampleName' self-correlation of $value is below the threshold of $threshold.\n";
+       $failedTest=1;
+   } else {
+      print STDERR "Ok.";
+   }
+  }
+  print STDERR "\n\n";
+
+  return $failedTest;
 }
 
 
@@ -147,13 +222,19 @@ and profile_set_name like '% unique]'
   my $sh = $dbh->prepare($sql);
   $sh->execute();
 
+  my %strandedDatasets;
+
   while(my ($dataset, $profileSet, $studyId) = $sh->fetchrow_array()) {
+    my $isStranded = $profileSet =~ / - (firststrand|secondstrand) - /;
+
     $dataset =~ s/_ebi_/_/;
     $profileSet =~ s/ - (tpm|fpkm) - / - exprval - /;
 
     $rv{$dataset}->{$profileSet} = $studyId;
+
+    $strandedDatasets{$dataset} = $isStranded;
   }
-  return \%rv;
+  return \%rv, \%strandedDatasets;
 }
 
 
