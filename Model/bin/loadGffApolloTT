@@ -1,0 +1,212 @@
+#!/usr/bin/perl
+#use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use CBIL::Util::PropertySet;
+use Getopt::Long;
+use DBI;
+use DBD::Oracle;
+use Data::Dumper;
+use Getopt::Long qw(GetOptions);
+use LWP::UserAgent;
+use HTTP::Request;
+use HTTP::Response;
+use EbrcModelCommon::Model::tmUtils;
+use CBIL::Util::Utils;
+use JSON;
+use Date::Manip;
+use XML::Simple;
+
+my $dateCmd = "date";
+my $dateStr1 = &runCmd($dateCmd);
+chomp $dateStr1;
+my $annotationInsert;
+my $commentInsert;
+my $NASequenceID;
+my $json;
+my %apolloID;
+
+my ($propFile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd );
+GetOptions("propfile=s" => \$propFile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "prefix=s" => \$prefix,
+           "filterValue=s" => \$filterValue,
+           "debug!" => \$debug,
+	  );
+die "required parameter missing" unless ($propFile && $instance && $schema);
+#Extract username and password from propfile
+my $xmlParser = new XML::Simple();
+my $props = $xmlParser->XMLin($propFile);
+my $passwd = $props->{apolloPassword};
+my $username = $props->{apolloUserId};
+die "required parameters userID and password missing from propfile" unless ($passwd && $username);
+
+my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propFile);
+
+#Create Apollo ID table
+createApolloIdTable($dbh, $prefix, $suffix);
+#Create Apollo GFF table
+createTables($dbh, $prefix, $suffix);
+
+#Extract all organisms in Apollo
+my $organismsCmd = "curl -X POST -F 'username=".$username."' -F 'password=".$passwd."' -L https://apollo-api\.veupathdb\.org/organism/findAllOrganisms --silent --show-error";
+my $organismJSONResponse = &runCmd($organismsCmd);
+my $organismJSON = decode_json($organismJSONResponse);
+my %daysSinceRelease;
+my @filteredOrganisms;
+my @gffData;
+
+#Get number of days since release and filter organisms
+foreach my $item( @$organismJSON){
+    my $organism = $item->{commonName};
+
+    #Get organism ID
+    my $organismIdCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','organism':\"".$organism."\"}' https://apollo-api\.veupathdb\.org/organism/findAllOrganisms --silent --show-error";
+    my $organismIdJSONResponse = &runCmd($organismIdCmd);
+    my $organismIdJSON = decode_json($organismIdJSONResponse);
+    my $organismId;
+    foreach my $line( @$organismIdJSON ) {
+    $organismId = $line->{id};
+    $apolloID{$organism} = $organismId;
+    my ($veupathId) = $organism =~ /(.*)\s+\[/;
+    #Write to the organism table called apolloID
+    insertApolloIdTable($dbh, $prefix, $suffix,  $veupathId, $organism, $organismId);
+    $dbh->commit() or print STDERR $dbh->errstr;
+    }
+	push (@filteredOrganisms, $organism);
+    }
+
+foreach(@filteredOrganisms){
+
+my $organismName = $_;
+my ($org, $abbrev) = split (/\[/, $organismName, 2);
+#extract annotations
+    my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','type':'GFF3','organism':\"".$organismName."\",'output':'text'}' https://apollo-api\.veupathdb\.org/IOService/write --silent --show-error";
+
+open (GFF, "$getGFFCmd|") or die "Can't open $getGFFCmd\n";
+
+my @gffArray;
+while (<GFF>) {
+    my $line = $_;
+    
+    if ($line !~ /^###$/){
+    push @gffArray, $line;
+    }
+    else{
+    my $match = "Finished";
+    chomp @gffArray;
+    if (grep(/$match/, @gffArray)) {
+    foreach (@gffArray){
+        #Skip whitespace or comments
+        next if /^(\s*(#.*)?)?$/;
+        my ($seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes) = split ( /\t/, $_);
+        #Fix any single quotes in attributes string
+        $attributes =~ s/\'/\'\'/g;
+        my $creationDate;
+        my $parentAttr="";
+        my $idAttr="";
+        #Parse creation date
+        if ($attributes =~ m/date_creation/ ){
+        $creationDate = substr ($attributes, -10);
+        }
+        #Parse parent attr
+        if ($attributes =~ m/Parent=([0-9a-zA-Z-]+);/ ){
+        $parentAttr = $1;
+        }
+        #Parse id attr
+        if ($attributes =~ m/ID=([0-9a-zA-Z-]+);/ ){
+        $idAttr = $1;
+        }
+        #Get Apollo numerical organism ID
+        my $apolloID = getApolloID($dbh, $prefix, $suffix,$seqID);
+        
+        #Check if NA_Sequence_ID is available
+        $NASequenceID = getNASequenceID($dbh, $seqID);
+        if ($NASequenceID ne ""){
+        #Insert Gff into table
+        insertAttribute($dbh, $prefix, $suffix, $NASequenceID,  $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr);
+        $dbh->commit() or print STDERR $dbh->errstr;
+        }
+        else{ 
+        #print "ERROR: $getGFFCmd\n";
+        next;
+        }
+    }
+    }
+    undef @gffArray;
+    }
+    }
+    close GFF;
+
+}
+$dbh->disconnect;
+
+sub insertAttribute {
+    my ($dbh, $prefix, $suffix, $NASequenceID, $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr) = @_;
+    $dbh->do(<<SQL) or die "inserting attribute";
+    INSERT INTO ${prefix}ApolloUpdate$suffix (NA_SEQUENCE_ID, SeqID, Source, Type, MAPPING_START, MAPPING_END, Score, Strand, Phase, ATTR, creationdate, apolloid, parent_attr, id_attr) VALUES ('$NASequenceID', '$seqID', '$source', '$type', '$start', '$end', '$score', '$strand', '$phase', '$attributes', '$creationDate', '$apolloID', '$parentAttr', '$idAttr')
+SQL
+}
+
+sub createTables {
+    my ($dbh, $prefix, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating annotationChange table";
+create table ${prefix}ApolloUpdate$suffix (
+   NA_SEQUENCE_ID  NUMBER(10),
+   SeqID           varchar2(50),
+   Source          varchar2(200),
+   Type            varchar2(50),
+   MAPPING_START   number(10),
+   MAPPING_END     number(10),
+   Score           varchar2(50),
+   Strand          varchar2(1),
+   Phase           varchar2(1),
+   ATTR            CLOB,   
+   creationdate    varchar2(10),
+   apolloid        number(10),
+   parent_attr     varchar2(50),
+   id_attr         varchar2(50)
+) nologging
+SQL
+}
+
+sub insertApolloIdTable {
+    my ($dbh, $prefix, $suffix, $veupathId, $organism, $organismID) = @_;
+    $dbh->do(<<SQL) or die "inserting attribute";
+    INSERT INTO ${prefix}apolloid$suffix (organism, commonname, apolloid) VALUES ('$veupathId','$organism','$organismID')
+SQL
+}
+
+sub createApolloIdTable {
+    my ($dbh, $prefix, $suffix) = @_;
+
+    $dbh->do(<<SQL) or die "creating ApolloID  table";
+create table ${prefix}ApolloID$suffix (
+    ORGANISM         VARCHAR2(100), 
+    COMMONNAME       VARCHAR2(100), 
+    APOLLOID         VARCHAR2(50)
+) nologging
+SQL
+}
+
+sub getNASequenceID {
+    my ($dbh, $seqID) = @_;
+    my $sql = "select NA_SEQUENCE_ID  from dots.nasequence where SOURCE_ID = ?";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute($seqID);
+    my ($NASequenceID) = $sh->fetchrow_array();
+    return $NASequenceID;
+}
+
+sub getApolloID {
+    my ($dbh, $prefix, $suffix, $seqID) = @_;
+    my $sql = "select distinct aid.apolloid from apidbtuning.genomicseqattributes gsa, ${prefix}apolloid$suffix aid where gsa.organism = aid.organism and gsa.source_id like ?";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute($seqID);
+    my ($apolloID) = $sh->fetchrow_array();
+    return $apolloID;
+}
