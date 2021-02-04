@@ -164,15 +164,19 @@ sub makeReportFromOutputFile {
 
     my $threshold = 0.9;
     my $selfThreshold = 0.99;
-   if ($value != $maxValue && $value < $selfThreshold) {
-      print STDERR "\nERROR:  Sample '$sampleName' self-correlation is $value but the max pairwise correlation is $maxValue.\n";
-      $failedTest=1;
-   } elsif ($value < $threshold) {
-       print STDERR "\nERROR:  Sample '$sampleName' self-correlation of $value is below the threshold of $threshold.\n";
-       $failedTest=1;
-   } else {
-      print STDERR "Ok.";
-   }
+    if ($value eq "NA") {
+	print STDERR "\nERROR:  Could not calculate a correlation for sample '$sampleName'. The legacy or new data may not exist for this sample. Did the tuning manager finish?\n";
+	$failedTest=1;
+    }
+    elsif ($value != $maxValue && $value < $selfThreshold) {
+	print STDERR "\nERROR:  Sample '$sampleName' self-correlation is $value but the max pairwise correlation is $maxValue.\n";
+	$failedTest=1;
+    } elsif ($value < $threshold) {
+	print STDERR "\nERROR:  Sample '$sampleName' self-correlation of $value is below the threshold of $threshold.\n";
+	$failedTest=1;
+    } else {
+	print STDERR "Ok.";
+    }
   }
   print STDERR "\n\n";
 
