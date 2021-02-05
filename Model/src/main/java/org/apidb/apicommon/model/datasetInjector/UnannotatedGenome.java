@@ -40,8 +40,10 @@ public class UnannotatedGenome extends DatasetInjector {
 
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "attribute", "overview");
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansBySourceId");
-    addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
 
+    if (!(getPropValue("projectName").equals("HostDB"))){
+	addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
+    }
 
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "SequenceCounts");
     addWdkReference("OrganismRecordClasses.OrganismRecordClass", "table", "GeneCounts");
