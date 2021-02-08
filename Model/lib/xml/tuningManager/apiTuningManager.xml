@@ -8527,9 +8527,58 @@ where url is not null
        Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
     </comment>
     <internalDependency name="GeneAttributes"/>
-    <externalDependency name="apidb.Synteny"/>
-    <program commandLine="buildOrthologousGenesTT"/>
+    <externalDependency name="apidb.SyntenicGene"/>
+    <sql>
+      <![CDATA[
+create table OrthologousGenes&1 as 
+with all_pairs as (
+select ga.source_id
+     , ga.project_id
+     , ga.na_feature_id
+     , oga.source_id as ortho_source_id
+     , oga.na_feature_id as ortho_na_feature_id
+     , oga.product as ortho_product
+     , ga.name as ortho_name
+     , oga.organism as ortho_organism
+from geneattributes ga
+join geneattributes oga
+on ga.ORTHOMCL_NAME = oga.ORTHOMCL_NAME
+and ga.source_id <> oga.source_id
+),
+syn_pairs as (
+SELECT ga.na_feature_id, sg.SYN_NA_FEATURE_ID, 1 as syntenic
+FROM apidb.syntenicgene sg, geneattributes ga
+WHERE sg.na_sequence_id = ga.na_sequence_id
+      AND sg.end_max >= ga.start_min
+      AND sg.start_min <= ga.end_max
+)
+select all_pairs.*
+     , CASE WHEN syn_pairs.syntenic = 1 then 'yes' ELSE 'no' END as syntenic
+from all_pairs
+left join syn_pairs
+on all_pairs.na_feature_id = syn_pairs.na_feature_id 
+and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+       ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+     create index ogix&1 on OrthologousGenes&1 (source_id, syntenic desc, ortho_source_id, ortho_product, ortho_name, ortho_organism) tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
+
+
+<!-- for testing
+  <tuningTable name="OldOrthologousGenes">
+    <comment>
+       Old materialization of the orthology transform.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <externalDependency name="apidb.Synteny"/>
+    <program commandLine="buildOldOrthologousGenesTT"/>
+  </tuningTable>
+-->
 
   <tuningTable name="DatasetGeneList">
     <comment>
