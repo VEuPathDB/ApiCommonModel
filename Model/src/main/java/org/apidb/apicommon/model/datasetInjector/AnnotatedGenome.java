@@ -285,7 +285,8 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
 
     // not for VectorBase
-    if (!(getPropValue("projectName").equals("VectorBase"))){
+    if (!(getPropValue("projectName").equals("VectorBase") || 
+	  getPropValue("projectName").equals("HostDB"))){
 	addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
 	}
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "Reference");
