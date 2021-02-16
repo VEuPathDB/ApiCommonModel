@@ -86,6 +86,7 @@ foreach my $dataset (keys %$dbProfiles) {
     if ( $legacyDatabaseInstance ) {
 	if ( ! exists $legacyDbProfiles->{$dataset}) {
 	    print STDERR "   WARN:  Could not find a matching legacy dataset for dataset=$dataset\n";
+	    print STDERR "\n    ---DATASET FAILED---\n";
 	    $numDatasetsWithError++;
 	    next;
 	} else {
@@ -269,6 +270,7 @@ foreach my $dataset (keys %$dbProfiles) {
 	}
 	else {
 	    print STDERR "ERROR:   Skipping correlations because unable to find matching profile for $profileName\n";
+	    print STDERR "\n    ---DATASET FAILED---\n";
 	    $numDatasetsWithError++;
 	    next;
 	}
