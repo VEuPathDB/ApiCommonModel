@@ -38,6 +38,7 @@ if($legacyDatabaseInstance) {
 my $numDatasets=0;
 my $numDatasetsWithError=0;
 foreach my $dataset (keys %$dbProfiles) {
+
     $numDatasets++;
     my $sumFiles;
     my $datasetError;
@@ -276,10 +277,10 @@ foreach my $dataset (keys %$dbProfiles) {
 	}
 
 	print STDERR "\n   Testing correlations of profile $profileName.\n"; 
-	my $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}.txt";
-	my $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}.txt";
-	print STDERR "          File containing sample correlations: $sampleOutputFile\n";
-	print STDERR "          File containing gene correlations: $geneOutputFile\n";
+	my $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}";
+	my $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}";
+	print STDERR "          Files containing scatterplots and sample correlations: ${sampleOutputFile}.txt  ${sampleOutputFile}.pdf\n";
+	print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
 	print STDERR "          Input expression files:\n";
 	print STDERR "                 $file\n";
 	print STDERR "                 $legacyFile\n";
@@ -288,9 +289,9 @@ foreach my $dataset (keys %$dbProfiles) {
 	$cmd = "rnaSeqGeneCorrTwoExpts.R $file $legacyFile $geneOutputFile";
 	system($cmd);
 
-	my ($numFailedSampleCorrelations1,$sampleCorrelations1) = makeReportFromSampleOutputFile($sampleOutputFile);
+	my ($numFailedSampleCorrelations1,$sampleCorrelations1) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
 	$datasetError=1 if ($numFailedSampleCorrelations1);
-	&makeReportFromGeneOutputFile($geneOutputFile);
+	&makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	if ($fileTwo && $legacyFileTwo) {
 	    my ($numFailedSampleCorrelations2,$sampleCorrelations2);
@@ -298,10 +299,10 @@ foreach my $dataset (keys %$dbProfiles) {
 	    my ($numFailedSampleCorrelations4,$sampleCorrelations4);
 
 	    print STDERR "\n   Testing correlations of profile $newProfileName\n"; 
-	    my $sampleOutputFile = "$orgDirectory/sample_correlations_${studyIdTwo}.txt";
-	    my $geneOutputFile = "$orgDirectory/gene_correlations_${studyIdTwo}.txt";
-	    print STDERR "          File containing sample correlations: $sampleOutputFile\n";
-	    print STDERR "          File containing gene correlations: $geneOutputFile\n";
+	    my $sampleOutputFile = "$orgDirectory/sample_correlations_${studyIdTwo}";
+	    my $geneOutputFile = "$orgDirectory/gene_correlations_${studyIdTwo}";
+	    print STDERR "          Files containing scatterplot and sample correlations: ${sampleOutputFile}.txt ${sampleOutputFile}.pdf\n";
+	    print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
 	    print STDERR "          Input expression files:\n";
 	    print STDERR "                 $fileTwo\n";
 	    print STDERR "                 $legacyFileTwo\n";
@@ -310,14 +311,14 @@ foreach my $dataset (keys %$dbProfiles) {
 	    $cmd = "rnaSeqGeneCorrTwoExpts.R $fileTwo $legacyFileTwo $geneOutputFile";
 	    system($cmd);
 
-	    ($numFailedSampleCorrelations2,$sampleCorrelations2) = makeReportFromSampleOutputFile($sampleOutputFile);
-	    &makeReportFromGeneOutputFile($geneOutputFile);
+	    ($numFailedSampleCorrelations2,$sampleCorrelations2) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	    print STDERR "\n   Testing correlations after switching strands:\n";
-	    $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}_A.txt"; 
-	    $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}_A.txt"; 
-	    print STDERR "          File containing sample correlations: $sampleOutputFile\n";
-	    print STDERR "          File containing gene correlations: $geneOutputFile\n";
+	    $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}_A"; 
+	    $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}_A"; 
+	    print STDERR "          Files containing scatterplots and sample correlations: ${sampleOutputFile}.txt  ${sampleOutputFile}.pdf\n";
+	    print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
 	    print STDERR "          Input expression files:\n";
 	    print STDERR "                 $fileTwo\n";
 	    print STDERR "                 $legacyFile\n";
@@ -326,14 +327,14 @@ foreach my $dataset (keys %$dbProfiles) {
 	    $cmd = "rnaSeqGeneCorrTwoExpts.R $fileTwo $legacyFile $geneOutputFile";
 	    system($cmd);
 
-	    ($numFailedSampleCorrelations3,$sampleCorrelations3) = makeReportFromSampleOutputFile($sampleOutputFile);
-	    &makeReportFromGeneOutputFile($geneOutputFile);
+	    ($numFailedSampleCorrelations3,$sampleCorrelations3) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	    print STDERR "\n   Testing correlations after switching strands (the other pair):\n";
-	    $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}_B.txt"; 
-	    $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}_B.txt"; 
-	    print STDERR "          File containing sample correlations: $sampleOutputFile\n";
-	    print STDERR "          File containing gene correlations: $geneOutputFile\n";
+	    $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}_B"; 
+	    $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}_B"; 
+	    print STDERR "          Files containing scatterplots and sample correlations: ${sampleOutputFile}.txt ${sampleOutputFile}.pdf\n";
+	    print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
 	    print STDERR "          Input expression files:\n";
 	    print STDERR "                 $file\n";
 	    print STDERR "                 $legacyFileTwo\n";
@@ -342,8 +343,8 @@ foreach my $dataset (keys %$dbProfiles) {
 	    $cmd = "rnaSeqGeneCorrTwoExpts.R $file $legacyFileTwo $geneOutputFile";
 	    system($cmd);
 
-	    ($numFailedSampleCorrelations4,$sampleCorrelations4) = makeReportFromSampleOutputFile($sampleOutputFile);
-	    &makeReportFromGeneOutputFile($geneOutputFile);
+	    ($numFailedSampleCorrelations4,$sampleCorrelations4) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	    my @corrBefore = (@{$sampleCorrelations1},@{$sampleCorrelations2});
 	    my $numCorrBefore = scalar @corrBefore;
@@ -357,6 +358,17 @@ foreach my $dataset (keys %$dbProfiles) {
 
 	    print STDERR "\n    RESULT: Average between-sample correlation $corrMeanBefore and $numFailedBeforeSwitch / $numCorrBefore correlations failed.\n";
 	    print STDERR "            After switching strands, average correlation $corrMeanAfter and $numFailedAfterSwitch / $numCorrAfter correlations failed.\n";
+	    if ($corrMeanAfter > $corrMeanBefore) {
+		print STDERR "            The correlation is higher after switching strands. For the new build, it is likely that you need to\n";
+		print STDERR "               flip the values for switchStrandsGBrowse and switchStrandsProfiles properties in the dataset\n";
+		print STDERR "               presenter xml. To be sure, check whether you see the expected coverage in JBrowse tracks and\n";
+		print STDERR "               expected FPKM/TPM values on the gene page.\n";
+	    } else {
+		print STDERR "            The correlation is NOT higher after switching strands. For the new build, it is likely that you DO NOT\n";
+		print STDERR "               need to switch the values for switchStrandsGBrowse and switchStrandsProfiles properties in the\n";
+		print STDERR "               dataset presenter xml. To be sure, check whether you see the expected coverage in JBrowse tracks\n";
+		print STDERR "               and expected FPKM/TPM values on the gene page.\n";
+	    }
 	} else {
 	    push @sampleCorrelationsUnstranded, @{$sampleCorrelations1};
 	    $numSampleCorrFailedUnstranded += $numFailedSampleCorrelations1;   

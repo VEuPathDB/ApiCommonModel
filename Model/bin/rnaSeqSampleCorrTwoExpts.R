@@ -16,6 +16,8 @@ if (length(arguments)!=3) {
 fileName1 <- arguments[1];
 fileName2 <- arguments[2];
 outFile <- arguments[3];
+correlationFile <- paste(outFile,"txt",sep=".");
+scatterFile <- paste(outFile,"pdf",sep=".");
 
 expt1 <- read.table(arguments[1],header=TRUE,sep="\t");
 expt2 <- read.table(arguments[2],header=TRUE,sep="\t");
@@ -43,8 +45,13 @@ results[nrow(results),1] <- paste(nrow(merged),min(merged),max(merged),sep="_");
 
 for (a in 1:numSamples1) {
   for (b in 1:numSamples2) {
-    results[a,b] <- cor(as.numeric(merged[,a]),as.numeric(merged[,(b+numSamples1)]));
+    results[a,b] <- cor(as.numeric(merged[,a]),as.numeric(merged[,(b+numSamples1)]),method="spearman");
   }
 }
 
-write.table(results,file=outFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);
+write.table(results,file=correlationFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);
+
+pdf(scatterFile,width=8,height=8);
+par(mar=c(1,1,1,1))
+pairs(log10(merged+1), pch=20, cex.labels=1-0.02*numSamples1, lower.panel=NULL);
+dev.off();
