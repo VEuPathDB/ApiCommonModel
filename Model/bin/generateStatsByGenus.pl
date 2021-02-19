@@ -6,14 +6,22 @@ use IO::File;
 use Getopt::Long;
 use CBIL::Util::PropertySet;
 
-my ($dbname, $gusConfigFile,$logDate);
+my ($dbname, $gusConfigFile,$logDate, $outputFile);
 
-&GetOptions('database|db=s' => \$dbname,
+&GetOptions('database|d=s' => \$dbname,
             'gusConfigFile|c=s' => \$gusConfigFile,
             'logDate|date=s' => \$logDate,
+            'outputFile|o=s' => \$outputFile,
             );
 
-die "usage: generateStatsByGenus -database|d <database> -logDate|date <date for logs ... eg 20210101 for the december 2020 log file> -gusConfigFile|c <configFile optional if in gus_home/config>\n" unless $dbname && $logDate;
+die "usage: generateStatsByGenus -database|d <database> -logDate|date <date for logs ... eg 20210101 for the december 2020 log file> -gusConfigFile|c <configFile optional if in gus_home/config> -outputFile|f <output file for tab delimited output>\n" unless $dbname && $logDate;
+
+unless ($logDate){
+  system("ssh watermelon ls /etc/httpd/logs/w1*/archive/access_log*");
+  print STDERR "Enter numeric portion of a filename as the logDate\n";
+  $logDate = <STDIN>;
+  chomp $logDate;
+}
 
 #------- Uid and Password..these are fetched from the gus.cnfig file----------
 $gusConfigFile = $ENV{GUS_HOME} . "/config/gus.config" unless($gusConfigFile);
@@ -63,16 +71,14 @@ $dbh->disconnect();
 
 my @com;
 my @servers = ("watermelon", "fir");
-$com[0] = "ssh watermelon zcat /etc/httpd/logs/w1*/archive/access_log-".$logDate.".gz";
-$com[1] = "ssh fir zcat /etc/httpd/logs/w2*/archive/access_log-".$logDate.".gz";
-## for testing
-#$com[0] = "ssh watermelon cat /etc/httpd/logs/w1.plasmodb.org/access_log";
-#$com[1] = "ssh fir cat /etc/httpd/logs/w2.plasmodb.org/access_log";
 
 my $tot = 0;
-my %taxa;
+my %gptaxa;
+my %staxa;
+my %search;
 foreach my $s (@servers){
   my $cmd = "ssh $s ls /etc/httpd/logs/w*/archive/access_log-".$logDate.".gz";
+#  my $cmd = "ssh $s ls /etc/httpd/logs/w1.plasmodb.org/archive/access_log-".$logDate.".gz";
   foreach my $f (`$cmd`){
     chomp $f;
     next if $f =~ /(clinepidb|orthomcl|microbiomedb|static)/;
@@ -87,14 +93,38 @@ foreach my $s (@servers){
           next; 
         }
         $tot++;
-        $taxa{$idGenus{$1}}++;
+        $gptaxa{$idGenus{$1}}++;
+      }
+      ##now searches
+      if($l =~ /search.*organisms/){
+        undef %search;
+        while($l =~ m/organisms=(\w+)/g){
+          $search{$1} = 1;
+        }
+        foreach my $a (keys%search){
+          $staxa{$a}++;
+        }
       }
     }
   }
 }
+
+if($outputFile){
+  open(F,">$outputFile") || die "unable to open $outputFile for writing\n";
+  print F "genus\tgenomeCt\tpageCt\tsearchCt\n";
+}
  
 print "total: $tot\n";
-foreach my $t (sort{$taxa{$b} <=> $taxa{$a}}keys%taxa){
-  print "$t: $orgCt{$t} genomes, $taxa{$t} pages\n";
+foreach my $t (sort{$gptaxa{$b} <=> $gptaxa{$a}}keys%gptaxa){
+  next unless $orgCt{$t};
+  print F "$t\t",$orgCt{$t} ? "$orgCt{$t}\t" : "0\t",$gptaxa{$t} ? "$gptaxa{$t}\t" : "0\t",$staxa{$t} ? "$staxa{$t}\n" : "0\n" if $outputFile;
+  print "$t: $orgCt{$t} genomes, ",$gptaxa{$t} ? "$gptaxa{$t}" : "0"," pages, ",$staxa{$t} ? "$staxa{$t}" : "0"," searches\n";
+  delete $staxa{$t};  ##remove so can generate numbers for any remaining
 }
 
+foreach my $t (sort{$staxa{$b} <=> $staxa{$a}}keys%staxa){
+  print F "$t\t",$orgCt{$t} ? "$orgCt{$t}\t" : "0\t",$gptaxa{$t} ? "$gptaxa{$t}\t" : "0\t",$staxa{$t} ? "$staxa{$t}\n" : "0\n" if $outputFile;
+  print "$t: $orgCt{$t} genomes, ",$gptaxa{$t} ? "$gptaxa{$t}" : "0"," pages, ",$staxa{$t} ? "$staxa{$t}" : "0"," searches\n";
+}
+
+close F;

@@ -230,21 +230,6 @@
         </propertyList>
         </flatVocabParam>
 
- <flatVocabParam name="MultiBlastDatabaseOrganism"
-                     queryRef="SharedVQ.MultiBlastOrganismFiles"
-                     prompt="Target Organism"
-                     displayType="treeBox" 
-                     multiPick="true"
-                     suppressNode="true"
-                     dependedParamRef="sharedParams.BlastDatabaseType"
-                     >
-          <help>
-               Select the Organism(s) (genomes) that you wish to query your Input Sequence against.
-          </help>
-        <propertyList name="organismProperties">
-           <value>pruneNodesWithSingleExtendingChild</value>
-        </propertyList>
-        </flatVocabParam>
 
 
 
@@ -286,6 +271,13 @@
       </enumList>
    </enumParam>
 
+   <stringParam name="BlastJobDescription"
+                prompt="Job Description" number="false">
+      <help>
+        Give your job a short description.
+      </help>
+      <suggest default="My New Job" />
+   </stringParam>
 
    <flatVocabParam name="WordSize"
                    prompt="Word Size"
@@ -386,6 +378,42 @@ With this option selected you can cut and paste a FASTA sequence in upper case c
               </help>
      </flatVocabParam>
 
+   <enumParam name="MultiBlastDatabaseType"
+                      prompt="Target Data Type"
+                      displayType="checkBox"
+                      quote="false"
+                      multiPick="false">
+      <help>
+        Select the type of sequence that your Input Sequence will be BLASTed against.
+      </help>
+      <enumList>
+        <enumValue>
+          <display>Transcripts</display>
+          <term>AnnotatedTranscripts</term>
+          <internal>AnnotatedTranscripts</internal>
+        </enumValue>
+        <enumValue>
+          <display>Proteins</display>
+          <term>AnnotatedProteins</term>
+          <internal>AnnotatedProteins</internal>
+        </enumValue>
+        <enumValue>
+          <display>Genome</display>
+          <term>Genome</term>
+          <internal>Genome</internal>
+        </enumValue>
+        <enumValue excludeProjects="HostDB">
+          <display>EST</display>
+          <term>ESTs</term>
+          <internal>ESTs</internal>
+        </enumValue>
+        <enumValue excludeProjects="HostDB,VectorBase">
+          <display>PopSet</display>
+          <term>PopSet</term>
+          <internal>PopSet</internal>
+        </enumValue>
+      </enumList>
+  </enumParam>
 
    <enumParam name="BlastDatabaseType"
                       prompt="Target Data Type"
@@ -438,8 +466,16 @@ With this option selected you can cut and paste a FASTA sequence in upper case c
                   length="31000"
                   number="false"
                   multiLine="true">
+       <regex>
+         <![CDATA[^(?!(.*>.*>.*)$).*$]]>
+       </regex>
        <noTranslation value="true"/>
-       <help>Paste your Input Sequence (up to 31K bps) in the text box.  Only one Input Sequence can be entered per search.</help>
+       <help>
+         Paste your Input Sequence (up to 31K bps) in the text box.  Only one
+         Input Sequence can be entered per search.  If more than one is entered,
+         an error message will mention that your input sequence parameter does
+         not match a specific regular expression.
+       </help>
        <suggest default=""/>
      </stringParam>
 
@@ -1794,7 +1830,7 @@ order by term
         </sqlQuery>
 
         <sqlQuery name="MultiBlastOrganismFiles">
-            <paramRef ref="sharedParams.BlastDatabaseType"/>
+            <paramRef ref="sharedParams.MultiBlastDatabaseType"/>
             <column name="internal" />
             <column name="term" />
             <column name="parentTerm" />
@@ -1803,18 +1839,19 @@ order by term
  WITH orgs as ( 
  select distinct organism, project_id, type from apidbtuning.blasttypes
   ) 
-     select case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term))
-                 then files.abbreviation else '-1' end as term,
-            case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
-	    case when (ot.organism is null or ( ot.organism is not null and ot.term = files.term))
-                 then files.abbreviation else '-1' end as internal
+     select distinct nvl(ot.term, files.term) as term,
+     case when ot.organism is null then files.parentterm else ot.parentterm end as parentterm,
+      case when (ot.organism is null or
+           ( ot.organism is not null and ot.term = files.term)) then files.abbreviation
+           else '-1'
+      end as internal
 From apidbtuning.organismtree ot, (
     select distinct abbrev.organism as term,
             abbrev.parent as parentTerm,
-           '@WEBSERVICEMIRROR@' || '/' || orgs.project_id || '/build-%%buildNumber%%/' || abbreviation || '/blast/' || abbreviation as abbreviation
+            abbreviation
      from orgs, apidbtuning.organismabbreviationblast abbrev
      where orgs.organism = abbrev.organism
-      and orgs.type = '$$BlastDatabaseType$$'
+      and orgs.type = '$$MultiBlastDatabaseType$$'
       and (orgs.project_id = '@PROJECT_ID@' OR 'EuPathDB' = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
       -- need to hard-code this constraint till the org. name has a strain -- redmine #15623 
       AND NOT (abbreviation like 'GniphandrodesUnknown' and orgs.type = 'ESTs')
@@ -1829,37 +1866,38 @@ order by term
             <paramRef ref="sharedParams.BlastAlgorithm"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT '11 (default)' AS term, '11' AS internal, 'blastn' AS algorithm, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT '11 (default)' AS display, '11' AS term, '11' AS internal, 'blastn' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT '7' AS term, '7' AS internal, 'blastn' AS algorithm, 2 AS num FROM dual
+           SELECT '7' AS display, '7' AS term, '7' AS internal, 'blastn' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT '15' AS term, '15' AS internal, 'blastn' AS algorithm, 3 AS num FROM dual
+           SELECT '15' AS display, '15' AS term, '15' AS internal, 'blastn' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT '6 (default)' AS term, '6' AS internal, 'blastp' AS algorithm, 1 AS num FROM dual
+           SELECT '6 (default)' AS display, '6' AS term, '6' AS internal, 'blastp' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT '2' AS term, '2' AS internal, 'blastp' AS algorithm, 2 AS num FROM dual
+           SELECT '2' AS display, '2' AS term, '2' AS internal, 'blastp' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT '3' AS term, '3' AS internal, 'blastp' AS algorithm, 3 AS num FROM dual
+           SELECT '3' AS display, '3' AS term, '3' AS internal, 'blastp' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT '6 (default)' AS term, '6' AS internal, 'blastx' AS algorithm, 1 AS num FROM dual
+           SELECT '6 (default)' AS display, '6' AS term, '6' AS internal, 'blastx' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT '2' AS term, '2' AS internal, 'blastx' AS algorithm, 2 AS num FROM dual
+           SELECT '2' AS display, '2' AS term, '2' AS internal, 'blastx' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT '3' AS term, '3' AS internal, 'blastx' AS algorithm, 3 AS num FROM dual
+           SELECT '3' AS display, '3' AS term, '3' AS internal, 'blastx' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT '6 (default)' AS term, '6' AS internal, 'tblastn' AS algorithm, 1 AS num FROM dual
+           SELECT '6 (default)' AS display, '6' AS term, '6' AS internal, 'tblastn' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT '2' AS term, '2' AS internal, 'tblastn' AS algorithm, 2 AS num FROM dual
+           SELECT '2' AS display, '2' AS term, '2' AS internal, 'tblastn' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT '3' AS term, '3' AS internal, 'tblastn' AS algorithm, 3 AS num FROM dual
+           SELECT '3' AS display, '3' AS term, '3' AS internal, 'tblastn' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT '3 (default)' AS term, '3' AS internal, 'tblastx' AS algorithm, 1 AS num FROM dual
+           SELECT '3 (default)' AS display, '3' AS term, '3' AS internal, 'tblastx' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT '2' AS term, '2' AS internal, 'tblastx' AS algorithm, 2 AS num FROM dual
+           SELECT '2' AS display, '2' AS term, '2' AS internal, 'tblastx' AS algorithm, 2 AS num FROM dual
      ) WHERE algorithm = '$$BlastAlgorithm$$' )
 ORDER BY num ASC
                 ]]>
@@ -1871,27 +1909,28 @@ ORDER BY num ASC
             <paramRef ref="sharedParams.BlastAlgorithm"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT 'none' AS term, 'none' AS internal, '-blastn-' AS algorithm, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-blastn-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT 'BLOSUM62 (default)' AS term, 'BLOSUM62' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 1 AS num FROM dual
+           SELECT 'BLOSUM62 (default)' AS display, 'BLOSUM62' AS term, 'BLOSUM62' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT 'PAM30' AS term, 'PAM30' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 2 AS num FROM dual
+           SELECT 'PAM30' AS display, 'PAM30' AS term, 'PAM30' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT 'PAM70' AS term, 'PAM70' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 3 AS num FROM dual
+           SELECT 'PAM70' AS display, 'PAM70' AS term, 'PAM70' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT 'PAM250' AS term, 'PAM250' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 4 AS num FROM dual
+           SELECT 'PAM250' AS display, 'PAM250' AS term, 'PAM250' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 4 AS num FROM dual
 	   UNION
-           SELECT 'BLOSUM45' AS term, 'BLOSUM45' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 5 AS num FROM dual
+           SELECT 'BLOSUM45' AS display, 'BLOSUM45' AS term, 'BLOSUM45' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 5 AS num FROM dual
 	   UNION
-           SELECT 'BLOSUM50' AS term, 'BLOSUM50' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 6 AS num FROM dual
+           SELECT 'BLOSUM50' AS display, 'BLOSUM50' AS term, 'BLOSUM50' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 6 AS num FROM dual
 	   UNION
-           SELECT 'BLOSUM80' AS term, 'BLOSUM80' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 7 AS num FROM dual
+           SELECT 'BLOSUM80' AS display, 'BLOSUM80' AS term, 'BLOSUM80' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 7 AS num FROM dual
 	   UNION
-           SELECT 'BLOSUM90' AS term, 'BLOSUM90' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 8 AS num FROM dual
+           SELECT 'BLOSUM90' AS display, 'BLOSUM90' AS term, 'BLOSUM90' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 8 AS num FROM dual
      ) WHERE algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%')
 ORDER BY num ASC
                 ]]>
@@ -1902,23 +1941,24 @@ ORDER BY num ASC
             <paramRef ref="sharedParams.BlastAlgorithm"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT '2,-3 (default)' AS term, '2,-3' AS internal, '-blastn-' AS algorithm, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT '2,-3 (default)' AS display, '2,-3' AS term, '2,-3' AS internal, '-blastn-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT '1,-2' AS term, '1,-2' AS internal, '-blastn-' AS algorithm, 2 AS num FROM dual
+           SELECT '1,-2' AS display, '1,-2' AS term, '1,-2' AS internal, '-blastn-' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT '1,-3' AS term, '1,-3' AS internal, '-blastn-' AS algorithm, 3 AS num FROM dual
+           SELECT '1,-3' AS display, '1,-3' AS term, '1,-3' AS internal, '-blastn-' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT '1,-4' AS term, '1,-4' AS internal, '-blastn-' AS algorithm, 4 AS num FROM dual
+           SELECT '1,-4' AS display, '1,-4' AS term, '1,-4' AS internal, '-blastn-' AS algorithm, 4 AS num FROM dual
 	   UNION
-           SELECT '4,-5' AS term, '4,-5' AS internal, '-blastn-' AS algorithm, 5 AS num FROM dual
+           SELECT '4,-5' AS display, '4,-5' AS term, '4,-5' AS internal, '-blastn-' AS algorithm, 5 AS num FROM dual
 	   UNION
-           SELECT '1,-1' AS term, '1,-1' AS internal, '-blastn-' AS algorithm, 6 AS num FROM dual
+           SELECT '1,-1' AS display, '1,-1' AS term, '1,-1' AS internal, '-blastn-' AS algorithm, 6 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 1 AS num FROM dual
      ) WHERE algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%')
 ORDER BY num ASC
                 ]]>
@@ -1932,273 +1972,274 @@ ORDER BY num ASC
             <paramRef ref="sharedParams.MatchMismatchScore"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT '5,2 (default)' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT '5,2 (default)' AS display, '5,2' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '4,4' AS term, '4,4' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 2 AS num FROM dual
+           SELECT '4,4' AS display, '4,4' AS term, '4,4' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '2,4' AS term, '2,4' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 3 AS num FROM dual
+           SELECT '2,4' AS display, '2,4' AS term, '2,4' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '0,4' AS term, '0,4' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 4 AS num FROM dual
+           SELECT '0,4' AS display, '0,4' AS term, '0,4' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '3,3' AS term, '3,3' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 5 AS num FROM dual
+           SELECT '3,3' AS display, '3,3' AS term, '3,3' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '6,2' AS term, '6,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 6 AS num FROM dual
+           SELECT '6,2' AS display, '6,2' AS term, '6,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '4,2' AS term, '4,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 7 AS num FROM dual
+           SELECT '4,2' AS display, '4,2' AS term, '4,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 8 AS num FROM dual
+           SELECT '2,2' AS display, '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '2,-3' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '5,2 (default)' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 1 AS num FROM dual
+           SELECT '5,2 (default)' AS display, '5,2' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 2 AS num FROM dual
+           SELECT '2,2' AS display, '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 3 AS num FROM dual
+           SELECT '1,2' AS display, '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 4 AS num FROM dual
+           SELECT '0,2' AS display, '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '3,1' AS term, '3,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 5 AS num FROM dual
+           SELECT '3,1' AS display, '3,1' AS term, '3,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 6 AS num FROM dual
+           SELECT '2,1' AS display, '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '1,1' AS term, '1,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 7 AS num FROM dual
+           SELECT '1,1' AS display, '1,1' AS term, '1,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-2' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '5,2 (default)' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 1 AS num FROM dual
+           SELECT '5,2 (default)' AS display, '5,2' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 2 AS num FROM dual
+           SELECT '2,2' AS display, '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 3 AS num FROM dual
+           SELECT '1,2' AS display, '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 4 AS num FROM dual
+           SELECT '0,2' AS display, '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '3,1' AS term, '3,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 5 AS num FROM dual
+           SELECT '3,1' AS display, '3,1' AS term, '3,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 6 AS num FROM dual
+           SELECT '2,1' AS display, '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '1,1' AS term, '1,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 7 AS num FROM dual
+           SELECT '1,1' AS display, '1,1' AS term, '1,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-3' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '5,2 (default)' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 1 AS num FROM dual
+           SELECT '5,2 (default)' AS display, '5,2' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 2 AS num FROM dual
+           SELECT '1,2' AS display, '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 3 AS num FROM dual
+           SELECT '0,2' AS display, '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 4 AS num FROM dual
+           SELECT '2,1' AS display, '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '1,1' AS term, '1,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 5 AS num FROM dual
+           SELECT '1,1' AS display, '1,1' AS term, '1,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-4' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '12,8 (default)' AS term, '12,8' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 1 AS num FROM dual
+           SELECT '12,8 (default)' AS display, '12,8' AS term, '12,8' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '6,5' AS term, '6,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 2 AS num FROM dual
+           SELECT '6,5' AS display, '6,5' AS term, '6,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '5,5' AS term, '5,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 3 AS num FROM dual
+           SELECT '5,5' AS display, '5,5' AS term, '5,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '4,5' AS term, '4,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 4 AS num FROM dual
+           SELECT '4,5' AS display, '4,5' AS term, '4,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '3,5' AS term, '3,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 5 AS num FROM dual
+           SELECT '3,5' AS display, '3,5' AS term, '3,5' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '4,-5' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '5,2 (default)' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 1 AS num FROM dual
+           SELECT '5,2 (default)' AS display, '5,2' AS term, '5,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '3,2' AS term, '3,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 2 AS num FROM dual
+           SELECT '3,2' AS display, '3,2' AS term, '3,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 3 AS num FROM dual
+           SELECT '2,2' AS display, '2,2' AS term, '2,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 4 AS num FROM dual
+           SELECT '1,2' AS display, '1,2' AS term, '1,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 5 AS num FROM dual
+           SELECT '0,2' AS display, '0,2' AS term, '0,2' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '4,1' AS term, '4,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 6 AS num FROM dual
+           SELECT '4,1' AS display, '4,1' AS term, '4,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '3,1' AS term, '3,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 7 AS num FROM dual
+           SELECT '3,1' AS display, '3,1' AS term, '3,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 8 AS num FROM dual
+           SELECT '2,1' AS display, '2,1' AS term, '2,1' AS internal, '-blastn-' AS algorithm, 'none' AS matrix, '1,-1' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '11,1 (default)' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '11,1 (default)' AS display, '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '11,2' AS term, '11,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '11,2' AS display, '11,2' AS term, '11,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '10,2' AS term, '10,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '10,2' AS display, '10,2' AS term, '10,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '9,2' AS term, '9,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '9,2' AS display, '9,2' AS term, '9,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '8,2' AS display, '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '7,2' AS display, '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '6,2' AS display, '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '13,1' AS term, '13,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 8 AS num FROM dual
+           SELECT '13,1' AS display, '13,1' AS term, '13,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '12,1' AS term, '12,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 9 AS num FROM dual
+           SELECT '12,1' AS display, '12,1' AS term, '12,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 9 AS num FROM dual
 	   UNION
-           SELECT '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 10 AS num FROM dual
+           SELECT '10,1' AS display, '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 10 AS num FROM dual
 	   UNION
-           SELECT '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 11 AS num FROM dual
+           SELECT '9,1' AS display, '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 11 AS num FROM dual
 	   UNION
-           SELECT '9,1 (default)' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '9,1 (default)' AS display, '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '7,2' AS display, '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '6,2' AS display, '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '5,2' AS term, '5,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '5,2' AS display, '5,2' AS term, '5,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '10,1' AS display, '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '8,1' AS term, '8,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '8,1' AS display, '8,1' AS term, '8,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '13,3' AS display, '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '15,3' AS term, '15,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 8 AS num FROM dual
+           SELECT '15,3' AS display, '15,3' AS term, '15,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '14,1' AS term, '14,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 9 AS num FROM dual
+           SELECT '14,1' AS display, '14,1' AS term, '14,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 9 AS num FROM dual
 	   UNION
-           SELECT '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 10 AS num FROM dual
+           SELECT '14,2' AS display, '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 10 AS num FROM dual
 	   UNION
-           SELECT '10,1 (default)' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '10,1 (default)' AS display, '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '8,2' AS display, '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '7,2' AS display, '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '6,2' AS display, '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '11,1' AS display, '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '9,1' AS display, '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '12,3' AS display, '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '11,2' AS term, '11,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 8 AS num FROM dual
+           SELECT '11,2' AS display, '11,2' AS term, '11,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '14,2 (default)' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '14,2 (default)' AS display, '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '15,3' AS term, '15,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '15,3' AS display, '15,3' AS term, '15,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '14,3' AS term, '14,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '14,3' AS display, '14,3' AS term, '14,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '13,3' AS display, '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '12,3' AS display, '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '11,3' AS term, '11,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '11,3' AS display, '11,3' AS term, '11,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '17,2' AS term, '17,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '17,2' AS display, '17,2' AS term, '17,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '16,2' AS term, '16,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 8 AS num FROM dual
+           SELECT '16,2' AS display, '16,2' AS term, '16,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '15,2' AS term, '15,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 9 AS num FROM dual
+           SELECT '15,2' AS display, '15,2' AS term, '15,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 9 AS num FROM dual
 	   UNION
-           SELECT '13,2' AS term, '13,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 10 AS num FROM dual
+           SELECT '13,2' AS display, '13,2' AS term, '13,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 10 AS num FROM dual
 	   UNION
-           SELECT '21,1' AS term, '21,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 11 AS num FROM dual
+           SELECT '21,1' AS display, '21,1' AS term, '21,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 11 AS num FROM dual
 	   UNION
-           SELECT '20,1' AS term, '20,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 12 AS num FROM dual
+           SELECT '20,1' AS display, '20,1' AS term, '20,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 12 AS num FROM dual
 	   UNION
-           SELECT '19,1' AS term, '19,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 13 AS num FROM dual
+           SELECT '19,1' AS display, '19,1' AS term, '19,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 13 AS num FROM dual
 	   UNION
-           SELECT '18,1' AS term, '18,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 14 AS num FROM dual
+           SELECT '18,1' AS display, '18,1' AS term, '18,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 14 AS num FROM dual
 	   UNION
-           SELECT '17,1' AS term, '17,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 15 AS num FROM dual
+           SELECT '17,1' AS display, '17,1' AS term, '17,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 15 AS num FROM dual
 	   UNION
-           SELECT '15,2 (default)' AS term, '15,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '15,2 (default)' AS display, '15,2' AS term, '15,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '13,3' AS display, '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '12,3' AS display, '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '11,3' AS term, '11,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '11,3' AS display, '11,3' AS term, '11,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '10,3' AS term, '10,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '10,3' AS display, '10,3' AS term, '10,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '14,2' AS display, '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '13,2' AS term, '13,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '13,2' AS display, '13,2' AS term, '13,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '12,2' AS term, '12,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 8 AS num FROM dual
+           SELECT '12,2' AS display, '12,2' AS term, '12,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '19,1' AS term, '19,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 9 AS num FROM dual
+           SELECT '19,1' AS display, '19,1' AS term, '19,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 9 AS num FROM dual
 	   UNION
-           SELECT '18,1' AS term, '18,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 10 AS num FROM dual
+           SELECT '18,1' AS display, '18,1' AS term, '18,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 10 AS num FROM dual
 	   UNION
-           SELECT '17,1' AS term, '17,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 11 AS num FROM dual
+           SELECT '17,1' AS display, '17,1' AS term, '17,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 11 AS num FROM dual
 	   UNION
-           SELECT '16,1' AS term, '16,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 12 AS num FROM dual
+           SELECT '16,1' AS display, '16,1' AS term, '16,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 12 AS num FROM dual
 	   UNION
-           SELECT '13,2 (default)' AS term, '13,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '13,2 (default)' AS display, '13,2' AS term, '13,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '13,3' AS display, '13,3' AS term, '13,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '12,3' AS display, '12,3' AS term, '12,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '11,3' AS term, '11,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '11,3' AS display, '11,3' AS term, '11,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '10,3' AS term, '10,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '10,3' AS display, '10,3' AS term, '10,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '9,3' AS term, '9,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '9,3' AS display, '9,3' AS term, '9,3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '16,2' AS term, '16,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '16,2' AS display, '16,2' AS term, '16,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT '15,2' AS term, '15,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 8 AS num FROM dual
+           SELECT '15,2' AS display, '15,2' AS term, '15,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 8 AS num FROM dual
 	   UNION
-           SELECT '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 9 AS num FROM dual
+           SELECT '14,2' AS display, '14,2' AS term, '14,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 9 AS num FROM dual
 	   UNION
-           SELECT '12,2' AS term, '12,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 10 AS num FROM dual
+           SELECT '12,2' AS display, '12,2' AS term, '12,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 10 AS num FROM dual
 	   UNION
-           SELECT '19,1' AS term, '19,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 11 AS num FROM dual
+           SELECT '19,1' AS display, '19,1' AS term, '19,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 11 AS num FROM dual
 	   UNION
-           SELECT '18,1' AS term, '18,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 12 AS num FROM dual
+           SELECT '18,1' AS display, '18,1' AS term, '18,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 12 AS num FROM dual
 	   UNION
-           SELECT '17,1' AS term, '17,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 13 AS num FROM dual
+           SELECT '17,1' AS display, '17,1' AS term, '17,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 13 AS num FROM dual
 	   UNION
-           SELECT '16,1' AS term, '16,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 14 AS num FROM dual
+           SELECT '16,1' AS display, '16,1' AS term, '16,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 14 AS num FROM dual
 	   UNION
-           SELECT '15,1' AS term, '15,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 15 AS num FROM dual
+           SELECT '15,1' AS display, '15,1' AS term, '15,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 15 AS num FROM dual
 	   UNION
-           SELECT '10,1 (default)' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '10,1 (default)' AS display, '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '8,2' AS display, '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '7,2' AS display, '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION          
-	   SELECT '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 4 AS num FROM dual
+	   SELECT '6,2' AS display, '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION           
-	   SELECT '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 5 AS num FROM dual
+	   SELECT '11,1' AS display, '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-	   SELECT '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 6 AS num FROM dual
+	   SELECT '9,1' AS display, '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '10,1 (default)' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT '10,1 (default)' AS display, '10,1' AS term, '10,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT '9,2' AS term, '9,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 2 AS num FROM dual
+           SELECT '9,2' AS display, '9,2' AS term, '9,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 2 AS num FROM dual
 	   UNION
-           SELECT '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 3 AS num FROM dual
+           SELECT '8,2' AS display, '8,2' AS term, '8,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 3 AS num FROM dual
 	   UNION
-           SELECT '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 4 AS num FROM dual
+           SELECT '7,2' AS display, '7,2' AS term, '7,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 4 AS num FROM dual
 	   UNION
-           SELECT '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 5 AS num FROM dual
+           SELECT '6,2' AS display, '6,2' AS term, '6,2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 5 AS num FROM dual
 	   UNION
-           SELECT '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 6 AS num FROM dual
+           SELECT '11,1' AS display, '11,1' AS term, '11,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 6 AS num FROM dual
 	   UNION
-           SELECT '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 7 AS num FROM dual
+           SELECT '9,1' AS display, '9,1' AS term, '9,1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 7 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM62' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'PAM30' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'PAM70' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'PAM250' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM45' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM50' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM80' AS matrix, 'none' AS score, 1 AS num FROM dual
 	   UNION
-           SELECT 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 1 AS num FROM dual
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-tblastx-' AS algorithm, 'BLOSUM90' AS matrix, 'none' AS score, 1 AS num FROM dual
      ) WHERE (algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%') AND (matrix = $$ScoringMatrix$$) AND (score = $$MatchMismatchScore$$) )
 ORDER BY num ASC
                 ]]>
@@ -2210,19 +2251,20 @@ ORDER BY num ASC
             <paramRef ref="sharedParams.BlastAlgorithm"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT 'none' AS term, 'none' AS internal, '-blastn-tblastx-' AS algorithm, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT 'none' AS display, 'none' AS term, 'none' AS internal, '-blastn-tblastx-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT 'Conditional compositional score matrix adjustment (default)' AS term, '2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 1 AS num FROM dual
+           SELECT 'Conditional compositional score matrix adjustment (default)' AS display, 'conditional-comp-based-score-adjustment' AS term, '2' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT 'No adjustment' AS term, '0' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 2 AS num FROM dual
+           SELECT 'No adjustment' AS display, 'none' AS term, '0' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT 'Composition-based statistics' AS term, '1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 3 AS num FROM dual
+           SELECT 'Composition-based statistics' AS display, 'comp-based-stats' AS term, '1' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 3 AS num FROM dual
 	   UNION
-           SELECT 'Universal compositional score matrix adjustment' AS term, '3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 4 AS num FROM dual
+           SELECT 'Universal compositional score matrix adjustment' AS display, 'unconditional-comp-based-score-adjustment' AS term, '3' AS internal, '-blastp-blastx-tblastn-' AS algorithm, 4 AS num FROM dual
      ) WHERE algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%')
 ORDER BY num ASC
                 ]]>
@@ -2234,25 +2276,26 @@ ORDER BY num ASC
             <paramRef ref="sharedParams.CompAdjust"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT 'dust (default)' AS term, 'dust' AS internal, '-blastn-' AS algorithm, '-none-' AS compadjust, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT 'dust (default)' AS display, 'dust' AS term, 'dust' AS internal, '-blastn-' AS algorithm, '-none-' AS compadjust, 1 AS num FROM dual
 	   UNION
-           SELECT 'no filter' AS term, 'no' AS internal, '-blastn-' AS algorithm, '-none-' AS compadjust, 2 AS num FROM dual
+           SELECT 'no filter' AS display, 'no filter' AS term, 'no' AS internal, '-blastn-' AS algorithm, '-none-' AS compadjust, 2 AS num FROM dual
 	   UNION
-           SELECT 'no filter (default)' AS term, 'no' AS internal, '-blastp-' AS algorithm, '-none-1-2-3-' AS compadjust, 1 AS num FROM dual
+           SELECT 'no filter (default)' AS display, 'no filter' AS term, 'no' AS internal, '-blastp-' AS algorithm, '-none-1-2-3-' AS compadjust, 1 AS num FROM dual
 	   UNION
-           SELECT 'seg' AS term, 'seg' AS internal, '-blastp-' AS algorithm, '-none-1-2-3-' AS compadjust, 2 AS num FROM dual
+           SELECT 'seg' AS display, 'seg' AS term, 'seg' AS internal, '-blastp-' AS algorithm, '-none-1-2-3-' AS compadjust, 2 AS num FROM dual
 	   UNION
-           SELECT 'seg (default)' AS term, 'seg' AS internal, '-blastp-' AS algorithm, '-0-' AS compadjust, 1 AS num FROM dual
+           SELECT 'seg (default)' AS display, 'seg' AS term, 'seg' AS internal, '-blastp-' AS algorithm, '-0-' AS compadjust, 1 AS num FROM dual
 	   UNION
-           SELECT 'no filter' AS term, 'no' AS internal, '-blastp-' AS algorithm, '-0-' AS compadjust, 2 AS num FROM dual
+           SELECT 'no filter' AS display, 'no filter' AS term, 'no' AS internal, '-blastp-' AS algorithm, '-0-' AS compadjust, 2 AS num FROM dual
 	   UNION
-           SELECT 'seg (default)' AS term, 'seg' AS internal, '-blastx-tblastn-tblastx-' AS algorithm, '-none-0-1-2-3-' AS compadjust, 1 AS num FROM dual
+           SELECT 'seg (default)' AS display, 'seg' AS term, 'seg' AS internal, '-blastx-tblastn-tblastx-' AS algorithm, '-none-0-1-2-3-' AS compadjust, 1 AS num FROM dual
 	   UNION
-           SELECT 'no filter' AS term, 'no' AS internal, '-blastx-tblastn-tblastx-' AS algorithm, '-none-0-1-2-3-' AS compadjust, 2 AS num FROM dual
+           SELECT 'no filter' AS display, 'no filter' AS term, 'no' AS internal, '-blastx-tblastn-tblastx-' AS algorithm, '-none-0-1-2-3-' AS compadjust, 2 AS num FROM dual
      ) WHERE ( algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%' ) AND ( compadjust LIKE '%-' || $$CompAdjust$$ || '-%' ) )
 ORDER BY num ASC
                 ]]>
@@ -2264,17 +2307,18 @@ ORDER BY num ASC
             <paramRef ref="sharedParams.BlastAlgorithm"/>
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (
-     SELECT term,internal,num FROM (
-           SELECT 'true (default)' AS term, 'true' AS internal, '-blastn-' AS algorithm, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+     SELECT display,term,internal,num FROM (
+           SELECT 'true (default)' AS display, 'true' AS term, 'true' AS internal, '-blastn-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT 'false' AS term, 'false' AS internal, '-blastn-' AS algorithm, 2 AS num FROM dual
+           SELECT 'false' AS display, 'false' AS term, 'false' AS internal, '-blastn-' AS algorithm, 2 AS num FROM dual
 	   UNION
-           SELECT 'false (default)' AS term, 'false' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 1 AS num FROM dual
+           SELECT 'false (default)' AS display, 'false' AS term, 'false' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 1 AS num FROM dual
 	   UNION
-           SELECT 'true' AS term, 'true' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 2 AS num FROM dual
+           SELECT 'true' AS display, 'true' AS term, 'true' AS internal, '-blastp-blastx-tblastn-tblastx-' AS algorithm, 2 AS num FROM dual
      ) WHERE ( algorithm LIKE '%-' || '$$BlastAlgorithm$$' || '-%' )  )
 ORDER BY num ASC
                 ]]>
@@ -2285,12 +2329,13 @@ ORDER BY num ASC
         <sqlQuery name="LowerCaseMask">
             <column name="internal" />
             <column name="term" />
+            <column name="display" />
             <sql>
                 <![CDATA[
-SELECT term,internal FROM (  
-           SELECT 'false (default)' AS term, 'false' AS internal, 1 AS num FROM dual
+SELECT display,term,internal FROM (
+           SELECT 'false (default)' AS display, 'false' AS term, 'false' AS internal, 1 AS num FROM dual
 	   UNION
-           SELECT 'true' AS term, 'true' AS internal, 2 AS num FROM dual
+           SELECT 'true' AS display, 'true' AS term, 'true' AS internal, 2 AS num FROM dual
 ) ORDER BY num ASC
                 ]]>
             </sql>
