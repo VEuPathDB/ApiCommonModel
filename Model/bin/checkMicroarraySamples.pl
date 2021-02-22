@@ -27,7 +27,7 @@ my $legacyDatabaseDirectory = "$workingDir/$legacyDatabaseInstance";
 my $dbh = &connectToDb($databaseInstance);
 my $dbProfiles = &queryForProfiles($dbh);
 
-my ($legacyDbh, $legacyDbProfiles, $legacyDbStrandedDatasets);
+my ($legacyDbh, $legacyDbProfiles);
 if($legacyDatabaseInstance) {
   &makeDirectoryUnlessExists($legacyDatabaseDirectory);
   $legacyDbh = &connectToDb($legacyDatabaseInstance);
@@ -39,7 +39,6 @@ my $numDatasetsWithError=0;
 foreach my $dataset (keys %$dbProfiles) {
 
     $numDatasets++;
-    my $sumFiles;
     my $datasetError;
 
     print STDERR "\n\n****** Reporting on DATASET '$dataset' ******\n";
@@ -49,10 +48,11 @@ foreach my $dataset (keys %$dbProfiles) {
 	$datasetError=1;
     }
 
-    my $profiles; # $profiles -> legacy/new -> profileName ->id -> id (strand -> first)
+    my $profiles; # $profiles -> legacy/new -> profileName -> id 
     my $numScaled=0;
     foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
 	print STDERR "          $profile\n";
+	$profiles->{new}->{$profile}->{id} = $dbProfiles->{$dataset}->{$profile};
 	$numScaled++ if ($profile =~ /scaled/);
     }
     
@@ -82,6 +82,7 @@ foreach my $dataset (keys %$dbProfiles) {
 	    my $numLegacyScaled=0;
 	    foreach my $profile (keys %{$legacyDbProfiles->{$dataset}}) {
 		print STDERR "          $profile\n";
+		$profiles->{legacy}->{$profile}->{id} = $legacyDbProfiles->{$dataset}->{$profile};
 		$numLegacyScaled++ if ($profile =~ /scaled/);
 	    }
 	
@@ -130,12 +131,12 @@ foreach my $dataset (keys %$dbProfiles) {
 	unless(-e $file) {
 	    my $fh;
 	    open($fh, ">$file") or die "Cannot open file $file for writing: $!";
-	    &printHeader($studyId, $fh, $dbh);
-	    &printData($studyId, $fh, $dbh);
+	    my $numSamples = printHeader($studyId, $fh, $dbh);
+	    &printData($studyId, $numSamples, $fh, $dbh);
 	    close $fh;
 	}
     }
-
+    
     if($legacyDatabaseInstance) {
 	foreach my $profileName (keys %{$profiles->{legacy}}) {
 	    my $studyId = $profiles->{legacy}->{$profileName}->{id};
@@ -150,83 +151,24 @@ foreach my $dataset (keys %$dbProfiles) {
 	    unless(-e $file) {
 		my $fh;
 		open($fh, ">$file") or die "Cannot open file $file for writing: $!";
-		&printHeader($studyId, $fh, $legacyDbh);
-		&printData($studyId, $fh, $legacyDbh);
+		my $numSamples = printHeader($studyId, $fh, $legacyDbh);
+		&printData($studyId, $numSamples, $fh, $legacyDbh);
 		close $fh;
 	    }
 	}
     }
 
-    my $seenAlready;
-    my $numSampleCorrFailedUnstranded=0;
-    my @sampleCorrelationsUnstranded;
-    my $sampleCorrelations;
+    my @sampleCorrelationsForThisDataset;
+    my $numFailedSampleCorrelationsForThisDataset = 0;
     foreach my $profileName (keys %{$profiles->{new}}) {
 	my $studyId = $profiles->{new}->{$profileName}->{id};
 	my $file = "$orgDirectory/${studyId}.txt";
 	my $legacyStudyId;
 	my $legacyFile;
 	
-	my $studyIdTwo;   # get other strand so can check if mix-up
-	my $fileTwo; 
-	my $legacyStudyIdTwo;
-	my $legacyFileTwo;
-	my $newProfileName;
-
 	if (exists $profiles->{legacy}->{$profileName}) {
 	    $legacyStudyId = $profiles->{legacy}->{$profileName}->{id};
 	    $legacyFile = "$legacyOrgDirectory/${legacyStudyId}.txt";
-	    $newProfileName = $profileName;
-	    my $seenProfileName;
-	    if ( $newProfileName =~ /(firststrand|secondstrand)/) {
-		my $strandType = $1;
-		if ($newProfileName =~ /^(.+)$strandType/) {
-		    $seenProfileName = $1;
-		    next if (exists $seenAlready->{$seenProfileName});         ## only deal with stranded profiles once
-		    $seenAlready->{$seenProfileName} = 1;
-		    if ( $newProfileName =~ /firststrand/) {
-			$newProfileName =~ s/firststrand/secondstrand/;
-		    } elsif ( $newProfileName =~ /secondstrand/) {
-			$newProfileName =~ s/secondstrand/firststrand/;
-		    }
-		    $studyIdTwo = $profiles->{new}->{$newProfileName}->{id};
-		    $fileTwo = "$orgDirectory/${studyIdTwo}.txt";
-		    $legacyStudyIdTwo = $profiles->{legacy}->{$newProfileName}->{id};
-		    $legacyFileTwo = "$legacyOrgDirectory/${legacyStudyIdTwo}.txt";
-		}
-	    }
-	} elsif ( $sumFiles eq "legacy") {            ### legacy is stranded and new is unstranded
-	    $newProfileName = $profileName;
-	    $newProfileName =~ s/unstranded/firststrand/;
-	    my $firstStrandId = $profiles->{legacy}->{$newProfileName}->{id};
-	    my $firstStrandFile = "$legacyOrgDirectory/${firstStrandId}.txt";
-	    $newProfileName =~ s/firststrand/secondstrand/;
-	    my $secondStrandId = $profiles->{legacy}->{$newProfileName}->{id};
-	    my $secondStrandFile = "$legacyOrgDirectory/${secondStrandId}.txt";
-	    $legacyFile = $legacyOrgDirectory."/combined_".$firstStrandId."_".$secondStrandId.".txt";
-	    my @fileNames = ($firstStrandFile,$secondStrandFile);
-	    print STDERR "            Combining\n";
-	    print STDERR "                $_\n" foreach (@fileNames);
-	    print STDERR "            into this file: $legacyFile\n";
-	    &combineFiles(\@fileNames,$legacyFile);
-	} elsif ( $sumFiles eq "new" && $profileName =~ /firststrand/) {  # legacy is unstranded and new is stranded, only do this for secondstrand
-	    $newProfileName = $profileName;
-	    my $firstStrandId = $studyId;
-	    my $firstStrandFile = "$orgDirectory/${firstStrandId}.txt";
-	    $newProfileName =~ s/firststrand/secondstrand/;
-	    my $secondStrandId = $profiles->{new}->{$newProfileName}->{id};
-	    my $secondStrandFile = "$orgDirectory/${secondStrandId}.txt";
-	    $file = $orgDirectory."/combined_".$firstStrandId."_".$secondStrandId.".txt";
-	    my @fileNames = ($firstStrandFile,$secondStrandFile);
-	    print STDERR "            Combining\n";
-	    print STDERR "                $_\n" foreach (@fileNames);
-	    print STDERR "            into this file: $file\n";
-	    &combineFiles(\@fileNames,$file);
-	    $newProfileName =~ s/secondstrand/unstranded/; 
-	    $legacyStudyId = $profiles->{legacy}->{$newProfileName}->{id};
-	    $legacyFile = "$legacyOrgDirectory/${legacyStudyId}.txt";
-	} elsif ( $sumFiles eq "new" && $profileName =~ /secondstrand/) {
-	    next;
 	} else {
 	    print STDERR "ERROR:   Skipping correlations because unable to find matching profile for $profileName\n";
 	    $datasetError=1;
@@ -246,98 +188,23 @@ foreach my $dataset (keys %$dbProfiles) {
 	$cmd = "rnaSeqGeneCorrTwoExpts.R $file $legacyFile $geneOutputFile";
 	system($cmd);
 
-	my ($numFailedSampleCorrelations1,$sampleCorrelations1) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
-	$datasetError=1 if ($numFailedSampleCorrelations1);
+	my ($numFailedSampleCorrelations,$sampleCorrelations) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	$datasetError=1 if ($numFailedSampleCorrelations);
 	&makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
-	if ($fileTwo && $legacyFileTwo) {
-	    my ($numFailedSampleCorrelations2,$sampleCorrelations2);
-	    my ($numFailedSampleCorrelations3,$sampleCorrelations3);
-	    my ($numFailedSampleCorrelations4,$sampleCorrelations4);
-
-	    print STDERR "\n   Testing correlations of profile $newProfileName\n"; 
-	    my $sampleOutputFile = "$orgDirectory/sample_correlations_${studyIdTwo}";
-	    my $geneOutputFile = "$orgDirectory/gene_correlations_${studyIdTwo}";
-	    print STDERR "          Files containing scatterplot and sample correlations: ${sampleOutputFile}.txt ${sampleOutputFile}.pdf\n";
-	    print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
-	    print STDERR "          Input expression files:\n";
-	    print STDERR "                 $fileTwo\n";
-	    print STDERR "                 $legacyFileTwo\n";
-	    my $cmd = "rnaSeqSampleCorrTwoExpts.R $fileTwo $legacyFileTwo $sampleOutputFile";
-	    system($cmd);
-	    $cmd = "rnaSeqGeneCorrTwoExpts.R $fileTwo $legacyFileTwo $geneOutputFile";
-	    system($cmd);
-
-	    ($numFailedSampleCorrelations2,$sampleCorrelations2) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
-	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
-
-	    print STDERR "\n   Testing correlations after switching strands:\n";
-	    $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}_A"; 
-	    $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}_A"; 
-	    print STDERR "          Files containing scatterplots and sample correlations: ${sampleOutputFile}.txt  ${sampleOutputFile}.pdf\n";
-	    print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
-	    print STDERR "          Input expression files:\n";
-	    print STDERR "                 $fileTwo\n";
-	    print STDERR "                 $legacyFile\n";
-	    $cmd = "rnaSeqSampleCorrTwoExpts.R $fileTwo $legacyFile $sampleOutputFile";
-	    system($cmd);
-	    $cmd = "rnaSeqGeneCorrTwoExpts.R $fileTwo $legacyFile $geneOutputFile";
-	    system($cmd);
-
-	    ($numFailedSampleCorrelations3,$sampleCorrelations3) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
-	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
-
-	    print STDERR "\n   Testing correlations after switching strands (the other pair):\n";
-	    $sampleOutputFile = "$orgDirectory/sample_correlations_${studyId}_B"; 
-	    $geneOutputFile = "$orgDirectory/gene_correlations_${studyId}_B"; 
-	    print STDERR "          Files containing scatterplots and sample correlations: ${sampleOutputFile}.txt ${sampleOutputFile}.pdf\n";
-	    print STDERR "          File containing gene correlations: ${geneOutputFile}.txt\n";
-	    print STDERR "          Input expression files:\n";
-	    print STDERR "                 $file\n";
-	    print STDERR "                 $legacyFileTwo\n";
-	    $cmd = "rnaSeqSampleCorrTwoExpts.R $file $legacyFileTwo $sampleOutputFile";
-	    system($cmd);
-	    $cmd = "rnaSeqGeneCorrTwoExpts.R $file $legacyFileTwo $geneOutputFile";
-	    system($cmd);
-
-	    ($numFailedSampleCorrelations4,$sampleCorrelations4) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
-	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
-
-	    my @corrBefore = (@{$sampleCorrelations1},@{$sampleCorrelations2});
-	    my $numCorrBefore = scalar @corrBefore;
-	    my @corrAfter = (@{$sampleCorrelations3},@{$sampleCorrelations4});
-	    my $numCorrAfter = scalar @corrAfter;
-	    my $corrMeanBefore = sprintf("%.3f",mean(\@corrBefore));
-	    my $corrMeanAfter = sprintf("%.3f",mean(\@corrAfter));
-	    my $numFailedBeforeSwitch = $numFailedSampleCorrelations1 + $numFailedSampleCorrelations2;
-	    my $numFailedAfterSwitch = $numFailedSampleCorrelations3 + $numFailedSampleCorrelations4;
-	    $datasetError = 1 if ($numFailedBeforeSwitch > 0);
-
-	    print STDERR "\n    RESULT: Average between-sample correlation $corrMeanBefore and $numFailedBeforeSwitch / $numCorrBefore correlations failed.\n";
-	    print STDERR "            After switching strands, average correlation $corrMeanAfter and $numFailedAfterSwitch / $numCorrAfter correlations failed.\n";
-	    if ($corrMeanAfter > $corrMeanBefore) {
-		print STDERR "            The correlation is higher after switching strands. For the new build, it is likely that you need to\n";
-		print STDERR "               flip the values for switchStrandsGBrowse and switchStrandsProfiles properties in the dataset\n";
-		print STDERR "               presenter xml. To be sure, check whether you see the expected coverage in JBrowse tracks and\n";
-		print STDERR "               expected FPKM/TPM values on the gene page.\n";
-	    } else {
-		print STDERR "            The correlation is NOT higher after switching strands. For the new build, it is likely that you DO NOT\n";
-		print STDERR "               need to switch the values for switchStrandsGBrowse and switchStrandsProfiles properties in the\n";
-		print STDERR "               dataset presenter xml. To be sure, check whether you see the expected coverage in JBrowse tracks\n";
-		print STDERR "               and expected FPKM/TPM values on the gene page.\n";
-	    }
-	} else {
-	    push @sampleCorrelationsUnstranded, @{$sampleCorrelations1};
-	    $numSampleCorrFailedUnstranded += $numFailedSampleCorrelations1;   
-	}
-
+	push @sampleCorrelationsForThisDataset, @{$sampleCorrelations};
+	$numFailedSampleCorrelationsForThisDataset += $numFailedSampleCorrelations;
     }
 
-    my $numSampleCorrUnstranded = scalar @sampleCorrelationsUnstranded;
-    if ($numSampleCorrUnstranded > 0) {
-	$datasetError = 1 if ($numSampleCorrFailedUnstranded > 0);
-	my $sampleCorrMeanUnstranded = sprintf("%.3f",mean(\@sampleCorrelationsUnstranded));
-	print STDERR "\n    RESULT: Average between-sample correlation $sampleCorrMeanUnstranded and $numSampleCorrFailedUnstranded / $numSampleCorrUnstranded correlations failed.\n";
+    my $numSampleCorr = scalar @sampleCorrelationsForThisDataset;
+
+    if (! $numSampleCorr) {
+	print STDERR "ERROR:   There were no correlations calculated for this dataset. Maybe missing sample(s) in legacy or new database?\n";
+	$datasetError = 1;
+    } else {
+	$datasetError = 1 if ($numFailedSampleCorrelationsForThisDataset);
+	my $sampleCorrMean = sprintf("%.3f",mean(\@sampleCorrelationsForThisDataset));
+	print STDERR "\n    RESULT: Average between-sample correlation $sampleCorrMean and $numFailedSampleCorrelationsForThisDataset / $numSampleCorr correlations failed.\n";
     }
 
     if ($datasetError) {
@@ -376,13 +243,8 @@ print STDERR "Number of legacy sites NOT in new database: $numLegacyDatasets\n";
 
 
 
-
-
-
-
-
 sub printData {
-  my ($studyId, $fh, $dbh) = @_;
+  my ($studyId, $numSamples, $fh, $dbh) = @_;
 
   my $sql = "select ga.source_id, p.profile_as_string 
 from apidbtuning.profile  p, apidbtuning.geneattributes ga
@@ -394,8 +256,11 @@ order by ga.source_id";
   my $sh = $dbh->prepare($sql);
   $sh->execute();
 
-  while(my @a = $sh->fetchrow_array()) {
-    print $fh join("\t", @a) . "\n";
+  while(my ($sourceId,$values) = $sh->fetchrow_array()) {
+      my @logValues = split("\t",$values);
+      next if (scalar @logValues != $numSamples);
+      my @linearValues = map { 2**$_ } @logValues;
+      print $fh $sourceId . "\t" . join("\t", @linearValues) . "\n";
   }
 }
 
@@ -411,8 +276,8 @@ sub makeReportFromGeneOutputFile {
   my $header = <FILE>;
   chomp $header;
   if ($header =~ /unmatched samples/ || $header =~ /only one sample/) {
-      print STDERR "\n     =========GENE CORRELATIONS=========\n";
-      print STDERR "         cannot be calculated because $header\n";
+      print STDERR "\n      =========SINGLE GENE CORRELATIONS (ACROSS SAMPLES)========\n";
+      print STDERR "             Cannot be calculated because $header\n";
       close FILE;
       return 0;
   }
@@ -433,6 +298,14 @@ sub makeReportFromGeneOutputFile {
       $geneExpression->{$gene} = $expression;
   }
   close FILE;
+
+  my $numCorr = keys %{$geneCorrelation};
+  my $numExpr = keys %{$geneExpression};
+  if ($numCorr == 0 || $numExpr == 0) {
+      print STDERR "\n      =========SINGLE GENE CORRELATIONS (ACROSS SAMPLES)========\n";
+      print STDERR "             Cannot be calculated, likely because there are no genes that change more than 2-fold.\n";
+      return;
+  }
 
   my @correlations = values %{$geneCorrelation};
   my ($meanCorr,$sdCorr) = meanSd(\@correlations);
@@ -731,6 +604,9 @@ sub printHeader {
   }
 
   print $fh "Gene\t" . join("\t", @a) . "\n";
+
+  my $numSamples = scalar @a;
+  return $numSamples;
 }
 
 
@@ -757,8 +633,6 @@ WHERE dataset_type = 'transcript_expression'
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
-
-  my %strandedDatasets;
 
   while(my ($dataset, $profileSet, $studyId) = $sh->fetchrow_array()) {
     $rv{$dataset}->{$profileSet} = $studyId;
