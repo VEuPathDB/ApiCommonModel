@@ -16,6 +16,7 @@ if (length(arguments)!=3) {
 fileName1 <- arguments[1];
 fileName2 <- arguments[2];
 outFile <- arguments[3];
+outFile <- paste(outFile,"txt",sep=".");
 
 expt1 <- read.table(arguments[1],header=TRUE,sep="\t");
 expt2 <- read.table(arguments[2],header=TRUE,sep="\t");
@@ -48,7 +49,7 @@ if (numSamples1 != numSamples2) {
   merged <- merged[,order(colnames(merged))];
 
   expression <- apply(merged,1,function(x) median(x,na.rm = TRUE));
-  correlation <- apply(merged,1,function(x) {cor(as.numeric(x[1:numSamples1]),as.numeric(x[(numSamples1+1):(numSamples1+numSamples2)]))});
+  correlation <- apply(merged,1,function(x) {cor(as.numeric(x[1:numSamples1]),as.numeric(x[(numSamples1+1):(numSamples1+numSamples2)]),method="spearman")});
   maxFc <- apply(merged,1,function(x) {max(max(x[1:numSamples1]) / min(x[1:numSamples1]), max(x[(numSamples1+1):(numSamples1+numSamples2)]) / min(x[(numSamples1+1):(numSamples1+numSamples2)]))});
 
   df <- data.frame(genes,expression,correlation,maxFc);

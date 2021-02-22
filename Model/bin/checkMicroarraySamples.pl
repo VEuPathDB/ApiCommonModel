@@ -25,14 +25,13 @@ my $legacyDatabaseDirectory = "$workingDir/$legacyDatabaseInstance";
 
 &makeDirectoryUnlessExists($databaseDirectory);
 my $dbh = &connectToDb($databaseInstance);
-my ($dbProfiles, $dbStrandedDatasets) = &queryForProfiles($dbh);
+my $dbProfiles = &queryForProfiles($dbh);
 
 my ($legacyDbh, $legacyDbProfiles, $legacyDbStrandedDatasets);
 if($legacyDatabaseInstance) {
-
   &makeDirectoryUnlessExists($legacyDatabaseDirectory);
   $legacyDbh = &connectToDb($legacyDatabaseInstance);
-  ($legacyDbProfiles, $legacyDbStrandedDatasets) = &queryForProfiles($legacyDbh);
+  $legacyDbProfiles = &queryForProfiles($legacyDbh);
 }
 
 my $numDatasets=0;
@@ -44,8 +43,6 @@ foreach my $dataset (keys %$dbProfiles) {
     my $datasetError;
 
     print STDERR "\n\n****** Reporting on DATASET '$dataset' ******\n";
-    my $isStrandedInDb = $dbStrandedDatasets->{$dataset} ? 'stranded' : 'unstranded';
-    print STDERR "   This dataset is $isStrandedInDb.  Profiles:\n";
     my $numProfiles = scalar keys %{$dbProfiles->{$dataset}};
     if ($numProfiles == 0) {
 	print STDERR "ERROR: Could not find any profiles for this dataset.\n";
@@ -57,21 +54,6 @@ foreach my $dataset (keys %$dbProfiles) {
     foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
 	print STDERR "          $profile\n";
 	$numScaled++ if ($profile =~ /scaled/);
-	if ($profile =~ /firststrand/) {
-	    $profiles->{new}->{$profile}->{id} = $dbProfiles->{$dataset}->{$profile};
-	    $profiles->{new}->{$profile}->{strand} = "first";
-	} elsif ($profile =~ /secondstrand/) {
-	    $profiles->{new}->{$profile}->{id} = $dbProfiles->{$dataset}->{$profile};
-	    $profiles->{new}->{$profile}->{strand} = "second";
-	} elsif ($profile =~ /unstranded/) {
-	    $profiles->{new}->{$profile}->{id} = $dbProfiles->{$dataset}->{$profile};
-	    $profiles->{new}->{$profile}->{strand} = "unstranded";
-	} else {
-	    $profiles->{new}->{$profile}->{id} = $dbProfiles->{$dataset}->{$profile};
-	    $profiles->{new}->{$profile}->{strand} = "unknown";
-	    print STDERR "ERROR: It is not clear whether $profile is stranded.\n";
-	    $datasetError=1; 
-	}
     }
     
     if ($numScaled > 2) {
@@ -83,7 +65,6 @@ foreach my $dataset (keys %$dbProfiles) {
 	$datasetError=1;
     }
 
-    my $isStrandedInLegacyDb;
     if ( $legacyDatabaseInstance ) {
 	if ( ! exists $legacyDbProfiles->{$dataset}) {
 	    print STDERR "   WARN:  Could not find a matching legacy dataset for dataset=$dataset\n";
@@ -92,8 +73,6 @@ foreach my $dataset (keys %$dbProfiles) {
 	    next;
 	} else {
 	    print STDERR "   Found a matching legacy dataset.\n";
-	    $isStrandedInLegacyDb = $legacyDbStrandedDatasets->{$dataset} ? 'stranded' : 'unstranded';
-	    print STDERR "   This dataset is $isStrandedInLegacyDb.  Profiles:\n";
 	    my $numLegacyProfiles = scalar keys %{$legacyDbProfiles->{$dataset}};
 	    if ($numLegacyProfiles == 0) {
 		print STDERR "ERROR: Could not find any profiles for this dataset.\n";
@@ -104,21 +83,6 @@ foreach my $dataset (keys %$dbProfiles) {
 	    foreach my $profile (keys %{$legacyDbProfiles->{$dataset}}) {
 		print STDERR "          $profile\n";
 		$numLegacyScaled++ if ($profile =~ /scaled/);
-		if ($profile =~ /firststrand/) {
-		    $profiles->{legacy}->{$profile}->{id} = $legacyDbProfiles->{$dataset}->{$profile};
-		    $profiles->{legacy}->{$profile}->{strand} = "first";
-		} elsif ($profile =~ /secondstrand/) {
-		    $profiles->{legacy}->{$profile}->{id} = $legacyDbProfiles->{$dataset}->{$profile};
-		    $profiles->{legacy}->{$profile}->{strand} = "second";
-		} elsif ($profile =~ /unstranded/) {
-		    $profiles->{legacy}->{$profile}->{id} = $legacyDbProfiles->{$dataset}->{$profile};
-		    $profiles->{legacy}->{$profile}->{strand} = "unstranded";
-		} else {
-		    $profiles->{legacy}->{$profile}->{id} = $legacyDbProfiles->{$dataset}->{$profile};
-		    $profiles->{legacy}->{$profile}->{strand} = "unknown";
-		    print STDERR "ERROR: It is not clear whether $profile is stranded.\n";
-		    $datasetError=1; 
-		}
 	    }
 	
 	    if ($numLegacyScaled > 2) {
@@ -132,22 +96,15 @@ foreach my $dataset (keys %$dbProfiles) {
 	  
 	    foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
 		if (! exists $legacyDbProfiles->{$dataset}->{$profile} ) {
-		    print STDERR "ERROR: The new profile $profile does not exist in the legacy database.\n";                                                                  
+		    print STDERR "ERROR: The new profile $profile does not exist in the legacy database.\n";
 		    $datasetError=1;
 		}
 	    }
 	    foreach my $profile (keys %{$legacyDbProfiles->{$dataset}}) {
 		if (! exists $dbProfiles->{$dataset}->{$profile} ) {
-		    print STDERR "ERROR: The legacy profile $profile does not exist in the new database.\n";                                                                  
+		    print STDERR "ERROR: The legacy profile $profile does not exist in the new database.\n";
 		    $datasetError=1;
 		}
-	    }
-	    
-	    if($isStrandedInDb ne $isStrandedInLegacyDb) {
-		print STDERR "WARN:  Dataset $dataset is $isStrandedInDb in first instance but $isStrandedInLegacyDb in legacy db\n";
-		$sumFiles = $isStrandedInDb eq "stranded" ? "new" : "legacy";
-		print STDERR "       I will sum the two $sumFiles stranded profiles into one file, then calculate correlations to the unstranded file.\n";
-		$datasetError=1;
 	    }
         }
     }
@@ -790,12 +747,12 @@ sub queryForProfiles {
 
   my %rv;
 
-  my $sql = "select dataset_name, profile_set_name, profile_study_id
-from apidbtuning.profiletype 
-where dataset_type = 'transcript_expression' 
-and dataset_subtype = 'rnaseq' 
-and profile_type = 'values'
-and profile_set_name like '% unique]'
+  my $sql = "
+SELECT dataset_name, profile_set_name, profile_study_id
+FROM apidbtuning.profiletype 
+WHERE dataset_type = 'transcript_expression' 
+      AND dataset_subtype = 'array' 
+      AND profile_type = 'values'
 ";
 
   my $sh = $dbh->prepare($sql);
@@ -804,16 +761,9 @@ and profile_set_name like '% unique]'
   my %strandedDatasets;
 
   while(my ($dataset, $profileSet, $studyId) = $sh->fetchrow_array()) {
-    my $isStranded = $profileSet =~ / - (firststrand|secondstrand) - /;
-
-    $dataset =~ s/_ebi_/_/;
-    $profileSet =~ s/ - (tpm|fpkm) - / - exprval - /;
-
     $rv{$dataset}->{$profileSet} = $studyId;
-
-    $strandedDatasets{$dataset} = $isStranded;
   }
-  return \%rv, \%strandedDatasets;
+  return \%rv;
 }
 
 
