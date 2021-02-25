@@ -49,22 +49,11 @@ foreach my $dataset (keys %$dbProfiles) {
     }
 
     my $profiles; # $profiles -> legacy/new -> profileName -> id 
-    my $numScaled=0;
     foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
 	print STDERR "          $profile\n";
 	$profiles->{new}->{$profile}->{id} = $dbProfiles->{$dataset}->{$profile};
-	$numScaled++ if ($profile =~ /scaled/);
     }
     
-    if ($numScaled > 2) {
-	print STDERR "ERROR: Unexpectedly, there are more than 2 scaled profiles\n";
-	$datasetError=1;
-    }
-    if (($numProfiles-$numScaled) > 2) {
-	print STDERR "ERROR: Unexpectedly, there are more than 2 non-scaled profiles\n";
-	$datasetError=1;
-    }
-
     if ( $legacyDatabaseInstance ) {
 	if ( ! exists $legacyDbProfiles->{$dataset}) {
 	    print STDERR "   WARN:  Could not find a matching legacy dataset for dataset=$dataset\n";
@@ -79,22 +68,11 @@ foreach my $dataset (keys %$dbProfiles) {
 		$datasetError=1;
 	    }
 
-	    my $numLegacyScaled=0;
 	    foreach my $profile (keys %{$legacyDbProfiles->{$dataset}}) {
 		print STDERR "          $profile\n";
 		$profiles->{legacy}->{$profile}->{id} = $legacyDbProfiles->{$dataset}->{$profile};
-		$numLegacyScaled++ if ($profile =~ /scaled/);
 	    }
-	
-	    if ($numLegacyScaled > 2) {
-		print STDERR "ERROR: Unexpectedly, there are more than 2 scaled profiles\n";
-		$datasetError=1;
-	    }
-	    if (($numLegacyProfiles-$numLegacyScaled) > 2) {
-		print STDERR "ERROR: Unexpectedly, there are more than 2 non-scaled profiles\n";
-		$datasetError=1;
-	    }
-	  
+		  
 	    foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
 		if (! exists $legacyDbProfiles->{$dataset}->{$profile} ) {
 		    print STDERR "ERROR: The new profile $profile does not exist in the legacy database.\n";
