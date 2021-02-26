@@ -44,6 +44,7 @@ my $datasetProperties = &datasetProperties($dbh);
 &addNrdbProteinAlignments($dbh, $result, $datasetProperties, $projectName);
 
 &addApolloGFF($dbh, $result);
+&addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -97,6 +98,12 @@ select dsp.name, prop.property, prop.value
 from apidbtuning.datasetpresenter dsp
    , apidbtuning.datasetproperty prop
 where dsp.name like '${organismAbbrev}%_ebi_GFF3_RSRC'
+and dsp.dataset_presenter_id = prop.dataset_presenter_id
+UNION
+select dsp.name, prop.property, prop.value
+from apidbtuning.datasetpresenter dsp
+   , apidbtuning.datasetproperty prop
+where dsp.name like '${organismAbbrev}%_ebi_rnaSeq_RSRC'
 and dsp.dataset_presenter_id = prop.dataset_presenter_id
 UNION
 select dsp.name, prop.property, prop.value
@@ -305,6 +312,99 @@ sub addApolloGFF {
                      ],
     };
     push @{$result->{tracks}}, $track;
+  }
+}
+
+sub addMergedRnaSeq {
+  my ($dbh, $result, $datasetProperties, $projectName) = @_;
+  my @urlArray;
+  my $genomeName;
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /rnaSeq/);
+my @urlArrayProject;
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_rnaSeq_RSRC/;
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+    my $keyName = $datasetDisplayName;
+    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sh = $dbh->prepare($sql);
+    $sh->execute();
+
+    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+    $genomeName = ${nameForFileNames};
+      my ($sampleName) = $sampleDataset;
+      my ($bigwigFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_rnaSeq_RSRC/;
+      my $keyName = $bigwigFileName;
+         $keyName =~ s/_/ /g;
+
+        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/*";
+        my @bigwigFiles = glob($bigWigRelativePath);
+        my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+        foreach(@bigwigFiles){
+                my $bigwigPath = $_;
+                my $bigwigName = (split '/', $bigwigPath)[-1];
+                my $shortBigwigName = $bigwigName;
+                my $shortBigwigName = substr($shortBigwigName,0, -3);
+                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
+                my $template = { url=>${bigwigUrl}, name=> ${shortBigwigName}, color=> 'black' };
+                push (@urlArray, $template);
+                push (@urlArrayProject, $template);
+                }
+    #}            
+        ### Print out combinedRNAseq track for experiment
+        my $arrayLength = @urlArrayProject;
+
+    if ($arrayLength > 0){
+
+        my $alignment = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+        urlTemplates =>
+        \@urlArrayProject
+        ,
+        showTooltips => "true",
+        key => "${datasetDisplayName} combined RNAseq plot",
+        label => "${datasetDisplayName} combined RNAseq plot",
+        type  => "MultiBigWig/View/Track/MultiWiggle/MultiXYPlot",
+        category => "Transcriptomics",
+        autoscale => "global",
+        style => {'height' => "100",
+        },
+                  metadata => {
+                    subcategory => "RNA-Seq",
+                    dataset => $datasetDisplayName,
+                    trackType => "Multi XY plot",
+                    attribution => $shortAttribution,
+                   },
+        fmtMetaValue_Dataset => "function() { return datasetLink('${dataset}', '${datasetDisplayName}'); }",
+      };
+      push @{$result->{tracks}}, $alignment;
+   }
+  }
+ }
+        ### Print out combinedRNAseq track for organism
+        my $arrayLength = @urlArray;
+
+    if ($arrayLength > 0){
+        my $alignment = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+        urlTemplates =>
+        \@urlArray
+        ,
+        showTooltips => "true",
+        key => "${genomeName} combined RNAseq plot",
+        label => "${genomeName} combined RNAseq plot",
+        type  => "MultiBigWig/View/Track/MultiWiggle/MultiXYPlot",
+        category => "Transcriptomics",
+        autoscale => "global",
+        style => {'height' => "100",
+        },
+                  metadata => {
+                    subcategory => "RNA-Seq",
+                    dataset => "Combined all RNA-Seq data for ${genomeName}",
+                    trackType => "Multi XY plot",
+                   },
+      };
+      push @{$result->{tracks}}, $alignment;
   }
 }
 
