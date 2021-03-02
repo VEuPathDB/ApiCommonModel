@@ -104,11 +104,12 @@ my $tot = 0;
 my %taxa;
 my %dataTypes;
 my %search;
+my %tools;
 foreach my $s (@servers){
   my $cmd = "ssh $s ls /etc/httpd/logs/w*/archive/access_log-".$logDate.".gz";
   foreach my $f (`$cmd`){
     chomp $f;
-    next unless $f =~ /(tritrypdb|giardiadb)/;  ##for testing so just do a smaller number
+#    next unless $f =~ /(tritrypdb|giardiadb)/;  ##for testing so just do a smaller number
     next if $f =~ /(clinepidb|orthomcl|microbiomedb|schistodb|static)/;
     print STDERR "Processing $s: $f\n";
     foreach my $l (`ssh $s zcat $f`){
@@ -151,6 +152,19 @@ foreach my $s (@servers){
           $taxa{$a}++;
         }
       }
+
+      ##tools
+      # Sequence retrieval tool
+      $tools{'Sequence retrieval tool'}++ if $l =~ /(srt|Srt)/; 
+      # Site Search
+      $tools{'Site Search'}++ if $l =~ /site-search/; 
+      # Multiple sequence alignment
+      $tools{'Multiple sequence alignment'}++ if $l =~ /cgi-bin\/isolateAlignment/; 
+      # Results downloads
+      $tools{'Results downloads'}++ if $l =~ /\/reports\/(attributesTabular|tableTabular|gff3|fullRecord|xml|json)/; 
+      # 
+
+      
     }
   }
 }
@@ -175,6 +189,16 @@ foreach my $d (keys%dataTypes){
 }
 
 close O;
+
+##and now for tools
+open(O,">$outputFile"."ByTool.tab") || die "unable to open $outputFile.tab for writing\n";
+print O "Tool\tDomain\tSubmitted\tCompleted\n";
+foreach my $t (keys%tools){
+  print O "$t\tVEuPathDB\t$tools{$t}\t$tools{$t}\n"
+}
+
+close O;
+  
 
 
 sub countPage {
