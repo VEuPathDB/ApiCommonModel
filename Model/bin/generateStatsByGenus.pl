@@ -42,7 +42,7 @@ my $dbh = DBI->connect("dbi:Oracle:$dbname", $u, $pw) ||  die "Couldn't connect 
 
 ## my $sql = "select source_id, regexp_substr ( genus_species, '[A-z]*' ) as genus
 ## from apidbtuning.geneattributes";
-my $sql = "select ga.source_id, regexp_substr ( ga.genus_species, '[A-z]*' ) as genus,
+my $sql = "select ga.source_id, regexp_substr ( ga.genus_species, '[A-z]*' ) as genus, ga.strain,
 decode(oa.proteomicscount,0,0,1) as proteomics,decode(oa.estcount,0,0,1) as ests,decode(ga.total_hts_snps,0,0,1) as variation,
 CASE WHEN oa.arraygenecount >= 0 THEN 1 WHEN oa.rnaseqcount >= 0 THEN 1 ELSE 0 END as transcriptomics,
 CASE WHEN oa.chipchipgenecount >= 0 THEN 1 WHEN oa.tfbscount >= 0 THEN 1 ELSE 0 END as epigenomics,
@@ -59,17 +59,23 @@ $sth->execute ||  die "Failed to  execute statement: " . $sth->errstr;
 
 my %idData;
 
+## TODO:  add queries to identify organisms specifically with different datatypes like phenotype etc that are shown on gene record page
+
 while (my $row = $sth->fetchrow_hashref()) {
   $idData{$row->{SOURCE_ID}}->{genus} = $row->{GENUS};
-  $idData{$row->{SOURCE_ID}}->{epigenomics} += $row->{EPIGENOMICS};
-  $idData{$row->{SOURCE_ID}}->{variation} += $row->{VARIATION};
-  $idData{$row->{SOURCE_ID}}->{transcriptomics} += $row->{TRANSCRIPTOMICS};
-  $idData{$row->{SOURCE_ID}}->{proteomics} += $row->{PROTEOMICS};
-  $idData{$row->{SOURCE_ID}}->{ecnumbers} += $row->{ECNUMBERS};
-  $idData{$row->{SOURCE_ID}}->{gofunction} += $row->{GOFUNCTION};
-  $idData{$row->{SOURCE_ID}}->{has_orthology} += $row->{HAS_ORTHOLOGY};
-  $idData{$row->{SOURCE_ID}}->{immunology} += $row->{IMMUNOLOGY};
-  $idData{$row->{SOURCE_ID}}->{ests} += $row->{ESTS};
+  $idData{$row->{SOURCE_ID}}->{Epigenomics} += $row->{EPIGENOMICS};
+  $idData{$row->{SOURCE_ID}}->{'Variation data'} += $row->{VARIATION};
+  $idData{$row->{SOURCE_ID}}->{Transcriptomics} += $row->{TRANSCRIPTOMICS};
+  $idData{$row->{SOURCE_ID}}->{Proteomics} += $row->{PROTEOMICS};
+  $idData{$row->{SOURCE_ID}}->{'Enzyme commission'} += $row->{ECNUMBERS};
+  $idData{$row->{SOURCE_ID}}->{'Gene Ontology'} += $row->{GOFUNCTION};
+  $idData{$row->{SOURCE_ID}}->{'Gene Orthology'} += $row->{HAS_ORTHOLOGY};
+  $idData{$row->{SOURCE_ID}}->{Immunology} += $row->{IMMUNOLOGY};
+  $idData{$row->{SOURCE_ID}}->{ESTs} += $row->{ESTS};
+  ##should add phenotype if genus Trypanosoma or Toxoplasma  ... really need to do some finer grained queries but no time now
+  $idData{$row->{SOURCE_ID}}->{Phenotype} += $row->{STRAIN} =~ /(ME49|brucei TREU927)/ ? 1 : 0;
+
+  
 }
 
 print STDERR "total IDs from $dbname: ".scalar(keys%idData)."\n";
@@ -100,24 +106,41 @@ my %dataTypes;
 my %search;
 foreach my $s (@servers){
   my $cmd = "ssh $s ls /etc/httpd/logs/w*/archive/access_log-".$logDate.".gz";
-#  my $cmd = "ssh $s ls /etc/httpd/logs/w1.plasmodb.org/archive/access_log-".$logDate.".gz";
   foreach my $f (`$cmd`){
     chomp $f;
-    last if $f =~ /hostdb/;  ##for testing so just do a smaller number
+    next unless $f =~ /(tritrypdb|giardiadb)/;  ##for testing so just do a smaller number
     next if $f =~ /(clinepidb|orthomcl|microbiomedb|schistodb|static)/;
     print STDERR "Processing $s: $f\n";
     foreach my $l (`ssh $s zcat $f`){
       #    print STDERR $l;
-      next if $l =~ /bot\.html/;
-      next if $l =~ /download/;
-      if($l =~ /GET\s\S*record\/gene\/(\S*)/){
-        unless($idData{$1}){
-          #        print STDERR "'$1'\n";
-          next; 
-        }
+#      next if $l =~ /bot\.html/;
+#      next if $l =~ /download/;
+      if($l =~ /POST.*record\/gene\/(\S+)\"/){
+        next unless($idData{$1});
         $tot++;
         &countPage($1);
       }
+      ##popsetSequence
+      if($l =~ /POST.*record\/popsetSequence\/(\S+)\"/){
+        $dataTypes{'Isolate data'}++;
+      }
+      #compound
+      if($l =~ /POST.*record\/compound\/(\S+)\"/){
+        $dataTypes{'Compounds'}++;
+      }
+      #pathways
+      if($l =~ /POST.*record\/pathway\/\w+\/(\S+)\"/){
+        $dataTypes{'Metabolic pathways'}++;
+      }
+      #ESTs
+      if($l =~ /POST.*record\/est\/(\S+)\"/){
+        $dataTypes{'ESTs'}++;
+      }
+      #SNPs
+      if($l =~ /POST.*record\/snp.*?\/(\S+)\"/){
+        $dataTypes{'Variation data'}++;
+      }
+
       ##now searches
       if($l =~ /search.*organisms/){
         undef %search;
@@ -146,7 +169,7 @@ close F;
 
 ##now print by datatype 
 open(O,">$outputFile"."ByDataType.tab") || die "unable to open $outputFile.tab for writing\n";
-print O "Data Type\tDomain\tPage Views + Searches\n";
+print O "Data Type\tDomain\tPage Views\n";
 foreach my $d (keys%dataTypes){
   print O "$d\tVEuPathDB\t$dataTypes{$d}\n"
 }
@@ -160,5 +183,10 @@ sub countPage {
   foreach my $key (keys%{$idData{$source_id}}){
     next if $key eq 'genus';
     $dataTypes{$key} += $idData{$source_id}->{$key};
+  }
+  ### need to add in genome, genomic sequence, etc that are present on all gene pages.
+  my @types = ('Taxonomy','Genomes','Genome sequences','Genes/Proteins', 'Protein domains','Synteny');
+  foreach my $key (@types){
+    $dataTypes{$key}++;
   }
 }
