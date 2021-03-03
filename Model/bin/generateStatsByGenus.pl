@@ -42,8 +42,12 @@ my $dbh = DBI->connect("dbi:Oracle:$dbname", $u, $pw) ||  die "Couldn't connect 
 
 ## my $sql = "select source_id, regexp_substr ( genus_species, '[A-z]*' ) as genus
 ## from apidbtuning.geneattributes";
-my $sql = "select ga.source_id, regexp_substr ( ga.genus_species, '[A-z]*' ) as genus, ga.strain,
-decode(oa.proteomicscount,0,0,1) as proteomics,decode(oa.estcount,0,0,1) as ests,decode(ga.total_hts_snps,0,0,1) as variation,
+my $sql = "select ga.source_id, 
+regexp_substr ( ga.genus_species, '[A-z]*' ) as genus, 
+ga.strain,
+decode(oa.proteomicscount,0,0,1) as proteomics,
+decode(oa.estcount,0,0,1) as ests,
+decode(ga.total_hts_snps,0,0,1) as variation,
 CASE WHEN oa.arraygenecount > 0 THEN 1 WHEN oa.rnaseqcount > 0 THEN 1 ELSE 0 END as transcriptomics,
 CASE WHEN oa.chipchipgenecount > 0 THEN 1 WHEN oa.tfbscount > 0 THEN 1 ELSE 0 END as epigenomics,
 oa.hasepitope as immunology,
@@ -80,12 +84,11 @@ while (my $row = $sth->fetchrow_hashref()) {
 
 print STDERR "total IDs from $dbname: ".scalar(keys%idData)."\n";
 
-my $orgSQL = "select regexp_substr ( organism_name, '[A-z]*' ) as genus,count(*) as total, count(distinct species) as tot_species,
-decode(project_id,'VectorBase','Vectors','FungiDB','Fungi','Protozoa') as domain 
+my $orgSQL = " select regexp_substr ( organism_name, '[A-z]*' ) as genus,count(*) as total, count(distinct species) as tot_species,
+decode(project_id,'VectorBase','Vectors','FungiDB','Fungi','HostDB','Host','Protozoa') as domain 
 from apidbtuning.organismattributes
 where is_annotated_genome = 1
-group by regexp_substr ( organism_name, '[A-z]*' ), decode(project_id,'VectorBase','Vectors','FungiDB','Fungi','Protozoa')";
-
+group by regexp_substr ( organism_name, '[A-z]*' ), decode(project_id,'VectorBase','Vectors','FungiDB','Fungi','HostDB','Host','Protozoa') "; 
 my $osth = $dbh->prepare($orgSQL) || die "Couldn't prepare the SQL statement: " . $dbh->errstr;
 $osth->execute ||  die "Failed to  execute statement: " . $sth->errstr;
 
