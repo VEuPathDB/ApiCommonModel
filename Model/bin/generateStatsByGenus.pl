@@ -53,7 +53,8 @@ CASE WHEN oa.chipchipgenecount > 0 THEN 1 WHEN oa.tfbscount > 0 THEN 1 ELSE 0 EN
 oa.hasepitope as immunology,
 CASE WHEN ta.ec_numbers is not null THEN 1 WHEN ta.ec_numbers_derived is not null THEN 1 ELSE 0 END as ecnumbers,
 CASE WHEN ta.annotated_go_function is not null THEN 1 WHEN ta.predicted_go_function is not null THEN 1 ELSE 0 END as gofunction,
-CASE WHEN ta.orthomcl_name is not null THEN 1 ELSE 0 END as has_orthology
+CASE WHEN ta.orthomcl_name is not null THEN 1 ELSE 0 END as has_orthology,
+CASE WHEN (ta.tm_count >= 1 or ta.signalp_peptide is not null) THEN 1 ELSE 0 END as subcellularlocation
 from apidbtuning.geneattributes ga, apidbtuning.organismattributes oa, apidbtuning.transcriptattributes ta
 where ga.organism = oa.organism_name
 and ta.source_id = ga.representative_transcript";
@@ -78,6 +79,7 @@ while (my $row = $sth->fetchrow_hashref()) {
   $idData{$row->{SOURCE_ID}}->{ESTs} += $row->{ESTS};
   ##should add phenotype if genus Trypanosoma or Toxoplasma  ... really need to do some finer grained queries but no time now
   $idData{$row->{SOURCE_ID}}->{Phenotype} += $row->{STRAIN} =~ /(ME49|brucei TREU927)/ ? 1 : 0;
+  $idData{$row->{SOURCE_ID}}->{'Subcellular localization'} += $row->{STRAIN} =~ /(ME49|brucei TREU927|3D7|isolate WB)/ || $row->{SUBCELLULARLOCATION} == 1;
 
   
 }
