@@ -17,7 +17,6 @@ public class QuantitativeProteomicsNonRatioUnlogged extends QuantitativeProteomi
         String yAxisDescription = "Protein Abundance Values or abundance percentile values";
         
         setPropValue("graphYAxisDescription", yAxisDescription);
-        setPropValue("hasPercentileData", "false");
     }
     
     @Override
