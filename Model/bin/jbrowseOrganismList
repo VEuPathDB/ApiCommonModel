@@ -17,25 +17,22 @@ my $sql = "select distinct o.public_abbrev as organism_abbrev
      , o.IS_REFERENCE_STRAIN
      , tn.name
      , t.NCBI_TAX_ID as species_ncbi_tax_id
-     , d.genome_source
-     , d.annotation_source
-     , d.ANNOTATION_VERSION
-     , d.genome_version
 from apidb.organism o
      , sres.taxonname tn
      , apidbtuning.taxonspecies ts
      , sres.taxon t
-     , (select taxon_id, genome_source, genome_version, annotation_source, annotation_version
-        from apidbtuning.datasethistory h, apidbtuning.datasetnametaxon nt
-        where h.dataset_presenter_id = nt.dataset_presenter_id
-        and nt.name like '%primary_genome_RSRC'
-        and h.annotation_version is not null) d
 where o.taxon_id = tn.taxon_id
 and tn.name_class = 'scientific name'
 and ts.species_taxon_id = t.taxon_id
 and ts.taxon_id = o.taxon_id
-and o.taxon_id = d.taxon_id
 ";
+
+my $historySql = "select h.build_number, o.public_abbrev, h.genome_source, h.genome_version, h.annotation_source, h.annotation_version
+        from apidbtuning.datasethistory h, apidbtuning.datasetnametaxon nt, apidb.organism o
+        where h.dataset_presenter_id = nt.dataset_presenter_id
+        and nt.name like '%primary_genome_RSRC'
+        and h.annotation_version is not null
+        and o.taxon_id = nt.taxon_id";
 
 
 my $sh = $dbh->prepare($sql);
@@ -47,7 +44,28 @@ while(my $hash = $sh->fetchrow_hashref()) {
   push @{$result->{organisms}}, $hash;
 }
 
+my $historySh = $dbh->prepare($historySql);
+$historySh->execute();
+
+while(my $history = $historySh->fetchrow_hashref()) {
+  &addHistoryToOrganism($history, $result->{organisms});
+}
+
+
+
 $dbh->disconnect();
 
 print encode_json($result);
 
+sub addHistoryToOrganism {
+  my ($h, $orgs) = @_;
+  my $publicAbbrev = $h->{PUBLIC_ABBREV};
+  foreach(@$orgs) {
+
+    if($_->{ORGANISM_ABBREV} eq $publicAbbrev) {
+      push @{$_->{HISTORY}}, $h;
+      return;
+    }
+  }
+  die "Could not match organism abbrev $publicAbbrev";
+}
