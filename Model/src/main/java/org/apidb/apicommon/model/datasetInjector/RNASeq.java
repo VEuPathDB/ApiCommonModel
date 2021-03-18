@@ -161,6 +161,7 @@ public class RNASeq extends  DatasetInjector {
           injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
           injectTemplate("rnaSeqProfileSetParamQuery");
+          injectTemplate("datasetUrlParamQuery");
           injectTemplate("rnaSeqPctProfileSetParamQuery");
 
           injectTemplate("rnaSeqGraph");
@@ -184,6 +185,7 @@ public class RNASeq extends  DatasetInjector {
             injectTemplate("rnaSeqExpressionGraphAttributes");
             injectTemplate("rnaSeqExpressionGraphAttributesPathwayRecord");
             injectTemplate("rnaSeqProfileSetParamQuery");
+            injectTemplate("datasetUrlParamQuery");
             injectTemplate("rnaSeqPctProfileSetParamQuery");
 
             injectTemplate("profileMinMaxAttributesCategory");
