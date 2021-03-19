@@ -112,7 +112,7 @@ public class RecordDumper {
         }
 
         // get report maker attributes and tables
-        Map<String, Field> fields = question.getFields(FieldScope.REPORT_MAKER);
+        Map<String, Field> fields = FieldScope.REPORT_MAKER.filter(question.getFields());
         StringBuffer sbFields = new StringBuffer();
         for (String fieldName : fields.keySet()) {
             if (sbFields.length() > 0) sbFields.append(",");
@@ -122,8 +122,7 @@ public class RecordDumper {
         // make the configuration for the reporter
         Map<String, String> config = new LinkedHashMap<String, String>();
         config.put(StandardConfig.ATTACHMENT_TYPE, "text");
-        config.put(StandardConfig.SELECTED_ATTRS,
-                sbFields.toString());
+        config.put(StandardConfig.SELECTED_ATTRS, sbFields.toString());
         config.put(StandardConfig.INCLUDE_EMPTY_TABLES, "yes");
 
         // ask the question
