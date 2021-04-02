@@ -147,7 +147,7 @@ foreach my $s (@servers){
         $dataTypes{'Variation data'}++;
       }
 
-      ##now searches
+      ##now searches but only does site search as this is the only one with organism= in the log files
       if($l =~ /search.*organisms/){
         undef %search;
         while($l =~ m/organisms=(\w+)/g){
