@@ -147,7 +147,7 @@ foreach my $s (@servers){
         $dataTypes{'Variation data'}++;
       }
 
-      ##now searches
+      ##now searches but only does site search as this is the only one with organism= in the log files and only does when organisms are constrained
       if($l =~ /search.*organisms/){
         undef %search;
         while($l =~ m/organisms=(\w+)/g){
@@ -167,9 +167,9 @@ foreach my $s (@servers){
       $tools{'Multiple sequence alignment'}++ if $l =~ /cgi-bin\/isolateAlignment/; 
       # Results downloads
       $tools{'Results downloads'}++ if $l =~ /\/reports\/(attributesTabular|tableTabular|gff3|fullRecord|xml|json)/; 
-      # 
+      # Apollo
+      $tools{'Apollo'}++ if $l =~ /apollo_help/; 
 
-      
     }
   }
 }
