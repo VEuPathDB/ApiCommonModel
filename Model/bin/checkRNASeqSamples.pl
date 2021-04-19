@@ -75,11 +75,11 @@ foreach my $dataset (keys %$dbProfiles) {
     }
     
     if ($numScaled > 2) {
-	print STDERR "ERROR: Unexpectedly, there are more than 2 scaled profiles\n";
+	print STDERR "WARNING: Unexpectedly, there are more than 2 scaled profiles\n";
 	$datasetError=1;
     }
     if (($numProfiles-$numScaled) > 2) {
-	print STDERR "ERROR: Unexpectedly, there are more than 2 non-scaled profiles\n";
+	print STDERR "WARNING: Unexpectedly, there are more than 2 non-scaled profiles\n";
 	$datasetError=1;
     }
 
@@ -241,9 +241,19 @@ foreach my $dataset (keys %$dbProfiles) {
 	} elsif ( $sumFiles eq "legacy") {            ### legacy is stranded and new is unstranded
 	    $newProfileName = $profileName;
 	    $newProfileName =~ s/unstranded/firststrand/;
+	    if (! exists $profiles->{legacy}->{$newProfileName}) {
+		print STDERR "ERROR:   Skipping correlation because unable to find matching profile for $profileName. Tried $newProfileName but that did not work.\n";
+		$datasetError=1;
+		next;
+	    }
 	    my $firstStrandId = $profiles->{legacy}->{$newProfileName}->{id};
 	    my $firstStrandFile = "$legacyOrgDirectory/${firstStrandId}.txt";
 	    $newProfileName =~ s/firststrand/secondstrand/;
+	    if (! exists $profiles->{legacy}->{$newProfileName}) {
+		print STDERR "ERROR:   Skipping correlation because unable to find matching profile for $profileName. Tried $newProfileName but that did not work.\n";
+		$datasetError=1;
+		next;
+	    }
 	    my $secondStrandId = $profiles->{legacy}->{$newProfileName}->{id};
 	    my $secondStrandFile = "$legacyOrgDirectory/${secondStrandId}.txt";
 	    $legacyFile = $legacyOrgDirectory."/combined_".$firstStrandId."_".$secondStrandId.".txt";
@@ -265,7 +275,12 @@ foreach my $dataset (keys %$dbProfiles) {
 	    print STDERR "                $_\n" foreach (@fileNames);
 	    print STDERR "            into this file: $file\n";
 	    &combineFiles(\@fileNames,$file);
-	    $newProfileName =~ s/secondstrand/unstranded/; 
+	    $newProfileName =~ s/secondstrand/unstranded/;
+	    if (! exists $profiles->{legacy}->{$newProfileName}) {
+		print STDERR "ERROR:   Skipping correlation because unable to find matching profile for $profileName. Tried $newProfileName but that did not work.\n";
+		$datasetError=1;
+		next;
+	    }
 	    $legacyStudyId = $profiles->{legacy}->{$newProfileName}->{id};
 	    $legacyFile = "$legacyOrgDirectory/${legacyStudyId}.txt";
 	} elsif ( $sumFiles eq "new" && $profileName =~ /secondstrand/) {
