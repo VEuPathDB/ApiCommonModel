@@ -1,8 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.HostDB;
 
-import org.apidb.apicommon.model.datasetInjector.RNASeq;
+import org.apidb.apicommon.model.datasetInjector.RNASeqEbi;
 
-public class RNASeqGalinskiMmulatta extends RNASeq {
+public class RNASeqGalinskiMmulatta extends RNASeqEbi {
 
 
   @Override
