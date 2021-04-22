@@ -1920,6 +1920,7 @@ tablespace indx
     <internalDependency name="TaxonSpecies"/>
     <externalDependency name="apidb.TranscriptLocation"/>
     <internalDependency name="SnpAttributes"/>
+    <internalDependency name="GeneLocations"/>
     <externalDependency name="apidb.GeneFeatureName"/>
     <externalDependency name="apidb.TranscriptProduct"/>
     <externalDependency name="apidb.GeneFeatureProduct"/>
@@ -1985,7 +1986,8 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
        uniprot.gene_uniprot_id, uniprot.gene_uniprot_id_internal,
        transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
-       entrez_table.entrez_id AS gene_entrez_id, 
+       entrez_table.entrez_id AS gene_entrez_id,
+       gloc.locations AS gene_locations
        --next the transcript attributes: 
        t.source_id AS transcript_source_id,
        tso.name as transcript_type,
@@ -2048,6 +2050,7 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      sres.externalDatabaseRelease soRls,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed, sres.OntologyTerm tso,
+     &prefixGeneLocations gloc,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
@@ -2250,6 +2253,7 @@ WHERE gf.source_id = gene.source_id
   AND t.source_id = pa.transcript_source_id(+)
   AND t.na_feature_id = utr_lengths.transcript_na_feature_id
   AND t.sequence_ontology_id = tso.ontology_term_id
+  AND gf.source_id = gloc.source_id
 ORDER BY tn.taxon_id
       ]]>
     </sql>
@@ -2623,6 +2627,7 @@ from ApidbTuning.transcriptattributes
                 , gene_zoom_context_start as zoom_context_start
                 , gene_zoom_context_end as zoom_context_end
                 , cast (null as number) as strain_count
+                , ta.gene_locations as locations
             FROM &prefixTranscriptAttributes ta,
                  (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo, MIN(gene_product) AS product
                   FROM &prefixTranscriptAttributes
@@ -5867,7 +5872,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
   </tuningTable>
 
 
-  <tuningTable name="CompoundId"  prefixEnabled="true">
+  <tuningTable name="CompoundId" prefixEnabled="true">
     <comment> Alias table for Compounds.
     Compound column is the source_id from CompoundAttributes (chEBI_ID).
     ID can have this same ID, or mapping KEGG ID, or Name, or Synonym.
@@ -8913,29 +8918,32 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="GeneLocations">
+  <tuningTable name="GeneLocations" prefixEnabled="true">
     <comment>semicolon-delimited list of formatted genomic locations for each gene</comment>
     <externalDependency name="apidb.FeatureLocation"/>
     <sql>
         <![CDATA[
-          create table GeneLocations&1 nologging as
+          create table &prefixGeneLocations&1 nologging as
           select source_id,
                  listagg(location, '; ') within group(order by is_top_level desc) as locations
-          from (select feature_source_id as source_id, is_top_level,
-                       sequence_source_id || ':'
-                       || trim(to_char(start_min,'999,999,999')) || '..'
-                       || trim(to_char(end_max,'999,999,999')) || '('
-                       || decode(nvl(is_reversed, 0), 0, '+', 1, '-', is_reversed)
+          from (select fl.feature_source_id as source_id, fl.is_top_level,
+                       fl.sequence_source_id || ':'
+                       || trim(to_char(fl.start_min,'999,999,999')) || '..'
+                       || trim(to_char(fl.end_max,'999,999,999')) || '('
+                       || decode(nvl(fl.is_reversed, 0), 0, '+', 1, '-', fl.is_reversed)
                        || ')' as location
-                from apidb.FeatureLocation
-                where feature_type = 'GeneFeature')
+                from apidb.FeatureLocation fl, dots.NaSequence ns
+                where fl.feature_type = 'GeneFeature'
+                  and fl.na_sequence_id = ns.na_sequence_id
+                  and (ns.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
+               )
           group by source_id
         ]]>
     </sql>
     <sql>
         <![CDATA[
             create index gloc_ix&1
-            on GeneLocations&1(source_id, locations)
+            on &prefixGeneLocations&1(source_id, locations)
             tablespace indx
         ]]>
     </sql>
