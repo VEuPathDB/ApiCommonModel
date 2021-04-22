@@ -38,20 +38,28 @@ colnames(expt1)[2:(numSamples1+1)] <- paste0(rep("Expt1_",numSamples1),colnames(
 colnames(expt2)[2:(numSamples2+1)] <- paste0(rep("Expt2_",numSamples2),colnames(expt2)[2:(numSamples2+1)]);
 
 merged <- merge(expt1,expt2,by="gene_id");
-merged <- merged[,-1];
-merged <- merged[,order(colnames(merged))];
 
-results[nrow(results),1] <- paste(nrow(merged),min(merged),max(merged),sep="_");
+numMatchingGenes = nrow(merged);
+if (numMatchingGenes < 2) {
+   text <- paste("num matching genes:",numMatchingGenes);
+   writeLines(c(text),correlationFile);
+} else {
 
-for (a in 1:numSamples1) {
-  for (b in 1:numSamples2) {
-    results[a,b] <- cor(as.numeric(merged[,a]),as.numeric(merged[,(b+numSamples1)]),method="spearman");
+  merged <- merged[,-1];
+  merged <- merged[,order(colnames(merged))];
+
+  results[nrow(results),1] <- paste(nrow(merged),min(merged),max(merged),sep="_");
+
+  for (a in 1:numSamples1) {
+      for (b in 1:numSamples2) {
+      	  results[a,b] <- cor(as.numeric(merged[,a]),as.numeric(merged[,(b+numSamples1)]),method="spearman");
+      }
   }
+  write.table(results,file=correlationFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);
+
+  pdf(scatterFile,width=8,height=8);
+  par(mar=c(1,1,1,1))
+  pairs(log10(merged+1), pch=20, cex.labels=1-0.02*numSamples1, lower.panel=NULL);
+  dev.off();
+
 }
-
-write.table(results,file=correlationFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);
-
-pdf(scatterFile,width=8,height=8);
-par(mar=c(1,1,1,1))
-pairs(log10(merged+1), pch=20, cex.labels=1-0.02*numSamples1, lower.panel=NULL);
-dev.off();

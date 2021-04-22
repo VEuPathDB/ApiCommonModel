@@ -301,11 +301,16 @@ foreach my $dataset (keys %$dbProfiles) {
 	print STDERR "                 $legacyFile\n";
 	my $cmd = "rnaSeqSampleCorrTwoExpts.R $file $legacyFile $sampleOutputFile";
 	system($cmd);
+	my ($numFailedSampleCorrelations1,$sampleCorrelations1) = &makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	if ($numFailedSampleCorrelations1 == -1) {
+	    $datasetError = 1;
+	    next;
+	} elsif ($numFailedSampleCorrelations1 > 0) {
+	    $datasetError = 1;
+	}
+
 	$cmd = "rnaSeqGeneCorrTwoExpts.R $file $legacyFile $geneOutputFile";
 	system($cmd);
-
-	my ($numFailedSampleCorrelations1,$sampleCorrelations1) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
-	$datasetError=1 if ($numFailedSampleCorrelations1);
 	&makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	if ($fileTwo && $legacyFileTwo) {
@@ -326,7 +331,7 @@ foreach my $dataset (keys %$dbProfiles) {
 	    $cmd = "rnaSeqGeneCorrTwoExpts.R $fileTwo $legacyFileTwo $geneOutputFile";
 	    system($cmd);
 
-	    ($numFailedSampleCorrelations2,$sampleCorrelations2) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	    ($numFailedSampleCorrelations2,$sampleCorrelations2) = &makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
 	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	    print STDERR "\n   Testing correlations after switching strands:\n";
@@ -342,7 +347,7 @@ foreach my $dataset (keys %$dbProfiles) {
 	    $cmd = "rnaSeqGeneCorrTwoExpts.R $fileTwo $legacyFile $geneOutputFile";
 	    system($cmd);
 
-	    ($numFailedSampleCorrelations3,$sampleCorrelations3) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	    ($numFailedSampleCorrelations3,$sampleCorrelations3) = &makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
 	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	    print STDERR "\n   Testing correlations after switching strands (the other pair):\n";
@@ -358,7 +363,7 @@ foreach my $dataset (keys %$dbProfiles) {
 	    $cmd = "rnaSeqGeneCorrTwoExpts.R $file $legacyFileTwo $geneOutputFile";
 	    system($cmd);
 
-	    ($numFailedSampleCorrelations4,$sampleCorrelations4) = makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
+	    ($numFailedSampleCorrelations4,$sampleCorrelations4) = &makeReportFromSampleOutputFile("${sampleOutputFile}.txt");
 	    &makeReportFromGeneOutputFile("${geneOutputFile}.txt");
 
 	    my @corrBefore = (@{$sampleCorrelations1},@{$sampleCorrelations2});
@@ -411,6 +416,7 @@ if($legacyDatabaseInstance) {
   $legacyDbh->disconnect();
 }
 
+print STDERR "\nMaking sure all legacy datasets are in the new database\n";
 my $numLegacyDatasets=0;
 if($legacyDatabaseInstance) {
     foreach my $dataset (keys %$legacyDbProfiles) {  
@@ -452,8 +458,11 @@ order by ga.source_id";
   my $sh = $dbh->prepare($sql);
   $sh->execute();
 
-  while(my @a = $sh->fetchrow_array()) {
-    print $fh join("\t", @a) . "\n";
+  while(my ($sourceId,$profile) = $sh->fetchrow_array()) {
+      if ($sourceId =~ /^(\S*)\.(\S*)$/) {
+	  $sourceId = $1;
+      }
+      print $fh "$sourceId\t$profile\n";
   }
 }
 
@@ -673,15 +682,22 @@ sub makeReportFromSampleOutputFile {
 
   my $header = <FILE>;
   chomp $header;
+
+  if ($header =~ /num matching genes:\s*([0-9]+)/) {
+      my $numMatchingGenes = $1;
+      print STDERR "      ERROR: Only $numMatchingGenes genes match between databases. Can't calculate correlations.\n";
+      return (-1,\@correlations);
+  }
+
   my @headers = split(/\t/, $header);
   my $lastIndex = scalar @headers - 1;
   my %indexToSample = map { $_ => $headers[$_] } 1..$lastIndex;
 
-  while(<FILE>) {
-    chomp;
-    my @a = split(/\t/, $_);
+  while(my $line = <FILE>) {
+    chomp($line);
+    my @a = split(/\t/, $line);
+    my $sampleName = $a[0];
 
-    my $sampleName = $a[0]; 
     if ($sampleName eq "NumGenes_Min_Max") {
 	my ($numGenes,$min,$max) = split("_",$a[1]);
 	print STDERR "      $numGenes genes ranged in expression from $min to $max.\n";
