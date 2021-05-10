@@ -64,17 +64,24 @@ ORDER BY
 
   <query name="gene:annotation2">
 <![CDATA[
- SELECT
+  SELECT gene_name, feature_id, type, source, name, phase, score, parent_id, startm, end, strand,
+    listagg(goterms, ';') within group (order by goterms) as combined_go,
+    listagg(pubinfo, ';' ON OVERFLOW TRUNCATE WITHOUT COUNT) within group (order by pubinfo) as combined_pub,
+    atts
+   from (SELECT distinct
+       ga.name gene_name,
        ga.na_feature_id feature_id,
        'gene' type,
        'annotation' source,
        ga.source_id name,
-       '1' phase, 
+       '1' phase,
        '.' score,
        ga.na_sequence_id parent_id,
-       fl.start_min startm,
-       fl.end_max end,
-       decode (fl.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       ga.start_min startm,
+       ga.end_max end,
+       go.go_id ||'%'|| go.go_term_name ||'%'|| go.ontology as goterms,
+       gpm.pubmed_id ||'%'||  gpm.doi ||'%'|| gpm.title ||'%'|| gpm.authors as pubinfo,
+       decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'Note=' || ga.product  || '$dlm' ||
        'soTerm=' || ga.so_term_name || '$dlm' ||
        'geneId=' || ga.source_id || '$dlm' ||
@@ -88,14 +95,13 @@ ORDER BY
        'ProjectId=' || ga.project_id || '$dlm' ||
        'OrgAbbrev=' || o.public_abbrev atts
 FROM
-       ApidbTuning.GeneAttributes ga,
-       Apidb.featurelocation fl,
-       apidb.organism o
-WHERE  fl.na_sequence_id = $srcfeature_id
-  AND  fl.start_min <= $rend
-  AND  fl.end_max >= $base_start
-  AND  fl.na_feature_id = ga.na_feature_id
-  AND  ga.taxon_id = o.taxon_id
+       ApidbTuning.GeneAttributes ga LEFT OUTER JOIN apidbTuning.GeneGoTable go on ga.source_id = go.source_id
+       LEFT OUTER JOIN apidbTuning.GenePubmed gpm on ga.source_id = gpm.gene_source_id , apidb.organism o
+WHERE  ga.na_sequence_id = $srcfeature_id
+  AND  ga.start_min <= $rend
+  AND  ga.end_max >= $base_start
+  AND  ga.taxon_id = o.taxon_id)
+GROUP BY gene_name, feature_id, type, source, name, phase, score, parent_id, startm, end, strand, atts
 ]]>
   </query>
 
