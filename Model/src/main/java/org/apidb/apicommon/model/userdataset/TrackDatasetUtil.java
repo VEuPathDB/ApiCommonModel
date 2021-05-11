@@ -33,7 +33,7 @@ class TrackDatasetUtil {
    * @param trackName
    * @return
    */
-  static String composeDatafileName(String trackName) {
+  private static String composeDatafileName(String trackName) {
     if (trackName.contains(".")) {
       String dataFileExtension = trackName.substring(trackName.lastIndexOf("."));
       String rootDataFileName = trackName.substring(0, trackName.lastIndexOf("-"));
@@ -53,7 +53,9 @@ class TrackDatasetUtil {
     }
 
     JSONObject assembleJson() {
-      return new JSONObject().put("trackName", _trackName);
+      return new JSONObject()
+        .put("trackName", _trackName)
+        .put("datafileName", composeDatafileName(_trackName));
     }
   }
 }

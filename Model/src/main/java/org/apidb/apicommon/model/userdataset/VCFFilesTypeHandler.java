@@ -152,7 +152,7 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
     // dataset datafiles collection.
     for(String dataFileName : userDataset.getFiles().keySet()) {
       if(isBigWigFile(dataFileName)) {
-        String trackName = getTrackName(datasetId.toString(), dataFileName);
+        String trackName = TrackDatasetUtil.composeTrackName(datasetId.toString(), dataFileName);
         tracksData.add(new TrackData(trackName));
       }
     }
@@ -166,14 +166,6 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
       tracks.put(trackData.assembleJson());
     }
     return tracks;
-  }
-
-  protected String getTrackName(String datasetId, String datafileName) {
-    return TrackDatasetUtil.composeTrackName(datasetId, datafileName);
-  }
-
-  protected String getDatafileName(String trackName) {
-    return TrackDatasetUtil.composeDatafileName(trackName);
   }
 
   /**
