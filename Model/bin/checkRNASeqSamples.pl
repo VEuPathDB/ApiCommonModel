@@ -459,9 +459,9 @@ order by ga.source_id";
   $sh->execute();
 
   while(my ($sourceId,$profile) = $sh->fetchrow_array()) {
-      if ($sourceId =~ /^(\S*)\.(\S*)$/) {
-	  $sourceId = $1;
-      }
+#      if ($sourceId =~ /^(\S*)\.(\S*)$/) {      # Use this when gene ID has a version in one but not other
+#	  $sourceId = $1;                        # for example, ENSG00000001.2
+#      }
       print $fh "$sourceId\t$profile\n";
   }
 }
@@ -677,6 +677,8 @@ sub makeReportFromSampleOutputFile {
 
   my $numFailedTests=0;  
   my @correlations;
+  my $threshold = 0.9;
+  my $selfThreshold = 0.99;
 
   open(FILE, $file) or die "Cannot open file $file for reading: $!";
 
@@ -706,9 +708,12 @@ sub makeReportFromSampleOutputFile {
     my $bestCorr;
     my $bestSample;
     my $selfCorr;
+    my $fewGenesFlag;
     for (my $i=1; $i<=$lastIndex; $i++) {
 	if ($a[$i] eq "NA") {
 	    next;
+	} elsif ($a[$i] == 10) {
+	    $fewGenesFlag = 1;
 	} elsif ($a[$i] > $bestCorr) {
 	    $bestCorr = $a[$i];
 	    $bestSample=$indexToSample{$i};
@@ -720,10 +725,13 @@ sub makeReportFromSampleOutputFile {
 
     push @correlations, $selfCorr if ($selfCorr);
 
-    my $threshold = 0.9;
-    my $selfThreshold = 0.99;
     if (! $bestSample || ! $bestCorr ) {
-	print STDERR "ERROR:  Could not calculate any correlation for sample '$sampleName'. The legacy or new data may not exist for this sample. Did the tuning manager finish?\n";
+	print STDERR "ERROR:  Could not calculate any correlation for sample '$sampleName'.\n";
+	if ($fewGenesFlag) {
+	    print STDERR "            The gene names seem to be different between databases.\n";
+	} else { 
+	    print STDERR "            The legacy or new data may not exist for this sample. Did the tuning manager finish?\n";
+	}
 	$numFailedTests++;
     } elsif (! $selfCorr) {
 	$bestCorr = sprintf("%.3f",$bestCorr);
@@ -839,6 +847,7 @@ and profile_set_name like '% unique]'
 
     $dataset =~ s/_ebi_/_/;
     $profileSet =~ s/ - (tpm|fpkm) - / - exprval - /;
+    $profileSet =~ s/,//g;   # we have taken commas out of profile names
 
     $rv{$dataset}->{$profileSet} = $studyId;
 
