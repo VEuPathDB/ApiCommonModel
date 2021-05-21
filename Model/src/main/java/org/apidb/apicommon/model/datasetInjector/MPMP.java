@@ -11,6 +11,7 @@ public class MPMP extends DBXRefs {
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ECNumbers");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEcNumber");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GeneByLocusTag");
   }
 
   // second column is for documentation
