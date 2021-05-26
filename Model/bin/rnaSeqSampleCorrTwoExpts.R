@@ -17,41 +17,53 @@ fileName1 <- arguments[1];
 fileName2 <- arguments[2];
 outFile <- arguments[3];
 correlationFile <- paste(outFile,"txt",sep=".");
-scatterFile <- paste(outFile,"pdf",sep=".");
 
-expt1 <- read.table(arguments[1],header=TRUE,sep="\t");
-expt2 <- read.table(arguments[2],header=TRUE,sep="\t");
+expt1 <- read.table(fileName1,header=TRUE,sep="\t");
+expt2 <- read.table(fileName2,header=TRUE,sep="\t");
 
 numSamples1 <- ncol(expt1) - 1;
 numSamples2 <- ncol(expt2) - 1;
 samples1 <- colnames(expt1)[2:(numSamples1+1)];
 samples2 <- colnames(expt2)[2:(numSamples2+1)];
-
+colnames(expt1)[2:(numSamples1+1)] <- paste0(rep("Expt1_",numSamples1),samples1);
+colnames(expt2)[2:(numSamples2+1)] <- paste0(rep("Expt2_",numSamples2),samples2);
 colnames(expt1)[1] <- "gene_id";
 colnames(expt2)[1] <- "gene_id";
 
 results <- matrix(0,nrow=numSamples1+1,ncol=numSamples2);
-rownames(results) <- c(samples1[order(samples1)],'NumGenes_Min_Max');
-colnames(results) <- samples2[order(samples2)];
+rownames(results) <- c(samples1,'NumGenes_Min_Max');
+colnames(results) <- samples2;
 
-colnames(expt1)[2:(numSamples1+1)] <- paste0(rep("Expt1_",numSamples1),colnames(expt1)[2:(numSamples1+1)]);
-colnames(expt2)[2:(numSamples2+1)] <- paste0(rep("Expt2_",numSamples2),colnames(expt2)[2:(numSamples2+1)]);
-
-merged <- merge(expt1,expt2,by="gene_id");
-merged <- merged[,-1];
-merged <- merged[,order(colnames(merged))];
-
-results[nrow(results),1] <- paste(nrow(merged),min(merged),max(merged),sep="_");
+lowest <- 100000;
+highest <- 0;
+leastMatchingGenes <- 1000000;
 
 for (a in 1:numSamples1) {
-  for (b in 1:numSamples2) {
-    results[a,b] <- cor(as.numeric(merged[,a]),as.numeric(merged[,(b+numSamples1)]),method="spearman");
-  }
+       for (b in 1:numSamples2) {
+       	   merged <- merge(expt1[,c(1,a+1)],expt2[,c(1,b+1)],by="gene_id");
+
+	   numMatchingGenes <- nrow(merged);
+      	   if (numMatchingGenes < leastMatchingGenes) {
+      	        leastMatchingGenes <- numMatchingGenes;
+           }
+	   if (numMatchingGenes < 2) {
+	        results[a,b] <- 10;
+	   } else {
+
+	        merged <- merged[,-1];
+		currentLowest <- min(merged);
+		currentHighest <- max(merged);
+		if (currentLowest < lowest) {
+		     lowest <- currentLowest;
+		}
+		if (currentHighest > highest) {
+		     highest <- currentHighest;
+		}
+		results[a,b] <- cor(as.numeric(merged[,1]),as.numeric(merged[,2]),method="spearman");
+           }
+       }
 }
 
-write.table(results,file=correlationFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);
+results[nrow(results),1] <- paste(leastMatchingGenes,lowest,highest,sep="_");
 
-pdf(scatterFile,width=8,height=8);
-par(mar=c(1,1,1,1))
-pairs(log10(merged+1), pch=20, cex.labels=1-0.02*numSamples1, lower.panel=NULL);
-dev.off();
+write.table(results,file=correlationFile,sep="\t",row.names = TRUE,col.names = NA,quote=FALSE);

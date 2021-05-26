@@ -399,6 +399,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     </sql>
   </tuningTable>
 
+
   <tuningTable name="RnaSeqStats">
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="sres.ExternalDatabase"/>
@@ -1919,6 +1920,7 @@ tablespace indx
     <internalDependency name="TaxonSpecies"/>
     <externalDependency name="apidb.TranscriptLocation"/>
     <internalDependency name="SnpAttributes"/>
+    <internalDependency name="GeneLocations"/>
     <externalDependency name="apidb.GeneFeatureName"/>
     <externalDependency name="apidb.TranscriptProduct"/>
     <externalDependency name="apidb.GeneFeatureProduct"/>
@@ -1950,7 +1952,7 @@ tablespace indx
 CREATE TABLE &prefixTranscriptAttributes&1 NOLOGGING AS
 SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(20)) as project_id,
        t.source_id,
-       --first the gene attributes:
+       -- first the gene attributes:
        gf.source_id AS gene_source_id, 
        gf.na_feature_id AS gene_na_feature_id,
        LEAST(nl.start_min, nl.end_max) AS gene_start_min,
@@ -1984,8 +1986,9 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
        uniprot.gene_uniprot_id, uniprot.gene_uniprot_id_internal,
        transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
-       entrez_table.entrez_id AS gene_entrez_id, 
-       --next the transcript attributes: 
+       entrez_table.entrez_id AS gene_entrez_id,
+       gloc.locations AS gene_locations,
+       -- next the transcript attributes: 
        t.source_id AS transcript_source_id,
        tso.name as transcript_type,
        t.na_feature_id,
@@ -2047,6 +2050,7 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      sres.externalDatabaseRelease soRls,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed, sres.OntologyTerm tso,
+     &prefixGeneLocations gloc,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
@@ -2249,6 +2253,7 @@ WHERE gf.source_id = gene.source_id
   AND t.source_id = pa.transcript_source_id(+)
   AND t.na_feature_id = utr_lengths.transcript_na_feature_id
   AND t.sequence_ontology_id = tso.ontology_term_id
+  AND gf.source_id = gloc.source_id
 ORDER BY tn.taxon_id
       ]]>
     </sql>
@@ -2458,6 +2463,7 @@ and ga.orthomcl_name is null
     </sql>
   </tuningTable>
 
+
   <tuningTable name="GeneModelCharMD" prefixEnabled="true">
     <comment>
       Stores tuned data for the genemodelchar filter search
@@ -2501,6 +2507,7 @@ from ApidbTuning.transcriptattributes
       ]]>
     </sql>
   </tuningTable>
+
 
   <tuningTable name="IntronUtrCoords">
     <comment>
@@ -2620,6 +2627,7 @@ from ApidbTuning.transcriptattributes
                 , gene_zoom_context_start as zoom_context_start
                 , gene_zoom_context_end as zoom_context_end
                 , cast (null as number) as strain_count
+                , ta.gene_locations as locations
             FROM &prefixTranscriptAttributes ta,
                  (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo, MIN(gene_product) AS product
                   FROM &prefixTranscriptAttributes
@@ -5119,6 +5127,7 @@ and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjuncti
     </sql>
   </tuningTable>
 
+
   <tuningTable name="PopsetSequence">
     <comment> Each record stores the nucleotide sequence of one popset. Used in the
          relevant attribute query of the WDK popset record, as well as by
@@ -5142,6 +5151,7 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
+
 
   <tuningTable name="OrganismAbbreviation">
     <comment> Each record maps an organism name onto an abbreviation, getting the
@@ -5862,7 +5872,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
   </tuningTable>
 
 
-  <tuningTable name="CompoundId"  prefixEnabled="true">
+  <tuningTable name="CompoundId" prefixEnabled="true">
     <comment> Alias table for Compounds.
     Compound column is the source_id from CompoundAttributes (chEBI_ID).
     ID can have this same ID, or mapping KEGG ID, or Name, or Synonym.
@@ -6950,7 +6960,6 @@ from (select distinct dsp.dataset_presenter_id as dataset_id, dsp.name as datase
             and ((dsp.type = 'genome')
                   OR (dsp.type = 'protein_expression' and subtype is null)
                   OR (dsp.type = 'transcript_expression' and (subtype = 'rnaseq' or dsp.subtype = 'chipseq'))
-                  OR (dsp.type = 'feature' and subtype is null)
                   OR (dsp.type is null and subtype is null)
                 )
       )
@@ -8378,6 +8387,7 @@ where url is not null
     </sql>
   </tuningTable>
 
+
   <tuningTable name="GeneModelDump">
     <comment>
        Materialization of GeneTables.GeneModelDump.
@@ -8391,7 +8401,7 @@ where url is not null
       <![CDATA[
         CREATE TABLE GeneModelDump&1 NOLOGGING as
          SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
-  listagg(transcript_id, ', ') within GROUP(ORDER BY transcript_id) AS transcript_ids
+  listagg(transcript_id, ',') within GROUP(ORDER BY transcript_id) AS transcript_ids
  from ( select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
                 ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
@@ -8456,6 +8466,7 @@ where url is not null
       ]]>
     </sql>
   </tuningTable>
+
 
   <tuningTable name="RflpGenotypes">
     <comment>
@@ -8729,6 +8740,7 @@ tablespace indx
     </sql>
   </tuningTable>
 
+
   <tuningTable name="ChrCopyNumbers">
     <comment>Chromosome data for CNV queries</comment>
     <internalDependency name="InferredParams"/>
@@ -8765,6 +8777,7 @@ tablespace indx
         ]]>
     </sql>
   </tuningTable>
+
 
   <tuningTable name="GeneCopyNumbers">
     <comment>Gene Data for CNV queries</comment>
@@ -8806,6 +8819,7 @@ tablespace indx
     </sql>
   </tuningTable>
 
+
   <tuningTable name="Stringdb" alwaysUpdate="true">
     <comment> Data from STRING-DB.org, populated from their web service.
          Used in the gene record.
@@ -8814,6 +8828,7 @@ tablespace indx
     <internalDependency name="TaxonSpecies"/>
     <program commandLine="buildStringdbTT"/>
   </tuningTable>
+
 
   <tuningTable name="InterproData">
     <comment>for TranscriptAttributes.InterproColumns</comment>
@@ -8893,13 +8908,44 @@ tablespace indx
     </sql>
   </tuningTable>
 
-<!-- Apollo Updates -->
   <tuningTable name="ApolloUpdate" alwaysUpdate="true">
+    <comment>annotation updates from Apollo</comment>
     <ancillaryTable name="ApolloID"/>
     <internalDependency name="GenomicSeqAttributes"/>
     <externalDependency name="dots.NaSequence"/>
     <program commandLine="loadGffApolloTT"/>
   </tuningTable>
 
+
+  <tuningTable name="GeneLocations" prefixEnabled="true">
+    <comment>semicolon-delimited list of formatted genomic locations for each gene</comment>
+    <externalDependency name="apidb.FeatureLocation"/>
+    <sql>
+        <![CDATA[
+          create table &prefixGeneLocations&1 nologging as
+          select source_id,
+                 listagg(location, '; ') within group(order by is_top_level desc) as locations
+          from (select fl.feature_source_id as source_id, fl.is_top_level,
+                       fl.sequence_source_id || ':'
+                       || trim(to_char(fl.start_min,'999,999,999')) || '..'
+                       || trim(to_char(fl.end_max,'999,999,999')) || '('
+                       || decode(nvl(fl.is_reversed, 0), 0, '+', 1, '-', fl.is_reversed)
+                       || ')' as location
+                from apidb.FeatureLocation fl, dots.NaSequence ns
+                where fl.feature_type = 'GeneFeature'
+                  and fl.na_sequence_id = ns.na_sequence_id
+                  and (ns.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
+               )
+          group by source_id
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+            create index gloc_ix&1
+            on &prefixGeneLocations&1(source_id, locations)
+            tablespace indx
+        ]]>
+    </sql>
+  </tuningTable>
 
 </tuningConfig>

@@ -131,8 +131,9 @@ select gene_source_id as source_id
      , project_id as project_id
      , exon_count
      , length
-     , CASE WHEN (is_pseudo = 1 OR gene_type = 'pseudogene') THEN NULL ELSE protein_length END AS protein_length
-     , transcript_type
+     , CASE WHEN (transcript_type LIKE 'pseudogen%' OR gene_type LIKE 'pseudogen%' OR so_term_name LIKE 'pseudogen%') THEN NULL ELSE protein_length END AS protein_length
+     , CASE WHEN (transcript_type LIKE 'pseudogen%' OR gene_type LIKE 'pseudogen%' OR so_term_name LIKE 'pseudogen%') THEN 'pseudogenic_transcript' 
+            ELSE transcript_type END AS transcript_type
      --, so_term_name
      --, transcript_product
 from apidbtuning.transcriptattributes 
@@ -300,6 +301,30 @@ group by
             </sql>
         </sqlQuery>
 
+       <sqlQuery name="ECNumbersInferred" isCacheable="false" >
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="ec_number"/>
+            <column name="length_score"/>
+            <column name="blast_score"/>
+            <column name="domain_score"/>
+            <column name="num_protein_with_ec"/>
+            <column name="num_protein_in_group"/>
+            <column name="num_genera_with_ec"/>
+            <column name="num_genera_in_group"/>
+
+            <sql>
+            <![CDATA[
+SELECT ta.gene_source_id AS source_id, ta.project_id, ec.ec_number,
+    asec.length_score, asec.blast_score, asec.domain_score, asec.num_protein_with_ec,
+    asec.num_protein_in_group, asec.num_genera_with_ec,asec.num_genera_in_group
+FROM apidbtuning.transcriptattributes ta, sres.enzymeclass ec, dots.aasequenceenzymeclass asec
+WHERE ta.aa_sequence_id = asec.aa_sequence_id AND asec.enzyme_class_id = ec.enzyme_class_id
+      AND asec.evidence_code = 'OrthoMCLDerived'
+         ]]>
+            </sql>
+        </sqlQuery>
+
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- GO terms -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -390,6 +415,10 @@ order by goslim.source_id, goslim.ontology, goslim.go_id
             <column name="assay_type"/>
             <column name="paralog_number"/>
             <column name="template"/>
+
+            <!--don't show multiple isolates on record page in VB-->
+            <sqlParamValue name="geneGroupJoin" excludeProjects="VectorBase,EuPathDB"></sqlParamValue>
+            <sqlParamValue name="geneGroupJoin" includeProjects="VectorBase">AND psgene.source_id = psgene.profile_graph_id</sqlParamValue>
             <sql>
             <![CDATA[
 SELECT g.*, decode('@PROJECT_ID@', 'UniDB', 'EuPathDB', g.project_id) as project_id_url, decode(lower(is_graph_custom), 'false', 1, 0) as template
@@ -425,6 +454,7 @@ FROM apidbtuning.datasetpresenter dpr,
       -- TEMPLATE_ANCHOR microarrayGraphDescriptions
            ) graph_descrip
         where ga.source_id = psgene.source_id
+          &&geneGroupJoin&&
           and psgene.dataset_name = dsnt.name
           and dsnt.dataset_presenter_id = dp.dataset_presenter_id
           and dp.dataset_presenter_id = pub.dataset_presenter_id(+)
@@ -575,10 +605,10 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
            apidbtuning.taxonspecies ts, 
            sres.taxonname sn,
            apidbtuning.geneGroupProfile psgene,
-           (        select 'tbruTREU927_RNAi_Horn_*rnaSeq_RSRC' as dataset,
+           (        select 'tbruTREU927_RNAi_Horn_rnaSeq_RSRC' as dataset,
        'RNASeq' as module,
        'Rank of each gene by its ratio' as x_axis,
-       'Ratio of FPKM values for the sample indicated compared to the uninduced control.<br>
+       'Ratio of TPM values for the sample indicated compared to the uninduced control.<br>
         This ratio is proportional to the fitness observed upon RNAi-induced knockdown.<br>
         All ratios are calculated from reads mapping uniquely to the CDS of each gene.<br><br>
         The particular samples and ratios are indicated in the gray bar above each graph:<br>
@@ -587,7 +617,7 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
 	    - BFD6: bloodstream-form cells grown for 6 days<br>
 	    - PF: insect/procyclic-form cells<br>
 	    - DIF: cells induced throughout growth as bloodstream forms, differentiation and growth as procyclic forms.<br><br>
-        Please note that values in the data table are the FPKM values for each sample, while the plot shows the ratio of the FPKM value for the indicated sample compared to the uninduced (NoTet) control.<br><br>' as y_axis,
+        Please note that values in the data table are the TPM values for each sample, while the plot shows the ratio of the TPM value for the indicated sample compared to the uninduced (NoTet) control.<br><br>' as y_axis,
        'false' as is_graph_custom,
        1 as order_num
        from dual
@@ -1055,7 +1085,16 @@ select * from (
  select ga.source_id, ga.project_id, pan.uri, r.property, r.value, r.protocol_app_node_id
  from apidb.nafeaturephenotype r, apidbtuning.geneattributes ga, study.protocolappnode pan
  where pan.protocol_app_node_id = r.protocol_app_node_id
- and r.na_feature_id = ga.na_feature_id
+   and r.na_feature_id = ga.na_feature_id
+   and property
+       in ('PHI-base entry', 'Co-mutated gene(s)', 'Comments', 'Disease',
+           'Disease manifestation', 'Essential gene', 'Experimental technique',
+           'Gene inducer', 'Host species', 'Host strain', 'Invitro growth',
+           'Mating defect', 'Multiple mutations', 'Mutant Phenotype',
+           'Pathogen species', 'Pathogen strain', 'Penetration defect',
+           'PMID', 'Postpenetration defect', 'Prepenetration defect',
+           'Sexual spores', 'Spore germination', 'Tissue',
+           'Vegetative spores' )
 ) pivot ( 
   listagg(value, '</br>') within group (order by value)
   for property IN (
@@ -1143,6 +1182,24 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
 
         </sqlQuery>
 
+       <sqlQuery name="ApolloProducts" isCacheable="false" excludeProjects="HostDB,TriTrypDB,TrichDB,UniDB" >
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="apollo_description" />
+            <sql>
+<![CDATA[
+SELECT  ga.source_id
+, ga.project_id
+, replace(replace(REGEXP_SUBSTR ( attr, 'description=(.+?);'), 'description=', ''), ';', '') as apollo_description
+FROM apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga
+where au.type = 'gene'
+and au.attr like '%description%'
+AND ((ga.start_min <= au.mapping_start AND au.mapping_start <= ga.end_max)
+    OR (au.mapping_end <= ga.start_min AND ga.start_min <= au.mapping_end))
+ ]]>
+       </sql>
+
+        </sqlQuery>
 
        <sqlQuery name="pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC" includeProjects="PlasmoDB,UniDB">
             <column name="source_id" />
@@ -1459,7 +1516,7 @@ ORDER BY se.trans_start
        <!-- HTS SNPs Alignment -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-        <sqlQuery name="HtsSNPsAlignment" includeProjects="PiroplasmaDB,GiardiaDB,AmoebaDB,PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,FungiDB,UniDB"
+        <sqlQuery name="HtsSNPsAlignment" includeProjects="PlasmoDB,UniDB"
                isCacheable="false">
             <column name="source_id"/>
             <column name="project_id"/>
@@ -2627,7 +2684,6 @@ order by ps.source_id,ps.residue, ps.experiment, ps.sample
             <column name="project_id"/>
             <column name="sequence_source_id"/>
             <column name="sequence_so_term"/> 
-            <column name="is_top_level"/>
             <column name="start_min"/>
             <column name="end_max"/>
             <column name="is_reversed"/>
@@ -2637,27 +2693,26 @@ order by ps.source_id,ps.residue, ps.experiment, ps.sample
             <column name="lc_project_id"/>
             <sql>
             <![CDATA[
-SELECT
-  ga.source_id
-, sa.project_id
-, ga.sequence_id AS sequence_source_id
-, so.name AS sequence_so_term
-, 1 AS is_top_level
-, start_min AS start_min
-, end_max AS end_max
-, DECODE(is_reversed, 0, '+', 1, '-') is_reversed
-,(start_min - 5000) AS start_context
-,(end_max + 5000) AS end_context
-, o.public_abbrev as organismAbbrev
-, lower(ga.project_id) AS lc_project_id
-from
-  ApidbTuning.GeneAttributes ga
-, ApidbTuning.GenomicSeqAttributes sa
-, SRes.OntologyTerm so
-, apidb.organism o
-WHERE ga.na_sequence_id = sa.na_sequence_id
-  AND sa.so_id = so.source_id
-  AND o.taxon_id = ga.taxon_id
+                     SELECT ga.source_id
+                          , ga.project_id
+                          , fl.sequence_source_id AS sequence_source_id
+                          , so.name AS sequence_so_term
+                          , fl.start_min AS start_min
+                          , fl.end_max AS end_max
+                          , DECODE(fl.is_reversed, 0, '+', 1, '-') is_reversed
+                          , (fl.start_min - 5000) AS start_context
+                          , (fl.end_max + 5000) AS end_context
+                          , o.public_abbrev as organismAbbrev
+                          , lower(ga.project_id) AS lc_project_id
+                     FROM ApidbTuning.GeneAttributes ga
+                        , apidb.featurelocation fl
+                        , ApidbTuning.GenomicSeqAttributes sa
+                        , SRes.OntologyTerm so
+                        , apidb.organism o
+                     WHERE ga.na_sequence_id = sa.na_sequence_id
+                      AND sa.so_id = so.source_id
+                      AND ga.na_feature_id = fl.NA_FEATURE_ID
+                      AND o.taxon_id = ga.taxon_id
             ]]>
             </sql>
         </sqlQuery>
@@ -3631,6 +3686,8 @@ FROM
             <sql>
                <![CDATA[
 select distinct * from (
+
+SELECT * FROM (
 SELECT 
   edd.dataset_presenter_display_name AS dataset
 , ga.source_id
@@ -3652,6 +3709,10 @@ WHERE
   AND lower(edd.dataset_presenter_name) NOT LIKE '%nafeature_aliases%'
   AND edd.dataset_presenter_name NOT LIKE '%dbxref_simple_gene2HagaiPathway%'
   AND lower(edd.dataset_presenter_name) NOT LIKE '%pubmed%'
+)
+WHERE dataset != 'Malaria Literature Database' 
+AND dataset != 'Ontology Based Pattern Identification'
+
 UNION
 SELECT REPLACE(substr(ed.name, instr(ed.name, '_', 1, 3)+1), '_geneMapping_RSRC', '') as dataset,
   ga.source_id
@@ -3940,7 +4001,7 @@ GROUP BY
                 SELECT ps.pdb_chain, ps.pdb_title, ps.pdb_id, ps.pvalue_mant,
                        ps.pvalue_exp, ps.taxon, ps.percent_identity,
                        ps.percent_plasmo_coverage, 
-                       'http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId=' || ps.pdb_id as pdb_url,
+                       'https://www.rcsb.org/structure/' || ps.pdb_id as pdb_url,
                        ta.source_id as transcript_id, ta.gene_source_id as source_id, ta.project_id
                 FROM ApidbTuning.PdbSimilarity ps, ApidbTuning.TranscriptAttributes ta
                 WHERE ps.source_id = ta.source_id
@@ -4374,9 +4435,10 @@ SELECT
 , ta.source_id as transcript_id
 , ta.project_id
 , ta.length as transcript_length
-, CASE WHEN (is_pseudo = 1 OR gene_type = 'pseudogene') THEN NULL ELSE ta.protein_length END AS protein_length
+, CASE WHEN (transcript_type LIKE 'pseudogen%' OR gene_type LIKE 'pseudogen%' OR so_term_name LIKE 'pseudogen%') THEN NULL ELSE ta.protein_length END AS protein_length
 , ta.is_pseudo
-, transcript_type
+, CASE WHEN (transcript_type LIKE 'pseudogen%' OR gene_type LIKE 'pseudogen%' OR so_term_name LIKE 'pseudogen%') THEN 'pseudogenic_transcript' 
+       ELSE transcript_type END AS transcript_type
 , iuc.gen_rel_intron_utr_coords
 , case when ta.five_prime_utr_length > 0 
        then '[1,' || (ta.five_prime_utr_length) || ']'
@@ -4387,7 +4449,7 @@ SELECT
        else null
   end as three_prime_utr_coords
 , sns.sequence as transcript_sequence
-, CASE WHEN (is_pseudo = 1 OR gene_type = 'pseudogene') THEN NULL ELSE ps.sequence END AS protein_sequence
+, CASE WHEN (transcript_type LIKE 'pseudogen%' OR gene_type LIKE 'pseudogen%' OR so_term_name LIKE 'pseudogen%') THEN NULL ELSE ps.sequence END AS protein_sequence
 , CASE
     WHEN tl.is_reversed = 1
     THEN
@@ -4512,7 +4574,7 @@ and i.external_database_release_id = r.external_database_release_id
 and r.external_database_id = d.external_database_id
 and ps.name = psdi.profile_set_name (+)
 and d.name = dnt.name
-and dnt.dataset_presenter_id = 'DS_3f5188c7a8' -- this is the TriTryp RNA-Seq phenotype dataset id
+and dnt.dataset_presenter_id = 'DS_98fb258539' -- this is the TriTryp RNA-Seq phenotype dataset id
 and ps.study_id = smpl.study_id
 and smpl.protocol_app_node_id = pan.protocol_app_node_id
 and smpl.profile_type = 'values'
