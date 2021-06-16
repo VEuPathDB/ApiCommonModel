@@ -282,6 +282,10 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PubMed");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ECNumbers");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GOTerms");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GOSlim");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
 
 
     // not for VectorBase
