@@ -459,9 +459,9 @@ order by ga.source_id";
   $sh->execute();
 
   while(my ($sourceId,$profile) = $sh->fetchrow_array()) {
-#      if ($sourceId =~ /^(\S*)\.(\S*)$/) {      # Use this when gene ID has a version in one but not other
-#	  $sourceId = $1;                        # for example, ENSG00000001.2
-#      }
+      if ($sourceId =~ /^(\S+)\.(\S+)$/) {      # Use this when gene ID has a version in one but not other
+	  $sourceId = $1;                        # for example, ENSG00000001.2
+      }
       print $fh "$sourceId\t$profile\n";
   }
 }
@@ -685,12 +685,6 @@ sub makeReportFromSampleOutputFile {
   my $header = <FILE>;
   chomp $header;
 
-  if ($header =~ /num matching genes:\s*([0-9]+)/) {
-      my $numMatchingGenes = $1;
-      print STDERR "      ERROR: Only $numMatchingGenes genes match between databases. Can't calculate correlations.\n";
-      return (-1,\@correlations);
-  }
-
   my @headers = split(/\t/, $header);
   my $lastIndex = scalar @headers - 1;
   my %indexToSample = map { $_ => $headers[$_] } 1..$lastIndex;
@@ -702,9 +696,15 @@ sub makeReportFromSampleOutputFile {
 
     if ($sampleName eq "NumGenes_Min_Max") {
 	my ($numGenes,$min,$max) = split("_",$a[1]);
-	print STDERR "      $numGenes genes ranged in expression from $min to $max.\n";
-	next;
+	if ($numGenes == 0 || $min == 100000 || $max == 0) {
+	    print STDERR "      ERROR: Only $numGenes genes match between databases. Can't calculate correlations.\n";
+	    return (-1,\@correlations);
+	} else {
+	    print STDERR "      $numGenes genes ranged in expression from $min to $max.\n";
+	    next;
+	}
     }
+
     my $bestCorr;
     my $bestSample;
     my $selfCorr;
@@ -846,8 +846,10 @@ and profile_set_name like '% unique]'
     my $isStranded = $profileSet =~ / - (firststrand|secondstrand) - /;
 
     $dataset =~ s/_ebi_/_/;
+    $dataset =~ s/mmul17573/mmulAG07107/;
     $profileSet =~ s/ - (tpm|fpkm) - / - exprval - /;
     $profileSet =~ s/,//g;   # we have taken commas out of profile names
+    $profileSet =~ s/Transcriptomes of 46 malaria-infected Gambian children/Transcriptome analysis of blood from Gambian children with malaria./;
 
     $rv{$dataset}->{$profileSet} = $studyId;
 
