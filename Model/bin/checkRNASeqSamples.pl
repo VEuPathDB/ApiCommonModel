@@ -75,18 +75,16 @@ foreach my $dataset (keys %$dbProfiles) {
     }
     
     if ($numScaled > 2) {
-	print STDERR "WARNING: Unexpectedly, there are more than 2 scaled profiles\n";
-	$datasetError=1;
+	print STDERR "WARNING: There are more than 2 scaled profiles\n";
     }
     if (($numProfiles-$numScaled) > 2) {
-	print STDERR "WARNING: Unexpectedly, there are more than 2 non-scaled profiles\n";
-	$datasetError=1;
+	print STDERR "WARNING: There are more than 2 non-scaled profiles\n";
     }
 
     my $isStrandedInLegacyDb;
     if ( $legacyDatabaseInstance ) {
 	if ( ! exists $legacyDbProfiles->{$dataset}) {
-	    print STDERR "   WARN:  Could not find a matching legacy dataset for dataset=$dataset\n";
+	    print STDERR "   WARNING:  Could not find a matching legacy dataset for dataset=$dataset\n";
 	    print STDERR "\n    ---DATASET FAILED---\n";
 	    $numDatasetsWithError++;
 	    next;
@@ -122,29 +120,25 @@ foreach my $dataset (keys %$dbProfiles) {
 	    }
 	
 	    if ($numLegacyScaled > 2) {
-		print STDERR "ERROR: Unexpectedly, there are more than 2 scaled profiles\n";
-		$datasetError=1;
+		print STDERR "WARNING: There are more than 2 scaled profiles\n";
 	    }
 	    if (($numLegacyProfiles-$numLegacyScaled) > 2) {
-		print STDERR "ERROR: Unexpectedly, there are more than 2 non-scaled profiles\n";
-		$datasetError=1;
+		print STDERR "WARNING: There are more than 2 non-scaled profiles\n";
 	    }
 	  
 	    foreach my $profile (keys %{$dbProfiles->{$dataset}}) {
 		if (! exists $legacyDbProfiles->{$dataset}->{$profile} ) {
-		    print STDERR "ERROR: The new profile $profile does not exist in the legacy database.\n";                                                                  
-		    $datasetError=1;
+		    print STDERR "ERROR: The new profile $profile does not exist in the legacy database.\n";                    		    $datasetError=1;
 		}
 	    }
 	    foreach my $profile (keys %{$legacyDbProfiles->{$dataset}}) {
 		if (! exists $dbProfiles->{$dataset}->{$profile} ) {
-		    print STDERR "ERROR: The legacy profile $profile does not exist in the new database.\n";                                                                  
-		    $datasetError=1;
+		    print STDERR "ERROR: The legacy profile $profile does not exist in the new database.\n";                    		    $datasetError=1;
 		}
 	    }
 	    
 	    if($isStrandedInDb ne $isStrandedInLegacyDb) {
-		print STDERR "WARN:  Dataset $dataset is $isStrandedInDb in first instance but $isStrandedInLegacyDb in legacy db\n";
+		print STDERR "WARNING:  Dataset $dataset is $isStrandedInDb in first instance but $isStrandedInLegacyDb in legacy db\n";
 		$sumFiles = $isStrandedInDb eq "stranded" ? "new" : "legacy";
 		print STDERR "       I will sum the two $sumFiles stranded profiles into one file, then calculate correlations to the unstranded file.\n";
 		$datasetError=1;
@@ -459,7 +453,7 @@ order by ga.source_id";
   $sh->execute();
 
   while(my ($sourceId,$profile) = $sh->fetchrow_array()) {
-#      if ($sourceId =~ /^(\S*)\.(\S*)$/) {      # Use this when gene ID has a version in one but not other
+#      if ($sourceId =~ /^(\S+)\.(\S+)$/) {      # Use this when gene ID has a version in one but not other
 #	  $sourceId = $1;                        # for example, ENSG00000001.2
 #      }
       print $fh "$sourceId\t$profile\n";
@@ -685,12 +679,6 @@ sub makeReportFromSampleOutputFile {
   my $header = <FILE>;
   chomp $header;
 
-  if ($header =~ /num matching genes:\s*([0-9]+)/) {
-      my $numMatchingGenes = $1;
-      print STDERR "      ERROR: Only $numMatchingGenes genes match between databases. Can't calculate correlations.\n";
-      return (-1,\@correlations);
-  }
-
   my @headers = split(/\t/, $header);
   my $lastIndex = scalar @headers - 1;
   my %indexToSample = map { $_ => $headers[$_] } 1..$lastIndex;
@@ -702,9 +690,15 @@ sub makeReportFromSampleOutputFile {
 
     if ($sampleName eq "NumGenes_Min_Max") {
 	my ($numGenes,$min,$max) = split("_",$a[1]);
-	print STDERR "      $numGenes genes ranged in expression from $min to $max.\n";
-	next;
+	if ($numGenes == 0 || $min == 100000 || $max == 0) {
+	    print STDERR "      ERROR: Only $numGenes genes match between databases. Can't calculate correlations.\n";
+	    return (-1,\@correlations);
+	} else {
+	    print STDERR "      $numGenes genes ranged in expression from $min to $max.\n";
+	    next;
+	}
     }
+
     my $bestCorr;
     my $bestSample;
     my $selfCorr;
@@ -740,7 +734,7 @@ sub makeReportFromSampleOutputFile {
 	if ($selfCorr > $selfThreshold) {
 	    $bestCorr = sprintf("%.3f",$bestCorr);
 	    $selfCorr = sprintf("%.3f",$selfCorr);
-	    print STDERR "WARN:  Sample '$sampleName' did not correlate best with itself ($selfCorr) but it is still really high. It correlated better with '$bestSample' ($bestCorr)\n";
+	    print STDERR "WARNING:  Sample '$sampleName' did not correlate best with itself ($selfCorr) but it is still really high. It correlated better with '$bestSample' ($bestCorr)\n";
 	} else {               
 	    $bestCorr = sprintf("%.3f",$bestCorr);
 	    $selfCorr = sprintf("%.3f",$selfCorr);
@@ -848,6 +842,9 @@ and profile_set_name like '% unique]'
     $dataset =~ s/_ebi_/_/;
     $profileSet =~ s/ - (tpm|fpkm) - / - exprval - /;
     $profileSet =~ s/,//g;   # we have taken commas out of profile names
+
+#    $dataset =~ s/mmul17573/mmulAG07107/;
+#    $profileSet =~ s/Transcriptomes of 46 malaria-infected Gambian children/Transcriptome analysis of blood from Gambian children with malaria./;
 
     $rv{$dataset}->{$profileSet} = $studyId;
 
