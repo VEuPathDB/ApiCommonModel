@@ -27,36 +27,61 @@ foreach(($dataDir,$searchFile)) {
 
 my $searches = &getSearches($searchFile);
 
-foreach my $search (@$searches) {
-    print "$search\n";
+foreach my $search (keys %$searches) {
+    print "$searches->{$search}\n";
     my $results = &getResults($search,$dataDir);
-    print Dumper $results;
+    print $results->{meta}->{totalCount}."\n\n";
 #    my $eupathSearch = &editSearch($search,"eupath");
 #    my $eupathResults = &getResults($eupathSearch,$dataDir);
 #    &compareResults($results,$eupathResults);
-    exit;
+
 }
 
 exit;
 
 sub getSearches {
     my ($file) = @_;
-    my @searches;
+    my %searches;
     open(IN, $file) or die "cannot open download file '$file': $!";
     while (my $line = <IN>) {
-	chomp($line);
 	if ($line =~ /^http/) {
-	    push @searches, $line;
+	    &cleanHtml(\$line);
+	    my $shortName = &getShortName($line);
+	    $searches{$line} = $shortName;
 	}
     }
     close IN;
-    return \@searches;
+    return \%searches;
+}
+
+sub cleanHtml {
+    my ($htmlRef) = @_;
+    chomp($$htmlRef);
+    $$htmlRef =~ s/\r//g;
+    $$htmlRef =~ s/%7B/{/g;
+    $$htmlRef =~ s/%7D/}/g;
+    $$htmlRef =~ s/%22/"/g;
+    $$htmlRef =~ s/%3A/:/g;
+    $$htmlRef =~ s/%5B/[/g;
+    $$htmlRef =~ s/%5D/]/g;
+    $$htmlRef =~ s/%2C/,/g;
+    $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":0,/;
+}
+
+sub getShortName {
+    my ($name) = @_;
+    if ($name =~ /\/(GenesBy[^\/]+)\//) {
+	return $1;
+    } else {
+	return $name;
+    }
 }
 
 sub getResults {
     my ($search,$dataDir) = @_;
-    my $cmd = "curl $search";
+    my $cmd = "curl --silent --show-error -g '$search'";
     my $json = &runCmd($cmd);
+#    print $json."\n";
     my $results = decode_json($json);
     return $results;
 }
