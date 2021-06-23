@@ -27,40 +27,79 @@ foreach(($dataDir,$searchFile)) {
 
 my $searches = &getSearches($searchFile);
 
-foreach my $search (@$searches) {
-    print "$search\n";
-    my $results = &getResults($search,$dataDir);
-    print Dumper $results;
-#    my $eupathSearch = &editSearch($search,"eupath");
+foreach my $search (keys %$searches) {
+    print "$searches->{$search}\n";
+    my $eupathSearch = &editSearch($search,"veupath");
+    
+    my $results = &getResults($search);
+    print $results->{meta}->{totalCount}."\n\n";
+
 #    my $eupathResults = &getResults($eupathSearch,$dataDir);
 #    &compareResults($results,$eupathResults);
-    exit;
+
 }
 
 exit;
 
 sub getSearches {
     my ($file) = @_;
-    my @searches;
+    my %searches;
     open(IN, $file) or die "cannot open download file '$file': $!";
     while (my $line = <IN>) {
-	chomp($line);
 	if ($line =~ /^http/) {
-	    push @searches, $line;
-	}
+	    &cleanHtml(\$line);
+	    my $shortName = &getShortName($line);
+	    $searches{$line} = $shortName;
+	}   
     }
     close IN;
-    return \@searches;
+    return \%searches;
+}
+
+sub cleanHtml {
+    my ($htmlRef) = @_;
+    chomp($$htmlRef);
+    $$htmlRef =~ s/\r//g;
+    $$htmlRef =~ s/%7B/{/g;
+    $$htmlRef =~ s/%7D/}/g;
+    $$htmlRef =~ s/%22/"/g;
+    $$htmlRef =~ s/%3A/:/g;
+    $$htmlRef =~ s/%5B/[/g;
+    $$htmlRef =~ s/%5D/]/g;
+    $$htmlRef =~ s/%2C/,/g;
+    $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":0,/;
+}
+
+sub getShortName {
+    my ($name) = @_;
+    if ($name =~ /searches\/([^\/]+)\/reports/) {
+	return $1;
+    } else {
+	return $name;
+    }
 }
 
 sub getResults {
-    my ($search,$dataDir) = @_;
-    my $cmd = "curl $search";
+    my ($search) = @_;
+    my $cmd = "curl --silent --show-error -g '$search'";
     my $json = &runCmd($cmd);
     my $results = decode_json($json);
     return $results;
 }
 
+sub editSearch {
+    my ($search,$site) = @_;
+    if ($site eq "veupath") {
+	$site = "veupathdb.org/veupathdb";
+    } elsif ($site eq "unidb") {
+	$site = "feature.veupathdb.org/veupathdb.feature";
+    }
+    if ($search =~ /^https?:\/\/([^\/]+\/[^\/])\//) {
+	my $original = $1;
+	$search =~ s/$original/$site/;
+    }
+    return $search;
+}
 
 sub getBaseUrls {
     my ($type) = @_;
