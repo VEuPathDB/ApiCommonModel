@@ -32,8 +32,8 @@ public class SpliceSites extends  DatasetInjector {
 
       setGraphModule();
 
-      setPropValue("exprMetric", "rpm");
-      setPropValue("graphYAxisDescription", "count per million");
+      setPropValue("exprMetric", "tpm");
+      setPropValue("graphYAxisDescription", "Transcript abundance in Transcripts per Million (TPM)");
 
       String exprMetric = getPropValue("exprMetric");
       setPropValue("graphVisibleParts", exprMetric + ",percentile");
@@ -50,19 +50,19 @@ public class SpliceSites extends  DatasetInjector {
   
       if(getPropValueAsBoolean("hasMultipleSamples")) {
         injectTemplate("spliceSitesFoldChangeQuestion");
-	injectTemplate("spliceSitesFoldChangeCategories");
+	    injectTemplate("spliceSitesFoldChangeCategories");
 
-	setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
+	    setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
         setPropValue("questionName", "GeneQuestions.GenesBySpliceSites" + getDatasetName());
         injectTemplate("internalGeneSearchCategory");
 
 
         injectTemplate("spliceSitesProfileSetsQuery");
-	injectTemplate("spliceSitesDifferentialQuestion");
-	injectTemplate("spliceSitesDifferentialCategories");
-	setPropValue("searchCategory", "searchCategory-splice-site-loc");
-	setPropValue("questionName", "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
-	injectTemplate("internalGeneSearchCategory");
+	    injectTemplate("spliceSitesDifferentialQuestion");
+	    injectTemplate("spliceSitesDifferentialCategories");
+	    setPropValue("searchCategory", "searchCategory-splice-site-loc");
+	    setPropValue("questionName", "GeneQuestions.GenesByDifferentialSpliceSites" + getDatasetName());
+	    injectTemplate("internalGeneSearchCategory");
 
       }
       injectTemplate("spliceSitesProfileSetParamQuery");
