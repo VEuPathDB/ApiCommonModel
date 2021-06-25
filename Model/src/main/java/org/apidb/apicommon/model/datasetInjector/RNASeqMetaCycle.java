@@ -1,6 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-public class RNASeqMetaCycle extends RNASeq {
+public class RNASeqMetaCycle extends RNASeqEbi {
 
 
   @Override
