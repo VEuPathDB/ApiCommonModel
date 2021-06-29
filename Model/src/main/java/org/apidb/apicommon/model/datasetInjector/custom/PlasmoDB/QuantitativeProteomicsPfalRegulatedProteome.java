@@ -13,7 +13,5 @@ public class QuantitativeProteomicsPfalRegulatedProteome extends QuantitativePro
   public void addModelReferences() {
 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirectPValuepfal3D7_quantitativeMassSpec_Ganter_Regulated_Proteome_RSRC");
-
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Proteomics::LogRatio"); 
   }
 }

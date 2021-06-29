@@ -13,8 +13,5 @@ public class QuantitativeProteomicsKOMutants extends QuantitativeProteomicsDirec
   public void addModelReferences() {
 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirectPValuepberANKA_quantitativeMassSpec_Modrzynska_KO_Mutants_RSRC"); 
-
-
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Proteomics::LogRatio"); 
   }
 }
