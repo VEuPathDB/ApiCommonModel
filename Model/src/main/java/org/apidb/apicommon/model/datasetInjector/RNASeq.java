@@ -21,7 +21,7 @@ public class RNASeq extends  DatasetInjector {
     }
 
     protected void setExprMetric() {
-        setPropValue("exprMetric", "fpkm");
+        setPropValue("exprMetric", "tpm");
     }
 
     protected void setGraphYAxisDescription() {
