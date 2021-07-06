@@ -10,6 +10,12 @@ public class UnannotatedGenome extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+      setOrgProperties();
+      injectTemplate("jbrowseCommon");
+  }
+
+
+    public void setOrgProperties() {
       String projectName = getPropValue("projectName");
       String organismAbbrev = getPropValue("organismAbbrev");
 
@@ -22,11 +28,33 @@ public class UnannotatedGenome extends DatasetInjector {
 
       setPropValue("organismNameForFiles", organismNameForFiles);
 
-      injectTemplate("jbrowseCommon");
-  }
+      String organismFullName = orgProps.get("organismFullName");
+      String strainAbbrev = orgProps.get("strainAbbrev");
+
+      String datasetDisplayName = getPropValue("datasetDisplayName");
+
+      if(datasetDisplayName.toLowerCase().equals("genome gequence") || datasetDisplayName.toLowerCase().equals("genome sequence and annotation")) {
+          if(organismFullName.contains(strainAbbrev)) {
+              datasetDisplayName = "Genome Sequence and Annotation for <i>" + replaceLast(organismFullName, strainAbbrev, "") + "</i> " + strainAbbrev;
+          }
+          else {
+              String[] arr = organismFullName.split("\\s+");
+              datasetDisplayName = "Genome Sequence and Annotation for <i>" + arr[0] + " " arr[1] + "  "  + "</i> " + strainAbbrev;
+          }
+      }
+
+      setPropValue("datasetDisplayName", datasetDisplayName);
+    }
+
+    public static String replaceLast(String text, String regex, String replacement) {
+        return text.replaceFirst("(?s)(.*)" + regex, "$1" + replacement);
+    }
+
 
   @Override
   public void addModelReferences() {
+    setOrgProperties();
+
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon");
