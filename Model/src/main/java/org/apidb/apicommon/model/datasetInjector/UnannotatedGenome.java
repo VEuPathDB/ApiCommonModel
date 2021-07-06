@@ -39,7 +39,7 @@ public class UnannotatedGenome extends DatasetInjector {
           }
           else {
               String[] arr = organismFullName.split("\\s+");
-              datasetDisplayName = "Genome Sequence and Annotation for <i>" + arr[0] + " " arr[1] + "  "  + "</i> " + strainAbbrev;
+              datasetDisplayName = "Genome Sequence and Annotation for <i>" + arr[0] + " " + arr[1] + "  "  + "</i> " + strainAbbrev;
           }
       }
 
