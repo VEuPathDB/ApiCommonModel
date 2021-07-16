@@ -1043,7 +1043,6 @@ and ps.na_feature_id in ($$phenoPlasmogemScore$$)
 
     <sqlQuery name="GeneByLocusTag"  doNotTest="true" excludeProjects="EuPathDB">
         <paramRef ref="sharedParams.ds_gene_ids"/>
-        <paramRef ref="geneParams.wild_card_option"/>
         <column name="source_id"/>
         <column name="matched_result"/>
         <column name="gene_source_id"/>
@@ -1051,25 +1050,31 @@ and ps.na_feature_id in ($$phenoPlasmogemScore$$)
         <column name="input_id"/>
        <sql>
              <![CDATA[
-SELECT gene_source_id,source_id, 
+WITH ds AS (SELECT gene_source_id AS input_id,
+                   REGEXP_REPLACE(REPLACE(LOWER(gene_source_id), '*', '%'), '[[:space:]]', '') AS gene_source_id
+            FROM ($$ds_gene_ids$$ ) 
+            UNION
+            SELECT gene_source_id AS input_id,
+                   REGEXP_REPLACE(REPLACE(LOWER(gene_source_id), '*', '%'), '[[:space:]]', '') || '.%' AS gene_source_id
+            FROM ($$ds_gene_ids$$) 
+            )
+SELECT gene_source_id,source_id,
         apidb.tab_to_string(SET(CAST(COLLECT(input_id) AS apidb.varchartab)), ', ') AS input_id,
         'Y' AS matched_result, project_id
 FROM
-  ( SELECT DISTINCT ta.gene_source_id,ta.source_id, ta.project_id,
-        t.gene_source_id AS input_id
-    FROM ApidbTuning.TranscriptAttributes ta,
-      ( SELECT DISTINCT ds.gene_source_id, gi.gene
-         FROM ApidbTuning.GeneId gi,($$ds_gene_ids$$) ds
-         WHERE LOWER(gi.id) LIKE REGEXP_REPLACE(REPLACE(LOWER(ds.gene_source_id) || CASE WHEN $$wild_card_option$$ = '-' THEN '' ELSE $$wild_card_option$$ END, '*', '%'), '[[:space:]]', '')
-       ) t
+     ( SELECT DISTINCT ta.gene_source_id,ta.source_id, ta.project_id, t.input_id
+       FROM ApidbTuning.TranscriptAttributes ta,
+            ( SELECT DISTINCT ds.gene_source_id, gi.gene, ds.input_id
+              FROM ApidbTuning.GeneId gi, ds
+              WHERE LOWER(gi.id) LIKE ds.gene_source_id) t
        WHERE t.gene = ta.gene_source_id
        UNION
        SELECT DISTINCT ta.gene_source_id, ta.source_id, ta.project_id,
-          ta.source_id AS input_id
-	FROM ApidbTuning.TranscriptAttributes ta,($$ds_gene_ids$$) ds
-	WHERE lower(ta.source_id) LIKE REGEXP_REPLACE(REPLACE(LOWER(ds.gene_source_id) || CASE WHEN $$wild_card_option$$ = '-' THEN '' ELSE $$wild_card_option$$ END, '*', '%'), '[[:space:]]', '')
-    )
-   GROUP BY source_id, gene_source_id, project_id
+                       ta.source_id AS input_id
+       FROM ApidbTuning.TranscriptAttributes ta, ds
+       WHERE LOWER(ta.source_id) LIKE ds.gene_source_id
+     )
+GROUP BY source_id, gene_source_id, project_id
            ]]>
        </sql>
     </sqlQuery>
