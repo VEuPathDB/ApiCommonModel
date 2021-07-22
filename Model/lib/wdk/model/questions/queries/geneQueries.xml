@@ -1207,6 +1207,60 @@ FROM
         <wsColumn name="source"  width="50" wsName="source"/>
     </processQuery>
 
+
+    <sqlQuery name="GenesByEcNumberDirect" excludeProjects="EuPathDB">
+        <paramRef ref="geneParams.ec_wildcard"/>
+        <column name="project_id"/>
+        <column name="gene_source_id"  />
+        <column name="source_id"  />
+        <column name="matched_result"/>
+        <column name="source"  />
+        <sql >
+          select source_id,gene_source_id,matched_result,project_id,
+          Listagg(source,',') within GROUP (order by source) as source
+          from (
+            SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id,
+            apidb.tab_to_string(set(cast(COLLECT(distinct decode(asec.evidence_code,'OrthoMCLDerived', 'computationally inferred from Orthology',
+	      'gb', 'GenBank',
+              'Hagai', 'MPMP',evidence_code)) AS apidb.varchartab)), ', ') as source
+            FROM dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec,  ApidbTuning.transcriptattributes ta
+            WHERE ta.taxon_id in (
+              -- Taxon_IDs sql
+              SELECT  apidb.tab_to_string(set (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ')  AS internal
+              FROM ApidbTuning.OrganismTree ot,
+	        (SELECT DISTINCT ta.organism
+	         FROM ApidbTuning.TranscriptAttributes ta, apidb.organism o
+                 WHERE (ta.ec_numbers IS NOT NULL OR ta.ec_numbers_derived IS NOT NULL)
+                 AND (ta.project_id = 'FungiDB' OR 'UniDB' = '@PROJECT_ID@')
+                 AND ta.taxon_id = o.taxon_id )fq
+              WHERE ot.organism = fq.organism
+              GROUP BY term, parentTerm
+              )
+              AND ta.aa_sequence_id = asec.aa_sequence_id
+              AND asec.enzyme_class_id = ec.enzyme_class_id
+              AND (
+                ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$ec_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
+                OR
+                ec.description LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower($$ec_wildcard$$),' ',''),'-', '%'),'*','%'),'any','%')
+              )
+              group by ta.source_id,ta.gene_source_id,ta.project_id,asec.evidence_code)
+              group by source_id,gene_source_id,matched_result,project_id
+            ORDER BY source_id
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="GenesByEcNumberDirect" 
+             includeProjects="EuPathDB"
+             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        <paramRef ref="geneParams.ec_wildcard"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="source"  width="50" wsName="source"/>
+    </processQuery>
+
+
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Transmembrane domains -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
