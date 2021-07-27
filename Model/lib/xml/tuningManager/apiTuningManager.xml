@@ -3069,22 +3069,41 @@ tablespace indx
     <comment> Each record captures info for a strain/protocol app node. Used in the model, including
          gene and SNP queries, as well as the gene record. 
      </comment>
-    <externalDependency name="apidb.SequenceVariation"/>
+    <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="dots.NaSequence"/>
     <sql>
       <![CDATA[
 CREATE TABLE SnpStrains&1 NOLOGGING AS
-select distinct pan.name as protocol_app_node_name, pan.protocol_app_node_id, sv.strain, tn.name as organism
-from apidb.sequencevariation sv
-   , study.protocolappnode pan
-   , dots.nasequence s
-   , sres.taxonname tn
-where pan.protocol_app_node_id = sv.protocol_app_node_id
-and sv.ref_na_sequence_id = s.na_sequence_id
-and s.taxon_id = tn.taxon_id
-and tn.name_class = 'scientific name'
+with seq_var_pan as (select pan.name as protocol_app_node_name
+                          , pan.protocol_app_node_id
+                          , d.name
+                          , pan.external_database_release_id
+                          , replace(pan.name, ' (Sequence Variation)', '') as strain
+                          , tn.name as organism
+                      from study.protocolappnode pan
+                         , sres.externaldatabaserelease r
+                         , sres.externaldatabase d
+                         , apidb.organism o
+                         , sres.taxonname tn
+                      where pan.external_database_release_id = r.external_database_release_id
+                      and r.external_database_id = d.external_database_id
+                      and o.public_abbrev = substr(d.name, 1, instr(d.name, '_') -1)
+                      and o.taxon_id = tn.taxon_id
+                      and tn.name_class = 'scientific name'
+                      and pan.name like '% (Sequence Variation)'), 
+ref_pan as (select svp.*
+             from seq_var_pan svp
+                , apidb.organism o
+             where svp.strain = o.public_abbrev),
+o_pan as (select distinct svp.*
+          from seq_var_pan svp
+             , dots.nasequence s
+          where svp.external_database_release_id = s.external_database_release_id)
+select * from o_pan
+union
+select * from ref_pan
       ]]>
     </sql>
     <sql>
