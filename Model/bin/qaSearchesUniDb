@@ -25,37 +25,43 @@ foreach(($dataDir,$searchFile)) {
     }
 }
 
-my $site2 = "markhick.veupathdb.org/eupathdb.markhick";
+my $unidbSite = "markhick.veupathdb.org/eupathdb.markhick";
 
-&printIntro($site2);
+my $projects = &getProjects();
 my $searches = &getSearches($searchFile);
+$projects->{UniDB} = $unidbSite;
+&printIntro($unidbSite);
 
 my $numSearchesTotal = 0;
-my $numSearchesNoMatch = 0;
-my $numSearchesNoUrl = 0;
-my $numSearchesDownloadError = 0;
+my $numSearchesError = 0;
+#my $numSearchesNoUrl = 0;
+#my $numSearchesDownloadError = 0;
 
 foreach my $search (keys %$searches) {
+    my (%componentKeys,%veupathKeys,%unidbKeys);
     $numSearchesTotal++;
-    print "Original search: $search\n";
-    my $newSearch = &editSearch($search,$site2);
-    if ($search eq $newSearch) {
-	$numSearchesNoUrl++;
-	next;
+    print "ORIGINAL SEARCH: $search\nNUMBER OF UNIQUE RESULTS:\n";
+    foreach my $project (sort keys %$projects) {
+	print "$project: ";
+	my $projectSearch = &editSearch($search,$projects->{$project});
+	next if ($projectSearch eq "0");
+	my $results = &getResults($projectSearch);
+	next if ($results eq "0");
+	my $count=0;
+	if ($project eq "UniDB") {
+	    $count = &getKeys($results,\%unidbKeys);
+	} elsif ($project eq "VEuPathDB") {
+	    $count = &getKeys($results,\%veupathKeys);
+	} else {
+	    $count = &getKeys($results,\%componentKeys);
+	}
+	next if ($count == -1);
+	print "$count\n";
     }
-    print "New search: $newSearch\n";
-
-    my $results = &getResults($search);
-    my $newResults = &getResults($newSearch);
-    my $compare = &compareCounts($results,$newResults);
-    if ($compare == -1) {
-	$numSearchesDownloadError++;
-    } else {
-	$numSearchesNoMatch += $compare;
-    }
+    $numSearchesError += &compareKeys(\%unidbKeys,\%veupathKeys,\%componentKeys);
 }
 
-&printSummary($numSearchesTotal,$numSearchesNoMatch,$numSearchesNoUrl,$numSearchesDownloadError);
+&printSummary($numSearchesTotal,$numSearchesError);
 
 exit;
 
@@ -63,8 +69,8 @@ exit;
 
 
 sub printIntro {
-    my ($site2) = @_;
-    print "\nComparing searches below to searches at $site2\n";
+    my ($unidbSite) = @_;
+    print "\nComparing searches between all sites and UniDb site: $unidbSite\n";
     my $time = localtime();
     print "Started $time\n\n";
 }
@@ -99,7 +105,7 @@ sub cleanHtml {
     $$htmlRef =~ s/%2F/\//g;
     $$htmlRef =~ s/%2F/%/g;
     $$htmlRef =~ s/%2B/+/g;
-    $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":0,/;
+    $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":-1,/;
 }
 
 sub getShortName {
@@ -116,13 +122,15 @@ sub getResults {
     my $cmd = "curl --max-time 600 --silent --show-error -g '$search'";
     my $json = eval {&runCmd($cmd)};
     if (! $json) {
-	return -1;
+	print "ERROR: Unable to access url.\n";
+	return 0;
     }
     my $results = eval {decode_json($json)};
     if ($results) {
 	return $results;
     } else {
-	return -1;
+	print "ERROR: $json\n";
+	return 0;
     }
 }
 
@@ -131,59 +139,60 @@ sub editSearch {
     if ($search =~ /^https?:\/\/([^\/]+\/[^\/]+)\//) {
 	my $original = $1;
 	$search =~ s/$original/$site/;
+	return $search;
     } else {
-	print "Was not able to change url of this search\n\n";
+	print "ERROR: Was not able to change url of this search\n";
+	return 0;
     }
-    return $search;
 }
 
-sub compareCounts {
-    my ($results,$newResults) = @_;
-    my ($count,$newCount) = (-1,-1);
-    if ($results != -1) {
-	$count = $results->{meta}->{totalCount};
-    }
-    if ($newResults != -1) {
-	$newCount = $newResults->{meta}->{totalCount};
-    }
-    print "Resulting records:   original $count  new $newCount";
-    if ($count == -1 || $newCount == -1) {
-	print "  FAIL\n\n";
-	return -1;
-    } elsif ($count == $newCount) {
-	print "  SUCCESS\n\n";
+sub compareKeys {
+    my ($unidbKeys,$veupathKeys,$componentKeys) = @_;
+    my $numUni = keys %$unidbKeys;
+    my $numVeu = keys %$veupathKeys;
+    my $numComp = keys %$componentKeys;
+    if ($numUni == 0 && $numComp == 0) {
+	print "***FAIL: There are 0 results for UniDB and 0 for the component sites. Need to modify test to produce result.\n\n";
+	return 1;
+    } elsif ($numUni != $numComp) {
+	print "***FAIL: There are $numUni unique results for UniDB but $numComp for the component sites.\n\n";
+	return 1;
+    } elsif ($numUni != $numVeu) {  
+	print "***SUCCESS.  Warning: There are $numUni unique results for UniDB but $numVeu for the VEuPathDB site.\n\n";
 	return 0;
     } else {
-	print "  FAIL\n\n";
-	return 1;
+	print "***SUCCESS\n\n";
+	return 0;
+    }
+}
+ 
+sub getKeys {
+    my ($results,$keys) = @_;
+    my %unique;
+    if (exists $results->{meta}->{totalCount}) {
+	foreach my $record (@{$results->{records}}) {
+	    $keys->{$record->{attributes}->{primary_key}}=1;
+	    $unique{$record->{attributes}->{primary_key}}=1;
+	}
+	my $count = keys %unique;
+	return $count;
+    } else {
+	print "ERROR: Cannot obtain results.\n";
+	print Dumper $results;
+	return -1;
     }
 }
 
 sub printSummary {
-    my ($numSearchesTotal,$numSearchesNoMatch,$numSearchesNoUrl,$numSearchesDownloadError) = @_;
+    my ($numSearchesTotal,$numSearchesError) = @_;
     print "\nSUMMARY\n";
     print "Total searches tested: $numSearchesTotal\n";
-    print "Searches without proper comparisons: $numSearchesNoUrl\n";
-    print "Searches that failed comparison: $numSearchesNoMatch\n";
-    print "Searches that had download error: $numSearchesDownloadError\n";
+    print "Searches that failed on UniDB: $numSearchesError\n";
     my $time = localtime();
     print "Finished $time\n\n";
 }
 
-sub getBaseUrls {
-    my ($type) = @_;
-
-    my $first = "https://";
-
-    my $last;
-    if ($type eq "organism") {
-	$last = "/service/record-types/organism/searches/GeneMetrics/reports/attributesTabular";
-    } elsif ($type eq "ec") {
-	$last = "/service/record-types/transcript/searches/GenesByTaxon/reports/attributesTabular";
-    } else {
-	die "Type must be 'organism' or 'ec' for getBaseUrl.\n";
-    }
-
+sub getProjects {
     my %projects = (
         MicrosporidiaDB => "microsporidiadb.org/micro",
         ToxoDB => "toxodb.org/toxo",
@@ -198,12 +207,8 @@ sub getBaseUrls {
     	HostDB => "hostdb.org/hostdb",
     	SchistoDB => "schistodb.net/schisto",
     	VectorBase => "vectorbase.org/vectorbase",
+	VEuPathDB => "veupathdb.org/veupathdb"
     );
-
-    foreach my $project (keys %projects) {
-	$projects{$project} = $first.$projects{$project}.$last;
-    }
-
     return \%projects;
 }
 
