@@ -272,7 +272,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
 
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Alias");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MercatorTable");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinProperties");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Sequences");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneTranscripts");
@@ -286,6 +285,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GOTerms");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GOSlim");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Seqedits");
 
 
     // not for VectorBase
