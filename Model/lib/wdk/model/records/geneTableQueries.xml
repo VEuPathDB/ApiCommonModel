@@ -1194,8 +1194,9 @@ SELECT  ga.source_id
 FROM apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga
 where au.type = 'gene'
 and au.attr like '%description%'
-AND ((ga.start_min <= au.mapping_start AND au.mapping_start <= ga.end_max)
-    OR (au.mapping_end <= ga.start_min AND ga.start_min <= au.mapping_end))
+and ga.na_sequence_id = au.na_sequence_id
+AND ga.start_min <= au.mapping_end 
+AND ga.end_max >= au.mapping_start
  ]]>
        </sql>
 
@@ -1476,6 +1477,7 @@ SELECT results.*
 FROM results
 LEFT JOIN knockdown ON results.phenotype_model_id = knockdown.model_id
 where knockdown.source_id <> results.source_id or knockdown.source_id is null
+and project_id = 'PlasmoDB'
              ]]>
             </sql>
         </sqlQuery>
@@ -1484,7 +1486,7 @@ where knockdown.source_id <> results.source_id or knockdown.source_id is null
        <!-- Seqedits -->
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-        <sqlQuery name="Seqedits" includeProjects="AmoebaDB,PiroplasmaDB,ToxoDB,VectorBase,UniDB"  isCacheable="false">
+        <sqlQuery name="Seqedits" isCacheable="false">
             <column name="source_id"/>
             <column name="transcript_source_id"/>
             <column name="project_id"/>
@@ -1740,62 +1742,8 @@ ORDER BY
        <!-- Signal Peptides -->  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-       <sqlQuery name="SignalP" isCacheable="false" excludeProjects="VectorBase">
 
-            <testParamValues includeProjects="CryptoDB">
-               <paramValue name="source_id">cgd7_110</paramValue>
-            </testParamValues>
-            <testParamValues includeProjects="ToxoDB">
-	    <paramValue name="source_id">TGME49_257790</paramValue>
-            </testParamValues>
-            <testParamValues includeProjects="GiardiaDB">
-               <paramValue name="source_id">GL50803_20315</paramValue>
-            </testParamValues>
-            <testParamValues includeProjects="TrichDB">
-               <paramValue name="source_id">TVAG_119560</paramValue>
-            </testParamValues>
-            <testParamValues includeProjects="TriTrypDB">
-               <paramValue name="source_id">Tb10.v4.0153</paramValue>
-            </testParamValues>
-
-            <column name="source_id"/>
-            <column name="transcript_id"/>
-            <column name="project_id"/>
-            <column name="spf_start_min"/>
-            <column name="spf_end_max"/>
-            <column name="conclusion_score"/>
-            <column name="d_score"/>
-            <column name="signal_probability"/>
-            <column name="signalp_peptide"/>
-            <sql>
-            <![CDATA[
-SELECT DISTINCT
-  t.source_id AS transcript_id
-, t.gene_source_id AS source_id
-, t.project_id
-,(spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion) AS conclusion_score
-,((spf.means_score + spf.maxy_score) / 2) AS d_score
-, spf.signal_probability AS signal_probability
-, 1 AS spf_start_min
-, aal.end_max AS spf_end_max
-, t.signalp_peptide
-FROM
-  dots.aalocation aal
-, apidbtuning.transcriptAttributes t
-, dots.signalpeptidefeature spf
-WHERE t.aa_sequence_id = spf.aa_sequence_id
-  AND spf.aa_feature_id = aal.aa_feature_id
-  AND
-  ((spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion) >= 3
-    or
-    ((spf.means_score + spf.maxy_score) / 2) >= 0.5
-    OR spf.signal_probability >= 0.5
-  )
-               ]]>
-            </sql>
-        </sqlQuery>
-
-       <sqlQuery name="SignalP" isCacheable="false" includeProjects="VectorBase">
+       <sqlQuery name="SignalP" isCacheable="false">
             <column name="source_id"/>
             <column name="transcript_id"/>
             <column name="project_id"/>
@@ -1815,6 +1763,13 @@ FROM
 , dots.signalpeptidefeature spf
 WHERE t.aa_sequence_id = spf.aa_sequence_id
   AND spf.aa_feature_id = aal.aa_feature_id
+  AND (spf.maxy_conclusion is null
+        OR
+       ((spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion) >= 3
+        or
+       ((spf.means_score + spf.maxy_score) / 2) >= 0.5
+      OR spf.signal_probability >= 0.5
+    )        )
                ]]>
             </sql>
         </sqlQuery>
@@ -3319,71 +3274,6 @@ WHERE
   <!--===========================================================================-->
   <!--===========================================================================-->
  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Interactions as prey -->  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-       <sqlQuery name="InteractionsAsPrey" isCacheable="false" includeProjects="PlasmoDB,UniDB" doNotTest="1">
-
-            <testParamValues includeProjects="PlasmoDB">
-               <paramValue name="source_id">PF3D7_0102200</paramValue>
-            </testParamValues>
-
-
-            <column name="source_id"/>
-            <column name="project_id"/>
-            <column name="bait_start"/>
-            <column name="bait_end"/>
-            <column name="prey_start"/>
-            <column name="prey_end"/>
-            <column name="times_observed"/>
-            <column name="number_of_searches"/>
-            <column name="prey_number_of_baits"/>
-            <sql>
-            <![CDATA[
-            SELECT pf.source_id, gi.bait_start, gi.bait_end, gi.prey_start,
-                   gi.prey_end, gi.times_observed, gi.number_of_searches,
-                   gi.prey_number_of_baits, 'PlasmoDB' as project_id
-           FROM dots.GeneFeature bf, dots.GeneFeature pf,
-                apidb.GeneInteraction gi
-           WHERE pf.na_feature_id = gi.prey_gene_feature_id
-             AND bf.na_feature_id = gi.bait_gene_feature_id
-            ]]>
-            </sql>
-        </sqlQuery>
-
- 
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- Interactions as bait -->  
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-       <sqlQuery name="InteractionsAsBait" isCacheable="false" includeProjects="PlasmoDB,UniDB">
-
-          <testParamValues includeProjects="PlasmoDB">
-               <paramValue name="source_id">PF3D7_0102200</paramValue>
-            </testParamValues>
-
-            <column name="source_id"/>
-            <column name="project_id"/>
-            <column name="bait_start"/>
-            <column name="bait_end"/>
-            <column name="prey_start"/>
-            <column name="prey_end"/>
-            <column name="times_observed"/>
-            <column name="number_of_searches"/>
-            <column name="bait_number_of_preys"/>
-            <sql>
-            <![CDATA[
-            SELECT bf.source_id, gi.bait_start, gi.bait_end, gi.prey_start,
-                   gi.prey_end, gi.times_observed, gi.number_of_searches,
-                   gi.bait_number_of_preys, 'PlasmoDB' as project_id
-           FROM dots.GeneFeature bf, dots.GeneFeature pf,
-                apidb.GeneInteraction gi
-           WHERE pf.na_feature_id = gi.prey_gene_feature_id
-             AND bf.na_feature_id = gi.bait_gene_feature_id
-            ]]>
-            </sql>
-        </sqlQuery>
 
  
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
