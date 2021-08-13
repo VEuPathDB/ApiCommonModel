@@ -79,6 +79,7 @@ public class IsolatesHTS extends DatasetInjector {
       addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "CountrySummary");
       addWdkReference("SnpRecordClasses.SnpRecordClass", "table", "StrainsSamples");
 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SnpsGbrowseUrl");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_hts_snps");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_nonsynonymous_snps");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_synonymous_snps");
