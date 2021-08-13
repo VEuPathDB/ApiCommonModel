@@ -303,9 +303,9 @@ public class AnnotatedGenome extends UnannotatedGenome {
     }
   
     // no Synteny for one TrichDB organism
-    if (!(organismFullName.equals("Trichomonas vaginalis G3"))){
-  addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
-    }
+    //    if (!(organismFullName.equals("Trichomonas vaginalis G3"))){
+    // addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
+    //    }
   }
 
   // declare properties required beyond those inherited from the datasetPresenter
