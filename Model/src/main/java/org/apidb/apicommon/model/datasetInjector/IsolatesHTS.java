@@ -82,6 +82,14 @@ public class IsolatesHTS extends DatasetInjector {
 
 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "total_hts_snps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_nonsynonymous_snps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_synonymous_snps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_noncoding_snps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_stop_codon_snps");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "hts_nonsyn_syn_ratio");
+BB
+
+
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByNgsSnps");
       //addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTajimasDHtsSnps");
 
