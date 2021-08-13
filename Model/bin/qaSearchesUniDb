@@ -11,26 +11,27 @@ use DBI;
 use DBD::Oracle;
 use Data::Dumper;
 
-my ($help,$dataDir,$searchFile);
+my ($help,$searchFile,$reportFile,$reportFileDetailed);
 
 &GetOptions('help|h' => \$help,
-            'dataDir=s' => \$dataDir,
+            'reportFile=s' => \$reportFile,
+            'reportFileDetailed=s' => \$reportFileDetailed,
 	    'searchFile=s' => \$searchFile
             );
 
-foreach(($dataDir,$searchFile)) {
+foreach(($reportFile,$reportFileDetailed,$searchFile)) {
     unless(defined $_) {
 	&usage();
 	die "You need to input the required parameters\n";
     }
 }
 
-my $unidbSite = "markhick.veupathdb.org/eupathdb.markhick";
+my $unidbSite = "beta.veupathdb.org/veupathdb.beta";
 
 my $projects = &getProjects();
 my $searches = &getSearches($searchFile);
 $projects->{UniDB} = $unidbSite;
-&printIntro($unidbSite);
+my ($logFh,$logMoreFh) = &printIntro($unidbSite,$reportFile,$reportFileDetailed);
 
 my $numSearchesTotal = 0;
 my $numSearchesError = 0;
@@ -40,28 +41,29 @@ my $numSearchesError = 0;
 foreach my $search (keys %$searches) {
     my (%componentKeys,%veupathKeys,%unidbKeys);
     $numSearchesTotal++;
-    print "ORIGINAL SEARCH: $search\nNUMBER OF UNIQUE RESULTS:\n";
+    &printLog("ORIGINAL SEARCH: $search\nNUMBER OF UNIQUE RESULTS:\n",$logFh,$logMoreFh);
     foreach my $project (sort keys %$projects) {
-	print "$project: ";
+	&printLog("$project: ",$logFh,$logMoreFh);
 	my $projectSearch = &editSearch($search,$projects->{$project});
 	next if ($projectSearch eq "0");
-	my $results = &getResults($projectSearch);
+	my ($results) = &getResults($projectSearch,$logFh,$logMoreFh);
 	next if ($results eq "0");
+
 	my $count=0;
 	if ($project eq "UniDB") {
-	    $count = &getKeys($results,\%unidbKeys);
+	    $count = &getKeys($results,\%unidbKeys,$logFh,$logMoreFh);
 	} elsif ($project eq "VEuPathDB") {
-	    $count = &getKeys($results,\%veupathKeys);
+	    $count = &getKeys($results,\%veupathKeys,$logFh,$logMoreFh);
 	} else {
-	    $count = &getKeys($results,\%componentKeys);
+	    $count = &getKeys($results,\%componentKeys,$logFh,$logMoreFh);
 	}
 	next if ($count == -1);
-	print "$count\n";
+	&printLog("$count\n",$logFh,$logMoreFh);
     }
-    $numSearchesError += &compareKeys(\%unidbKeys,\%veupathKeys,\%componentKeys);
+    $numSearchesError += &compareKeys(\%unidbKeys,\%veupathKeys,\%componentKeys,$logFh,$logMoreFh);
 }
 
-&printSummary($numSearchesTotal,$numSearchesError);
+&printSummary($numSearchesTotal,$numSearchesError,$logFh,$logMoreFh);
 
 exit;
 
@@ -69,10 +71,19 @@ exit;
 
 
 sub printIntro {
-    my ($unidbSite) = @_;
-    print "\nComparing searches between all sites and UniDb site: $unidbSite\n";
+    my ($unidbSite,$reportFile,$reportFileDetailed) = @_;
+    open(my $logFh,">",$reportFile) or die "cannot open for writing '$reportFile': $!";
+    open(my $logMoreFh,">",$reportFileDetailed) or die "cannot open for writing '$reportFileDetailed': $!";
     my $time = localtime();
-    print "Started $time\n\n";
+    &printLog("\nComparing searches between all sites and UniDb site: $unidbSite\n",$logFh,$logMoreFh);
+    &printLog("Started $time\n\n",$logFh,$logMoreFh);
+    return ($logFh,$logMoreFh);
+}
+
+sub printLog {
+    my ($text,$logFh,$logMoreFh) = @_;
+    print $logFh $text if ($logFh != 0);
+    print $logMoreFh $text if ($logMoreFh != 0);
 }
 
 sub getSearches {
@@ -94,18 +105,18 @@ sub cleanHtml {
     my ($htmlRef) = @_;
     chomp($$htmlRef);
     $$htmlRef =~ s/\r//g;
-    $$htmlRef =~ s/%7B/{/g;
-    $$htmlRef =~ s/%7D/}/g;
-    $$htmlRef =~ s/%22/"/g;
-    $$htmlRef =~ s/%3A/:/g;
-    $$htmlRef =~ s/%5B/[/g;
-    $$htmlRef =~ s/%5D/]/g;
-    $$htmlRef =~ s/%2C/,/g;
-#    $$htmlRef =~ s/%20/ /g;
-    $$htmlRef =~ s/%2F/\//g;
-    $$htmlRef =~ s/%2F/%/g;
-    $$htmlRef =~ s/%2B/+/g;
-    $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":-1,/;
+#     $$htmlRef =~ s/%7B/{/g;
+#     $$htmlRef =~ s/%7D/}/g;
+#     $$htmlRef =~ s/%22/"/g;
+#     $$htmlRef =~ s/%3A/:/g;
+#     $$htmlRef =~ s/%5B/[/g;
+#     $$htmlRef =~ s/%5D/]/g;
+#     $$htmlRef =~ s/%2C/,/g;
+# #    $$htmlRef =~ s/%20/ /g;
+#     $$htmlRef =~ s/%2F/\//g;
+#     $$htmlRef =~ s/%2F/%/g;
+#     $$htmlRef =~ s/%2B/+/g;
+     $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":-1,/;
 }
 
 sub getShortName {
@@ -118,19 +129,21 @@ sub getShortName {
 }
 
 sub getResults {
-    my ($search) = @_;
+    my ($search,$logFh,$logMoreFh) = @_;
     my $cmd = "curl --max-time 600 --silent --show-error -g '$search'";
     my $json = eval {&runCmd($cmd)};
     if (! $json) {
-	print "ERROR: Unable to access url.\n";
-	return 0;
+	&printLog("0\n",$logFh,0);
+	&printLog("0  (ERROR: Unable to access url.)\n",0,$logMoreFh);
+	return(0);
     }
     my $results = eval {decode_json($json)};
     if ($results) {
-	return $results;
+	return ($results);
     } else {
-	print "ERROR: $json\n";
-	return 0;
+	&printLog("0\n",$logFh,0);
+	&printLog("0  (ERROR: $json)\n",0,$logMoreFh);
+	return(0);
     }
 }
 
@@ -147,27 +160,28 @@ sub editSearch {
 }
 
 sub compareKeys {
-    my ($unidbKeys,$veupathKeys,$componentKeys) = @_;
+    my ($unidbKeys,$veupathKeys,$componentKeys,$logFh,$logMoreFh) = @_;
     my $numUni = keys %$unidbKeys;
     my $numVeu = keys %$veupathKeys;
     my $numComp = keys %$componentKeys;
     if ($numUni == 0 && $numComp == 0) {
-	print "***FAIL: There are 0 results for UniDB and 0 for the component sites. Need to modify test to produce result.\n\n";
+	&printLog("***FAIL: There are 0 results for UniDB and 0 for the component sites. Need to modify test to produce result.\n\n",$logFh,$logMoreFh);
 	return 1;
     } elsif ($numUni != $numComp) {
-	print "***FAIL: There are $numUni unique results for UniDB but $numComp for the component sites.\n\n";
+	&printLog("***FAIL: There are $numUni unique results for UniDB but $numComp for the component sites.\n\n",$logFh,$logMoreFh);
 	return 1;
-    } elsif ($numUni != $numVeu) {  
-	print "***SUCCESS.  Warning: There are $numUni unique results for UniDB but $numVeu for the VEuPathDB site.\n\n";
+    } elsif ($numUni != $numVeu) {
+	&printLog("***SUCCESS\n\n",$logFh,0);
+	&printLog("***SUCCESS  (Warning: There are $numUni unique results for UniDB but $numVeu for the VEuPathDB site.)\n\n",0,$logMoreFh);
 	return 0;
     } else {
-	print "***SUCCESS\n\n";
+	&printLog("***SUCCESS\n\n",$logFh,$logMoreFh);
 	return 0;
     }
 }
  
 sub getKeys {
-    my ($results,$keys) = @_;
+    my ($results,$keys,$logFh,$logMoreFh) = @_;
     my %unique;
     if (exists $results->{meta}->{totalCount}) {
 	foreach my $record (@{$results->{records}}) {
@@ -177,19 +191,23 @@ sub getKeys {
 	my $count = keys %unique;
 	return $count;
     } else {
-	print "ERROR: Cannot obtain results.\n";
-	print Dumper $results;
+	&printLog("0\n",$logFh,0);
+	&printLog("0  (ERROR: Cannot obtain results.)\n",0,$logMoreFh);
+	print $logMoreFh Dumper $results;
+	&printLog("\n",0,$logMoreFh);
 	return -1;
     }
 }
 
 sub printSummary {
-    my ($numSearchesTotal,$numSearchesError) = @_;
-    print "\nSUMMARY\n";
-    print "Total searches tested: $numSearchesTotal\n";
-    print "Searches that failed on UniDB: $numSearchesError\n";
+    my ($numSearchesTotal,$numSearchesError,$logFh,$logMoreFh) = @_;
+    &printLog("\nSUMMARY\n",$logFh,$logMoreFh);
+    &printLog("Total searches tested: $numSearchesTotal\n",$logFh,$logMoreFh);
+    &printLog("Searches that failed on UniDB: $numSearchesError\n",$logFh,$logMoreFh);
     my $time = localtime();
-    print "Finished $time\n\n";
+    &printLog("Finished $time\n\n",$logFh,$logMoreFh);
+    close $logFh;
+    close $logMoreFh;
 }
 
 sub getProjects {
@@ -212,92 +230,8 @@ sub getProjects {
     return \%projects;
 }
 
-
-sub getPostText {
-    my ($type,$organismName) = @_;
-
-    my $postText;
-    if ($type eq "organism") {
-	$postText = "'{\"searchConfig\": {\"parameters\": {},\"wdkWeight\": 10},\"reportConfig\": {\"attributes\": [\"primary_key\",\"name_for_filenames\",\"orthomcl_abbrev\"],\"includeHeader\": true,\"attachmentType\": \"text\"}}'";
-    } elsif ($type eq 'ec') {
-	$postText = "'{\"searchConfig\": {\"parameters\": {\"organism\": \"[\\\"$organismName\\\"]\"},\"wdkWeight\": 10},\"reportConfig\": {\"attributes\": [\"primary_key\",\"source_id\",\"ec_numbers\",\"ec_numbers_derived\"],\"includeHeader\": true,\"attachmentType\": \"text\",\"applyFilter\": false}}'";
-    } else {
-	die "Type must be 'organism' or 'ec' for getPostText.\n";
-    }
-
-    return $postText;
-}
-
-
-sub runOrganismWgetCmds {
-    my ($baseUrls,$postText,$dataDir) = @_;
-
-    # one file for each genomic project
-    my %organismFiles;
-    foreach my $project (keys %{$baseUrls}) {
-	my $downloadFile = $dataDir."/".$project."_organisms.txt";
-	$organismFiles{$project} = $downloadFile;
-	my $logFile = $dataDir."/".$project."_organisms_wget.log";
-	my $url = $baseUrls->{$project};
-	my $cmd = "wget --output-file=$logFile --output-document=$downloadFile --post-data $postText --header 'content-type: application/json' \"$url\"";
-	print "$cmd\n\n";
-	system($cmd);
-	die "The organism file $downloadFile obtained with wget is empty!\n" if (-s $downloadFile == 0 && $downloadFile !~ /SchistoDB/);
-    }
-
-    # one file for uniprot proteomes
-    my $cmd = "wget --output-file='$dataDir/uniprot_wget.log' --output-document=$dataDir/UniprotProteomes \"ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/README\"";
-    print "$cmd\n\n";
-    system($cmd);
-    die "Download file $dataDir/UniprotProteomes obtained with wget is empty!\n" if (-s "$dataDir/UniprotProteomes" == 0);
-
-    return \%organismFiles;
-}
-
-sub runEcWgetCmds {
-    my ($ecBaseUrls,$organismFiles,$dataDir) = @_;
-
-    my $numEcFiles = 0;
-    foreach my $project (keys %{$ecBaseUrls}) {
-	my $organisms = readOrganismFile($organismFiles->{$project});
-	my $totalFileSize=0;
-	foreach my $abbrev (keys %{$organisms} ) {
-	    my $downloadFile = $dataDir."/".$abbrev."_ec.txt";
-	    my $logFile = $dataDir."/".$abbrev."_ec_wget.log";
-	    my $postText = getPostText("ec",$organisms->{$abbrev});
-	    my $url = $ecBaseUrls->{$project};
-	    my $cmd = "wget --output-file=$logFile --output-document=$downloadFile --post-data $postText --header 'content-type: application/json' \"$url\"";
-	    print "$cmd\n\n";
-	    system($cmd);
-	    $totalFileSize += (-s $downloadFile);
-	    $numEcFiles++;
-	}
-	die "All of the EC files downloaded from $project are empty! Directory: $dataDir\n" if ($totalFileSize == 0 && $project !~ /SchistoDB/);
-    }
-    return $numEcFiles;
-}
-
-sub readOrganismFile {
-    my ($file) = @_;
-
-    my %organisms;
-    open(IN, $file) or die "cannot open download file '$file': $!";    
-    while (my $line =<IN>) {
-	chomp $line;
-	$line =~ s/<i>//g;
-	$line =~ s/<\/i>//g;
-	next if ($line =~ /^Organism/);
-	next unless ($line =~ /^[A-Za-z]/);
-	my @fields = split("\t",$line); 
-	$organisms{$fields[2]} = $fields[0];
-    }
-
-    close IN;
-    return \%organisms;
-}
-
 sub usage {
-  print "qaSearchesUniDb --dataDir=s --searchFile=s\n";
+  print "qaSearchesUniDb --dataDir=s --searchFile=s --reportFile=s --reportFileDetailed=s\n";
 }
 
 1;
