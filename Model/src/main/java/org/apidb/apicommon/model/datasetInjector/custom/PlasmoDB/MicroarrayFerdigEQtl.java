@@ -22,6 +22,7 @@ public class MicroarrayFerdigEQtl extends MicroarrayTwoChannelReferenceDesign {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEQTL_HaploGrpSimilarity"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByEQTL_Segments"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Plasmo_eQTL_Table"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "eQTLPhenotypeGraphs");
       addWdkReference("SpanRecordClasses.SpanRecordClass", "question", "SpanQuestions.DynSpansByEQTLtoGenes"); 
   }
 
