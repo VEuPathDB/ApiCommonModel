@@ -301,7 +301,13 @@ public class AnnotatedGenome extends UnannotatedGenome {
     if(getPropValueAsBoolean("showReferenceTranscriptomics")){
   addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
     }
+  
+    // no Synteny for one TrichDB organism
+    if (!(organismFullName.equals("Trichomonas vaginalis G3"))){
+  addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
+    }
   }
+
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
   @Override
