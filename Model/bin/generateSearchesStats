@@ -1,0 +1,101 @@
+#!/usr/bin/perl
+
+use strict;
+#use DBI;
+use LWP::Simple;
+use Data::Dumper;
+use JSON qw( decode_json );
+
+my ($siteServiceUrl) = @ARGV;
+
+usage() unless $siteServiceUrl;
+
+# from wdk record class endpoint:
+#   get map of searches to record class display name (ie, category)
+
+# from ontology endpoint
+#   recurse down tree, passing down the path of label names
+#   for searches with record class full name == transcript record class
+#     consider second element of path to be category
+#     overwrite the map of search to category (record class display name) with this new category
+
+# from userdb, get map of search names in steps to count
+#   collapse this into the categories, using the categories map
+
+my %searchToCategoryMap;
+
+# do record classes first, because, for genes, ontology categories will overwrite
+#my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
+my $recordsString = `cat /home/sfischer/recordclasses.json`;
+my $recordClassesJson = decode_json($recordsString);
+getSearchToRecordClassDisplayNameMap($recordClassesJson, \%searchToCategoryMap);
+
+#my $categoriesString = get("https://$siteServiceUrl/ontologies/Categories");
+my $categoriesString = `cat /home/sfischer/categories.json`;
+my $categoriesJson = decode_json($categoriesString);
+my @emptyArray;
+addSearchesFromOntologyToMap($categoriesJson->{tree}, \@emptyArray, \%searchToCategoryMap);
+
+print Dumper(\%searchToCategoryMap);
+
+##################################################################################################################
+
+sub getSearchToRecordClassDisplayNameMap {
+  my ($recordClassesJson, $searchToCategoryMap) = @_;
+  foreach my $recordClass (@$recordClassesJson) {
+    my $plural = $recordClass->{displayNamePlural};
+    foreach my $search (@{$recordClass->{searches}}) {
+      $searchToCategoryMap->{$search->{fullName}} = $plural;
+    }
+  }
+}
+
+# for Gene searches, gather categories from the ontology
+# each ontology node has children[] and properties[]
+# properties might have these keys:
+#   labels: an array of category labels.  we only care about the 0th element.
+#   targetType: might be "search".  in this case, the 0th element of labels is the search full name
+# because it is a tree, the category have subcategories.  but we only care about the second-to-top level, which
+# corresponds to what is shown in the menus for Genes.
+sub addSearchesFromOntologyToMap {
+  my ($ontologyNode, $labelsPath, $searchToCategoryMap) = @_;
+  my $children = $ontologyNode->{children};
+  my $props = $ontologyNode->{properties};
+
+#  print Dumper $labelsPath;
+  # handle category node
+  if (scalar(@$children)) {
+    my @newPath = @$labelsPath;
+    if ($props) {
+      my $label = $props->{'EuPathDB alternative term'}?
+	$props->{'EuPathDB alternative term'}->[0] : $props->{'label'}->[0];
+      @newPath = (@$labelsPath, $label);
+    }
+    foreach my $child (@{$children}) {
+      addSearchesFromOntologyToMap($child, \@newPath, $searchToCategoryMap);
+    }
+  }
+
+  # handle search node
+  elsif ($props && $props->{targetType} && $props->{targetType}->[0] eq 'search' &&
+	$props->{recordClassName}->[0] eq 'TranscriptRecordClasses.TranscriptRecordClass') {
+    my $searchName = $props->{name}->[0];
+    my $category = $labelsPath->[1];
+    $searchToCategoryMap->{$searchName} = $category;
+  }
+}
+
+sub usage {
+  die "
+Generate usage statistics for searches in the specified genomics site.  Use the /ontology endpoint of the provided site_url
+to get gene search categories.  (For other record classes, categorize by record class name).  Connect to the site's user database, and query the steps table to count searches used.
+
+Output (standard out) is tab delimited.  First column is category (as seen in site menu); second column is count.
+
+Usage generateSearchesStats site_service_url wdk_model_config_file
+
+Example: generateSearchesStats plasmodb.org/plasmo/service > my_favorite_output_file
+
+";
+
+}
