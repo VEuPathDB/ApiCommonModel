@@ -1,17 +1,18 @@
 #!/usr/bin/perl
 
 use strict;
-#use DBI;
+use DBI;
+use DBD::Oracle;
 use LWP::Simple;
 use Data::Dumper;
 use JSON qw( decode_json );
 
-my ($siteServiceUrl) = @ARGV;
+my ($siteServiceUrl, $modelName, $startDate, $endDate) = @ARGV;
 
-usage() unless $siteServiceUrl;
+usage() unless scalar(@ARGV) == 4;
 
 # from wdk record class endpoint:
-#   get map of searches to record class display name (ie, category)
+#   get map of searches to record class display name (which is the category for non-Gene record classes)
 
 # from ontology endpoint
 #   recurse down tree, passing down the path of label names
@@ -85,16 +86,47 @@ sub addSearchesFromOntologyToMap {
   }
 }
 
+sub getDistribution {
+  my ($model, $startDate, $endDate, $searchToCategoryMap) = @_;
+
+  my $modelConfig = WDK::Model::ModelConfig->new($model);
+
+  my $dbh = DBI->connect($modelConfig->getUserDbDbiDsn(),
+                        $modelConfig->getUserDbLogin(),
+                        $modelConfig->getUserDbPassword()
+                      );
+
+  my $sql = "select question_name, count(question_name) as cnt from userlogins5.steps
+where last_run_time >= TO_DATE('$startDate', 'DD-MM-YYYY')
+and last_run_time <= TO_DATE('$endDate', 'DD-MM-YYYY')
+group by question_name
+order by cnt desc";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  my $distribution;
+  while(my ($searchName, $count) = $sh->fetchrow_array()) {
+    if ($searchToCategoryMap->{$searchName}) {
+      my $category = $searchToCategoryMap->{$searchName};
+      $distribution->{$category} += 1;
+    }
+  }
+}
+
 sub usage {
   die "
-Generate usage statistics for searches in the specified genomics site.  Use the /ontology endpoint of the provided site_url
-to get gene search categories.  (For other record classes, categorize by record class name).  Connect to the site's user database, and query the steps table to count searches used.
+Generate usage statistics for searches in the specified genomics site, for the specified time perios.  Use the
+/ontology endpoint of the provided site_url to get gene search categories.  (For other record classes, categorize by
+record class name).  Connect to the site's user database, and query the steps table to count searches used.
 
 Output (standard out) is tab delimited.  First column is category (as seen in site menu); second column is count.
 
-Usage generateSearchesStats site_service_url wdk_model_config_file
+Usage generateSearchesStats site_service_url model_name start_date end_date
 
-Example: generateSearchesStats plasmodb.org/plasmo/service > my_favorite_output_file
+Dates are in DD-MM-YYYY format.
+
+Example: generateSearchesStats plasmodb.org/plasmo/service PlasmoDB 21-04-2020 21-05-2020 > my_favorite_output_file
 
 ";
 
