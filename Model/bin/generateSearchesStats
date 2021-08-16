@@ -6,6 +6,7 @@ use DBD::Oracle;
 use LWP::Simple;
 use Data::Dumper;
 use JSON qw( decode_json );
+use WDK::Model::ModelConfig;
 
 my ($siteServiceUrl, $modelName, $startDate, $endDate) = @ARGV;
 
@@ -26,18 +27,22 @@ usage() unless scalar(@ARGV) == 4;
 my %searchToCategoryMap;
 
 # do record classes first, because, for genes, ontology categories will overwrite
-#my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
-my $recordsString = `cat /home/sfischer/recordclasses.json`;
+my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
 my $recordClassesJson = decode_json($recordsString);
 getSearchToRecordClassDisplayNameMap($recordClassesJson, \%searchToCategoryMap);
 
-#my $categoriesString = get("https://$siteServiceUrl/ontologies/Categories");
-my $categoriesString = `cat /home/sfischer/categories.json`;
+# for Genes, use ontology
+delete $searchToCategoryMap->{Genes};
+my $categoriesString = get("https://$siteServiceUrl/ontologies/Categories");
 my $categoriesJson = decode_json($categoriesString);
 my @emptyArray;
 addSearchesFromOntologyToMap($categoriesJson->{tree}, \@emptyArray, \%searchToCategoryMap);
 
-print Dumper(\%searchToCategoryMap);
+my $distribution = getDistribution($modelName, $startDate, $endDate, \%searchToCategoryMap);
+
+foreach my $category (sort keys $distribution) {
+  print STDOUT "$category\t$distribution->{$category}\n";
+}
 
 ##################################################################################################################
 
@@ -104,25 +109,31 @@ order by cnt desc";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
-
+print STDERR "hello\n";
   my $distribution;
   while(my ($searchName, $count) = $sh->fetchrow_array()) {
     if ($searchToCategoryMap->{$searchName}) {
       my $category = $searchToCategoryMap->{$searchName};
-      $distribution->{$category} += 1;
+print STDERR "$searchName $count $category\n";
+      $distribution->{$category} += $count;
     }
   }
+  return $distribution;
 }
 
 sub usage {
   die "
-Generate usage statistics for searches in the specified genomics site, for the specified time perios.  Use the
-/ontology endpoint of the provided site_url to get gene search categories.  (For other record classes, categorize by
-record class name).  Connect to the site's user database, and query the steps table to count searches used.
+Generate usage statistics for searches in the specified genomics site, for the specified time period.
 
-Output (standard out) is tab delimited.  First column is category (as seen in site menu); second column is count.
+Uses the /record-types endpoint of the provided site_service_url to get a mapping of search names to record classes.
 
-Usage generateSearchesStats site_service_url model_name start_date end_date
+For Genes, uses the /ontology endpoint to get gene search categories.
+
+Connects to the site's user database, and queries the steps table to count searches used.  The results are mapped to categories.
+
+Output (standard out) is tab delimited.  First column is category (as seen in site menu); second column is count.  Ordered alphabetically.
+
+Usage: generateSearchesStats site_service_url model_name start_date end_date
 
 Dates are in DD-MM-YYYY format.
 
