@@ -8,9 +8,9 @@ use Data::Dumper;
 use JSON qw( decode_json );
 use WDK::Model::ModelConfig;
 
-my ($siteServiceUrl, $modelName, $startDate, $endDate) = @ARGV;
-
 usage() unless scalar(@ARGV) == 4;
+
+my ($siteServiceUrl, $modelName, $startDate, $endDate) = @ARGV;
 
 # from wdk record class endpoint:
 #   get map of searches to record class display name (which is the category for non-Gene record classes)
@@ -27,22 +27,26 @@ usage() unless scalar(@ARGV) == 4;
 my %searchToCategoryMap;
 
 # do record classes first, because, for genes, ontology categories will overwrite
+print STDERR "Reading from wdk /record-types endpoint\n";
 my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
 my $recordClassesJson = decode_json($recordsString);
 getSearchToRecordClassDisplayNameMap($recordClassesJson, \%searchToCategoryMap);
 
 # for Genes, use ontology
-delete $searchToCategoryMap->{Genes};
+delete $searchToCategoryMap{Genes};
+print STDERR "Reading from wdk /ontology/Categories endpoint\n";
 my $categoriesString = get("https://$siteServiceUrl/ontologies/Categories");
 my $categoriesJson = decode_json($categoriesString);
 my @emptyArray;
 addSearchesFromOntologyToMap($categoriesJson->{tree}, \@emptyArray, \%searchToCategoryMap);
 
+print STDERR "Reading from Steps table in UserDB\n";
 my $distribution = getDistribution($modelName, $startDate, $endDate, \%searchToCategoryMap);
 
 foreach my $category (sort keys $distribution) {
   print STDOUT "$category\t$distribution->{$category}\n";
 }
+print STDERR "Done\n";
 
 ##################################################################################################################
 
@@ -109,12 +113,10 @@ order by cnt desc";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
-print STDERR "hello\n";
   my $distribution;
   while(my ($searchName, $count) = $sh->fetchrow_array()) {
     if ($searchToCategoryMap->{$searchName}) {
       my $category = $searchToCategoryMap->{$searchName};
-print STDERR "$searchName $count $category\n";
       $distribution->{$category} += $count;
     }
   }
