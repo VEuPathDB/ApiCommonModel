@@ -12,6 +12,7 @@ public class PhenotypeGrowthRate extends DatasetInjector {
   public void addModelReferences() {
       String datasetName = getDatasetName();
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", datasetName + "_Phenotype");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", datasetName + "PhenotypeScoreGraphs");
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_pberANKA_phenotype_Bushnell_functional_profiling_RSRC");
   }
 
