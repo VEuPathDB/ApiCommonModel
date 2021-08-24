@@ -6,6 +6,15 @@ public class BenzCoexpression extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+    setShortAttribution();
+
+    String projectName = getPropValue("projectName");
+    String datasetName = getDatasetName();
+
+    injectTemplate("datasetCategory");
+    injectTemplate("coexpressionQuestion");
+    injectTemplate("coexpressionQuestion");
+    injectTemplate("coexpressionSource");
   }
 
   @Override
