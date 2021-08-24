@@ -13,7 +13,6 @@ public class BenzCoexpression extends DatasetInjector {
 
     injectTemplate("coexpressionCategory");
     injectTemplate("coexpressionQuestion");
-    injectTemplate("coexpressionQuestion");
     injectTemplate("coexpressionSource");
   }
 
