@@ -11,7 +11,7 @@ public class BenzCoexpression extends DatasetInjector {
     String projectName = getPropValue("projectName");
     String datasetName = getDatasetName();
 
-    injectTemplate("datasetCategory");
+    injectTemplate("coexpressionCategory");
     injectTemplate("coexpressionQuestion");
     injectTemplate("coexpressionQuestion");
     injectTemplate("coexpressionSource");
