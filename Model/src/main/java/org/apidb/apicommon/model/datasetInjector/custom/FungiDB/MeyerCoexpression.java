@@ -6,11 +6,19 @@ public class MeyerCoexpression extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+    setShortAttribution();
+
+    String projectName = getPropValue("projectName");
+    String datasetName = getDatasetName();
+
+    injectTemplate("coexpressionCategory");
+    injectTemplate("coexpressionQuestion");
+    injectTemplate("coexpressionSource");
   }
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCoexpression"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByCoexpressionanigCBS513-88_array_microarrayCoexpressionMeyer_RSRC"); 
   }
 
   // second column is for documentation
