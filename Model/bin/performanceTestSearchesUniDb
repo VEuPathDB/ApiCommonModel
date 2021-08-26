@@ -1,0 +1,297 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use Getopt::Long;
+use File::Temp qw/ tempfile /;
+use CBIL::Util::Utils;
+use CBIL::Util::PropertySet;
+use JSON;
+use DBI;
+use DBD::Oracle;
+use Data::Dumper;
+
+my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$model1,$model2,$numRecords,$organisms);
+
+&GetOptions('help|h' => \$help,
+            'reportFile=s' => \$reportFile,
+            'logFile=s' => \$logFile,
+            'site1=s' => \$site1,
+            'site2=s' => \$site2,
+            'model1=s' => \$model1,
+            'model2=s' => \$model2,
+            'numRecords=s' => \$numRecords,
+            'organisms=s' => \$organisms,
+	    'searchFile=s' => \$searchFile
+            );
+
+foreach(($reportFile,$logFile,$site1,$site2,$model1,$model2,$numRecords,$organisms,$searchFile)) {
+    unless(defined $_) {
+	&usage();
+	die "You need to input the required parameters\n";
+    }
+}
+
+my $logFh = &printIntro($logFile,$site1,$site2,$numRecords,$organisms,$searchFile,$reportFile);
+my $searches = &getSearches($searchFile,$logFh);
+my %results;
+
+#&clearCache($site1,$model1,$logFh);
+#&clearCache($site2,$model2,$logFh);
+
+print "\n\n";
+
+foreach my $search (keys %$searches) {
+    my $siteNum = 1;
+    &setNumRecords(\$searches->{$search}->{url},$numRecords);
+    my $time = localtime();
+    print $logFh "$time\n";
+    print $logFh "SEARCH: $search\n";
+    print $logFh "ORIGINAL URL: $searches->{$search}->{url}\n";
+    foreach my $site (($site1,$site2)) {
+	my $changedSearchUrl = &changeSearchSite($searches->{$search}->{url},$site);
+	print $logFh "TESTING URL $siteNum: $changedSearchUrl\n";
+#	my $organismsForSearch = &getOrganismsForSearch($searches->{$search},$recordType,$projects->{$project},$logMoreFh);	
+	&testSearch(\%results,$search,&cleanDotSlash($site),$changedSearchUrl,$numRecords,$logFh);
+	$siteNum++;
+    }
+    print $logFh "\n";
+}
+
+&printReportFile($site1,$site2,\%results,$logFh,$reportFile);
+
+exit;
+
+
+
+
+sub printIntro {
+    my ($logFile,$site1,$site2,$numRecords,$organisms,$searchFile,$reportFile) = @_;
+    open(my $logFh,">",$logFile) or die "cannot open for writing '$logFile': $!";
+    my $time = localtime();
+    print $logFh "\nTEST OF SEARCH PERFORMANCE\n";
+    print $logFh "Comparing searches between $site1 and $site2\n";
+    print $logFh "List of searches are in file $searchFile\n";
+    print $logFh "Obtain $numRecords records. Organism selection: $organisms\n";
+    print $logFh "Tabulated results are in file $reportFile\n";
+    print $logFh "Started $time\n\n";
+    return ($logFh);
+}
+
+sub getSearches {
+    my ($file,$logFh) = @_;
+    my %searches;
+    open(IN, $file) or die "cannot open download file '$file': $!";
+    while (my $line = <IN>) {
+	if ($line =~ /^http/) {
+	    &cleanHtml(\$line);
+	    my $shortName = &getShortName($line);
+	    my $recordType = &getRecordType($line);
+	    my $organismParam = &getOrganismParam($line,$logFh);
+	    $searches{$shortName}->{url} = $line;
+	    $searches{$shortName}->{recordType} = $recordType;
+	    $searches{$shortName}->{organismParam} = $organismParam if ($organismParam);
+	}   
+    }
+    close IN;
+    return \%searches;
+}
+
+sub cleanDotSlash {
+    my ($text) = @_;
+    $text =~ s/\//_/g;
+    $text =~ s/\./_/g;
+    return $text;
+}
+
+sub cleanHtml {
+    my ($htmlRef) = @_;
+    chomp($$htmlRef);
+    $$htmlRef =~ s/\r//g;
+#     $$htmlRef =~ s/%7B/{/g;
+#     $$htmlRef =~ s/%7D/}/g;
+#     $$htmlRef =~ s/%22/"/g;
+#     $$htmlRef =~ s/%3A/:/g;
+#     $$htmlRef =~ s/%5B/[/g;
+#     $$htmlRef =~ s/%5D/]/g;
+#     $$htmlRef =~ s/%2C/,/g;
+#     $$htmlRef =~ s/%20/ /g;
+#     $$htmlRef =~ s/%2F/\//g;
+#     $$htmlRef =~ s/%2F/%/g;
+#     $$htmlRef =~ s/%2B/+/g;
+}
+
+sub setNumRecords {
+    my ($htmlRef,$numRecords) = @_;
+    $$htmlRef =~ s/\"numRecords\":-?[0-9]+,/\"numRecords\":$numRecords,/;
+}
+
+sub getShortName {
+    my ($name) = @_;
+    if ($name =~ /searches\/([^\/]+)\/reports/) {
+	return $1;
+    } else {
+	die "Cannot find short name: $name]n";;
+    }
+}
+
+sub getRecordType {
+    my ($name) = @_;
+    if ($name =~ /record-types\/([^\/]+)\//) {
+	return $1;
+    } else {
+	die "Cannot find record type: $name\n";
+    }
+}
+
+sub getOrganismParam {
+    my ($url,$logFh) = @_;
+    if ($url =~ /(org\w+|BlastDatabaseOrganism)=/) {
+	my $orgParam = $1;
+#	print $logFh "$url\nThis is the organism parameter: $orgParam\n";
+	return $orgParam;
+    } else {
+#	print $logFh "$url\nThere is no organism parameter for this search.\n";
+	return;
+    }
+}
+
+sub getAllOrganismsForSearch {
+    my ($search,$recordType,$project,$logMoreFh) = @_;
+    my $html = "https://".$project."/service/record-types/".$recordType."/searches/".$search;
+    my $cmd = "curl --max-time 600 --silent --show-error -g '$html'";
+    &printLog("Getting organisms for search: $cmd\n\n",0,$logMoreFh);
+    my $json = eval {&runCmd($cmd)};
+    if (! $json) {
+	&printLog("ERROR: Unable to access url.\n",0,$logMoreFh);
+	return 0;
+    }
+    my $results = eval {decode_json($json)};
+    if (! $results) {
+	&printLog("ERROR decoding json: $json)\n",0,$logMoreFh);
+    }
+    print Dumper $results;
+    exit;
+    
+#return $organisms;
+}
+
+
+sub testSearch {
+    my ($results,$search,$site,$changedSearchUrl,$numRecords,$logFh) = @_;
+    my $cmd = "curl --max-time 600 --silent --show-error -g '$changedSearchUrl'";
+    my $startTime = time();
+    $results->{$search}->{$site}->{start} = localtime();
+    my $json = eval {&runCmd($cmd)};
+    my $endTime = time();
+    $results->{$search}->{$site}->{end} = localtime();
+    $results->{$search}->{$site}->{seconds} = $endTime - $startTime;
+    print $logFh "Number of seconds: $results->{$search}->{$site}->{seconds}\n";
+    if (! $json) {
+	print $logFh "ERROR:  Unable to access url.\n";
+	$results->{$search}->{$site}->{num} = -1;
+	return;
+    }
+    my $searchResults = eval {decode_json($json)};
+    if ($searchResults) {
+	$results->{$search}->{$site}->{num} = &getCount($searchResults,$numRecords,$logFh);
+    } else {
+	print $logFh "ERROR:  $json\n";
+	$results->{$search}->{$site}->{num} = -1;
+    }
+}
+
+sub changeSearchSite {
+    my ($search,$site) = @_;
+    if ($search =~ /^https?:\/\/([^\/]+\/[^\/]+)\//) {
+	my $original = $1;
+	$search =~ s/$original/$site/;
+	return $search;
+    } else {
+	die "ERROR: Was not able to change url of this search: $search\n";
+    }
+}
+ 
+sub getCount {
+    my ($searchResults,$numRecords,$logFh) = @_;
+    my %unique;
+    foreach my $record (@{$searchResults->{records}}) {
+	$unique{$record->{attributes}->{primary_key}}=1;
+    }
+    my $count = keys %unique;
+    if (! exists $searchResults->{meta}->{totalCount}) {
+	print $logFh "ERROR:  The totalCount variable does not exist in the json. There are $count unique primary keys.\n";
+	return "_".$count;
+    }
+    if ($numRecords == -1 && $searchResults->{meta}->{totalCount} != $count) {
+	print $logFh "ERROR:  The desired number of records is set to -1 (to obtain all records), but the totalCount variable in the json ($searchResults->{meta}->{totalCount}) does not match the number of displayed unique primary keys ($count)\n";
+	return $searchResults->{meta}->{totalCount}."_".$count;
+    } elsif ($searchResults->{meta}->{totalCount} <= $numRecords && $count != $searchResults->{meta}->{totalCount}) {
+	print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is less than or equal to the desired number of records ($numRecords), but does not match the number of displayed unique primary keys ($count)\n";
+	return $searchResults->{meta}->{totalCount}."_".$count;
+    } elsif ($searchResults->{meta}->{totalCount} > $numRecords && $count != $numRecords) {
+	print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is greater than the desired number of records ($numRecords), but the desired number of records ($numRecords) does not match the number of displayed unique primary keys ($count)\n";
+	return $searchResults->{meta}->{totalCount}."_".$count;
+    }
+    print $logFh "There are $searchResults->{meta}->{totalCount} total results and $count displayed unique primary keys.\n";
+    return $searchResults->{meta}->{totalCount}."_".$count;
+}
+
+sub printReportFile {
+    my ($site1,$site2,$results,$logFh,$reportFile) = @_;
+    print $logFh "Writing results out to report file: $reportFile\n";
+    my $numSearches = keys %$results;
+    print $logFh "Total searches tested: $numSearches\n";
+    open(my $reportFh,">",$reportFile) or die "cannot open for writing '$reportFile': $!";
+    print $reportFh "\t".$site1."\t\t\t\t".$site2."\n";
+    print $reportFh "\ttotal_displayed\tseconds\tstart_time\tend_time\ttotal_displayed\tseconds\tstart_time\tend_time\n";
+    foreach my $search (keys %results) {
+	print $reportFh $search;
+	foreach my $site ((&cleanDotSlash($site1),&cleanDotSlash($site2))) {
+	    print $reportFh "\t".$results->{$search}->{$site}->{num};
+	    print $reportFh "\t".$results->{$search}->{$site}->{seconds};
+	    print $reportFh "\t".$results->{$search}->{$site}->{start};
+	    print $reportFh "\t".$results->{$search}->{$site}->{end};
+	}
+	print $reportFh "\n";
+    }
+    close $reportFh;
+    my $time = localtime();
+    print $logFh "Finished $time\n";
+    close $logFh;
+}
+
+sub getProjects {
+    my %projects = (
+        MicrosporidiaDB => "microsporidiadb.org/micro",
+        ToxoDB => "toxodb.org/toxo",
+        AmoebaDB => "amoebadb.org/amoeba",
+        CryptoDB => "cryptodb.org/cryptodb",
+        FungiDB => "fungidb.org/fungidb",
+        GiardiaDB => "giardiadb.org/giardiadb",
+    	PiroplasmaDB => "piroplasmadb.org/piro",
+    	PlasmoDB => "plasmodb.org/plasmo",
+    	TrichDB => "trichdb.org/trichdb",
+    	TriTrypDB => "tritrypdb.org/tritrypdb",
+    	HostDB => "hostdb.org/hostdb",
+    	SchistoDB => "schistodb.net/schisto",
+    	VectorBase => "vectorbase.org/vectorbase",
+	VEuPathDB => "veupathdb.org/veupathdb"
+    );
+    return \%projects;
+}
+
+sub clearCache {
+    my ($site,$model,$logFh) = @_;
+    $site =~ s/^.*\///;
+    my $cmd = "wdkCache -model $model -reset && instance_manager manage $model reload /${site}";
+    print $logFh "Resetting cache: $cmd\n\n";
+    &runCmd($cmd);
+}
+
+
+sub usage {
+  print STDERR "qaSearchesUniDb --searchFile=s --reportFile=s --logFile=s --site1=s --site2=s --model1=s --model2=s --numRecords=s --organisms=s\n";
+}
+
+1;

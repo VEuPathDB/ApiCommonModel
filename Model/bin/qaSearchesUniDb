@@ -41,26 +41,28 @@ my $numSearchesError = 0;
 foreach my $search (keys %$searches) {
     my (%componentKeys,%veupathKeys,%unidbKeys);
     $numSearchesTotal++;
+    my $unidbRunTime = 0;
     &printLog("ORIGINAL SEARCH: $search\nNUMBER OF UNIQUE RESULTS:\n",$logFh,$logMoreFh);
     foreach my $project (sort keys %$projects) {
 	&printLog("$project: ",$logFh,$logMoreFh);
 	my $projectSearch = &editSearch($search,$projects->{$project});
 	next if ($projectSearch eq "0");
-	my ($results) = &getResults($projectSearch,$logFh,$logMoreFh);
+	my ($results,$runTime) = &getResults($projectSearch,$logFh,$logMoreFh);
 	next if ($results eq "0");
 
 	my $count=0;
 	if ($project eq "UniDB") {
-	    $count = &getKeys($results,\%unidbKeys,$logFh,$logMoreFh);
+	    $count = &getKeys($results,\%unidbKeys,$runTime,$logFh,$logMoreFh);
+	    $unidbRunTime = $runTime;
 	} elsif ($project eq "VEuPathDB") {
-	    $count = &getKeys($results,\%veupathKeys,$logFh,$logMoreFh);
+	    $count = &getKeys($results,\%veupathKeys,$runTime,$logFh,$logMoreFh);
 	} else {
-	    $count = &getKeys($results,\%componentKeys,$logFh,$logMoreFh);
+	    $count = &getKeys($results,\%componentKeys,$runTime,$logFh,$logMoreFh);
 	}
 	next if ($count == -1);
-	&printLog("$count\n",$logFh,$logMoreFh);
+	&printLog("$count ($runTime seconds)\n",$logFh,$logMoreFh);
     }
-    $numSearchesError += &compareKeys(\%unidbKeys,\%veupathKeys,\%componentKeys,$logFh,$logMoreFh);
+    $numSearchesError += &testKeysAndTime(\%unidbKeys,\%veupathKeys,\%componentKeys,$unidbRunTime,$logFh,$logMoreFh);
 }
 
 &printSummary($numSearchesTotal,$numSearchesError,$logFh,$logMoreFh);
@@ -116,7 +118,7 @@ sub cleanHtml {
 #     $$htmlRef =~ s/%2F/\//g;
 #     $$htmlRef =~ s/%2F/%/g;
 #     $$htmlRef =~ s/%2B/+/g;
-     $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":-1,/;
+     $$htmlRef =~ s/\"numRecords\":[0-9]+,/\"numRecords\":20,/;
 }
 
 sub getShortName {
@@ -131,19 +133,22 @@ sub getShortName {
 sub getResults {
     my ($search,$logFh,$logMoreFh) = @_;
     my $cmd = "curl --max-time 600 --silent --show-error -g '$search'";
+    my $startTime = time();
     my $json = eval {&runCmd($cmd)};
+    my $endTime = time();
+    my $totalTime = $endTime - $startTime;
     if (! $json) {
-	&printLog("0\n",$logFh,0);
-	&printLog("0  (ERROR: Unable to access url.)\n",0,$logMoreFh);
-	return(0);
+	&printLog("0 ($totalTime seconds)\n",$logFh,0);
+	&printLog("0 ($totalTime seconds) (ERROR: Unable to access url.)\n",0,$logMoreFh);
+	return(0,0);
     }
     my $results = eval {decode_json($json)};
     if ($results) {
-	return ($results);
+	return ($results,$totalTime);
     } else {
-	&printLog("0\n",$logFh,0);
-	&printLog("0  (ERROR: $json)\n",0,$logMoreFh);
-	return(0);
+	&printLog("0 ($totalTime seconds)\n",$logFh,0);
+	&printLog("0 ($totalTime seconds) (ERROR: $json)\n",0,$logMoreFh);
+	return(0,0);
     }
 }
 
@@ -159,21 +164,24 @@ sub editSearch {
     }
 }
 
-sub compareKeys {
-    my ($unidbKeys,$veupathKeys,$componentKeys,$logFh,$logMoreFh) = @_;
+sub testKeysAndTime {
+    my ($unidbKeys,$veupathKeys,$componentKeys,$unidbRunTime,$logFh,$logMoreFh) = @_;
+    my $secondsLimit = 15;
     my $numUni = keys %$unidbKeys;
     my $numVeu = keys %$veupathKeys;
     my $numComp = keys %$componentKeys;
+    if ($numUni != $numVeu) {
+	&printLog("(Warning: There are $numUni unique results for UniDB but $numVeu for the VEuPathDB site.)\n",$logFh,$logMoreFh);
+    }
     if ($numUni == 0 && $numComp == 0) {
 	&printLog("***FAIL: There are 0 results for UniDB and 0 for the component sites. Need to modify test to produce result.\n\n",$logFh,$logMoreFh);
 	return 1;
     } elsif ($numUni != $numComp) {
 	&printLog("***FAIL: There are $numUni unique results for UniDB but $numComp for the component sites.\n\n",$logFh,$logMoreFh);
 	return 1;
-    } elsif ($numUni != $numVeu) {
-	&printLog("***SUCCESS\n\n",$logFh,0);
-	&printLog("***SUCCESS  (Warning: There are $numUni unique results for UniDB but $numVeu for the VEuPathDB site.)\n\n",0,$logMoreFh);
-	return 0;
+    } elsif ($unidbRunTime > $secondsLimit) {
+	&printLog("***FAIL: The UniDB search ran in $unidbRunTime seconds, which is greater than the $secondsLimit second limit.\n\n",$logFh,$logMoreFh);
+	return 1;
     } else {
 	&printLog("***SUCCESS\n\n",$logFh,$logMoreFh);
 	return 0;
@@ -181,7 +189,7 @@ sub compareKeys {
 }
  
 sub getKeys {
-    my ($results,$keys,$logFh,$logMoreFh) = @_;
+    my ($results,$keys,$runTime,$logFh,$logMoreFh) = @_;
     my %unique;
     if (exists $results->{meta}->{totalCount}) {
 	foreach my $record (@{$results->{records}}) {
@@ -191,8 +199,8 @@ sub getKeys {
 	my $count = keys %unique;
 	return $count;
     } else {
-	&printLog("0\n",$logFh,0);
-	&printLog("0  (ERROR: Cannot obtain results.)\n",0,$logMoreFh);
+	&printLog("0 ($runTime seconds)\n",$logFh,0);
+	&printLog("0 ($runTime seconds) (ERROR: Cannot obtain results.)\n",0,$logMoreFh);
 	print $logMoreFh Dumper $results;
 	&printLog("\n",0,$logMoreFh);
 	return -1;
