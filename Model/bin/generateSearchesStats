@@ -26,18 +26,19 @@ my ($siteServiceUrl, $modelName, $startDate, $endDate) = @ARGV;
 
 my %searchToCategoryMap;
 
-# do record classes first, because, for genes, ontology categories will overwrite
+# for each record class, map each search to the record class display name
 print STDERR "Reading from wdk /record-types endpoint\n";
 my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
 my $recordClassesJson = decode_json($recordsString);
 getSearchToRecordClassDisplayNameMap($recordClassesJson, \%searchToCategoryMap);
 
-# for Genes, use ontology
+# read the ontology.  map each Transcript search to its ontology category (overriding the record class display name)
+# use the ontologyToNiaidCategory map to find the final NIAID approved category
 print STDERR "Reading from wdk /ontology/Categories endpoint\n";
 my $categoriesString = get("https://$siteServiceUrl/ontologies/Categories");
 my $categoriesJson = decode_json($categoriesString);
 my @emptyArray;
-addSearchesFromOntologyToMap($categoriesJson->{tree}, \@emptyArray, \%searchToCategoryMap);
+addSearchesFromOntologyToMap($categoriesJson->{tree}, \@emptyArray, \%searchToCategoryMap, \%ontologyToNiaidCategory);
 
 print STDERR "Reading from Steps table in UserDB\n";
 my $distribution = getDistribution($modelName, $startDate, $endDate, \%searchToCategoryMap);
@@ -67,8 +68,9 @@ sub getSearchToRecordClassDisplayNameMap {
 #   targetType: might be "search".  in this case, the 0th element of labels is the search full name
 # because it is a tree, the category have subcategories.  but we only care about the second-to-top level, which
 # corresponds to what is shown in the menus for Genes.
+# we must use niaid approved cateogries.  use the supplied map.
 sub addSearchesFromOntologyToMap {
-  my ($ontologyNode, $labelsPath, $searchToCategoryMap) = @_;
+  my ($ontologyNode, $labelsPath, $searchToCategoryMap, $ontologyToNiaidCategory) = @_;
   my $children = $ontologyNode->{children};
   my $props = $ontologyNode->{properties};
 
@@ -90,7 +92,9 @@ sub addSearchesFromOntologyToMap {
   elsif ($props && $props->{targetType} && $props->{targetType}->[0] eq 'search' &&
 	$props->{recordClassName}->[0] eq 'TranscriptRecordClasses.TranscriptRecordClass') {
     my $searchName = $props->{name}->[0];
-    my $category = $labelsPath->[1];
+    my $ontologyTerm = $labelsPath->[1];
+    my $category = $ontologyToNiaidCategory->{$ontologyTerm};
+    die "ontology term '$ontologyTerm' is not found in the map to approved NIAID categories\n";
     $searchToCategoryMap->{$searchName} = $category;
   }
 }
