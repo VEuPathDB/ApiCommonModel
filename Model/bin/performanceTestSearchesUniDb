@@ -10,8 +10,9 @@ use JSON;
 use DBI;
 use DBD::Oracle;
 use Data::Dumper;
+use Time::HiRes;
 
-my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$model1,$model2,$numRecords,$organisms);
+my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$model1,$model2,$numRecords,$organisms,$headerText);
 
 &GetOptions('help|h' => \$help,
             'reportFile=s' => \$reportFile,
@@ -22,10 +23,11 @@ my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$model1,$model2,$numRec
             'model2=s' => \$model2,
             'numRecords=s' => \$numRecords,
             'organisms=s' => \$organisms,
-	    'searchFile=s' => \$searchFile
+	    'searchFile=s' => \$searchFile,
+	    'headerText=s' => \$headerText
             );
 
-foreach(($reportFile,$logFile,$site1,$site2,$model1,$model2,$numRecords,$organisms,$searchFile)) {
+foreach(($reportFile,$logFile,$site1,$site2,$model1,$model2,$numRecords,$organisms,$searchFile,$headerText)) {
     unless(defined $_) {
 	&usage();
 	die "You need to input the required parameters\n";
@@ -39,9 +41,10 @@ my %results;
 #&clearCache($site1,$model1,$logFh);
 #&clearCache($site2,$model2,$logFh);
 
-print "\n\n";
-
 foreach my $search (keys %$searches) {
+
+#    next unless ($search eq 'GenesWithUserComments');
+
     my $siteNum = 1;
     &setNumRecords(\$searches->{$search}->{url},$numRecords);
     my $time = localtime();
@@ -50,9 +53,14 @@ foreach my $search (keys %$searches) {
     print $logFh "ORIGINAL URL: $searches->{$search}->{url}\n";
     foreach my $site (($site1,$site2)) {
 	my $changedSearchUrl = &changeSearchSite($searches->{$search}->{url},$site);
+	$changedSearchUrl = &changeOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$organisms,$logFh);
+	if ($changedSearchUrl eq "0") {
+	    print $logFh "Skipping test. You cannot select multiple organisms for this search.\n";
+	    $siteNum++;
+	    next;
+	}
 	print $logFh "TESTING URL $siteNum: $changedSearchUrl\n";
-#	my $organismsForSearch = &getOrganismsForSearch($searches->{$search},$recordType,$projects->{$project},$logMoreFh);	
-	&testSearch(\%results,$search,&cleanDotSlash($site),$changedSearchUrl,$numRecords,$logFh);
+	&testSearch(\%results,$search,&cleanDotSlash($site),$changedSearchUrl,$numRecords,$headerText,$logFh);
 	$siteNum++;
     }
     print $logFh "\n";
@@ -146,7 +154,7 @@ sub getRecordType {
 
 sub getOrganismParam {
     my ($url,$logFh) = @_;
-    if ($url =~ /(org\w+|BlastDatabaseOrganism)=/) {
+    if ($url =~ /(motif_org\w+|text_search_org\w+|org\w+|BlastDatabaseOrganism)=/) {
 	my $orgParam = $1;
 #	print $logFh "$url\nThis is the organism parameter: $orgParam\n";
 	return $orgParam;
@@ -157,35 +165,56 @@ sub getOrganismParam {
 }
 
 sub getAllOrganismsForSearch {
-    my ($search,$recordType,$project,$logMoreFh) = @_;
-    my $html = "https://".$project."/service/record-types/".$recordType."/searches/".$search;
+    my ($search,$searchRef,$site,$logFh) = @_;
+    my $html = "https://".$site."/service/record-types/".$searchRef->{recordType}."/searches/".$search;
     my $cmd = "curl --max-time 600 --silent --show-error -g '$html'";
-    &printLog("Getting organisms for search: $cmd\n\n",0,$logMoreFh);
+    print $logFh "Getting organisms for search: $cmd\n";
     my $json = eval {&runCmd($cmd)};
     if (! $json) {
-	&printLog("ERROR: Unable to access url.\n",0,$logMoreFh);
-	return 0;
+	print $logFh "ERROR: Unable to access url.\n";
+	return (0,0);
     }
     my $results = eval {decode_json($json)};
     if (! $results) {
-	&printLog("ERROR decoding json: $json)\n",0,$logMoreFh);
+	print $logFh "ERROR decoding json: $json)\n";
     }
-    print Dumper $results;
-    exit;
-    
-#return $organisms;
+
+    my %organisms;
+    my $orgParam;
+    foreach my $key1 (@{$results->{searchData}->{parameters}}) {
+#	print "SEARCH: $search    SITE: $site\n";
+	next if ($key1->{name} !~ /org/i && $key1->{displayName} !~ /org/i);
+	next if ($key1->{type} ne "multi-pick-vocabulary");
+	$orgParam = $key1->{name};
+#	print "         ORG parameter: name '$key1->{name}'   displayName '$key1->{displayName}'\n";
+	&getLeaves($key1->{vocabulary},\%organisms);
+    }
+    return (0,0) if (keys %organisms == 0);
+    my @orgs =  map { $_ } keys %organisms;
+    return (\@orgs,$orgParam);
 }
 
+sub getLeaves {
+    my ($tree,$organisms) = @_;
+    if (scalar @{$tree->{children}} == 0) {
+	$organisms->{$tree->{data}->{term}} = 1;
+    } else {
+	foreach my $node (@{$tree->{children}}) {
+	    &getLeaves($node,$organisms);
+	}
+    }
+}
 
 sub testSearch {
-    my ($results,$search,$site,$changedSearchUrl,$numRecords,$logFh) = @_;
-    my $cmd = "curl --max-time 600 --silent --show-error -g '$changedSearchUrl'";
-    my $startTime = time();
+    my ($results,$search,$site,$changedSearchUrl,$numRecords,$headerText,$logFh) = @_;
+    my $header = $headerText eq "n" ? "" : "--header '$headerText' ";
+    my $cmd = "curl ".$header."--max-time 600 --silent --show-error -g '$changedSearchUrl'";
+    my $startTime = Time::HiRes::time();
     $results->{$search}->{$site}->{start} = localtime();
     my $json = eval {&runCmd($cmd)};
-    my $endTime = time();
+    my $endTime = Time::HiRes::time();
     $results->{$search}->{$site}->{end} = localtime();
-    $results->{$search}->{$site}->{seconds} = $endTime - $startTime;
+    $results->{$search}->{$site}->{seconds} = sprintf("%.2f",($endTime - $startTime));
     print $logFh "Number of seconds: $results->{$search}->{$site}->{seconds}\n";
     if (! $json) {
 	print $logFh "ERROR:  Unable to access url.\n";
@@ -199,6 +228,39 @@ sub testSearch {
 	print $logFh "ERROR:  $json\n";
 	$results->{$search}->{$site}->{num} = -1;
     }
+}
+
+sub changeOrganisms {
+    my ($url,$search,$searchRef,$site,$organisms,$logFh) = @_;
+    my ($allOrganisms,$orgParam);
+    if ($organisms eq "preset") {
+    } elsif ($organisms eq "all") {
+	($allOrganisms,$orgParam) = &getAllOrganismsForSearch($search,$searchRef,$site,$logFh);
+	return "0" if ($allOrganisms == 0);
+	print $logFh "Here are all the organisms for the search:\n";
+	print $logFh join(",",@{$allOrganisms}),"\n";
+	$url = &updateOrgsInUrl($url,$orgParam,$allOrganisms);
+    } else {         # comma-delimited list of organisms
+	# need to test whether the provided organisms can be used in this search
+	my @names = split(/,/,$organisms);
+	s/^\s+|\s+$//g foreach @names;
+	$url = &updateOrgsInUrl($url,$orgParam,\@names); 
+    }
+    return $url;
+}
+
+sub updateOrgsInUrl {
+    my ($url,$orgParam,$organismsForSearch) = @_;
+    my ($old,$new);
+    if ($url =~ /($orgParam=%5B.+?%5D)/) {
+	$old = $1;
+    } elsif ($url =~ /($orgParam=.+?)&/) {
+	$old = $1;
+    }
+    $new = $orgParam."=%5B%22".join("%22%2C%22",@{$organismsForSearch})."%22%5D";
+    $new =~ s/ /%20/g;
+    $url =~ s/$old/$new/;
+    return $url;
 }
 
 sub changeSearchSite {
@@ -221,20 +283,18 @@ sub getCount {
     my $count = keys %unique;
     if (! exists $searchResults->{meta}->{totalCount}) {
 	print $logFh "ERROR:  The totalCount variable does not exist in the json. There are $count unique primary keys.\n";
-	return "_".$count;
+	return 0;
     }
     if ($numRecords == -1 && $searchResults->{meta}->{totalCount} != $count) {
 	print $logFh "ERROR:  The desired number of records is set to -1 (to obtain all records), but the totalCount variable in the json ($searchResults->{meta}->{totalCount}) does not match the number of displayed unique primary keys ($count)\n";
-	return $searchResults->{meta}->{totalCount}."_".$count;
     } elsif ($searchResults->{meta}->{totalCount} <= $numRecords && $count != $searchResults->{meta}->{totalCount}) {
 	print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is less than or equal to the desired number of records ($numRecords), but does not match the number of displayed unique primary keys ($count)\n";
-	return $searchResults->{meta}->{totalCount}."_".$count;
     } elsif ($searchResults->{meta}->{totalCount} > $numRecords && $count != $numRecords) {
 	print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is greater than the desired number of records ($numRecords), but the desired number of records ($numRecords) does not match the number of displayed unique primary keys ($count)\n";
-	return $searchResults->{meta}->{totalCount}."_".$count;
+    } else {
+	print $logFh "There are $searchResults->{meta}->{totalCount} total results and $count displayed unique primary keys.\n";
     }
-    print $logFh "There are $searchResults->{meta}->{totalCount} total results and $count displayed unique primary keys.\n";
-    return $searchResults->{meta}->{totalCount}."_".$count;
+    return $searchResults->{meta}->{totalCount};
 }
 
 sub printReportFile {
@@ -244,20 +304,23 @@ sub printReportFile {
     print $logFh "Total searches tested: $numSearches\n";
     open(my $reportFh,">",$reportFile) or die "cannot open for writing '$reportFile': $!";
     print $reportFh "\t".$site1."\t\t\t\t".$site2."\n";
-    print $reportFh "\ttotal_displayed\tseconds\tstart_time\tend_time\ttotal_displayed\tseconds\tstart_time\tend_time\n";
+    print $reportFh "\ttotal\tseconds\tstart_time\tend_time\ttotal\tseconds\tstart_time\tend_time\n";
     foreach my $search (keys %results) {
 	print $reportFh $search;
 	foreach my $site ((&cleanDotSlash($site1),&cleanDotSlash($site2))) {
-	    print $reportFh "\t".$results->{$search}->{$site}->{num};
-	    print $reportFh "\t".$results->{$search}->{$site}->{seconds};
-	    print $reportFh "\t".$results->{$search}->{$site}->{start};
-	    print $reportFh "\t".$results->{$search}->{$site}->{end};
+	    foreach my $field (("num","seconds","start","end")) {
+		if (exists $results->{$search}->{$site}->{$field}) {
+		    print $reportFh "\t".$results->{$search}->{$site}->{$field};
+		} else {
+		    print $reportFh "\t-1";
+		}
+	    }
 	}
 	print $reportFh "\n";
     }
     close $reportFh;
     my $time = localtime();
-    print $logFh "Finished $time\n";
+    print $logFh "\nFinished $time\n";
     close $logFh;
 }
 
