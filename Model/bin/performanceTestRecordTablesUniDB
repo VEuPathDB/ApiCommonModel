@@ -1,0 +1,131 @@
+#!/usr/bin/perl
+
+use strict;
+
+usage() unless scalar(@ARGV) == 3;
+
+my ($site1ServiceUrl, $site2ServiceUrl, $ids_file) = @ARGV;
+
+my $result1 = perfTestRecordTables($site1ServiceUrl, $ids_file);
+my $result2 = perfTestRecordTables($site2ServiceUrl, $ids_file);
+
+foreach my $recordtype (sort keys %$result1) {
+  foreach my $table (sort keys %$recordtype) {
+    foreach my $id (sort keys %$table) {
+      my $row1 = $result1->{$table}->{$id};
+      my $row2 = $result2->{$table}->{$id};
+      my @a = ($recordtype, $table, $id, $row1->{startTime}, $row1->{endTime}, $row1->{duration}, $row2->{startTime}, $row2->{endTime}, $row2->{duration});
+      print STDOUT join("\t", @a) . "\n";
+    }
+  }
+}
+
+sub usage {
+  die
+"Compare performance of two websites, focusing on WDK Record Class Tables. IDs for each record class are supplied in the provided IDs yaml file.
+
+For each site:
+  - read the wdk meta info to discover all record types and their records
+  - for those record types included in the IDs file, for each of its tables, use the provided IDs to run a request to the /record-types/XXXX/records endpoint, to pull data for this table
+
+Usage: performanceTestRecordTablesUniDB site1_service_url site2_service_url ids_file
+
+IDs file format is yaml:
+gene:
+  - sourceId: pf12345
+    project: PlasmoDB
+  - sourceId: pf4444
+    projectId: PlasmoDB
+snp:
+  - id:
+
+(where the record-type name comes from plasmodb.org/plasmo/service/record-types)
+
+Output is tab delimited, with these columns:
+ - record-type name
+ - table name
+ - ID
+ - start time
+ - end time
+ - duration
+";
+}
+
+use LWP::Simple;
+use Data::Dumper;
+use JSON qw( decode_json encode_json );
+use YAML qw(LoadFile);
+use Time::HiRes qw(time);
+
+sub perfTestRecordTables {
+  my ($siteServiceUrl, $idsFile) = @_;
+
+  die "Can't open IDs file '$idsFile' for reading\n" unless -e $idsFile;
+
+  my $idsMap = LoadFile($idsFile);
+  my $resultMap = {};
+
+  print STDERR "Reading from wdk /record-types endpoint\n";
+  my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
+  my $recordClassesJson = decode_json($recordsString);
+
+  foreach my $recordClass (@$recordClassesJson) {
+    my $className = $recordClass->{urlSegment};
+    if (!$idsMap->{$className}) {
+      print STDERR "can't find IDs for record '$className'\n";
+      next;
+    }
+    foreach my $table (@{$recordClass->{tables}}) {
+      my $tableName = $table->{name};
+      foreach my $id (@{$idsMap->{$className}}) {
+	my ($start, $end, $duration) = runTest($id, $className, $tableName, $siteServiceUrl);
+	$resultMap->{$className}->{$tableName}->{$id} = [$start, $end, $duration];
+      }
+    }
+
+  }
+  return $resultMap;
+}
+
+sub runTest {
+  my ($id, $className, $tableName, $serviceUrl) = @_;
+
+  print STDERR "running test: $className $tableName\n";
+  my $testResult = {};
+  $testResult->{id} = "" . join(", ", values(%$id));
+  my $ua = LWP::UserAgent->new;
+
+  my $wdkPk = convertPkToWdkFormat($id);
+  my $requestBody = {};
+  $requestBody->{primaryKey} = $wdkPk;
+  $requestBody->{tables} = [$tableName];
+  $requestBody->{attributes} = [];
+
+  my $url = "https://$serviceUrl/record-types/$className/records";
+  my $req = HTTP::Request->new(POST => $url);
+  $req->header('content-type' => 'application/json');
+  $req->content(encode_json($requestBody));
+  $testResult->{timestamp} = localtime;
+  my $start = time;
+  my $resp = $ua->request($req);
+  my $end = time;
+  $testResult->{duration} = sprintf("%.1f", $end - $start);
+  die "HTTP POST error code: " . $resp->code . " " . $resp->message . "\n" unless $resp->is_success;
+  my $message = $resp->decoded_content;
+  my $f = decode_json($message);
+  my $table = $f->{tables}->{$tableName};
+  die "Table $tableName not returned in result\n" unless $table;
+  die "Had table errors: " . $f->{tableErrors} if scalar(@{$f->{tableErrors}});
+  $testResult->{count} = scalar(@$table);
+  print Dumper $testResult;
+}
+
+sub convertPkToWdkFormat {
+  my ($id) = @_;
+  my @wdkPk;
+  foreach my $label (keys %$id) {
+    my %part = (name=> $label, value => $id->{$label});
+    push(@wdkPk, \%part);
+  }
+  return \@wdkPk;
+}
