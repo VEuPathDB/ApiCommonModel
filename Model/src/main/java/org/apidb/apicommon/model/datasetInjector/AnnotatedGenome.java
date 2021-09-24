@@ -303,10 +303,13 @@ public class AnnotatedGenome extends UnannotatedGenome {
   addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
     }
   
+
+    // getting properties defined in .prop file
+    String projectName = getPropValue("projectName");
     // no Synteny for one TrichDB organism
-    //    if (!(organismFullName.equals("Trichomonas vaginalis G3"))){
-    // addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
-    //    }
+    if (!(projectName.equals("TrichDB"))){
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
+    }
   }
 
   // declare properties required beyond those inherited from the datasetPresenter
