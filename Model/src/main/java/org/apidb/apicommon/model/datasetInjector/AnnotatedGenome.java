@@ -277,7 +277,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneTranscripts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AlternateProducts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "UserComments");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ApolloProducts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PreferredProducts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinDatabase");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLocation");
@@ -288,27 +287,36 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Seqedits");
 
-
-    // not for VectorBase
-    if (!(getPropValue("projectName").equals("VectorBase") || 
-	  getPropValue("projectName").equals("HostDB"))){
-	addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
-	}
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "Reference");
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "AlignmentInfo");
-
 
     // if showReferenceTranscriptomics is true, add wdkReference to enable transcritomics of reference strain to be visible for this genome's gene pages.
     if(getPropValueAsBoolean("showReferenceTranscriptomics")){
   addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
     }
-  
 
     // getting properties defined in .prop file
     String projectName = getPropValue("projectName");
+
+    // no Popsets for VectorBase
+    if (!(projectName.equals("VectorBase") ||
+	  projectName.equals("HostDB"))){
+	addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
+    }
+
     // no Synteny for one TrichDB organism
     if (!(projectName.equals("TrichDB"))){
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
+    }
+
+
+
+    // no Apollo updates for CryptoDB, HostDB, GiardiaDB, MicrosporidiaDB and TrichDB
+    if (!(projectName.equals("CryptoDB")) ||
+	(projectName.equals("HostDB")) ||
+	(projectName.equals("MicrosporidiaDB")) ||
+	(projectName.equals("TrichDB"))){
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ApolloProducts");
     }
   }
 
