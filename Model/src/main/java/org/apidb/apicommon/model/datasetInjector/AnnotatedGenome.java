@@ -304,9 +304,10 @@ public class AnnotatedGenome extends UnannotatedGenome {
 	addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
     }
 
-    // no Synteny for one TrichDB organism
+    // no genes or synteny for TrichDB
     if (!(projectName.equals("TrichDB"))){
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
+	addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "dnaContextUrl");
     }
 
 
