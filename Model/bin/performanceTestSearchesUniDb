@@ -12,7 +12,7 @@ use DBD::Oracle;
 use Data::Dumper;
 use Time::HiRes;
 
-my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$numRecords,$organisms,$headerText);
+my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$numRecords,$orgOption,$headerText);
 
 &GetOptions('help|h' => \$help,
             'reportFile=s' => \$reportFile,
@@ -20,7 +20,7 @@ my ($help,$searchFile,$reportFile,$logFile,$site1,$site2,$numRecords,$organisms,
             'site1=s' => \$site1,
             'site2=s' => \$site2,
             'numRecords=s' => \$numRecords,
-            'organisms=s' => \$organisms,
+            'organisms=s' => \$orgOption,
 	    'searchFile=s' => \$searchFile,
 	    'headerText=s' => \$headerText
             );
@@ -29,7 +29,7 @@ if ($help) {
     &usage();
     exit;
 } else {
-    foreach(($reportFile,$logFile,$site1,$site2,$numRecords,$organisms,$searchFile,$headerText)) {
+    foreach(($reportFile,$logFile,$site1,$site2,$numRecords,$orgOption,$searchFile,$headerText)) {
 	unless(defined $_) {
 	    print STDERR "\nYou need to input the required parameters:\n";
 	    &usage();
@@ -38,9 +38,10 @@ if ($help) {
     }
 }
 
-my $logFh = &printIntro($logFile,$site1,$site2,$numRecords,$organisms,$searchFile,$reportFile);
-my $searches = &getSearches($searchFile,$logFh);
-my %results;
+my $organismsFromFile;
+$organismsFromFile = &readOrganisms($orgOption) if ($orgOption =~ /\//);
+my $logFh = &printIntro($logFile,$site1,$site2,$numRecords,$orgOption,$organismsFromFile,$searchFile,$reportFile);
+my $searches = &getSearches($searchFile,$site1,$site2,$logFh);
 
 foreach my $search (keys %$searches) {
 
@@ -52,22 +53,31 @@ foreach my $search (keys %$searches) {
     print $logFh "$time\n";
     print $logFh "SEARCH: $search\n";
     print $logFh "ORIGINAL URL: $searches->{$search}->{url}\n";
+    my $originalAllOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},&getSite($searches->{$search}->{url}),$logFh);
     foreach my $site (($site1,$site2)) {
+	print $logFh "TESTING URL $siteNum: $site\n";
 	my $changedSearchUrl = &changeSearchSite($searches->{$search}->{url},$site);
-	$changedSearchUrl = &changeOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$organisms,$logFh);
-	if ($changedSearchUrl eq "0") {
-	    print $logFh "Skipping test. You cannot select multiple organisms for this search.\n";
-	    $siteNum++;
-	    next;
+	my $allOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},$site,$logFh);
+	if ($searches->{$search}->{results}->{&cleanDotSlash($site)}->{searchParamsExist} == 0) {
+	    print $logFh "ERROR:  The searchParams could not be obtained. The search may not be available on this site but let's try the search.\n";
+	} else {
+	    $changedSearchUrl = &changeOrgParam($changedSearchUrl,$searches->{$search},$site,&getSite($searches->{$search}->{url}),$logFh);
+	    $changedSearchUrl = &changeOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$orgOption,$organismsFromFile,$allOrganisms,$logFh);
 	}
-	print $logFh "TESTING URL $siteNum: $changedSearchUrl\n";
-	&testSearch(\%results,$search,&cleanDotSlash($site),$changedSearchUrl,$numRecords,$headerText,$logFh);
+	if ($changedSearchUrl) {
+	    print $logFh "Changed URL for testing: $changedSearchUrl\n";
+	    $searches->{$search}->{results}->{&cleanDotSlash($site)}->{testPerformed} = 1;
+	    &testSearch($searches->{$search},$site,$changedSearchUrl,$numRecords,$headerText,$logFh);
+	} else {
+	    $searches->{$search}->{results}->{&cleanDotSlash($site)}->{notes} = "search skipped. organisms can't be selected";
+	    print $logFh "Skipping test because unable to choose organisms for this search.\n";
+	}
 	$siteNum++;
     }
     print $logFh "\n";
 }
 
-&printReportFile($site1,$site2,\%results,$logFh,$reportFile);
+&printReportFile($site1,$site2,$searches,$logFh,$reportFile);
 
 exit;
 
@@ -75,20 +85,24 @@ exit;
 
 
 sub printIntro {
-    my ($logFile,$site1,$site2,$numRecords,$organisms,$searchFile,$reportFile) = @_;
+    my ($logFile,$site1,$site2,$numRecords,$orgOption,$organisms,$searchFile,$reportFile) = @_;
     open(my $logFh,">",$logFile) or die "cannot open for writing '$logFile': $!";
     my $time = localtime();
     print $logFh "\nTEST OF SEARCH PERFORMANCE\n";
     print $logFh "Comparing searches between $site1 and $site2\n";
     print $logFh "List of searches are in file $searchFile\n";
-    print $logFh "Obtain $numRecords records. Organism selection: $organisms\n";
+    print $logFh "Obtain $numRecords records.\nOrganism option: $orgOption\n";
+    if ($orgOption =~ /\//) {
+	print $logFh "   Organisms in file:\n";
+	print $logFh "       $_\n" foreach @{$organisms};
+    }
     print $logFh "Tabulated results are in file $reportFile\n";
     print $logFh "Started $time\n\n";
     return ($logFh);
 }
 
 sub getSearches {
-    my ($file,$logFh) = @_;
+    my ($file,$site1,$site2,$logFh) = @_;
     my %searches;
     open(IN, $file) or die "cannot open download file '$file': $!";
     while (my $line = <IN>) {
@@ -96,10 +110,23 @@ sub getSearches {
 	    &cleanHtml(\$line);
 	    my $shortName = &getShortName($line);
 	    my $recordType = &getRecordType($line);
-	    my $organismParam = &getOrganismParam($line,$logFh);
+	    my $originalSite = &getSite($line);
 	    $searches{$shortName}->{url} = $line;
 	    $searches{$shortName}->{recordType} = $recordType;
-	    $searches{$shortName}->{organismParam} = $organismParam if ($organismParam);
+	    foreach my $site (($originalSite,$site1,$site2)) {
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{notes} = "";
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numAllOrgs} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{orgParam} = "-";
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{orgParamType} = "-";
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{searchParamsExist} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numOrgsToTest} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numOrgsTested} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{testPerformed} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numResults} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{seconds} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{start} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{end} = 0;
+	    }
 	}   
     }
     close IN;
@@ -172,27 +199,38 @@ sub getAllOrganismsForSearch {
     print $logFh "Getting organisms for search: $cmd\n";
     my $json = eval {&runCmd($cmd)};
     if (! $json) {
-	print $logFh "ERROR: Unable to access url.\n";
-	return (0,0);
+	print $logFh "ERROR: Unable to access url to obtain all organisms for search.\n";
+	return;
     }
     my $results = eval {decode_json($json)};
     if (! $results) {
-	print $logFh "ERROR decoding json: $json)\n";
+	print $logFh "ERROR decoding json to obtain all organisms for search:\n$json\n";
+	return;
     }
 
     my %organisms;
-    my $orgParam;
+    my ($orgParam,$orgParamType);
     foreach my $key1 (@{$results->{searchData}->{parameters}}) {
 #	print "SEARCH: $search    SITE: $site\n";
 	next if ($key1->{name} !~ /org/i && $key1->{displayName} !~ /org/i);
-	next if ($key1->{type} ne "multi-pick-vocabulary");
 	$orgParam = $key1->{name};
-#	print "         ORG parameter: name '$key1->{name}'   displayName '$key1->{displayName}'\n";
+	$orgParamType = $key1->{type};
+	next if ($key1->{type} ne "multi-pick-vocabulary");
+#	print "         ORG parameter: name '$key1->{name}'   displayName '$key1->{displayName}'  type '$key1->{type}'\n";
 	&getLeaves($key1->{vocabulary},\%organisms);
+	last;
     }
-    return (0,0) if (keys %organisms == 0);
+    my $numAllOrgs = keys %organisms;
+    $searchRef->{results}->{&cleanDotSlash($site)}->{orgParamType} = $orgParamType ? $orgParamType : "not_found";
+    $searchRef->{results}->{&cleanDotSlash($site)}->{searchParamsExist} = 1;
+    $searchRef->{results}->{&cleanDotSlash($site)}->{numAllOrgs} = $numAllOrgs;
+    $searchRef->{results}->{&cleanDotSlash($site)}->{orgParam} = $orgParam ? $orgParam : "not_found";
+    print $logFh "Organism parameter for the search: $orgParam      Type: $orgParamType\n";
+    return if ($numAllOrgs == 0);
     my @orgs =  map { $_ } keys %organisms;
-    return (\@orgs,$orgParam);
+    print $logFh "There are $numAllOrgs multi-pick organisms for the search:\n";
+    print $logFh join(", ",@orgs)."\n";
+    return (\@orgs);
 }
 
 sub getLeaves {
@@ -207,47 +245,116 @@ sub getLeaves {
 }
 
 sub testSearch {
-    my ($results,$search,$site,$changedSearchUrl,$numRecords,$headerText,$logFh) = @_;
+    my ($searchRef,$site,$changedSearchUrl,$numRecords,$headerText,$logFh) = @_;
     my $header = $headerText eq "n" ? "" : "--header '$headerText' ";
     my $cmd = "curl ".$header."--max-time 600 --silent --show-error -g '$changedSearchUrl'";
     my $startTime = Time::HiRes::time();
-    $results->{$search}->{$site}->{start} = localtime();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{start} = localtime();
     my $json = eval {&runCmd($cmd)};
     my $endTime = Time::HiRes::time();
-    $results->{$search}->{$site}->{end} = localtime();
-    $results->{$search}->{$site}->{seconds} = sprintf("%.2f",($endTime - $startTime));
-    print $logFh "Number of seconds: $results->{$search}->{$site}->{seconds}\n";
+    $searchRef->{results}->{&cleanDotSlash($site)}->{end} = localtime();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{seconds} = sprintf("%.2f",($endTime - $startTime));
+    print $logFh "Number of seconds: $searchRef->{results}->{&cleanDotSlash($site)}->{seconds}\n";
     if (! $json) {
 	print $logFh "ERROR:  Unable to access url.\n";
-	$results->{$search}->{$site}->{num} = -1;
+	$searchRef->{results}->{&cleanDotSlash($site)}->{notes} = "url_no_access";
 	return;
     }
     my $searchResults = eval {decode_json($json)};
     if ($searchResults) {
-	$results->{$search}->{$site}->{num} = &getCount($searchResults,$numRecords,$logFh);
+	$searchRef->{results}->{&cleanDotSlash($site)}->{numResults} = &getCount($searchResults,$numRecords,$logFh);
     } else {
 	print $logFh "ERROR:  $json\n";
-	$results->{$search}->{$site}->{num} = -1;
+	$searchRef->{results}->{&cleanDotSlash($site)}->{notes} = $json;
     }
 }
 
-sub changeOrganisms {
-    my ($url,$search,$searchRef,$site,$organisms,$logFh) = @_;
-    my ($allOrganisms,$orgParam);
-    if ($organisms eq "preset") {
-    } elsif ($organisms eq "all") {
-	($allOrganisms,$orgParam) = &getAllOrganismsForSearch($search,$searchRef,$site,$logFh);
-	return "0" if ($allOrganisms == 0);
-	print $logFh "Here are all the organisms for the search:\n";
-	print $logFh join(",",@{$allOrganisms}),"\n";
-	$url = &updateOrgsInUrl($url,$orgParam,$allOrganisms);
-    } else {         # comma-delimited list of organisms
-	# need to test whether the provided organisms can be used in this search
-	my @names = split(/,/,$organisms);
-	s/^\s+|\s+$//g foreach @names;
-	$url = &updateOrgsInUrl($url,$orgParam,\@names); 
+sub changeOrgParam {
+    my ($url,$searchRef,$site,$originalSite,$logFh) = @_;
+    my $orgParam = $searchRef->{results}->{&cleanDotSlash($site)}->{orgParam};
+    return $url if ($orgParam !~ /org/i);
+    my $originalOrgParam = $searchRef->{results}->{&cleanDotSlash($originalSite)}->{orgParam};
+    if ($orgParam ne $originalOrgParam) {
+	$url =~ s/$originalOrgParam/$orgParam/;
+	print $logFh "Changing organism parameter from $originalOrgParam to $orgParam\n";
     }
     return $url;
+}
+
+sub changeOrganisms {
+    my ($url,$search,$searchRef,$site,$orgOption,$organismsFromFile,$allOrganisms,$logFh) = @_;
+    if ($orgOption eq "preset") {
+	$searchRef->{results}->{&cleanDotSlash($site)}->{numOrgsToTest} = &getNumOrgsInSearch($url,$searchRef->{results}->{&cleanDotSlash($site)}->{orgParam});
+    } else {
+	return if ( $searchRef->{results}->{&cleanDotSlash($site)}->{numAllOrgs} == 0 ||
+	            $searchRef->{results}->{&cleanDotSlash($site)}->{orgParamType} ne "multi-pick-vocabulary" ||
+	            $searchRef->{results}->{&cleanDotSlash($site)}->{orgParam} !~ /org/i );
+	if ($orgOption eq "all") {
+	    $searchRef->{results}->{&cleanDotSlash($site)}->{numOrgsToTest} = $searchRef->{results}->{&cleanDotSlash($site)}->{numAllOrgs};
+	    $searchRef->{results}->{&cleanDotSlash($site)}->{numOrgsTested} = $searchRef->{results}->{&cleanDotSlash($site)}->{numAllOrgs};
+	    $url = &updateOrgsInUrl($url,$searchRef->{results}->{&cleanDotSlash($site)}->{orgParam},$allOrganisms);
+	} elsif ($orgOption =~ /\//) {         # full path for organism file
+	    $searchRef->{results}->{&cleanDotSlash($site)}->{numOrgsToTest} = scalar @{$organismsFromFile};
+	    my $orgsPossible = &orgsPossibleInSearch($organismsFromFile,$allOrganisms,$logFh);
+	    $searchRef->{results}->{&cleanDotSlash($site)}->{numOrgsTested} = scalar @{$orgsPossible};
+	    if (scalar @{$orgsPossible} == 0) {
+		print $logFh "None of the desired organisms are available for this search.\n";
+		return;
+	    }
+	    $url = &updateOrgsInUrl($url,$searchRef->{results}->{&cleanDotSlash($site)}->{orgParam},$orgsPossible); 
+	}
+    }
+    return $url;
+}
+
+sub getNumOrgsInSearch {
+    my ($url,$orgParam) = @_;
+    return 0 if ($orgParam !~ /org/i);
+    my $organismString;
+    if ($url =~ /($orgParam=%5B.+?%5D)/) {
+	$organismString = $1;
+    } elsif ($url =~ /($orgParam=.+?)&/) {
+	$organismString = $1;
+    } else {
+	return 0;
+    }
+    my @organisms = split("%2C",$organismString);
+    return scalar @organisms;
+}
+
+sub orgsPossibleInSearch {
+    my ($organisms,$allOrganisms,$logFh) = @_;
+    my @present;
+    foreach my $org (@{$organisms}) {
+	my $found = 0;
+	foreach my $allOrg (@{$allOrganisms}) {
+	    if ($org eq $allOrg) {
+		$found = 1;
+		push @present, $org;
+		last;
+	    }
+	}
+	if ($found == 0) {
+	    print $logFh "This organism is not available in this search so will not be included in the test:\n";
+	    print $logFh "      $org\n";
+	}
+    }
+    return \@present;
+}
+
+sub readOrganisms {
+    my ($organismFile) = @_;
+    my @names;
+    open(IN, $organismFile) or die "cannot open organism file '$organismFile': $!";
+    while (my $line = <IN>) {
+	if ($line =~ /^\w/) {
+	    chomp($line);
+	    $line =~ s/^\s+|\s+$//g;
+	    push @names, $line;
+	}
+    }
+    close IN;
+    return \@names;
 }
 
 sub updateOrgsInUrl {
@@ -266,15 +373,20 @@ sub updateOrgsInUrl {
 
 sub changeSearchSite {
     my ($search,$site) = @_;
-    if ($search =~ /^https?:\/\/([^\/]+\/[^\/]+)\//) {
-	my $original = $1;
-	$search =~ s/$original/$site/;
-	return $search;
+    my $originalSite = &getSite($search);
+    $search =~ s/$originalSite/$site/;
+    return $search;
+}
+
+sub getSite {
+    my ($fullUrl) = @_;
+    if ($fullUrl =~ /^https?:\/\/([^\/]+\/[^\/]+)\//) {
+	return $1;
     } else {
-	die "ERROR: Was not able to change url of this search: $search\n";
+	die "ERROR: Was not able to find the site within this url: $fullUrl\n";
     }
 }
- 
+
 sub getCount {
     my ($searchResults,$numRecords,$logFh) = @_;
     my %unique;
@@ -284,7 +396,9 @@ sub getCount {
     my $count = keys %unique;
     if (! exists $searchResults->{meta}->{totalCount}) {
 	print $logFh "ERROR:  The totalCount variable does not exist in the json. There are $count unique primary keys.\n";
-	return 0;
+	print $logFh "        Here is the json:\n";
+	print $logFh Dumper $searchResults;
+	return $count;
     }
     if ($numRecords == -1 && $searchResults->{meta}->{totalCount} != $count) {
 	print $logFh "ERROR:  The desired number of records is set to -1 (to obtain all records), but the totalCount variable in the json ($searchResults->{meta}->{totalCount}) does not match the number of displayed unique primary keys ($count)\n";
@@ -299,21 +413,25 @@ sub getCount {
 }
 
 sub printReportFile {
-    my ($site1,$site2,$results,$logFh,$reportFile) = @_;
+    my ($site1,$site2,$searches,$logFh,$reportFile) = @_;
     print $logFh "Writing results out to report file: $reportFile\n";
-    my $numSearches = keys %$results;
+    my $numSearches = keys %$searches;
     print $logFh "Total searches tested: $numSearches\n";
+
     open(my $reportFh,">",$reportFile) or die "cannot open for writing '$reportFile': $!";
-    print $reportFh "\t".$site1."\t\t\t\t".$site2."\n";
-    print $reportFh "\ttotal\tseconds\tstart_time\tend_time\ttotal\tseconds\tstart_time\tend_time\n";
-    foreach my $search (keys %results) {
-	print $reportFh $search;
+    print $reportFh "\t".$site1;
+    print $reportFh "\t" x 11;
+    print $reportFh $site2."\n";
+    my @fields = ("testPerformed","searchParamsExist","orgParam","orgParamType","numAllOrgs","numOrgsToTest","numOrgsTested","numResults","seconds","start","end");
+    print $reportFh "searchName\t".join("\t",@fields)."\t".join("\t",@fields)."\n";
+    foreach my $search (keys %{$searches}) {
+	print $reportFh $search."\t";
 	foreach my $site ((&cleanDotSlash($site1),&cleanDotSlash($site2))) {
-	    foreach my $field (("num","seconds","start","end")) {
-		if (exists $results->{$search}->{$site}->{$field}) {
-		    print $reportFh "\t".$results->{$search}->{$site}->{$field};
+	    foreach my $field (@fields) {
+		if (exists $searches->{$search}->{results}->{$site}->{$field}) {
+		    print $reportFh $searches->{$search}->{results}->{$site}->{$field}."\t";
 		} else {
-		    print $reportFh "\t-1";
+		    print $reportFh "-\t";
 		}
 	    }
 	}
@@ -364,13 +482,14 @@ sub usage {
     print STDERR "--site1 <first-site-to-test>   (e.g., w2.plasmodb.org/plasmo)\n";
     print STDERR "--site2 <first-site-to-test>   (e.g., beta.veupathdb.org/veupathdb.beta)\n";
     print STDERR "--numRecords <number_records-to-retrieve>   (e.g., 20)\n";
-    print STDERR "--organisms <organisms-option>     (e.g., 'all' for all organisms on each site, 'preset' for organisms pre-defined in searchFile, or comma-delimited list of full organism names)\n";
+    print STDERR "--organisms <organisms-option>     (e.g., 'all' for all organisms on each site, 'preset' for organisms pre-defined in searchFile, or full path to file containing full organism names)\n";
     print STDERR "--headerText <text-for-curl-header>   (e.g., n or \"Content-Type: application/json\")\n\n";
     print STDERR "Example url in reportFile\n";
     print STDERR "https://plasmodb.org/plasmo/service/record-types/transcript/searches/GenesWithEpitopes/reports/standard?organism=%5B%22Plasmodium%20falciparum%203D7%22%2C%22Plasmodium%20falciparum%22%5D&epitope_confidence=%5B%22High%22%2C%22Medium%22%5D&reportConfig={\"pagination\":{\"numRecords\":20,\"offset\":0},\"attributes\":[\"primary_key\"],\"tables\":[]}\n\n";
     print STDERR "Example command lines:\n\n";
     print STDERR "performanceTestSearchesUniDb --searchFile service_reports/perf-table3-GET-tests-unidb.txt --reportFile report.txt --logFile log.txt --site1 w2.plasmodb.org/plasmo --site2 beta.veupathdb.org/veupathdb.beta --numRecords 20 --organisms all --headerText n\n\n";
     print STDERR "performanceTestSearchesUniDb --searchFile service_reports/perf-table3-GET-tests-unidb.txt --reportFile report.txt --logFile log.txt --site1 w2.veupathdb.org/veupathdb --site2 beta.veupathdb.org/veupathdb.beta --numRecords 20 --organisms preset --headerText \"Content-Type: application/json\"\n\n";
+    print STDERR "performanceTestSearchesUniDb --searchFile service_reports/perf-table3-GET-tests-unidb.txt --reportFile report.txt --logFile log.txt --site1 w2.veupathdb.org/veupathdb --site2 beta.veupathdb.org/veupathdb.beta --numRecords 20 --organisms service_reports/organisms-tests.txt --headerText \"Content-Type: application/json\"\n\n";
 }
 
 1;
