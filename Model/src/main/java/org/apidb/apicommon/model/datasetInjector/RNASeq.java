@@ -13,6 +13,12 @@ public class RNASeq extends  DatasetInjector {
    * is safe to pass all in, because unneeded ones will be ignored.
    */
 
+    private String profileSetParamQueryTemplate = "rnaSeqProfileSetParamQuery";
+
+
+    protected void setProfileSetParamQueryTemplate(String profileSetParamQueryTemplate) {
+        this.profileSetParamQueryTemplate = profileSetParamQueryTemplate;
+    }
 
     protected void setProfileSamplesHelp() {
         String profileSamplesHelp = "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM)";
@@ -32,8 +38,6 @@ public class RNASeq extends  DatasetInjector {
   @Override
   public void injectTemplates() {
       setShortAttribution();
-
-
 
       String projectName = getPropValue("projectName");
       //String presenterId = getPropValue("presenterId");
@@ -160,9 +164,10 @@ public class RNASeq extends  DatasetInjector {
           setPropValue("graphTextAttrName", pathwayGraphAttr);
           injectTemplate("graphTextAttributeCategoryPathwayRecord");
 
-          injectTemplate("rnaSeqProfileSetParamQuery");
-          injectTemplate("datasetUrlParamQuery");
+
+          injectTemplate(this.profileSetParamQueryTemplate);
           injectTemplate("rnaSeqPctProfileSetParamQuery");
+          injectTemplate("datasetUrlParamQuery");
 
           injectTemplate("rnaSeqGraph");
 
@@ -184,10 +189,10 @@ public class RNASeq extends  DatasetInjector {
             setPropValue("pctGraphAttr", pctGraphAttr);
             injectTemplate("rnaSeqExpressionGraphAttributes");
             injectTemplate("rnaSeqExpressionGraphAttributesPathwayRecord");
-            injectTemplate("rnaSeqProfileSetParamQuery");
+
+            injectTemplate(this.profileSetParamQueryTemplate);
             injectTemplate("datasetUrlParamQuery");
             injectTemplate("rnaSeqPctProfileSetParamQuery");
-
             injectTemplate("profileMinMaxAttributesCategory");
             injectTemplate("profileMinMaxAttributeRef");
             injectTemplate("profileMinMaxAttributeQueries");
