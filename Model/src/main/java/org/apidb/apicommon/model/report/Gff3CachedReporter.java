@@ -220,8 +220,14 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     // get id sql, then combine with the gff cache.
     String idSql = _baseAnswer.getSortedIdSql();
 
+
+    String sourceIdField = "source_id";
+    if(getQuestion().getRecordClass().getFullName().equals("TranscriptRecordClasses.TranscriptRecordClass")) {
+        sourceIdField = "gene_source_id";
+    }
+
     StringBuffer sql = new StringBuffer("SELECT tc." + COLUMN_CONTENT);
-    sql.append(" FROM " + tableCache + " tC WHERE tc.source_id in (select gene_source_id from (" + idSql + ") ac)");
+    sql.append(" FROM " + tableCache + " tC WHERE tc.source_id in (select " + sourceIdField + " from (" + idSql + ") ac)");
     sql.append(" AND tc.table_name = '" + recordName + "' ");
 
 
@@ -264,9 +270,16 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
       sqlIn.append("'" + proteinName + "'");
     }
 
+
+
+    String sourceIdField = "source_id";
+    if(getQuestion().getRecordClass().getFullName().equals("TranscriptRecordClasses.TranscriptRecordClass")) {
+        sourceIdField = "gene_source_id";
+    }
+
     StringBuffer sql = new StringBuffer("SELECT ");
     sql.append("tc.").append(COLUMN_CONTENT).append(" FROM ");
-    sql.append(tableCache).append(" tc where tc.source_id in (select gene_source_id from (").append(idSql).append(") aC)");
+    sql.append(tableCache).append(" tc where tc.source_id in (select " + sourceIdField + " from (").append(idSql).append(") aC)");
 
     DatabaseInstance db = getQuestion().getWdkModel().getAppDb();
 
