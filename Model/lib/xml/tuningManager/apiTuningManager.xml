@@ -6180,10 +6180,10 @@ ORDER BY p.source_id, p.compound_name
                       pr.PATHWAY_REACTION_ID as reaction_id
                       , pr.SOURCE_ID as reaction_source_id
                       , (case (replace (replace (ed.name, 'Pathways_', ''), '_RSRC', ''))
-                        when 'KEGG' then 'http://www.genome.jp/dbget-bin/www_bget?rn:' || pr.source_id
-                        when 'MetaCyc' then 'http://metacyc.org/META/new-image?type=REACTION' || chr(38) || 'object=' || pr.source_id
-                        when 'TrypanoCyc' then 'http://vm-trypanocyc.toulouse.inra.fr/TRYPANO/new-image?type=REACTION' || chr(38) || 'object=' || pr.source_id
-                        when 'LeishCyc' then 'http://vm-trypanocyc.toulouse.inra.fr/LEISH/new-image?tyrp=REACTION' || chr(38) || 'object=' || pr.source_id
+                        when 'KEGG' then 'https://www.genome.jp/dbget-bin/www_bget?rn:' || pr.source_id
+                        when 'MetaCyc' then 'https://metacyc.org/META/new-image?type=REACTION' || chr(38) || 'object=' || pr.source_id
+                        when 'TrypanoCyc' then 'https://vm-trypanocyc.toulouse.inra.fr/TRYPANO/new-image?type=REACTION' || chr(38) || 'object=' || pr.source_id
+                        when 'LeishCyc' then 'https://vm-trypanocyc.toulouse.inra.fr/LEISH/new-image?tyrp=REACTION' || chr(38) || 'object=' || pr.source_id
                         when 'FungiCyc' then null
                         end) as reaction_url
                       , ed.NAME as ext_db_name
@@ -6520,7 +6520,15 @@ ORDER BY p.source_id, p.compound_name
         , pn.width
         , pn.height
         , pn.cellular_location
-        , pn.url
+        , nvl(pn.url,
+            CASE WHEN nvl(type, nodes_with_parents.node_type) = 'enzyme' THEN
+                CASE WHEN REGEXP_LIKE (display_label, '^\d+\.(\d|-)+\.(\d|-)+\.(\d|-)+$') THEN 'https://enzyme.expasy.org/EC/' || display_label
+                WHEN pa.pathway_source = 'KEGG' THEN 'https://www.genome.jp/dbget-bin/www_bget?rn:' || reaction_source_id
+                WHEN pa.pathway_source = 'MetaCyc' THEN 'https://metacyc.org/META/new-image?type=REACTION' || chr(38) || 'object=' || reaction_source_id
+                WHEN pa.pathway_source = 'TrypanoCyc' THEN 'https://vm-trypanocyc.toulouse.inra.fr/TRYPANO/new-image?type=REACTION' || chr(38) || 'object=' || reaction_source_id
+                WHEN pa.pathway_source = 'LeishCyc' THEN ''http://vm-trypanocyc.toulouse.inra.fr/LEISH/new-image?tyrp=REACTION' || chr(38) || 'object=' || reaction_source_id
+                ELSE NULL END
+            ELSE NULL END) AS url
         , pn.name
         , pn.node_identifier
         , nodes_with_parents.pathway_node_id AS id
@@ -6985,6 +6993,7 @@ select dnt.dataset_presenter_id
      , o.public_abbrev as org_abbrev
      , o.source_id as org_pk
      , dnt.name
+     , dsp.name as dataset_presenter_name
      , sa.source_id as sequence_source_id
      , pg.sequence_id as p_sequence_source_id
      , pg.gene_source_id as p_gene_id
@@ -6993,18 +7002,20 @@ select dnt.dataset_presenter_id
      , rg.gene_source_id as r_gene_id
 from organismattributes o
    , datasetnametaxon dnt
+   , datasetpresenter dsp
    , sequences sa
    , (select * from proteomicsgenes where rn = 1) pg
    , (select * from rnaseqgenes where rn = 1) rg
 where o.component_taxon_id = dnt.taxon_id
 and dnt.taxon_id = sa.taxon_id
+and dnt.dataset_presenter_id = dsp.dataset_presenter_id
 and sa.rn = 1
 and dnt.name = pg.name (+)
 and dnt.name = rg.dataset_name (+)
 )
 select h.dataset_link_id, h.dataset_presenter_id, h.description
      , replace(h.text, 'DEFAULT_PROJECT', macros.project_id) as text
-     , replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(h.url
+     , replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(h.url
                                             , 'DEFAULT_PROJECT', macros.project_id) 
                                             , 'ORGANISM_FILE_NAME', macros.name_for_filenames)
                                             , 'DEFAULT_SEQUENCE', macros.sequence_source_id)
@@ -7015,6 +7026,7 @@ select h.dataset_link_id, h.dataset_presenter_id, h.description
                                             , 'DEFAULT_RNASEQ_GENE', macros.r_gene_id)
                                             , 'DEFAULT_RNASEQ_SEQUENCE', macros.r_sequence_source_id)
                                             , 'DEFAULT_DATASET_NAME', macros.name) 
+                                            , 'DEFAULT_DATASET_PRESENTER_NAME', macros.dataset_presenter_name) 
                                             , 'DEFAULT_ORGANISM_PK', macros.org_pk) as url
 from datasetpresenter dsp, macros, datasethyperlink h
 where macros.dataset_presenter_id = dsp.dataset_presenter_id
