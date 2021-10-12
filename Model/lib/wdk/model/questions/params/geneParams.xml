@@ -5329,7 +5329,7 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
       <flatVocabParam name="domain_database"
                      queryRef="GeneVQ.DomainDatabase"
                      prompt="Domain Database"
-                     quote="false"
+                     quote="true"
                      multiPick="false">
         <help>
              Choose one of the constituent databases of InterPro.
@@ -8700,24 +8700,18 @@ and s.name = 'PCF vs BSF'
             <column name="display"/>
 
             <sql>
-                  select * from (
-                  SELECT dr.primary_identifier AS internal,
-                       dr.primary_identifier || ' : ' || dr.secondary_identifier AS term,
-                       dr.primary_identifier || ' : ' || dr.secondary_identifier || ' ' ||
-                       dr.remark AS display,
-                       count(*) as ct_hits
-                       from dots.domainfeature df, dots.dbrefaafeature draf,sres.dbref dr,
-                       sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
-                       where df.aa_feature_id = draf.aa_feature_id
-                       and dr.db_ref_id = draf.db_ref_id
-                       and dr.external_database_release_id = edr.external_database_release_id
-                       AND edr.external_database_id = ed.external_database_id
-                       AND edr.external_database_release_id IN ($$domain_database$$)
-                       AND dr.primary_identifier IS NOT NULL
-                       group by dr.primary_identifier,dr.secondary_identifier,dr.remark
-                       UNION
-                       SELECT 'N/A', 'N/A', 'N/A', 0.5 FROM dual)
-                  order by ct_hits desc
+              select interpro_primary_id as internal
+                   , interpro_primary_id || ' : ' || interpro_secondary_id AS term
+                   , interpro_primary_id || ' : ' || interpro_secondary_id || ' ' ||
+                     interpro_desc as display
+                   , count(*) as ct_hits
+              from apidbtuning.interproresults 
+              where interpro_db_name = $$domain_database$$
+              and interpro_primary_id is not null
+              group by interpro_primary_id, interpro_secondary_id, interpro_desc
+              UNION                                                                                                                                                                               
+              SELECT 'N/A', 'N/A', 'N/A', 0.5 FROM dual
+              order by ct_hits desc 
             </sql>
         </sqlQuery>
 
@@ -8807,27 +8801,10 @@ and s.name = 'PCF vs BSF'
             <column name="internal"/>
             <column name="term"/>
             <sql>
-              select database as term, listagg(external_database_release_id, ',') within group (order by external_database_release_id) as internal
-              from (SELECT distinct upper(CASE WHEN (upper(ed.name)like 'INTERPRO%') 
-                           THEN 'INTERPRO'  ELSE ed.name END ) AS database,
-                           edr.external_database_release_id
-                    FROM sres.DbRef dr, 
-                         sres.ExternalDatabaseRelease edr,
-                         sres.ExternalDatabase ed
-                    WHERE dr.external_database_release_id = edr.external_database_release_id
-                    AND edr.external_database_id = ed.external_database_id
-                    AND dr.db_ref_id IN (select draf.db_ref_id
-                                         from dots.dbrefaafeature draf
-                                            , dots.domainfeature df
-                                            , sres.externaldatabase d
-                                            , sres.externaldatabaserelease r
-                                         where draf.aa_feature_id = df.aa_feature_id
-                                         and df.external_database_release_id = r.external_database_release_id
-                                         and r.external_database_id = d.external_database_id
-                                         and d.name IN('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP', 'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF', 'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan', 'PFAM', 'SMART', 'CDD', 'PANTHER')
-                                        )
-                    )
-              group by database
+              select distinct interpro_db_name as internal
+                            , case when upper(interpro_db_name) like 'INTERPRO%'
+                                   THEN 'INTERPRO'  ELSE interpro_db_name END  AS term
+               from apidbtuning.interproresults
               order by term
             </sql>
         </sqlQuery>
