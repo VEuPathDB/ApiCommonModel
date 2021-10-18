@@ -2035,6 +2035,30 @@ tablespace indx
     <externalDependency name="sres.OntologyTerm"/>
     <externalDependency name="sres.Taxon"/>
     <externalDependency name="sres.TaxonName"/>
+    <ancillaryTable name="TranscriptUniprot"/>
+    <sql>
+      <![CDATA[
+      create table &prefixTranscriptUniprot&1 nologging as
+      select na_feature_id,
+             substr(listagg (uniprot_id, ',') within group (order by uniprot_id), 1, 240) as uniprot_id,
+             substr(listagg (uniprot_id, '+or+') within group (order by uniprot_id), 1, 240) as uniprot_id_internal
+      from (select distinct t.na_feature_id, dr.primary_identifier as uniprot_id
+            from sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+                 sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+            where dr.db_ref_id = x.DB_REF_ID
+            and (x.na_feature_id = t.na_feature_id -- 
+                 or x.na_feature_id = t.parent_id)
+            and dr.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            and (d.name like '%uniprot_dbxref_RSRC'
+                 or d.name like '%dbxref_gene2Uniprot_RSRC'
+                 or d.name = 'Links to Uniprot Genes'
+                 or d.name like '%_dbxref_uniprot_linkout_RSRC'
+                 or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
+           )
+      group by na_feature_id
+      ]]>
+    </sql>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixTranscriptAttributes&1 NOLOGGING AS
@@ -2139,6 +2163,7 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      dots.Transcript t, sres.ExternalDatabase ed, sres.OntologyTerm tso,
      &prefixGeneLocations gloc,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
+     &prefixTranscriptUniprot&1 transcript_uniprot,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
       GROUP BY rna_feature_id) transcript_exons,
@@ -2160,10 +2185,9 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
                AS comment_string
       FROM dots.NaFeatureComment nfc
       GROUP BY nfc.na_feature_id) cmnt,
-     (select distinct gf.source_id, 1 as is_deprecated
-      from dots.GeneFeature gf, dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
-      where gf.na_feature_id = drnf.na_feature_id
-        and drnf.db_ref_id = dr.db_ref_id
+     (select distinct drnf.na_feature_id as gene_na_feature_id, 1 as is_deprecated
+      from dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+      where drnf.db_ref_id = dr.db_ref_id
         and dr.external_database_release_id = edr.external_database_release_id
         and edr.external_database_id = ed.external_database_id
         and ed.name = 'gassAWB_dbxref_gene2Deprecated_RSRC') deprecated,
@@ -2182,11 +2206,10 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
              where  gene_source_id is not null
              group by gene_source_id 
       ) ) tothtssnps, 
-     (  select gf.na_feature_id, sg.name
-        from dots.genefeature gf, dots.SequenceSequenceGroup ssg, 
+     (  select ssg.sequence_id as gene_na_feature_id, sg.name
+        from dots.SequenceSequenceGroup ssg, 
              dots.SequenceGroup sg, core.TableInfo ti
-        where gf.na_feature_id = ssg.sequence_id
-          and ssg.sequence_group_id = sg.sequence_group_id
+        where ssg.sequence_group_id = sg.sequence_group_id
           and ssg.source_table_id = ti.table_id
           and ti.name = 'GeneFeature'
        ) orthologs,
@@ -2217,25 +2240,6 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
       from apidb.GeneFeatureName
       group by na_feature_id
      ) any_name,
-     (select na_feature_id,
-             substr(listagg (uniprot_id, ',') within group (order by uniprot_id), 1, 240) as uniprot_id,
-             substr(listagg (uniprot_id, '+or+') within group (order by uniprot_id), 1, 240) as uniprot_id_internal
-      from (select distinct t.na_feature_id, dr.primary_identifier as uniprot_id
-            from sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
-                 sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
-            where dr.db_ref_id = x.DB_REF_ID
-            and (x.na_feature_id = t.na_feature_id -- 
-                 or x.na_feature_id = t.parent_id)
-            and dr.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and (d.name like '%uniprot_dbxref_RSRC'
-                 or d.name like '%dbxref_gene2Uniprot_RSRC'
-                 or d.name = 'Links to Uniprot Genes'
-                 or d.name like '%_dbxref_uniprot_linkout_RSRC'
-                 or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
-           )
-      group by na_feature_id
-    )  transcript_uniprot,
      (select dbna.na_feature_id,
              substr(listagg (db.primary_identifier, ',') within group (order by db.primary_identifier), 1, 300) as entrez_id
       from sres.ExternalDatabaseRelease edr, sres.DbRef db,
@@ -2296,9 +2300,9 @@ WHERE gf.source_id = gene.source_id
   AND edr.external_database_id = ed.external_database_id
   AND gf.na_feature_id = transcripts.parent_id(+)
   AND gf.na_feature_id = exons.parent_id(+)
-  AND gf.na_feature_id = orthologs.na_feature_id(+)
+  AND gf.na_feature_id = orthologs.gene_na_feature_id(+)
   AND gf.na_feature_id = cmnt.na_feature_id(+)
-  AND gf.source_id = deprecated.source_id(+)
+  AND gf.na_feature_id = deprecated.gene_na_feature_id(+)
   AND gf.na_feature_id = gi.na_feature_id(+)
   AND gf.source_id = tothtssnps.gene_source_id(+)
   AND gsa.taxon_id = ts.taxon_id(+)
