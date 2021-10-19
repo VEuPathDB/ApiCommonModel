@@ -9123,7 +9123,6 @@ tablespace indx
   </tuningTable>
 
 
-<!--
   <tuningTable name="TranscriptGenomicSequence" prefixEnabled="true">
     <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
     </comment>
@@ -9134,18 +9133,49 @@ tablespace indx
       <![CDATA[
       create table &prefixTranscriptGenomicSequence&1 nologging as
       select ta.gene_source_id, ta.source_id, ta.project_id,
+             nas.sequence as genomic_sequence,
+             length(nas.sequence) as genomic_sequence_length
+      from &prefixTranscriptAttributes ta, dots.NaSequence nas
+      where 1 = 0
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+  DECLARE
+    rowcount number := 0;
+    commit_frequency number := 1000;
+  BEGIN
+  FOR rowset IN (
+    select ta.gene_source_id, ta.source_id, ta.project_id, ta.na_sequence_id,
+           tl.na_feature_id, tl.start_min, tl.end_max, tl.is_reversed
+    from &prefixTranscriptAttributes ta, apidb.TranscriptLocation tl
+    where ta.na_feature_id = tl.na_feature_id
+      and tl.is_top_level = 1
+    order by ta.na_sequence_id
+    )
+  LOOP
+   insert into &prefixTranscriptGenomicSequence&1
+          (gene_source_id, source_id, project_id,
+             genomic_sequence, genomic_sequence_length)
+      select rowset.gene_source_id, rowset.source_id, rowset.project_id,
              case
-               when tl.is_reversed = 1
+               when rowset.is_reversed = 1
                 then apidb.reverse_complement_clob(
-                        substr(nas.sequence, tl.start_min, tl.end_max - tl.start_min + 1)
+                        substr(nas.sequence, rowset.start_min, rowset.end_max - rowset.start_min + 1)
                        )
-                else substr(nas.sequence, tl.start_min, tl.end_max - tl.start_min + 1)
+                else substr(nas.sequence, rowset.start_min, rowset.end_max - rowset.start_min + 1)
              end as genomic_sequence,
-             tl.end_max - tl.start_min + 1 as genomic_sequence_length
-      from TranscriptAttributes ta, dots.NaSequence nas, apidb.TranscriptLocation tl
-      where nas.na_sequence_id = ta.na_sequence_id
-        and ta.na_feature_id = tl.na_feature_id
-        and tl.is_top_level = 1
+             rowset.end_max - rowset.start_min + 1 as genomic_sequence_length
+      from dots.NaSequence nas
+      where nas.na_sequence_id = rowset.na_sequence_id;
+
+    rowcount := rowcount + 1;
+    IF mod(rowcount, commit_frequency) = 0
+      THEN
+         commit;
+    END IF;  
+   END LOOP;
+  END;
       ]]>
     </sql>
     <sql>
@@ -9156,6 +9186,6 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
--->
+
 
 </tuningConfig>
