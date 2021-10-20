@@ -2035,6 +2035,30 @@ tablespace indx
     <externalDependency name="sres.OntologyTerm"/>
     <externalDependency name="sres.Taxon"/>
     <externalDependency name="sres.TaxonName"/>
+    <ancillaryTable name="TranscriptUniprot"/>
+    <sql>
+      <![CDATA[
+      create table &prefixTranscriptUniprot&1 nologging as
+      select na_feature_id,
+             substr(listagg (uniprot_id, ',') within group (order by uniprot_id), 1, 240) as uniprot_id,
+             substr(listagg (uniprot_id, '+or+') within group (order by uniprot_id), 1, 240) as uniprot_id_internal
+      from (select distinct t.na_feature_id, dr.primary_identifier as uniprot_id
+            from sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+                 sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+            where dr.db_ref_id = x.DB_REF_ID
+            and (x.na_feature_id = t.na_feature_id -- 
+                 or x.na_feature_id = t.parent_id)
+            and dr.external_database_release_id = r.external_database_release_id
+            and r.external_database_id = d.external_database_id
+            and (d.name like '%uniprot_dbxref_RSRC'
+                 or d.name like '%dbxref_gene2Uniprot_RSRC'
+                 or d.name = 'Links to Uniprot Genes'
+                 or d.name like '%_dbxref_uniprot_linkout_RSRC'
+                 or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
+           )
+      group by na_feature_id
+      ]]>
+    </sql>
     <sql>
       <![CDATA[
 CREATE TABLE &prefixTranscriptAttributes&1 NOLOGGING AS
@@ -2072,7 +2096,6 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        nvl(tothtssnps.hts_synonymous_snps,0) AS gene_hts_synonymous_snps,
        nvl(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio, 
        SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
-       uniprot.gene_uniprot_id, uniprot.gene_uniprot_id_internal,
        transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
        entrez_table.entrez_id AS gene_entrez_id,
        gloc.locations AS gene_locations,
@@ -2140,6 +2163,7 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      dots.Transcript t, sres.ExternalDatabase ed, sres.OntologyTerm tso,
      &prefixGeneLocations gloc,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
+     &prefixTranscriptUniprot&1 transcript_uniprot,
      (SELECT rna_feature_id, count(*) as exon_count
       FROM dots.RnaFeatureExon 
       GROUP BY rna_feature_id) transcript_exons,
@@ -2161,10 +2185,9 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
                AS comment_string
       FROM dots.NaFeatureComment nfc
       GROUP BY nfc.na_feature_id) cmnt,
-     (select distinct gf.source_id, 1 as is_deprecated
-      from dots.GeneFeature gf, dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
-      where gf.na_feature_id = drnf.na_feature_id
-        and drnf.db_ref_id = dr.db_ref_id
+     (select distinct drnf.na_feature_id as gene_na_feature_id, 1 as is_deprecated
+      from dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+      where drnf.db_ref_id = dr.db_ref_id
         and dr.external_database_release_id = edr.external_database_release_id
         and edr.external_database_id = ed.external_database_id
         and ed.name = 'gassAWB_dbxref_gene2Deprecated_RSRC') deprecated,
@@ -2183,11 +2206,10 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
              where  gene_source_id is not null
              group by gene_source_id 
       ) ) tothtssnps, 
-     (  select gf.na_feature_id, sg.name
-        from dots.genefeature gf, dots.SequenceSequenceGroup ssg, 
+     (  select ssg.sequence_id as gene_na_feature_id, sg.name
+        from dots.SequenceSequenceGroup ssg, 
              dots.SequenceGroup sg, core.TableInfo ti
-        where gf.na_feature_id = ssg.sequence_id
-          and ssg.sequence_group_id = sg.sequence_group_id
+        where ssg.sequence_group_id = sg.sequence_group_id
           and ssg.source_table_id = ti.table_id
           and ti.name = 'GeneFeature'
        ) orthologs,
@@ -2218,46 +2240,6 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
       from apidb.GeneFeatureName
       group by na_feature_id
      ) any_name,
-     (select g.source_id,
-             substr(listagg (dr.primary_identifier, ',') within group (order by dr.primary_identifier), 1, 240) as gene_uniprot_id,
-             substr(listagg (dr.PRIMARY_IDENTIFIER, '+or+') within group (order by dr.primary_identifier), 1, 240) as gene_uniprot_id_internal
-      from sres.dbref dr
-         , dots.dbrefnafeature x
-         , dots.transcript t
-         , sres.externaldatabase d
-         , sres.externaldatabaserelease r
-         , dots.genefeature g
-      where dr.db_ref_id = x.DB_REF_ID
-      and x.NA_FEATURE_ID = t.NA_FEATURE_ID
-      and dr.EXTERNAL_DATABASE_RELEASE_ID = r.EXTERNAL_DATABASE_RELEASE_ID
-      and r.EXTERNAL_DATABASE_ID = d.EXTERNAL_DATABASE_ID
-      and t.parent_id = g.na_feature_id
-      and (d.name like '%uniprot_dbxref_RSRC'
-         or d.name like '%dbxref_gene2Uniprot_RSRC'
-         or d.name = 'Links to Uniprot Genes'
-         or d.name like '%_dbxref_uniprot_linkout_RSRC'
-         or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
-      group by g.source_id
-     ) uniprot,
-     (select na_feature_id,
-             substr(listagg (uniprot_id, ',') within group (order by uniprot_id), 1, 240) as uniprot_id,
-             substr(listagg (uniprot_id, '+or+') within group (order by uniprot_id), 1, 240) as uniprot_id_internal
-      from (select distinct t.na_feature_id, dr.primary_identifier as uniprot_id
-            from sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
-                 sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
-            where dr.db_ref_id = x.DB_REF_ID
-            and (x.na_feature_id = t.na_feature_id -- 
-                 or x.na_feature_id = t.parent_id)
-            and dr.external_database_release_id = r.external_database_release_id
-            and r.external_database_id = d.external_database_id
-            and (d.name like '%uniprot_dbxref_RSRC'
-                 or d.name like '%dbxref_gene2Uniprot_RSRC'
-                 or d.name = 'Links to Uniprot Genes'
-                 or d.name like '%_dbxref_uniprot_linkout_RSRC'
-                 or d.name like '%_dbxref_uniprot_from_annotation_RSRC')
-           )
-      group by na_feature_id
-    )  transcript_uniprot,
      (select dbna.na_feature_id,
              substr(listagg (db.primary_identifier, ',') within group (order by db.primary_identifier), 1, 300) as entrez_id
       from sres.ExternalDatabaseRelease edr, sres.DbRef db,
@@ -2318,9 +2300,9 @@ WHERE gf.source_id = gene.source_id
   AND edr.external_database_id = ed.external_database_id
   AND gf.na_feature_id = transcripts.parent_id(+)
   AND gf.na_feature_id = exons.parent_id(+)
-  AND gf.na_feature_id = orthologs.na_feature_id(+)
+  AND gf.na_feature_id = orthologs.gene_na_feature_id(+)
   AND gf.na_feature_id = cmnt.na_feature_id(+)
-  AND gf.source_id = deprecated.source_id(+)
+  AND gf.na_feature_id = deprecated.gene_na_feature_id(+)
   AND gf.na_feature_id = gi.na_feature_id(+)
   AND gf.source_id = tothtssnps.gene_source_id(+)
   AND gsa.taxon_id = ts.taxon_id(+)
@@ -2334,7 +2316,6 @@ WHERE gf.source_id = gene.source_id
   AND gf.na_feature_id = any_name.na_feature_id(+)
   AND (gf.is_predicted != 1 OR gf.is_predicted is null)
   AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
-  AND gf.source_id = uniprot.source_id(+)
   AND t.na_feature_id = transcript_uniprot.na_feature_id(+)
   AND gf.na_feature_id = entrez_table.na_feature_id(+)
   AND gf.na_feature_id = olds.na_feature_id(+)
@@ -9140,5 +9121,71 @@ tablespace indx
       ]]>
     </sql>
   </tuningTable>
+
+
+  <tuningTable name="TranscriptGenomicSequence" prefixEnabled="true">
+    <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.TranscriptLocation"/>
+    <externalDependency name="dots.NaSequence"/>
+    <sql>
+      <![CDATA[
+      create table &prefixTranscriptGenomicSequence&1 nologging as
+      select ta.gene_source_id, ta.source_id, ta.project_id,
+             nas.sequence as genomic_sequence,
+             length(nas.sequence) as genomic_sequence_length
+      from &prefixTranscriptAttributes ta, dots.NaSequence nas
+      where 1 = 0
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+  DECLARE
+    rowcount number := 0;
+    commit_frequency number := 1000;
+  BEGIN
+  FOR rowset IN (
+    select ta.gene_source_id, ta.source_id, ta.project_id, ta.na_sequence_id,
+           tl.na_feature_id, tl.start_min, tl.end_max, tl.is_reversed
+    from &prefixTranscriptAttributes ta, apidb.TranscriptLocation tl
+    where ta.na_feature_id = tl.na_feature_id
+      and tl.is_top_level = 1
+    order by ta.na_sequence_id
+    )
+  LOOP
+   insert into &prefixTranscriptGenomicSequence&1
+          (gene_source_id, source_id, project_id,
+             genomic_sequence, genomic_sequence_length)
+      select rowset.gene_source_id, rowset.source_id, rowset.project_id,
+             case
+               when rowset.is_reversed = 1
+                then apidb.reverse_complement_clob(
+                        substr(nas.sequence, rowset.start_min, rowset.end_max - rowset.start_min + 1)
+                       )
+                else substr(nas.sequence, rowset.start_min, rowset.end_max - rowset.start_min + 1)
+             end as genomic_sequence,
+             rowset.end_max - rowset.start_min + 1 as genomic_sequence_length
+      from dots.NaSequence nas
+      where nas.na_sequence_id = rowset.na_sequence_id;
+
+    rowcount := rowcount + 1;
+    IF mod(rowcount, commit_frequency) = 0
+      THEN
+         commit;
+    END IF;  
+   END LOOP;
+  END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index txgseq_idx&1
+          ON &prefixTranscriptGenomicSequence&1(source_id, gene_source_id, project_id)
+          tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
 
 </tuningConfig>
