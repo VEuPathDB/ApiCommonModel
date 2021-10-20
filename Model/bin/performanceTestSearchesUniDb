@@ -39,38 +39,34 @@ if ($help) {
 }
 
 my $organismsFromFile;
-$organismsFromFile = &readOrganisms($orgOption) if ($orgOption =~ /\//);
+$organismsFromFile = &readOrganismsFromFile($orgOption) if ($orgOption =~ /\//);
 my $logFh = &printIntro($logFile,$site1,$site2,$numRecords,$orgOption,$organismsFromFile,$searchFile,$reportFile);
 my $searches = &getSearches($searchFile,$site1,$site2,$logFh);
 
 foreach my $search (keys %$searches) {
 
-#    next unless ($search eq 'GenesWithUserComments');
+#    next unless ($search eq 'GenesByRNASeqpberANKA_Janse_Hoeijmakers_five_stages_ebi_rnaSeq_RSRCPercentile');
+    my $jbrowse = $searches->{$search}->{recordType} eq "jbrowse" ? 1 : 0;
 
     my $siteNum = 1;
-    &setNumRecords(\$searches->{$search}->{url},$numRecords);
+    &setNumRecords(\$searches->{$search}->{url},$numRecords) if (! $jbrowse);
     my $time = localtime();
     print $logFh "$time\n";
     print $logFh "SEARCH: $search\n";
     print $logFh "ORIGINAL URL: $searches->{$search}->{url}\n";
-    my $originalAllOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},&getSite($searches->{$search}->{url}),$logFh);
+#    my $originalAllOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},&getSite($searches->{$search}->{url}),$logFh);
     foreach my $site (($site1,$site2)) {
 	print $logFh "TESTING URL $siteNum: $site\n";
 	my $changedSearchUrl = &changeSearchSite($searches->{$search}->{url},$site);
-	my $allOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},$site,$logFh);
-	if ($searches->{$search}->{results}->{&cleanDotSlash($site)}->{searchParamsExist} == 0) {
-	    print $logFh "ERROR:  The searchParams could not be obtained. The search may not be available on this site but let's try the search.\n";
-	} else {
-	    $changedSearchUrl = &changeOrgParam($changedSearchUrl,$searches->{$search},$site,&getSite($searches->{$search}->{url}),$logFh);
-	    $changedSearchUrl = &changeOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$orgOption,$organismsFromFile,$allOrganisms,$logFh);
-	}
+	$changedSearchUrl = &updateOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$orgOption,$organismsFromFile,$logFh) if (! $jbrowse);
+
 	if ($changedSearchUrl) {
 	    print $logFh "Changed URL for testing: $changedSearchUrl\n";
 	    $searches->{$search}->{results}->{&cleanDotSlash($site)}->{testPerformed} = 1;
 	    &testSearch($searches->{$search},$site,$changedSearchUrl,$numRecords,$headerText,$logFh);
 	} else {
-	    $searches->{$search}->{results}->{&cleanDotSlash($site)}->{notes} = "search skipped. organisms can't be selected";
-	    print $logFh "Skipping test because unable to choose organisms for this search.\n";
+	    $searches->{$search}->{results}->{&cleanDotSlash($site)}->{notes} = "search skipped. error with organisms or url";
+	    print $logFh "Skipping test because error with organisms or with url.\n";
 	}
 	$siteNum++;
     }
@@ -166,6 +162,8 @@ sub getShortName {
     my ($name) = @_;
     if ($name =~ /searches\/([^\/]+)\/reports/) {
 	return $1;
+    } elsif ($name =~ /jbrowse.*feature=([^&]+)&/i) {
+	return "jbrowse_".$1;
     } else {
 	die "Cannot find short name: $name]n";;
     }
@@ -175,6 +173,8 @@ sub getRecordType {
     my ($name) = @_;
     if ($name =~ /record-types\/([^\/]+)\//) {
 	return $1;
+    } elsif ($name =~ /jbrowse/i) {
+	return "jbrowse";
     } else {
 	die "Cannot find record type: $name\n";
     }
@@ -190,6 +190,19 @@ sub getOrganismParam {
 #	print $logFh "$url\nThere is no organism parameter for this search.\n";
 	return;
     }
+}
+
+sub updateOrganisms {
+    my ($url,$search,$searchRef,$site,$orgOption,$organismsFromFile,$logFh) = @_;
+
+    my $allOrganisms = &getAllOrganismsForSearch($search,$searchRef,$site,$logFh);
+    if ($searchRef->{results}->{&cleanDotSlash($site)}->{searchParamsExist} == 0) {
+	print $logFh "ERROR:  The searchParams could not be obtained. The search may not be available on this site but let's try the search.\n";
+    } else {
+	$url = &changeOrgParam($url,$searchRef,$site,&getSite($searchRef->{url}),$logFh);
+	$url = &changeOrganisms($url,$search,$searchRef,$site,$orgOption,$organismsFromFile,$allOrganisms,$logFh);
+    }
+    return $url;
 }
 
 sub getAllOrganismsForSearch {
@@ -342,7 +355,7 @@ sub orgsPossibleInSearch {
     return \@present;
 }
 
-sub readOrganisms {
+sub readOrganismsFromFile {
     my ($organismFile) = @_;
     my @names;
     open(IN, $organismFile) or die "cannot open organism file '$organismFile': $!";
@@ -389,28 +402,59 @@ sub getSite {
 
 sub getCount {
     my ($searchResults,$numRecords,$logFh) = @_;
-    my %unique;
-    foreach my $record (@{$searchResults->{records}}) {
-	$unique{$record->{attributes}->{primary_key}}=1;
-    }
-    my $count = keys %unique;
-    if (! exists $searchResults->{meta}->{totalCount}) {
-	print $logFh "ERROR:  The totalCount variable does not exist in the json. There are $count unique primary keys.\n";
-	print $logFh "        Here is the json:\n";
-	print $logFh Dumper $searchResults;
-	return $count;
-    }
-    if ($numRecords == -1 && $searchResults->{meta}->{totalCount} != $count) {
-	print $logFh "ERROR:  The desired number of records is set to -1 (to obtain all records), but the totalCount variable in the json ($searchResults->{meta}->{totalCount}) does not match the number of displayed unique primary keys ($count)\n";
-    } elsif ($searchResults->{meta}->{totalCount} <= $numRecords && $count != $searchResults->{meta}->{totalCount}) {
-	print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is less than or equal to the desired number of records ($numRecords), but does not match the number of displayed unique primary keys ($count)\n";
-    } elsif ($searchResults->{meta}->{totalCount} > $numRecords && $count != $numRecords) {
-	print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is greater than the desired number of records ($numRecords), but the desired number of records ($numRecords) does not match the number of displayed unique primary keys ($count)\n";
+
+    if (exists $searchResults->{features}) {   #jbrowse service
+	my $numFeatures = 0;
+	my $numSubFeatures = 0;
+	foreach my $feature (@{$searchResults->{features}}) {
+#	    print $logFh "feature: ".$feature->{name}."\n";
+	    $numFeatures++;
+	    $numSubFeatures += &getNumSubFeatures($feature);
+	}
+	print $logFh "For this JBrowse service call, there are $numFeatures features and $numSubFeatures sub-features.\n";
+	return $numFeatures;
+    } elsif (exists $searchResults->{records}) {   #regular search
+	my %unique;
+	foreach my $record (@{$searchResults->{records}}) {
+	    $unique{$record->{attributes}->{primary_key}}=1;
+	}
+
+	my $count = keys %unique;
+	if (! exists $searchResults->{meta}->{totalCount}) {
+	    print $logFh "ERROR:  The totalCount variable does not exist in the json. There are $count unique primary keys.\n";
+	    print $logFh "        Here is the json:\n";
+	    print $logFh Dumper $searchResults;
+	    return $count;
+	} 
+	if ($numRecords == -1 && $searchResults->{meta}->{totalCount} != $count) {
+	    print $logFh "ERROR:  The desired number of records is set to -1 (to obtain all records), but the totalCount variable in the json ($searchResults->{meta}->{totalCount}) does not match the number of displayed unique primary keys ($count)\n";
+	} elsif ($searchResults->{meta}->{totalCount} <= $numRecords && $count != $searchResults->{meta}->{totalCount}) {
+	    print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is less than or equal to the desired number of records ($numRecords), but does not match the number of displayed unique primary keys ($count)\n";
+	} elsif ($searchResults->{meta}->{totalCount} > $numRecords && $count != $numRecords) {
+	    print $logFh "ERROR:  The totalCount variable in the json ($searchResults->{meta}->{totalCount}) is greater than the desired number of records ($numRecords), but the desired number of records ($numRecords) does not match the number of displayed unique primary keys ($count)\n";
+	} else {
+	    print $logFh "There are $searchResults->{meta}->{totalCount} total results and $count displayed unique primary keys.\n";
+	}
+	return $searchResults->{meta}->{totalCount};
     } else {
-	print $logFh "There are $searchResults->{meta}->{totalCount} total results and $count displayed unique primary keys.\n";
+	print $logFh "ERROR:  Could not find records or features to count.\n"; 
+	return 0;
     }
-    return $searchResults->{meta}->{totalCount};
 }
+
+sub getNumSubFeatures {
+    my ($featureRef) = @_;
+    my $num = 0;
+    foreach my $subfeature (@{$featureRef->{subfeatures}}) {
+#	print $logFh "     subfeature: ".$subfeature->{feature_id}."\n"; 
+	$num++;
+	$num += &getNumSubFeatures($subfeature);
+    }
+    return $num;
+}
+
+
+
 
 sub printReportFile {
     my ($site1,$site2,$searches,$logFh,$reportFile) = @_;
