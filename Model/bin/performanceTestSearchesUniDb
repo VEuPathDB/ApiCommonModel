@@ -49,16 +49,16 @@ foreach my $search (keys %$searches) {
     my $jbrowse = $searches->{$search}->{recordType} eq "jbrowse" ? 1 : 0;
 
     my $siteNum = 1;
-    &setNumRecords(\$searches->{$search}->{url},$numRecords) if (! $jbrowse);
+    &setNumRecords(\$searches->{$search}->{url},$numRecords) if ($jbrowse== 0);
     my $time = localtime();
     print $logFh "$time\n";
     print $logFh "SEARCH: $search\n";
     print $logFh "ORIGINAL URL: $searches->{$search}->{url}\n";
-#    my $originalAllOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},&getSite($searches->{$search}->{url}),$logFh);
+    my $originalAllOrganisms = &getAllOrganismsForSearch($search,$searches->{$search},&getSite($searches->{$search}->{url}),$logFh) if ($jbrowse== 0);
     foreach my $site (($site1,$site2)) {
 	print $logFh "TESTING URL $siteNum: $site\n";
 	my $changedSearchUrl = &changeSearchSite($searches->{$search}->{url},$site);
-	$changedSearchUrl = &updateOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$orgOption,$organismsFromFile,$logFh) if (! $jbrowse);
+	$changedSearchUrl = &updateOrganisms($changedSearchUrl,$search,$searches->{$search},$site,$orgOption,$organismsFromFile,$logFh) if ($jbrowse==0);
 
 	if ($changedSearchUrl) {
 	    print $logFh "Changed URL for testing: $changedSearchUrl\n";
@@ -115,13 +115,16 @@ sub getSearches {
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{orgParam} = "-";
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{orgParamType} = "-";
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{searchParamsExist} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{vocabSeconds} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{vocabStart} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{vocabEnd} = 0;
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numOrgsToTest} = 0;
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numOrgsTested} = 0;
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{testPerformed} = 0;
 		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{numResults} = 0;
-		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{seconds} = 0;
-		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{start} = 0;
-		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{end} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{searchSeconds} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{searchStart} = 0;
+		$searches{$shortName}->{results}->{&cleanDotSlash($site)}->{searchEnd} = 0;
 	    }
 	}   
     }
@@ -210,7 +213,13 @@ sub getAllOrganismsForSearch {
     my $html = "https://".$site."/service/record-types/".$searchRef->{recordType}."/searches/".$search;
     my $cmd = "curl --max-time 600 --silent --show-error -g '$html'";
     print $logFh "Getting organisms for search: $cmd\n";
+    my $startTime = Time::HiRes::time();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{vocabStart} = localtime();
     my $json = eval {&runCmd($cmd)};
+    my $endTime = Time::HiRes::time();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{vocabEnd} = localtime();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{vocabSeconds} = sprintf("%.2f",($endTime - $startTime));
+    print $logFh "Number of seconds: $searchRef->{results}->{&cleanDotSlash($site)}->{vocabSeconds}\n";
     if (! $json) {
 	print $logFh "ERROR: Unable to access url to obtain all organisms for search.\n";
 	return;
@@ -262,12 +271,12 @@ sub testSearch {
     my $header = $headerText eq "n" ? "" : "--header '$headerText' ";
     my $cmd = "curl ".$header."--max-time 600 --silent --show-error -g '$changedSearchUrl'";
     my $startTime = Time::HiRes::time();
-    $searchRef->{results}->{&cleanDotSlash($site)}->{start} = localtime();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{searchStart} = localtime();
     my $json = eval {&runCmd($cmd)};
     my $endTime = Time::HiRes::time();
-    $searchRef->{results}->{&cleanDotSlash($site)}->{end} = localtime();
-    $searchRef->{results}->{&cleanDotSlash($site)}->{seconds} = sprintf("%.2f",($endTime - $startTime));
-    print $logFh "Number of seconds: $searchRef->{results}->{&cleanDotSlash($site)}->{seconds}\n";
+    $searchRef->{results}->{&cleanDotSlash($site)}->{searchEnd} = localtime();
+    $searchRef->{results}->{&cleanDotSlash($site)}->{searchSeconds} = sprintf("%.2f",($endTime - $startTime));
+    print $logFh "Number of seconds: $searchRef->{results}->{&cleanDotSlash($site)}->{searchSeconds}\n";
     if (! $json) {
 	print $logFh "ERROR:  Unable to access url.\n";
 	$searchRef->{results}->{&cleanDotSlash($site)}->{notes} = "url_no_access";
@@ -466,7 +475,7 @@ sub printReportFile {
     print $reportFh "\t".$site1;
     print $reportFh "\t" x 11;
     print $reportFh $site2."\n";
-    my @fields = ("testPerformed","searchParamsExist","orgParam","orgParamType","numAllOrgs","numOrgsToTest","numOrgsTested","numResults","seconds","start","end");
+    my @fields = ("testPerformed","searchParamsExist","vocabSeconds","vocabStart","vocabEnd","orgParam","orgParamType","numAllOrgs","numOrgsToTest","numOrgsTested","numResults","searchSeconds","searchStart","searchEnd");
     print $reportFh "searchName\t".join("\t",@fields)."\t".join("\t",@fields)."\n";
     foreach my $search (keys %{$searches}) {
 	print $reportFh $search."\t";
