@@ -6,7 +6,6 @@ public class PopBio extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
-      injectTemplate("datasetCategory");
   }
 
   @Override
