@@ -10,7 +10,7 @@ public class PhenotypeTb extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotypeTbrucei"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
   }
 
