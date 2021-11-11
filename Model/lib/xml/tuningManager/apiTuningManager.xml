@@ -511,6 +511,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <externalDependency name="dots.dbrefaafeature"/>
     <externalDependency name="dots.aalocation"/>
     <ancillaryTable name="InterproDomainDatabase"/>
+    <ancillaryTable name="InterproDomainAccession"/>
     <sql>
       <![CDATA[
         create table &prefixInterproResults&1 nologging as
@@ -573,15 +574,6 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
       ]]>
     </sql>
 
-    <!-- domain Accession param query --> 
-    <sql>
-      <![CDATA[
-        create index ips_p1ix&1 on &prefixInterproResults&1 (interpro_db_name, interpro_primary_id, interpro_secondary_id, interpro_desc)
-        tablespace indx
-      ]]>
-    </sql>
-
-
     <!-- Gene Record Page.  (May help some with download;  we are not prioritizing speed for download) -->
     <sql>
       <![CDATA[
@@ -598,6 +590,32 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                from &prefixInterproResults&1
       ]]>
     </sql>
+
+    <!-- domain accession param query --> 
+    <sql>
+      <![CDATA[
+        create table &prefixInterproDomainAccession&1 nologging as
+        select interpro_db_name, 
+               interpro_primary_id,
+               interpro_secondary_id,
+               interpro_desc,
+               count(*) as ct_hits
+        from apidbtuning.&prefixinterproresults&1
+         where interpro_primary_id is not null                                                                                                                                                    
+         group by interpro_db_name, interpro_primary_id, interpro_secondary_id, interpro_desc
+      ]]>
+    </sql>
+
+    <!-- domain Accession param query --> 
+    <sql>
+      <![CDATA[
+        create index ips_p1ix&1 on &prefixInterproDomainAccession&1 (interpro_db_name, interpro_primary_id, interpro_secondary_id, interpro_desc, ct_hits)
+        tablespace indx
+      ]]>
+    </sql>
+
+
+
   </tuningTable>
 
 
@@ -5757,11 +5775,13 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                                 'genus', 'species')
                          then 'major rank'
                        when taxon_id
-                            in (select taxon_id
-                                from sres.TaxonName
-                                where name
-                                      in ('Amoebozoa', 'Coccidia', 'Conoidasida',
-                                          'end of hardwired taxon list'))
+                            in ( select taxon_id 
+                                 from sres.taxon 
+                                 where ncbi_tax_id in (44542 -- gambiae species complex
+                                                     , 554915 -- Amoebozoa
+                                                     , 5796 -- Coccidia
+                                                     , 1280412 -- Conoidasida 
+                                ))
                          then 'hardwired'
                        else 'none'
                      end as display_reason
