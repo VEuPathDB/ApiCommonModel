@@ -12,7 +12,7 @@ public class QuantProteomicsGT1Palmitome extends QuantitativeProteomicsDirectCom
   @Override
   public void addModelReferences() {
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirectPValuetgonME49_quantitativeMassSpec_Foe_Lipidome_Palmitoylome_RSRC"); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirectPValuetgonGT1_quantitativeMassSpec_Foe_Lipidome_Palmitoylome_RSRC"); 
 
 
 
