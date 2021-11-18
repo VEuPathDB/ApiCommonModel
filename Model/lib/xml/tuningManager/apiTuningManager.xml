@@ -4648,8 +4648,6 @@ create table GeneIdLoc (
     <sql>
   <![CDATA[
 declare
-  ctrows number := 1;
-  commit_after number := 200;  
   iter_length number := 4999;
   i_first_pos number := 1;
   i_last_pos number := i_first_pos + iter_length;
@@ -4657,7 +4655,7 @@ declare
   FOR idlist IN (
     select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
     select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
-      from apidb.intronjunction ij,  genomicseqattributes gs
+      from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
     ) order by organism
@@ -4668,7 +4666,7 @@ declare
   i_last_pos := i_first_pos + iter_length;
   WHILE i_first_pos < idlist.length
   LOOP
-  FOR pf_row in (
+  insert into core NOLOGGING (
    select junc.intron_junction_id, nm.exp_name, nm.external_database_name,
               nm.sample_name, junc.protocol_app_node_id, junc.na_sequence_id,
               junc.segment_start, junc.segment_end, junc.unique_reads,
@@ -4729,30 +4727,11 @@ declare
                 nm.switch_strands, junc.is_reversed, isrm.multiplier, nm.strand,
                 annot.feature_type, nm.include_unified_junctions,
                 nm.show_intron_junctions, ms.read_length, ms.mapped_reads
-  )
-  LOOP
-   insert into core nologging
-        (INTRON_JUNCTION_ID, EXP_NAME, EXTERNAL_DATABASE_NAME, SAMPLE_NAME, PROTOCOL_APP_NODE_ID, NA_SEQUENCE_ID, SEGMENT_START, SEGMENT_END, 
-        UNIQUE_READS, ISRPM, NU_READS, VALUE, SWITCH_STRANDS, STRAND, EXP_RATIO, ISRPM_EXP_RATIO, AVG_COVERAGE, ISR_COVERAGE_RATIO, IS_REVERSED, 
-        MATCHES_GENE_STRAND, GENE_SOURCE_ID, ANNOTATED_INTRON, INCLUDE_UNIFIED_JUNCTIONS, SHOW_INTRON_JUNCTIONS) 
-        values
-        (pf_row.INTRON_JUNCTION_ID, pf_row.EXP_NAME, pf_row.EXTERNAL_DATABASE_NAME, pf_row.SAMPLE_NAME, pf_row.PROTOCOL_APP_NODE_ID, pf_row.NA_SEQUENCE_ID, 
-        pf_row.SEGMENT_START, pf_row.SEGMENT_END, pf_row.UNIQUE_READS, pf_row.ISRPM, pf_row.NU_READS, pf_row.VALUE, pf_row.SWITCH_STRANDS, pf_row.STRAND, 
-        pf_row.EXP_RATIO, pf_row.ISRPM_EXP_RATIO, pf_row.AVG_COVERAGE, pf_row.ISR_COVERAGE_RATIO, pf_row.IS_REVERSED, pf_row.MATCHES_GENE_STRAND, 
-        pf_row.GENE_SOURCE_ID, pf_row.ANNOTATED_INTRON, pf_row.INCLUDE_UNIFIED_JUNCTIONS, pf_row.SHOW_INTRON_JUNCTIONS);
-    IF ctrows >= commit_after
-      THEN
-         COMMIT;  
-         ctrows := 1;  
-      ELSE  
-         ctrows := ctrows + 1;  
-    END IF;  
-    END LOOP;
+  );
     commit;
-    ctrows := 1;  
     i_first_pos := i_last_pos + 1;
     i_last_pos := i_first_pos + iter_length;
-   END LOOP;
+    END LOOP;
    END LOOP;
 END;
       ]]>
@@ -4889,8 +4868,6 @@ create table ratiostats (
     <sql>
       <![CDATA[
 declare
-  ctrows number := 1;
-  commit_after number := 200;  
   iter_length number := 4999;
   i_first_pos number := 1;
   i_last_pos number := i_first_pos + iter_length;
@@ -4898,7 +4875,7 @@ declare
   FOR idlist IN (
     select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
     select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
-      from apidb.intronjunction ij,  genomicseqattributes gs
+      from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
     ) order by organism
@@ -4909,7 +4886,7 @@ declare
   i_last_pos := i_first_pos + iter_length;
   WHILE i_first_pos < idlist.length
   LOOP
-  FOR pf_row in (
+  insert into IntronJunctionTmp NOLOGGING (
     select intron_junction_id, protocol_app_node_id, exp_name, external_database_name,
        sample_name, na_sequence_id, segment_start, segment_end, is_reversed, strand,
        unique_reads, isrpm, nu_reads, round(value, 4) as exp_value,
@@ -5038,32 +5015,8 @@ AND introns.protocol_app_node_id = isrmult.protocol_app_node_id
 AND introns.protocol_app_node_id = isrmultcons.protocol_app_node_id
 AND introns.protocol_app_node_id = nr.protocol_app_node_id
 AND ms.junctions_pan_id = introns.protocol_app_node_id)
-  )
-  LOOP
-   insert into intronjunctiontmp nologging
-        (INTRON_JUNCTION_ID, PROTOCOL_APP_NODE_ID, EXP_NAME, EXTERNAL_DATABASE_NAME, SAMPLE_NAME, NA_SEQUENCE_ID, SEGMENT_START, SEGMENT_END, IS_REVERSED, 
-        STRAND, UNIQUE_READS, ISRPM, NU_READS, EXP_VALUE, INTRON_EXP_RATIO, ISRPM_EXP_RATIO, AVG_COVERAGE, ISR_COVERAGE_RATIO, NORM_ISR_COVERAGE_RATIO, 
-        PERCENT_MAX_SAMPLE, PERCENT_MAX_TOTAL, TOTAL_RATIO, MATCHES_GENE_STRAND, ANNOTATED_INTRON, IS_CONTAINED, GENE_SOURCE_ID, INTRON_SAMPLE_AVGEXP_RATIO, 
-        ISRPM_SAMPLE_AVGEXP_RATIO, INTRON_SAMPLE_MEDEXP_RATIO, ISRPM_SAMPLE_MEDEXP_RATIO, ISR_AVGCOVERAGE_RATIO, NORM_ISR_AVGCOVERAGE_RATIO, 
-        SAMPLE_TOTAL_JUNCTIONS, SAMPLE_MULTIPLIER, CONSISTENT_MULTIPLIER, TOTAL_CONS_MULT_RATIO, INCLUDE_UNIFIED_JUNCTIONS, SHOW_INTRON_JUNCTIONS) 
-        values
-        (pf_row.INTRON_JUNCTION_ID, pf_row.PROTOCOL_APP_NODE_ID, pf_row.EXP_NAME, pf_row.EXTERNAL_DATABASE_NAME, pf_row.SAMPLE_NAME, pf_row.NA_SEQUENCE_ID, 
-        pf_row.SEGMENT_START, pf_row.SEGMENT_END, pf_row.IS_REVERSED, pf_row.STRAND, pf_row.UNIQUE_READS, pf_row.ISRPM, pf_row.NU_READS, pf_row.EXP_VALUE, 
-        pf_row.INTRON_EXP_RATIO, pf_row.ISRPM_EXP_RATIO, pf_row.AVG_COVERAGE, pf_row.ISR_COVERAGE_RATIO, pf_row.NORM_ISR_COVERAGE_RATIO, pf_row.PERCENT_MAX_SAMPLE, 
-        pf_row.PERCENT_MAX_TOTAL, pf_row.TOTAL_RATIO, pf_row.MATCHES_GENE_STRAND, pf_row.ANNOTATED_INTRON, pf_row.IS_CONTAINED, pf_row.GENE_SOURCE_ID, 
-        pf_row.INTRON_SAMPLE_AVGEXP_RATIO, pf_row.ISRPM_SAMPLE_AVGEXP_RATIO, pf_row.INTRON_SAMPLE_MEDEXP_RATIO, pf_row.ISRPM_SAMPLE_MEDEXP_RATIO, 
-        pf_row.ISR_AVGCOVERAGE_RATIO, pf_row.NORM_ISR_AVGCOVERAGE_RATIO, pf_row.SAMPLE_TOTAL_JUNCTIONS, pf_row.SAMPLE_MULTIPLIER, pf_row.CONSISTENT_MULTIPLIER, 
-        pf_row.TOTAL_CONS_MULT_RATIO, pf_row.INCLUDE_UNIFIED_JUNCTIONS, pf_row.SHOW_INTRON_JUNCTIONS);
-    IF ctrows >= commit_after
-      THEN
-         COMMIT;  
-         ctrows := 1;  
-      ELSE  
-         ctrows := ctrows + 1;  
-    END IF;  
-    END LOOP;
+  );
     commit;
-    ctrows := 1;  
     i_first_pos := i_last_pos + 1;
     i_last_pos := i_first_pos + iter_length;
    END LOOP;
@@ -5178,8 +5131,6 @@ create table GeneIntronJunction&1 (
     <sql>
       <![CDATA[
 declare
-  ctrows number := 1;
-  commit_after number := 200;  
   iter_length number := 4999;
   i_first_pos number := 1;
   i_last_pos number := i_first_pos + iter_length;
@@ -5187,7 +5138,7 @@ declare
   FOR idlist IN (
     select na_sequence_id, length, organism, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
     select gs.na_sequence_id, gs.length, gs.organism, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
-      from apidb.intronjunction ij,  genomicseqattributes gs
+      from apidb.intronjunction ij,  apidbtuning.genomicseqattributes gs
       where gs.na_sequence_id = ij.na_sequence_id 
       group by gs.na_sequence_id, gs.length, gs.organism
     ) order by organism
@@ -5198,21 +5149,9 @@ declare
   i_last_pos := i_first_pos + iter_length;
   WHILE i_first_pos < idlist.length
   LOOP
-  FOR pf_row in (
-with inwindow as (
-SELECT ij.*
-FROM IntronJunctionTmp ij, valid v
-  WHERE  v.na_sequence_id = idlist.na_sequence_id
-     and v.segment_start between i_first_pos and i_last_pos
-     AND v.segment_start = ij.segment_start
-     AND v.segment_end = ij.segment_end
-     AND v.na_sequence_id = ij.na_sequence_id 
-     AND v.is_reversed = ij.is_reversed
-     AND ij.unique_reads >= 1
-     AND ij.sample_multiplier <= 40
-     AND ij.total_cons_mult_ratio >= 0.001
-     AND ij.include_unified_junctions = 'true'
-   )
+  insert into GeneIntronJunction&1 NOLOGGING (
+SELECT *
+from (
 SELECT *
 from (
 SELECT feature_id, type, source, 'Score=' || sum(total_reads)  as name, parent_id, startm, end, contained, matches_gene_strand,
@@ -5253,7 +5192,18 @@ SELECT segment_start || '_' || segment_end || '_' || is_reversed as feature_id,
          avg(intron_sample_avgexp_ratio) as avg_exp_ratio_exp,gt.max_gene_isrpm,
          max(CASE WHEN iw.is_contained = 1 THEN isr_coverage_ratio ELSE isr_avgcoverage_ratio END) as best_sample_ratio,
          min(iw.sample_multiplier) as sample_multiplier, max(total_cons_mult_ratio) as total_cons_mult_ratio
-FROM inwindow iw, genesample gs, genetotal gt
+FROM ( SELECT ij.*
+FROM apidbtuning.IntronJunctionTmp ij, valid v
+  WHERE  v.na_sequence_id = idlist.na_sequence_id
+     and v.segment_start between i_first_pos and i_last_pos
+     AND v.segment_start = ij.segment_start
+     AND v.segment_end = ij.segment_end
+     AND v.na_sequence_id = ij.na_sequence_id 
+     AND v.is_reversed = ij.is_reversed
+     AND ij.unique_reads >= 1
+     AND ij.sample_multiplier <= 40
+     AND ij.total_cons_mult_ratio >= 0.001
+     AND ij.include_unified_junctions = 'true') iw, genesample gs, genetotal gt
 WHERE iw.gene_source_id = gt.gene_source_id(+)
 AND iw.protocol_app_node_id = gs.protocol_app_node_id(+)
 and iw.gene_source_id = gs.gene_source_id(+)
@@ -5261,29 +5211,12 @@ GROUP BY gt.gene_source_id, iw.na_sequence_id, iw.segment_start, iw.segment_end,
 iw.is_reversed,iw.annotated_intron)
 GROUP BY gene_source_id,feature_id, type, source, parent_id,startm, end, contained,max_gene_isrpm,matches_gene_strand, is_reversed,annotated_intron
   HAVING sum(total_reads) >= 1 ) 
-WHERE (contained = 1
+WHERE ((contained = 1
        AND percent_max >= 0.001 )
-OR contained = 0
-order by startm 
-  )
-  LOOP
-   insert into GeneIntronJunction&1 nologging
-        (FEATURE_ID, TYPE, SOURCE, NAME, PARENT_ID, STARTM, END, CONTAINED, MATCHES_GENE_STRAND, PERCENT_MAX, SCORE, SCORE_EXP_RATIO, 
-        ANNOTATED_INTRON, MIN_SAMPLE_MULTIPLIER, MAX_TOTAL_CONS_MULT_RATIO, ATTS) 
-        values
-        (pf_row.FEATURE_ID, pf_row.TYPE, pf_row.SOURCE, pf_row.NAME, pf_row.PARENT_ID, pf_row.STARTM, pf_row.END, pf_row.CONTAINED, 
-        pf_row.MATCHES_GENE_STRAND, pf_row.PERCENT_MAX, pf_row.SCORE, pf_row.SCORE_EXP_RATIO, pf_row.ANNOTATED_INTRON, 
-        pf_row.MIN_SAMPLE_MULTIPLIER, pf_row.MAX_TOTAL_CONS_MULT_RATIO, pf_row.ATTS);
-    IF ctrows >= commit_after
-      THEN
-         COMMIT;  
-         ctrows := 1;  
-      ELSE  
-         ctrows := ctrows + 1;  
-    END IF;  
-    END LOOP;
+OR contained = 0)
+order by startm )
+  );
     commit;
-    ctrows := 1;  
     i_first_pos := i_last_pos + 1;
     i_last_pos := i_first_pos + iter_length;
    END LOOP;
