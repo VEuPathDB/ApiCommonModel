@@ -4200,32 +4200,33 @@ tablespace indx
     <externalDependency name="dots.Est"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="sres.Taxon"/>
+    <intermediateTable name="TaxonOfInterest"/>
     <sql>
       <![CDATA[
-create table &prefixTaxonSpecies&1 nologging as
+        create table &prefixTaxonOfInterest nologging as
+          select taxon_id
+          from &prefixGenomicSeqAttributes
+        union
+          select ns.taxon_id
+          from dots.NaSequence ns, dots.Est
+          where est.na_sequence_id = ns.na_sequence_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+  create table &prefixTaxonSpecies&1 nologging as
   -- recursively walk taxon tree to find ancestor with rank "species"
-  select taxon_id, species_taxon_id
-  from (select connect_by_root child.taxon_id as taxon_id, parent.taxon_id as species_taxon_id, parent.rank
-        from sres.Taxon child, sres.Taxon parent
-        where child.parent_id = parent.taxon_id
-        start with child.taxon_id
-                   in (  select taxon_id
-                         from &prefixGenomicSeqAttributes
-                       union
-                         select ns.taxon_id
-                         from dots.NaSequence ns, dots.Est
-                         where est.na_sequence_id = ns.na_sequence_id
-                      )
-        connect by parent.taxon_id = prior parent.parent_id
-                   and prior parent.rank != 'species')
+  select taxon_id, ancestor_taxon_id as species_taxon_id
+  from (
+          select connect_by_root taxon_id as taxon_id,
+                 taxon_id as ancestor_taxon_id, rank
+          from sres.Taxon
+          start with taxon_id
+                     in (select taxon_id from TaxonOfInterest)
+          connect by taxon_id = prior parent_id
+                     and prior rank != 'species'
+       )
   where rank = 'species'
-union
-  -- special case: for taxa that are species, map taxon ID to itself
-  select taxon_id, taxon_id as species_taxon_id
-  from sres.Taxon
-  where rank = 'species'
-  and taxon_id in (select taxon_id
-                       from &prefixGenomicSeqAttributes)
       ]]>
     </sql>
   </tuningTable>
