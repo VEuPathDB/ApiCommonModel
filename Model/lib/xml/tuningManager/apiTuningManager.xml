@@ -5231,6 +5231,424 @@ END;
     </sql>
   </tuningTable>
 
+  <tuningTable name="JunExpGIJ">
+    <comment>
+      Statistics for each intron junction sample
+    </comment>
+    <externalDependency name="study.Characteristic"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <externalDependency name="apidb.IntronJunction"/>
+    <internalDependency name="PANIO"/>
+
+    <sql>
+      <![CDATA[
+create table JunExpGIJ&1  NOLOGGING as
+select ij.junctions_pan_id, 
+max(ij.expression_pan_id) keep (dense_rank first order by ij.avg_value desc) as exp_pan_id, 
+max(ij.sample_name) keep (dense_rank first order by ij.avg_value desc) as sample_name, 
+CASE WHEN max(ij.exp_name) keep (dense_rank first order by ij.avg_value desc) like '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands,
+stats.multiplier
+from (
+select pj.output_pan_id as junctions_pan_id, p.output_pan_id as expression_pan_id, avg(nafe.value) as avg_value,pan.name as exp_name,
+regexp_replace(pan.name, ' \[htseq-union.*', '') as sample_name 
+from panio p, panio pj, results.nafeatureexpression nafe, study.protocolappnode pan
+where pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
+and pj.input_pan_id = p.input_pan_id
+and p.output_pan_id = pan.protocol_app_node_id
+and pan.name like '%tpm - unique%'
+and p.output_pan_id = nafe.protocol_app_node_id
+group by pj.output_pan_id, p.output_pan_id, pan.name
+order by pj.output_pan_id
+) ij, (select protocol_app_node_id, 'total' as type, count(*) as total_junctions,
+              sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+       from apidb.IntronJunction
+       where unique_reads >= 1
+       group by protocol_app_node_id) stats
+where ij.junctions_pan_id = stats.protocol_app_node_id
+group by ij.junctions_pan_id, stats.multiplier
+order by junctions_pan_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index junexpgij_ix&1 on JunExpGIJ&1(junctions_pan_id,exp_pan_id) tablespace indx
+      ]]>
+    </sql>
+
+  </tuningTable>
+    
+  <tuningTable name="MappingStatsGIJ">
+    <comment>
+      Statistics for each intron junction sample
+    </comment>
+    <externalDependency name="study.characteristic"/>
+    <externalDependency name="sres.ontologyterm"/>
+    <internalDependency name="PANIO"/>
+    <internalDependency name="JunExpGIJ"/>
+    <sql>
+      <![CDATA[
+create table MappingStatsGIJ&1 (
+    junctions_pan_id,
+    read_length,
+    mapped_reads,
+    avg_mapping_coverage,
+    num_replicates,
+    CONSTRAINT mpstats_pk_ix&1 PRIMARY KEY (junctions_pan_id,read_length,mapped_reads,avg_mapping_coverage,num_replicates) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
+              round(avg(number_mapped_reads),1) as mapped_reads,
+              round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
+                as avg_mapping_coverage,
+              count(*) as num_replicates
+       from (select je.junctions_pan_id, to_number(ca.value) as average_read_length,
+                    to_number(cb.value) as number_mapped_reads,
+                    to_number(cc.value) as avg_mapping_coverage
+             from junexpgij je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
+                  PANIO ioa, STUDY.CHARACTERISTIC cb, sres.ontologyterm otb,
+                  STUDY.CHARACTERISTIC cc, sres.ontologyterm otc
+             where je.junctions_pan_id = ioa.output_pan_id
+               and ioa.input_pan_id = ca.protocol_app_node_id
+               and ca.value is not null
+               and ca.QUALIFIER_ID = ota.ONTOLOGY_TERM_ID
+               and ota.source_id = 'EUPATH_0000457'  /* lower(ota.name) = 'average read length' */
+               and ca.protocol_app_node_id = cb.protocol_app_node_id
+               and cb.value is not null
+               and cb.QUALIFIER_ID = otb.ONTOLOGY_TERM_ID
+               and otb.source_id = 'EUPATH_0000456' /* lower(otb.name) = 'number mapped reads' */
+               and ca.protocol_app_node_id = cc.protocol_app_node_id
+               and cc.value is not null
+               and cc.QUALIFIER_ID = otc.ONTOLOGY_TERM_ID
+               and otc.source_id = 'EUPATH_0000454'  /* lower(otc.name) = 'average mapping coverage' */
+               )
+       group by Junctions_Pan_Id
+      ]]>
+    </sql>
+  </tuningTable>
+    
+  <tuningTable name="NameMappingGIJ">
+    <comment>
+      Mapping table of experiment and sample names to junction protocol_app_node_id
+    </comment>
+    <internalDependency name="ExternalDbDatasetPresenter"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="PANIO"/>
+    <internalDependency name="JunExpGIJ"/>
+    <internalDependency name="MappingStatsGIJ"/>
+    <sql>
+      <![CDATA[
+create table NameMappingGIJ&1 NOLOGGING AS
+select distinct edp.dataset_presenter_display_name as exp_name,
+                edp.external_database_name, je.sample_name,
+                je.junctions_pan_id, je.exp_pan_id,
+                to_char(substr(dp.value, 1, 4000)) as switch_strands,
+                to_char(substr(sj.value, 1, 4000)) as show_intron_junctions,
+                to_char(substr(uj.value, 1, 4000)) as include_unified_junctions,
+                ms.read_length, ms.mapped_reads, ms.avg_mapping_coverage, ms.num_replicates
+from junexpgij je, study.StudyLink sl, study.Study s, ExternalDbDatasetPresenter edp,
+     DatasetProperty dp, DatasetProperty sj, DatasetProperty uj, mappingstatsgij ms
+where sl.protocol_app_node_id = je.junctions_pan_id
+  and je.junctions_pan_id = ms.junctions_pan_id
+  and s.study_id = sl.study_id
+  and s.name like '%[junctions]'
+  and s.external_database_release_id = edp.external_database_release_id
+  and dp.dataset_presenter_id = edp.dataset_presenter_id
+  and dp.property = 'switchStrandsProfiles'
+  and sj.dataset_presenter_id = edp.dataset_presenter_id
+  and sj.property = 'showIntronJunctions'
+  and uj.dataset_presenter_id = edp.dataset_presenter_id
+  and uj.property = 'includeInUnifiedJunctions'
+  and (to_char(substr(sj.value, 1, 10)) = 'true' or to_char(substr(uj.value, 1, 10)) = 'true')
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+               create index namemappinggij_ix&1 on NameMappingGIJ&1(junctions_pan_id,exp_pan_id) tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="GeneIntronJunctionNew">
+    <comment>
+      Table collects up single row / intronjunction (identified as all junctions with same start, end and strand).  Statistics are generated including percentages of max intron score and ratios vs expression on an overall level.  
+    </comment>
+    <externalDependency name="apidb.IntronJunction"/>
+    <externalDependency name="dots.NaFeature"/>
+    <externalDependency name="dots.NaSequence"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <ancillaryTable name="GeneIdLocGIJ"/>
+    <intermediateTable name="PanIOgij"/>
+    <intermediateTable name="JunExpGIJtmp"/>
+    <intermediateTable name="annotgij"/>
+    <intermediateTable name="GIJtmp"/>
+
+    <!-- some remedial tables -->
+    <!-- PanIO:  can just generate minimal one with: -->
+    <sql>
+      <![CDATA[
+               create table PanIOgij as
+               select i.protocol_app_id, i.protocol_app_node_id as input_pan_id, o.protocol_app_node_id as output_pan_id 
+               from study.output o, study.input i
+               where o.protocol_app_node_id in (select distinct protocol_app_node_id
+               from study.protocolappnode where name like '%junctions%' or name like '%htseq%')
+               and o.protocol_app_id = i.protocol_app_id
+      ]]>
+    </sql>
+               
+<!-- ancillary table to connect junction data with expression data is used in samples table for record -->
+    <sql>
+      <![CDATA[
+create table junexpgijtmp  NOLOGGING as
+select ij.junctions_pan_id, 
+max(ij.expression_pan_id) keep (dense_rank first order by ij.avg_value desc) as exp_pan_id, 
+max(ij.sample_name) keep (dense_rank first order by ij.avg_value desc) as sample_name, 
+CASE WHEN max(ij.exp_name) keep (dense_rank first order by ij.avg_value desc) like '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands,
+stats.multiplier
+from (
+select pj.output_pan_id as junctions_pan_id, p.output_pan_id as expression_pan_id, avg(nafe.value) as avg_value,pan.name as exp_name,
+regexp_replace(pan.name, ' \[htseq-union.*', '') as sample_name 
+from paniogij p, paniogij pj, results.nafeatureexpression nafe, study.protocolappnode pan
+where pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
+and pj.input_pan_id = p.input_pan_id
+and p.output_pan_id = pan.protocol_app_node_id
+and pan.name like '%tpm - unique%'
+and p.output_pan_id = nafe.protocol_app_node_id
+group by pj.output_pan_id, p.output_pan_id, pan.name
+order by pj.output_pan_id
+) ij, (select protocol_app_node_id, 'total' as type, count(*) as total_junctions,
+              sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
+       from apidb.IntronJunction
+       where unique_reads >= 1
+       group by protocol_app_node_id) stats
+where ij.junctions_pan_id = stats.protocol_app_node_id
+group by ij.junctions_pan_id, stats.multiplier
+order by junctions_pan_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index junexpgijtmp_ix&1 on junexpgijtmp(junctions_pan_id,exp_pan_id) tablespace indx
+      ]]>
+    </sql>
+
+<!-- table with single row per annotated intron -->
+    <sql>
+      <![CDATA[
+create table annotgij (
+    na_sequence_id,
+    start_min,
+    end_max,
+    is_reversed,
+    feature_type,
+    CONSTRAINT annottmp_pk_ix PRIMARY KEY (na_sequence_id,start_min,end_max,is_reversed,feature_type) 
+)
+  ORGANIZATION index
+  nologging
+  as
+   select il.na_sequence_id, il.start_min,il.end_max, il.is_reversed, 'Intron' as feature_type
+   from  apidb.IntronLocation il
+   group by il.na_sequence_id, il.start_min,il.end_max,il.is_reversed
+      ]]>
+    </sql>
+<!-- table mapping gene source ids to their location including strand information -->
+    <sql>
+      <![CDATA[
+create table GeneIdLocGIJ&1 (
+    na_sequence_id      number(10),
+    start_min           number,
+    is_reversed         number,
+    end_max             number,
+    na_feature_id       number(10),
+    source_id           varchar2(100),
+    total_expression    number,
+    CONSTRAINT gnattidloc_pk_ix&1 PRIMARY KEY (na_sequence_id,start_min,is_reversed,end_max,na_feature_id,source_id,total_expression) 
+)
+ORGANIZATION index
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+ BEGIN
+  FOR idlist IN (
+    select distinct na_sequence_id from apidb.intronjunction
+ )
+ LOOP
+  insert into GeneIdLocGIJ&1 nologging (
+  select gf.na_sequence_id,l.start_min,l.is_reversed,l.end_max,gf.na_feature_id,gf.source_id,
+    round(sum(nafe.value),2) as total_expression
+   from  dots.genefeature gf, dots.nalocation l, junexpgijtmp je, results.nafeatureexpression nafe
+   where gf.na_sequence_id = idlist.na_sequence_id
+   and l.na_feature_id = gf.na_feature_id
+   and gf.na_feature_id = nafe.na_feature_id
+   and nafe.protocol_app_node_id = je.exp_pan_id
+   group by gf.na_sequence_id,l.start_min,l.is_reversed,l.end_max,gf.na_feature_id,gf.source_id
+  );
+    commit;
+   END LOOP;
+END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index gnidloc_nafid_ix&1 on GeneIdLocGIJ&1 (na_feature_id) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create table GIJtmp (
+               NA_SEQUENCE_ID               NUMBER(10),    
+               SEQUENCE_SOURCE_ID           VARCHAR2(100),    
+               SEGMENT_START                NUMBER,    
+               SEGMENT_END                  NUMBER,    
+               TOTAL_UNIQUE                 NUMBER,        
+               TOTAL_ISRPM                  NUMBER,        
+               IS_REVERSED                  NUMBER(1),     
+               INTRON_FEATURE_ID            VARCHAR2(200), 
+               MATCHES_GENE_STRAND          NUMBER,        
+               GENE_SOURCE_ID               VARCHAR2(100),  
+               GENE_NA_FEATURE_ID           NUMBER,        
+               ANNOTATED_INTRON             VARCHAR2(10)
+               )
+      ]]>
+    </sql>
+<!-- should add is_contained to this table ... although if gene_source_id is not null then is_contained = 1 -->
+    <sql>
+      <![CDATA[
+declare
+  iter_length number := 4999;
+  i_first_pos number := 1;
+  i_last_pos number := i_first_pos + iter_length;
+ BEGIN
+  FOR idlist IN (
+    select na_sequence_id, length, taxon_id, CASE WHEN step_mult > 500000 THEN 500000 ELSE step_mult END as seq_step_mult from (
+    select gs.na_sequence_id, gs.length, gs.taxon_id, 25000 * (1 + floor(gs.length/count(*))) as step_mult 
+      from apidb.intronjunction ij,  dots.nasequence gs
+      where gs.na_sequence_id = ij.na_sequence_id 
+      group by gs.na_sequence_id, gs.length, gs.taxon_id
+      ) order by taxon_id
+    )
+ LOOP
+  iter_length := idlist.seq_step_mult;
+  i_first_pos := 1;
+  i_last_pos := i_first_pos + iter_length;
+  WHILE i_first_pos < idlist.length
+  LOOP
+  insert into GIJtmp nologging (
+    select junc.*,
+              CASE
+                WHEN max(ga.is_reversed) keep (dense_rank first order by ga.total_expression desc) = junc.is_reversed 
+                  THEN 1
+                  ELSE 0
+              END as matches_gene_strand,
+              CASE
+                WHEN max(ga.source_id) is not null
+                  THEN max(ga.source_id) keep (dense_rank first order by ga.total_expression desc)
+                  ELSE null
+              END as gene_source_id, 
+              CASE
+                WHEN max(ga.na_feature_id) is not null
+                  THEN max(ga.na_feature_id) keep (dense_rank first order by ga.total_expression desc)
+                  ELSE null
+              END as gene_na_feature_id, 
+              decode(ag.feature_type,'Intron','Yes','No') as annotated_intron
+from (
+select ij.na_sequence_id,seq.source_id as sequence_source_id,ij.segment_start,ij.segment_end, 
+sum(ij.unique_reads) as total_unique, round(sum(ij.unique_reads * je.multiplier),2) as total_isrpm,
+ij.is_reversed,seq.source_id || '_' || ij.segment_start || '_' || ij.segment_end || '_' || ij.is_reversed as intron_feature_id
+from apidb.intronjunction ij, junexpgijtmp je, dots.nasequence seq
+where ij.na_sequence_id = idlist.na_sequence_id
+and ij.segment_start between i_first_pos and i_last_pos
+and ij.na_sequence_id = seq.na_sequence_id
+and ij.unique_reads >= 1
+and je.junctions_pan_id = ij.protocol_app_node_id
+and je.multiplier < 20
+group by ij.na_sequence_id,ij.segment_start,ij.segment_end, ij.is_reversed,seq.source_id
+) junc, GeneIdLocGIJ&1 ga, annotgij ag
+where junc.na_sequence_id = ga.na_sequence_id(+)  
+         and junc.segment_start >= ga.start_min(+)
+         and junc.segment_end <= ga.end_max(+)
+         and junc.is_reversed = ga.is_reversed(+)
+         and junc.na_sequence_id = ag.na_sequence_id(+)
+         and junc.segment_start = ag.start_min(+)
+         and junc.segment_end = ag.end_max(+)
+         and junc.is_reversed = ag.is_reversed(+)         
+group by junc.na_sequence_id,junc.sequence_source_id,junc.segment_start,junc.segment_end, junc.is_reversed, junc.intron_feature_id,junc.total_unique, junc.total_isrpm,ag.feature_type
+having (junc.total_unique >= 1 or ag.feature_type = 'Intron')
+  );
+    commit;
+    i_first_pos := i_last_pos + 1;
+    i_last_pos := i_first_pos + iter_length;
+    END LOOP;
+   END LOOP;
+END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index gijtmp_gnscid_ix on gijtmp (gene_source_id) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create table GeneIntronJunctionNew&1 NOLOGGING as
+select junc.*, CASE WHEN maxv.gene_source_id is not null THEN round((junc.total_isrpm / max_isrpm) * 100,2) ELSE null END as percent_max,
+CASE WHEN maxv.gene_source_id is not null THEN 1 ELSE 0 END as contained
+from ( 
+select gene_source_id,max(total_unique) as max_unique, max(total_isrpm) as max_isrpm
+from gijtmp
+where gene_source_id is not null
+group by gene_source_id) maxv, gijtmp junc
+where junc.gene_source_id = maxv.gene_source_id(+) 
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index gijnew_loc_ix&1 on GeneIntronJunctionNew&1 (na_sequence_id,segment_start,segment_end,is_reversed) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index gijnew_gnscid_ix&1 on GeneIntronJunctionNew&1 (intron_feature_id) tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="GeneIntJuncStatsNew">
+    <comment> Stores statistics for annotated introns used for configuring JBrowse tracks based on organism.
+     </comment>
+    <internalDependency name="GeneIntronJunctionNew"/>
+    <sql>
+      <![CDATA[
+create table GeneIntJuncStatsNew&1 nologging as
+with org_tot as (
+select gs.organism, 
+min(gij.total_unique) as min_annot_score, PERCENTILE_cont(0.005) within group (order by gij.total_unique asc) as perc005_annot_score, 
+PERCENTILE_cont(0.01) within group (order by gij.total_unique asc) as perc01_annot_score,
+min(gij.percent_max) as min_annot_percent_max, PERCENTILE_cont(0.0001) within group (order by gij.percent_max asc) as perc0001_annot_percent_max,
+PERCENTILE_cont(0.0005) within group (order by gij.percent_max asc) as perc0005_annot_percent_max,
+floor(max(gij.segment_end - gij.segment_start) * 1.25) as max_intron_length
+from geneintronjunctionnew gij, genomicseqattributes gs
+where gs.na_sequence_id = gij.na_sequence_id
+and gij.annotated_intron = 'Yes'
+group by gs.organism
+)
+select gs.na_sequence_id, gs.source_id, ot.*
+from genomicseqattributes gs, org_tot ot
+where gs.organism = ot.organism
+and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjunction)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index GeneIntJuncStatNew_ix&1 on GeneIntJuncStatsNew&1 (na_sequence_id) tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
 
   <tuningTable name="GeneIntJuncStats">
     <comment> Stores statistics for annotated introns used for configuring JBrowse tracks based on organism.
