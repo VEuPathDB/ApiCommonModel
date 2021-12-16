@@ -4222,7 +4222,7 @@ tablespace indx
                  taxon_id as ancestor_taxon_id, rank
           from sres.Taxon
           start with taxon_id
-                     in (select taxon_id from &prefixTaxonOfInterest)
+                     in (select taxon_id from TaxonOfInterest)
           connect by taxon_id = prior parent_id
                      and prior rank != 'species'
        )
@@ -5239,18 +5239,21 @@ END;
     </sql>
   </tuningTable>
 
-  <tuningTable name="JunExpGIJ">
+  <tuningTable name="NameMappingGIJ">
     <comment>
-      Statistics for each intron junction sample
+      Mapping table of experiment and sample names to junction protocol_app_node_id
     </comment>
-    <externalDependency name="study.Characteristic"/>
-    <externalDependency name="sres.OntologyTerm"/>
-    <externalDependency name="apidb.IntronJunction"/>
+    <externalDependency name="study.Study"/>
+    <externalDependency name="study.StudyLink"/>
+    <internalDependency name="ExternalDbDatasetPresenter"/>
+    <internalDependency name="DatasetPresenter"/>
     <internalDependency name="PANIO"/>
+    <intermediateTable name="JunExpGIJtmp"/>
+    <intermediateTable name="MappingStatsGIJtmp"/>
 
     <sql>
       <![CDATA[
-create table JunExpGIJ&1  NOLOGGING as
+create table JunExpGIJtmp  NOLOGGING as
 select ij.junctions_pan_id, 
 max(ij.expression_pan_id) keep (dense_rank first order by ij.avg_value desc) as exp_pan_id, 
 max(ij.sample_name) keep (dense_rank first order by ij.avg_value desc) as sample_name, 
@@ -5279,23 +5282,13 @@ order by junctions_pan_id
     </sql>
     <sql>
       <![CDATA[
-               create index junexpgij_ix&1 on JunExpGIJ&1(junctions_pan_id,exp_pan_id) tablespace indx
+               create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id) tablespace indx
       ]]>
     </sql>
 
-  </tuningTable>
-    
-  <tuningTable name="MappingStatsGIJ">
-    <comment>
-      Statistics for each intron junction sample
-    </comment>
-    <externalDependency name="study.characteristic"/>
-    <externalDependency name="sres.ontologyterm"/>
-    <internalDependency name="PANIO"/>
-    <internalDependency name="JunExpGIJ"/>
     <sql>
       <![CDATA[
-create table MappingStatsGIJ&1 (
+create table MappingStatsGIJtmp (
     junctions_pan_id,
     read_length,
     mapped_reads,
@@ -5334,31 +5327,20 @@ create table MappingStatsGIJ&1 (
        group by Junctions_Pan_Id
       ]]>
     </sql>
-  </tuningTable>
     
-  <tuningTable name="NameMappingGIJ">
-    <comment>
-      Mapping table of experiment and sample names to junction protocol_app_node_id
-    </comment>
-    <internalDependency name="ExternalDbDatasetPresenter"/>
-    <externalDependency name="study.Study"/>
-    <externalDependency name="study.StudyLink"/>
-    <internalDependency name="DatasetPresenter"/>
-    <internalDependency name="PANIO"/>
-    <internalDependency name="JunExpGIJ"/>
-    <internalDependency name="MappingStatsGIJ"/>
     <sql>
       <![CDATA[
 create table NameMappingGIJ&1 NOLOGGING AS
 select distinct edp.dataset_presenter_display_name as exp_name,
                 edp.external_database_name, je.sample_name,
                 je.junctions_pan_id, je.exp_pan_id,
-                to_char(substr(dp.value, 1, 4000)) as switch_strands,
+                to_char(substr(dp.value, 1, 4000)) as presenter_switch_strands,
                 to_char(substr(sj.value, 1, 4000)) as show_intron_junctions,
                 to_char(substr(uj.value, 1, 4000)) as include_unified_junctions,
-                ms.read_length, ms.mapped_reads, ms.avg_mapping_coverage, ms.num_replicates
-from junexpgij je, study.StudyLink sl, study.Study s, ExternalDbDatasetPresenter edp,
-     DatasetProperty dp, DatasetProperty sj, DatasetProperty uj, mappingstatsgij ms
+                ms.read_length, ms.mapped_reads, ms.avg_mapping_coverage, ms.num_replicates,
+                je.switch_strands, je.multiplier
+from junexpgijtmp je, study.StudyLink sl, study.Study s, ExternalDbDatasetPresenter edp,
+     DatasetProperty dp, DatasetProperty sj, DatasetProperty uj, mappingstatsgijtmp ms
 where sl.protocol_app_node_id = je.junctions_pan_id
   and je.junctions_pan_id = ms.junctions_pan_id
   and s.study_id = sl.study_id
@@ -5389,9 +5371,9 @@ where sl.protocol_app_node_id = je.junctions_pan_id
     <externalDependency name="dots.NaFeature"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="results.NaFeatureExpression"/>
+    <internalDependency name="NameMappingGIJ"/>
     <ancillaryTable name="GeneIdLocGIJ"/>
     <intermediateTable name="PanIOgij"/>
-    <intermediateTable name="JunExpGIJtmp"/>
     <intermediateTable name="annotgij"/>
     <intermediateTable name="GIJtmp"/>
 
@@ -5409,6 +5391,7 @@ where sl.protocol_app_node_id = je.junctions_pan_id
     </sql>
                
 <!-- ancillary table to connect junction data with expression data is used in samples table for record -->
+<!-- Note: do not need unless move into workflow
     <sql>
       <![CDATA[
 create table junexpgijtmp  NOLOGGING as
@@ -5443,6 +5426,7 @@ order by junctions_pan_id
                create index junexpgijtmp_ix&1 on junexpgijtmp(junctions_pan_id,exp_pan_id) tablespace indx
       ]]>
     </sql>
+-->
 
 <!-- table with single row per annotated intron -->
     <sql>
@@ -5489,7 +5473,7 @@ ORGANIZATION index
   insert into GeneIdLocGIJ&1 nologging (
   select gf.na_sequence_id,l.start_min,l.is_reversed,l.end_max,gf.na_feature_id,gf.source_id,
     round(sum(nafe.value),2) as total_expression
-   from  dots.genefeature gf, dots.nalocation l, junexpgijtmp je, results.nafeatureexpression nafe
+   from  dots.genefeature gf, dots.nalocation l, namemappinggij je, results.nafeatureexpression nafe
    where gf.na_sequence_id = idlist.na_sequence_id
    and l.na_feature_id = gf.na_feature_id
    and gf.na_feature_id = nafe.na_feature_id
@@ -5568,7 +5552,7 @@ from (
 select ij.na_sequence_id,seq.source_id as sequence_source_id,ij.segment_start,ij.segment_end, 
 sum(ij.unique_reads) as total_unique, round(sum(ij.unique_reads * je.multiplier),2) as total_isrpm,
 ij.is_reversed,seq.source_id || '_' || ij.segment_start || '_' || ij.segment_end || '_' || ij.is_reversed as intron_feature_id
-from apidb.intronjunction ij, junexpgijtmp je, dots.nasequence seq
+from apidb.intronjunction ij, namemappinggij je, dots.nasequence seq
 where ij.na_sequence_id = idlist.na_sequence_id
 and ij.segment_start between i_first_pos and i_last_pos
 and ij.na_sequence_id = seq.na_sequence_id
