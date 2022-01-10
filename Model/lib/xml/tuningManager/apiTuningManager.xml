@@ -5391,44 +5391,6 @@ where sl.protocol_app_node_id = je.junctions_pan_id
       ]]>
     </sql>
                
-<!-- ancillary table to connect junction data with expression data is used in samples table for record -->
-<!-- Note: do not need unless move into workflow
-    <sql>
-      <![CDATA[
-create table junexpgijtmp  NOLOGGING as
-select ij.junctions_pan_id, 
-max(ij.expression_pan_id) keep (dense_rank first order by ij.avg_value desc) as exp_pan_id, 
-max(ij.sample_name) keep (dense_rank first order by ij.avg_value desc) as sample_name, 
-CASE WHEN max(ij.exp_name) keep (dense_rank first order by ij.avg_value desc) like '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands,
-stats.multiplier
-from (
-select pj.output_pan_id as junctions_pan_id, p.output_pan_id as expression_pan_id, avg(nafe.value) as avg_value,pan.name as exp_name,
-regexp_replace(pan.name, ' \[htseq-union.*', '') as sample_name 
-from paniogij p, paniogij pj, results.nafeatureexpression nafe, study.protocolappnode pan
-where pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
-and pj.input_pan_id = p.input_pan_id
-and p.output_pan_id = pan.protocol_app_node_id
-and pan.name like '%tpm - unique%'
-and p.output_pan_id = nafe.protocol_app_node_id
-group by pj.output_pan_id, p.output_pan_id, pan.name
-order by pj.output_pan_id
-) ij, (select protocol_app_node_id, 'total' as type, count(*) as total_junctions,
-              sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
-       from apidb.IntronJunction
-       where unique_reads >= 1
-       group by protocol_app_node_id) stats
-where ij.junctions_pan_id = stats.protocol_app_node_id
-group by ij.junctions_pan_id, stats.multiplier
-order by junctions_pan_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-               create index junexpgijtmp_ix&1 on junexpgijtmp(junctions_pan_id,exp_pan_id) tablespace indx
-      ]]>
-    </sql>
--->
-
 <!-- table with single row per annotated intron -->
     <sql>
       <![CDATA[
@@ -5643,6 +5605,52 @@ and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjuncti
     </sql>
   </tuningTable>
 
+  <tuningTable name="GeneMaxIntronGIJ">
+    <comment> Stores maximum values per gene for each sample so percent max intron can be computed for sample table.
+     </comment>
+    <internalDependency name="GeneIntronJunctionNew"/>
+    <internalDependency name="NameMappingGIJ"/>
+    <externalDependency name="apidb.intronjunction"/>
+    <sql>
+      <![CDATA[
+create table GeneMaxIntronGIJ&1 (
+    protocol_app_node_id    number(10),
+    gene_source_id          varchar2(200),
+    max_unique              number,
+    max_isrpm               number
+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+BEGIN
+  FOR idlist IN (
+    select distinct na_sequence_id
+      from GeneIdLocGIJ
+    )
+  LOOP
+  insert into GeneMaxIntronGIJ&1 nologging (
+select j.protocol_app_node_id, ga.source_id, max(unique_reads) as max_unique, max(round(j.unique_reads * mult.multiplier,2)) as max_isrpm
+from apidb.intronjunction j, GeneIdLocGIJ ga, namemappinggij mult
+where ga.na_sequence_id = idlist.na_sequence_id
+and ga.na_sequence_id = j.na_sequence_id
+and ga.start_min <= j.segment_start
+and ga.end_max >= j.segment_end
+and ga.is_reversed = j.is_reversed
+and j.protocol_app_node_id = mult.junctions_pan_id
+group by j.protocol_app_node_id, ga.source_id
+    );
+    commit;
+   END LOOP;
+END;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index GnMxIntGIJ_ix&1 on GeneMaxIntronGIJ&1 (gene_source_id,protocol_app_node_id) tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
   <tuningTable name="GeneIntJuncStats">
     <comment> Stores statistics for annotated introns used for configuring JBrowse tracks based on organism.
      </comment>
