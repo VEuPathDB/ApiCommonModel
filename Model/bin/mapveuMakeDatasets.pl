@@ -12,9 +12,9 @@ my $inputDir = $ARGV[0];
 my $outputDir = $ARGV[1];
 my $releaseNum = $ARGV[2];
 
-my $outputDatasetFile = $outputDir."/datasets.xml";
-my $outputPresenterFile = $outputDir."/presenters.xml";
-my $outputContactsFile = $outputDir."/contacts.xml";
+my $outputDatasetFile = $outputDir."/new_mapveu_datasets.xml";
+my $outputPresenterFile = $outputDir."/new_mapveu_presenters.xml";
+my $outputContactsFile = $outputDir."/new_mapveu_contacts.xml";
 
 my $datasetFolders = &getFolders($inputDir,$releaseNum);
 &makeDatasets($datasetFolders,$outputDatasetFile,$outputPresenterFile,$outputContactsFile,$releaseNum);
