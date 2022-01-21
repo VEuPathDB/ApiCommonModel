@@ -12,7 +12,7 @@ public class PhenotypeHS extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_pfal3D7_phenotype_HS_Response_Phenotype_RSRC");
 
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PhenotypeScoreGraphs");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PhenotypeScoreGraphsHS");
   }
 
   // second column is for documentation
