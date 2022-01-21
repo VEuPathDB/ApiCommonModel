@@ -23,6 +23,16 @@
                     multiPick="false" >
       <help>Choose the Study/Experiment that you are interested in</help>
     </flatVocabParam>
+
+
+    <flatVocabParam name="phenotypeScoreDataset" includeProjects="UniDB,PlasmoDB"
+                    queryRef="GeneVQ.PhenotypeScoreDataset"
+                    prompt="Dataset"
+                    quote="false"
+                    visible="false"
+                    multiPick="false" >
+      <help>Internal Dataset Name</help>
+    </flatVocabParam>
     
 
     <enumParam name="metacycle_protocol" prompt="Protocol" quote="false">
@@ -329,6 +339,8 @@
                     multiPick="false" >
          <help>A Gene List dataset you have imported into your workspace, and that is installed in @PROJECT_ID@ </help>
     </flatVocabParam>
+
+
 
     <enumParam name="RodMalStage"
                prompt="Stage in which phenotype is observed" quote="false">
@@ -4613,16 +4625,21 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
        </filterParam>
 
 
-       <filterParam name="phenoPlasmogemScore" includeProjects="PlasmoDB,UniDB"
-                      metadataQueryRef="GeneVQ.MetadataQuery_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC"
-                      backgroundQueryRef="GeneVQ.MetadataQuery_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC"
-                      ontologyQueryRef="GeneVQ.OntologyQuery_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC"
+
+
+       <filterParam name="phenotypeScoreFileterParam" includeProjects="PlasmoDB,UniDB"
+                      metadataQueryRef="GeneVQ.MetadataQuery_PhenotypeScore"
+                      backgroundQueryRef="GeneVQ.MetadataQuery_PhenotypeScore"
+                      ontologyQueryRef="GeneVQ.OntologyQuery_PhenotypeScore"
                       prompt="Genes"
+                      dependedParamRef="geneParams.phenotypeScoreDataset"
                       trimMetadataTerms="false">
          <help>
               Filter based on phenotype data
          </help>
        </filterParam>
+
+
 
 
         <flatVocabParam name="phenotypeQualifier" includeProjects="TriTrypDB,FungiDB,EuPathDB,UniDB"
@@ -6771,9 +6788,27 @@ from dual
         </sqlQuery>
 
 
+	<sqlQuery name="PhenotypeScoreDataset" doNotTest="1">
+          <column name="term"/>
+          <column name="internal"/>
+          <sql>
+           <![CDATA[ select distinct d.name as term
+                                   , d.name as internal
+                     from sres.externaldatabase d
+                        , sres.externaldatabaserelease r
+                        , study.study s
+                        , study.studylink sl
+                        , apidb.phenotypescore ps
+                     where d.external_database_id = r.external_database_id
+                     and r.external_database_release_id = s.external_database_release_id
+                     and s.study_id = sl.study_id
+                     and sl.protocol_app_node_id = ps.protocol_app_node_id
+                    ]]>
+          </sql>
+        </sqlQuery>
 
-
-	<sqlQuery name="MetadataQuery_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC" doNotTest="1">
+	<sqlQuery name="MetadataQuery_PhenotypeScore" doNotTest="1">
+          <paramRef ref="geneParams.phenotypeScoreDataset"/>
           <column name="ontology_term_name"/>
           <column name="internal"/>
           <column name="number_value"/>
@@ -6781,23 +6816,30 @@ from dual
           <column name="string_value"/>
           <sql>
            <![CDATA[
-select na_feature_id as internal
-     , score_type as ontology_term_name
-     , score as number_value
-     , cast(null as varchar(10)) as string_value
-     , cast(null as number(10)) as date_value
-from APIDB.PHENOTYPEscore
-where ROW_ALG_INVOCATION_ID in 
-  (select distinct s.ROW_ALG_INVOCATION_ID
-   from study.study s, sres.externaldatabase ed, sres.externaldatabaserelease edr
-   where ed.EXTERNAL_DATABASE_ID = edr.EXTERNAL_DATABASE_ID
-   and s.EXTERNAL_DATABASE_RELEASE_ID=edr.EXTERNAL_DATABASE_RELEASE_ID
-   and ed.name='pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC')
+            select ps.na_feature_id as internal
+                 , pan.name as ontology_term_name
+                 , score as number_value
+                 , cast(null as varchar(10)) as string_value
+                 , cast(null as number(10)) as date_value
+            from apidb.PhenotypeScore ps
+               , study.protocolappnode pan
+               , (select distinct sl.protocol_app_node_id
+                  from study.study s
+                     , study.studylink sl
+                     , sres.externaldatabase d
+                     , sres.externaldatabaserelease r
+                  where d.name = '$$phenotypeScoreDataset$$'
+                  and d.external_database_id = r.external_database_id
+                  and r.external_database_release_id = s.external_database_release_id
+                  and s.study_id = sl.study_id) sl   
+            where ps.protocol_app_node_id = pan.protocol_app_node_id
+            and pan.protocol_app_node_id = sl.protocol_app_node_id
            ]]>
             </sql>
         </sqlQuery>
 
-	<sqlQuery name="OntologyQuery_pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC" doNotTest="1">
+	<sqlQuery name="OntologyQuery_PhenotypeScore" doNotTest="1">
+          <paramRef ref="geneParams.phenotypeScoreDataset"/>
           <column name="ontology_term_name"/>
           <column name="parent_ontology_term_name"/>
           <column name="display_name"/>
@@ -6808,25 +6850,32 @@ where ROW_ALG_INVOCATION_ID in
           <column name="is_range"/>
           <sql>
            <![CDATA[
-                    select distinct p.score_type as ontology_term_name
+            select distinct pan.name as ontology_term_name
                     , cast(null as varchar(10)) as parent_ontology_term_name
-                    , initcap(p.score_type) as display_name
-                    , cast(null as varchar(10)) as description
+                    , pan.name  as display_name
+                    , p.score_type  as description 
                     , cast(null as varchar(10)) as units
                     , 'number' as type
                     , 1 as is_range
                     , 1 as precision
-                    from apidb.phenotypescore p
-                    where p.ROW_ALG_INVOCATION_ID in 
-                          (select distinct s.ROW_ALG_INVOCATION_ID
-                           from study.study s, sres.externaldatabase ed, sres.externaldatabaserelease edr
-                           where ed.EXTERNAL_DATABASE_ID = edr.EXTERNAL_DATABASE_ID
-                           and s.EXTERNAL_DATABASE_RELEASE_ID=edr.EXTERNAL_DATABASE_RELEASE_ID
-                           and ed.name='pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC')
+            from apidb.phenotypescore p
+               , study.protocolappnode pan
+               , (select distinct sl.protocol_app_node_id
+                  from study.study s
+                     , study.studylink sl
+                     , sres.externaldatabase d
+                     , sres.externaldatabaserelease r
+                  where d.name = '$$phenotypeScoreDataset$$'
+                  and d.external_database_id = r.external_database_id
+                  and r.external_database_release_id = s.external_database_release_id
+                  and s.study_id = sl.study_id) sl   
+            where p.protocol_app_node_id = pan.protocol_app_node_id
+            and pan.protocol_app_node_id = sl.protocol_app_node_id
 
            ]]>
             </sql>
         </sqlQuery>
+
 
 
 	<sqlQuery name="MetadataQuery_pberANKA_phenotype_Bushnell_functional_profiling_RSRC" doNotTest="1">
