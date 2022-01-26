@@ -23,7 +23,7 @@ public class PhenotypeScore extends DatasetInjector {
   public void addModelReferences() {
 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", getInternalQuestionName());
-
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PhenotypeScore");
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PhenotypeScoreGraphs");
   }
 
