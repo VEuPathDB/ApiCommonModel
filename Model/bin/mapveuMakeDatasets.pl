@@ -43,7 +43,7 @@ sub getFolders {
     my ($inputDir,$releaseNum) = @_;
     $inputDir .= "/rel-$releaseNum/loaded";
     my @datasetFolders;
-    print "Getting folders for each study/dataset:\n";
+    print "\nGetting folders for each study/dataset:\n";
     opendir my $dir, $inputDir or die "Cannot open directory: $!";
     my @files = readdir $dir;
     closedir $dir;
@@ -83,6 +83,7 @@ sub makeDatasets {
 	&printToContactsFile($contactsFh,\%datasetInfo);
     }
     close $datasetFh; close $presenterFh; close $contactsFh;
+    print "\n";
 }
 
 sub processSampleFile {
@@ -163,10 +164,12 @@ sub printToPresenterFile {
     my $sampleFile = $row->{Sample_file};
     my $investFile = $row->{Investigation_file};
 
-    print "\nProcessing $vbId\n    Title: '$title'\n";
+    print "\nProcessing $vbId\n";
+    print "    ALERT: This dataset is already in the presenter-file. You may need to replace or update the previous entry.\n" if (exists $existingDatasets->{$vbId});
     print "    Sample file: $sampleFile\n";
     print "    Investigation file: $investFile\n";
-    print "    ALERT: This dataset is already in the presenter-file. You may need to replace or update the previous entry.\n" if (exists $existingDatasets->{$vbId});
+    print "    Title: '$title'\n";
+
     my $length = length($title);
     print "          Length of title without the <![CDATA[]]>: $length\n";
     my $numPubmed = scalar @{$pubmedIds};
@@ -213,7 +216,7 @@ sub checkPubMedIds {
 	if ($xml && ($xml =~ /(aedes|anopheles|insect|mosquito|plasmodium|ixodes|parasite|vector)/i)) {
 	    print "    ID is likely correct. Found this text: $1\n";
 	} else {
-	    print "    ALERT: Did not find a keyword. Check whether this ID is correct.\n";
+	    print "\n        ALERT: Did not find a keyword. Check whether this ID is correct.\n";
 	}
     }
 }
@@ -228,7 +231,7 @@ sub checkDOIs {
 	if ($text && ($text =~ /(aedes|anopheles|insect|mosquito|plasmodium|ixodes|parasite|vector)/i)) {
 	    print "    ID is likely correct. Found this text: $1\n";
 	} else {
-	    print "    ALERT: Did not find a keyword. Check whether this ID is correct.\n";
+	    print "\n        ALERT: Did not find a keyword. Check whether this ID is correct.\n";
 	}
     }
 }
