@@ -144,7 +144,7 @@ sub printToDatasetFile {
     my ($fh,$row) = @_;
     my $version = $row->{Date};
     my $vbId = $row->{VBP_ID};
-    print $fh "  <dataset class=\"PopBio_temp\">\n";
+    print $fh "  <dataset class=\"PopBio_Study\">\n";
     print $fh "    <prop name=\"version\">${version}</prop>\n";
     print $fh "    <prop name=\"vbId\">${vbId}</prop>\n";
     print $fh "    <prop name=\"projectName\">\$\$projectName\$\$</prop>\n";
@@ -178,7 +178,7 @@ sub printToPresenterFile {
     &checkPubMedIds($pubmedIds);
     push @{$pubmedIds}, "" if ($numPubmed == 0);
 
-    print $fh "  <datasetPresenter name=\"PopBio_temp_${vbId}_RSRC\"\n";
+    print $fh "  <datasetPresenter name=\"PopBio_Study_${vbId}_RSRC\"\n";
     print $fh "                    projectName=\"VectorBase\">\n";
     print $fh "    <displayName><![CDATA[${title}]]></displayName>\n";
     print $fh "    <shortDisplayName><![CDATA[${title}]]></shortDisplayName>\n";
