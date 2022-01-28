@@ -6,22 +6,38 @@ use Data::Dumper;
 use Text::CSV;
 use Encode qw( decode_utf8 );
 
-&usage() unless scalar(@ARGV) == 3;
+&usage() unless scalar(@ARGV) == 4;
 
 my $inputDir = $ARGV[0];
-my $outputDir = $ARGV[1];
-my $releaseNum = $ARGV[2];
+my $presenterFile = $ARGV[1];
+my $outputDir = $ARGV[2];
+my $releaseNum = $ARGV[3];
+
+my $existingDatasets = &getExistingDatasets($presenterFile);
 
 my $outputDatasetFile = $outputDir."/new_mapveu_datasets.xml";
 my $outputPresenterFile = $outputDir."/new_mapveu_presenters.xml";
 my $outputContactsFile = $outputDir."/new_mapveu_contacts.xml";
 
 my $datasetFolders = &getFolders($inputDir,$releaseNum);
-&makeDatasets($datasetFolders,$outputDatasetFile,$outputPresenterFile,$outputContactsFile,$releaseNum);
+&makeDatasets($datasetFolders,$outputDatasetFile,$outputPresenterFile,$outputContactsFile,$releaseNum,$existingDatasets);
 
 exit;
 
 
+sub getExistingDatasets {
+    my ($presenterFile) = @_;
+    my %datasets;
+
+    open(my $inFh,'<', $presenterFile) or die "Unable to read file $presenterFile.\n";
+    while (my $line = <$inFh>) {
+	if ($line =~ /<datasetPresenter name="PopBio_Study_(VBP\d+)_RSRC"/) {
+	    $datasets{$1} = 1;
+	}
+    }
+    close $inFh;
+    return \%datasets;
+}
 
 sub getFolders {
     my ($inputDir,$releaseNum) = @_;
@@ -38,17 +54,19 @@ sub getFolders {
 	} elsif (-e "${inputDir}/${file}/isa-tab/i_investigation.txt") {
 	    print "    ${inputDir}/${file}/isa-tab\n";
 	    push @datasetFolders, "${inputDir}/${file}/isa-tab";
+	} elsif ($file eq "remediations") {
+	    print "    Skipping ${inputDir}/${file}\n";
 	} elsif ($file eq "." || $file eq "..") {
-	    print "    Skipping $file\n";
+	    print "    Skipping ${inputDir}/${file}\n";
 	} else {
-	    die "Could not find i_investigation.txt file within $file";
+	    print "    ERROR: Could not find i_investigation.txt file within ${inputDir}/${file}\n";
 	}
     }
     return \@datasetFolders;
 }
 
 sub makeDatasets {
-    my ($datasetFolders,$outputDatasetFile,$outputPresenterFile,$outputContactsFile,$releaseNum) = @_;
+    my ($datasetFolders,$outputDatasetFile,$outputPresenterFile,$outputContactsFile,$releaseNum,$existingDatasets) = @_;
     print "\nWriting these files:\n";
     print "    ".join("\n    ",($outputDatasetFile,$outputPresenterFile,$outputContactsFile))."\n";
     open(my $datasetFh,'>', $outputDatasetFile) or die "Unable to read file $outputDatasetFile.\n";
@@ -61,7 +79,7 @@ sub makeDatasets {
 	&processSampleFile($folder."/sample-info.txt",\%datasetInfo);
 	&translateToHtml(\%datasetInfo);
 	&printToDatasetFile($datasetFh,\%datasetInfo);
-	&printToPresenterFile($presenterFh,\%datasetInfo);
+	&printToPresenterFile($presenterFh,\%datasetInfo,$existingDatasets);
 	&printToContactsFile($contactsFh,\%datasetInfo);
     }
     close $datasetFh; close $presenterFh; close $contactsFh;
@@ -80,6 +98,7 @@ sub processSampleFile {
     }
     die "There is no VBP Id in this file: $file" if ($vbId eq "");
     $datasetInfo->{VBP_ID} = $vbId;
+    $datasetInfo->{Sample_file} = $file;
 }
 
 sub processInvestigationFile {
@@ -97,6 +116,8 @@ sub processInvestigationFile {
 	    $datasetInfo->{Description} = $array[1];
 	} elsif ($array[0] =~ /"Study PubMed ID"/) {
 	    $datasetInfo->{Pubmed} = &addToArray($datasetInfo->{Pubmed},$array[1]);
+	} elsif ($array[0] =~ /"Study Publication DOI"/) {
+	    $datasetInfo->{Doi} = &addToArray($datasetInfo->{Doi},$array[1]);
 	} elsif ($array[0] =~ /"Study Person Last Name"/) {
 	    $datasetInfo->{Last_Name} = $array[1];
 	} elsif ($array[0] =~ /"Study Person First Name"/) {
@@ -113,7 +134,9 @@ sub processInvestigationFile {
     $datasetInfo->{Full_Name} .= " ".$datasetInfo->{Middle_Initials} if (exists $datasetInfo->{Middle_Initials} && $datasetInfo->{Middle_Initials} ne "");
     $datasetInfo->{Full_Name} .= " ".$datasetInfo->{Last_Name} if (exists $datasetInfo->{Last_Name});
     s/^\s+|\s+$//g foreach (@{$datasetInfo->{Pubmed}});
+    s/^\s+|\s+$//g foreach (@{$datasetInfo->{Doi}});
     close $fh;
+    $datasetInfo->{Investigation_file} = $file;
 }
 
 sub printToDatasetFile {
@@ -128,7 +151,7 @@ sub printToDatasetFile {
 }
 
 sub printToPresenterFile {
-    my ($fh,$row) = @_;
+    my ($fh,$row,$existingDatasets) = @_;
     my $title = $row->{Title};
     my $description = $row->{Description};
     my $vbId = $row->{VBP_ID};
@@ -136,11 +159,21 @@ sub printToPresenterFile {
     my $name = $row->{Full_Name};
     my $contact = $name eq "" ? "unidentified" : "popbio_temp_".$row->{VBP_ID};
     my $pubmedIds = $row->{Pubmed};
-    print "\nProcessing title '$title'\n";
+    my $DOIs = $row->{Doi};
+    my $sampleFile = $row->{Sample_file};
+    my $investFile = $row->{Investigation_file};
+
+    print "\nProcessing $vbId\n    Title: '$title'\n";
+    print "    Sample file: $sampleFile\n";
+    print "    Investigation file: $investFile\n";
+    print "    ALERT: This dataset is already in the presenter-file. You may need to replace or update the previous entry.\n" if (exists $existingDatasets->{$vbId});
     my $length = length($title);
-    print "    Length of title without the <![CDATA[]]>: $length\n";
+    print "          Length of title without the <![CDATA[]]>: $length\n";
+    my $numPubmed = scalar @{$pubmedIds};
+    my $numDOI = scalar @{$DOIs};
+    print "    Num Pubmed Ids: $numPubmed    Num DOIs: $numDOI\n";
     &checkPubMedIds($pubmedIds);
-    push @{$pubmedIds}, "" if (scalar @{$pubmedIds} == 0);
+    push @{$pubmedIds}, "" if ($numPubmed == 0);
 
     print $fh "  <datasetPresenter name=\"PopBio_temp_${vbId}_RSRC\"\n";
     print $fh "                    projectName=\"VectorBase\">\n";
@@ -154,10 +187,17 @@ sub printToPresenterFile {
     print $fh "    <releasePolicy></releasePolicy>\n";
     print $fh "    <history build=\"${build}\"></history>\n";
     print $fh "    <primaryContactId>${contact}</primaryContactId>\n";
-    print $fh "    <link>\n";
-    print $fh "      <text>View Data in MapVEu</text>\n";
-    print $fh "      <url>https://vectorbase.org/popbio-map/web/?projectID=${vbId}</url>\n";
-    print $fh "    </link>\n";
+
+    if ($numDOI > $numPubmed) {
+	&checkDOIs($DOIs);
+	foreach my $id (@{$DOIs}) {
+	    my $url = "https://www.doi.org/" . $id;
+	    print $fh "    <link isPublication=\"yes\">\n";
+	    print $fh "      <text>Publication DOI</text>\n";
+	    print $fh "      <url>$url</url>\n";
+	    print $fh "    </link>\n";
+	}
+    }
     print $fh "    <pubmedId>$_</pubmedId>\n" foreach @{$pubmedIds};
     print $fh "    <templateInjector className=\"org.apidb.apicommon.model.datasetInjector.PopBio\"/>\n";
     print $fh "  </datasetPresenter>\n\n";
@@ -171,10 +211,24 @@ sub checkPubMedIds {
 	my $cmd = "curl --max-time 600 --silent --show-error -g '$url'";
 	my $xml = `$cmd`;
 	if ($xml && ($xml =~ /(aedes|anopheles|insect|mosquito|plasmodium|ixodes|parasite|vector)/i)) {
-	    print "        ID is likely correct. Found this text: $1\n";
+	    print "    ID is likely correct. Found this text: $1\n";
 	} else {
-	    print "        Check whether this ID is correct\n";
-	    print Dumper $xml;
+	    print "    ALERT: Did not find a keyword. Check whether this ID is correct.\n";
+	}
+    }
+}
+
+sub checkDOIs {
+    my ($DOIs) = @_;
+    foreach my $id (@{$DOIs}) {
+	my $url = "https://www.doi.org/" . $id;
+	print "    Getting DOI at '$url'";
+	my $cmd = "curl --max-time 600 --silent --show-error -g -L '$url'";
+	my $text = `$cmd`;
+	if ($text && ($text =~ /(aedes|anopheles|insect|mosquito|plasmodium|ixodes|parasite|vector)/i)) {
+	    print "    ID is likely correct. Found this text: $1\n";
+	} else {
+	    print "    ALERT: Did not find a keyword. Check whether this ID is correct.\n";
 	}
     }
 }
@@ -202,7 +256,7 @@ sub printToContactsFile {
 sub translateToHtml {
     my ($row) = @_;
     foreach my $key (keys %{$row}) {
-	next if ($key eq "Pubmed");
+	next if ($key eq "Pubmed" || $key eq "Doi");
 	my $unicode_string = decode_utf8($row->{$key});
 	$unicode_string =~ s/^\s+|\s+$//g;
 	$unicode_string =~ s/^"|"$//g;
@@ -312,242 +366,21 @@ sub addToArray {
         $arrayRef = [$element];
     }
     return $arrayRef;
-} 
-
-sub uniprotRefDataset {
-    my ($proteomeRef) = @_;
-    my @need = ("core_peripheral","Uniprot_num","species","ncbi_taxon","abbrev","orthomclClade","kingdom");
-    testFields($proteomeRef,\@need);
-    my @text;
-    push @text, "\t<dataset class=\"orthomclUniprotReferenceProteomeFor${$proteomeRef}{core_peripheral}\">";
-    push @text, "\t\t<prop name=\"proteomeId\">${$proteomeRef}{Uniprot_num}</prop>";
-    push @text, "\t\t<prop name=\"organismName\">${$proteomeRef}{species}</prop>";
-    push @text, "\t\t<prop name=\"ncbiTaxonId\">${$proteomeRef}{ncbi_taxon}</prop>";
-    push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-    if (${$proteomeRef}{core_peripheral} eq "Peripheral") {
-	push @text, "\t\t<prop name=\"orthomclClade\">${$proteomeRef}{orthomclClade}</prop>";
-    }
-    push @text, "\t\t<prop name=\"oldAbbrevsList\">${$proteomeRef}{oldAbbrevsList}</prop>";
-    push @text, "\t\t<prop name=\"kingdom\">${$proteomeRef}{kingdom}</prop>";
-    push @text, "\t</dataset>\n";
-    if ( ${$proteomeRef}{makeEcDatasets} =~ /^[Yy]/ ) {
-	push @text, "\t<dataset class=\"orthomclUniprotEcFor${$proteomeRef}{core_peripheral}\">";
-	push @text, "\t\t<prop name=\"ncbiTaxonId\">${$proteomeRef}{ncbi_taxon}</prop>";
-	push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-	push @text, "\t</dataset>\n";
-    }
-    return \@text;
 }
-
-sub vectorbaseDataset {
-    my ($proteomeRef) = @_;
-    my @need = ("core_peripheral","vectorBaseLongName","ncbi_taxon","abbrev","vectorBaseShortName","species","orthomclClade","biomartDataset");
-    testFields($proteomeRef,\@need);
-    my @text;
-    push @text, "\t<dataset class=\"orthomclVectorbaseProteomeFor${$proteomeRef}{core_peripheral}\">";
-    push @text, "\t\t<prop name=\"vectorBaseLongName\">${$proteomeRef}{vectorBaseLongName}</prop>";
-    push @text, "\t\t<prop name=\"vectorBaseShortName\">${$proteomeRef}{vectorBaseShortName}</prop>";
-    push @text, "\t\t<prop name=\"organismName\">${$proteomeRef}{species}</prop>";
-    push @text, "\t\t<prop name=\"ncbiTaxonId\">${$proteomeRef}{ncbi_taxon}</prop>";
-    push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-    if (${$proteomeRef}{core_peripheral} eq "Peripheral") {
-	push @text, "\t\t<prop name=\"orthomclClade\">${$proteomeRef}{orthomclClade}</prop>";
-    }
-    push @text, "\t\t<prop name=\"oldAbbrevsList\">${$proteomeRef}{oldAbbrevsList}</prop>";
-    push @text, "\t</dataset>\n";
-    if ( ${$proteomeRef}{makeEcDatasets} =~ /^[Yy]/ ) {
-	push @text, "\t<dataset class=\"orthomclVectorbaseEcFor${$proteomeRef}{core_peripheral}\">";
-	push @text, "\t\t<prop name=\"ncbiTaxonId\">${$proteomeRef}{ncbi_taxon}</prop>";
-	push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-	push @text, "\t\t<prop name=\"biomartDataset\">${$proteomeRef}{biomartDataset}</prop>";
-	push @text, "\t</dataset>\n";
-    }
-    return \@text;
-}
-
-
-sub eupathDataset {
-    my ($proteomeRef) = @_;
-    my @need = ("core_peripheral","ncbi_taxon","abbrev","species","orthomclClade","eupath_project","eupath_project","webSubDir","ncbiTaxonIdIsAtSpeciesLevel");
-    testFields($proteomeRef,\@need);
-    my @text;
-    push @text, "\t<dataset class=\"orthomclEuPathProteomeFor${$proteomeRef}{core_peripheral}\">";
-    push @text, "\t\t<prop name=\"ncbiTaxonIdIsAtSpeciesLevel\">${$proteomeRef}{ncbiTaxonIdIsAtSpeciesLevel}</prop>";
-    push @text, "\t\t<prop name=\"organismName\">${$proteomeRef}{species}</prop>";
-    push @text, "\t\t<prop name=\"ncbiTaxonId\">${$proteomeRef}{ncbi_taxon}</prop>";
-    push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-    if (${$proteomeRef}{core_peripheral} eq "Peripheral") {
-	push @text, "\t\t<prop name=\"orthomclClade\">${$proteomeRef}{orthomclClade}</prop>";
-    }
-    push @text, "\t\t<prop name=\"oldAbbrevsList\">${$proteomeRef}{oldAbbrevsList}</prop>";
-    push @text, "\t\t<prop name=\"project\">${$proteomeRef}{eupath_project}</prop>";
-    push @text, "\t\t<prop name=\"webSubDir\">${$proteomeRef}{webSubDir}</prop>";   
-    push @text, "\t\t<prop name=\"version\">${$proteomeRef}{eupath_version}</prop>";
-    push @text, "\t</dataset>\n";
-    if ( ${$proteomeRef}{makeEcDatasets} =~ /^[Yy]/ ) {
-	${$proteomeRef}{species} =~ s/ /%20/g;
-	${$proteomeRef}{species} =~ s/#/%23/g;
-	push @text, "\t<dataset class=\"orthomclEuPathEcFor${$proteomeRef}{core_peripheral}\">";
-	push @text, "\t\t<prop name=\"version\">${$proteomeRef}{eupath_version}</prop>";
-	push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-	push @text, "\t\t<prop name=\"project\">${$proteomeRef}{eupath_project}</prop>";
-	push @text, "\t\t<prop name=\"webSubDir\">${$proteomeRef}{webSubDir}</prop>";   
-	push @text, "\t\t<prop name=\"organismName\">${$proteomeRef}{species}</prop>";
-	push @text, "\t</dataset>\n";
-    }
-    return \@text;
-}
-
-sub manualDeliveryDataset {
-    my ($proteomeRef) = @_;
-    my @text;
-    push @text, "\t<dataset class=\"orthomclManualDeliveryProteomeFor${$proteomeRef}{core_peripheral}\">";
-    push @text, "\t\t<prop name=\"species\">${$proteomeRef}{manualDeliveryName}</prop>";
-    push @text, "\t\t<prop name=\"ncbiTaxonId\">${$proteomeRef}{ncbi_taxon}</prop>";
-    push @text, "\t\t<prop name=\"abbrev\">${$proteomeRef}{abbrev}</prop>";
-    if (${$proteomeRef}{core_peripheral} eq "Peripheral") {
-	push @text, "\t\t<prop name=\"orthomclClade\">${$proteomeRef}{orthomclClade}</prop>";
-    }
-    push @text, "\t\t<prop name=\"oldAbbrevsList\">${$proteomeRef}{oldAbbrevsList}</prop>";
-    push @text, "\t\t<prop name=\"project\">${$proteomeRef}{eupath_project}</prop>";
-    push @text, "\t\t<prop name=\"version\">${$proteomeRef}{manualDeliveryVersion}</prop>";
-    push @text, "\t</dataset>\n";
-    return \@text;
-}
-
-sub formatOldAbbrevsList {
-    my ($abbrev,$list) = @_;
-    my @elements = split(",",$list);
-    my @newElements;
-    foreach my $element (@elements) {
-	$element =~ s/ //g;
-	if ($element =~ /^(\S+):(\S+)$/ ) {
-	    my ($version, $organism) = ($1,$2);
-	    next if $version eq '2.2';
-	    next if $organism eq $abbrev;
-	    push @newElements, $element;
-	}
-    }
-    return join(", ",@newElements);
-}
-
-sub getWebSubDirFromProject {
-    my %projectToDir = (
-	MicrosporidiaDB => "micro",
-	ToxoDB => "toxo",
-	AmoebaDB => "amoeba",
-	CryptoDB => "cryptodb",
-	FungiDB => "fungidb",
-	GiardiaDB => "giardiadb",
-	PiroplasmaDB => "piro",
-	PlasmoDB => "plasmo",
-	TrichDB => "trichdb",
-	TriTrypDB => "tritrypdb",
-	HostDB => "hostdb",
-	);
-    return \%projectToDir;
-}
-
-sub getKingdomFromOneLetter {
-    my %oneLetterToKingdom = (
-	A => 'Archaea',
-        B => 'Bacteria',
-        E => 'Eukaryota',
-        V => 'Viruses',
-        O => 'Others');
-    return \%oneLetterToKingdom;
-}
-
-sub getKingdomFromClade {
-    my %cladeToKingdom = (
-        BACT => "Bacteria",
-        FIRM => "Bacteria",
-        PROT => "Bacteria",
-        PROA => "Bacteria",
-        PROB => "Bacteria",
-        PROD => "Bacteria",
-        PROG => "Bacteria",
-        PROE => "Bacteria",
-        OBAC => "Bacteria",
-        ARCH => "Archaea",
-        EURY => "Archaea",
-        CREN => "Archaea",
-        NANO => "Archaea",
-        KORA => "Archaea",
-        EUKA => "Eukaryota",
-        CILI => "Eukaryota",
-        ALVE => "Eukaryota",
-        APIC => "Eukaryota",
-        COCC => "Eukaryota",
-        ACON => "Eukaryota",
-        HAEM => "Eukaryota",
-        PIRO => "Eukaryota",
-        AMOE => "Eukaryota",
-        EUGL => "Eukaryota",
-        VIRI => "Eukaryota",
-        STRE => "Eukaryota",
-        CHLO => "Eukaryota",
-        RHOD => "Eukaryota",
-        CRYP => "Eukaryota",
-        BACI => "Eukaryota",
-        FUNG => "Eukaryota",
-        MICR => "Eukaryota",
-        BASI => "Eukaryota",
-        ASCO => "Eukaryota",
-        MUCO => "Eukaryota",
-        CHYT => "Eukaryota",
-        META => "Eukaryota",
-        PLAT => "Eukaryota",
-        NEMA => "Eukaryota",
-	ARTH => "Eukaryota",
-	CHOR => "Eukaryota",
-	ACTI => "Eukaryota",
-	AVES => "Eukaryota",
-	MAMM => "Eukaryota",
-	TUNI => "Eukaryota",
-	OMET => "Eukaryota",
-	OEUK => "Eukaryota",
-        OOMY => "Eukaryota",
-        );
-    return \%cladeToKingdom;
-}
-
-sub getTaxonToKingdom {
-    my ($downloadUniprotTaxonFile,$oneLetterToKingdom) = @_;
-    if ($downloadUniprotTaxonFile =~ /^[Yy]/) {
-	my $cmd = "wget https://www.uniprot.org/docs/speclist.txt";
-	system($cmd);
-    }
-    my %taxonToKingdom;
-    open(specFH, "speclist.txt") or die "Unable to read file speclist.txt\n";
-    while (<specFH>) {
-	if (/^\w+\s+([ABEVO])\s+(\d+):\s/) {
-	    my ($kingdom, $taxonId) = ($1,$2);
-	    $kingdom = $oneLetterToKingdom->{$kingdom};
-	    $taxonToKingdom{$taxonId} = $kingdom;
-	} 
-    }
-    close specFH;
-    return \%taxonToKingdom;
-}
-
-sub testFields {
-    my ($proteomeRef,$arrayRef) = @_;
-    foreach my $field (@$arrayRef) {
-	if (!exists $proteomeRef->{$field} || $proteomeRef->{$field} eq "") {
-	    die "The expected field '$field' does not exist for abbrev '$proteomeRef->{abbrev}'\n";
-	}
-    }
-}
-
 
 sub usage {
-    print "\nmapveuMakeDatasets <input-dir> <output-dir> <release-number>\n\n";
-    print "For example:  mapveuMakeDatasets /home/skelly/vectorbase/popbio/data/isa-tab . 55\n";
+    print "\nmapveuMakeDatasets <input-dir> <presenter-file> <output-dir> <release-number>\n\n";
+    print "For example:  mapveuMakeDatasets /home/skelly/vectorbase/popbio/data/isa-tab\n";
+    print "      /home/skelly/project_home/ApiCommonPresenters/Model/lib/xml/datasetPresenters/VectorBase.xml\n";
+    print "      . 55\n";
     print "This command will use i_investigation.txt and sample-info.txt files from\n";
-    print "the directory /home/skelly/vectorbase/popbio/data/isa-tab/rel-55/loaded/*/\n";
+    print "the directories /home/skelly/vectorbase/popbio/data/isa-tab/rel-55/loaded/*/\n";
     print " and /home/skelly/vectorbase/popbio/data/isa-tab/rel-55/loaded/*/isa-tab/\n";
-    print "and place three output files into the current directory. The three files will\n";
-    print "be datasets.xml, presenters.xml, and contacts.xml.\n";
+    print "and place three output files into the current directory (indicated by the period).\n";
+    print "The three files will be new_mapveu_datasets.xml, new_mapveu_presenters.xml, and\n";
+    print "new_mapveu_contacts.xml.\n";
+    print "If a study has already been loaded into the presenter-file, the script will still write out the study\n";
+    print "to the new files but will notify you.\n";
+    print "Note that the 'remediations' folder will be skipped.\n";
     exit;
 }
