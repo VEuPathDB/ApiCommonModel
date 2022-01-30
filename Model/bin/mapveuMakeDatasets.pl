@@ -188,7 +188,7 @@ sub printToPresenterFile {
     print $fh "    <caveat></caveat>\n";
     print $fh "    <acknowledgement></acknowledgement>\n";
     print $fh "    <releasePolicy></releasePolicy>\n";
-    print $fh "    <history build=\"${build}\"></history>\n";
+    print $fh "    <history buildNumber=\"${build}\"></history>\n";
     print $fh "    <primaryContactId>${contact}</primaryContactId>\n";
 
     if ($numDOI > $numPubmed) {
