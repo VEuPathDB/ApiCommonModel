@@ -165,7 +165,10 @@ sub printToPresenterFile {
     my $investFile = $row->{Investigation_file};
 
     print "\nProcessing $vbId\n";
-    print "    ALERT: This dataset is already in the presenter-file. You may need to replace or update the previous entry.\n" if (exists $existingDatasets->{$vbId});
+    if (exists $existingDatasets->{$vbId}) {
+	print "    ALERT: This dataset is already in the presenter-file. You may need to replace or update the previous entry.\n";
+	print "           Make sure to also check the contacts.xml file for duplicate contacts.\n";
+    }
     print "    Sample file: $sampleFile\n";
     print "    Investigation file: $investFile\n";
     print "    Title: '$title'\n";
