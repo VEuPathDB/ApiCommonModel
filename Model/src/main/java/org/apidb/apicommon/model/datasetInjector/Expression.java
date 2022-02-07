@@ -24,10 +24,13 @@ public abstract class Expression extends DatasetInjector {
     protected abstract void setProfileSamplesHelp();
 
     protected String getSearchCategoryType() {
+	System.out.println("dataset="+getDatasetName());
 	String lcDatasetClassCategory=getPropValue("datasetClassCategory").toLowerCase();
 	if (lcDatasetClassCategory.equals("proteomics")) {
+	    System.out.println(lcDatasetClassCategory);
 	    return lcDatasetClassCategory;
 	}
+	System.out.println("transcriptomics-HERE");
 	return "transcriptomics";
     }
 	
