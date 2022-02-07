@@ -410,9 +410,9 @@ public class DetailTableLoader extends BaseCLI {
     String sql =
         "SELECT tq.*" + "\n" +
         "FROM (ID_QUERY) idq," + "\n" +
-        "(select tq1.*, rownum as row_num from (TABLE_QUERY) tq1) tq" + "\n" +
+        "(select tq1.*  from (TABLE_QUERY) tq1) tq" + "\n" +
         "WHERE\n" + pkPredicates +
-        "ORDER BY " + pkList + ", tq.row_num";
+        "ORDER BY " + pkList;
     sql = sql.replace("ID_QUERY", idSql);
     sql = sql.replace("TABLE_QUERY", tableSql);
     // System.err.println(sql);
