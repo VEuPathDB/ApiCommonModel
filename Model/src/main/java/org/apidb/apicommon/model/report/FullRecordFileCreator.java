@@ -188,7 +188,7 @@ public class FullRecordFileCreator extends BaseCLI {
     }
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
-            throws WdkUserException {
+            throws WdkUserException, WdkModelException {
         Question question = answerValue.getAnswerSpec().getQuestion();
         Map<String, Field> fields = FieldScope.REPORT_MAKER.filter(question.getFields());
         StringBuffer sbFields = new StringBuffer();
@@ -207,9 +207,9 @@ public class FullRecordFileCreator extends BaseCLI {
         config.put(StandardConfig.SELECTED_FIELDS, sbFields.toString());
         config.put(StandardConfig.INCLUDE_EMPTY_TABLES, "yes");
 
-        FullRecordReporter reporter = new FullRecordReporter(answerValue);
-        reporter.setProperties(properties);
-        reporter.configure(config);
-        return reporter;
+        return new FullRecordReporter()
+          .setProperties(() -> properties)
+          .setAnswerValue(answerValue)
+          .configure(config);
     }
 }

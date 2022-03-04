@@ -38,16 +38,6 @@ public class GenBankReporter extends PagedAnswerReporter {
     private static final String DB_XREF_QUALIFIER_GI = "GI";
     private static final String DB_XREF_QUALIFIER_UNIPROTKB = "UniProtKB/TrEMBL";
 
-    public GenBankReporter(AnswerValue answerValue) {
-        super(answerValue);
-    }
-
-    @Override
-    public GenBankReporter configure(Map<String, String> config) {
-      // no configuration for this reporter
-      return this;
-    }
-
     @Override
     public GenBankReporter configure(JSONObject config) {
       // no configuration for this reporter
