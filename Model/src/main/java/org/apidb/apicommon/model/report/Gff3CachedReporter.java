@@ -14,12 +14,11 @@ import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
-import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.record.RecordInstance;
 import org.gusdb.wdk.model.record.attribute.AttributeValue;
+import org.gusdb.wdk.model.report.PropertiesProvider;
 import org.gusdb.wdk.model.report.ReporterConfigException;
-import org.gusdb.wdk.model.report.ReporterInfo;
 import org.gusdb.wdk.model.report.config.StandardConfig;
 import org.gusdb.wdk.model.report.reporter.PagedAnswerReporter;
 import org.json.JSONObject;
@@ -62,12 +61,8 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
   private boolean hasProtein = false;
   private String fileType = null;
 
-  public Gff3CachedReporter(AnswerValue answerValue) {
-    super(answerValue);
-  }
-
   @Override
-  public void setProperties(ReporterInfo reporterRef) throws WdkModelException {
+  public Gff3CachedReporter setProperties(PropertiesProvider reporterRef) throws WdkModelException {
     super.setProperties(reporterRef);
 
     // check required properties
@@ -92,6 +87,8 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
     if (transcriptName == null || transcriptName.length() == 0)
       throw new WdkModelException("The required property for reporter " + this.getClass().getName() + ", " +
           PROPERTY_GFF_PROTEIN_NAME + ", is missing");
+
+    return this;
   }
 
   /*

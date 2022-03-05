@@ -22,7 +22,6 @@ import org.gusdb.fgputil.db.SqlUtils;
 import org.gusdb.fgputil.db.pool.DatabaseInstance;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.WdkUserException;
-import org.gusdb.wdk.model.answer.AnswerValue;
 import org.gusdb.wdk.model.answer.stream.RecordStream;
 import org.gusdb.wdk.model.question.Question;
 import org.gusdb.wdk.model.record.RecordClass;
@@ -66,10 +65,6 @@ public class Gff3Reporter extends PagedAnswerReporter {
   private String fileType = "text";
 
   private PreparedStatement psQuery;
-
-  public Gff3Reporter(AnswerValue answerValue) {
-    super(answerValue);
-  }
 
   @Override
   public String getHttpContentType() {
