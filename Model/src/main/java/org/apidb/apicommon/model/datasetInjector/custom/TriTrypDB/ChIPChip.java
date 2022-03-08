@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector.custom.ToxoDB;
+package org.apidb.apicommon.model.datasetInjector.custom.TriTrypDB;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
@@ -10,7 +10,7 @@ public class ChIPChip extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByToxoChIPchip");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTriTrypChIPchip");
   }
 
   // second column is for documentation
