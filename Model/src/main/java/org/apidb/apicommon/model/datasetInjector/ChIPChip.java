@@ -6,11 +6,11 @@ public class ChIPChip extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
-
     setPropValue ("organismAbbrevDisplay", getOrganismAbbrevDisplayFromDatasetName());
     String featureName = getPropValue("datasetDisplayName").replace(' ', '_');
     setPropValue ("featureName", featureName);
 
+    String projectName = getPropValue("projectName");
     if(getPropValueAsBoolean("isEuPathDBSite")) {
 	setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
     } else {
