@@ -11,6 +11,16 @@ public class ChIPChip extends DatasetInjector {
     String featureName = getPropValue("datasetDisplayName").replace(' ', '_');
     setPropValue ("featureName", featureName);
 
+    if(getPropValueAsBoolean("isEuPathDBSite")) {
+	setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
+    } else {
+	setPropValue("includeProjects", projectName + ",UniDB");
+    }
+
+    setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
+
+
+
     String key = getPropValue("key");
     if (key.length() != 0) {
         setPropValue ("key", " - " + key);
@@ -38,7 +48,7 @@ public class ChIPChip extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-      //      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip");
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ getDatasetName());
   }
 
   // second column is for documentation
