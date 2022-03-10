@@ -11,20 +11,23 @@ public class ChIPChip extends DatasetInjector {
     setPropValue ("featureName", featureName);
 
     String projectName = getPropValue("projectName");
-    if(getPropValueAsBoolean("isEuPathDBSite")) {
-	setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
-    } else {
-	setPropValue("includeProjects", projectName + ",UniDB");
-    }
+    setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
 
     setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
+    injectTemplate("chipchipQuestion");
 
+    setPropValue("searchCategory", "Epigenomics");
+    setPropValue("questionName", "GeneQuestions.GenesByChIPchip"+ getDatasetName());
+    injectTemplate("chipchipCategories");
+
+    injectTemplate("internalGeneSearchCategory");
 
     String key = getPropValue("key");
     if (key.length() != 0) {
         setPropValue ("key", " - " + key);
     }
+
     injectTemplate("chipChipSmoothed");
 
     //    setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipSmoothed");
@@ -48,6 +51,7 @@ public class ChIPChip extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
+
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ getDatasetName());
   }
 
