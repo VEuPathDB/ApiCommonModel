@@ -37,9 +37,10 @@ my @mdFields = qw/FILENAME PROJECT_ID SOURCE_ID PUBLIC_ABBREV ORTHOMCL_ABBREV FA
 
 open(M, ">$metadataFile") or die "unable to open $metadataFile for writing\n";
 
+my $ct = 0;
 foreach my $md (@mdFields){
   print M "\"$md\"";
-  print M $mdFields[-1] eq $md ? "\n" : ",";
+  print M ++$ct == scalar(@mdFields) ?  "\n" : ",";
 }
 ##remove filename from mdfields
 shift(@mdFields);
@@ -79,7 +80,6 @@ while (my $row = $sth->fetchrow_hashref()) {
     foreach my $a (@{$files{$org}}){
       next if $row->{IS_ANNOTATED_GENOME} eq  '0' && $a =~ /(AnnotatedProteins\.fasta|\.gff)/;
       &processFile($a,$row);
-#      &writeMetadata($a,$row);
       $ctFiles++;
     }
   }else{
@@ -130,8 +130,9 @@ sub writeMetadata {
 
 sub printMDRow {
   my $md = shift;
+  my $ct = 0;
   foreach my $f (@mdFields){
     print M "\"$md->{$f}\"";
-    print M $mdFields[-1] eq $f ? "\n" : ",";
+    print M ++$ct == scalar(@mdFields) ?  "\n" : ",";
   }
 }
