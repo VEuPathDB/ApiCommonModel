@@ -76,7 +76,7 @@ if(scalar(keys%files) == 0){
 
 ##next get the metadata using a service call
 my $mds = new LWP::UserAgent (agent => 'Mozilla/5.0', cookie_jar =>{});
-my $mdurl = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","species","strain","project_id","contigCount","supercontigCount","chromosomeCount","is_annotated_genome","ncbi_tax_id","genome_version","annotation_version","annotation_source"],"includeHeader":true,"attachmentType":"plain"}';
+my $mdurl = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","species","strain","project_id","contigCount","supercontigCount","chromosomeCount","is_annotated_genome","ncbi_tax_id","genome_version","annotation_version","annotation_source","build_latest_update","build_introduced"],"includeHeader":true,"attachmentType":"plain"}';
 my @tmpData = split("\n",$mds->get($mdurl)->content);
 my @mdFields = split("\t",shift(@tmpData));
 &writeMetadata("filename",\@mdFields);
@@ -120,8 +120,11 @@ sub processFile {
   }else{
     print die "ERROR: unable to parse filename from $url\n";
   }
-  my $cmd = "wget --output-document=$filePath/$fn $url";
-  system($cmd);
+  ##if already have file don't retrieve a new one
+  if(!-e "$filePath/$fn"){
+    my $cmd = "wget --output-document=$filePath/$fn $url";
+    system($cmd);
+  }
 
   &writeMetadata("$comp/$genus/$fn",$md);
 }
