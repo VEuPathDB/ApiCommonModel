@@ -15,8 +15,6 @@ public class ChIPChip extends DatasetInjector {
 
     setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
-    injectTemplate("chipchipQuestion");
-
     setPropValue("searchCategory", "Epigenomics");
     setPropValue("questionName", "GeneQuestions.GenesByChIPchip"+ getDatasetName());
     injectTemplate("chipchipCategories");
@@ -37,6 +35,7 @@ public class ChIPChip extends DatasetInjector {
         if (getPropValue("cutoff") == null) {
             setPropValue("cutoff", "0");
             injectTemplate("chipChipPeaks");
+	    injectTemplate("chipchipQuestion");
         }
         else {
         injectTemplate("chipChipPeaksColorByScore");
