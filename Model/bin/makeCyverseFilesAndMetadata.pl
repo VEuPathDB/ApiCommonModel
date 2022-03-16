@@ -1,14 +1,9 @@
 #!/usr/bin/perl
 
 use strict;
-use DBI;
 use IO::File;
 use Getopt::Long;
 use LWP::UserAgent;
-
-##todo
-# make sure is just reference genomes
-# make filename bld number = latest build
 
 my $targetDirectory = "VEuPathDB";
 my $metadataFile = "";
@@ -39,14 +34,15 @@ if($debug){ open(FD, ">files_debug.csv"); open(MD, ">md_debug.csv"); }
 my %files;
 my $ctRows = 0;
 my $B = new LWP::UserAgent (agent => 'Mozilla/5.0', cookie_jar =>{});
-my $url = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","build_latest_update","is_annotated_genome","URLGenomeFasta","URLproteinFasta","URLgff"],"includeHeader":true,"attachmentType":"plain"}';
+my $url = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","build_latest_update","is_annotated_genome","is_reference_strain","URLGenomeFasta","URLproteinFasta","URLgff"],"includeHeader":true,"attachmentType":"plain"}';
 my $get = $B->get($url)->content;
 foreach my $l (split("\n",$get)){
   my @f = split("\t",$l);
   $ctRows++;
   next unless $build eq "All" || $build == $f[1];  ##restrict to build number.  if no build arg on cmdline then get all
+  next if $f[3] eq "no";
   print FD join('","',@f),"\n" if $debug;
-  for(my $a = 3;$a<6;$a++){
+  for(my $a = 4;$a<=scalar(@f);$a++){
     ##don't include files that don't exist for non-annotated genomes
     push(@{$files{$f[0]}},$f[$a]) unless $f[2] == 0 && $f[$a] =~ /(AnnotatedProteins\.fasta|\.gff)/;
   }
@@ -65,7 +61,7 @@ if(scalar(keys%files) == 0){
 
 ##next get the metadata using a service call
 my $mds = new LWP::UserAgent (agent => 'Mozilla/5.0', cookie_jar =>{});
-my $mdurl = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","species","strain","project_id","contigCount","supercontigCount","chromosomeCount","is_annotated_genome","ncbi_tax_id","genome_version","annotation_version","annotation_source","build_latest_update","build_introduced"],"includeHeader":true,"attachmentType":"plain"}';
+my $mdurl = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","species","strain","project_id","contigCount","supercontigCount","chromosomeCount","is_annotated_genome","ncbi_tax_id","genome_version","annotation_version","annotation_source","build_introduced","build_latest_update"],"includeHeader":true,"attachmentType":"plain"}';
 my @tmpData = split("\n",$mds->get($mdurl)->content);
 my @mdFields = split("\t",shift(@tmpData));
 &writeMetadata("filename",\@mdFields);
@@ -88,6 +84,8 @@ close M;
 
 sub processFile {
   my($url,$md) = @_;
+  ##don't proceed unless file is one of expected types
+  return unless $url =~ /(fasta|gff)/;
   #first directory structure
   my $comp = $md->[3]; ##4th element in array is project_id
   if(!-d "$targetDirectory/$comp"){
@@ -105,7 +103,9 @@ sub processFile {
   my $fn;
   if($url =~ /^.*\/(.*)$/){
     $fn = $1;
-    print STDERR "$fn\n";
+    ##want to change bld number to be the lastest update
+    $fn =~ s/\d+/$md->[-1]/;  ##change build number to the latest update which is last field in metadata
+##    print STDERR "$fn\n";
   }else{
     print die "ERROR: unable to parse filename from $url\n";
   }
