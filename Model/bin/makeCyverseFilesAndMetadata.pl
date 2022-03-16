@@ -4,19 +4,18 @@ use strict;
 use DBI;
 use IO::File;
 use Getopt::Long;
-use CBIL::Util::PropertySet;
-#use File::Basename;
-#use File::Copy;
 use LWP::UserAgent;
 
-my $gusConfigFile;
+##todo
+# make sure is just reference genomes
+# make filename bld number = latest build
+
 my $targetDirectory = "VEuPathDB";
 my $metadataFile = "";
 my $build = 'All';
 my $debug = 0;
 
-&GetOptions('gusConfigFile|c=s' => \$gusConfigFile,
-            'metadataFile|m=s' => \$metadataFile,
+&GetOptions('metadataFile|m=s' => \$metadataFile,
             'targetDirectory|t=s' => \$targetDirectory,
             'build|b=s' => \$build,
             );
@@ -29,16 +28,6 @@ if(!-d "$targetDirectory"){
   mkdir $targetDirectory or die "unable to create targetDirectory $targetDirectory\n";
 }
 
-#------- Uid and Password..these are fetched from the gus.cnfig file----------
-$gusConfigFile = $ENV{GUS_HOME} . "/config/gus.config" unless($gusConfigFile);
-
-unless(-e $gusConfigFile) {
-  print STDERR "gus.config ($gusConfigFile) file not found! \n";
-  exit;
-}
-
-# write metadatafile into target directory unless passed in on commandline
-# include build in number in metadata filename
 $metadataFile = $metadataFile ? $metadataFile : "$targetDirectory/CyverseMetadata$build.csv";
 open(M, ">$metadataFile") or die "unable to open $metadataFile for writing\n";
 
