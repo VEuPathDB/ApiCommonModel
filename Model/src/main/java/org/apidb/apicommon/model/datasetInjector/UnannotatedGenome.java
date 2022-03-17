@@ -69,7 +69,9 @@ public class UnannotatedGenome extends DatasetInjector {
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "attribute", "overview");
     addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansBySourceId");
 
-    if (!(getPropValue("projectName").equals("HostDB"))){
+    if (!(getPropValue("projectName").equals("HostDB"))
+	&& !(getPropValue("projectName").equals("VectorBase"))
+	){
 	addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.DynSpansByMotifSearch");
     }
 
