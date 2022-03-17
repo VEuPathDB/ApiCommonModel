@@ -64,7 +64,7 @@ my $mds = new LWP::UserAgent (agent => 'Mozilla/5.0', cookie_jar =>{});
 my $mdurl = 'https://veupathdb.org/veupathdb/service/record-types/organism/searches/GenomeDataTypes/reports/attributesTabular?reportConfig={"attributes":["primary_key","species","strain","project_id","contigCount","supercontigCount","chromosomeCount","is_annotated_genome","ncbi_tax_id","genome_version","annotation_version","annotation_source","build_introduced","build_latest_update"],"includeHeader":true,"attachmentType":"plain"}';
 my @tmpData = split("\n",$mds->get($mdurl)->content);
 my @mdFields = split("\t",shift(@tmpData));
-&writeMetadata("filename",\@mdFields);
+&writeMetadata("Filename",\@mdFields);
 my $ctFiles = 0;
 foreach my $l (@tmpData){
   my @tmp = split("\t",$l);
