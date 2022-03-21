@@ -16,7 +16,11 @@ public class ChIPChip extends DatasetInjector {
     setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
     setPropValue("searchCategory", "Epigenomics");
-    setPropValue("questionName", "GeneQuestions.GenesByChIPchip"+ getDatasetName());
+
+    String cleanDatasetName = getDatasetName().replace('.', '_');
+    setPropValue ("cleanDatasetName", cleanDatasetName);
+
+    setPropValue("questionName", "GeneQuestions.GenesByChIPchip"+ cleanDatasetName);
     injectTemplate("chipchipCategories");
 
     injectTemplate("internalGeneSearchCategory");
