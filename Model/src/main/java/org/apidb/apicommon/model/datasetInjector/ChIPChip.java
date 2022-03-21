@@ -55,7 +55,10 @@ public class ChIPChip extends DatasetInjector {
   @Override
   public void addModelReferences() {
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ getDatasetName());
+      String cleanDatasetName = getDatasetName().replace('.', '_');
+      setPropValue ("cleanDatasetName", cleanDatasetName);
+
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ cleanDatasetName);
   }
 
   // second column is for documentation
