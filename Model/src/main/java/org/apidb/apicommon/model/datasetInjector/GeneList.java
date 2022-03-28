@@ -1,6 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-public class GeneList {
+import org.apidb.apicommon.datasetPresenter.DatasetInjector;
+
+public class GeneList extends  DatasetInjector {
 
   @Override
     public void injectTemplates() {
@@ -42,6 +44,7 @@ public class GeneList {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""}
                                  };
+      return declaration;
           }
 
   
