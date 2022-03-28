@@ -20,7 +20,7 @@ public class GeneList {
       }
 
      String searchCategory = "searchCategory-functional-gene-list";
-     String questionName = "TODO";
+     String questionName = "GenesByFunctionalGeneList";
 
      setPropValue("searchCategory", searchCategory);
      setPropValue("questionName", questionName);
