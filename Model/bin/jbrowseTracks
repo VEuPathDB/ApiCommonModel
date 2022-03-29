@@ -5,6 +5,8 @@ use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 
+# NOTE:  if nameOrId is an organismAbbrev it MUST be the public_abbrev because this service is in a public facing URL
+
 my ($nameOrId, $projectName, $isPbrowse, $tracks) = @ARGV;
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
@@ -14,27 +16,35 @@ my $dbh = $jbrowseUtil->getDbh();
 my $sql;
 
 if(lc($nameOrId) eq 'default') {
-  $sql = 'select * from (select public_abbrev, name_for_filenames from apidbtuning.organismattributes order by COMMUNITYCOUNT desc) where rownum = 1';
+  $sql = 'select * from (select abbrev, name_for_filenames from apidbtuning.organismattributes order by COMMUNITYCOUNT desc) where rownum = 1';
 }
 elsif(lc($tracks) eq 'bysequenceid') {
-  $sql = "select o.public_abbrev, o.NAME_FOR_FILENAMES 
+  $sql = "select o.abbrev, o.NAME_FOR_FILENAMES
           from apidbtuning.genomicseqattributes sa, apidb.organism o
           where sa.source_id = '$nameOrId'
           and sa.taxon_id = o.taxon_id";
 }
 else {
- $sql = "select public_abbrev, NAME_FOR_FILENAMES
+ $sql = "select abbrev, NAME_FOR_FILENAMES
            from apidb.organism  
-           where abbrev = '$nameOrId' OR NAME_FOR_FILENAMES = '$nameOrId'";
+           where public_abbrev = '$nameOrId' OR NAME_FOR_FILENAMES = '$nameOrId'";
 }
 
 my $sh = $dbh->prepare($sql);
 $sh->execute();
 
-my ($organismAbbrev, $organismNameForFiles) = $sh->fetchrow_array();
+my ($organismAbbrev, $organismNameForFiles, $organismCount);
+
+while(my ($oa, $onf)= $sh->fetchrow_array()) {
+  $organisAbbrev = $oa;
+  $organismNameForFiles = $onf;
+  $organismCount++;
+}
 $sh->finish();
+
 $dbh->disconnect();
 
+die "Could not determine unique organism for: $nameOrId" unless($organismCount == 1);
 
 my (@include, $refSeqs, $namesUrl);
 
