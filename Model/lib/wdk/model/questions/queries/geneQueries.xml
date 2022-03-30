@@ -2405,7 +2405,7 @@ AND 1=0
         <column name="max_total_isrpm"/>
         <sql>
             <![CDATA[
-select ga.gene_source_id, ga.source_id, 'Y' as matched_result, ga.project_id, count(*) as num_novel, max(gij.percent_max) as max_percent_max, max(gij.total_unique) as max_total_unique, max(gij.total_isrpm) as max_total_isrpm, ga.gene_exon_count
+with core as (select ga.gene_source_id, ga.source_id, ga.project_id, gij.total_unique, gij.total_isrpm, gij.annotated_intron
 from apidbtuning.geneintronjunction gij, apidbtuning.transcriptattributes ga
 where ga.na_sequence_id = gij.na_sequence_id
 and (gij.segment_end between ga.start_min - $$max_flanking_bp$$ and ga.end_max + $$max_flanking_bp$$
@@ -2413,10 +2413,18 @@ or gij.segment_start between ga.start_min - $$max_flanking_bp$$ and ga.end_max +
 and ga.exon_count between $$number_annot_introns.min$$ and $$number_annot_introns.max$$
 and gij.is_reversed = ga.is_reversed
 and gij.total_unique >= $$min_total_unique$$
-and gij.percent_max between $$percent_max.min$$ and $$percent_max.max$$
-and gij.annotated_intron = 'No'
 and ga.organism = '$$organism$$'
-group by ga.gene_source_id,ga.source_id, ga.gene_exon_count, ga.project_id
+),
+gmi as (select gene_source_id, source_id, max(total_unique) as max_unique, max(total_isrpm) as max_isrpm
+from core
+group by gene_source_id, source_id)
+select core.gene_source_id, core.source_id, 'Y' as matched_result, core.project_id, 
+round((max(core.total_unique) / gmi.max_unique) * 100,1) as max_percent_max, max(total_unique) as max_total_unique, max(core.total_isrpm) as max_total_isrpm, count(*) as num_novel
+from core, gmi
+where core.source_id = gmi.source_id
+and core.annotated_intron = 'No'
+and (core.total_unique / gmi.max_unique) * 100 between $$percent_max.min$$ and $$percent_max.max$$
+group by core.gene_source_id, core.source_id, core.project_id, gmi.max_unique, gmi.max_isrpm 
             ]]>
        </sql>
     </sqlQuery>
