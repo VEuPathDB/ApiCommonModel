@@ -22,7 +22,7 @@ public class GeneList extends  DatasetInjector {
       }
 
      String searchCategory = "searchCategory-functional-gene-list";
-     String questionName = "GenesByFunctionalGeneList";
+     String questionName = "GeneQuestions.GenesByFunctionalGeneList" + getDatasetName();
 
      setPropValue("searchCategory", searchCategory);
      setPropValue("questionName", questionName);
