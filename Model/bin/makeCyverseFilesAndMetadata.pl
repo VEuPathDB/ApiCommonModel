@@ -26,6 +26,10 @@ if(!-d "$targetDirectory"){
 $metadataFile = $metadataFile ? $metadataFile : "$targetDirectory/CyverseMetadata$build.csv";
 open(M, ">$metadataFile") or die "unable to open $metadataFile for writing\n";
 
+## write updated genomes to file
+my $updateFile = "$targetDirectory/UpdatedFiles$build";
+open(U, ">$updateFile") or die "unable to open $updateFile for writing\n";
+
 my $ct = 0;
 
 if($debug){ open(FD, ">files_debug.csv"); open(MD, ">md_debug.csv"); }
@@ -81,6 +85,7 @@ if($debug){ close MD; close FD; }
 print STDERR "Processed $ctFiles files\n";
 
 close M;
+close U;
 
 sub processFile {
   my($url,$md) = @_;
@@ -109,6 +114,8 @@ sub processFile {
   }else{
     print die "ERROR: unable to parse filename from $url\n";
   }
+  ##first update rows ... note this deletes existing rows if this is an updated genome rather than a new one.
+  &doUpdateFile("$comp/$genus/$fn",$md);
   ##if already have file don't retrieve a new one
   if(!-e "$filePath/$fn"){
     my $cmd = "wget --output-document=$filePath/$fn $url";
@@ -140,5 +147,18 @@ sub printMDRow {
   foreach my $f (@{$md}){
     print M "\"$f\"";
     print M ++$ct == scalar(@{$md}) ?  "\n" : ",";
+  }
+}
+
+sub doUpdateFile {
+  my($fn,$md) = @_;
+  if($md->[-2] != $md->[-1]){
+    print STDERR "updated file $fn\n";
+    ##delete old file .... don't forget to use $targetDirectory/
+    my $delFn = $fn;
+    $delFn =~ s/$md->[3]-$md->[-1]/\*/;
+    system("/bin/rm $targetDirectory/$delFn");
+    ##print update row
+    print U "$fn\n";
   }
 }
