@@ -67,14 +67,17 @@
             <column name="comment_date"/>
             <column name="comment_target_id"/>
 
-            <sqlParamValue name="selectReviewed" includeProjects="PlasmoDB,TriTrypDB">
+            <sqlParamValue name="selectReviewed" includeProjects="FungiDB,PlasmoDB,TriTrypDB">
                 <![CDATA[
-                          case when reviewed_comments.gene_source_id is not null then 'Integrated'
+                          case when ags.is_curated_genome = 'false' then 'N/A'
+                            when project_id = 'PlasmoDB' AND c.comment_date < '04-MAR-22' then 'N/A'
+                            when integrated_comments.gene_source_id is not null then 'Integrated'
+                            when reviewed_comments.gene_source_id is not null then 'Reviewed'
                             else 'Pending'
                             end as comment_status,
                 ]]>
             </sqlParamValue>
-            <sqlParamValue name="selectReviewed" excludeProjects="PlasmoDB,TriTrypDB">
+            <sqlParamValue name="selectReviewed" excludeProjects="FungiDB,PlasmoDB,TriTrypDB">
                             '' as comment_status,
             </sqlParamValue>
 
@@ -117,21 +120,38 @@
                         AND ed.external_database_id = edr.external_database_id
                         AND edr.external_database_release_id = dr.external_database_release_id
                         AND ed.name like '%_dbxref_EuPathDB_comment_RSRC'
+                        ) integrated_comments,
+                        (SELECT dr.primary_identifier AS comment_id
+                        , ta.gene_source_id
+                        FROM sres.dbref dr
+                        , dots.DbRefNaFeature drnf
+                        , apidbtuning.transcriptattributes ta
+                        , sres.externaldatabase ed
+                        , sres.externaldatabaserelease edr
+                        WHERE drnf.db_ref_id = dr.db_ref_id
+                        AND ta.na_feature_id = drnf.na_feature_id
+                        AND ed.external_database_id = edr.external_database_id
+                        AND edr.external_database_release_id = dr.external_database_release_id
+                        AND ed.name like '%_dbxref_EuPathDB_comment_na_RSRC'
                         ) reviewed_comments
                   ,  apidbtuning.GeneAttributes ga
+                  ,  apidbtuning.annotatedgenomesummary ags
                   WHERE c.project_name = ga.project_id
                     AND c.comment_target_id = 'gene'
                     AND c.review_status_id not in ('rejected', 'task')
                     -- no need for separate sql for toxo .. just want to exclude expert/community comments here
-                    AND ((c.project_name = 'GiardiaDB' and c.review_status_id != 'community') OR c.project_name != 'GiardiaB')
+                    AND ((c.project_name = 'GiardiaDB' and c.review_status_id != 'community') OR c.project_name != 'GiardiaDB')
                     AND c.is_visible = 1
                     AND c.user_id = u.user_id
                     AND c.stable_id = ga.source_id
                     AND c.comment_id = files.comment_id(+)
                     AND c.comment_id = references.comment_id(+)
                     and c.comment_id = gene_counts.comment_id(+)
+		    AND to_char(c.comment_id) = integrated_comments.comment_id (+)
+                    AND c.stable_id = integrated_comments.gene_source_id(+)
                     AND to_char(c.comment_id) = reviewed_comments.comment_id (+)
                     AND c.stable_id = reviewed_comments.gene_source_id(+)
+                    AND ga.taxon_id = ags.taxon_id
                   order by c.comment_id desc
             ]]>
             </sql>
