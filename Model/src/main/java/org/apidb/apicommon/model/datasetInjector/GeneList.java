@@ -11,7 +11,7 @@ public class GeneList extends  DatasetInjector {
 
       String projectName = getPropValue("projectName");
       //String presenterId = getPropValue("presenterId");
-      String datasetName = getDatasetName();
+      //String datasetName = getDatasetName();
 
       setOrganismAbbrevFromDatasetName();
 
