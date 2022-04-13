@@ -29,7 +29,7 @@ open(M, ">$metadataFile") or die "unable to open $metadataFile for writing\n";
 ## write updated genomes to file
 my $updateFile = "$targetDirectory/UpdatedFiles$build.csv";
 open(U, ">$updateFile") or die "unable to open $updateFile for writing\n";
-print U "\"Old FileName\"\t\"New FileName\"\n";
+print U "\"Old FileName\",\"New FileName\"\n";
 
 my $ct = 0;
 
@@ -162,6 +162,6 @@ sub doUpdateFile {
     $oFn =~ s/$targetDirectory\///; ## remove targetDirectory so is consistent ... path starts inside VEuPathDB
     system("/bin/rm $targetDirectory/$delFn");
     ##print update row
-    print U "\"$oFn\"\t\"$fn\"\n";
+    print U "\"$oFn\",\"$fn\"\n";
   }
 }
