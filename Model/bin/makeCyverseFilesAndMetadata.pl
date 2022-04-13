@@ -27,8 +27,9 @@ $metadataFile = $metadataFile ? $metadataFile : "$targetDirectory/CyverseMetadat
 open(M, ">$metadataFile") or die "unable to open $metadataFile for writing\n";
 
 ## write updated genomes to file
-my $updateFile = "$targetDirectory/UpdatedFiles$build";
+my $updateFile = "$targetDirectory/UpdatedFiles$build.csv";
 open(U, ">$updateFile") or die "unable to open $updateFile for writing\n";
+print U "\"Old FileName\"\t\"New FileName\"\n";
 
 my $ct = 0;
 
@@ -157,8 +158,10 @@ sub doUpdateFile {
     ##delete old file .... don't forget to use $targetDirectory/
     my $delFn = $fn;
     $delFn =~ s/$md->[3]-$md->[-1]/\*/;
+    my $oFn = glob("$targetDirectory/$delFn");
+    $oFn =~ s/$targetDirectory\///; ## remove targetDirectory so is consistent ... path starts inside VEuPathDB
     system("/bin/rm $targetDirectory/$delFn");
     ##print update row
-    print U "$fn\n";
+    print U "\"$oFn\"\t\"$fn\"\n";
   }
 }
