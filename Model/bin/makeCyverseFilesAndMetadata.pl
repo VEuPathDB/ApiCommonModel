@@ -157,8 +157,9 @@ sub doUpdateFile {
     print STDERR "updated file $fn\n";
     ##delete old file .... don't forget to use $targetDirectory/
     my $delFn = $fn;
-    $delFn =~ s/$md->[3]-$md->[-1]/\*/;
-    my $oFn = glob("$targetDirectory/$delFn");
+    $delFn =~ s/$md->[3]-\d+/\*/;
+    my $oFn = `ls $targetDirectory/$delFn`;
+    chomp $oFn;
     $oFn =~ s/$targetDirectory\///; ## remove targetDirectory so is consistent ... path starts inside VEuPathDB
     system("/bin/rm $targetDirectory/$delFn");
     ##print update row
