@@ -202,13 +202,13 @@
 <!-- intronjunction params -->
 
    <numberRangeParam name="percent_max"
-                      prompt="Percent of max intron"
+                      prompt="Percent of Most Abundant Intron (MAI)"
                       integer="false"
                       min="1"
                       max="100"
-                      increment="1">
-      <help>Choose the range of percentages you want to consider when identifying genes based on high confidence unannotated introns</help>
-      <suggest default="{'min': '1', 'max': '100'}" />
+                      increment="100">
+      <help>The most abundant intron (MAI; supported by the highest number of intron-spanning reads; ISRs) provides context for the expected observation frequency: introns mistakenly omitted from the gene model are likely to be as abundant as correctly annotated introns; alternative splice variants may be observed at ~20-80%, but you may not be interested in rare 'typographical errors' made by the splicing machinery.</help>
+      <suggest default="{'min': '20', 'max': '100'}" />
    </numberRangeParam>
 
    <numberRangeParam name="number_annot_introns"
@@ -223,15 +223,24 @@
   
    <stringParam name="min_total_unique" 
                 prompt="Minimum number of unique reads &gt;="
-                number="true">
+                number="true"
+                excludeProjects="VectorBase">
      <help>Enter the minimum number of total unique reads required to consider an intron.</help>
      <suggest default="20" />
    </stringParam>
 
+   <stringParam name="min_total_unique" 
+                prompt="Minimum unique reads / million (ISRPM) &gt;="
+                number="true"
+                includeProjects="VectorBase">
+     <help>Enter the minimum number of total ISRPM (unique intron spaning reads per million intron spanning reads) required to consider an intron.</help>
+     <suggest default="20" />
+   </stringParam>
+
    <stringParam name="max_flanking_bp" 
-                prompt="Maximum flanking sequence &lt;="
+                prompt="Consider 5' &amp; 3' Flanking Sequence up to (bp)"
                 number="true">
-     <help>Enter the maximum number of basepairs of flanking sequence to conider when looking for novel introns. </help>
+     <help>Enter the maximum number of nucleotides flanking the annotated gene model to explore when looking for unannotated introns.  Search automatically includes the annotated gene model, and only considers putative introns on the same strand. </help>
      <suggest default="0" />
    </stringParam>
 
@@ -268,6 +277,28 @@
    
 -->
 
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+  <!-- Gene List params -->
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+  <flatVocabParam name="geneListDataset"
+                 queryRef="GeneVQ.geneListDataset"
+                 prompt="Gene List Dataset"
+                 visible="false"
+                 quote="false"
+                 multiPick="false" >
+    <help>Please choose a dataset.</help>
+  </flatVocabParam>
+
+  <flatVocabParam name="geneListParam"
+                 queryRef="GeneVQ.geneListParam"
+                 prompt="Gene List"
+                 visible="true"
+                 multiPick="false"
+                 dependedParamRef="geneParams.geneListDataset">
+
+    <help>Please select a list of genes.</help>
+  </flatVocabParam>
      
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- LOPIT params -->
@@ -5420,7 +5451,7 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
         <stringParam name="domain_accession"
-                        prompt="Free Text (use '*' for wildcard)" number="false">
+           prompt="Free Text (use '*' for wildcard)" number="false" length="150">
             <suggest default=""/>
             <help><![CDATA[Use this parameter to indicate the domain you wish to query for. Genes returned by this 
             search have protein products that are predicted to contain the domain(s) you indicate here. <br><br>
@@ -6610,6 +6641,53 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
 	</sql>
       </sqlQuery>
 -->
+
+  <sqlQuery name="geneListDataset" isCacheable="false" excludeProjects="EuPathDB">
+    <column name="term"/>
+    <column name="internal"/>
+
+    <sql>
+      <![CDATA[
+        select distinct d.name as term, r.external_database_release_id  as internal
+              from sres.externaldatabase d
+          , sres.externaldatabaserelease r
+          , apidb.nafeaturelist fl
+          , study.studylink sl
+          , study.study s
+        where sl.protocol_app_node_id = fl.protocol_app_node_id
+        and sl.study_id=  s.study_id
+        and r.external_database_release_id = s.external_database_release_id
+        and d.external_database_id = r.external_database_id
+      ]]>
+    </sql>
+  </sqlQuery>
+
+  <processQuery name="geneListDataset" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+    <wsColumn name="internal" width="50" wsName="internal"/>
+    <wsColumn name="term" width="50" wsName="term"/>
+  </processQuery>
+
+  <sqlQuery name="geneListParam" isCacheable="false" excludeProjects="EuPathDB">
+    <paramRef ref="geneParams.geneListDataset" />
+    <column name="term"/>
+    <column name="internal"/>
+    <sql>
+      <![CDATA[
+        select distinct replace(pan.name,' (functional_data)','') as term
+          , pan.protocol_app_node_id as internal
+        from study.protocolappnode pan, study.study s, study.studylink sl
+          where s.external_database_release_id =$$geneListDataset$$
+          and s.study_id = sl.study_id
+          and sl.protocol_app_node_id = pan.protocol_app_node_id
+          order by TO_NUMBER(REGEXP_SUBSTR(term, '\d+'))
+      ]]>
+    </sql>
+  </sqlQuery>
+
+  <processQuery name="geneListParam" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+    <wsColumn name="internal" width="50" wsName="internal"/>
+    <wsColumn name="term" width="50" wsName="term"/>
+  </processQuery>
 
 
 

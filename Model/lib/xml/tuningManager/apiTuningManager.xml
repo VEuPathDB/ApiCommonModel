@@ -549,7 +549,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
         , dots.TranslatedAASequence tas
         WHERE xd3.name IN('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP', 'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF', 'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan', 'PFAM', 'SMART', 'CDD', 'PANTHER')
           AND ta.aa_sequence_id = df.aa_sequence_id
-          AND ta.aa_sequence_id = tas.aa_sequence.id
+          AND ta.aa_sequence_id = tas.aa_sequence_id
           AND (ta.taxon_id = '&filterValue' or nvl('&filterValue', 0) = 0)
           AND df.aa_feature_id = draf.aa_feature_id
           AND df.aa_feature_id = al.aa_feature_id
@@ -1214,6 +1214,7 @@ SELECT o.project_name as project_id,
          then 'TMPTX_' || o.public_abbrev
          else 'NCBITAXON_' || t.ncbi_tax_id
        end as source_id,
+       o.abbrev as internal_abbrev,
        o.public_abbrev,
        o.orthomcl_abbrev,
        o.family_name_for_files,
@@ -4528,7 +4529,7 @@ create table MappingStatsGIJtmp (
        from (select je.junctions_pan_id, to_number(ca.value) as average_read_length,
                     to_number(cb.value) as number_mapped_reads,
                     to_number(cc.value) as avg_mapping_coverage
-             from junexpgij je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
+             from junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
                   PANIO ioa, STUDY.CHARACTERISTIC cb, sres.ontologyterm otb,
                   STUDY.CHARACTERISTIC cc, sres.ontologyterm otc
              where je.junctions_pan_id = ioa.output_pan_id
@@ -4771,7 +4772,7 @@ END;
     <sql>
       <![CDATA[
                create table GeneIntronJunction&1 NOLOGGING as
-select junc.*, CASE WHEN maxv.gene_source_id is not null THEN round((junc.total_isrpm / max_isrpm) * 100,2) ELSE null END as percent_max,
+select junc.*, CASE WHEN maxv.gene_source_id is not null and maxv.max_isrpm > 0 THEN round((junc.total_isrpm / maxv.max_isrpm) * 100,2) ELSE null END as percent_max,
 CASE WHEN maxv.gene_source_id is not null THEN 1 ELSE 0 END as contained
 from ( 
 select gene_source_id,max(total_unique) as max_unique, max(total_isrpm) as max_isrpm
@@ -8811,6 +8812,32 @@ tablespace indx
       <![CDATA[
         create index group_pp_ix&1
           on GroupPhylogeneticProfile&1 (orthomcl_name)
+          tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="ApolloSiteSearch">
+    <comment>
+      Text from ApolloUpdate that can be used in site search to find genes
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ApolloUpdate"/>
+    <sql>
+      <![CDATA[
+      create table ApolloSiteSearch&1 nologging as
+      select ga.source_id, ga.project_id, au.id_attr,
+             cast(substr(au.attr, 1, 4000) as varchar2(4000)) as attr
+      from apidbTuning.ApolloUpdate au, apidbTuning.GeneAttributes ga
+      where au.na_sequence_id = ga.na_sequence_id
+        and au.type = 'gene'
+        and ga.start_min <= au.mapping_end AND ga.end_max >= au.mapping_start 
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index auss_ix&1
+          on ApolloSiteSearch&1 (source_id, project_id)
           tablespace indx
       ]]>
     </sql>
