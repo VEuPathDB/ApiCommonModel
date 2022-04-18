@@ -11,7 +11,7 @@ public class ChIPChip extends DatasetInjector {
     setPropValue ("featureName", featureName);
 
     String projectName = getPropValue("projectName");
-    setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
+    setPropValue("includeProjects", projectName + ",UniDB");
 
     setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
 
