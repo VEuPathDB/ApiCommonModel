@@ -17,6 +17,7 @@ use CBIL::Util::Utils;
 use JSON;
 use Date::Manip;
 use XML::Simple;
+use URI::Escape;
 
 my $dateCmd = "date";
 my $dateStr1 = &runCmd($dateCmd);
@@ -105,9 +106,16 @@ while (<GFF>) {
         my ($seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes) = split ( /\t/, $_);
         #Fix any single quotes in attributes string
         $attributes =~ s/\'/\'\'/g;
+        #Decode uri encoding
+        $attributes = uri_unescape( $attributes );
         my $creationDate;
         my $parentAttr="";
         my $idAttr="";
+        my $apolloProduct="";
+        my $apolloSymbol="";
+        my $apolloOwner="";
+        my $apolloGoTerm="";
+        my $apolloPmid="";
         #Parse creation date
         if ($attributes =~ m/date_creation/ ){
         $creationDate = substr ($attributes, -10);
@@ -120,6 +128,27 @@ while (<GFF>) {
         if ($attributes =~ m/ID=([0-9a-zA-Z-]+);/ ){
         $idAttr = $1;
         }
+        #Parse apollo product
+        if ($attributes =~ m/gene_product=rank=1;term=(.+?);/  ||  $attributes =~ m/description=(.+?);/   ){
+        $apolloProduct = $1;
+        }
+        #Parse apollo symbol
+        if ($attributes =~ m/symbol=([0-9a-zA-Z-]+);/ ){
+        $apolloSymbol = $1;
+        }
+        #Parse apollo owner
+        if ($attributes =~ m/owner=([0-9a-zA-Z-\.]+);/ ){
+        $apolloOwner = $1;
+        }
+        #Parse apollo GO term
+        if ($attributes =~ m/go_annotations=rank=1;aspect=[A-Za-z]+;term=(GO:[0-9]+);/ ){
+        $apolloGoTerm = $1;
+        }
+        #Parse apollo PMID
+        if ($attributes =~ m/db_xref=(PMID:[0-9]+);/ ){
+        $apolloPmid = $1;
+        }
+
         #Get Apollo numerical organism ID
         my $apolloID = getApolloID($dbh, $prefix, $suffix,$seqID);
         
@@ -127,7 +156,7 @@ while (<GFF>) {
         $NASequenceID = getNASequenceID($dbh, $seqID);
         if ($NASequenceID ne ""){
         #Insert Gff into table
-        insertAttribute($dbh, $prefix, $suffix, $NASequenceID,  $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr);
+        insertAttribute($dbh, $prefix, $suffix, $NASequenceID,  $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr, $apolloProduct, $apolloSymbol, $apolloOwner, $apolloGoTerm, $apolloPmid);
         $dbh->commit() or print STDERR $dbh->errstr;
         }
         else{ 
@@ -145,9 +174,9 @@ while (<GFF>) {
 $dbh->disconnect;
 
 sub insertAttribute {
-    my ($dbh, $prefix, $suffix, $NASequenceID, $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr) = @_;
+    my ($dbh, $prefix, $suffix, $NASequenceID, $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr, $apolloProduct, $apolloSymbol, $apolloOwner, $apolloGoTerm, $apolloPmid) = @_;
     $dbh->do(<<SQL) or die "inserting attribute";
-    INSERT INTO ${prefix}ApolloUpdate$suffix (NA_SEQUENCE_ID, SeqID, Source, Type, MAPPING_START, MAPPING_END, Score, Strand, Phase, ATTR, creationdate, apolloid, parent_attr, id_attr) VALUES ('$NASequenceID', '$seqID', '$source', '$type', '$start', '$end', '$score', '$strand', '$phase', '$attributes', '$creationDate', '$apolloID', '$parentAttr', '$idAttr')
+    INSERT INTO ${prefix}ApolloUpdate$suffix (NA_SEQUENCE_ID, SeqID, Source, Type, MAPPING_START, MAPPING_END, Score, Strand, Phase, ATTR, creationdate, apolloid, parent_attr, id_attr, apolloProduct, apolloSymbol, apolloOwner, apolloGoTerm, apolloPmid) VALUES ('$NASequenceID', '$seqID', '$source', '$type', '$start', '$end', '$score', '$strand', '$phase', '$attributes', '$creationDate', '$apolloID', '$parentAttr', '$idAttr', '$apolloProduct', '$apolloSymbol', '$apolloOwner', '$apolloGoTerm', '$apolloPmid')
 SQL
 }
 
@@ -169,7 +198,12 @@ create table ${prefix}ApolloUpdate$suffix (
    creationdate    varchar2(10),
    apolloid        number(10),
    parent_attr     varchar2(50),
-   id_attr         varchar2(50)
+   id_attr         varchar2(50),
+   apolloProduct   varchar2(200),
+   apolloSymbol    varchar2(10),
+   apolloOwner     varchar2(30),
+   apolloGoTerm    varchar2(20),
+   apolloPmid      varchar2(20)
 ) nologging
 SQL
 }
