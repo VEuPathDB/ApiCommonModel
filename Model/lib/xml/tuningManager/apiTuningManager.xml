@@ -977,30 +977,40 @@ where p.rn = 1
     <sql>
       <![CDATA[
 CREATE TABLE DataSourceCount nologging as ( 
-        SELECT ds.taxon_id,
-               max(case when ds.type = 'organellar_genome' 
-                     then 1 
-                     else 0 end) as isOrganellar,
-               max(case when ds.type = 'isolates'
-                         AND ds.subtype = 'HTS_SNP' 
-                     then 1 
-                     else 0 end) as hasHTSIsolate,
-               max(case when ds.type = 'isolates'
-                         AND ds.subtype = 'sequenceing_types' 
-                     then 1 
-                     else 0 end) as hasPopset,      
-               max(case when ds.type = 'epitope'
-                     then 1 
-                     else 0 end) as hasEpitope,     
-               max(case when ds.type = 'transcript_expression'
-                         AND ds.subtype = 'array'                       
-                     then 1 
-                     else 0 end) as hasArray                      
-        FROM   apidb.DataSource ds
-          group by ds.taxon_id
-         )
-      ]]>
-    </sql>
+  SELECT * FROM (
+    SELECT DISTINCT enas.taxon_id, 'organellar' AS stype, 1 AS num
+    FROM dots.externalNAsequence enas, SRES.ontologyterm ot
+    WHERE enas.sequence_ontology_id = ot.ontology_term_id
+    AND ot.name in( 'mitochondrial_chromosome','apicoplast_chromosome')
+    GROUP BY  enas.taxon_id
+    UNION
+    SELECT distinct ds.taxon_id, 'HTSIsolate' AS stype, 1 AS num
+    FROM   apidb.DataSource ds
+    WHERE ds.type = 'isolates' AND ds.subtype = 'HTS_SNP'
+    GROUP BY  taxon_id
+    UNION
+    SELECT distinct ds.taxon_id, 'Popset' AS stype, 1 AS num
+    FROM   apidb.DataSource ds
+    WHERE ds.subtype = 'sequenceing_types'
+    GROUP BY  taxon_id
+    UNION
+    SELECT distinct ds.taxon_id, 'Epitope' AS stype, 1 AS num
+    FROM   apidb.DataSource ds
+    WHERE ds.type = 'epitope'
+    GROUP BY  taxon_id
+    UNION
+    SELECT distinct ds.taxon_id, 'Array' AS stype, 1 AS num
+    FROM   apidb.DataSource ds
+    WHERE ds.type = 'transcript_expression'
+    AND ds.subtype = 'array'
+    GROUP BY  taxon_id
+      ) PIVOT (
+        LISTAGG(num, ';') WITHIN GROUP (ORDER BY num) AS has
+        FOR stype IN ('organellar' organellar, 'Epitope' Epitope, 'Array' Array, 'HTSIsolate' HTSIsolate, 'Popset' Popset)
+        )
+  )
+    ]]>
+   </sql>
 
 
     <sql>
@@ -1237,11 +1247,11 @@ SELECT o.project_name as project_id,
        gc.proteomicsCount as proteomicsCount,
        gc.estCount as estCount,
        gc.ecNumberCount as ecNumberCount,
-       nvl(dsc.isOrganellar, 0) as isOrganellar,
-       nvl(dsc.hasHTSIsolate, 0) as hasHTSIsolate, 
-       nvl(dsc.hasPopset, 0) as hasPopset,
-       nvl(dsc.hasEpitope, 0) as hasEpitope,
-       nvl(dsc.hasArray, 0) as hasArray,
+       cast(nvl(dsc.Organellar_Has, 0) as NUMBER(1)) as isOrganellar,
+       cast(nvl(dsc.HTSIsolate_Has, 0) as NUMBER(1)) as hasHTSIsolate,
+       cast(nvl(dsc.Popset_Has, 0) as NUMBER(1)) as hasPopset,
+       cast(nvl(dsc.Epitope_Has, 0) as NUMBER(1)) as hasEpitope,
+       cast(nvl(dsc.Array_Has, 0) as NUMBER(1)) as hasArray,
        nvl(oc.hasCentromere, 0) as hasCentromere,
        nvl(sc.contig_num, 0) as contigCount,
        nvl(sc.supercont_num, 0) as supercontigCount,
@@ -8823,7 +8833,7 @@ tablespace indx
       <![CDATA[
       create table ApolloSiteSearch&1 nologging as
       select ga.source_id, ga.project_id, au.id_attr,
-             cast(substr(au.attr, 1, 4000) as varchar2(4000)) as attr
+             au.apolloproduct || au.apollosymbol || au.apolloowner || au.apollogoterm || au.apollopmid as attr
       from apidbTuning.ApolloUpdate au, apidbTuning.GeneAttributes ga
       where au.na_sequence_id = ga.na_sequence_id
         and au.type = 'gene'
