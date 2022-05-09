@@ -30,7 +30,6 @@ public abstract class Expression extends DatasetInjector {
 	    System.out.println(lcDatasetClassCategory);
 	    return lcDatasetClassCategory;
 	}
-	System.out.println("transcriptomics-HERE");
 	return "transcriptomics";
     }
 	
