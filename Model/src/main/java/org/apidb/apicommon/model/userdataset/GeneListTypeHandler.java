@@ -1,9 +1,9 @@
 package org.apidb.apicommon.model.userdataset;
 
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
@@ -37,16 +37,20 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
+  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId, Path workingDir) {
     String[] cmd = {"installGeneListUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("genelist.txt").toString(), projectId};
     return cmd;
   }
 
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
-    Set<String> filenames = new HashSet<String>();
-    filenames.add("genelist.txt");
-    return filenames;
+    try {
+      return userDataset.getFiles().values().stream()
+          .map(file -> file.getFileName())
+          .collect(Collectors.toSet());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override

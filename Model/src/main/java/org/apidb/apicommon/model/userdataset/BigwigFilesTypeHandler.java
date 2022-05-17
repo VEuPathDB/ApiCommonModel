@@ -100,7 +100,7 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
+  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId, Path workingDir) {
     String[] cmd = {};
     return cmd;
   }
