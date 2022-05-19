@@ -45,7 +45,6 @@ public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
     final String metaJsonTmpFile = Path.of(workingDir.toString(), "tmp-meta.json").toString();
     try {
       final var meta = userDataset.getMeta();
-      // Should we just modify loadStudy.bash to take the strings that are in this file?
       OBJECT_MAPPER.writeValue(new File(metaJsonTmpFile), meta);
     } catch (WdkModelException | IOException e) {
       throw new RuntimeException(e);
