@@ -51,8 +51,8 @@ public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
       throw new RuntimeException(e);
     }
     String[] cmd = {"singularity", "run",
-        "--bind", "$workDir:" + workingDir,
-        "--bind", "$componentGusConfigFile:$GUS_HOME/gus.config", // $GUS_HOME
+        "--bind", workingDir + ":/work",
+        "--bind", "$GUS_HOME/config/gus.config:/gusApp/gus_home/config/gus.config",
         "--bind", "$ORACLE_HOME/network/admin:/opt/oracle/instantclient_21_6/network/admin",
         "docker://veupathdb/dataset-installer-isasimple:latest",
         "loadStudy.bash",
