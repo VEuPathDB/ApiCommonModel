@@ -1,6 +1,5 @@
 package org.apidb.apicommon.model.userdataset;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.gusdb.fgputil.json.JsonUtil;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.*;
@@ -18,8 +17,6 @@ public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
   public final static String VERSION = "1.0";
   public final static String DISPLAY = "ISA Simple";
 
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-	
   @Override
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
     return new UserDatasetCompatibility(true, "");
