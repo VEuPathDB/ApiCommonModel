@@ -1,6 +1,7 @@
 package org.apidb.apicommon.model.userdataset;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.gusdb.fgputil.json.JsonUtil;
 import org.gusdb.wdk.model.WdkModelException;
 import org.gusdb.wdk.model.user.dataset.*;
 
@@ -45,7 +46,7 @@ public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
     final String metaJsonTmpFile = Path.of(workingDir.toString(), "tmp-meta.json").toString();
     try {
       final var meta = userDataset.getMeta();
-      OBJECT_MAPPER.writeValue(new File(metaJsonTmpFile), meta);
+      JsonUtil.Jackson.writeValue(new File(metaJsonTmpFile), meta);
     } catch (WdkModelException | IOException e) {
       throw new RuntimeException(e);
     }
