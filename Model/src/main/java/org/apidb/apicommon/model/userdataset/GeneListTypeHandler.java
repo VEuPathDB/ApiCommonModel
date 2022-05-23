@@ -37,14 +37,14 @@ public class GeneListTypeHandler extends UserDatasetTypeHandler {
   }
 
   @Override
-  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
+  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId, Path workingDir) {
     String[] cmd = {"installGeneListUserDataset", userDataset.getUserDatasetId().toString(), fileNameToTempFileMap.get("genelist.txt").toString(), projectId};
     return cmd;
   }
 
   @Override
   public Set<String> getInstallInAppDbFileNames(UserDataset userDataset) {
-    Set<String> filenames = new HashSet<String>();
+    Set<String> filenames = new HashSet<>();
     filenames.add("genelist.txt");
     return filenames;
   }
