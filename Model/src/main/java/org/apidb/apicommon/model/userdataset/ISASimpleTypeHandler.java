@@ -13,8 +13,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
-  public final static String NAME = "ISASimple";
-  public final static String VERSION = "1.0";
+  public final static String NAME = "ISA";
+  public final static String VERSION = "0.0";
   public final static String DISPLAY = "ISA Simple";
 
   @Override
