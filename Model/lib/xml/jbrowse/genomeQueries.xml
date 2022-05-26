@@ -66,11 +66,7 @@ ORDER BY
 <!-- For this query, '%' is added onto the end of goterms to prevent ORA-29275: partial multibyte character. -->
   <query name="gene:annotation2">
 <![CDATA[
-  SELECT distinct gene_name, feature_id, type, source, name, phase, score, parent_id, startm, end, strand,
-    listagg(goterms, ';' ON OVERFLOW TRUNCATE WITHOUT COUNT) within group (order by goterms) as combined_go,
-    listagg(pubinfo, ';' ON OVERFLOW TRUNCATE WITHOUT COUNT) within group (order by pubinfo) as combined_pub,
-    atts
-   from (SELECT distinct
+  SELECT
        ga.name gene_name,
        ga.na_feature_id feature_id,
        'gene' type,
@@ -81,8 +77,6 @@ ORDER BY
        ga.na_sequence_id parent_id,
        ga.start_min startm,
        ga.end_max end,
-       go.go_id ||'%'|| go.go_term_name ||'%'|| go.ontology ||'%'|| go.transcript_ids || '%' as goterms,
-       gpm.pubmed_id ||'%'||  gpm.doi ||'%'|| gpm.title ||'%'|| gpm.authors as pubinfo,
        decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'Note=' || ga.product  || '$dlm' ||
        'soTerm=' || ga.so_term_name || '$dlm' ||
@@ -98,14 +92,13 @@ ORDER BY
        'ProjectId=' || ga.project_id || '$dlm' ||
        'OrgAbbrev=' || o.public_abbrev atts
 FROM
-       ApidbTuning.GeneAttributes ga LEFT OUTER JOIN apidbTuning.GeneGoTable go on ga.source_id = go.source_id
-       LEFT OUTER JOIN apidbTuning.GenePubmed gpm on ga.source_id = gpm.gene_source_id , apidb.organism o, apidb.featurelocation fl 
+       ApidbTuning.GeneAttributes ga
+     , apidb.organism o, apidb.featurelocation fl
 WHERE  fl.na_sequence_id = $srcfeature_id
   AND  fl.start_min <= $rend
   AND  fl.end_max >= $base_start
   AND  fl.na_feature_id = ga.na_feature_id
-  AND  ga.taxon_id = o.taxon_id)
-GROUP BY gene_name, feature_id, type, source, name, phase, score, parent_id, startm, end, strand, atts
+  AND  ga.taxon_id = o.taxon_id
 ]]>
   </query>
 
@@ -3200,7 +3193,7 @@ where sg.na_sequence_id = $srcfeature_id
   AND sg.end_max >=  $$visibleRegionStart$$
   AND sg.syn_na_feature_id = fl.parent_id
   and fl.feature_type in ('Transcript')
-UNION
+UNION ALL
 select sg.synteny_id
      , fl.start_min syn_exon_start 
      , fl.end_max syn_exon_end
@@ -3277,7 +3270,7 @@ WHERE sg.feature_type = 'Transcript'
   AND sg.s <= $rend
   AND sg.e >= $base_start
   AND sg.syn_na_feature_id = gattr.na_feature_id
-UNION
+UNION ALL
 -- Syn UTR/CDS
 SELECT sg.syn_na_feature_id || '_syncdsorutr' as feature_id,
        sg.feature_type type,
@@ -3296,7 +3289,7 @@ WHERE sg.feature_type in ('CDS', 'UTR')
   AND sg.s <= $rend
   AND sg.e >= $base_start
 )
-UNION
+UNION ALL
 -- Transcipts
 SELECT distinct loc.na_feature_id || '_reftranscript' feature_id, 
        case when ta.so_term_name like 'protein_coding%'  then 'processed_transcript' else 'nc_transcript' end as type,
@@ -3316,7 +3309,7 @@ WHERE  loc.na_sequence_id = $srcfeature_id
   AND  loc.start_min <= $$visibleRegionEnd$$
   AND  loc.end_max >= $$visibleRegionStart$$
   AND loc.na_feature_id = ta.na_feature_id
-UNION
+UNION ALL
 -- UTR / CDS
 SELECT distinct loc.feature_location_id || '_refexon' feature_id, 
        loc.feature_type type, 
