@@ -16,7 +16,7 @@ public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
   public final static String NAME = "ISA";
   public final static String VERSION = "0.0";
   public final static String DISPLAY = "ISA Simple";
-  
+
   @Override
   public UserDatasetCompatibility getCompatibility(UserDataset userDataset, DataSource appDbDataSource) {
     return new UserDatasetCompatibility(true, "");
@@ -47,9 +47,11 @@ public class ISASimpleTypeHandler extends UserDatasetTypeHandler {
     } catch (WdkModelException | IOException e) {
       throw new RuntimeException(e);
     }
+    final String gusConfigBinding = String.format("%s/config/%s/gus.config:/gusApp/gus_home/config/gus.config",
+        System.getenv("GUS_HOME"), System.getenv("PROJECT_ID"));
     String[] cmd = {"singularity", "run",
         "--bind", workingDir + ":/work",
-        "--bind", System.getenv("GUS_HOME") + "/config/gus.config:/gusApp/gus_home/config/gus.config",
+        "--bind", gusConfigBinding,
         "--bind", System.getenv("ORACLE_HOME") + "/network/admin:/opt/oracle/instantclient_21_6/network/admin",
         "docker://veupathdb/dataset-installer-isasimple:latest",
         "loadStudy.bash",
