@@ -42,7 +42,8 @@ public class ChIPChip extends DatasetInjector {
 	    injectTemplate("chipchipQuestion");
         }
         else {
-        injectTemplate("chipChipPeaksColorByScore");
+	    //injectTemplate("chipChipPeaksColorByScore");
+	    injectTemplate("chipchipQuestion");
         }
 
 
