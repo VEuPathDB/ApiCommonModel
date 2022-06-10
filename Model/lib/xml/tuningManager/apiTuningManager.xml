@@ -1543,12 +1543,23 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
         AND edr.external_database_id = ed.external_database_id
      UNION
       SELECT n.name AS id, gf.source_id AS gene,
-             'gene name' as union_member, d.name as database_name /* apidb.GeneFeatureName.name */
-      from apidb.GeneFeatureName n, dots.genefeature gf, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d
+             'gene name' as union_member, d.name as database_name -- apidb.GeneFeatureName.name
+      from dots.genefeature gf, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+           (  select na_feature_id, name
+              from apidb.GeneFeatureName
+              where is_preferred = 1
+            minus
+              -- suppress gene/name associations from the *DELETED_RSRC databases
+              select gfn.na_feature_id, gfn.name
+              from apidb.GeneFeatureName gfn,
+                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+              where gfn.external_database_release_id = edr.external_database_release_id
+                and ed.external_database_id = edr.external_database_id
+                and ed.name like '%DELETED_RSRC'
+           ) n
       where n.na_feature_id = gf.na_feature_id
-        and gf.external_database_release_id =r.external_database_release_id
+        and gf.external_database_release_id = r.external_database_release_id
         and r.external_database_id = d.external_database_id
-        and n.is_preferred = 1
      UNION
       select dr.primary_identifier as id,
              gf.source_id as gene,
@@ -2294,14 +2305,30 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
       from apidb.GeneFeatureProduct
       group by na_feature_id
      ) any_gene_product,
-     (select na_feature_id, max(name) as name
-      from apidb.GeneFeatureName
-      where is_preferred = 1
-      group by na_feature_id
+     (  select na_feature_id, max(name) as name
+        from apidb.GeneFeatureName
+        where is_preferred = 1
+        group by na_feature_id
+      minus
+        -- suppress gene/name associations from the *DELETED_RSRC databases
+        select gfn.na_feature_id, gfn.name
+        from apidb.GeneFeatureName gfn,
+             sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+        where gfn.external_database_release_id = edr.external_database_release_id
+          and ed.external_database_id = edr.external_database_id
+          and ed.name like '%DELETED_RSRC'
      ) preferred_name,
-     (select na_feature_id, max(name) as name
-      from apidb.GeneFeatureName
-      group by na_feature_id
+     (  select na_feature_id, max(name) as name
+        from apidb.GeneFeatureName
+        group by na_feature_id
+      minus
+        -- suppress gene/name associations from the *DELETED_RSRC databases
+        select gfn.na_feature_id, gfn.name
+        from apidb.GeneFeatureName gfn,
+             sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+        where gfn.external_database_release_id = edr.external_database_release_id
+          and ed.external_database_id = edr.external_database_id
+          and ed.name like '%DELETED_RSRC'
      ) any_name,
      (select dbna.na_feature_id,
              substr(listagg (db.primary_identifier, ',') within group (order by db.primary_identifier), 1, 300) as entrez_id
