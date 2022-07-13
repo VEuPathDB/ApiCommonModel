@@ -1543,12 +1543,23 @@ FROM (SELECT substr(t.protein_id, 1, instr(t.protein_id, '.') - 1) AS id,
         AND edr.external_database_id = ed.external_database_id
      UNION
       SELECT n.name AS id, gf.source_id AS gene,
-             'gene name' as union_member, d.name as database_name /* apidb.GeneFeatureName.name */
-      from apidb.GeneFeatureName n, dots.genefeature gf, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d
+             'gene name' as union_member, d.name as database_name -- apidb.GeneFeatureName.name
+      from dots.genefeature gf, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+           (  select na_feature_id, name
+              from apidb.GeneFeatureName
+              where is_preferred = 1
+            minus
+              -- suppress gene/name associations from the *DELETED_RSRC databases
+              select gfn.na_feature_id, gfn.name
+              from apidb.GeneFeatureName gfn,
+                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+              where gfn.external_database_release_id = edr.external_database_release_id
+                and ed.external_database_id = edr.external_database_id
+                and ed.name like '%DELETED_RSRC'
+           ) n
       where n.na_feature_id = gf.na_feature_id
-        and gf.external_database_release_id =r.external_database_release_id
+        and gf.external_database_release_id = r.external_database_release_id
         and r.external_database_id = d.external_database_id
-        and n.is_preferred = 1
      UNION
       select dr.primary_identifier as id,
              gf.source_id as gene,
@@ -2294,14 +2305,30 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
       from apidb.GeneFeatureProduct
       group by na_feature_id
      ) any_gene_product,
-     (select na_feature_id, max(name) as name
-      from apidb.GeneFeatureName
-      where is_preferred = 1
-      group by na_feature_id
+     (  select na_feature_id, max(name) as name
+        from apidb.GeneFeatureName
+        where is_preferred = 1
+        group by na_feature_id
+      minus
+        -- suppress gene/name associations from the *DELETED_RSRC databases
+        select gfn.na_feature_id, gfn.name
+        from apidb.GeneFeatureName gfn,
+             sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+        where gfn.external_database_release_id = edr.external_database_release_id
+          and ed.external_database_id = edr.external_database_id
+          and ed.name like '%DELETED_RSRC'
      ) preferred_name,
-     (select na_feature_id, max(name) as name
-      from apidb.GeneFeatureName
-      group by na_feature_id
+     (  select na_feature_id, max(name) as name
+        from apidb.GeneFeatureName
+        group by na_feature_id
+      minus
+        -- suppress gene/name associations from the *DELETED_RSRC databases
+        select gfn.na_feature_id, gfn.name
+        from apidb.GeneFeatureName gfn,
+             sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+        where gfn.external_database_release_id = edr.external_database_release_id
+          and ed.external_database_id = edr.external_database_id
+          and ed.name like '%DELETED_RSRC'
      ) any_name,
      (select dbna.na_feature_id,
              substr(listagg (db.primary_identifier, ',') within group (order by db.primary_identifier), 1, 300) as entrez_id
@@ -2591,6 +2618,14 @@ and ga.orthomcl_name is null
         CREATE UNIQUE INDEX TranscriptAttr_genenaf&1
         ON &prefixTranscriptAttributes&1 (gene_na_feature_id, gene_source_id, source_id, project_id)
         TABLESPACE INDX
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX TransAttr_locsIds_ix&1
+          ON &prefixTranscriptAttributes&1
+             (na_sequence_id, start_min, end_max, is_reversed, gene_source_id, source_id, project_id)
+          TABLESPACE INDX
       ]]>
     </sql>
   </tuningTable>
@@ -4779,7 +4814,8 @@ END;
       <![CDATA[
                create table GeneIntronJunction&1 NOLOGGING as
 select junc.*, CASE WHEN maxv.gene_source_id is not null and maxv.max_isrpm > 0 THEN round((junc.total_isrpm / maxv.max_isrpm) * 100,2) ELSE null END as percent_max,
-CASE WHEN maxv.gene_source_id is not null THEN 1 ELSE 0 END as contained
+CASE WHEN maxv.gene_source_id is not null THEN 1 ELSE 0 END as contained,
+cast (null as number(10)) as taxon_id
 from ( 
 select gene_source_id,max(total_unique) as max_unique, max(total_isrpm) as max_isrpm
 from gijtmp
@@ -4790,12 +4826,29 @@ where junc.gene_source_id = maxv.gene_source_id(+)
     </sql>
     <sql>
       <![CDATA[
+        update GeneIntronJunction&1 gij
+        set taxon_id
+            = (select taxon_id
+               from dots.NaSequence
+               where na_sequence_id = gij.na_sequence_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
                create index gijnew_loc_ix&1 on GeneIntronJunction&1 (na_sequence_id,segment_start,segment_end,is_reversed) tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
                create index gijnew_gnscid_ix&1 on GeneIntronJunction&1 (intron_feature_id) tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+               create index gijnew_txnloc_ix&1
+                 on GeneIntronJunction&1
+                    (taxon_id, na_sequence_id, segment_start, segment_end, is_reversed,
+                     total_unique, total_isrpm, annotated_intron) tablespace indx
       ]]>
     </sql>
   </tuningTable>
@@ -5779,6 +5832,7 @@ GROUP BY p.ID, p.source_id, p.compound_name, p.definition, p.secondary_ids
     <externalDependency name="sres.PathwayNode"/>
     <externalDependency name="sres.PathwayRelationship"/>
     <externalDependency name="sres.OntologyTerm"/>
+    <externalDependency name="sres.EnzymeClass"/>
     <externalDependency name="apidb.PathwayReactionRel"/>
     <externalDependency name="apidb.PathwayReaction"/>
     <internalDependency name="PathwayCompounds"/>
@@ -7682,6 +7736,13 @@ and h.url like '/%'
         tablespace indx
       ]]>
     </sql>
+    <sql>
+      <![CDATA[
+        create index srcdset_idx&1
+          on Profile&1 (source_id, dataset_subtype, dataset_type) 
+        tablespace indx
+      ]]>
+    </sql>
 
     <sql>
       <![CDATA[
@@ -8837,6 +8898,8 @@ tablespace indx
       from apidbTuning.ApolloUpdate au, apidbTuning.GeneAttributes ga
       where au.na_sequence_id = ga.na_sequence_id
         and au.type = 'gene'
+        and (au.attr like '%gene_product=%'
+             or au.attr like '%description=%')
         and ga.start_min <= au.mapping_end AND ga.end_max >= au.mapping_start 
       ]]>
     </sql>

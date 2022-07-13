@@ -27,7 +27,7 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
   }
 
   @Override
-  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId) {
+  public String[] getInstallInAppDbCommand(UserDataset userDataset, Map<String, Path> fileNameToTempFileMap, String projectId, Path workingDir) {
       Path manifestFile = fileNameToTempFileMap.get("manifest.txt");
       if (manifestFile == null) {
 	  throw new RuntimeException("failed to get manifest.txt");

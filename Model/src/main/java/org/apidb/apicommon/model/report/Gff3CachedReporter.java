@@ -137,7 +137,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
   public String getDownloadFileName() {
     logger.info("Internal format: " + fileType);
     String name = getQuestion().getName();
-    if (fileType.equalsIgnoreCase("text")) {
+    if ("text".equalsIgnoreCase(fileType)) {
       return name + ".gff";
     }
     else { // use the default file name defined in the parent
