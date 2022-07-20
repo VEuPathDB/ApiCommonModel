@@ -1188,9 +1188,10 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
             <column name="apollo_symbol" />
             <column name="apollo_go_term" />
             <column name="creation_date" />
+            <column name="apollo_owner_details" />
             <sql>
 <![CDATA[
-                select ga.source_id
+           select ga.source_id
                 , ga.project_id
                 , apolloproduct as apollo_description
                 , apolloowner as apollo_owner
@@ -1199,13 +1200,31 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
                 , apollogoterm as apollo_go_term
                 , cast(utl_url.unescape(replace( replace(regexp_substr(au.attr, 'Name=[^;]*;'), 'Name=', ''), ';', '')) as varchar2(400)) as apollo_transcript_id
                 , au.creationdate as creation_date
-from  apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga
+                , (select firstname.value || ' ' ||  lastname.value || ', ' || address.value from
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'first_name') firstname,
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'last_name') lastname,
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'organization') address) as apollo_owner_details
+from  apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga, apidbtuning.transcriptattributes ta
      where au.type = 'gene'
      and (au.attr like '%gene_product=%'
           or au.attr like '%description=%')
      and ga.na_sequence_id = au.na_sequence_id
      and ga.start_min <= au.mapping_end 
      and ga.end_max >= au.mapping_start
+     and ta.source_id = au.apolloTranscript
+     and ga.strand_plus_minus = au.strand
  ]]>
        </sql>
 
