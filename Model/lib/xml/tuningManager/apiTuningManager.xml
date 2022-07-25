@@ -8962,4 +8962,106 @@ tablespace indx
     </sql>
   </tuningTable>
 
+  <tuningTable name="AlphaFoldGenes">
+    <comment>
+      Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
+    </comment>
+    
+    <externalDependency name="sres.externaldatabase"/>
+    <externalDependency name="sres.externaldatabaserelease"/>
+    <externalDependency name="sres.dbref"/>
+    <externalDependency name="dots.dbrefaafeature"/>
+    <externalDependency name="dots.aafeature"/>
+    <externalDependency name="apidb.alphafold"/>
+    <internalDependency name="ProteinAttributes"/>
+
+    <intermediateTable name="uniprotGenes"/>
+    <intermediateTable name="minRank"/>
+    <intermediateTable name="alphaFoldHits"/>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE uniprotGenes nologging AS (
+            SELECT ed.name
+            , d.*
+            , edr.version
+            , aa.source_id
+            , pa.gene_source_id
+            , CASE WHEN ed.name like '%SWISSPROT%' THEN 1
+                WHEN ed.name like '%SPTREMBL%' THEN 2
+                ELSE  3 END AS rank
+            FROM sres.dbref d
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            , dots.dbrefaafeature db
+            , dots.aafeature aa
+            , ProteinAttributes pa
+            WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
+            AND edr.external_database_id = ed.external_database_id
+            AND d.external_database_release_id = edr.external_database_release_id
+            AND edr.version = 'xrefuniparc'
+            AND db.db_ref_id = d.db_ref_id
+            AND aa.aa_feature_id = db.aa_feature_id
+            AND pa.source_id = aa.source_id
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE minRank nologging AS (
+            SELECT gene_source_id
+            , primary_identifier
+            , MIN(rank) as min_rank
+            FROM uniprotGenes
+            GROUP BY gene_source_id, primary_identifier
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE alphaFoldHits nologging AS (
+            SELECT gene_source_id
+            , MIN(primary_identifier) KEEP (DENSE_RANK FIRST ORDER BY primary_identifier) AS uniprot_id
+            FROM (
+                SELECT uniprotGenes.*
+                --, af.*
+                FROM uniprotGenes
+                , minRank
+                --, apidb.alphafold af
+                WHERE uniprotGenes.gene_source_id = minRank.gene_source_id
+                AND uniprotGenes.rank = minRank.min_rank
+                AND uniprotGenes.primary_identifier = af.uniprot_id
+            )
+            GROUP BY gene_source_id
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE AlphaFoldGenes nologging AS (
+            SELECT afh.gene_source_id
+            , af.uniprot_id
+            , af.source_id as alphafold_id
+            , af.alphafold_version
+            , af.first_residue_index
+            , af.last_residue_index
+            FROM apidb.alphafold af
+            , alphaFoldHits afh
+            WHERE afh.uniprot_id = af.uniprot_id
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE index AlphaFoldGene_idx&1 ON &prefixAlphaFoldGene&1 (gene_source_id, uniprot_id)                                                                                                
+        tablespace indx
+      ]]>
+    </sql>
+
+  </tuningTable>
+
 </tuningConfig>
