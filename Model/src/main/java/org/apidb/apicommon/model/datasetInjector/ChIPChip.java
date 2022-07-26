@@ -59,7 +59,9 @@ public class ChIPChip extends DatasetInjector {
       String cleanDatasetName = getDatasetName().replace('.', '_');
       setPropValue ("cleanDatasetName", cleanDatasetName);
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ cleanDatasetName);
+      if (!getPropValueAsBoolean("hasCalledPeaks")) {
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ cleanDatasetName);
+      }
   }
 
   // second column is for documentation
