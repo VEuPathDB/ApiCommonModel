@@ -1188,9 +1188,10 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
             <column name="apollo_symbol" />
             <column name="apollo_go_term" />
             <column name="creation_date" />
+            <column name="apollo_owner_details" />
             <sql>
 <![CDATA[
-                select ga.source_id
+           select ga.source_id
                 , ga.project_id
                 , apolloproduct as apollo_description
                 , apolloowner as apollo_owner
@@ -1199,13 +1200,31 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
                 , apollogoterm as apollo_go_term
                 , cast(utl_url.unescape(replace( replace(regexp_substr(au.attr, 'Name=[^;]*;'), 'Name=', ''), ';', '')) as varchar2(400)) as apollo_transcript_id
                 , au.creationdate as creation_date
-from  apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga
+                , (select firstname.value || ' ' ||  lastname.value || ', ' || address.value from
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'first_name') firstname,
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'last_name') lastname,
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'organization') address) as apollo_owner_details
+from  apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga, apidbtuning.transcriptattributes ta
      where au.type = 'gene'
      and (au.attr like '%gene_product=%'
           or au.attr like '%description=%')
      and ga.na_sequence_id = au.na_sequence_id
      and ga.start_min <= au.mapping_end 
      and ga.end_max >= au.mapping_start
+     and ta.source_id = au.apolloTranscript
+     and ga.strand_plus_minus = au.strand
  ]]>
        </sql>
 
@@ -1643,43 +1662,23 @@ transcript_ids
             </testParamValues>
 
             <column name="source_id"/>
-            <column name="transcript_id"/>
             <column name="project_id"/>
-            <column name="tmf_name"/>
-            <column name="tmf_parent_id"/>
             <column name="tmf_topology"/>
+            <column name="transcript_id"/>
             <column name="tmf_start_min"/>
             <column name="tmf_end_max"/>
             <column name="tmf_sequence"/>
-
             <sql>
            <![CDATA[
-SELECT
-  /*+ no_star_transformation */
-  t.source_id as transcript_id
-, gf.source_id AS source_id
-, gf.project_id
-, tmf.topology AS tmf_topology
-, aal.start_min AS tmf_start_min
-, aal.end_max AS tmf_end_max
-, dbms_lob.substr(tas.sequence, aal.end_max - aal.start_min + 1, aal.start_min) AS tmf_sequence
-FROM
-  dots.aalocation aal
-, apidbtuning.geneattributes gf
-, dots.transcript t
-, dots.translatedaafeature taf
-, dots.translatedaasequence tas
-, dots.transmembraneaafeature tmf
-WHERE
-  gf.na_feature_id = t.parent_id
-  AND t.na_feature_id = taf.na_feature_id
-  AND taf.aa_sequence_id = tas.aa_sequence_id
-  AND tas.aa_sequence_id = tmf.aa_sequence_id
-  and tmf.aa_feature_id = aal.aa_feature_id
-order by
-  t.source_id,
-  tmf_start_min
-            ]]>           
+                    SELECT tm.gene_source_id as source_id
+                         , tm.project_id
+                         , tm.tmf_topology
+                         , tm.transcript_source_id as transcript_id
+                         , tm.tmf_start_min
+                         , tm.tmf_end_max
+                         , tm.tmf_sequence
+                         FROM ApiDBTuning.TransmembraneDomains tm
+           ]]>           
           </sql>
         </sqlQuery>
 
