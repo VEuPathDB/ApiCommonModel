@@ -10,12 +10,12 @@ public class RNASeqWGCNA extends RNASeq {
 
 
       // setPropValue("searchCategory", "searchCategory-transcriptomics-iterativeWGCNA");
-      // setPropValue("questionName", "GenesByRNASeqWGCNA" + getDatasetName());
+      injectTemplate("wgcnaModules");
+      setPropValue("questionName", "GenesByRNASeq" + getDatasetName() + "WGCNAModules");
 
       setPropValue("searchCategory", "searchCategory-transcriptomics-iterativeWGCNA");
-      setPropValue("questionName", "GenesByWGCNAModule");
+      //setPropValue("questionName", "GenesByWGCNAModule");
 
-      injectTemplate("wgcnaModules");
       injectTemplate("internalGeneSearchCategory");
 
   }
@@ -26,8 +26,7 @@ public class RNASeqWGCNA extends RNASeq {
 
       super.addModelReferences();
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GenesByWGCNAModule" + getDatasetName());
-
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "WGCNAModules");
   }
 
 
