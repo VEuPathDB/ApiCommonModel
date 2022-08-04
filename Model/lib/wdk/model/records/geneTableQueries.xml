@@ -1188,9 +1188,10 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
             <column name="apollo_symbol" />
             <column name="apollo_go_term" />
             <column name="creation_date" />
+            <column name="apollo_owner_details" />
             <sql>
 <![CDATA[
-                select ga.source_id
+           select ga.source_id
                 , ga.project_id
                 , apolloproduct as apollo_description
                 , apolloowner as apollo_owner
@@ -1199,13 +1200,31 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
                 , apollogoterm as apollo_go_term
                 , cast(utl_url.unescape(replace( replace(regexp_substr(au.attr, 'Name=[^;]*;'), 'Name=', ''), ';', '')) as varchar2(400)) as apollo_transcript_id
                 , au.creationdate as creation_date
-from  apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga
+                , (select firstname.value || ' ' ||  lastname.value || ', ' || address.value from
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'first_name') firstname,
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'last_name') lastname,
+(select uap.value
+from useraccounts.accounts@acctdbn.profile uaa,  useraccounts.account_properties@acctdbn.profile uap
+where uaa.user_id = uap.user_id
+and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+and uap.key = 'organization') address) as apollo_owner_details
+from  apidbtuning.ApolloUpdate au, ApidbTuning.GeneAttributes ga, apidbtuning.transcriptattributes ta
      where au.type = 'gene'
      and (au.attr like '%gene_product=%'
           or au.attr like '%description=%')
      and ga.na_sequence_id = au.na_sequence_id
      and ga.start_min <= au.mapping_end 
      and ga.end_max >= au.mapping_start
+     and ta.source_id = au.apolloTranscript
+     and ga.strand_plus_minus = au.strand
  ]]>
        </sql>
 
@@ -4401,6 +4420,39 @@ WHERE edr.external_database_id = ed.external_database_id
             </sql>
         </sqlQuery>
 
+    <sqlQuery name="AlphaFoldLinkoutsTable" excludeProjects="EuPathDB,HostDB">
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="uniprot_id"/>
+        <column name="first"/>
+        <column name="last"/>
+        <column name="uniprot_source"/>
+        <column name="is_visualization"/>
+
+        <sql>
+          <![CDATA[
+            SELECT DISTINCT ga.project_id
+            , ga.source_id
+            , af.uniprot_id
+            , af.first_residue_index as first
+            , af.last_residue_index as last
+            , CASE WHEN upg.rank = 1 THEN 'From Annotation'
+                WHEN upg.rank = 2 THEN 'SWISSPROT direct link'
+                WHEN upg.rank = 3 THEN 'TrEMBL direct link'
+                WHEN upg.rank = 4 THEN 'SWISSPROT by sequence similarity'
+                WHEN upg.rank = 5 THEN 'TrEMBL by sequence similarity' END as uniprot_source
+            , CASE WHEN afg.uniprot_id IS NULL THEN 'No' ELSE 'Yes' END AS is_visualization
+            FROM apidbtuning.geneattributes ga
+            , apidb.alphafold af
+            , apidbtuning.alphafoldgenes afg
+            , apidbtuning.uniprotgenes upg
+            WHERE ga.source_id = upg.gene_source_id
+            AND upg.primary_identifier = af.uniprot_id
+            AND af.uniprot_id = afg.uniprot_id (+)
+            AND ga.source_id = afg.gene_source_id (+)
+        ]]>
+      </sql>
+    </sqlQuery>
 
 
    </querySet>
