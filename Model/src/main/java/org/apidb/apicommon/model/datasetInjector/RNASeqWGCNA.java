@@ -9,12 +9,9 @@ public class RNASeqWGCNA extends RNASeq {
       super.injectTemplates();
 
 
-      // setPropValue("searchCategory", "searchCategory-transcriptomics-iterativeWGCNA");
-      injectTemplate("wgcnaModules");
-      setPropValue("questionName", "GenesByRNASeq" + getDatasetName() + "WGCNAModules");
-
+      injectTemplate("rnaSeqWGCNAModulesQuestion");
       setPropValue("searchCategory", "searchCategory-transcriptomics-iterativeWGCNA");
-      //setPropValue("questionName", "GenesByWGCNAModule");
+      setPropValue("questionName", "GenesByRNASeq" + getDatasetName() + "WGCNAModules");
 
       injectTemplate("internalGeneSearchCategory");
 
