@@ -3,6 +3,118 @@
 
   <import file="tuningManager.xml"/>
 
+  <tuningTable name="TransmembraneDomains" prefixEnabled="false">
+    <comment>Locations and Sequence of Transmembrane Domains (TMHMM)
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="dots.AaLocation"/>
+    <externalDependency name="dots.TranslatedAaFeature"/>
+    <externalDependency name="dots.TranslatedAaSequence"/>
+    <externalDependency name="dots.TransmembraneAaFeature"/>
+    <sql>
+      <![CDATA[
+               create table TransmembraneDomains&1 as 
+               SELECT ta.source_id as transcript_source_id
+                    , ta.gene_source_id AS gene_source_id
+                    , ta.project_id
+                    , tmf.topology AS tmf_topology
+                    , aal.start_min AS tmf_start_min
+                    , aal.end_max AS tmf_end_max
+                    , dbms_lob.substr(tas.sequence, aal.end_max - aal.start_min + 1, aal.start_min) AS tmf_sequence
+                    , tmf.aa_feature_id tmf_aa_feature_id
+                    , tmf.aa_sequence_id tmf_aa_sequence_id
+                    , tas.source_id as protein_source_id
+               FROM dots.aalocation aal
+                  , transcriptattributes ta
+                  , dots.translatedaafeature taf
+                  , dots.translatedaasequence tas
+                  , dots.transmembraneaafeature tmf
+               WHERE ta.na_feature_id = taf.na_feature_id
+                AND taf.aa_sequence_id = tas.aa_sequence_id
+                AND tas.aa_sequence_id = tmf.aa_sequence_id
+                and tmf.aa_feature_id = aal.aa_feature_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index TransDom1_ix&1
+        on TransmembraneDomains&1 (tmf_aa_sequence_id, tmf_aa_feature_id, tmf_start_min, tmf_end_max, tmf_topology)
+        tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index TransDom2_ix&1
+        on TransmembraneDomains&1 (gene_source_id, project_id, transcript_source_id, tmf_start_min, tmf_end_max, tmf_topology, tmf_sequence)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="SignalPeptideDomains" prefixEnabled="false">
+    <comment>Locations and Sequence of Signal Peptide Domains (SignalP)
+    </comment>
+    <externalDependency name="dots.AaLocation"/>
+    <externalDependency name="dots.AaSequence"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.SignalPeptideFeature"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="dots.TranslatedAaFeature"/>
+    <externalDependency name="dots.TranslatedAaSequence"/>
+    <sql>
+        <![CDATA[
+          CREATE TABLE SignalPeptideDomains&1 AS
+          SELECT
+              gf.source_id gene_source_id
+              , t.source_id transcript_source_id
+              , taf.na_feature_id
+              , spf.aa_feature_id
+              , spf.aa_sequence_id
+              , spf.parent_id
+              , aal.start_min
+              , aal.end_max
+              , spf.algorithm_name
+              , dbms_lob.substr(s.sequence, aal.end_max, 1) peptide_sequence
+          FROM
+             dots.SignalPeptideFeature spf
+            , dots.AaLocation aal
+            , dots.TranslatedAaFeature taf
+            , dots.TranslatedAaSequence tas
+            , dots.GeneFeature gf
+            , dots.AaSequence s
+            , dots.Transcript t
+          WHERE
+              spf.aa_sequence_id = s.aa_sequence_id
+              AND aal.aa_feature_id = spf.aa_feature_id
+              AND t.na_feature_id = taf.na_feature_id
+              AND taf.aa_sequence_id = tas.aa_sequence_id
+              AND tas.aa_sequence_id = spf.aa_sequence_id
+              AND gf.na_feature_id = t.parent_id
+              AND (spf.signal_probability >= .5
+                  OR spf.signal_probability IS NULL
+                  OR ((spf.means_score + spf.maxy_score) / 2) >= .5
+                      OR ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) >= 3
+                  )
+          ORDER BY
+              spf.aa_sequence_id, spf.aa_feature_id
+        ]]>
+    </sql>
+    <sql>
+        <![CDATA[
+          CREATE INDEX SignalP1_ix&1
+          ON SignalPeptideDomains&1 (aa_sequence_id)
+          TABLESPACE indx
+        ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+          CREATE INDEX SignalP2_ix&1
+          ON SignalPeptideDomains&1 (gene_source_id, transcript_source_id, end_max)
+          TABLESPACE indx
+        ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="OrganismSelectTaxonRank" prefixEnabled="false">
     <comment>Taxon ranks for organisms                                                                                                     
     </comment>
@@ -7271,6 +7383,7 @@ and h.url like '/%'
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
+    <externalDependency name="apidb.eigengenewgcnaresults"/>
     <externalDependency name="results.CompoundMassSpec"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="results.NaFeatureHostResponse"/>
@@ -7695,6 +7808,22 @@ and h.url like '/%'
                        and sl.study_id = s.study_id
                        and s.investigation_id is not null
                 group by sl.study_id, result.subject
+        UNION ALL
+        -- wgcna eigengene results
+               select sl.study_id, result.module_name as source_id, 'values' as profile_type,
+                       listagg(nvl(to_char(round(result.value, 2)), 'NA'), chr(9))
+                         within group (order by pan.node_order_num)
+                         as profile_as_string, 
+                       max(result.value) as max_value, min(result.value) as min_value, 
+                       max(pan.name) keep(dense_rank last order by result.value) as max_timepoint, 
+                       max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
+                from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
+                     apidb.eigengenewgcnaresults result 
+                     where result.protocol_app_node_id = sl.protocol_app_node_id
+                       and result.protocol_app_node_id = pan.protocol_app_node_id
+                       and sl.study_id = s.study_id
+                       and s.investigation_id is not null
+                group by sl.study_id, result.module_name
        ) profile
   where ds.name = d.name
     and ps.investigation_id = i.study_id
@@ -7922,6 +8051,19 @@ and h.url like '/%'
           pt.profile_set_suffix
         FROM profileType pt, study.study s, study.studyLink sl,
           study.protocolAppNode pan, apidb.subjectresult r
+        WHERE pt.profile_study_id = s.study_id
+        AND sl.study_id = s.study_id
+        AND sl.protocol_app_node_id = pan.protocol_app_node_id
+        AND  pan.protocol_app_node_id =r.protocol_app_node_id
+      UNION
+        SELECT DISTINCT s.name AS study_name, s.study_id, 
+          REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                         ' \(.+\)', '')AS protocol_app_node_name,
+          pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+          pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+          pt.profile_set_suffix
+        FROM profileType pt, study.study s, study.studyLink sl,
+          study.protocolAppNode pan, apidb.eigengenewgcnaresults r
         WHERE pt.profile_study_id = s.study_id
         AND sl.study_id = s.study_id
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
@@ -8910,6 +9052,132 @@ tablespace indx
           tablespace indx
       ]]>
     </sql>
+  </tuningTable>
+
+  <tuningTable name="AlphaFoldGenes">
+    <comment>
+      Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
+    </comment>
+    
+    <externalDependency name="sres.externaldatabase"/>
+    <externalDependency name="sres.externaldatabaserelease"/>
+    <externalDependency name="sres.dbref"/>
+    <externalDependency name="dots.dbrefaafeature"/>
+    <externalDependency name="dots.aafeature"/>
+    <externalDependency name="dots.dbrefnafeature"/>
+    <externalDependency name="dots.nafeature"/>
+    <externalDependency name="apidb.alphafold"/>
+    <internalDependency name="ProteinAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+
+    <ancillaryTable name="uniprotGenes"/>
+    <intermediateTable name="minRank"/>
+    <intermediateTable name="alphaFoldHits"/>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE uniprotGenes&1 nologging AS (
+            SELECT DISTINCT ed.name
+            , d.*
+            , edr.version
+            , aa.source_id
+            , pa.gene_source_id
+            , CASE WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xrefuniparc') THEN 2
+                WHEN (ed.name like '%SPTREMBL%' AND edr.version = 'xrefuniparc') THEN 3
+                WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xref_sprot_blastp') THEN 4
+                WHEN (ed.name like '%SPTREMBL%' and edr.version = 'xref_trembl_blastp') THEN 5
+                ELSE 6 END as rank
+            FROM sres.dbref d
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            , dots.dbrefaafeature db
+            , dots.aafeature aa
+            , ProteinAttributes pa
+            WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
+            AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp') 
+            AND edr.external_database_id = ed.external_database_id
+            AND d.external_database_release_id = edr.external_database_release_id
+            AND db.db_ref_id = d.db_ref_id
+            AND aa.aa_feature_id = db.aa_feature_id
+            AND pa.source_id = aa.source_id
+
+            UNION
+
+            SELECT DISTINCT ed.name
+            , d.*
+            , edr.version
+            , na.source_id
+            , ta.gene_source_id
+            , 1 as rank
+            FROM sres.dbref d
+            , sres.externaldatabase ed
+            , sres.externaldatabaserelease edr
+            , dots.dbrefnafeature db
+            , dots.nafeature na
+            , TranscriptAttributes ta
+            WHERE ed.name like '%_dbxref_%niprot_%RSRC'
+            AND edr.external_database_id = ed.external_database_id
+            AND d.external_database_release_id = edr.external_database_release_id
+            AND db.db_ref_id = d.db_ref_id
+            AND na.na_feature_id = db.na_feature_id
+            AND (ta.transcript_source_id = na.source_id OR ta.gene_source_id = na.source_id)
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE minRank nologging AS (
+            SELECT gene_source_id
+            , MIN(rank) as min_rank
+            FROM uniprotGenes&1 upg
+            , apidb.alphafold af
+            WHERE upg.primary_identifier = af.uniprot_id
+            GROUP BY gene_source_id
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE alphaFoldHits nologging AS (
+            SELECT gene_source_id
+            , MIN(primary_identifier) KEEP (DENSE_RANK FIRST ORDER BY primary_identifier) AS uniprot_id
+            FROM (
+                SELECT upg.*
+                FROM uniprotGenes&1 upg
+                , minRank
+                WHERE upg.gene_source_id = minRank.gene_source_id
+                AND upg.rank = minRank.min_rank
+            )
+            GROUP BY gene_source_id
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE TABLE AlphaFoldGenes&1 nologging AS (
+            SELECT afh.gene_source_id
+            , af.uniprot_id
+            , af.source_id as alphafold_id
+            , af.alphafold_version
+            , af.first_residue_index
+            , af.last_residue_index
+            FROM apidb.alphafold af
+            , alphaFoldHits afh
+            WHERE afh.uniprot_id = af.uniprot_id
+        )
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        CREATE index AlphaFoldGenes_idx&1 ON AlphaFoldGenes&1 (gene_source_id, uniprot_id)                                                                                                
+        tablespace indx
+      ]]>
+    </sql>
+
   </tuningTable>
 
 </tuningConfig>
