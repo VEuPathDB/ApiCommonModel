@@ -1952,6 +1952,7 @@ tablespace indx
     <externalDependency name="apidb.CdsLocation"/>
     <internalDependency name="GoTermSummary"/>
     <internalDependency name="GeneGoTerms"/>
+    <internalDependency name="SignalPeptideDomains"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
     <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.AaLocation"/>
@@ -1959,7 +1960,6 @@ tablespace indx
     <externalDependency name="dots.AaSequenceEnzymeClass"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.RnaType"/>
-    <externalDependency name="dots.SignalPeptideFeature"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
@@ -2084,6 +2084,7 @@ SELECT pi.name as project_id,
             dots.TranslatedAaFeature taf,
             dots.TranslatedAaSequence tas,
             apidb.AaSequenceAttribute asa,
+            SignalPeptideDomains sigp,
             (SELECT protein_source_id, na_sequence_id, is_reversed,
                  MIN(start_min) AS start_min, MAX(end_max) AS end_max  
              FROM apidb.CdsLocation WHERE is_top_level=1
@@ -2096,18 +2097,6 @@ SELECT pi.name as project_id,
                    WHERE tmaf.aa_feature_id = al.aa_feature_id
                    GROUP BY tmaf.aa_sequence_id) tms
              GROUP BY tms.aa_sequence_id) transmembrane,
-             (SELECT spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
-              ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2) as scores,
-               apidb.tab_to_string(set(cast(COLLECT(decode(spf.algorithm_name,'SignalPhmm','HMM: ','NN: ') || dbms_lob.substr(s.sequence,aal.end_max,1) order by spf.algorithm_name, dbms_lob.substr(s.sequence, aal.end_max, 1)) as apidb.varchartab)), ', ') as pep
-              FROM dots.SignalPeptideFeature spf, dots.AaLocation aal, dots.AaSequence s
-              WHERE spf.aa_sequence_id = s.aa_sequence_id 
-              and  aal.aa_feature_id = spf.aa_feature_id
-              and (spf.signal_probability >= .5
-              or spf.signal_probability is null
-              or ((spf.means_score + spf.maxy_score) / 2) >= .5
-              or ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) >= 3)
-              group by spf.aa_sequence_id,'NN Sum: ' || ( spf.maxy_conclusion + spf.maxc_conclusion + spf.maxs_conclusion + spf.means_conclusion ) ||
-              ', NN D: ' || round(((spf.means_score + spf.maxy_score) / 2),2) || ', HMM Prob: ' || round(spf.signal_probability,2)) sigp,
             (SELECT aa_sequence_id,
                     SUBSTR(apidb.tab_to_string(set(cast(COLLECT(ec_number order by ec_number)
                                                as apidb.varchartab)), ';'),
