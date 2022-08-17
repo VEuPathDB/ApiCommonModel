@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class PubMed extends DatasetInjector {
+public class Cellxgene extends DatasetInjector {
 
     @Override
 	public void injectTemplates() {
