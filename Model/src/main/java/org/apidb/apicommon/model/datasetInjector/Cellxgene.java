@@ -11,6 +11,7 @@ public class Cellxgene extends DatasetInjector {
     @Override
   public void addModelReferences() {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Cellxgene");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySingleCell");
   }
 
   // second column is for documentation
