@@ -1428,6 +1428,41 @@ UNION
         </sql>
  </sqlQuery>
 
+
+       <sqlQuery name="Cellxgene" isCacheable="false" includeProjects="PlasmoDB,TriTrypDB,PiroplasmaDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="source_ids"/>
+            <column name="assay_type"/>
+            <column name="summary"/>
+            <column name="short_attribution"/>
+            <column name="display_name"/>
+            <column name="dataset_name"/>
+            <sql>
+            <![CDATA[
+                     select ga.source_id
+                          , ga.project_id
+                          , listagg(cg.source_id, ';') within group (order by cg.source_id) as source_ids
+                          , d.name as dataset_name
+                          , dsp.display_name
+                          , 'scRNASeq' as assay_type
+                          , to_char(dsp.summary) as summary
+                          , dsp.SHORT_ATTRIBUTION
+                     from apidbtuning.geneattributes ga
+                        , apidb.cellxgene cg
+                        , sres.externaldatabaserelease r
+                        , sres.externaldatabase d
+                        , apidbtuning.datasetpresenter dsp
+                     where ga.na_feature_id = cg.na_feature_id
+                     and r.EXTERNAL_DATABASE_RELEASE_ID = cg.EXTERNAL_DATABASE_RELEASE_ID
+                     and r.external_database_id = d.external_database_id
+                     and d.name = dsp.name
+                     group by ga.source_id, ga.project_id, d.name, dsp.display_name, to_char(dsp.summary), dsp.short_attribution
+            ]]>
+            </sql>
+        </sqlQuery>
+
+
        <sqlQuery name="RodMalPhenotypeTable" isCacheable="false" includeProjects="PlasmoDB,UniDB">
             <column name="source_id"/>
             <column name="project_id"/>
@@ -4412,12 +4447,13 @@ WHERE edr.external_database_id = ed.external_database_id
             </sql>
         </sqlQuery>
 
-    <sqlQuery name="AlphaFoldLinkoutsTable" excludeProjects="EuPathDB,HostDB">
+    <sqlQuery name="AlphaFoldLinkoutsTable" excludeProjects="EuPathDB">
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="uniprot_id"/>
         <column name="first"/>
         <column name="last"/>
+        <column name="prediction_length"/>
         <column name="uniprot_source"/>
         <column name="is_visualization"/>
 
@@ -4428,6 +4464,8 @@ WHERE edr.external_database_id = ed.external_database_id
             , af.uniprot_id
             , af.first_residue_index as first
             , af.last_residue_index as last
+            , (af.last_residue_index - af.first_residue_index + 1 ) as prediction_length
+            , upg.rank
             , CASE WHEN upg.rank = 1 THEN 'From Annotation'
                 WHEN upg.rank = 2 THEN 'SWISSPROT direct link'
                 WHEN upg.rank = 3 THEN 'TrEMBL direct link'
@@ -4442,6 +4480,7 @@ WHERE edr.external_database_id = ed.external_database_id
             AND upg.primary_identifier = af.uniprot_id
             AND af.uniprot_id = afg.uniprot_id (+)
             AND ga.source_id = afg.gene_source_id (+)
+            ORDER BY is_visualization desc, upg.rank, prediction_length desc
         ]]>
       </sql>
     </sqlQuery>
