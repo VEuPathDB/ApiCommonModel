@@ -81,7 +81,7 @@ public class GenBankReporter extends PagedAnswerReporter {
                 .setParamValues(params)
                 .buildRunnable(_baseAnswer.getUser(), _baseAnswer.getAnswerSpec().getStepContainer());
             AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(
-                _baseAnswer.getUser(), runnableSpec, 0, _pageSize, sorting, false);
+                _baseAnswer.getUser(), runnableSpec, 1, _pageSize, sorting, false);
 
             // write non gene sequence features
             writeSequenceFeatures(record, writer);
