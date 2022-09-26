@@ -12,7 +12,7 @@ public class PhenotypeMagnaporthe extends DatasetInjector {
   public void addModelReferences() {
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotype_phenotype_Magnaporthe_Pheno_RSRC"); 
       addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByPhenotypeText");
-      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "PhenotypeMagnaporthe"); 
   }
 
   // second column is for documentation
