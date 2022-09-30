@@ -9072,6 +9072,116 @@ tablespace indx
     </sql>
   </tuningTable>
 
+  <tuningTable name="PreferredProductsGene">
+    <comment>
+      Text for PreferredProduct table on gene record page.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="ApolloUpdateGene"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <sql>
+      <![CDATA[
+                -- PreferredProductsGene: check apidb.TranscriptProduct and
+                -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
+                -- (and only if) that turns up nothing, check the PRODUCT column of
+                -- dots.GeneFeature and dots.Transcript
+                with evids
+                   as (select distinct gaiec.go_evidence_code_id, ot.name
+                       from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                       where ot.ontology_term_id = gaiec.go_evidence_code_id),
+                     gusmappings
+                   as (  
+                select ta.gene_source_id as source_id, tp.product, ta.project_id,
+                       listagg(source_id, ', ') within group(order by source_id)
+                         as transcript_ids,
+                       listagg(publication, ', ') within group(order by source_id)
+                         as reference,
+                       e.name as evidence_code,
+                       tp.with_from AS evidence_code_parameter
+                from apidb.TranscriptProduct tp,
+                     TranscriptAttributes ta, evids e
+                where ta.na_feature_id = tp.na_feature_id
+                  and tp.is_preferred = 1
+                  and tp.evidence_code = e.go_evidence_code_id(+)
+                group by gene_source_id, ta.project_id, tp.product,
+                         e.name, tp.with_from
+              union
+                select ga.source_id, gfp.product, ga.project_id,
+                       cast (null as varchar2(1)) as transcript_ids,
+                       cast (null as varchar2(1)) as reference,
+                       cast (null as varchar2(1)) as evidence_code,
+                       cast (null as varchar2(1)) as evidence_code_parameter
+                from apidb.GeneFeatureProduct gfp,
+                     GeneAttributes ga
+                where ga.na_feature_id = gfp.na_feature_id
+                  and gfp.is_preferred = 1
+                group by source_id, ga.project_id, gfp.product
+              union
+                select *
+                from (select ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
+                             listagg(source_id, ', ') within group(order by source_id)
+                               as transcript_ids,
+                             cast (null as varchar2(1)) as reference,
+                             cast (null as varchar2(1)) as evidence_code,
+                             cast (null as varchar2(1)) as evidence_code_parameter
+                      from TranscriptAttributes ta
+                      where ta.transcript_product is not null
+                      group by ta.gene_source_id, ta.transcript_product, ta.project_id
+                     )
+                where source_id
+                      in (  select *
+                            from (  select source_id
+                                    from dots.GeneFeature
+                                    where product is not null
+                                  union
+                                    select ga.source_id
+                                    from dots.Transcript t, GeneAttributes ga
+                                    where t.product is not null
+                                      and t.parent_id = ga.na_feature_id
+                                 )
+                          minus
+                            select *
+                            from (  select ta.gene_source_id
+                                    from apidb.TranscriptProduct tp, TranscriptAttributes ta
+                                    where tp.na_feature_id = ta.na_feature_id
+                                  union
+                                    select ga.source_id
+                                    from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+                                    where gfp.na_feature_id = ga.na_feature_id
+                                 )
+                         ))
+                select source_id, product, project_id, transcript_ids, 'N/A' as assigned_by, reference, evidence_code, evidence_code_parameter, 'gus_mappings' as row_source 
+                from gusmappings 
+                where source_id 
+                      not in (select source_id 
+                              from ApolloUpdateGene
+                              where apollo_dbxref is not null
+                                                OR evidence_code is not null
+                                                OR evidence_code_parameter is not null) 
+        union
+                         select source_id, apollo_description as product, project_id, apollo_transcript_id as transcript_ids, 'Apollo' as assigned_by, apollo_dbxref as reference, evidence_code, 
+                                evidence_code_parameter, 'aug_mappings' as row_source
+                         from ApolloUpdateGene
+                         where  (apollo_dbxref is not null
+                                 OR evidence_code is not null
+                                 OR evidence_code_parameter is not null)
+     ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ppg_ix&1
+          on PreferredProductsGene&1 (source_id, project_id)
+          tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
   <tuningTable name="AlphaFoldGenes">
     <comment>
       Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
