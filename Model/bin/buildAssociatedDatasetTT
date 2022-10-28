@@ -36,7 +36,8 @@ $dbh->do(<<SQL) or die "creating table";
       local_dataset_id      varchar2(15),
       pubmed_id             varchar2(60),
       associated_dataset_id varchar2(15),
-      project               varchar2(20)
+      project               varchar2(20),
+      category              varchar2(60)
    ) nologging
 SQL
 
@@ -80,8 +81,8 @@ my %webapps = (
 # prepare insert
 my $insertStmt = $dbh->prepare(<<SQL);
    insert into AssociatedDataset$suffix
-   (local_dataset_id, pubmed_id, associated_dataset_id, project)
-   values (?, ?, ?, ?)
+   (local_dataset_id, pubmed_id, associated_dataset_id, project, category)
+   values (?, ?, ?, ?, ?)
 SQL
 
 # get local datasets and PubMed IDs
@@ -120,7 +121,7 @@ my $insertCount = 0;
 foreach my $projectKey (keys %projects) {
    next if ($projectKey eq $localProject);
 
-   my $url = "https://$host.$projects{$projectKey}.org/$webapps{$projectKey}/service/record-types/dataset/searches/AllDatasets/reports/standard?reportConfig=%7B%22attributes%22%3A%5B%22primary_key%22%5D%2C%22tables%22%3A%5B%22Publications%22%5D%2C%22attributeFormat%22%3A%22text%22%7D";
+   my $url = "https://$host.$projects{$projectKey}.org/$webapps{$projectKey}/service/record-types/dataset/searches/AllDatasets/reports/standard?reportConfig=%7B%22attributes%22%3A%5B%22primary_key%22%2C%22newcategory%22%5D%2C%22tables%22%3A%5B%22Publications%22%5D%2C%22attributeFormat%22%3A%22text%22%7D";
 
    my $datasetsJson = getData($url);
 
@@ -128,13 +129,16 @@ foreach my $projectKey (keys %projects) {
 
    foreach my $record (@{$datasetsJson->{records}}) {
 
+     my $category = $record->{attributes}->{newcategory};
+
      foreach my $pubrec (@{$record->{tables}->{Publications}}) {
 
        # print "dataset: " . $pubrec->{dataset_id} . "; pmid: " . $pubrec->{pmid} . "\n";
 
        for (my $i=0; $i<$localDatasets; $i++) {
 	 if ($pubrec->{pmid} eq $localPmid[$i]) {
-	   $insertStmt->execute($localDatasetId[$i], $localPmid[$i], $pubrec->{dataset_id}, $projects{$projectKey})
+	   $insertStmt->execute($localDatasetId[$i], $localPmid[$i], $pubrec->{dataset_id},
+                                $projects{$projectKey}, $category)
 	     or die "inserting record for local dataset \"" . $localDatasetId[$i] . "\"";
 	   $insertCount++;
 
