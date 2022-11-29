@@ -1,4 +1,4 @@
-package org.apidb.apicommon.model.datasetInjector;
+package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
 public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeq {
 
