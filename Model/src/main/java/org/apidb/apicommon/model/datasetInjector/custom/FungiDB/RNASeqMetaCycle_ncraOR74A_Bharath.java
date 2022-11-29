@@ -1,5 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
+import org.apidb.apicommon.model.datasetInjector.RNASeq;
+
 public class RNASeqMetaCycle_ncraOR74A_Bharath extends RNASeq {
 
   @Override
