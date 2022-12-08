@@ -20,6 +20,18 @@ public class RNASeq extends  DatasetInjector {
         this.profileSetParamQueryTemplate = profileSetParamQueryTemplate;
     }
 
+    private String pctProfileSetParamQueryTemplate = "rnaSeqPctProfileSetParamQuery";
+
+    protected void setPctProfileSetParamQueryTemplate(String pctProfileSetParamQueryTemplate) {
+        this.pctProfileSetParamQueryTemplate = pctProfileSetParamQueryTemplate;
+    } 
+
+    private String antisenseSamplesParamQueryTemplate = "antisenseSamplesParamQuery";
+
+    protected void setAntisenseSamplesParamQueryTemplate(String antisenseSamplesParamQueryTemplate) {
+        this.antisenseSamplesParamQueryTemplate = antisenseSamplesParamQueryTemplate;
+    }
+
     protected void setProfileSamplesHelp() {
         String profileSamplesHelp = "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM)";
 
@@ -165,7 +177,7 @@ public class RNASeq extends  DatasetInjector {
 
 
 	      injectTemplate(this.profileSetParamQueryTemplate);
-	      injectTemplate("rnaSeqPctProfileSetParamQuery");
+	      injectTemplate(this.pctProfileSetParamQueryTemplate);
 	      injectTemplate("datasetUrlParamQuery");
 
 	      injectTemplate("rnaSeqGraph");
@@ -190,7 +202,7 @@ public class RNASeq extends  DatasetInjector {
 
 	      injectTemplate(this.profileSetParamQueryTemplate);
 	      injectTemplate("datasetUrlParamQuery");
-	      injectTemplate("rnaSeqPctProfileSetParamQuery");
+	      injectTemplate(this.pctProfileSetParamQueryTemplate);
 	      injectTemplate("profileMinMaxAttributesCategory");
 	      injectTemplate("profileMinMaxAttributeRef");
 	      injectTemplate("profileMinMaxAttributeQueries");
@@ -220,7 +232,7 @@ public class RNASeq extends  DatasetInjector {
 	      injectTemplate("internalGeneSearchCategory");
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  injectTemplate("strandSpecificGraph");
-		  injectTemplate("antisenseSamplesParamQuery");
+		  injectTemplate(this.antisenseSamplesParamQueryTemplate);
 		  injectTemplate("rnaSeqSenseAntisenseQuestion");
 		  //              injectTemplate("rnaSeqSenseAntisenseCategories");
 		  setPropValue("searchCategory", "searchCategory-transcriptomics-sense-antisense");
