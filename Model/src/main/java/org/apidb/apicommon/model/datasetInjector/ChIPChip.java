@@ -32,23 +32,8 @@ public class ChIPChip extends DatasetInjector {
 
     injectTemplate("chipChipSmoothed");
 
-    //    setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipSmoothed");
-    //    injectTemplate("gbrowseTrackCategory");
-
     if (getPropValueAsBoolean("hasCalledPeaks")) {
-        if (getPropValue("cutoff") == null) {
-            setPropValue("cutoff", "0");
-            injectTemplate("chipChipPeaks");
-	    injectTemplate("chipchipQuestion");
-        }
-        else {
-	    //injectTemplate("chipChipPeaksColorByScore");
-	    injectTemplate("chipchipQuestion");
-        }
-
-
-        //        setPropValue("gbrowseTrackName", getDatasetName() + "_chipChipPeaks");
-        //        injectTemplate("gbrowseTrackCategory");
+        injectTemplate("chipchipQuestion");
     }
 
   }
@@ -59,7 +44,7 @@ public class ChIPChip extends DatasetInjector {
       String cleanDatasetName = getDatasetName().replace('.', '_');
       setPropValue ("cleanDatasetName", cleanDatasetName);
 
-      if (!getPropValueAsBoolean("hasCalledPeaks")) {
+      if (getPropValueAsBoolean("hasCalledPeaks")) {
 	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByChIPchip"+ cleanDatasetName);
       }
   }
