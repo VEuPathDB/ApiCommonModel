@@ -23,7 +23,7 @@ main(){
   # Check the arguments and if they don't seem right print the usage message and exit
   if [ "$#" -ne 6 ] || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" ] || [ ! -f "$STAGING_DIR_PATHS_CONFIG" ] ; then
     echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX FILES_ID_BEFORE_FIRST_SPACE FILES_ID_TRANSCRIPT_FIELD"
-    echo "e.g. $0 ../config/stagingDirPaths.tab CURRENT ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins"
+    echo "e.g. $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins"
     exit 1
   fi
   mkdir -pv $OUTPUT_DIR
