@@ -2,52 +2,53 @@
 # This is a script for creating database files for the seqret service
 
 main(){
-  # allow data from staging dir for the coming release, or from the download site for any release
-  INPUT_BASE_DIR="$1" 
-  RELEASE_NUMBER_OR_CURRENT="$2"
+  # which staging directories are the current production ones?
+  STAGING_DIR_PATHS_CONFIG="$1"
 
-  # needs to match sync source
-  OUTPUT_DIR="$3"
+  # where to write the files to?
+  OUTPUT_DIR="$2"
 
   # How to name output files?
-  # Should match service config
-  # See: https://github.com/VEuPathDB/service-sequence-retrieval/blob/main/docker-compose/docker-compose.yml
-  FASTA_SUFFIX="$4"
-  SQLITE_SUFFIX="$5"
+  # Should match config: https://github.com/VEuPathDB/service-sequence-retrieval/blob/main/docker-compose/docker-compose.yml
+  FASTA_SUFFIX="$3"
+  SQLITE_SUFFIX="$4"
 
   # Which sequence types to retrieve?
   # Needs two options because of parsing headers difference:
   # - match everything before first space as the ID
   # - match "transcript(.*?) " as the ID (so we can index proteins by their transcript)
-  FILES_ID_BEFORE_FIRST_SPACE="$6"
-  FILES_ID_TRANSCRIPT_FIELD="$7"
+  FILES_ID_BEFORE_FIRST_SPACE="$5"
+  FILES_ID_TRANSCRIPT_FIELD="$6"
 
-  if [ "$#" -ne 7 ] || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" ] ; then
-    echo "Usage: $0 INPUT_BASE_DIR RELEASE_NUMBER_OR_CURRENT OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX FILES_ID_BEFORE_FIRST_SPACE FILES_ID_TRANSCRIPT_FIELD"
-    echo "e.g. to sync protein and ESTs only, from the staging data folder:"
-    echo "  $0 /eupath/data/apiSiteFilesStaging CURRENT ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins"
-    echo "Or, to get all the sequences, corresponding to release 59:"
-    echo "  $0 /eupath/data/apiSiteFiles/downloadSite 59 ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins"
+  # Check the arguments and if they don't seem right print the usage message and exit
+  if [ "$#" -ne 6 ] || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" ] || [ ! -f "$STAGING_DIR_PATHS_CONFIG" ] ; then
+    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX FILES_ID_BEFORE_FIRST_SPACE FILES_ID_TRANSCRIPT_FIELD"
+    echo "e.g. $0 ../config/stagingDirPaths.tab CURRENT ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins"
     exit 1
   fi
   mkdir -pv $OUTPUT_DIR
 
+  # Go through the different files that need to be made
   iterSeq "removeAfterSpaceFromHeader:$FILES_ID_BEFORE_FIRST_SPACE" "chooseTranscriptFieldForHeader:$FILES_ID_TRANSCRIPT_FIELD" \
   | while read SEQUENCE_TYPE PROG; do
+    # For each desired result ...
     RESULT_SEQ_FASTA=$OUTPUT_DIR/${SEQUENCE_TYPE}.${FASTA_SUFFIX}
     RESULT_SEQ_SQLITE=$OUTPUT_DIR/${SEQUENCE_TYPE}.${SQLITE_SUFFIX}
+
     # Remove results of any previous run
     rm -fv $RESULT_SEQ_FASTA $RESULT_SEQ_SQLITE
 
-    walkGenomicDownloadDirs $INPUT_BASE_DIR $RELEASE_NUMBER_OR_CURRENT \
-    | while read PROJECT_ID DOWNLOAD_DIR; do
-      findInDownloadDir $DOWNLOAD_DIR "${PROJECT_ID}-${RELEASE_NUMBER_OR_CURRENT}_*${SEQUENCE_TYPE}.fasta" \
+    # Find fastas in staging dir and concatenate into one big fasta
+    readProjectAndStagingDirForGenomicSitesFromConfig $STAGING_DIR_PATHS_CONFIG \
+    | while read PROJECT_ID STAGING_DIR; do
+      findInDownloadDir ${STAGING_DIR}/downloadSite/${PROJECT_ID}/release-CURRENT "${PROJECT_ID}-CURRENT_*${SEQUENCE_TYPE}.fasta" \
       | while read -r SOURCE_FASTA; do
           echo $(date --iso=seconds) "$PROG >> $RESULT_SEQ_FASTA: $SOURCE_FASTA"
           $PROG $SOURCE_FASTA >> $RESULT_SEQ_FASTA
       done
     done
 
+    # Index the big fasta
     echo $(date --iso=seconds) "Indexing: $RESULT_SEQ_FASTA -> $RESULT_SEQ_SQLITE"
     indexFasta $RESULT_SEQ_FASTA $RESULT_SEQ_SQLITE
   done
@@ -66,22 +67,9 @@ findInDownloadDir(){
   find $DOWNLOAD_DIR -type f -name "$NAME_PATTERN" -a ! -wholename '*Reference/*' 
 }
 
-
-
-walkGenomicDownloadDirs(){
-  INPUT_BASE_DIR="$1"
-  RELEASE_NUMBER_OR_CURRENT="$2"
-  find $INPUT_BASE_DIR  -maxdepth 1 -type d \( -name '*DB' -a ! -name 'MicrobiomeDB' -a ! -name 'SchistoDB' -a ! -name 'ClinEpiDB' -a ! -name 'UniDB' \) -o -name 'VectorBase' | while read -r d; do
-    PROJECT_ID=$(basename "$d" )
-    if [ -d $d/release-${RELEASE_NUMBER_OR_CURRENT} ] ; then
-      echo $PROJECT_ID $d/release-${RELEASE_NUMBER_OR_CURRENT}
-    else
-      leaves=$(find $d -maxdepth 6 -regex "$d/[0-9]+/real/downloadSite/.*/release-${RELEASE_NUMBER_OR_CURRENT}" )
-      if [ "$leaves" ] ; then
-        echo $PROJECT_ID $( ls -dt $leaves | head -n1 )
-      fi
-    fi
-  done
+readProjectAndStagingDirForGenomicSitesFromConfig(){
+  config="$1"
+  grep -v 'MicrobiomeDB\|ClinEpiDB\|OrthoMCL\|^$' $config
 }
 
 removeAfterSpaceFromHeader(){
