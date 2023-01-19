@@ -8,6 +8,9 @@ public class MicroarrayOneChannelRmaMetaCycle extends MicroarrayOneChannelRma {
 
       super.injectTemplates();
 
+      injectTemplate("metaCycleQuestion");
+      //      injectTemplate("metaCycleParamQuery");
+
       setPropValue("searchCategory", "searchCategory-transcriptomics-metacycle");
       setPropValue("questionName", "GeneQuestions.GenesByMetaCycle" + getDatasetName());
       injectTemplate("internalGeneSearchCategory");
