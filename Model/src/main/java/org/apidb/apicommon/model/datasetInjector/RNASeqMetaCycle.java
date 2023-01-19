@@ -8,9 +8,9 @@ public class RNASeqMetaCycle extends RNASeqEbi {
 
       super.injectTemplates();
 
-      injectTemplate("rnaSeqMetaCycleQuestion");
+      injectTemplate("metaCycleQuestion");
 
-      //      injectTemplate("rnaSeqMetaCycleParamQuery");
+      //      injectTemplate("metaCycleParamQuery");
 
       setPropValue("searchCategory", "searchCategory-transcriptomics-metacycle");
       setPropValue("questionName", "GeneQuestions.GenesByMetaCycle" + getDatasetName());
