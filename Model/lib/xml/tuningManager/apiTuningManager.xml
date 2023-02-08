@@ -1115,32 +1115,32 @@
         CREATE UNLOGGED TABLE DataSourceCount AS
         SELECT
           taxon_id,
-          CASE WHEN stype = 'organellar' THEN num ELSE null END as organellar_has,
-          CASE WHEN stype = 'Epitope'  THEN num ELSE null END as Epitope_has,
-          CASE WHEN stype = 'Array'  THEN num ELSE null END as Array_has,
-          CASE WHEN stype = 'HTSIsolate' THEN num ELSE null END as HTSIsolate_has,
-          CASE WHEN stype = 'Popset' THEN num ELSE null END as Popset_has
+          max(CASE WHEN stype = 'organellar' THEN num ELSE null END) as organellar_has,
+          max(CASE WHEN stype = 'Epitope'  THEN num ELSE null END)  as Epitope_has,
+          max(CASE WHEN stype = 'Array'  THEN num ELSE null END) as Array_has,
+          max(CASE WHEN stype = 'HTSIsolate' THEN num ELSE null END) as HTSIsolate_has,
+          max(CASE WHEN stype = 'Popset' THEN num ELSE null END) as Popset_has
         FROM (
           SELECT DISTINCT enas.taxon_id, 'organellar' AS stype, 1 AS num
           FROM dots.externalNAsequence enas, SRES.ontologyterm ot
           WHERE enas.sequence_ontology_id = ot.ontology_term_id
             AND ot.name in( 'mitochondrial_chromosome','apicoplast_chromosome')
-          GROUP BY  enas.taxon_id
+          GROUP BY enas.taxon_id
           UNION
           SELECT distinct ds.taxon_id, 'HTSIsolate' AS stype, 1 AS num
           FROM   apidb.DataSource ds
           WHERE ds.type = 'isolates' AND ds.subtype = 'HTS_SNP'
-          GROUP BY  taxon_id
+          GROUP BY taxon_id
           UNION
           SELECT distinct ds.taxon_id, 'Popset' AS stype, 1 AS num
           FROM   apidb.DataSource ds
           WHERE ds.subtype = 'sequenceing_types'
-          GROUP BY  taxon_id
+          GROUP BY taxon_id
           UNION
           SELECT distinct ds.taxon_id, 'Epitope' AS stype, 1 AS num
           FROM   apidb.DataSource ds
           WHERE ds.type = 'epitope'
-          GROUP BY  taxon_id
+          GROUP BY taxon_id
           UNION
           SELECT distinct ds.taxon_id, 'Array' AS stype, 1 AS num
           FROM   apidb.DataSource ds
@@ -1148,6 +1148,7 @@
             AND ds.subtype = 'array'
           GROUP BY  taxon_id
         ) t
+        GROUP BY taxon_id
     ]]>
     </sql>
     <sql>
@@ -1169,15 +1170,16 @@
         CREATE UNLOGGED TABLE SequenceCount AS
         SELECT
           taxon_id,
-          CASE WHEN sequence_type = 'contig' THEN num ELSE null END as  contig_num,
-          CASE WHEN sequence_type = 'supercontig' THEN num ELSE null END as  supercont_num,
-          CASE WHEN sequence_type = 'chromosome' THEN num ELSE null END as  chrom_num
+          max(CASE WHEN sequence_type = 'contig' THEN num ELSE null END) as  contig_num,
+          max(CASE WHEN sequence_type = 'supercontig' THEN num ELSE null END) as  supercont_num,
+          max(CASE WHEN sequence_type = 'chromosome' THEN num ELSE null END) as  chrom_num
         FROM (
          SELECT count(*) as num, sequence_type, taxon_id
          FROM GenomicSeqAttributes
          WHERE is_top_level =1
          GROUP BY taxon_id, sequence_type
         ) t
+        GROUP BY taxon_id
       ]]>
     </sql>
     <sql>
@@ -1191,7 +1193,7 @@
               --userlogins5.mappedComment@prodn.login_comment
               FROM (
                 SELECT *
-                FROM dblink('dbname=apicommS options=-csearch_path=',
+                FROM public.dblink('dbname=apicommS options=-csearch_path=',
                            'select * from userlogins5.mappedcomment')
                 AS t1(COMMENT_ID NUMERIC(10), USER_ID NUMERIC(12), EMAIL VARCHAR(255), COMMENT_DATE TIMESTAMP, COMMENT_TARGET_ID VARCHAR(20), STABLE_ID VARCHAR(200)
                       , CONCEPTUAL NUMERIC(1), PROJECT_NAME VARCHAR(200), PROJECT_VERSION VARCHAR(100), HEADLINE VARCHAR(2000), REVIEW_STATUS_ID VARCHAR(20)
@@ -7180,7 +7182,7 @@ tablespace indx
                           SELECT sl.study_id, result.na_feature_id, 'values' as profile_type,
                               string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
                               min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM public.PROTOCOLAPPNODE pan, public.STUDYLINK sl, public.STUDY s, min_max, result
+                          FROM study.PROTOCOLAPPNODE pan, study.STUDYLINK sl, study.STUDY s, min_max, result
                           WHERE result.protocol_app_node_id = sl.protocol_app_node_id
                             AND result.protocol_app_node_id = pan.protocol_app_node_id
                             AND sl.study_id = s.study_id
@@ -7851,7 +7853,7 @@ tablespace indx
                     SELECT sl.study_id, result.subject as source_id, 'values' as profile_type,
                       string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
                       min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                    FROM public.PROTOCOLAPPNODE pan, public.STUDYLINK sl, public.STUDY s, min_max, apidb.SubjectResult result
+                    FROM study.PROTOCOLAPPNODE pan, study.STUDYLINK sl, study.STUDY s, min_max, apidb.SubjectResult result
                     WHERE result.protocol_app_node_id = sl.protocol_app_node_id
                       AND result.protocol_app_node_id = pan.protocol_app_node_id
                       AND sl.study_id = s.study_id
@@ -7883,7 +7885,7 @@ tablespace indx
                     SELECT sl.study_id, result.module_name as source_id, 'values' as profile_type,
                       string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
                       min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                    FROM public.PROTOCOLAPPNODE pan, public.STUDYLINK sl, public.STUDY s, min_max, apidb.eigengenewgcnaresults result
+                    FROM study.PROTOCOLAPPNODE pan, study.STUDYLINK sl, study.STUDY s, min_max, apidb.eigengenewgcnaresults result
                     WHERE result.protocol_app_node_id = sl.protocol_app_node_id
                       AND result.protocol_app_node_id = pan.protocol_app_node_id
                       AND sl.study_id = s.study_id
