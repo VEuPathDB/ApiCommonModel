@@ -10,6 +10,8 @@ public class QuantitativeProteomicsDirectPValue extends QuantitativeProteomicsDi
     super.injectTemplates();
 
     injectTemplate("directComparisonGenericPValueQuestion");
+
+    injectTemplate("directComparisonGenericPValueSamplesParamQuery");
   }
 
 
