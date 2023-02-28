@@ -8,6 +8,19 @@ public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeqMetaCycle {
   // is to be removed for bld-62. If/when that Q is to be added back, custom injector
   // will NOT be needed.
 
+    private String profileSetParamQueryTemplate = "rnaSeqProfileSetParamQuery";
+
+
+    protected void setProfileSetParamQueryTemplate(String profileSetParamQueryTemplate) {
+        this.profileSetParamQueryTemplate = profileSetParamQueryTemplate;
+    }
+
+    private String pctProfileSetParamQueryTemplate = "rnaSeqPctProfileSetParamQuery";
+
+    protected void setPctProfileSetParamQueryTemplate(String pctProfileSetParamQueryTemplate) {
+        this.pctProfileSetParamQueryTemplate = pctProfileSetParamQueryTemplate;
+    } 
+
   @Override
   public void injectTemplates() {
       setShortAttribution();
