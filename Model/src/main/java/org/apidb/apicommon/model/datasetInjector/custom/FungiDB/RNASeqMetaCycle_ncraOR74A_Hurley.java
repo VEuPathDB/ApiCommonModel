@@ -1,6 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector.custom.FungiDB;
 
-import org.apidb.apicommon.model.datasetInjector.RNASeq;
+import org.apidb.apicommon.model.datasetInjector.RNASeqMetaCycle;
 
 public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeqMetaCycle {
 
