@@ -188,8 +188,28 @@ public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeqMetaCycle {
       setPropValue("questionName", "GeneQuestions.GenesByMetaCycle" + getDatasetName());
 
       injectTemplate("internalGeneSearchCategory");
-
-
   }
+
+
+  @Override
+  public void addModelReferences() {
+      setProfileSamplesHelp();
+
+      setPropValue("graphModule", "RNASeq");
+
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", getPropValue("graphModule") + getDatasetName() ); 
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ExpressionGraphs");
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "TranscriptionSummary");
+      if(getPropValueAsBoolean("hasMultipleSamples")) {
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+			  "GeneQuestions.GenesByRNASeq" + getDatasetName());
+      }
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+		      "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMetaCycle" + getDatasetName()); 
+
+      }
+
 
 }
