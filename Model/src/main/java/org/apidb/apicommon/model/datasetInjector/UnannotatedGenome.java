@@ -12,6 +12,22 @@ public class UnannotatedGenome extends DatasetInjector {
   public void injectTemplates() {
       setOrgProperties();
       injectTemplate("jbrowseCommon");
+
+      String projectName = getPropValue("projectName");
+      String organismAbbrev = getPropValue("organismAbbrev");
+
+      Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
+      String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+      Map<String, String> orgProps = globalProps.get(orgPropsKey);
+      
+      if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
+
+
+      for (Map.Entry<String, String> entry : orgProps.entrySet()) {
+          setPropValue(entry.getKey(), entry.getValue());
+      }
+ 
+      injectTemplate("jbrowseOrganismBuildProps");
   }
 
 
