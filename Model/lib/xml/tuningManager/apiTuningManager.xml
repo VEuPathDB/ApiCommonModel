@@ -8453,17 +8453,70 @@ and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
     </sql>
   </tuningTable>
 
-
-<!-- old version was created for testing 
-  <tuningTable name="OldOrthologousGenes">
+  <tuningTable name="OrthologousTranscripts">
     <comment>
-       Old materialization of the orthology transform.
+       Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
     </comment>
+    <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="GeneAttributes"/>
-    <externalDependency name="apidb.Synteny"/>
-    <program commandLine="buildOldOrthologousGenesTT"/>
+    <externalDependency name="apidb.SyntenicGene"/>
+    <externalDependency name="apidb.Organism"/>
+    <sql>
+      <![CDATA[
+create table OrthologousTranscripts&1 as 
+with all_pairs
+     as (select ga.source_id
+              , ga.project_id
+              , ga.na_feature_id
+              , ota.source_id as ortho_source_id
+              , ota.gene_source_id as ortho_gene_source_id
+              , ota.project_id as ortho_project_id
+              , ota.gene_na_feature_id as ortho_na_feature_id
+              , ota.transcript_product as ortho_product
+              , ga.name as ortho_name
+              , ota.organism as ortho_organism
+              , ota.taxon_id as ortho_taxon_id
+              , o.is_reference_strain
+         from Geneattributes ga
+            , TranscriptAttributes ota
+            , apidb.Organism o
+         where ga.ORTHOMCL_NAME = ota.ORTHOMCL_NAME
+         and ota.taxon_id = o.taxon_id
+         ),
+     syn_pairs
+     as (select distinct ga.na_feature_id, sg.SYN_NA_FEATURE_ID, 1 as is_syntenic
+         from apidb.SyntenicGene sg, GeneAttributes ga
+         where sg.na_sequence_id = ga.na_sequence_id
+           and sg.end_max >= ga.start_min
+           and sg.start_min <= ga.end_max
+        )
+select all_pairs.*
+     , nvl(syn_pairs.is_syntenic, 0) as is_syntenic
+from all_pairs
+     left join syn_pairs
+     on all_pairs.na_feature_id = syn_pairs.na_feature_id 
+        and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+       ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ot_idx&1
+          on OrthologousTranscripts&1 (source_id, is_syntenic desc, ortho_source_id,
+                                       ortho_project_id, ortho_gene_source_id, ortho_product,
+                                       ortho_name, ortho_organism, ortho_taxon_id)
+          tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ot_smol_idx&1
+          on OrthologousTranscripts&1 (is_syntenic, ortho_taxon_id, source_id, ortho_source_id,
+                                       ortho_project_id, ortho_gene_source_id)
+          tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
- -->
+
 
   <tuningTable name="DatasetGeneList">
     <comment>
