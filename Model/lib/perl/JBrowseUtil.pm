@@ -4,13 +4,63 @@ use strict;
 
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
-use DBI;
-use DBD::Oracle;
+#use DBI;
+#use DBD::Oracle;
+# use WDK::Model::ModelConfig;
 
-use WDK::Model::ModelConfig;
+# sub getDbh {$_[0]->{_dbh}}
 
-sub getDbh {$_[0]->{_dbh}}
+my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
+
 sub getCacheFile {$_[0]->{_cache_file}}
+
+sub getType {$_[0]->{_type}}
+
+sub getConfigType {$_[0]->{_config_type}}
+
+sub getOrganismAbbrev {$_[0]->{_organism_abbrev}}
+
+sub getProjectName {$_[0]->{_project_name}}
+
+sub getBuildProperties {$_[0]->{_build_properties}}
+sub setBuildProperties {
+  my ($self) = @_;
+  my $organismAbbrev = $self->getOrganismAbbrev();
+  my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/${organismAbbrev}/$datasetAndPresenterPropertiesBaseName";
+
+  open(FILE, $buildPropertiesFile) or die "Cannot open file $buildPropertiesFile for reading: $!";
+
+  my $buildProperties = {};
+
+  while(<FILE>) {
+    chomp;
+    next unless($_);
+    next if /^\s*#/;
+    my ($propString, $value) = split(/\=/, $_);
+    my @props = split(/\./, $propString);
+
+    &toNestedHash($buildProperties, \@props, $value);
+  }
+
+  $self->{_build_properties} = $buildProperties;
+}
+
+
+sub toNestedHash {
+  my ($hash, $props, $value) = @_;
+
+  my $key = shift @$props;
+
+  if(scalar @$props == 0) {
+    $hash->{$key} = $value;
+    return $hash;
+  }
+
+  my $subHash = $hash->{$key} || {};
+  $hash->{$key} = $subHash;
+
+  &toNestedHash($subHash, $props, $value);
+}
 
 sub new {
   my ($class, $args) = @_;
@@ -20,6 +70,15 @@ sub new {
   my $organismAbbrev = $args->{organismAbbrev};
   my $fileName = $args->{fileName};
   my $type = $args->{type};
+  my $configType = $args->{configType};
+  my $projectName = $args->{projectName};
+
+
+  $self->{_type} = lc($type) eq 'protein' ? 'protein' : 'genome';
+  $self->{_config_type} = $configType;
+  $self->{_organism_abbrev} = $organismAbbrev;
+  $self->{_project_name} = $projectName;
+
 
   my $cacheFile = $type && $type eq 'protein' 
       ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 
@@ -29,19 +88,21 @@ sub new {
     $self->{_cache_file} = $cacheFile;
   }
 
-  unless($organismAbbrev && $fileName && -e $cacheFile) {
-    my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
+  $self->setBuildProperties();
 
-    my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
-                            $modelConfig->getAppDbLogin(),
-                            $modelConfig->getAppDbPassword()
-        )
-        || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
-    
-    $dbh->{LongTruncOk} = 0;
-    $dbh->{LongReadLen} = 10000000;
-    $self->{_dbh} = $dbh;
-  }
+  # unless($organismAbbrev && $fileName && -e $cacheFile) {
+  #   my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
+
+  #   my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+  #                           $modelConfig->getAppDbLogin(),
+  #                           $modelConfig->getAppDbPassword()
+  #       )
+  #       || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+  #   $dbh->{LongTruncOk} = 0;
+  #   $dbh->{LongReadLen} = 10000000;
+  #   $self->{_dbh} = $dbh;
+  # }
 
   return $self;
 }
