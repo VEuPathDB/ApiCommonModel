@@ -105,8 +105,8 @@ public class RnaSeqTypeHandler extends BigwigFilesTypeHandler {
 
       String[] qList;
       String[] unstrandedQList = {"GeneQuestions.GenesByRNASeqUserDataset"};
-      String[] strandedQList = {"GeneQuestions.GenesByRNASeqUserDataset", "GeneQuestions.GenesByUserDatasetAntisense"};
-      // String[] strandedQList = {"GeneQuestions.GenesByRNASeqUserDataset"};
+      // String[] strandedQList = {"GeneQuestions.GenesByRNASeqUserDataset", "GeneQuestions.GenesByUserDatasetAntisense"};
+      String[] strandedQList = {"GeneQuestions.GenesByRNASeqUserDataset"};
       if (isStranded) {
 	  qList = strandedQList;
       } else {
