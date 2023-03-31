@@ -607,10 +607,10 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <comment>GeneGoTerms: each row represents one GO term assignment to one gene, right from what was loaded.
      </comment>
     <internalDependency name="TranscriptAttributes"/>
-    <externalDependency name="sres.dbref"/>
-    <externalDependency name="dots.domainfeature"/>
-    <externalDependency name="dots.dbrefaafeature"/>
-    <externalDependency name="dots.aalocation"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="dots.DomainFeature"/>
+    <externalDependency name="dots.DbRefAaFeature"/>
+    <externalDependency name="dots.AaLocation"/>
     <ancillaryTable name="InterproDomainDatabase"/>
     <ancillaryTable name="InterproDomainAccession"/>
     <sql>
@@ -4994,7 +4994,7 @@ and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjuncti
      </comment>
     <internalDependency name="GeneIntronJunction"/>
     <internalDependency name="NameMappingGIJ"/>
-    <externalDependency name="apidb.intronjunction"/>
+    <externalDependency name="apidb.IntronJunction"/>
     <sql>
       <![CDATA[
 create table GeneMaxIntronGIJ&1 (
@@ -9213,14 +9213,14 @@ tablespace indx
       Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
     </comment>
     
-    <externalDependency name="sres.externaldatabase"/>
-    <externalDependency name="sres.externaldatabaserelease"/>
-    <externalDependency name="sres.dbref"/>
-    <externalDependency name="dots.dbrefaafeature"/>
-    <externalDependency name="dots.aafeature"/>
-    <externalDependency name="dots.dbrefnafeature"/>
-    <externalDependency name="dots.nafeature"/>
-    <externalDependency name="apidb.alphafold"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="dots.DbRefAaFeature"/>
+    <externalDependency name="dots.AaFeature"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="dots.NaFeature"/>
+    <externalDependency name="apidb.AlphaFold"/>
     <internalDependency name="ProteinAttributes"/>
     <internalDependency name="TranscriptAttributes"/>
 
@@ -9241,12 +9241,14 @@ tablespace indx
                 WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xref_sprot_blastp') THEN 4
                 WHEN (ed.name like '%SPTREMBL%' and edr.version = 'xref_trembl_blastp') THEN 5
                 ELSE 6 END as rank
+            , (af.last_residue_index - af.first_residue_index + 1) as hit_length
             FROM sres.dbref d
             , sres.externaldatabase ed
             , sres.externaldatabaserelease edr
             , dots.dbrefaafeature db
             , dots.aafeature aa
             , ProteinAttributes pa
+            , apidb.AlphaFold af
             WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
             AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp') 
             AND edr.external_database_id = ed.external_database_id
@@ -9254,27 +9256,29 @@ tablespace indx
             AND db.db_ref_id = d.db_ref_id
             AND aa.aa_feature_id = db.aa_feature_id
             AND pa.source_id = aa.source_id
-
-            UNION
-
+            AND d.primary_identifier = af.uniprot_id(+)
+          UNION
             SELECT DISTINCT ed.name
             , d.*
             , edr.version
             , na.source_id
             , ta.gene_source_id
             , 3 as rank
+            , (af.last_residue_index - af.first_residue_index + 1) as hit_length
             FROM sres.dbref d
             , sres.externaldatabase ed
             , sres.externaldatabaserelease edr
             , dots.dbrefnafeature db
             , dots.nafeature na
             , TranscriptAttributes ta
+            , apidb.AlphaFold af
             WHERE ed.name like '%_dbxref_%niprot_%RSRC'
             AND edr.external_database_id = ed.external_database_id
             AND d.external_database_release_id = edr.external_database_release_id
             AND db.db_ref_id = d.db_ref_id
             AND na.na_feature_id = db.na_feature_id
             AND (ta.transcript_source_id = na.source_id OR ta.gene_source_id = na.source_id)
+            AND d.primary_identifier = af.uniprot_id(+)
         )
       ]]>
     </sql>
@@ -9285,8 +9289,7 @@ tablespace indx
             SELECT gene_source_id
             , MIN(rank) as min_rank
             FROM uniprotGenes&1 upg
-            , apidb.alphafold af
-            WHERE upg.primary_identifier = af.uniprot_id
+            WHERE hit_length is not null
             GROUP BY gene_source_id
         )
       ]]>
@@ -9299,13 +9302,10 @@ tablespace indx
             , MAX(primary_identifier) KEEP (DENSE_RANK LAST ORDER BY hit_length) AS uniprot_id
             FROM (
                 SELECT upg.*
-                , (af.last_residue_index - af.first_residue_index + 1) as hit_length
                 FROM uniprotGenes&1 upg
-                , apidb.alphafold af
                 , minRank
                 WHERE upg.gene_source_id = minRank.gene_source_id
                 AND upg.rank = minRank.min_rank
-                AND af.uniprot_id = upg.primary_identifier
             )
             GROUP BY gene_source_id
         )
