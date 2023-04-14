@@ -22,7 +22,9 @@ public class QuantitativeProteomicsDirectPValue extends QuantitativeProteomicsDi
 
   @Override
   public void addModelReferences() {
-    super.addModelReferences();
+
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ProteinExpressionGraphs");
+
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByProteomicsDirectPValue" + getDatasetName() );
 
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "profile_graph", "Proteomics::LogRatio"); 
