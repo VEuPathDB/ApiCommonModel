@@ -106,8 +106,7 @@ public abstract class ExpressionTwoChannelDirectComparison extends Expression {
         if(getPropValueAsBoolean("hasPageData") && !(myDataType.equals("Proteomics"))) {
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "DirectWithConfidence" + getDatasetName());
-        } else {
-
+        } else if ((!getPropValueAsBoolean("hasPageData")) && !(myDataType.equals("Protein expression"))){
             addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                             "GeneQuestions.GenesBy" + myDataType + "Direct" + getDatasetName());
         }
