@@ -1,45 +1,29 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 
+#use parent 'TrackConfig';
 use strict;
+use warnings;
 
-use lib $ENV{GUS_HOME} . "/lib/perl";
-
-
+## To Do: 
 # getters and setters
-sub getDatasetName {$_[0]->{_dataset_name}}
-sub setDatasetName {$_[0]->{_dataset_name} = $_[1]}
+sub getUrlTemplates {$_[0]->{url_template}}
+sub getCovMaxScoreDefault {$_[0]->{cov_max_score_default}}
+sub getScale {$_[0]->{scale}}
 
-
- ....
+sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1]}
+sub setScale {$_[0]->{scale} = $_[1]}
 
 sub new {
-  my ($class, $args) = @_;
+    my ($class, $args) = @_;
+    my $self = $class->SUPER::new($args);
+    $self->{url_template} = $args->{url_template};
+    $self->{cov_max_score_default} = $args->{cov_max_score_default};
+    $self->{scale} = $args->{scale};
 
-  my $self = bless($args, $class);
-
-  $self->setDatasetName($args->{datasetName});
-
-  return $self;
+    return $self;
 }
-
-
-sub getJBrowseObject { }
-sub getApolloObject { 
-  $self = shift;
-
-  # main difference is the url for the endpoint:  relative path vs full website specification
-  # JBrowse: $storeEndpoint=/a/jbrowse/service/.....
-  # Apollo: $storeEndpoint=plasmodb.org/a/jbrowse/service/.....
-  my $obj = $self->getJBrowseObject ();
-  $obj->setBlah("some different value");
-
-}
-
-
-sub getJBrowse2Object { 
-  return undef;
-}
-
 
 
 1;
