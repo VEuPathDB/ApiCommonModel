@@ -65,7 +65,6 @@ $dbh->disconnect;
 
 ## To get the projRelpaths (release-xyz)
 $downloadDir = "/var/www/Common/apiSiteFilesMirror/downloadSite/" if (!$downloadDir);
-$component = "VectorBase" if (!$component);
 
 my $projPath = $downloadDir . $component;
 my @projRelpaths;
