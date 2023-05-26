@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::JBrowseTrackConfig::multiBigWigTrackConfig;
+package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
@@ -18,7 +18,7 @@ sub setUrlTemp {$_[0]->{url_templates} = $_[1]}
 ### To Do: Add getter and setter for urlTemplates
 sub getUrlTemplates{
 	my $self = shift;
-	
+
 
 	return $self->getUrlTemp([0]);
 }
@@ -93,14 +93,14 @@ sub getJBrowse2Object{
 			"height" => "40"
 		},
 		urlTemplates => [{
-			url => $urlTemplates,	
+			url => $urlTemplates,
 			color => $color,
-			name => $datasetName	
+			name => $datasetName
 		}],
 		metadata => {
 			subcategory => $subCategory,
 			dataset => $studyDisplayName,
-			trackType => "Multi-Density",	
+			trackType => "Multi-Density",
 			attribution => $shortAttribution,
 			dataset => $datasetName
 		},
@@ -130,18 +130,18 @@ sub getApolloObject {
 	my $apolloObject={storeClass => "JBrowse/Store/SeqFeature/BigWig",
 		key => "$studyDisplayName - $displayName Coverage",
 		yScalePosition => "left",
-		urlTemplate => $urlTemplates,		  
+		urlTemplate => $urlTemplates,
 		scale => "log",
 		max_score => $covMaxScoreDefault,
 		metadata => {
 			subcategory => "RNA-Seq",
 			trackType => "Coverage",
 			alignment => "unique",
-			dataset => $datasetName,		  		  
+			dataset => $datasetName,
 		},
 		label => "$datasetName $label Coverage",
 		type => "JBrowse/View/Track/Wiggle/XYPlot",
-		min_score => 0,		  
+		min_score => 0,
 		max_score => 1000,
 		scale => "log",
 		fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
