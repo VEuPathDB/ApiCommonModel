@@ -1707,36 +1707,25 @@ AND 1=0
 
         <sql excludeProjects="EuPathDB" >
             <![CDATA[
-                     WITH inputs
-                          AS (SELECT gene_source_id, max(wdk_weight) AS wdk_weight
-                              FROM $$gene_result$$
-                              GROUP BY gene_source_id),
-                          output_gene
-                          AS (SELECT ogenes.ortho_source_id,
-                                     to_char(
-                                       dbms_lob.substr(rtrim(
-                                         replace(
-                                           replace(
-                                             XmlAgg(
-                                               XmlElement("a", ogenes.source_id)
-                                               order by
-                                               ogenes.source_id)
-                                               .getClobVal(),
-                                           '<a>', ''),
-                                         '</a>',
-                                         ','),
-                                       ', '),
-                                      4000, 1)) AS gene_list,
-                                     max(inputs.wdk_weight) AS wdk_weight
-                              FROM inputs, apidbTuning.OrthologousGenes ogenes
-                              WHERE inputs.gene_source_id = ogenes.source_id
-                                AND (ogenes.syntenic = 'yes' OR $$isSyntenic$$ = 'no')
-                                AND ogenes.ortho_taxon_id IN ($$organism$$)
-                              GROUP BY ogenes.ortho_source_id)
-                     SELECT ta.gene_source_id, ta.source_id, ta.project_id, 'Y' AS matched_result,
-                            og.wdk_weight, og.gene_list AS orthologs
-                     FROM output_gene og, apidbTuning.TranscriptAttributes ta
-                     WHERE og.ortho_source_id = ta.gene_source_id
+                     with inputs
+                          as (select gene_source_id, max(wdk_weight) as wdk_weight
+                              from $$gene_result$$
+                              group by gene_source_id)
+                     select otx.ortho_gene_source_id as gene_source_id,
+                            otx.ortho_source_id as source_id,
+                            'Y' AS matched_result,
+                            max(otx.ortho_project_id) as project_id,
+                            to_char(dbms_lob.substr(rtrim(replace(replace(
+                                 XmlAgg(XmlElement("a", otx.source_id) order by otx.source_id)
+                                                  .getClobVal(),
+                                           '<a>', ''), '</a>', ','), ', '), 4000, 1))
+                              as orthologs,
+                            max(inputs.wdk_weight) AS wdk_weight
+                     from inputs, apidbTuning.OrthologousTranscripts otx
+                     where inputs.gene_source_id = otx.source_id
+                       and (otx.is_syntenic = 1 OR $$isSyntenic$$ = 'no')
+                       and otx.ortho_taxon_id IN ($$organism$$)
+                     group by otx.ortho_source_id, otx.ortho_gene_source_id
            ]]>
        </sql>
 
@@ -3734,7 +3723,7 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
 
 
 
-    <sqlQuery name="GenesByGenericFoldChangeWithConfidence" includeProjects="AmoebaDB,ToxoDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,UniDB"  >
+    <sqlQuery name="GenesByGenericFoldChangeWithConfidence" includeProjects="AmoebaDB,ToxoDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,VectorBase,UniDB"  >
 
     <testParamValues>
       <paramValue name="samples_fc_ref_generic" selectMode="all"/>
@@ -3752,7 +3741,7 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="matched_result"/>
-        <column name="e_value_confidence"/>
+        <column name="confidence"/>
         <column name="fold_change"/>
         <column name="group_one_value"/>
         <column name="group_two_value"/>
@@ -5740,7 +5729,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
        <paramRef ref="geneParams.profileset_generic"/>
        <paramRef ref="geneParams.regulated_dir"/>
        <paramRef ref="geneParams.samples_direct_generic_confidence"/>
-       <paramRef ref="geneParams.p_value"/>
+       <paramRef ref="geneParams.dcc_p_value"/>
        <paramRef ref="geneParams.fold_change"/>
        <paramRef ref="geneParams.protein_coding_only"/>
        <column name="project_id"/>
@@ -5757,7 +5746,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
           from ApidbTuning.TranscriptAttributes ta
                  , results.nafeaturediffresult r
           where $$regulated_dir$$ (r.fold_change) >= $$fold_change$$
-          and nvl(r.adj_p_value, r.p_value) <= to_char($$p_value$$,'99.99999999999999')
+          and nvl(r.adj_p_value, r.p_value) <= to_char($$dcc_p_value$$,'99.99999999999999')
           and r.protocol_app_node_id = $$samples_direct_generic_confidence$$ 
           and ta.gene_na_feature_id = r.na_feature_id
           and ( $$protein_coding_only$$ = 'no' OR ta.gene_type = $$protein_coding_only$$ )
@@ -5776,7 +5765,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
        <paramRef ref="geneParams.profileset_generic"/>
        <paramRef ref="geneParams.regulated_dir"/>
        <paramRef ref="geneParams.samples_direct_generic_confidence"/>
-       <paramRef ref="geneParams.p_value"/>
+       <paramRef ref="geneParams.dcc_p_value"/>
        <paramRef ref="geneParams.fold_change"/>
        <paramRef ref="geneParams.protein_coding_only"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>

@@ -534,7 +534,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                 and sl.protocol_app_node_id = pan.protocol_app_node_id
                 and pan.protocol_app_node_id = c.protocol_app_node_id
                 and c.qualifier_id = ot.ontology_term_id
-                and ot.source_id = 'EUPATH_0000460')
+                and (ot.source_id = 'EUPATH_0000460' or ot.source_id = 'EuPathUserDefined_00507'))
         group by study_id, study_name, dataset_name, taxon_id
         union
         select study_id, study_name, dataset_name, taxon_id, round(2*avg(num_reads),0) as avg_unique_reads
@@ -558,7 +558,7 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
                 and sl.protocol_app_node_id = pan.protocol_app_node_id
                 and pan.protocol_app_node_id = c.protocol_app_node_id
                 and c.qualifier_id = ot.ontology_term_id
-                and (ot.source_id = 'EUPATH_0000468' or ot.source_id = 'EuPathUserDefined_00523'))
+                and (ot.source_id = 'EUPATH_0000468' or ot.source_id = 'EuPathUserDefined_00515' or ot.source_id = 'EUPATH_0000476' or ot.source_id = 'EuPathUserDefined_00523'))
         group by study_id, study_name, dataset_name, taxon_id
       ]]>
     </sql>
@@ -607,10 +607,10 @@ and tp.ec_number_gene like replace(pn.display_label, '-', '%')
     <comment>GeneGoTerms: each row represents one GO term assignment to one gene, right from what was loaded.
      </comment>
     <internalDependency name="TranscriptAttributes"/>
-    <externalDependency name="sres.dbref"/>
-    <externalDependency name="dots.domainfeature"/>
-    <externalDependency name="dots.dbrefaafeature"/>
-    <externalDependency name="dots.aalocation"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="dots.DomainFeature"/>
+    <externalDependency name="dots.DbRefAaFeature"/>
+    <externalDependency name="dots.AaLocation"/>
     <ancillaryTable name="InterproDomainDatabase"/>
     <ancillaryTable name="InterproDomainAccession"/>
     <sql>
@@ -2235,14 +2235,14 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        LEAST(nl.start_min, nl.end_max) AS gene_start_min,
        GREATEST(nl.start_min, nl.end_max) AS gene_end_max,
        COALESCE(preferred_name.name, any_name.name) AS gene_name,
-       substr(coalesce(preferred_gene_product.product, any_gene_product.product,
+       cast(coalesce(preferred_gene_product.product, any_gene_product.product,
                        gf.product,
                        preferred_tx_product.product, any_tx_product.product,
                        t.product,
                        case when t.is_pseudo = 1
                          then 'pseudogene'
                          else 'unspecified product'
-                       end), 1, 300)
+                       end) as varchar2(300))
             as gene_product,
        REPLACE(so.name, '_', ' ') AS gene_type,
        gf.name as gene_ebi_biotype,
@@ -2257,14 +2257,14 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 15000) AS gene_context_end,
        GREATEST(1, least(nl.start_min, nl.end_max) - 1500) AS gene_zoom_context_start,
        LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 1500) AS gene_zoom_context_end,
-       substr(orthologs.name, 1, 60) AS orthomcl_name,
+       CAST(orthologs.name AS VARCHAR2(60)) AS orthomcl_name,
        nvl(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps, 
        nvl(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
        nvl(tothtssnps.hts_stop_codon_snps,0) AS gene_hts_stop_codon_snps,
        nvl(tothtssnps.hts_noncoding_snps,0) AS gene_hts_noncoding_snps, 
        nvl(tothtssnps.hts_synonymous_snps,0) AS gene_hts_synonymous_snps,
        nvl(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio, 
-       SUBSTR(cmnt.comment_string, 1, 300) AS comment_string,
+       CAST(cmnt.comment_string AS VARCHAR2(300)) AS comment_string,
        transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
        entrez_table.entrez_id AS gene_entrez_id,
        gloc.locations AS gene_locations,
@@ -2272,14 +2272,14 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        t.source_id AS transcript_source_id,
        tso.name as transcript_type,
        t.na_feature_id,
-       substr(coalesce(preferred_tx_product.product, any_tx_product.product,
+       cast(coalesce(preferred_tx_product.product, any_tx_product.product,
                        t.product,
                        preferred_gene_product.product, any_gene_product.product,
                        gf.product,
                        case when t.is_pseudo = 1
                          then 'pseudogene'
                          else 'unspecified product'
-                       end), 1, 300)
+                       end) AS VARCHAR2(300))
             as transcript_product,
        tl.start_min, tl.end_max,
        tl.is_reversed,   --CHECK if needed
@@ -2287,19 +2287,20 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
        DECODE(t.is_pseudo, null, 0, t.is_pseudo) as is_pseudo,
        transcript_exons.exon_count,
        sns.length AS length, sns.na_sequence_id as spliced_na_sequence_id,
-       SUBSTR(gsa.source_id, 1, 50) AS sequence_id,
-       SUBSTR(tn.name, 1, 80) AS organism,
-       SUBSTR(species_name.name, 1, 60) AS species,
+       CAST(gsa.source_id AS VARCHAR2(50)) AS sequence_id,
+       CAST(SUBSTR(tn.name, 1, 80) AS VARCHAR2(80)) AS organism,
+       CAST(species_name.name AS VARCHAR2(60)) AS species,
        LTRIM(REGEXP_REPLACE(tn.name, replace (replace (species_name.name,'[',''), ']','') ,'')) AS strain,
        taxon.ncbi_tax_id,  tn.taxon_id, 
-       so.source_id as so_id, SUBSTR(so.name, 1, 150) AS so_term_name,
+       so.source_id as so_id,
+       CAST(so.name AS VARCHAR2(150)) AS so_term_name,
        CAST(SUBSTR(so.definition, 1, 150) AS VARCHAR2(150)) AS so_term_definition,
-       SUBSTR(soRls.version, 1, 7) AS so_version,
-       SUBSTR(NVL(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
+       CAST(soRls.version AS VARCHAR2(7)) AS so_version,
+       CAST(NVL(rt1.anticodon, rt2.anticodon) AS VARCHAR2(3)) AS anticodon,
        ed.name AS external_db_name,
        edr.version AS external_db_version,
        edr.external_database_release_id AS external_db_rls_id,
-       SUBSTR(gsa.chromosome, 1, 20) AS chromosome,
+       CAST(gsa.chromosome AS VARCHAR2(20)) AS chromosome,
        gsa.sequence_type,
        gsa.chromosome_order_num, gsa.na_sequence_id,
        --next the protein attributes: 
@@ -3436,7 +3437,7 @@ with seq_var_pan as (select pan.name as protocol_app_node_name
                          , sres.taxonname tn
                       where pan.external_database_release_id = r.external_database_release_id
                       and r.external_database_id = d.external_database_id
-                      and o.abbrev = substr(d.name, 1, instr(d.name, '_') -1)
+                      and d.name like o.abbrev || '%'
                       and o.taxon_id = tn.taxon_id
                       and tn.name_class = 'scientific name'
                       and pan.name like '% (Sequence Variation)'), 
@@ -4994,7 +4995,7 @@ and gs.na_sequence_id in (select distinct na_sequence_id from apidb.intronjuncti
      </comment>
     <internalDependency name="GeneIntronJunction"/>
     <internalDependency name="NameMappingGIJ"/>
-    <externalDependency name="apidb.intronjunction"/>
+    <externalDependency name="apidb.IntronJunction"/>
     <sql>
       <![CDATA[
 create table GeneMaxIntronGIJ&1 (
@@ -6877,7 +6878,7 @@ and h.url like '/%'
                                      ds.dataset_presenter_id as id, sample,
                                      '<p style="color:' || html_color || '">' || sample || '</p>' as sample_i
                      from MSPeptideSummary mps, DatasetPresenter ds
-                     -- consider using ApiDBTuing.ExternalDbDatasetPresenter instead of the LIKE below, if its performance is a problem
+                     -- consider using the tuning table ExternalDbDatasetPresenter instead of the LIKE below, if its performance is a problem
                      where (ds.name = mps.external_database_name or mps.external_database_name like ds.dataset_name_pattern))
                group by name, id)
       select name,
@@ -8085,31 +8086,41 @@ and h.url like '/%'
   </tuningTable>
 
 
+
+
   <tuningTable name="GeneGroupProfile">
     <comment> For all datasets, list all genes (source_id) of a gene_group where one of them (profile_graph_id) 
               has data for a profile_set. 
     </comment>      
     <internalDependency name="GeneAttributes"/>
     <internalDependency name="Profile"/>
-    <internalDependency name="OrthologousGenes"/>
+    <internalDependency name="OrthologousTranscripts"/>
     <sql>
       <![CDATA[
         create table GeneGroupProfile&1 nologging as
-       select distinct other_gene.source_id, p.dataset_name,
-             this_gene.source_id as profile_graph_id
-        from orthologousgenes og
-           , profile p
-           , geneattributes this_gene
-           , geneattributes other_gene
-        where p.source_id = og.source_id
-        and og.source_id = this_gene.source_id
-        and og.ORTHO_SOURCE_ID = other_gene.source_id
-        and this_gene.species = other_gene.species
-        and og.SYNTENIC = 'yes'
+          select distinct other_gene.source_id, p.dataset_name,
+               this_gene.source_id as profile_graph_id
+          from OrthologousTranscripts ot
+             , Profile p
+             , GeneAttributes this_gene
+             , GeneAttributes other_gene
+          where p.source_id = ot.source_id
+            and ot.source_id = this_gene.source_id
+            and ot.ortho_gene_source_id = other_gene.source_id
+            and this_gene.species = other_gene.species
+            and ot.is_syntenic = 1
         union
-        select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
-        from profile p, geneattributes ga
-        where p.source_id = ga.source_id
+          select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
+          from Profile p, GeneAttributes ga
+          where p.source_id = ga.source_id
+    ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ggp_ix&1
+          on GeneGroupProfile&1
+            (source_id, dataset_name, profile_graph_id)
+        tablespace indx
     ]]>
     </sql>
   </tuningTable>
@@ -8393,77 +8404,85 @@ and h.url like '/%'
   </tuningTable>
 
 
-  <tuningTable name="OrthologousGenes">
+  <tuningTable name="OrthologousTranscripts">
     <comment>
        Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
     </comment>
+    <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="GeneAttributes"/>
     <externalDependency name="apidb.SyntenicGene"/>
     <externalDependency name="apidb.Organism"/>
+    <intermediateTable name="SyntenicPairs"/>
     <sql>
       <![CDATA[
-create table OrthologousGenes&1 as 
-with all_pairs as (
-select ga.source_id
-     , ga.project_id
-     , ga.na_feature_id
-     , oga.source_id as ortho_source_id
-     , oga.na_feature_id as ortho_na_feature_id
-     , oga.product as ortho_product
-     , ga.name as ortho_name
-     , oga.organism as ortho_organism
-     , oga.taxon_id as ortho_taxon_id
-     , o.is_reference_strain
-from geneattributes ga
-   , geneattributes oga
-   , apidb.organism o
-where ga.ORTHOMCL_NAME = oga.ORTHOMCL_NAME
-and ga.source_id <> oga.source_id
-and oga.taxon_id = o.taxon_id
-),
-syn_pairs as (
-SELECT DISTINCT ga.na_feature_id, sg.SYN_NA_FEATURE_ID, 1 as syntenic
-FROM apidb.syntenicgene sg, geneattributes ga
-WHERE sg.na_sequence_id = ga.na_sequence_id
-      AND sg.end_max >= ga.start_min
-      AND sg.start_min <= ga.end_max
-)
-select all_pairs.*
-     , CASE WHEN syn_pairs.syntenic = 1 then 'yes' ELSE 'no' END as syntenic
-from all_pairs
-left join syn_pairs
-on all_pairs.na_feature_id = syn_pairs.na_feature_id 
-and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+         create table SyntenicPairs as
+         select distinct ga.na_feature_id, sg.syn_na_feature_id
+         from apidb.SyntenicGene sg, GeneAttributes ga
+         where sg.na_sequence_id = ga.na_sequence_id
+           and sg.end_max >= ga.start_min
+           and sg.start_min <= ga.end_max
        ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index ogidx&1
-        on OrthologousGenes&1 (source_id, syntenic desc, ortho_source_id, ortho_product,
-                              ortho_name, ortho_organism, ortho_taxon_id)
-       tablespace indx
+        create index SynPair_idx&1
+          on SyntenicPairs (na_feature_id, syn_na_feature_id)
+          tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index og_smol_idx&1
-          on OrthologousGenes&1 (syntenic, ortho_taxon_id, source_id, ortho_source_id)
+create table OrthologousTranscripts&1 as 
+with all_pairs
+     as (select ga.source_id
+              , ga.project_id
+              , ga.na_feature_id
+              , ota.source_id as ortho_source_id
+              , ota.gene_source_id as ortho_gene_source_id
+              , ota.project_id as ortho_project_id
+              , ota.gene_na_feature_id as ortho_na_feature_id
+              , ota.transcript_product as ortho_product
+              , ga.name as ortho_name
+              , ota.organism as ortho_organism
+              , ota.taxon_id as ortho_taxon_id
+              , o.is_reference_strain
+         from Geneattributes ga
+            , TranscriptAttributes ota
+            , apidb.Organism o
+         where ga.ORTHOMCL_NAME = ota.ORTHOMCL_NAME
+         and ota.taxon_id = o.taxon_id
+         ),
+     syn_pairs
+     as (select na_feature_id, syn_na_feature_id, 1 as is_syntenic
+         from SyntenicPairs
+        )
+select all_pairs.*
+     , nvl(syn_pairs.is_syntenic, 0) as is_syntenic
+from all_pairs
+     left join syn_pairs
+     on all_pairs.na_feature_id = syn_pairs.na_feature_id 
+        and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+       ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ot_idx&1
+          on OrthologousTranscripts&1 (source_id, project_id, is_syntenic desc, ortho_source_id,
+                                       ortho_project_id, ortho_gene_source_id, ortho_product,
+                                       ortho_name, ortho_organism, ortho_taxon_id, is_reference_strain)
+          tablespace indx
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ot_smol_idx&1
+          on OrthologousTranscripts&1 (is_syntenic, ortho_taxon_id, source_id, ortho_source_id,
+                                       ortho_project_id, ortho_gene_source_id)
           tablespace indx
       ]]>
     </sql>
   </tuningTable>
 
-
-<!-- old version was created for testing 
-  <tuningTable name="OldOrthologousGenes">
-    <comment>
-       Old materialization of the orthology transform.
-    </comment>
-    <internalDependency name="GeneAttributes"/>
-    <externalDependency name="apidb.Synteny"/>
-    <program commandLine="buildOldOrthologousGenesTT"/>
-  </tuningTable>
- -->
 
   <tuningTable name="DatasetGeneList">
     <comment>
@@ -9160,14 +9179,14 @@ tablespace indx
       Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
     </comment>
     
-    <externalDependency name="sres.externaldatabase"/>
-    <externalDependency name="sres.externaldatabaserelease"/>
-    <externalDependency name="sres.dbref"/>
-    <externalDependency name="dots.dbrefaafeature"/>
-    <externalDependency name="dots.aafeature"/>
-    <externalDependency name="dots.dbrefnafeature"/>
-    <externalDependency name="dots.nafeature"/>
-    <externalDependency name="apidb.alphafold"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="dots.DbRefAaFeature"/>
+    <externalDependency name="dots.AaFeature"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="dots.NaFeature"/>
+    <externalDependency name="apidb.AlphaFold"/>
     <internalDependency name="ProteinAttributes"/>
     <internalDependency name="TranscriptAttributes"/>
 
@@ -9188,12 +9207,14 @@ tablespace indx
                 WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xref_sprot_blastp') THEN 4
                 WHEN (ed.name like '%SPTREMBL%' and edr.version = 'xref_trembl_blastp') THEN 5
                 ELSE 6 END as rank
+            , (af.last_residue_index - af.first_residue_index + 1) as hit_length
             FROM sres.dbref d
             , sres.externaldatabase ed
             , sres.externaldatabaserelease edr
             , dots.dbrefaafeature db
             , dots.aafeature aa
             , ProteinAttributes pa
+            , apidb.AlphaFold af
             WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
             AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp') 
             AND edr.external_database_id = ed.external_database_id
@@ -9201,27 +9222,29 @@ tablespace indx
             AND db.db_ref_id = d.db_ref_id
             AND aa.aa_feature_id = db.aa_feature_id
             AND pa.source_id = aa.source_id
-
-            UNION
-
+            AND d.primary_identifier = af.uniprot_id(+)
+          UNION
             SELECT DISTINCT ed.name
             , d.*
             , edr.version
             , na.source_id
             , ta.gene_source_id
             , 3 as rank
+            , (af.last_residue_index - af.first_residue_index + 1) as hit_length
             FROM sres.dbref d
             , sres.externaldatabase ed
             , sres.externaldatabaserelease edr
             , dots.dbrefnafeature db
             , dots.nafeature na
             , TranscriptAttributes ta
+            , apidb.AlphaFold af
             WHERE ed.name like '%_dbxref_%niprot_%RSRC'
             AND edr.external_database_id = ed.external_database_id
             AND d.external_database_release_id = edr.external_database_release_id
             AND db.db_ref_id = d.db_ref_id
             AND na.na_feature_id = db.na_feature_id
             AND (ta.transcript_source_id = na.source_id OR ta.gene_source_id = na.source_id)
+            AND d.primary_identifier = af.uniprot_id(+)
         )
       ]]>
     </sql>
@@ -9232,8 +9255,7 @@ tablespace indx
             SELECT gene_source_id
             , MIN(rank) as min_rank
             FROM uniprotGenes&1 upg
-            , apidb.alphafold af
-            WHERE upg.primary_identifier = af.uniprot_id
+            WHERE hit_length is not null
             GROUP BY gene_source_id
         )
       ]]>
@@ -9246,13 +9268,10 @@ tablespace indx
             , MAX(primary_identifier) KEEP (DENSE_RANK LAST ORDER BY hit_length) AS uniprot_id
             FROM (
                 SELECT upg.*
-                , (af.last_residue_index - af.first_residue_index + 1) as hit_length
                 FROM uniprotGenes&1 upg
-                , apidb.alphafold af
                 , minRank
                 WHERE upg.gene_source_id = minRank.gene_source_id
                 AND upg.rank = minRank.min_rank
-                AND af.uniprot_id = upg.primary_identifier
             )
             GROUP BY gene_source_id
         )

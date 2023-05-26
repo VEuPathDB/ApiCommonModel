@@ -11,12 +11,14 @@ public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeqMetaCycle {
     private String profileSetParamQueryTemplate = "rnaSeqProfileSetParamQuery";
 
 
+    @Override
     protected void setProfileSetParamQueryTemplate(String profileSetParamQueryTemplate) {
         this.profileSetParamQueryTemplate = profileSetParamQueryTemplate;
     }
 
     private String pctProfileSetParamQueryTemplate = "rnaSeqPctProfileSetParamQuery";
 
+    @Override
     protected void setPctProfileSetParamQueryTemplate(String pctProfileSetParamQueryTemplate) {
         this.pctProfileSetParamQueryTemplate = pctProfileSetParamQueryTemplate;
     } 

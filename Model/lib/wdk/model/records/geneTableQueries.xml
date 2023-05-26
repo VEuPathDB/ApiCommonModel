@@ -114,7 +114,7 @@
          <![CDATA[
         select distinct ga.source_id
         , ga.project_id
-                   , replace(pan.name,' (functional_data) as gene_list
+                   , replace(pan.name,' (functional_data)','') as gene_list
                     , ed.dataset_presenter_id
                     , ed.DATASET_PRESENTER_DISPLAY_NAME
               from apidb.nafeaturelist fl
@@ -2207,10 +2207,14 @@ ORDER BY
                          AND is_visible = 1)
               SELECT og.source_id
                      , og.project_id
-                     , og.ortho_source_id AS ortho_gene_source_id
+                     , og.ortho_gene_source_id
                      , og.ortho_product AS gene_product
                      , og.ortho_organism AS organism
-                     , og.syntenic AS is_syntenic
+                     , CASE
+                            WHEN og.is_syntenic = 1
+                              THEN 'yes'
+                            ELSE 'no'
+                          END AS is_syntenic
                      , CASE 
                          WHEN og.is_reference_strain = 1
                            THEN 'yes'
@@ -2223,7 +2227,7 @@ ORDER BY
                        END AS has_comment
                      , rpad(lower(og.source_id), 80)
                        || CASE
-                            WHEN og.syntenic = 'yes'
+                            WHEN og.is_syntenic = 1
                               THEN '8yes' -- sort earlier
                             ELSE '9no '   -- sort later
                           END
@@ -2232,9 +2236,10 @@ ORDER BY
                               THEN '9no ' -- sort later
                             ELSE '8yes'   -- sort earlier
                           END
-                       || rpad(lower(og.ortho_source_id), 80) as sort_key
-              FROM apidbTuning.OrthologousGenes og
+                       || rpad(lower(og.ortho_gene_source_id), 80) as sort_key
+              FROM apidbTuning.OrthologousTranscripts og
                    LEFT OUTER JOIN comments ON og.ortho_source_id = comments.stable_id
+              WHERE og.source_id != og.ortho_gene_source_id
             ]]>
             </sql>
        </sqlQuery>
@@ -2248,20 +2253,25 @@ ORDER BY
 
             <column name="source_id"/>
             <column name="project_id"/>
-            <column name = "ortho_gene_source_id" />
+            <column name="ortho_gene_source_id"/>
             <column name="organism"/>
             <column name="gene_product"/>
             <column name="is_syntenic"/>
 
             <sql>
             <![CDATA[
-              SELECT og.source_id
-                     , og.project_id
-                     , og.ortho_source_id AS ortho_gene_source_id
-                     , og.ortho_product AS gene_product
-                     , og.ortho_organism AS organism
-                     , og.syntenic AS is_syntenic
-              FROM apidbTuning.OrthologousGenes og
+              SELECT DISTINCT
+                     ot.source_id
+                     , ot.project_id
+                     , ot.ortho_gene_source_id
+                     , ot.ortho_product AS gene_product
+                     , ot.ortho_organism AS organism
+                     , CASE ot.is_syntenic
+                         WHEN 0 THEN 'no'
+                         ELSE 'yes'
+                       END AS is_syntenic
+              FROM apidbTuning.OrthologousTranscripts ot
+              WHERE ot.source_id != ot.ortho_gene_source_id
             ]]>
             </sql>
        </sqlQuery>
@@ -4079,6 +4089,7 @@ and ta.na_feature_id = iuc.na_feature_id(+)
                   AND ggp.source_id = ga.source_id
                   AND dp.name = ggp.dataset_name
                   AND ggp.profile_graph_id = d.source_id
+                  AND d.sample_name NOT LIKE '%PaGE'
                 ORDER BY ggp.profile_graph_id, d.dataset_id, dp.dataset_presenter_id, d.node_order_num, d.protocol_app_node_id
              ]]>
             </sql>
@@ -4451,24 +4462,25 @@ WHERE
  UNION
 SELECT -- from orthologs
 og.source_id,
-'<a href = "' || REPLACE(edr.id_url, 'EXTERNAL_ID_HERE', db.primary_identifier) || '" target="_blank">' || og.ortho_source_id || '</a>' AS link,
+'<a href = "' || REPLACE(edr.id_url, 'EXTERNAL_ID_HERE', db.primary_identifier) || '" target="_blank">' || og.ortho_gene_source_id || '</a>' AS link,
   edd.dataset_presenter_display_name AS dataset 
 FROM
-  sres.dbref db
-, DOTS.dbrefnafeature dbna
-, apidbtuning.ExternalDbDatasetPresenter edd
-, sres.externaldatabaserelease edr
-, apidbtuning.orthologousgenes og
+  sres.DbRef db
+, dots.DbRefNaFeature dbna
+, apidbTuning.ExternalDbDatasetPresenter edd
+, sres.ExternalDatabaseRelease edr
+, apidbTuning.OrthologousTranscripts og
 WHERE
   db.external_database_release_id = edd.external_database_release_id
   AND edr.external_database_release_id = edd.external_database_release_id
   AND dbna.db_ref_id = db.db_ref_id
   AND og.ortho_na_feature_id = dbna.na_feature_id
+  AND og.source_id != og.ortho_gene_source_id
   AND og.ortho_organism in ('Candida albicans SC5314', 'Saccharomyces cerevisiae S288C','Schizosaccharomyces pombe 972h-')
   AND edd.dataset_presenter_display_name  IN ('SGD','PomBase','CGD')
 UNION
-SELECT 
-  og.ortho_source_id as source_id,
+SELECT
+  og.ortho_gene_source_id as source_id,
   '<a href="https://flybase.org/reports/' || ref.primary_identifier || '.html" target="_blank">' || og.source_id || '</a>' AS link,
   'FlyBase' AS dataset 
 FROM
@@ -4477,7 +4489,7 @@ FROM
 , sres.dbref ref
 , dots.dbrefNaFeature dbna
 , apidbtuning.GeneAttributes ga
-, apidbTuning.OrthologousGenes og
+, apidbTuning.OrthologousTranscripts og
 WHERE edr.external_database_id = ed.external_database_id
   AND lower(ed.name) like 'flybase%_gene_id'
   AND ref.external_database_release_id = edr.external_database_release_id
