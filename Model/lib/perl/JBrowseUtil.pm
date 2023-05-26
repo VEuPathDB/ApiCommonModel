@@ -17,7 +17,6 @@ sub getCacheFile {$_[0]->{_cache_file}}
 
 sub getType {$_[0]->{_type}}
 
-sub getConfigType {$_[0]->{_config_type}}
 
 sub getOrganismAbbrev {$_[0]->{_organism_abbrev}}
 sub setOrganismAbbrev {$_[0]->{_organism_abbrev} = $_[1]}
@@ -75,12 +74,12 @@ sub new {
 
   my $fileName = $args->{fileName};
   my $type = $args->{type};
-  my $configType = $args->{configType};
+
   my $projectName = $args->{projectName};
 
 
   $self->{_type} = lc($type) eq 'protein' ? 'protein' : 'genome';
-  $self->{_config_type} = $configType;
+
   $self->{_project_name} = $projectName;
 #print Dumper $args;
   $self->setOrganismAbbrev($organismAbbrev);

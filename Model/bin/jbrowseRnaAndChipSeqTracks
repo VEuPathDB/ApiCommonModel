@@ -1,12 +1,11 @@
 #!/usr/bin/perl
 
-#use strict;
+use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use ApiCommonModel::Model::JBrowseTrackConfig::RNASeqCoverageTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::multiBigWigTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::uniqueMultiBigWigTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
 use Data::Dumper;
 use URI::Escape;
 use XML::Simple;
@@ -15,14 +14,12 @@ use Storable 'dclone';
 use JSON qw(decode_json);
 
 # TODO:  add 3 new args:  applicationType, legacyWebappBaseUrl, localhost
-my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $configType, $applicationType) = @ARGV;
-$applicationType='jbrowse';
-$technologyType='RNASeq';
+my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $applicationType) = @ARGV;
 
 my $fileName = "_" . $technologyType . "Cache.json";
 
 # set applicationType, legacyWebappBaseUrl, localhost in the util class
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => $fileName, configType => $configType});
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => $fileName});
 
 my $buildProps = $jbrowseUtil->getBuildProperties();
 
@@ -33,9 +30,8 @@ my $buildProps = $jbrowseUtil->getBuildProperties();
 # }
 #open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 #my $dbh = $jbrowseUtil->getDbh();
-#my $subCategory = $technologyType;
-#my ($sql, $category, $covMaxScoreDefault, $multiCovScale);
 
+my ($sql, $category, $covMaxScoreDefault, $multiCovScale, $subCategory);
 if($technologyType eq 'ChIPSeq') {
   $category = 'Epigenomics';
   $covMaxScoreDefault = 200;
@@ -48,80 +44,28 @@ elsif($technologyType eq 'RNASeq') {
  $multiCovScale = "log";
  $subCategory = "RNA-Seq";
 }
-#if($technologyType eq 'ChIPSeq') {
-#  $sql = "select dnt.name, prop.property, prop.value
-#from apidbtuning.datasetnametaxon dnt
-#   , apidbtuning.datasetproperty prop
-#where dnt.name like '${organismAbbrev}%_chipSeq_RSRC'
-#and dnt.dataset_presenter_id = prop.dataset_presenter_id
-#";
-#  $category = 'Epigenomics';
-#  $covMaxScoreDefault = 200;
-#  $multiCovScale = "linear";
-#  $subCategory = "ChIP-Seq";
-#}
-#elsif($technologyType eq 'RNASeq') {
-#  $sql = "select dnt.name, prop.property, prop.value
-#from apidbtuning.datasetnametaxon dnt
-#   , apidbtuning.datasetproperty prop
-#where dnt.name like '${organismAbbrev}%_rnaSeq_RSRC'
-#and dnt.dataset_presenter_id = prop.dataset_presenter_id
-#";
-#  $category = 'Transcriptomics';
-#  $covMaxScoreDefault = 1000;
-#  $multiCovScale = "log";
-#  $subCategory = "RNA-Seq";
-#}
-#else {
-#  die "technologyType must be either RNASeq or ChIPSeq";
-#}
-
-
-#my $sh = $dbh->prepare($sql);
-#$sh->execute();
-
-#my (%allStudyProperties);
-#while(my ($datasetName, $prop, $val) = $sh->fetchrow_array()) {
-#  $allStudyProperties{$datasetName}->{$prop} = $val;
-#}
-#$sh->finish();
-
-#my $nffSh = $dbh->prepare("select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'");
-#$nffSh->execute();
-#my ($nameForFileNames) = $nffSh->fetchrow_array();
-#$nffSh->finish();
+else {
+  die "technologyType must be either RNASeq or ChIPSeq";
+}
 
 my $result = {"tracks" => [] };
 
-### Create rnaseq hash and extract datasetName
-my $rnaseqHash = ($buildProps->{'rnaseq'});
-my @datasetNames;
-
-foreach my $datasetName (keys $rnaseqHash){
-#push (@datasetNames, $datasetName);
-$rnaValue = $rnaseqHash->{$datasetName};
-#print "$datasetName = $rnaValue->{covMaxScoreDefault}\n";
-#print Dumper $rnaValue;
-
 ### Get organism properties
 my $orgHash = ($buildProps->{'organism'});
-my $nameForFileNames = ($orgHash->{organismNameForFiles}); 
+my $nameForFileNames = ($orgHash->{organismNameForFiles});
 my $projectName = ($orgHash->{projectName});
-#print Dumper $orgHash;
-#print "$datasetName = $nameForFileNames\n";
+
+### Create rnaseq hash and extract datasetName
+my $allDatasetPropertiesForAssayType = ($buildProps->{lc($technologyType)});
+
+foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
+
+  my %studyProperties = %{$allDatasetPropertiesForAssayType->{$datasetName}};
 
   # TODO:  Handle duplicate Horn CDS Dataset Better
   next if($datasetName eq 'tbruTREU927_RNAi_Horn_CDS_rnaSeq_RSRC');
 
-
   my $metadataBase = "metadata_unlogged";
-
- # my %studyProperties = %{$allStudyProperties{$datasetName}};
-### Dereference hash
-my %studyProperties = %$rnaValue;
-#print Dumper %studyProperties;
-#print "$datasetName = $studyProperties{datasetDisplayName} \n";
-$buildNumber = '63';
 
   if(lc $studyProperties{isStrandSpecific} ne 'true' && lc $studyProperties{switchStrandsGBrowse} ne 'true') {
     $metadataBase = $metadataBase . "_alt";
@@ -130,21 +74,22 @@ $buildNumber = '63';
   my %refinedQueryParams = %{$jbrowseUtil->intronJunctionsQueryParams('refined')};
   $refinedQueryParams{intronSizeLimit} = $projectName eq 'HostDB' ? 20000 : 3000;
 
-# EXAMPLE:
-#/var/www/Common/apiSiteFilesMirror/webServices/PlasmoDB/build-42/Pfalciparum3D7/bigwig/pfal3D7_Caro_ribosome_profiling_rnaSeq_RSRC/metadata_unlogged
+  # EXAMPLE:
+  #/var/www/Common/apiSiteFilesMirror/webServices/PlasmoDB/build-42/Pfalciparum3D7/bigwig/pfal3D7_Caro_ribosome_profiling_rnaSeq_RSRC/metadata_unlogged
 
-  my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";
-#print $bigWigRelativePath."\n";
+  my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";
+  #print $bigWigRelativePath."\n";
   my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
 
+
+
   if(! -e $metadataFile) {
-#    print STDERR "SKIPPING dataset $datasetName.  File not found:  $metadataFile";
+    #TODO:  take out the print if everything looks ok
+    print STDERR "SKIPPING dataset $datasetName.  File not found:  $metadataFile";
     next;
   }
 
   open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
-
-
 
   my ($start, $file, $displayName, $strand, $alignment, $dbid, $sample);;
   
@@ -181,6 +126,9 @@ $buildNumber = '63';
   # ChipSeq are all unique
   my @uniqueOnlyUrls = grep { $technologyType eq 'ChIPSeq' || $_->{alignment} eq 'unique' } @multiUrls;
 
+
+print STDERR Dumper \@uniqueOnlyUrls;
+
   my $studyDisplayName = $studyProperties{datasetDisplayName};
 
 
@@ -188,59 +136,32 @@ $buildNumber = '63';
   my $summary = $studyProperties{summary};
   $summary =~ s/\n/ /g;
 
-#my $label="test";
-  my $multiBigWigObj = ApiCommonModel::Model::JBrowseTrackConfig::multiBigWigTrackConfig->new({ dataset_name => $datasetName,
-                                                                                            url_templates => \@multiUrls,
-                                                                                            display_name => $displayName,
-                                                                                            study_display_name => $studyDisplayName,
-                                                                                            application_type => $applicationType,
-                                                                                            file_name => $file,
-                                                                                            color => $color,
-                                                                                            label => $label,
-                                                                                            cov_max_score_default => $covMaxScoreDefault,
-                                                                                            scale => $multiCovScale,
-                                                                                            category => $category,
-                                                                                            summary => $summary,
-											    key => $studyProperties{datasetDisplayName} . " Density - Unique And Non-Unique",
-											    subcategory => $subCategory,
-											    attribution => $shortAttribution							    
-											    })->getConfigurationObject();											    
+  my $color = 'black';
+my $multiBigWigObj = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig->new({ dataset_name => $datasetName,
+                                                                                              url_templates => \@multiUrls,
+                                                                                              display_name => $displayName,
+                                                                                              study_display_name => $studyDisplayName,
+                                                                                              application_type => $applicationType,
+                                                                                              file_name => $file,
+                                                                                              color => $color,
+                                                                                              cov_max_score_default => $covMaxScoreDefault,
+                                                                                              scale => $multiCovScale,
+                                                                                              category => $category,
+                                                                                              summary => $summary,
+                                                                                              key => $studyProperties{datasetDisplayName} . " Density - Unique And Non-Unique",
+                                                                                              subcategory => $subCategory,
+                                                                                              attribution => $shortAttribution
+                                                                                            })->getConfigurationObject();
 
 
 
-  my $multiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-                     urlTemplates => \@multiUrls,
-                     showTooltips => JSON::true,
-                     category => "$category",
-                     yScalePosition => "left",
-                     key => $studyProperties{datasetDisplayName} . " Density - Unique And Non-Unique",
-                     label => $datasetName  . " Density - Unique And Non-Unique",
-                     type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
-                     style => {
-                       pos_color => "black",
-                       neg_color => "white",
-                       height => max(min(scalar(@multiUrls) * 5, 100), 20),
-                     },
-                           scale => $multiCovScale,
-                           metadata => {
-                             subcategory => $subCategory,
-                             dataset => $studyDisplayName,
-                             trackType => 'Multi-Density',
-                             attribution => $shortAttribution,
-                             description => $summary,
-                     },
-                     fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-                     fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
-  };
-
-  my $uniqueMultiBigWigObj = ApiCommonModel::Model::JBrowseTrackConfig::uniqueMultiBigWigTrackConfig->new({ dataset_name => $datasetName,
+  my $uniqueMultiBigWigObj = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig->new({ dataset_name => $datasetName,
                                                                                             url_templates => \@uniqueOnlyUrls,
                                                                                             display_name => $displayName,
                                                                                             study_display_name => $studyDisplayName,
                                                                                             application_type => $applicationType,
                                                                                             file_name => $file,
                                                                                             color => $color,
-                                                                                            label => $label,
                                                                                             cov_max_score_default => $covMaxScoreDefault,
                                                                                             scale => $multiCovScale,
                                                                                             category => $category,
@@ -251,31 +172,31 @@ $buildNumber = '63';
                                                                                             })->getConfigurationObject(); 
 
 
-  my $uniqueMultiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-                           urlTemplates => \@uniqueOnlyUrls,
-                           showTooltips => JSON::true,
-                           yScalePosition => "left",
-                           category => "$category",
-                           key => $studyProperties{datasetDisplayName} . " Density - Unique Only",
-                           label => $datasetName . " Density - Unique Only",
-                           type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
-                           style => {
-                             pos_color => "black",
-                             neg_color => "white",
-                             height => max(min(scalar(@uniqueOnlyUrls) * 5, 100), 20),
-                           },
-                                 scale => $multiCovScale,
-                                 metadata => {
-                                   subcategory => $subCategory,
-                                   dataset => $studyDisplayName,
-                                   trackType => 'Multi-Density',
-                                   attribution => $shortAttribution,
-                                   description => $summary,
-                                   alignment => "unique",
-                           },
-                           fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-                           fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
-  };
+  # my $uniqueMultiBigWig = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+  #                          urlTemplates => \@uniqueOnlyUrls,
+  #                          showTooltips => JSON::true,
+  #                          yScalePosition => "left",
+  #                          category => "$category",
+  #                          key => $studyProperties{datasetDisplayName} . " Density - Unique Only",
+  #                          label => $datasetName . " Density - Unique Only",
+  #                          type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
+  #                          style => {
+  #                            pos_color => "black",
+  #                            neg_color => "white",
+  #                            height => max(min(scalar(@uniqueOnlyUrls) * 5, 100), 20),
+  #                          },
+  #                                scale => $multiCovScale,
+  #                                metadata => {
+  #                                  subcategory => $subCategory,
+  #                                  dataset => $studyDisplayName,
+  #                                  trackType => 'Multi-Density',
+  #                                  attribution => $shortAttribution,
+  #                                  description => $summary,
+  #                                  alignment => "unique",
+  #                          },
+  #                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
+  #                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+  # };
 
   my $multiBigWigXy = dclone $multiBigWigObj;
   #my $multiBigWigXy = dclone $multiBigWig;
@@ -414,13 +335,17 @@ close CACHE;
 
 sub addConfiguration {
   my ($result, $file, $displayName, $strand, $alignment, $properties, $datasetName, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample) = @_;
+
+
+  print STDERR "Adding configuration\n";
+
   $strand = 'not strand specific' unless($strand);
 
   my $studyDisplayName = $properties->{datasetDisplayName};
   my $shortAttribution = $properties->{shortAttribution};
   my $summary = $properties->{summary};
   $summary =~ s/\n/ /g;
-$summary = "MADE UP SUMMARY";
+
   # old, direct file access; replaced by jbrowse service
   #my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
   #my $bwUrl = "/a/service/jbrowse/rnaseq/bigwig/$nameForFileNames/$datasetName/$file"; 
@@ -430,10 +355,6 @@ $summary = "MADE UP SUMMARY";
 
   my $label = $dbid ? $dbid : ($sample ? $sample : $displayName);
 
-#TODO
-$applicationType='jbrowse';
-$label = 'test';
-$category = 'transcriptomics';
   my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::RNASeqCoverageTrackConfig->new({ dataset_name => $datasetName,
 											    url_template => $bwUrl,
  											    display_name => $displayName, 
@@ -450,32 +371,32 @@ $category = 'transcriptomics';
 #                                                                                          jbrowseUtilObject => $jbrowseUtil
                                                                                          })->getConfigurationObject();
 
-  my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
-                  urlTemplate => $bwUrl,
-                  yScalePosition => "left",
-                  key => "$studyDisplayName - $displayName Coverage",
-                  label => "$datasetName $label Coverage",
-                  type => "JBrowse/View/Track/Wiggle/XYPlot",
-                  category => "$category",
-                  min_score => 0,
-                  max_score => $covMaxScoreDefault,
-##                  autoscale => "local",
-                  style => {
-                    "pos_color"         => $color,
-                    "clip_marker_color" =>  "black",
-                    "height" => 40
-                  },
-                  scale => $multiCovScale,
-                  metadata => {
-                    subcategory => $subCategory,
-                    dataset => $studyDisplayName,
-                    trackType => 'Coverage',
-                    attribution => $shortAttribution,
-                    description => $summary,
-                   },
-                   fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-                   fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
-  };
+#   my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
+#                   urlTemplate => $bwUrl,
+#                   yScalePosition => "left",
+#                   key => "$studyDisplayName - $displayName Coverage",
+#                   label => "$datasetName $label Coverage",
+#                   type => "JBrowse/View/Track/Wiggle/XYPlot",
+#                   category => "$category",
+#                   min_score => 0,
+#                   max_score => $covMaxScoreDefault,
+# ##                  autoscale => "local",
+#                   style => {
+#                     "pos_color"         => $color,
+#                     "clip_marker_color" =>  "black",
+#                     "height" => 40
+#                   },
+#                   scale => $multiCovScale,
+#                   metadata => {
+#                     subcategory => $subCategory,
+#                     dataset => $studyDisplayName,
+#                     trackType => 'Coverage',
+#                     attribution => $shortAttribution,
+#                     description => $summary,
+#                    },
+#                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
+#                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+#   };
   if($technologyType eq 'RNASeq') {
     $coverageObj->{metadata}->{strand} = $strand;
     $coverageObj->{metadata}->{alignment} = $alignment;
@@ -483,9 +404,8 @@ $category = 'transcriptomics';
 
   my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color, alignment => $alignment};
 
-  #push @{$result->{tracks}}, $coverage; # TODO:  only push if the confiration object was available
   push @{$result->{tracks}}, $coverageObj;
-  push @$multiUrls, $multiUrlHash; # TODO:  only push if the confiration object was available
+  push @$multiUrls, $multiUrlHash;
 }
 
 
