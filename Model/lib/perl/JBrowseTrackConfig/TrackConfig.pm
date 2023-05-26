@@ -43,19 +43,6 @@ sub new {
     return $self;
 }
 
-sub makeTrackConfig {
-    my ($self) = @_;
-
-    if ($self->{application_type} eq 'jbrowse') {
-        $self->getJBrowseObject();
-    } elsif ($self->{application_type} eq 'jbrowse2') {
-        $self->getJBrowse2Object();
-    } elsif ($self->{application_type} eq 'apollo') {
-        $self->getApolloObject();
-    } else {
-        die "Unknown application type: $self->{application_type}";
-    }
-}
 
 sub getJBrowseObject {
     my $self = shift;
@@ -74,24 +61,26 @@ sub getApolloObject {
 
 sub getConfigurationObject {
         my $self = shift;
-
-        if($self->{application_type} eq 'jbrowse') {
+        my $applicationType = $self->getApplicationType();
+#die $applicationType;
+$applicationType = 'jbrowse';
+        if($applicationType eq 'jbrowse') {
                 return $self->getJBrowseObject();
         }
-        elsif($self->{application_type} eq 'jbrowse2') {
+        elsif($applicationType eq 'jbrowse2') {
                 return $self->getJBrowse2Object();
         }
 
-        elsif($self->{application_type} eq 'apollo') {
+        elsif($applicationType eq 'apollo') {
                 return $self->getApolloObject();
         }
 
-        elsif($self->{application_type} eq 'apollo3') {
+        elsif($applicationType eq 'apollo3') {
                 return $self->getApolloObject();
         }
 
         else {
-                die "Application Type not recognized " . $self->{application_type};
+                die "Application Type not recognized " . $applicationType;
         }
 }
 

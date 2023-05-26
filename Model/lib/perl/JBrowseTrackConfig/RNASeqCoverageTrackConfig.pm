@@ -3,30 +3,6 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
 
-### move to superclass TrackConfig
-#sub getConfigurationObject {
-#	my $self = shift;
-
-#	if($self->{application_type} eq 'jbrowse') {
-#		return $self->getJBrowseObject();
-#	}
-#	elsif($self->{application_type} eq 'jbrowse2') {
-#		return $self->getJBrowse2Object();
-#	}
-
-#	elsif($self->{application_type} eq 'apollo') {
-#		return $self->getApolloObject();
-#	}
-
-#	elsif($self->{application_type} eq 'apollo3') {
-#		return $self->getApolloObject();
-#	}
-
-#	else {
-#		die "Application Type not recognized " . $self->{application_type};
-#	}
-#}
-
 ### To Do: Add getter and setter for urlTemplates
 sub getUrlTemplate{
 	my $self = shift;
@@ -48,7 +24,7 @@ sub getJBrowseObject{
 	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
 	my $multiCovScale =  $self->getScale();
 	my $category = $self->getCategory();
-#my $summary = $self->getSummary();
+my $summary = $self->getSummary();
 	my $jbrowseObject = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
 		urlTemplate => $urlTemp,
 		yScalePosition => "left",
@@ -65,9 +41,9 @@ sub getJBrowseObject{
 		},
 		scale => $multiCovScale,
 		fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-#                     fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+                     fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
 	};
-
+#die;
 	return $jbrowseObject;
 }
 

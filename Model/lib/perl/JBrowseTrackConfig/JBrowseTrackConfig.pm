@@ -29,25 +29,25 @@ sub new {
   return $self;
 }
 
-sub getConfigurationObject {
-  my $self = shift;
+#sub getConfigurationObject {
+#  my $self = shift;
 
-  if($self->getApplicationType eq 'jbrowse') {
-    return $self->getJBrowseObject();
-  }
-  elsif($self->getApplicationType eq 'jbrowse2') {
-    return $self->getJBrowse2Object();
-  }
+#  if($self->getApplicationType eq 'jbrowse') {
+#    return $self->getJBrowseObject();
+#  }
+#  elsif($self->getApplicationType eq 'jbrowse2') {
+#    return $self->getJBrowse2Object();
+#  }
 
-  elsif($self->getApplicationType eq 'apollo') {
-    return $self->getApolloObject();
-  }
+#  elsif($self->getApplicationType eq 'apollo') {
+#    return $self->getApolloObject();
+#  }
 
-  elsif($self->getApplicationType eq 'apollo3') {
-    return $self->getApollo3Object();
-  }
+#  elsif($self->getApplicationType eq 'apollo3') {
+#    return $self->getApollo3Object();
+#  }
 
-  else {
-    die "ApplicationType not recognized " . $self->applicationType;
-  }
-}
+#  else {
+#    die "ApplicationType not recognized " . $self->applicationType;
+#  }
+#}

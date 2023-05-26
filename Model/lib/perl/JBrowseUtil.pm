@@ -4,11 +4,12 @@ use strict;
 
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
-#use DBI;
-#use DBD::Oracle;
-# use WDK::Model::ModelConfig;
+use DBI;
+use DBD::Oracle;
+use WDK::Model::ModelConfig;
+use Data::Dumper;
 
-# sub getDbh {$_[0]->{_dbh}}
+sub getDbh {$_[0]->{_dbh}}
 
 my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
 
@@ -19,15 +20,17 @@ sub getType {$_[0]->{_type}}
 sub getConfigType {$_[0]->{_config_type}}
 
 sub getOrganismAbbrev {$_[0]->{_organism_abbrev}}
+sub setOrganismAbbrev {$_[0]->{_organism_abbrev} = $_[1]}
 
 sub getProjectName {$_[0]->{_project_name}}
 
 sub getBuildProperties {$_[0]->{_build_properties}}
 sub setBuildProperties {
   my ($self) = @_;
+  #my $organismAbbrev = $self->{_organism_abbrev};
   my $organismAbbrev = $self->getOrganismAbbrev();
-  my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/${organismAbbrev}/$datasetAndPresenterPropertiesBaseName";
-
+  my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$datasetAndPresenterPropertiesBaseName";
+#print "BUILD PROPS --> $buildPropertiesFile \n";
   open(FILE, $buildPropertiesFile) or die "Cannot open file $buildPropertiesFile for reading: $!";
 
   my $buildProperties = {};
@@ -43,6 +46,7 @@ sub setBuildProperties {
   }
 
   $self->{_build_properties} = $buildProperties;
+
 }
 
 
@@ -66,8 +70,9 @@ sub new {
   my ($class, $args) = @_;
 
   my $self = bless($args, $class);
-
   my $organismAbbrev = $args->{organismAbbrev};
+  #my $organismAbbrev = $self->getOrganismAbbrev();
+
   my $fileName = $args->{fileName};
   my $type = $args->{type};
   my $configType = $args->{configType};
@@ -76,11 +81,11 @@ sub new {
 
   $self->{_type} = lc($type) eq 'protein' ? 'protein' : 'genome';
   $self->{_config_type} = $configType;
-  $self->{_organism_abbrev} = $organismAbbrev;
   $self->{_project_name} = $projectName;
-
-
-  my $cacheFile = $type && $type eq 'protein' 
+#print Dumper $args;
+  $self->setOrganismAbbrev($organismAbbrev);
+  
+my $cacheFile = $type && $type eq 'protein' 
       ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 
       : $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$fileName";;
 

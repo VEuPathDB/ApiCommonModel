@@ -15,8 +15,8 @@ use Storable 'dclone';
 use JSON qw(decode_json);
 
 # TODO:  add 3 new args:  applicationType, legacyWebappBaseUrl, localhost
-my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $configType, $applicationType, $legacyWebappBaseUrl, $localhost) = @ARGV;
-
+my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $configType, $applicationType) = @ARGV;
+$applicationType='jbrowse';
 $technologyType='RNASeq';
 
 my $fileName = "_" . $technologyType . "Cache.json";
@@ -24,19 +24,30 @@ my $fileName = "_" . $technologyType . "Cache.json";
 # set applicationType, legacyWebappBaseUrl, localhost in the util class
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => $fileName, configType => $configType});
 
-
 my $buildProps = $jbrowseUtil->getBuildProperties();
-
 
 # TODO:  Add this back when we are done
 # # we're done if we can get from cache file
 # if($jbrowseUtil->printFromCache()) {
 #   exit 0;
 # }
-open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
+#open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 #my $dbh = $jbrowseUtil->getDbh();
-my $subCategory = $technologyType;
-my ($sql, $category, $covMaxScoreDefault, $multiCovScale);
+#my $subCategory = $technologyType;
+#my ($sql, $category, $covMaxScoreDefault, $multiCovScale);
+
+if($technologyType eq 'ChIPSeq') {
+  $category = 'Epigenomics';
+  $covMaxScoreDefault = 200;
+  $multiCovScale = "linear";
+  $subCategory = "ChIP-Seq";
+}
+elsif($technologyType eq 'RNASeq') {
+ $category = 'Transcriptomics';
+ $covMaxScoreDefault = 1000;
+ $multiCovScale = "log";
+ $subCategory = "RNA-Seq";
+}
 #if($technologyType eq 'ChIPSeq') {
 #  $sql = "select dnt.name, prop.property, prop.value
 #from apidbtuning.datasetnametaxon dnt
@@ -110,7 +121,7 @@ my $projectName = ($orgHash->{projectName});
 my %studyProperties = %$rnaValue;
 #print Dumper %studyProperties;
 #print "$datasetName = $studyProperties{datasetDisplayName} \n";
-$buildNumber = '62';
+$buildNumber = '63';
 
   if(lc $studyProperties{isStrandSpecific} ne 'true' && lc $studyProperties{switchStrandsGBrowse} ne 'true') {
     $metadataBase = $metadataBase . "_alt";
@@ -177,7 +188,7 @@ $buildNumber = '62';
   my $summary = $studyProperties{summary};
   $summary =~ s/\n/ /g;
 
-my $label="test";
+#my $label="test";
   my $multiBigWigObj = ApiCommonModel::Model::JBrowseTrackConfig::multiBigWigTrackConfig->new({ dataset_name => $datasetName,
                                                                                             url_templates => \@multiUrls,
                                                                                             display_name => $displayName,
@@ -267,6 +278,7 @@ my $label="test";
   };
 
   my $multiBigWigXy = dclone $multiBigWigObj;
+  #my $multiBigWigXy = dclone $multiBigWig;
   $multiBigWigXy->{key} = $studyProperties{datasetDisplayName} . " XYPlot - Unique And Non-Unique";
   $multiBigWigXy->{label} = $datasetName  . " XYPlot - Unique And Non-Unique";
   $multiBigWigXy->{metadata}->{trackType} = "Multi XY plot";
@@ -275,6 +287,7 @@ my $label="test";
   $multiBigWigXy->{style}->{height} = 40;
 
   my $uniqueMultiBigWigXy = dclone $uniqueMultiBigWigObj;
+  #my $uniqueMultiBigWigXy = dclone $uniqueMultiBigWig;
   $uniqueMultiBigWigXy->{key} = $studyProperties{datasetDisplayName} . " XYPlot - Unique Only";
   $uniqueMultiBigWigXy->{label} = $datasetName  . " XYPlot - Unique Only";
   $uniqueMultiBigWigXy->{metadata}->{trackType} = "Multi XY plot";
@@ -282,10 +295,11 @@ my $label="test";
   $uniqueMultiBigWigXy->{autoscale} = "local";
   $uniqueMultiBigWigXy->{style}->{height} = 40;
 
-
-  push @{$result->{tracks}}, $uniqueMultiBigWigObj; # ChipSeq are all unique
+  push @{$result->{tracks}}, $uniqueMultiBigWig;
+  ##push @{$result->{tracks}}, $uniqueMultiBigWigObj; # ChipSeq are all unique
 
   if($technologyType eq 'RNASeq') {
+    #push @{$result->{tracks}}, $multiBigWig;
     push @{$result->{tracks}}, $multiBigWigObj;
     push @{$result->{tracks}}, $multiBigWigXy;
     push @{$result->{tracks}}, $uniqueMultiBigWigXy;
@@ -391,7 +405,7 @@ AND s.investigation_id is null";
   }
 
 }
-#$result = $result->convert_blessed([$enable]);
+
 print encode_json($result);
 print CACHE encode_json($result);
 close CACHE;
@@ -406,7 +420,7 @@ sub addConfiguration {
   my $shortAttribution = $properties->{shortAttribution};
   my $summary = $properties->{summary};
   $summary =~ s/\n/ /g;
-
+$summary = "MADE UP SUMMARY";
   # old, direct file access; replaced by jbrowse service
   #my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
   #my $bwUrl = "/a/service/jbrowse/rnaseq/bigwig/$nameForFileNames/$datasetName/$file"; 
@@ -436,7 +450,6 @@ $category = 'transcriptomics';
 #                                                                                          jbrowseUtilObject => $jbrowseUtil
                                                                                          })->getConfigurationObject();
 
-
   my $coverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
                   urlTemplate => $bwUrl,
                   yScalePosition => "left",
@@ -463,7 +476,6 @@ $category = 'transcriptomics';
                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
   };
-
   if($technologyType eq 'RNASeq') {
     $coverageObj->{metadata}->{strand} = $strand;
     $coverageObj->{metadata}->{alignment} = $alignment;
@@ -471,10 +483,9 @@ $category = 'transcriptomics';
 
   my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color, alignment => $alignment};
 
-  if ($coverageObj ne ''){
-  push @{$result->{tracks}}, $coverageObj; # TODO:  only push if the confiration object was available
+  #push @{$result->{tracks}}, $coverage; # TODO:  only push if the confiration object was available
+  push @{$result->{tracks}}, $coverageObj;
   push @$multiUrls, $multiUrlHash; # TODO:  only push if the confiration object was available
-  }
 }
 
 
