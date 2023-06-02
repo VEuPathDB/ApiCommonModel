@@ -39,6 +39,11 @@ sub setProject {$_[0]->{project} = $_[1]}
 sub getAttribution {$_[0]->{attribution}}
 sub setAttribution {$_[0]->{attribution} = $_[1]}
 
+sub getUniqueOnly {$_[0]->{is_unique_only}}
+sub setUniqueOnly {$_[0]->{is_unique_only} = $_[1]}
+
+sub getSubcategory {$_[0]->{subcategory}}
+sub setSubcategory {$_[0]->{subcategory} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -56,6 +61,7 @@ sub new {
     $self->setSummary($args->{summary});
     $self->setProject($args->{project});
     $self->setAttribution($args->{attribution});
+    $self->setUniqueOnly($args->{is_unique_only});
     return $self;
 }
 
