@@ -7,11 +7,11 @@ use warnings;
 # # getters and setters
 
 # TODO:  Why is this here??
-sub getKey {$_[0]->{key}}
+ sub getKey {$_[0]->{key}}
  sub setKey {$_[0]->{key} = $_[1]}
 # TODO:  Why is this here?? seems like error
- sub getSubcategory {$_[0]->{subcategory}}
- sub setSubcategory {$_[0]->{subcategory} = $_[1]}
+# sub getSubcategory {$_[0]->{subcategory}}
+# sub setSubcategory {$_[0]->{subcategory} = $_[1]}
 
 sub getJBrowseObject{
 	my $self = shift;
@@ -26,16 +26,25 @@ sub getJBrowseObject{
 	my $multiCovScale =  $self->getScale();
 	my $category = $self->getCategory();
 	my $key =$self->getKey();
+	my $uniqueTest = $self->getUniqueOnly();
+        my $newLabel;
+
+	if ($uniqueTest == 0){
+	$newLabel = $datasetName  . " Density - Unique And Non-Unique";
+	}
+	elsif ($uniqueTest == 1){
+	$newLabel = $datasetName  . " Density - Unique Only";
+	}
+
 	my $subCategory = $self->getSubcategory();
 	my $shortAttribution = $self->getAttribution();
 	my $summary = $self->getSummary();
-	#my $summary = $self->getSummary();
 	my $jbrowseObject = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
 						 urlTemplate => $urlTemplates,
 						 showTooltips => JSON::true,
 						 yScalePosition => "left",
 						 key => $key,
-						 label => $datasetName  . " Density - Unique And Non-Unique PAUL",
+						 label => $newLabel,
 						 type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
 						 category => "$category",
 						 min_score => 0,
@@ -53,7 +62,7 @@ sub getJBrowseObject{
 							 description => $summary
 						 },
 						 fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-						 #                     fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+						 fmtMetaValue_Description => "function() { return datasetDescription('$summary', ''); }"
 	};
 
 	return $jbrowseObject;
