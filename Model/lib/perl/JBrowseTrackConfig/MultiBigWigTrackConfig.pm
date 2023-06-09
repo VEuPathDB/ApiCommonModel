@@ -27,30 +27,32 @@ sub getJBrowseObject{
 	my $category = $self->getCategory();
 	my $key =$self->getKey();
 	my $uniqueTest = $self->getUniqueOnly();
+	my $alignment = $self->getAlignment();
+        my $strand = $self->getStrand();
         my $newLabel;
-
+	my $newKey;
 	if ($uniqueTest == 0){
 	$newLabel = $datasetName  . " Density - Unique And Non-Unique";
+	$newKey = $studyDisplayName . " Density - Unique And Non-Unique"
 	}
 	elsif ($uniqueTest == 1){
 	$newLabel = $datasetName  . " Density - Unique Only";
+	$newKey = $studyDisplayName . " Density - Unique Only"
 	}
 
 	my $subCategory = $self->getSubcategory();
 	my $shortAttribution = $self->getAttribution();
 	my $summary = $self->getSummary();
 	my $jbrowseObject = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-						 urlTemplate => $urlTemplates,
+						 urlTemplates => $urlTemplates,
 						 showTooltips => JSON::true,
 						 yScalePosition => "left",
-						 key => $key,
+						 key => $newKey,
 						 label => $newLabel,
 						 type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
 						 category => "$category",
-						 min_score => 0,
-						 max_score => $covMaxScoreDefault,
 						 style => {
-							 "pos_color"         => "black",
+							         "pos_color"         => "black",
 								 "neg_color"         => "white",
 						 },
 						 scale => $multiCovScale,
@@ -59,7 +61,8 @@ sub getJBrowseObject{
 							 dataset => $studyDisplayName,
 							 trackType => "Multi-Density",
 							 attribution => $shortAttribution,
-							 description => $summary
+							 description => $summary,
+							 alignment => $alignment,
 						 },
 						 fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
 						 fmtMetaValue_Description => "function() { return datasetDescription('$summary', ''); }"

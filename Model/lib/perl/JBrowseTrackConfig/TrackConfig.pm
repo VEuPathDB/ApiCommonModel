@@ -45,6 +45,9 @@ sub setUniqueOnly {$_[0]->{is_unique_only} = $_[1]}
 sub getSubcategory {$_[0]->{subcategory}}
 sub setSubcategory {$_[0]->{subcategory} = $_[1]}
 
+sub getAlignment {$_[0]->{alignment}}
+sub setAlignment {$_[0]->{alignment} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = bless {}, $class;
@@ -57,11 +60,13 @@ sub new {
     $self->setColor($args->{color});
     $self->setLabel($args->{label});
     $self->setCategory($args->{category});
+    $self->setSubcategory($args->{category});
     $self->setStrand($args->{strand});
     $self->setSummary($args->{summary});
     $self->setProject($args->{project});
     $self->setAttribution($args->{attribution});
     $self->setUniqueOnly($args->{is_unique_only});
+    $self->setAlignment($args->{alignment});
     return $self;
 }
 

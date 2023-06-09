@@ -28,6 +28,8 @@ sub setBuildProperties {
   my ($self) = @_;
   #my $organismAbbrev = $self->{_organism_abbrev};
   my $organismAbbrev = $self->getOrganismAbbrev();
+
+#print STDERR "ORGABRREV: $organismAbbrev \n";
   my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$datasetAndPresenterPropertiesBaseName";
 #print "BUILD PROPS --> $buildPropertiesFile \n";
   open(FILE, $buildPropertiesFile) or die "Cannot open file $buildPropertiesFile for reading: $!";
@@ -70,6 +72,7 @@ sub new {
 
   my $self = bless($args, $class);
   my $organismAbbrev = $args->{organismAbbrev};
+  $self->setOrganismAbbrev();
   #my $organismAbbrev = $self->getOrganismAbbrev();
 
   my $fileName = $args->{fileName};
@@ -82,7 +85,7 @@ sub new {
 
   $self->{_project_name} = $projectName;
 #print Dumper $args;
-  $self->setOrganismAbbrev($organismAbbrev);
+  #$self->setOrganismAbbrev($organismAbbrev);
   
 my $cacheFile = $type && $type eq 'protein' 
       ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 

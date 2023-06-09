@@ -32,6 +32,10 @@ sub getJBrowseObject{
 	my $multiCovScale =  $self->getScale();
 	my $category = $self->getCategory();
 	my $summary = $self->getSummary();
+	my $alignment = $self->getAlignment();
+        my $strand = $self->getStrand();
+        my $shortAttribution = $self->getAttribution();
+	my $subCategory = $self->getSubcategory();
 	my $jbrowseObject = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
 						 urlTemplate => $urlTemplate,
 						 yScalePosition => "left",
@@ -42,11 +46,20 @@ sub getJBrowseObject{
 						 min_score => 0,
 						 max_score => $covMaxScoreDefault,
 						 style => {
-							 "pos_color"         => $color,
+							 	 "pos_color" => $color,
 								 "clip_marker_color" =>  "black",
 								 "height" => 40
 						 },
 						 scale => $multiCovScale,
+						 metadata => {
+                    						subcategory => $subCategory,
+                    						dataset => $studyDisplayName,
+                    						trackType => 'Coverage',
+                    						attribution => $shortAttribution,
+                    						description => $summary,
+								strand => $strand,
+								alignment => $alignment,
+                   				 },
 						 fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
 						 fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
 	};
