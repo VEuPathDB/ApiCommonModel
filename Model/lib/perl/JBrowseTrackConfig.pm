@@ -11,7 +11,8 @@ sub setApplicationType {$_[0]->{_application_type} = $_[1]}
 sub new {
   my ($class, $args) = @_;
 
-  my $self = bless($args, $class);
+  my $self = {};
+  bless($self, $class);
 
   $self->setApplicationType($args->{applicationType});
   # can we get access to these env vars??
