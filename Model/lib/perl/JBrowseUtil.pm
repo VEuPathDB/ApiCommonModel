@@ -11,45 +11,94 @@ use Data::Dumper;
 
 sub getDbh {$_[0]->{_dbh}}
 
-my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
+# this is invariant - hard coded below
+#my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
 
+# getters and setters for all class attributes
 sub getCacheFile {$_[0]->{_cache_file}}
+sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
+
+sub getFileName {$_[0]->{_fileName}}
+sub setFileName {$_[0]->{_fileName} = $_[1]}
+
 
 sub getType {$_[0]->{_type}}
-
+sub setType {$_[0]->{_type} = $_[1]}
 
 sub getOrganismAbbrev {$_[0]->{_organism_abbrev}}
 sub setOrganismAbbrev {$_[0]->{_organism_abbrev} = $_[1]}
 
 sub getProjectName {$_[0]->{_project_name}}
+sub setProjectName {$_[0]->{_project_name} = $_[1]}
 
 sub getBuildProperties {$_[0]->{_build_properties}}
-sub setBuildProperties {
-  my ($self) = @_;
-  #my $organismAbbrev = $self->{_organism_abbrev};
-  my $organismAbbrev = $self->getOrganismAbbrev();
+sub setBuildProperties {$_[0]->{_build_properties} = $_[1]}
 
-#print STDERR "ORGABRREV: $organismAbbrev \n";
-  my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$datasetAndPresenterPropertiesBaseName";
-#print "BUILD PROPS --> $buildPropertiesFile \n";
-  open(FILE, $buildPropertiesFile) or die "Cannot open file $buildPropertiesFile for reading: $!";
+# standard to put new method first.
+sub new {
+  my ($class, $args) = @_;
 
-  my $buildProperties = {};
+  # we want class attributes to be private, so make an empty hash and bless that with your class
+  my $self = {};
+  bless ($self, $class);
 
-  while(<FILE>) {
-    chomp;
-    next unless($_);
-    next if /^\s*#/;
-    my ($propString, $value) = split(/\=/, $_);
-    my @props = split(/\./, $propString);
+  # now user your setters to populate it 
+  $self->setOrganismAbbrev($args->{organismAbbrev});
+  $self->setFileName($args->{fileName});
+  $self->setProjectName($args->{projectName});
 
-    &toNestedHash($buildProperties, \@props, $value);
-  }
+  my $type = lc($args->{type}) eq 'protein' ? 'protein' : 'genome';
+  $self->setType($type);
+ 
+ # this one is a bit odd because it calls a function that calls the setter
+ # not sure if you need this
+  $self->setCacheFileName();
 
-  $self->{_build_properties} = $buildProperties;
+  # as above, this calls a function that calls the setter
+  $self->makeBuildProperties();
 
+  return $self;
 }
 
+# this function makes the build properties has and sets it as a class attribute
+sub makeBuildProperties {
+    my ($self) = @_; 
+
+    my $organismAbbrev = $self->getOrganismAbbrev();
+
+    my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/datasetAndPresenterProps.conf";
+    
+    open(FILE, $buildPropertiesFile) or die "Cannot open file $buildPropertiesFile for reading: $!";
+
+    my $buildProperties = {};
+    while(<FILE>) {
+        chomp;
+        next unless ($_);
+        next if /^\s*#/;
+        my ($propString, $value) = split(/\=/, $_);
+        my @props = split(/\./, $propString);
+
+        &toNestedHash($buildProperties, \@props, $value);
+    }
+    
+    $self->setBuildProperties($buildProperties);
+}
+
+# this function makes the cacheFileName and sets it as a class attribute
+sub setCacheFileName {
+    my ($self) = @_;
+
+    my $organismAbbrev = $self->getOrganismAbbrev();
+    my $fileName = $self->getFileName();
+
+    my $cacheFile = $self->getType() eq 'protein' 
+        ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 
+        : $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$fileName";
+
+    $self->setCacheFile($cacheFile);
+}
+
+# didn't touch anything below here
 
 sub toNestedHash {
   my ($hash, $props, $value) = @_;
@@ -67,52 +116,6 @@ sub toNestedHash {
   &toNestedHash($subHash, $props, $value);
 }
 
-sub new {
-  my ($class, $args) = @_;
-
-  my $self = bless($args, $class);
-  my $organismAbbrev = $args->{organismAbbrev};
-  $self->setOrganismAbbrev();
-  #my $organismAbbrev = $self->getOrganismAbbrev();
-
-  my $fileName = $args->{fileName};
-  my $type = $args->{type};
-
-  my $projectName = $args->{projectName};
-
-
-  $self->{_type} = lc($type) eq 'protein' ? 'protein' : 'genome';
-
-  $self->{_project_name} = $projectName;
-#print Dumper $args;
-  #$self->setOrganismAbbrev($organismAbbrev);
-  
-my $cacheFile = $type && $type eq 'protein' 
-      ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 
-      : $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$fileName";;
-
-  if($organismAbbrev && $fileName) {
-    $self->{_cache_file} = $cacheFile;
-  }
-
-  $self->setBuildProperties();
-
-  # unless($organismAbbrev && $fileName && -e $cacheFile) {
-  #   my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
-
-  #   my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
-  #                           $modelConfig->getAppDbLogin(),
-  #                           $modelConfig->getAppDbPassword()
-  #       )
-  #       || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
-
-  #   $dbh->{LongTruncOk} = 0;
-  #   $dbh->{LongReadLen} = 10000000;
-  #   $self->{_dbh} = $dbh;
-  # }
-
-  return $self;
-}
 
 sub intronJunctionsQueryParams {
   my ($self, $level) = @_;
