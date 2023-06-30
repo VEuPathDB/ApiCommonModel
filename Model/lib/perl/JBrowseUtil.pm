@@ -57,6 +57,17 @@ sub new {
   # as above, this calls a function that calls the setter
   $self->makeBuildProperties();
 
+    my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
+    my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                            $modelConfig->getAppDbLogin(),
+                            $modelConfig->getAppDbPassword()
+        )
+        || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+    $dbh->{LongTruncOk} = 0;
+    $dbh->{LongReadLen} = 10000000;
+    $self->{_dbh} = $dbh;
+
   return $self;
 }
 
@@ -80,9 +91,13 @@ sub makeBuildProperties {
 
         &toNestedHash($buildProperties, \@props, $value);
     }
-    
+
     $self->setBuildProperties($buildProperties);
+
 }
+
+
+
 
 # this function makes the cacheFileName and sets it as a class attribute
 sub setCacheFileName {
