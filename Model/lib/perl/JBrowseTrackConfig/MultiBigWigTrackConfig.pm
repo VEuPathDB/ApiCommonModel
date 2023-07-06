@@ -3,70 +3,42 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
 
+use JSON;
 
-# # getters and setters
+sub new {
+    my ($class, $args) = @_;
+    my $self = $class->SUPER::new($args);
 
-# TODO:  Why is this here??
- sub getKey {$_[0]->{key}}
- sub setKey {$_[0]->{key} = $_[1]}
-# TODO:  Why is this here?? seems like error
-# sub getSubcategory {$_[0]->{subcategory}}
-# sub setSubcategory {$_[0]->{subcategory} = $_[1]}
+    $self->setUrlTemplates($args->{url_templates});
+
+		$self->setStoreClass("MultiBigWig/Store/SeqFeature/MultiBigWig");
+
+    my $studyDisplayName = $self->getStudyDisplayName();
+    my $displayName = $self->getDisplayName();
+		my $datasetName = $self->getDatasetName();
+
+    $self->setHeight(40);
+
+    return $self;
+}
+
+sub getJBrowseStyle {
+    my $self = shift;
+
+		my $style = {pos_color => "black",
+								 neg_color => "white",
+		};
+
+    return $style;
+}
 
 sub getJBrowseObject{
 	my $self = shift;
-	my $datasetName = $self->getDatasetName();
-	my $displayName = $self->getDisplayName();
-	my $studyDisplayName = $self->getStudyDisplayName();
-	my $file = $self->getFileName();
-	my $urlTemplates = $self->getUrlTemplates();
-	my $color = $self->getColor();
-	my $label = $self->getLabel();
-	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
-	my $multiCovScale =  $self->getScale();
-	my $category = $self->getCategory();
-	my $key =$self->getKey();
-	my $uniqueTest = $self->getUniqueOnly();
-	my $alignment = $self->getAlignment();
-        my $strand = $self->getStrand();
-        my $newLabel;
-	my $newKey;
-	if ($uniqueTest == 0){
-	$newLabel = $datasetName  . " Density - Unique And Non-Unique";
-	$newKey = $studyDisplayName . " Density - Unique And Non-Unique"
-	}
-	elsif ($uniqueTest == 1){
-	$newLabel = $datasetName  . " Density - Unique Only";
-	$newKey = $studyDisplayName . " Density - Unique Only"
-	}
 
-	my $subCategory = $self->getSubcategory();
-	my $shortAttribution = $self->getAttribution();
-	my $summary = $self->getSummary();
-	my $jbrowseObject = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-						 urlTemplates => $urlTemplates,
-						 showTooltips => JSON::true,
-						 yScalePosition => "left",
-						 key => $newKey,
-						 label => $newLabel,
-						 type => "MultiBigWig/View/Track/MultiWiggle/MultiDensity",
-						 category => "$category",
-						 style => {
-							         "pos_color"         => "black",
-								 "neg_color"         => "white",
-						 },
-						 scale => $multiCovScale,
-						 metadata => {
-							 subcategory => $subCategory,
-							 dataset => $studyDisplayName,
-							 trackType => "Multi-Density",
-							 attribution => $shortAttribution,
-							 description => $summary,
-							 alignment => $alignment,
-						 },
-						 fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-						 fmtMetaValue_Description => "function() { return datasetDescription('$summary', ''); }"
-	};
+	my $jbrowseObject = $self->SUPER::getJBrowseObject();
+
+	$jbrowseObject->{url_templates} = $self->getUrlTemplates();
+	$jbrowseObject->{showTooltips} = JSON::true;
 
 	return $jbrowseObject;
 }
@@ -76,7 +48,7 @@ sub getJBrowse2Object{
 	my $datasetName = $self->getDatasetName();
 	my $displayName = $self->getDisplayName();
 	my $studyDisplayName = $self->getStudyDisplayName();
-	my $file = $self->getFileName();
+
 	my $urlTemplates = $self->getUrlTemplates();
 	my $color = $self->getColor();
 	my $label = $self->getLabel();
@@ -120,8 +92,7 @@ sub getApolloObject {
 	my $datasetName = $self->getDatasetName();
 	my $displayName = $self->getDisplayName();
 	my $studyDisplayName = $self->getStudyDisplayName();
-	my $file = $self->getFileName();
-	my $urlTemplates = $self->getUrlTemplates();
+		my $urlTemplates = $self->getUrlTemplates();
 	my $color = $self->getColor();
 	my $label = $self->getLabel();
 	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
@@ -150,6 +121,80 @@ sub getApolloObject {
 	};
 
 	return $apolloObject;
+}
+
+
+package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density;
+
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig);
+use strict;
+use warnings;
+
+sub new {
+    my ($class, $args) = @_;
+    my $self = $class->SUPER::new($args);
+
+    my $studyDisplayName = $self->getStudyDisplayName();
+    my $displayName = $self->getDisplayName();
+		my $datasetName = $self->getDatasetName();
+
+
+    $self->setViewType("MultiBigWig/View/Track/MultiWiggle/MultiDensity");
+
+		$self->setTrackType("Multi-Density");
+
+		my $alignment = $self->getAlignment();
+
+		my $alignmentDisplay = "Unique And Non-Unique";
+		if($alignment && $alignment eq 'unique') {
+			$alignmentDisplay = "Unique Only";
+		}
+
+		$self->setLabel("$datasetName Density - $alignmentDisplay");
+		$self->setKey("$displayName Density - $alignmentDisplay");
+
+    return $self;
+}
+
+package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY;
+
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig);
+use strict;
+use warnings;
+
+sub new {
+    my ($class, $args) = @_;
+    my $self = $class->SUPER::new($args);
+
+    my $studyDisplayName = $self->getStudyDisplayName();
+    my $displayName = $self->getDisplayName();
+		my $datasetName = $self->getDatasetName();
+
+    $self->setViewType("MultiBigWig/View/Track/MultiWiggle/MultiXYPlot");
+
+		$self->setTrackType("Multi XY plot");
+
+		my $alignment = $self->getAlignment();
+
+		my $alignmentDisplay = "Unique And Non-Unique";
+		if($alignment && $alignment eq 'unique') {
+			$alignmentDisplay = "Unique Only";
+		}
+
+		$self->setLabel("$datasetName XYPlot - $alignmentDisplay");
+		$self->setKey("$displayName XYPlot - $alignmentDisplay");
+
+    return $self;
+}
+
+sub getJBrowseObject{
+	my $self = shift;
+
+	my $jbrowseObject = $self->SUPER::getJBrowseObject();
+
+	$jbrowseObject->{autoscale} = "local";
+
+	return $jbrowseObject;
 }
 
 1;

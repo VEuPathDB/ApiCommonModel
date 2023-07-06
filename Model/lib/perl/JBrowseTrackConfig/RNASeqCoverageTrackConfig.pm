@@ -4,10 +4,12 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
 use Data::Dumper;
+
 sub getUrlTemplate {
-	my $self = shift;
-	return $self->getUrlTemplates()->[0];
+    my $self = shift;
+    return $self->getUrlTemplates()->[0];
 }
+
 
 sub new {
     my ($class, $args) = @_;
@@ -15,109 +17,74 @@ sub new {
 
     $self->setUrlTemplates([$args->{url_template}]);
 
+    my $studyDisplayName = $self->getStudyDisplayName();
+    my $displayName = $self->getDisplayName();
+    $self->setKey("$studyDisplayName - $displayName Coverage");
+
+    $self->setHeight(40);
+
     return $self;
+}
+
+sub getJBrowseStyle {
+    my $self = shift;
+
+    my $style = {pos_color => $self->getColor(),
+                 clip_marker_color => "black",
+                 height => $self->getHeight(),
+    };
+    return $style;
 }
 
 
 sub getJBrowseObject{
-	my $self = shift;
-	my $datasetName = $self->getDatasetName();
-	my $displayName = $self->getDisplayName();
-	my $studyDisplayName = $self->getStudyDisplayName();
-	my $file = $self->getFileName();
-	my $urlTemplate = $self->getUrlTemplate();
-	my $color = $self->getColor();
-	my $label = $self->getLabel();
-	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
-	my $multiCovScale =  $self->getScale();
-	my $category = $self->getCategory();
-	my $summary = $self->getSummary();
-	my $alignment = $self->getAlignment();
-        my $strand = $self->getStrand();
-        my $shortAttribution = $self->getAttribution();
-	my $subCategory = $self->getSubcategory();
-	my $jbrowseObject = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
-						 urlTemplate => $urlTemplate,
-						 yScalePosition => "left",
-						 key => "$studyDisplayName - $displayName Coverage",
-						 label => "$datasetName $label Coverage",
-						 type => "JBrowse/View/Track/Wiggle/XYPlot",
-						 category => "$category",
-						 min_score => 0,
-						 max_score => $covMaxScoreDefault,
-						 style => {
-							 	 "pos_color" => $color,
-								 "clip_marker_color" =>  "black",
-								 "height" => 40
-						 },
-						 scale => $multiCovScale,
-						 metadata => {
-                    						subcategory => $subCategory,
-                    						dataset => $studyDisplayName,
-                    						trackType => 'Coverage',
-                    						attribution => $shortAttribution,
-                    						description => $summary,
-								strand => $strand,
-								alignment => $alignment,
-                   				 },
-						 fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-						 fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
-	};
+    my $self = shift;
 
-	return $jbrowseObject;
+    my $jbrowseObject = $self->SUPER::getJBrowseObject();
+
+    $jbrowseObject->{url_template} = $self->getUrlTemplate();
+
+    return $jbrowseObject;
 }
+
 
 sub getJBrowse2Object{
-	my $self = shift;
-	my $datasetName = $self->getDatasetName();
-	my $displayName = $self->getDisplayName();
-	my $studyDisplayName = $self->getStudyDisplayName();
-	my $file = $self->getFileName();
-	my $urlTemplate = $self->getUrlTemplate();
-	my $color = $self->getColor();
-	my $label = $self->getLabel();
-	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
-	my $multiCovScale =  $self->getScale();
-	my $category = $self->getCategory();
-	my $jbrowse2Object = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-						  yScalePosition => "left",
-						  key => "$studyDisplayName - $displayName Coverage",
-						  autoscale => "local",
-						  style => {
-							  "height" => "40"
-						  },
-						  urlTemplates => [{
-							  url => $urlTemplate,
-							  color => $color,
-							  name => $datasetName
-										   }],
-						  metadata => {
-							  subcategory => "RNA-Seq",
-							  trackType => "Multi XY plot",
-							  alignment => "Unique",
-							  dataset => $datasetName
-						  },
-						  label => "$datasetName $label Coverage",
-						  type => "MultiBigWig/View/Track/MultiWiggle/MultiXYPlot",
-						  category => "$category",
-						  showTooltips => "true"
-	};
+    my $self = shift;
 
-	return $jbrowse2Object;
+    my $studyDisplayName = $self->getStudyDisplayName();
+
+    my $jbrowse2Object = {type => "QuantitativeTrack",
+                          trackId => $self->getLabel(),
+                          name => $self->getKey(),
+                          category => ["RNASeq", $studyDisplayName],
+                          adapter => {type => "BigWigAdapter",
+                                      bigWigLocation => {uri => $self->getUrlTemplate(),
+                                                         locationType => "UriLocation"
+                                      }
+                          },
+                          assemblyNames =>  [
+                              $self->getOrganismAbbrev()
+                              ],
+                          displays => [
+                              {type => "LinearWiggleDisplay",
+                               displayId => "rnaseq_wiggle_" . scalar($self),
+                               minScore => 1,
+                               maxScore => 1000,
+                               scaleType => "log",
+                               defaultRendering => "xyplot",
+                               renderers => {XYPlotRenderer => {type => "XYPlotRenderer",
+                                                                color => $self->getColor()
+                                             },
+                                             DensityRenderer => {type => "DensityRenderer",
+                                                                 color => $self->getColor()
+                                             },
+                               }
+                              }
+                              ]
+    };
+
+    return $jbrowse2Object;
 }
 
-sub getApolloObject {
-	my $self = shift;
-
-	my $apolloObject= $self->getJBrowseObject();
-	my $project = $self->getProject();
-
-	#TODO:  change the urltemplate
-	# my $urlTemplate = $self->getUrlTemplate();
-	# $urlTemplate =~ s/lc($project)/; (this is not right.  need to specify full url here)
-	# $apolloObject->{urlTemplate} = $urlTemplate;
-
-	return $apolloObject;
-}
 
 1;
