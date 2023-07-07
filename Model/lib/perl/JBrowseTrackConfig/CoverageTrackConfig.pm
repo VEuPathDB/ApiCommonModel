@@ -4,13 +4,21 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 use strict;
 use warnings;
 
-sub getUrlTemplates {$_[0]->{url_templates} || [] }
-sub setUrlTemplates {$_[0]->{url_templates} = $_[1]}
+sub getUrlTemplate {$_[0]->{url_template} }
+sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 
 sub getCovMaxScoreDefault {$_[0]->{cov_max_score_default} || 1000}
 sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1]}
 
-sub getCovMinScoreDefault {$_[0]->{cov_min_score_default} || 0 }
+sub getCovMinScoreDefault {
+    my $self = shift;
+    my $min = $self->{cov_min_score_default};
+
+    if(defined($min)) {
+        return $min;
+    }
+    return $self->getScale eq "log" ? 1 : 0;
+}
 sub setCovMinScoreDefault {$_[0]->{cov_min_score_default} = $_[1]}
 
 sub getScale {$_[0]->{scale} || "log"}
@@ -31,17 +39,24 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplates($args->{url_templates});
+    $self->setUrlTemplate($args->{url_template});
 
     $self->setCovMaxScoreDefault($args->{cov_max_score_default});
     $self->setCovMinScoreDefault($args->{cov_min_score_default});
     $self->setScale($args->{scale});
 
-    $self->setStoreClass("JBrowse/Store/SeqFeature/BigWig");
+    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+        $self->setStoreType("JBrowse/Store/SeqFeature/BigWig");
+        $self->setDisplayType("JBrowse/View/Track/Wiggle/XYPlot");
+        $self->setTrackTypeDisplay("Coverage");
+    }
+    else {
+        $self->setStoreType("BigWigAdapter");
+        $self->setTrackType("QuantitativeTrack");
+        $self->setDisplayType("LinearWiggleDisplay");
 
-    $self->setViewType("JBrowse/View/Track/Wiggle/XYPlot");
-
-    $self->setTrackType("Coverage");
+        $self->setTrackTypeDisplay("Coverage");
+    }
 
     # These are optional
     $self->setStrand($args->{strand});
@@ -68,13 +83,34 @@ sub getJBrowseObject{
     return $jbrowseObject;
 }
 
-sub getJBrowseMetadata {
+sub getJBrowse2Object{
+    my $self = shift;
+
+    my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+
+    my $scale = $self->getScale();
+    my $minScore = $self->getCovMinScoreDefault();
+    my $maxScore = $self->getCovMaxScoreDefault();
+    #my $yScalePosition = $self->getYScalePosition();
+
+    $jbrowse2Object->{displays}->[0]->{minScore} = $minScore;
+    $jbrowse2Object->{displays}->[0]->{maxScore} = $maxScore;
+    $jbrowse2Object->{displays}->[0]->{scaleType} = $scale;
+
+    return $jbrowse2Object;
+}
+
+
+
+
+
+sub getMetadata {
     my $self = shift;
 
     my $strand = $self->getStrand();
     my $alignment = $self->getAlignment();
 
-    my $metadata = $self->SUPER::getJBrowseMetadata();
+    my $metadata = $self->SUPER::getMetadata();
     $metadata->{strand} = $strand if($strand);
     $metadata->{alignment} = $alignment if($alignment);
 

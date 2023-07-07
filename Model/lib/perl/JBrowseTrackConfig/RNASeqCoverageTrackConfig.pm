@@ -5,21 +5,22 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-sub getUrlTemplate {
-    my $self = shift;
-    return $self->getUrlTemplates()->[0];
-}
 
 
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplates([$args->{url_template}]);
+    $self->setUrlTemplate($args->{url_template});
 
     my $studyDisplayName = $self->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
-    $self->setKey("$studyDisplayName - $displayName Coverage");
+
+    my $label = $self->getLabel();
+    my $datasetName = $self->getDatasetName();
+
+    $self->setId("${datasetName}_${displayName}_Coverage");
+    $self->setLabel("$studyDisplayName - $displayName Coverage");
 
     $self->setHeight(40);
 
@@ -47,40 +48,22 @@ sub getJBrowseObject{
     return $jbrowseObject;
 }
 
-
 sub getJBrowse2Object{
     my $self = shift;
 
+    my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+
     my $studyDisplayName = $self->getStudyDisplayName();
 
-    my $jbrowse2Object = {type => "QuantitativeTrack",
-                          trackId => $self->getLabel(),
-                          name => $self->getKey(),
-                          category => ["RNASeq", $studyDisplayName],
-                          adapter => {type => "BigWigAdapter",
-                                      bigWigLocation => {uri => $self->getUrlTemplate(),
-                                                         locationType => "UriLocation"
-                                      }
-                          },
-                          assemblyNames =>  [
-                              $self->getOrganismAbbrev()
-                              ],
-                          displays => [
-                              {type => "LinearWiggleDisplay",
-                               displayId => "rnaseq_wiggle_" . scalar($self),
-                               minScore => 1,
-                               maxScore => 1000,
-                               scaleType => "log",
-                               defaultRendering => "xyplot",
-                               renderers => {XYPlotRenderer => {type => "XYPlotRenderer",
-                                                                color => $self->getColor()
-                                             },
-                                             DensityRenderer => {type => "DensityRenderer",
-                                                                 color => $self->getColor()
-                                             },
-                               }
-                              }
-                              ]
+    $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getUrlTemplate(),locationType => "UriLocation"};
+    $jbrowse2Object->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
+    $jbrowse2Object->{displays}->[0]->{defaultRendering} = "xyplot";
+    $jbrowse2Object->{displays}->[0]->{renderers} = {XYPlotRenderer => {type => "XYPlotRenderer",
+                                                                        color => $self->getColor()
+                                                     },
+                                                     DensityRenderer => {type => "DensityRenderer",
+                                                                         color => $self->getColor()
+                                                     },
     };
 
     return $jbrowse2Object;

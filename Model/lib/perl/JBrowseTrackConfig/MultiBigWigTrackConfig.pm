@@ -5,13 +5,17 @@ use warnings;
 
 use JSON;
 
+sub getMultiUrls {$_[0]->{multi_urls} }
+sub setMultiUrls {$_[0]->{multi_urls} = $_[1]}
+
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplates($args->{url_templates});
+    $self->setMultiUrls($args->{multi_urls});
 
-		$self->setStoreClass("MultiBigWig/Store/SeqFeature/MultiBigWig");
+		$self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
 
     my $studyDisplayName = $self->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
@@ -37,7 +41,7 @@ sub getJBrowseObject{
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-	$jbrowseObject->{url_templates} = $self->getUrlTemplates();
+	$jbrowseObject->{url_templates} = $self->getMultiUrls();
 	$jbrowseObject->{showTooltips} = JSON::true;
 
 	return $jbrowseObject;
@@ -45,83 +49,49 @@ sub getJBrowseObject{
 
 sub getJBrowse2Object{
 	my $self = shift;
-	my $datasetName = $self->getDatasetName();
-	my $displayName = $self->getDisplayName();
-	my $studyDisplayName = $self->getStudyDisplayName();
 
-	my $urlTemplates = $self->getUrlTemplates();
-	my $color = $self->getColor();
-	my $label = $self->getLabel();
-	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
-	my $multiCovScale =  $self->getScale();
-	my $category = $self->getCategory();
-	my $shortAttribution = $self->getAttribution();
-	my $summary = $self->getSummary();
-	my $subCategory = $self->getSubcategory();
-	my $jbrowse2Object = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-						  yScalePosition => "left",
-						  key => "$studyDisplayName - $displayName Coverage",
-						  autoscale => "local",
-						  style => {
-							  "height" => "40"
-						  },
-						  urlTemplates => [{
-							  url => $urlTemplates,
-							  color => $color,
-							  name => $datasetName
-										   }],
-						  metadata => {
-							  subcategory => $subCategory,
-							  dataset => $studyDisplayName,
-							  trackType => "Multi-Density",
-							  attribution => $shortAttribution,
-							  dataset => $datasetName
-						  },
-						  label => "$datasetName $label Coverage",
-						  type => "MultiBigWig/View/Track/MultiWiggle/MultiXYPlot",
-						  category => "$category",
-						  showTooltips => "true"
-	};
+	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+
 
 	return $jbrowse2Object;
 }
 
-sub getApolloObject {
+# sub getApolloObject {
 
-	my $self = shift;
-	my $datasetName = $self->getDatasetName();
-	my $displayName = $self->getDisplayName();
-	my $studyDisplayName = $self->getStudyDisplayName();
-		my $urlTemplates = $self->getUrlTemplates();
-	my $color = $self->getColor();
-	my $label = $self->getLabel();
-	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
-	my $multiCovScale =  $self->getScale();
-	my $category = $self->getCategory();
-	#my $summary = $self->getSummary();
-	my $apolloObject={storeClass => "JBrowse/Store/SeqFeature/BigWig",
-					  key => "$studyDisplayName - $displayName Coverage",
-					  yScalePosition => "left",
-					  urlTemplate => $urlTemplates,
-					  scale => "log",
-					  max_score => $covMaxScoreDefault,
-					  metadata => {
-						  subcategory => "RNA-Seq",
-						  trackType => "Coverage",
-						  alignment => "unique",
-						  dataset => $datasetName,
-					  },
-					  label => "$datasetName $label Coverage",
-					  type => "JBrowse/View/Track/Wiggle/XYPlot",
-					  min_score => 0,
-					  max_score => 1000,
-					  scale => "log",
-					  fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
-					  #                  fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
-	};
+# 	my $self = shift;
+# 	my $datasetName = $self->getDatasetName();
+# 	my $displayName = $self->getDisplayName();
+# 	my $studyDisplayName = $self->getStudyDisplayName();
+# 		my $urlTemplates = $self->getMultiUrls();
+# 	my $color = $self->getColor();
+# 	my $label = $self->getLabel();
+# 	my $covMaxScoreDefault = $self->getCovMaxScoreDefault();
+# 	my $multiCovScale =  $self->getScale();
+# 	my $category = $self->getCategory();
+# 	#my $summary = $self->getSummary();
+# 	my $apolloObject={storeClass => "JBrowse/Store/SeqFeature/BigWig",
+# 					  key => "$studyDisplayName - $displayName Coverage",
+# 					  yScalePosition => "left",
+# 					  urlTemplate => $urlTemplates,
+# 					  scale => "log",
+# 					  max_score => $covMaxScoreDefault,
+# 					  metadata => {
+# 						  subcategory => "RNA-Seq",
+# 						  trackType => "Coverage",
+# 						  alignment => "unique",
+# 						  dataset => $datasetName,
+# 					  },
+# 					  label => "$datasetName $label Coverage",
+# 					  type => "JBrowse/View/Track/Wiggle/XYPlot",
+# 					  min_score => 0,
+# 					  max_score => 1000,
+# 					  scale => "log",
+# 					  fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }",
+# 					  #                  fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+# 	};
 
-	return $apolloObject;
-}
+# 	return $apolloObject;
+# }
 
 
 package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density;
@@ -139,7 +109,7 @@ sub new {
 		my $datasetName = $self->getDatasetName();
 
 
-    $self->setViewType("MultiBigWig/View/Track/MultiWiggle/MultiDensity");
+    $self->setDisplayType("MultiBigWig/View/Track/MultiWiggle/MultiDensity");
 
 		$self->setTrackType("Multi-Density");
 
@@ -151,7 +121,7 @@ sub new {
 		}
 
 		$self->setLabel("$datasetName Density - $alignmentDisplay");
-		$self->setKey("$displayName Density - $alignmentDisplay");
+		$self->setId("$displayName Density - $alignmentDisplay");
 
     return $self;
 }
@@ -170,7 +140,7 @@ sub new {
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
 
-    $self->setViewType("MultiBigWig/View/Track/MultiWiggle/MultiXYPlot");
+    $self->setDisplayType("MultiBigWig/View/Track/MultiWiggle/MultiXYPlot");
 
 		$self->setTrackType("Multi XY plot");
 
@@ -182,7 +152,7 @@ sub new {
 		}
 
 		$self->setLabel("$datasetName XYPlot - $alignmentDisplay");
-		$self->setKey("$displayName XYPlot - $alignmentDisplay");
+		$self->setId("$displayName XYPlot - $alignmentDisplay");
 
     return $self;
 }

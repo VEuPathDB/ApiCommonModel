@@ -17,20 +17,23 @@ sub setApplicationType {$_[0]->{application_type} = $_[1]}
 sub getLabel {$_[0]->{label}}
 sub setLabel {$_[0]->{label} = $_[1]}
 
-sub getKey {$_[0]->{key}}
-sub setKey {$_[0]->{key} = $_[1]}
+sub getId {$_[0]->{id}}
+sub setId {$_[0]->{id} = $_[1]}
 
 sub getProject {$_[0]->{project}}
 sub setProject {$_[0]->{project} = $_[1]}
 
-sub getStoreClass {$_[0]->{store_class}}
-sub setStoreClass {$_[0]->{store_class} = $_[1]}
+sub getStoreType {$_[0]->{store_type}}
+sub setStoreType {$_[0]->{store_type} = $_[1]}
 
-sub getViewType {$_[0]->{view_type}}
-sub setViewType {$_[0]->{view_type} = $_[1]}
+sub getDisplayType {$_[0]->{display_type}}
+sub setDisplayType {$_[0]->{display_type} = $_[1]}
 
 sub getTrackType {$_[0]->{track_type}}
 sub setTrackType {$_[0]->{track_type} = $_[1]}
+
+sub getTrackTypeDisplay {$_[0]->{track_type_display} || $_[0]->getTrackType()}
+sub setTrackTypeDisplay {$_[0]->{track_type_display} = $_[1]}
 
 # Some basic metadata things
 sub getCategory {$_[0]->{category}}
@@ -78,6 +81,10 @@ sub new {
     $self->setHeight($args->{height});
     $self->setOrganismAbbrev($args->{organism_abbrev});
 
+    unless($self->getSubcategory()) {
+        print Dumper $args;
+        die "";
+    }
     return $self;
 }
 
@@ -99,11 +106,11 @@ sub getJBrowseStyle {
 }
 
 
-sub getJBrowseMetadata {
+sub getMetadata {
     my $self = shift;
 
-    my $subcategory => $self->getSubcategory();
-    my $trackType = $self->getTrackType();
+    my $subcategory = $self->getSubcategory();
+    my $trackType = $self->getTrackTypeDisplay();
     my $attribution = $self->getAttribution();
     my $summary = $self->getSummary();
     my $studyDisplayName = $self->getStudyDisplayName();
@@ -117,7 +124,6 @@ sub getJBrowseMetadata {
     $metadata->{subcategory} = $subcategory if($subcategory);
     $metadata->{trackType} = $trackType if($trackType);
     $metadata->{attribution} = $attribution if($attribution);
-    $metadata->{description} = $summary if($summary);
     $metadata->{dataset} = $studyDisplayName if($studyDisplayName);
 
     return $metadata;
@@ -131,23 +137,23 @@ sub getJBrowseObject{
     my $summary = $self->getSummary();
 
     my $style = $self->getJBrowseStyle();
-    my $metadata = $self->getJBrowseMetadata();
+    my $metadata = $self->getMetadata();
 
-    my $key = $self->getKey();
-    my $storeClass = $self->getStoreClass();
+    my $id = $self->getId();
+    my $storeType = $self->getStoreType();
     my $label = $self->getLabel();
-    my $viewType = $self->getViewType();
+    my $displayType = $self->getDisplayType();
     my $category = $self->getCategory();
 
-    unless($key && $storeClass && $label && $viewType && $category) {
+    unless($id && $storeType && $label && $displayType && $category) {
         print Dumper $self;
-        die "missing a required property (key, storeClass,label, viewType, category)";
+        die "missing a required property (id, storeClass,label, displayType, category)";
     }
 
-    my $jbrowseObject = {storeClass => $storeClass,
-                         key => $key,
+    my $jbrowseObject = {storeClass => $storeType,
+                         id => $id,
                          label => $label,
-                         type => $viewType,
+                         type => $displayType,
                          category => $category,
     };
 
@@ -164,9 +170,59 @@ sub getJBrowseObject{
 }
 
 
+sub getJBrowse2Metadata {
+
+}
 
 sub getJBrowse2Object {
     my $self = shift;
+
+    my $datasetName = $self->getDatasetName();
+    my $studyDisplayName = $self->getStudyDisplayName();
+    my $summary = $self->getSummary();
+
+    my $metadata = $self->getMetadata();
+
+    my $id = $self->getId();
+    my $label = $self->getLabel();
+
+    my $storeType = $self->getStoreType();
+    my $displayType = $self->getDisplayType();
+    my $trackType = $self->getTrackType();
+
+    my $category = $self->getCategory();
+    my $subcategory = $self->getSubcategory();
+
+    my @categoryHierarchy = ($category);
+    if($subcategory) {
+        push @categoryHierarchy, $subcategory;
+        if($studyDisplayName) {
+            push @categoryHierarchy, $studyDisplayName;
+        }
+    }
+
+
+    unless($id && $storeType && $label && $displayType && $trackType && $category) {
+        print Dumper $self;
+        die "missing a required property (id, storeType,label, displayType, trackType category)";
+    }
+
+    my $jbrowseObject = {type => $trackType,
+                         trackId => $id,
+                         name => $label,
+                         category => \@categoryHierarchy,
+                         adapter => { type => $storeType },
+                         assemblyNames =>  [ $self->getOrganismAbbrev() ],
+                         displays => [{ type => $displayType }]
+    };
+
+
+    $jbrowseObject->{metadata} = $metadata if($metadata);
+
+    return $jbrowseObject;
+
+
+
     die "Abstract method 'jbrowse2' must be implemented by subclass";
 }
 
