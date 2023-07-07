@@ -54,7 +54,6 @@ sub run{
 
   my $insertStatement = "INSERT INTO SampleDisplayInfo$suffix(dataset_name, sample, sample_display_name, sort_order, html_color) VALUES (?,?,?,?,?)";
   my $insertRow = $dbh->prepare($insertStatement);
-  my @lines = [];
   createEmptyTable($dbh,$suffix);
   if ($tabFileLocation =~ /\.xls$/ || $tabFileLocation =~ /\.xlsx$/) {
     eval {
@@ -75,7 +74,6 @@ sub run{
         my $maxCol = $oSheet->{MaxCol};
         if($maxRow) {
           for(my $i = $minRow; $i <= $maxRow; $i++) {
-            # skip comments / header
             my @row;
             for(my $j = $minCol; $j <= $maxCol; $j++) {
               my $oCell = $oSheet->{Cells}[$i][$j];
@@ -83,22 +81,21 @@ sub run{
               $cellValue =~ s/["\']//g;
               push(@row, $cellValue);
             }
-            push @lines, join("\t", @row);
+
+	    my ($ext_db_name, $sample, $sample_display, $sort_order, $color ) = @row ;
+
+	    # skip comments / header
+	    next if($ext_db_name =~ /^#/);
+
+	    if ($ext_db_name) {
+	      $insertRow->execute($ext_db_name, $sample, $sample_display, $sort_order,$color);
+	    }
           }
         }
       }
     }
   }
 
-  foreach my $line (@lines) {
-    next if($line=~/^#/);
-
-    my ($ext_db_name, $sample, $sample_display, $sort_order, $color ) = split("\t",$line) ;
-    if ($ext_db_name) {
-      $insertRow->execute($ext_db_name, $sample, $sample_display, $sort_order,$color);
-    }
-  }
-    
   $dbh->commit();
   $dbh->disconnect();
 }
