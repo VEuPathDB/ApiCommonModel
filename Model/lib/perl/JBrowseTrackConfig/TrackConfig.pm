@@ -73,13 +73,17 @@ sub new {
     $self->setProject($args->{project});
     $self->setCategory($args->{category});
     $self->setSubcategory($args->{subcategory});
-    $self->setSummary($args->{summary});
+
     $self->setAttribution($args->{attribution});
     $self->setStudyDisplayName($args->{study_display_name});
     $self->setDatasetName($args->{dataset_name});
     $self->setColor($args->{color});
     $self->setHeight($args->{height});
     $self->setOrganismAbbrev($args->{organism_abbrev});
+
+    my $summary = $args->{summary};
+    $summary =~ s/\n//g;
+    $self->setSummary($summary);
 
     unless($self->getSubcategory()) {
         print Dumper $args;
