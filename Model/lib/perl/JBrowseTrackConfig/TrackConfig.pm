@@ -174,9 +174,6 @@ sub getJBrowseObject{
 }
 
 
-sub getJBrowse2Metadata {
-
-}
 
 sub getJBrowse2Object {
     my $self = shift;
