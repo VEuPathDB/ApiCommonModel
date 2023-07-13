@@ -166,7 +166,7 @@
    
 -->
 
-  <flatVocabParam name="singleCellDataset" includeProjects="TriTrypDB,PlasmoDB,PiroplasmaDB,EuPathDB"
+  <flatVocabParam name="singleCellDataset" includeProjects="TriTrypDB,PlasmoDB,PiroplasmaDB,ToxoDB,HostDB,EuPathDB"
                   queryRef="GeneVQ.singleCellDataset"
                   prompt="Single Cell RNA-Seq Dataset"
                   quote="false"
@@ -235,26 +235,16 @@
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- LOPIT params -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <enumParam name="lopit_method" prompt="Method" quote="false">
-      <noTranslation value="true" includeProjects="EuPathDB" />
-      <visibleHelp><![CDATA[TAGM-MAP (default): predicts the most likely protein steady-state location based on the modal probability (each location parameter will only show the final predicted location and probability for each gene).<br>TAGM-MCMC (advanced): samples the entire distribution of protein localization probabilities across all compartments, predicts the most likely protein location based on the average probability and quantifies the uncertainty of localization prediction.]]></visibleHelp>
-
-      <help><![CDATA[Select the method for protein subcellular location prediction based on hyperLOPIT spatial proteome data.]]> </help>
-      <enumList>   
-        <enumValue>
-          <term>TAGM-MAP (default)</term>
-          <internal>TAGM-MAP-Final-Probability</internal>
-        </enumValue>
-	<enumValue>
-          <term>TAGM-MCMC (advanced)</term>
-          <internal>TAGM-MCMC-Joint-Probability</internal>
-        </enumValue>
-
-      </enumList>   
-    </enumParam>
-
+  <flatVocabParam name="lopit_method" includeProjects="ToxoDB,TriTrypDB"
+                 queryRef="GeneVQ.lopitMethod"
+                 prompt="Method"
+                 visible="true"
+                 multiPick="false"
+                 dependedParamRef="organismParams.organismWithLopitData">
+    <help>Please select the organism.</help>
+  </flatVocabParam>
     
-    <filterParam name="lopit_filter" 
+    <filterParam name="lopit_filter" includeProjects="ToxoDB,TriTrypDB"
                  ontologyQueryRef="GeneVQ.lopitOntologyQuery"
                  metadataQueryRef="GeneVQ.lopitMetadataQuery"
                  backgroundQueryRef="GeneVQ.lopitMetadataQuery"
@@ -6560,7 +6550,7 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
 
 
 
-  <sqlQuery name="singleCellDataset" isCacheable="true" includeProjects="TriTrypDB,PlasmoDB,PiroplasmaDB">
+  <sqlQuery name="singleCellDataset" isCacheable="true" includeProjects="TriTrypDB,PlasmoDB,PiroplasmaDB,ToxoDB,HostDB">
     <paramRef ref="organismParams.organismsWithSingleCell" />
     <column name="term"/>
     <column name="internal"/>
@@ -6695,9 +6685,41 @@ or prey (fused to the activation domain) in the yeast two-hybrid experiment.
 
 
 
+   <sqlQuery name="lopitMethod" isCacheable="true" includeProjects="ToxoDB,TriTrypDB">
+     <paramRef ref="organismParams.organismWithLopitData"/>
+     <column name="term"/>
+     <column name="internal"/>
+     <sql includeProjects="TriTrypDB">
+      <![CDATA[
+     SELECT CASE WHEN $$organismWithLopitData$$ = 'Trypanosoma brucei brucei TREU927'
+                 THEN 'lopit Study hyperLopit'
+                 WHEN $$organismWithLopitData$$ = 'Trypanosoma congolense IL3000'
+                 THEN 'lopit Study hyperLopitTc'
+                 END AS internal,
+            'hyperLopit study' as term
+     FROM dual
+       ]]>
+    </sql>
+     <sql includeProjects="ToxoDB">
+      <![CDATA[
+      select 'TAGM-MAP (default)' as term, 'TAGM-MAP-Final-Probability' as internal
+      from dual
+      UNION
+      select 'TAGM-MCMC (advanced)' as term, 'TAGM-MCMC-Joint-Probability' as internal
+      from dual
+       ]]>
+    </sql>
+
+  </sqlQuery>
+
+  <!-- processQuery name="lopitMethod" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+    <paramRef ref="geneParams.geneListDataset"/> 
+    <wsColumn name="internal" width="50" wsName="internal"/>
+    <wsColumn name="term" width="100" wsName="term"/>
+  </processQuery -->
 
 
-   <sqlQuery name="lopitOntologyQuery" isCacheable="true">
+   <sqlQuery name="lopitOntologyQuery" isCacheable="true" includeProjects="ToxoDB,TriTrypDB">
      <paramRef ref="geneParams.lopit_method" />  
      <column name="ontology_term_name"/>
      <column name="parent_ontology_term_name"/>
@@ -6718,7 +6740,7 @@ SELECT distinct pan.name as ontology_term_name, cast(null as varchar2(1)) as par
 case when pan.name ='outlier (lopit)' THEN  '- ' || upper(substr(replace(pan.name,' (lopit)','') || ' probability',1,1)) || substr(replace(pan.name,' (lopit)','') || ' probability',2,9999) 
 ELSE upper(substr(replace(pan.name,' (lopit)','') || ' probability',1,1)) || substr(replace(pan.name,' (lopit)','') || ' probability',2,9999) END as display_name, cast(null as varchar2(1)) as description, cast(null as varchar2(1)) as units, 'number' as type,1 as is_range,1 as precision, cast(null as varchar2(1)) as display_order
 FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbtuning.geneattributes ga
-where s.name = '$$lopit_method$$'
+where s.name = $$lopit_method$$
 and s.study_id = sl.study_id
 and sl.protocol_app_node_id = pan.protocol_app_node_id
 and pan.protocol_app_node_id = lr.protocol_app_node_id
@@ -6729,7 +6751,7 @@ order by display_name
     </sql>
    </sqlQuery>
 
-    <sqlQuery name="lopitMetadataQuery" isCacheable="false">
+    <sqlQuery name="lopitMetadataQuery" isCacheable="false" includeProjects="ToxoDB,TriTrypDB">
       <paramRef ref="geneParams.lopit_method" />  
       <column name="ontology_term_name"/>
       <column name="internal"/>
@@ -6740,7 +6762,7 @@ order by display_name
         <![CDATA[
 select ga.source_id as internal, pan.name as ontology_term_name, round(lr.probability_mean,2) as number_value, round(to_char(lr.probability_mean),2) as string_value,cast(null as date) as date_value
 from study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbtuning.geneattributes ga
-where s.name in ('$$lopit_method$$')
+where s.name in ($$lopit_method$$)
 and s.study_id = sl.study_id
 and sl.protocol_app_node_id = pan.protocol_app_node_id
 and pan.protocol_app_node_id = lr.protocol_app_node_id
@@ -6749,7 +6771,7 @@ and ga.na_feature_id = lr.na_feature_id
 UNION
 select ga.source_id as internal, 'Any compartments (lopit)' as ontology_term_name, round(lr.probability_mean,2) as number_value, round(to_char(lr.probability_mean),2) as string_value,cast(null as date) as date_value
 from study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbtuning.geneattributes ga
-where s.name in ('$$lopit_method$$')
+where s.name in ($$lopit_method$$)
 and s.study_id = sl.study_id
 and sl.protocol_app_node_id = pan.protocol_app_node_id
 and pan.protocol_app_node_id = lr.protocol_app_node_id
