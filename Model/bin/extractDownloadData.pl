@@ -117,7 +117,7 @@ foreach my $path (sort @projRelpaths) {
     next if ($name eq 'Build_number');
 
     my $org = $f;
-    $org =~s/^(.)*release\-\d+\.?\d*\/([a-zA-Z0-9\-]+).*$/$2/;  #  "Pfalciparum 3D7", etc
+    $org =~s/^(.)*release\-\d+\.?\d*\/([a-zA-Z0-9\-\_]+).*$/$2/;  #  "Pfalciparum 3D7", etc
     # set the full organism name
     if (my $o = $orgName{$org}){
       $org = $o;
