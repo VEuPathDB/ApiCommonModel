@@ -22,7 +22,7 @@ public class ChIPSeq extends DatasetInjector {
         //        injectTemplate("gbrowseTrackCategory");
     }
 
-
+	injectTemplate("jbrowseChIPSeqBuildProps");
   }
 
   @Override
