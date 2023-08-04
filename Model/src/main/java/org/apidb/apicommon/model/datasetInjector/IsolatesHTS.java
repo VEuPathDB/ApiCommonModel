@@ -41,6 +41,8 @@ public class IsolatesHTS extends DatasetInjector {
 
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
+          injectTemplate("jbrowseDnaSeqSampleBuildProps");
+
       }
 
       if(getPropValueAsBoolean("hasCNVData")) {
@@ -55,9 +57,9 @@ public class IsolatesHTS extends DatasetInjector {
               //              setPropValue("gbrowseTrackName", getPropValue("datasetName") + getPropValue("sampleName"));
               //              injectTemplate("gbrowseTrackCategory");
           }       
-
       }
-
+	injectTemplate("jbrowseDnaSeqBuildProps");
+	//System.err.println("short attribution" + getPropValue("shortAttribution"));
   }
 
   @Override
