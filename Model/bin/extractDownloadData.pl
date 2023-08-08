@@ -44,23 +44,16 @@ my $pwd = $gusconfig->{props}->{databasePassword};
 my $dsn = $gusconfig->{props}->{dbiDsn};
 my $instance = $dsn;
 
-my $dbh = DBI->connect("dbi:Oracle:$instance", $usr, $pwd) ||  die "Couldn't connect to database: " . DBI->errstr;
+#print STDERR "$instance, $usr, $pwd --CONECT NOW \n";
 
 my %orgName;
-my $sql = "select name_for_filenames as fileAbbrev, n.name as organism
-  from apidb.organism o, sres.taxonName n
-  where o.taxon_id = n.taxon_id(+)
-  and n.name_class = 'scientific name'
-  order by name_for_filenames";
-
-my $sth = $dbh->prepare($sql) || die "Couldn't prepare the SQL statement: " . $dbh->errstr;
-$sth->execute() ||  die "Couldn't execute statement: " . $sth->errstr;
-  while (my ($fileAbbrev, $organism) = $sth->fetchrow_array()) {
-    $orgName{$fileAbbrev} = $organism;
-  }
-$dbh->disconnect;
+getOrgNames();
 
 
+
+#Get Organism Abbrev used for EST (like Pfalciparum is Plasmodium falciparum)
+my %orgEst;
+getOrgForEst();
 
 
 ## To get the projRelpaths (release-xyz)
@@ -75,9 +68,18 @@ while (my $entry = readdir $DIR) {
   #next unless -d $projPath . '/' . $entry;
   next if $entry eq '.' or $entry eq '..' or $entry eq 'Current_Release' or $entry eq 'pathwayFiles';
   next unless $entry =~/release(\S)+/;
+
+
+  ##  ignore release nums less than 23
+  my $minBld = $entry;
+  $minBld =~s/^(.)*release\-(\d+\.?\d*)(.)*/$2/;  # gives 55, etc
+  next unless ($minBld >=24);
+  #print "MIN BLD = $minBld \n";
+
+#    next unless $entry =~/release-64/;
+
   push (@projRelpaths, $entry);
 }
-
 
 my %fileInfo;
 
@@ -118,18 +120,26 @@ foreach my $path (sort @projRelpaths) {
 
     my $org = $f;
     $org =~s/^(.)*release\-\d+\.?\d*\/([a-zA-Z0-9\-\_]+).*$/$2/;  #  "Pfalciparum 3D7", etc
+    # needed for just "Orf50.gff" files only
+    if ($name eq 'Orf50.gff'){
+      $name = $component . "-" . $bld . "_" . $org . "_" . $name;
+    }
+
+
     # set the full organism name
     if (my $o = $orgName{$org}){
       $org = $o;
-    } # no org assignment for some entries
-
+    } elsif ($orgEst{$org}) { # org entries for ESTs
+      $org = $orgEst{$org};
+#    } else {
+#      print "NO MAPPING for $org \n"; # no org assignment should NOT happen
+    }
 
     #  my $key = $bld.$org.$name; # primary_key
     my $key = $bld.$name; # primary_key
     $fileInfo{$key}->{build} = $bld;
     $fileInfo{$key}->{org} = $org;
     $fileInfo{$key}->{filename} = $name;
-
 
     # set the file_format
     my ($type) = $f =~ /([^.]+)$/;
@@ -208,6 +218,47 @@ foreach my $test (keys( %fileInfo )){
   ."\n";
 
 }
+
+
+sub getOrgNames{
+  my $dbh = DBI->connect("dbi:Oracle:$instance", $usr, $pwd) ||  die "Couldn't connect to database: " . DBI->errstr;
+
+  my $sql =
+  q{select name_for_filenames as fileAbbrev, n.name as organism
+    from apidb.organism o, sres.taxonName n
+    where o.taxon_id = n.taxon_id(+)
+    and n.name_class = 'scientific name'
+    order by name_for_filenames };
+
+  my $sth = $dbh->prepare($sql) || die "Couldn't prepare the SQL statement: " . $dbh->errstr;
+  $sth->execute() ||  die "Couldn't execute statement: " . $sth->errstr;
+  while (my ($fileAbbrev, $organism) = $sth->fetchrow_array()) {
+    $orgName{$fileAbbrev} = $organism;
+  }
+  $dbh->disconnect;
+}
+
+sub getOrgForEst {
+  my $dbh = DBI->connect("dbi:Oracle:$instance", $usr, $pwd) ||  die "Couldn't connect to database: " . DBI->errstr;
+
+  my $sql =
+  q{with estOrgs as (
+   select distinct ea.organism,
+          regexp_replace(ea.organism, '(\S)\S+\s* ', '\1') as briefname
+   from apidbtuning.estattributes ea)
+  select distinct  fa.organism, eo.organism
+  from apidb.fileAttributes fa, estOrgs eo
+  where fa.organism = eo.briefname};
+
+
+  my $sth = $dbh->prepare($sql) || die "Couldn't prepare the SQL statement: " . $dbh->errstr;
+  $sth->execute() ||  die "Couldn't execute statement: " . $sth->errstr;
+  while (my ($fileAbbrev, $organism) = $sth->fetchrow_array()) {
+    $orgEst{$fileAbbrev} = $organism;
+  }
+  $dbh->disconnect;
+}
+
 
 sub usage {
   my $m = shift;
