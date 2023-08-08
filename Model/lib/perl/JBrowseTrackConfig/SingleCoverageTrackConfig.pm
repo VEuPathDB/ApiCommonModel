@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::JBrowseTrackConfig::RNASeqCoverageTrackConfig;
+package ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 
 use strict;

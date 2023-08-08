@@ -4,129 +4,170 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
+use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig;
 use Data::Dumper;
 use URI::Escape;
 
 
-my ($organismAbbrev, $projectName) = @ARGV;
+my ($organismAbbrev, $projectName, $applicationType) = @ARGV;
+
+
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_dnaSeqCache.json"});
 
 my $buildProps = $jbrowseUtil->getBuildProperties();
 # we're done if we can get from cache file
-    print Dumper $buildProps;
-exit;
 
-if($jbrowseUtil->printFromCache()) {
-  exit 0;
-}
+#if($jbrowseUtil->printFromCache()) {
+#TODO add this back
+  #  exit 0;
+#}
 
-open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
+#open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 
-my $dbh = $jbrowseUtil->getDbh();   
+my $publicAbbrevForFiles = $buildProps->{organism}->{organismNameForFiles};
 
-my $nffSh = $dbh->prepare("select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'");
-$nffSh->execute();
-my ($publicAbbrev) = $nffSh->fetchrow_array();
-$nffSh->finish();
 
 my $result = {"tracks" => [] };
 
 my %datasets;
-my $dsSh = $dbh->prepare("select dsp.display_name, dsp.name , dp.value as hasCnvData, dsp.short_attribution, dsp.summary
-from apidbtuning.datasetpresenter dsp, apidbtuning.datasetproperty dp
-where dsp.name like '${organismAbbrev}_HTS_SNP_%_RSRC'
-and dsp.DATASET_PRESENTER_ID = dp.DATASET_PRESENTER_ID
-and dp.property = 'hasCNVData'");
 
-$dsSh->execute();
-while(my ($studyDisplayName, $dsName, $hasCnvData, $shortAttribution, $summary) = $dsSh->fetchrow_array()) {
-  $summary =~ s/\n/ /g;
+my $dnaSeqDatasets = $buildProps->{dnaseq} ? $buildProps->{dnaseq} : {};
+
+foreach my $dsName (keys %$dnaSeqDatasets) {
+  my $dataset = $dnaSeqDatasets->{$dsName};
+
+  my $summary = "TODO SUMMARY";
+
+  my $hasCnvData = $dataset->{hasCNVData};
+  my $shortAttribution = $dataset->{shortAttribution};
+  my $studyDisplayName = $dataset->{datasetDisplayName};
+
+  my $category = $dataset->{category};
+  my $subCategory = $dataset->{subCategory};
+
   my ($study) = $dsName =~ /${organismAbbrev}_HTS_SNP_(.+)_RSRC$/;
 
-  my $sql = "select ds.name 
-             from apidb.datasource ds
-             where ds.name like '${organismAbbrev}_${study}%HTS_SNPSample_RSRC'";
 
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
+  foreach my $sampleName(keys %{$dataset->{sampleNames}}) {
 
-  while(my ($sampleDataset) = $sh->fetchrow_array()) {
-
-    my ($sampleName) = $sampleDataset =~ /${study}_(.+)_HTS_SNPSample_RSRC$/;
-
+  #  my ($sampleName) = $sampleDataset =~ /${study}_(.+)_HTS_SNPSample_RSRC$/;
 
     my $baseUrl = "/a/service/jbrowse/store?data=";
 
-
-    my $bamUrl = $baseUrl . uri_escape_utf8("$publicAbbrev/bam/$study/$sampleName/result.bam"); 
+    my $bamUrl = $baseUrl . uri_escape_utf8("$publicAbbrevForFiles/bam/$study/$sampleName/result.bam");
 
     my $copyNumberDataset = "${organismAbbrev}_copyNumberVariations_${study}_RSRC";
-    my $cnvBWUrl = $baseUrl . uri_escape_utf8("$publicAbbrev/bigwig/$copyNumberDataset/$sampleName.bw"); 
+    my $cnvBWUrl = $baseUrl . uri_escape_utf8("$publicAbbrevForFiles/bigwig/$copyNumberDataset/$sampleName.bw");
 
-    my $bigwigUrl = $baseUrl . uri_escape_utf8("$publicAbbrev/bigwig/${study}/${sampleName}/result.bw");
+    my $bigwigUrl = $baseUrl . uri_escape_utf8("$publicAbbrevForFiles/bigwig/${study}/${sampleName}/result.bw");
 
-    my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
-                     urlTemplate => $bamUrl,
-                     chunkSizeLimit => 50000000,
-                     key => "$sampleName Coverage and Alignments",
-                     label => "$sampleName Coverage and Alignments",
-                     type => "JBrowse/View/Track/Alignments2",
-                     category => "Genetic Variation",
-                     yScalePosition => "left",
-                     histograms => {storeClass => "JBrowse/Store/SeqFeature/BigWig",
-                                    urlTemplate => $bigwigUrl, 
-                                    color => "black",
-                                    min => 0,
-                                    max => 500,
-                     },
-                     metadata => {
-                       subcategory => 'DNA-Seq',
-                       dataset => $studyDisplayName,
-                       trackType => 'Coverage (Read Alignments zoomed)',
-                       attribution => $shortAttribution,
-                       description => $summary,
-                     },
-                     fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dsName}', '${studyDisplayName}'); }",
-                     fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
-    };
+    my $displayName = "$sampleName Coverage and Alignments";
+    my $label = "$sampleName Coverage and Alignments";
+
+    my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig->new({ dataset_name => $dsName,
+                                                                                                url_template => $bamUrl,
+                                                                                                display_name => $displayName,
+                                                                                                study_display_name => $studyDisplayName,
+                                                                                                application_type => $applicationType,
+                                                                                                color => 'black',
+                                                                                                label => $label,
+                                                                                                cov_max_score_default => 500,
+                                                                                                category => $category,
+                                                                                                subcategory => $subCategory,
+                                                                                                attribution => $shortAttribution,
+                                                                                                summary => $summary,
+                                                                                                organism_abbrev => $organismAbbrev
+                                                                                              })->getConfigurationObject();
+
+
+    # my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
+    #                  urlTemplate => $bamUrl,
+    #                  chunkSizeLimit => 50000000,
+    #                  key => "$sampleName Coverage and Alignments",
+    #                  label => "$sampleName Coverage and Alignments",
+    #                  type => "JBrowse/View/Track/Alignments2",
+    #                  category => "Genetic Variation",
+    #                  yScalePosition => "left",
+    #                  histograms => {storeClass => "JBrowse/Store/SeqFeature/BigWig",
+    #                                 urlTemplate => $bigwigUrl,
+    #                                 color => "black",
+    #                                 min => 0,
+    #                                 max => 500,
+    #                  },
+    #                  metadata => {
+    #                    subcategory => 'DNA-Seq',
+    #                    dataset => $studyDisplayName,
+    #                    trackType => 'Coverage (Read Alignments zoomed)',
+    #                    attribution => $shortAttribution,
+    #                    description => $summary,
+    #                  },
+    #                  fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dsName}', '${studyDisplayName}'); }",
+    #                  fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+    # };
     
     
-    my $cnvCoverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
-                       urlTemplate => $cnvBWUrl,
-                       yScalePosition => "left",
-                       key => "$sampleName Coverage normalised to chromosome copy number (ploidy)",
-                       label => "$sampleName Coverage normalised to chromosome copy number (ploidy)",
-                       type => "JBrowse/View/Track/Wiggle/XYPlot",
-                       category => "Genetic Variation",
-                       min_score => 0,
-                       autoscale => "local",
-                       style => {
-                         "pos_color"         => "black",
-                         "clip_marker_color" =>  "red",
-                         "height" => 40
-                       },
-                       metadata => {
-                         subcategory => 'DNA-Seq',
-                         dataset => $studyDisplayName,
-                         trackType => 'Coverage (ploidy Normalized)',
-                         attribution => $shortAttribution,
-                         description => $summary,
-                       },
-                       fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dsName}', '${studyDisplayName}'); }",
-                       fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
 
-    };
+    $displayName = "$sampleName Coverage normalised to chromosome copy number (ploidy)";
+    $label = "${dsName}_$sampleName";
+
+    my $cnvCoverage = ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig->new({ dataset_name => $dsName,
+                                                                                                url_template => $cnvBWUrl,
+                                                                                                display_name => $displayName,
+                                                                                                study_display_name => $studyDisplayName,
+                                                                                                application_type => $applicationType,
+                                                                                                color => 'black',
+                                                                                                label => $label,
+                                                                                                cov_max_score_default => 5,
+                                                                                                scale => 'linear',
+                                                                                                #strand =>  $strand,
+                                                                                                category => $category,
+                                                                                                subcategory => $subCategory,
+                                                                                                attribution => $shortAttribution,
+                                                                                                summary => $summary,
+                                                                                                #alignment => $alignment,
+                                                                                                organism_abbrev => $organismAbbrev
+                                                                                              })->getConfigurationObject();
+
+
+
+
+    # my $cnvCoverage = {storeClass => "JBrowse/Store/SeqFeature/BigWig",
+    #                    urlTemplate => $cnvBWUrl,
+    #                    yScalePosition => "left",
+    #                    key => "$sampleName Coverage normalised to chromosome copy number (ploidy)",
+    #                    label => "$sampleName Coverage normalised to chromosome copy number (ploidy)",
+    #                    type => "JBrowse/View/Track/Wiggle/XYPlot",
+    #                    category => "Genetic Variation",
+    #                    min_score => 0,
+    #                    autoscale => "local",
+    #                    style => {
+    #                      "pos_color"         => "black",
+    #                      "clip_marker_color" =>  "red",
+    #                      "height" => 40
+    #                    },
+    #                    metadata => {
+    #                      subcategory => 'DNA-Seq',
+    #                      dataset => $studyDisplayName,
+    #                      trackType => 'Coverage (ploidy Normalized)',
+    #                      attribution => $shortAttribution,
+    #                      description => $summary,
+    #                    },
+    #                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dsName}', '${studyDisplayName}'); }",
+    #                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }"
+
+    # };
     
     push @{$result->{tracks}}, $alignment;
-    push @{$result->{tracks}}, $cnvCoverage if(lc $hasCnvData eq "true");;
+    #push @{$result->{tracks}}, $cnvCoverage if(lc $hasCnvData eq "true");;
   }
 
 }
-$dsSh->finish();
+#$dsSh->finish();
 
 
-$dbh->disconnect();
+#$dbh->disconnect();
 
 print encode_json($result);
 print CACHE encode_json($result);

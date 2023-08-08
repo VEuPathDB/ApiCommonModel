@@ -8,14 +8,14 @@ sub getUrlTemplate {$_[0]->{url_template} }
 sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 
 sub getCovMaxScoreDefault {$_[0]->{cov_max_score_default} || 1000}
-sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1]}
+sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1] + 0}
 
 sub getCovMinScoreDefault {
     my $self = shift;
     my $min = $self->{cov_min_score_default};
 
     if(defined($min)) {
-        return $min;
+        return $min + 0;
     }
     return $self->getScale eq "log" ? 1 : 0;
 }
@@ -72,7 +72,7 @@ sub getJBrowseObject{
 
     my $scale = $self->getScale();
     my $minScore = $self->getCovMinScoreDefault();
-    my $maxScore = $self->getCovMinScoreDefault();
+    my $maxScore = $self->getCovMaxScoreDefault();
     my $yScalePosition = $self->getYScalePosition();
 
     $jbrowseObject->{yScalePosition} = $yScalePosition;

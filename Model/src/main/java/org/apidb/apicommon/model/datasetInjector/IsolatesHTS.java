@@ -45,6 +45,8 @@ public class IsolatesHTS extends DatasetInjector {
 
       }
 
+      injectTemplate("jbrowseDnaSeqBuildProps");
+
       if(getPropValueAsBoolean("hasCNVData")) {
 
           setPropValue("datasetName", datasetName.replaceFirst("_HTS_SNP_", "_copyNumberVariations_"));
@@ -58,7 +60,7 @@ public class IsolatesHTS extends DatasetInjector {
               //              injectTemplate("gbrowseTrackCategory");
           }       
       }
-	injectTemplate("jbrowseDnaSeqBuildProps");
+
 	//System.err.println("short attribution" + getPropValue("shortAttribution"));
   }
 

@@ -344,7 +344,6 @@ public class RNASeq extends  DatasetInjector {
       // String studyName = getPropValue("name");
       // setPropValue("studyName", studyName);
 
-
       injectTemplate("jbrowseRNASeqBuildProps");
   }
 

@@ -4,7 +4,7 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
-use ApiCommonModel::Model::JBrowseTrackConfig::RNASeqCoverageTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
 use Data::Dumper;
 use URI::Escape;
@@ -31,22 +31,22 @@ my $buildProps = $jbrowseUtil->getBuildProperties();
 #open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 #my $dbh = $jbrowseUtil->getDbh();
 
-my ($sql, $category, $covMaxScoreDefault, $multiCovScale, $subCategory);
-if($technologyType eq 'ChIPSeq') {
-  $category = 'Epigenomics';
-#TODO  $covMaxScoreDefault = 200;
-  $multiCovScale = "linear";
-  $subCategory = "ChIP-Seq";
-}
-elsif($technologyType eq 'RNASeq') {
-  $category = 'Transcriptomics';
-#  $covMaxScoreDefault = 1000;
-  $multiCovScale = "log";
-  $subCategory = "RNA-Seq";
-}
-else {
-  die "technologyType must be either RNASeq or ChIPSeq";
-}
+
+# if($technologyType eq 'ChIPSeq') {
+#   $category = 'Epigenomics';
+# #TODO  $covMaxScoreDefault = 200;
+#   $multiCovScale = "linear";
+#   $subCategory = "ChIP-Seq";
+# }
+# elsif($technologyType eq 'RNASeq') {
+#   $category = 'Transcriptomics';
+# #  $covMaxScoreDefault = 1000;
+#   $multiCovScale = "log";
+#   $subCategory = "RNA-Seq";
+# }
+# else {
+#   die "technologyType must be either RNASeq or ChIPSeq";
+# }
 
 my $result = {"tracks" => [] };
 
@@ -58,8 +58,15 @@ my $projectName = ($orgHash->{projectName});
 my $allDatasetPropertiesForAssayType = ($buildProps->{lc($technologyType)});
 
 foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
-
   my %studyProperties = %{$allDatasetPropertiesForAssayType->{$datasetName}};
+
+
+
+
+  my $category = $studyProperties{category};
+  my $covMaxScoreDefault = $studyProperties{covMaxScoreDefault};
+  my $multiCovScale = $studyProperties{multiCovScale};
+  my $subCategory = $studyProperties{subCategory};
 
   # TODO:  Handle duplicate Horn CDS Dataset Better
   next if($datasetName eq 'tbruTREU927_RNAi_Horn_CDS_rnaSeq_RSRC');
@@ -97,7 +104,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   while(<FILE>) {
     chomp;
     if(/^\[(.+)\]$/) {
-      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $subCategory) if($start);
+      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $subCategory, $category, $covMaxScoreDefault, $multiCovScale) if($start);
       $file = $1;
       $start = 1;
     }
@@ -120,7 +127,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
     }
     
   }
-  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $subCategory);
+  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $subCategory, $category, $covMaxScoreDefault, $multiCovScale);
 
   # ChipSeq are all unique
   my @uniqueOnlyUrls = grep { $technologyType eq 'ChIPSeq' || $_->{alignment} eq 'unique' } @multiUrls;
@@ -317,7 +324,7 @@ close CACHE;
 #$dbh->disconnect();
 
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignment, $properties, $datasetName, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $subCategory) = @_;
+  my ($result, $file, $displayName, $strand, $alignment, $properties, $datasetName, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $subCategory, $category, $covMaxScoreDefault, $multiCovScale) = @_;
 
   $strand = 'not strand specific' unless($strand);
 
@@ -335,7 +342,7 @@ sub addConfiguration {
 
   my $label = $dbid ? $dbid : ($sample ? $sample : $displayName);
 
-  my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::RNASeqCoverageTrackConfig->new({ dataset_name => $datasetName,
+  my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig->new({ dataset_name => $datasetName,
                                                                                                 url_template => $bwUrl,
                                                                                                 display_name => $displayName,
                                                                                                 study_display_name => $studyDisplayName,
