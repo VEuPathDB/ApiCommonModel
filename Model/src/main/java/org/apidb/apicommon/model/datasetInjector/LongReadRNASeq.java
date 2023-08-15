@@ -11,8 +11,9 @@ public class LongReadRNASeq extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.TODO");
-    addWdkReference("TODO SPAN", "question", "TODOSpan?Questions.TODO");
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.LongReadTranscripCounts");
+	  addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.LongReadNovelGeneSpansBySourceId");
+	  addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.IntronJunctionDynamicSearch");
   }
 
   // second column is for documentation
