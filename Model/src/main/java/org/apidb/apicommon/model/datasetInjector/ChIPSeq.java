@@ -21,7 +21,7 @@ public class ChIPSeq extends DatasetInjector {
         //        setPropValue("gbrowseTrackName", getDatasetName() + "_chipSeqPeaks");
         //        injectTemplate("gbrowseTrackCategory");
     }
-
+        setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
 	injectTemplate("jbrowseChIPSeqBuildProps");
   }
 
