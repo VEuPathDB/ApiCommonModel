@@ -2736,7 +2736,7 @@ and ga.orthomcl_name is null
     </comment>
     <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="GeneIntronJunction"/>
-    <externalDependency name="apidb.longreadtranscript"/>
+    <externalDependency name="apidb.LongReadTranscript"/>
     <sql>
     
      <![CDATA[
@@ -2802,7 +2802,7 @@ from (  select gene_source_id, source_id, taxon_id,
                'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
                null as number_value
         from TranscriptAttributes atr
-        ,apidb.longreadtranscript ltr
+        , apidb.LongReadTranscript ltr
         where 
         ltr.gene_source_id = atr.gene_source_id
         
@@ -2811,7 +2811,7 @@ from (  select gene_source_id, source_id, taxon_id,
         'intron_junction' as ontology_term_name, gj.annotated_intron string_value,
             null as number_value
         from 
-        geneintronjunction gj
+        GeneIntronJunction gj
         ,TranscriptAttributes atr
         where gj.gene_source_id =  atr.gene_source_id
         
@@ -2824,8 +2824,7 @@ from (  select gene_source_id, source_id, taxon_id,
         where gj.gene_source_id =  atr.gene_source_id
      )
       ]]>
-
-    </sql>
+   </sql>
   </tuningTable>
 
 
@@ -2833,6 +2832,9 @@ from (  select gene_source_id, source_id, taxon_id,
     <comment>
       Stores tuned data for the genemodelchar filter search. Portal-specific version including taxon names.
     </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="GeneIntronJunction"/>
+    <externalDependency name="apidb.LongReadTranscript"/>
     <sql>
       <![CDATA[
 create table &prefixGeneModelCharOrgMD&1
@@ -2852,7 +2854,7 @@ nologging
 as
 select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as varchar2(53)),
        cast(nvl(string_value,'NA') as varchar2(100)), nvl(number_value,-1)
-from (  select gene_source_id, source_id, taxon_id, organism,
+       from (  select gene_source_id, source_id, taxon_id, organism,
                'transcript_count' as ontology_term_name,
                null as string_value, gene_transcript_count as number_value
         from TranscriptAttributes
@@ -2895,29 +2897,30 @@ from (  select gene_source_id, source_id, taxon_id, organism,
                'organism' as ontology_term_name, organism as string_value,
                null as number_value
         from TranscriptAttributes
-       UNION
-        select atr.gene_source_id, atr.source_id, atr.taxon_id,
-               'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
+        
+    UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+               'long_lranscript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
                null as number_value
         from TranscriptAttributes atr
         ,apidb.longreadtranscript ltr
         where 
         ltr.gene_source_id = atr.gene_source_id
         
-     UNION
-        select atr.gene_source_id, atr.source_id, atr.taxon_id, 
+    UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
         'intron_junction' as ontology_term_name, gj.annotated_intron string_value,
             null as number_value
         from 
-        geneintronjunction gj
+        GeneIntronJunction gj
         ,TranscriptAttributes atr
         where gj.gene_source_id =  atr.gene_source_id
         
      UNION
-        select atr.gene_source_id, atr.source_id, atr.taxon_id, 
-        'Unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value           
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value           
         from 
-        geneintronjunction gj
+        GeneIntronJunction gj
         ,TranscriptAttributes atr
         where gj.gene_source_id =  atr.gene_source_id
      )
@@ -5657,7 +5660,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                  select distinct
                         sp.name as organism, ot.parentTerm as parent,
                         regexp_replace(org.name_for_filenames,
-                                       org.strain_abbrev,'', 1, 1)
+                               replace( org.strain_abbrev, '/','_'),'', 1, 1)
                           as abbreviation
                  from sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org,
                       OrganismTree ot
@@ -6824,7 +6827,7 @@ select p.DATASET_NAME
       , p.source_id as gene_source_id
       , ga.sequence_id as sequence_id
       , row_number() over(partition by p.dataset_name
-                          order by p.max_value desc) as rn
+                          order by p.max_value desc, p.source_id, ga.sequence_id) as rn
 from profile p, geneattributes ga
 where dataset_type = 'transcript_expression' and dataset_subtype =  'rnaseq'
 and p.source_id = ga.source_id),
@@ -6834,7 +6837,7 @@ select ga.gene_source_id,
        ga.protein_source_id,
        d.name,
        row_number() over(partition by d.name
-                         order by mss.aa_seq_percent_covered desc) as rn
+                         order by mss.aa_seq_percent_covered desc, ga.gene_source_id) as rn
 from apidb.MassSpecSummary mss, TranscriptAttributes ga,
      sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
 where mss.external_database_release_id = r.external_database_release_id
@@ -6874,7 +6877,8 @@ and sa.rn = 1
 and dnt.name = pg.name (+)
 and dnt.name = rg.dataset_name (+)
 )
-select h.dataset_link_id, h.dataset_presenter_id, h.description
+select distinct
+       h.dataset_link_id, h.dataset_presenter_id, h.description
      , replace(h.text, 'DEFAULT_PROJECT', macros.project_id) as text
      , replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(h.url
                                             , 'DEFAULT_PROJECT', macros.project_id) 
@@ -7432,7 +7436,7 @@ and h.url like '/%'
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
-    <externalDependency name="apidb.eigengenewgcnaresults"/>
+    <externalDependency name="apidb.EigenGeneWgcnaResults"/>
     <externalDependency name="results.CompoundMassSpec"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="results.NaFeatureHostResponse"/>
@@ -7867,7 +7871,7 @@ and h.url like '/%'
                        max(pan.name) keep(dense_rank last order by result.value) as max_timepoint, 
                        max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
                 from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
-                     apidb.eigengenewgcnaresults result 
+                     apidb.EigenGeneWgcnaResults result 
                      where result.protocol_app_node_id = sl.protocol_app_node_id
                        and result.protocol_app_node_id = pan.protocol_app_node_id
                        and sl.study_id = s.study_id
@@ -8112,7 +8116,7 @@ and h.url like '/%'
           pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
           pt.profile_set_suffix
         FROM profileType pt, study.study s, study.studyLink sl,
-          study.protocolAppNode pan, apidb.eigengenewgcnaresults r
+          study.protocolAppNode pan, apidb.EigenGeneWgcnaResults r
         WHERE pt.profile_study_id = s.study_id
         AND sl.study_id = s.study_id
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
