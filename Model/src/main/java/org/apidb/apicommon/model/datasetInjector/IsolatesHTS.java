@@ -41,10 +41,13 @@ public class IsolatesHTS extends DatasetInjector {
 
           injectTemplate("htsSnpSampleCoverageDensityTracks");
           injectTemplate("htsSnpSampleAlignmentTrack");
+	  
           injectTemplate("jbrowseDnaSeqSampleBuildProps");
 
       }
-
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
+      String shortAttribution = getPropValue("shortAttribution");
       injectTemplate("jbrowseDnaSeqBuildProps");
 
       if(getPropValueAsBoolean("hasCNVData")) {
