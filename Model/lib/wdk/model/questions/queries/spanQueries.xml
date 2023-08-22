@@ -90,7 +90,144 @@
         <wsColumn name="project_id" width="20" wsName="project_id"/>
 
      </processQuery>
+    
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->   
+<!-- Long read novel gene model search query 	    --> 
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->    
 
+    <sqlQuery name="DynSpansLongReadBySourceId" includeProjects="PlasmoDB" >
+        <paramRef ref="organismParams.organismLongread"/>
+        <paramRef ref="geneParams.long_read_datasets"/>
+        <paramRef ref="SpanParams.transcript_length"/>
+	<column name="source_id"/>
+        <column name="project_id"/>
+        <column name="min_start"/>
+        <column name="max_end"/>
+        <column name="coordinates"/>
+        
+	<sql includeProjects="PlasmoDB">
+        <![CDATA[
+	select source_id, project_id, min_start, max_end, chr_source_id from(
+	   select distinct lrt.na_seq_source_id as chr_source_id
+    	     ,gsa.project_id
+    	     ,lrt.min_start
+    	     ,lrt.max_end
+    	     ,lrt.na_seq_source_id || ':' || lrt.min_start || '-' ||  lrt.max_end || ':f' as source_id
+    	     ,ed.name as dataset_name
+	from
+    	      apidb.longreadtranscript lrt
+    	     ,apidbtuning.genomicseqattributes gsa
+    	     ,sres.externaldatabaserelease edr
+    	     ,sres.externaldatabase ed
+    	     ,apidbtuning.transcriptattributes ta
+	where 
+    	     edr.external_database_release_id = lrt.external_database_release_id
+    	     and ed.external_database_id = edr.external_database_id
+	     and gsa.organism = ta.organism
+    	     and lrt.gene_novelty not in ('Known')
+    	     and ta.organism in ($$organismLongread$$)
+	     and lrt.transcript_length >= $$transcript_length$$
+	)	
+	where dataset_name in ($$long_read_datasets$$)
+	order by source_id, min_start	
+           ]]>
+        </sql>
+
+    </sqlQuery>
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->
+<!-- Intron junction search query        -->
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="DynSpansIntronJunction" includeProjects="PlasmoDB" >
+        <paramRef ref="organismParams.organism_span"/>
+        <paramRef ref="SpanParams.Intron_junction_confidence"/>
+        <column name="source_id"/>
+        <column name="project_id"/>
+        <column name="min_start"/>
+        <column name="max_end"/>
+        <column name="coordinates"/>
+
+        <sql includeProjects="PlasmoDB">
+        <![CDATA[
+
+
+	select 
+                     chr_source_id, min_start, max_end, organism, project_id, source_id 
+                     from (
+select INTRON_FEATURE_ID as feature_id,                                                                                                                                                      
+                     segment_start - 10 as startm,
+                     segment_END + 10 as end,
+                     CONTAINED, -- is the intron junction in a gene - you probably want contained=0
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     total_unique as SCORE,
+                     ANNOTATED_INTRON,
+                     'high' as Confidence,
+                     gij.sequence_source_id as chr_source_id,
+                     gij.segment_start as min_start,
+                     gij.segment_end as max_end,
+                     gsa.organism,
+                     gsa.project_id,
+		     gij.sequence_source_id || ':' || gij.segment_start || '-' ||  gij.segment_end || DECODE(gij.is_reversed, 0,':f', 1,':r') as source_id
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats ,sres.taxonname tn ,apidbtuning.genomicseqattributes gsa
+                WHERE gij.na_sequence_id = stats.na_sequence_id
+                and gsa.taxon_id = tn.taxon_id
+                and gsa.na_sequence_ID = gij.na_sequence_id
+                and gsa.organism in ($$organism_span$$)
+                AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+                AND gij.annotated_intron = 'No'
+                AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+                AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+                AND gij.gene_source_id is NULL
+Union
+select INTRON_FEATURE_ID as feature_id, 
+                     segment_start - 10 as startm,
+                     segment_END + 10 as end,
+                     CONTAINED, -- is the intron junction in a gene - you probably want contained=0
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     total_unique as SCORE,
+                     ANNOTATED_INTRON,
+                     'low' as Confidence,
+                     gij.sequence_source_id as chr_source_id,
+                     gij.segment_start as min_start,
+                     gij.segment_end as max_end,
+                     gsa.organism,
+                     gsa.project_id,
+		     gij.sequence_source_id || ':' || gij.segment_start || '-' ||  gij.segment_end || DECODE(gij.is_reversed, 0,':f', 1,':r') as source_id
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats, sres.taxonname tn ,apidbtuning.genomicseqattributes gsa
+                WHERE gij.na_sequence_id = stats.na_sequence_id
+                and gsa.taxon_id = tn.taxon_id
+                and gsa.na_sequence_ID = gij.na_sequence_id
+                and gsa.organism in ($$organism_span$$)
+                AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
+                AND gij.annotated_intron = 'No'
+                AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+                AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+                AND gij.gene_source_id is NULL
+                AND gij.intron_feature_id not in (
+                select gij.intron_feature_id
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                WHERE gij.na_sequence_id = stats.na_sequence_id
+                AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+                AND gij.annotated_intron = 'No'
+                AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+                AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+                
+               )
+)
+where (confidence = $$Intron_junction_confidence$$ or 'all' = $$Intron_junction_confidence$$)
+
+
+           ]]>
+        </sql>
+
+    </sqlQuery>
+
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->
 
  <!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
   <!-- Location : NOT IN USE **   for eupath this sql needs to get the project from the apidb.sequenceattribute table  -->
@@ -292,8 +429,7 @@
         <wsColumn name="end_loc" wsName="end_loc"/>
         <wsColumn name="assoc_genes" wsName="assoc_genes"/>
     </processQuery>
-
-</querySet>
+  </querySet>
 
 </wdkModel>
 
