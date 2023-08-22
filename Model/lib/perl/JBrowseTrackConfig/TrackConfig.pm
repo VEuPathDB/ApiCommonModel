@@ -46,7 +46,14 @@ sub getSummary {$_[0]->{summary}  || ""}
 sub setSummary {$_[0]->{summary} = $_[1]}
 
 sub getAttribution {$_[0]->{attribution}}
-sub setAttribution {$_[0]->{attribution} = $_[1]}
+sub setAttribution {
+    my ($self, $attribution) = @_;
+    return if ($attribution eq '${shortAttribution}');
+    $self->{attribution} = $attribution;
+}
+
+sub getDescription {$_[0]->{description}}
+sub setDescription {$_[0]->{description} = $_[1]}
 
 sub getStudyDisplayName {$_[0]->{study_display_name}}
 sub setStudyDisplayName {$_[0]->{study_display_name} = $_[1]}
@@ -75,6 +82,7 @@ sub new {
     $self->setSubcategory($args->{subcategory});
 
     $self->setAttribution($args->{attribution});
+    $self->setDescription($args->{description});
     $self->setStudyDisplayName($args->{study_display_name});
     $self->setDatasetName($args->{dataset_name});
     $self->setColor($args->{color});
@@ -129,7 +137,7 @@ sub getMetadata {
     $metadata->{trackType} = $trackType if($trackType);
     $metadata->{attribution} = $attribution if($attribution);
     $metadata->{dataset} = $studyDisplayName if($studyDisplayName);
-
+    $metadata->{description} = $summary if($summary);
     return $metadata;
 }
 
@@ -155,7 +163,7 @@ sub getJBrowseObject{
     }
 
     my $jbrowseObject = {storeClass => $storeType,
-                         id => $id,
+                         key => $id,
                          label => $label,
                          type => $displayType,
                          category => $category,
