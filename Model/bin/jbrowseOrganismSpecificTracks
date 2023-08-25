@@ -6,7 +6,6 @@ use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 use URI::Escape;
-
 use Storable 'dclone';
 use Tie::IxHash;
 
@@ -14,11 +13,14 @@ my %datasets;
 my $t = tie %datasets, 'Tie::IxHash';
 
 
-my ($organismAbbrev, $projectName, $isApollo, $buildNumber) = @ARGV;
+my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir) = @ARGV;
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
 
 my $dbh = $jbrowseUtil->getDbh();   
+
+my $nameForFilenames = &nameForFilenames($organismAbbrev, $dbh);
+
 
 my $result = {"tracks" => [] };
 #my $result = {"tracks" => []};
@@ -34,22 +36,25 @@ my $result = {"tracks" => [] };
 my $datasetProperties = &datasetProperties($dbh);
 
 &addChipChipTracks($dbh, $result, $datasetProperties);
-&addSmallNcRnaSeq($dbh, $result, $datasetProperties);
+&addSmallNcRnaSeq($dbh, $result, $datasetProperties, $nameForFilenames);
 &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
-&addVCF($dbh, $result, $datasetProperties);
-&addGFF($dbh, $result, $datasetProperties);
+&addVCF($dbh, $result, $datasetProperties, $nameForFilenames);
+&addGFF($dbh, $result, $datasetProperties, $nameForFilenames);
 
 
 &addTRNA($dbh, $result, $datasetProperties);
 if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
-  &addNrdbProteinAlignments($dbh, $result, $datasetProperties, $projectName);
+  &addNrdbProteinAlignments($dbh, $result, $datasetProperties, $projectName, $nameForFilenames);
 }
 &addPopsets($dbh, $result, $datasetProperties);
 
 if ($organismAbbrev !~ m/dmeliso-1/ ){
 &addApolloGFF($dbh, $result);
 }
-&addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName);
+&addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFilenames);
+
+
+&addLongReadRNASeq($result, $datasetProperties, $nameForFilenames, $webservicesDir);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
@@ -64,6 +69,18 @@ unless($isApollo) {
 
 print encode_json($result);
 
+
+sub nameForFilenames {
+  my ($organismAbbrev, $dbh) = @_;
+
+  my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+  my ($nameForFileNames) = $sh->fetchrow_array();
+  $sh->finish();
+
+  return $nameForFileNames;
+}
 
 sub addDatasets {
   my ($dbh) = @_;
@@ -127,6 +144,9 @@ and o.abbrev = '${organismAbbrev}'
 and dnt.name like '%_massSpec%_RSRC'
 and dnt.dataset_presenter_id = prop.dataset_presenter_id
 and prop.dataset_presenter_id = dsp.dataset_presenter_id
+--TODO Saikou longread rnaseq
+--UNION
+--select name, presenter_id, property, value, ....
 ";
 
   my $sh = $dbh->prepare($sql);
@@ -144,7 +164,7 @@ and prop.dataset_presenter_id = dsp.dataset_presenter_id
 }
 
 sub addVCF {
-  my ($dbh, $result, $datasetProperties) = @_;
+  my ($dbh, $result, $datasetProperties, $nameForFilenames) = @_;
 
   foreach my $dataset (keys %$datasetProperties) {
     next unless($dataset =~ /VCF/);
@@ -155,16 +175,16 @@ sub addVCF {
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
 
-    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sql = "select ds.name from apidb.datasource ds where ds.name = '$dataset'";
     my $sh = $dbh->prepare($sql);
     $sh->execute();
 
-    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+    while(my ($sampleDataset) = $sh->fetchrow_array()) {
       my ($sampleName) = $sampleDataset;
       my ($vcfFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
       my $keyName = $vcfFileName;
  	 $keyName =~ s/_/ /g;
-      my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
+      my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
       my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
                        urlTemplate => $vcfUrl,
                            #key => "${vcfFileName} SNPs from VCF",
@@ -191,7 +211,7 @@ sub addVCF {
 }
 
 sub addGFF {
-  my ($dbh, $result, $datasetProperties) = @_;
+  my ($dbh, $result, $datasetProperties, $nameForFilenames) = @_;
 
   foreach my $dataset (keys %$datasetProperties) {
     next unless($dataset =~ /GFF/);
@@ -202,7 +222,7 @@ sub addGFF {
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
 
-    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sql = "select ds.name from apidb.datasource ds where ds.name = '$dataset'";
     my $sh = $dbh->prepare($sql);
     $sh->execute();
 
@@ -245,11 +265,11 @@ sub addGFF {
     my $organismLookup = $lookup{${organismAbbrev}};
     my $organismUrl = $organismLookup;
     $organismUrl =~ s/ /%20/g;
-    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+    while(my ($sampleDataset) = $sh->fetchrow_array()) {
       my ($sampleName) = $sampleDataset;
       my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
       my $keyName = $datasetDisplayName;
-      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
+      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
       my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
                        urlTemplate => $gffUrl,
                            key => "$keyName",
@@ -371,7 +391,7 @@ sub addApolloGFF {
 }
 
 sub addMergedRnaSeq {
-  my ($dbh, $result, $datasetProperties, $projectName) = @_;
+  my ($dbh, $result, $datasetProperties, $projectName, $nameForFilenames) = @_;
   my @urlArray;
   my $genomeName;
   foreach my $dataset (keys %$datasetProperties) {
@@ -383,18 +403,18 @@ my @urlArrayProject;
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
     my $keyName = $datasetDisplayName;
-    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    my $sql = "select ds.name from apidb.datasource ds where ds.name = '$dataset'";
     my $sh = $dbh->prepare($sql);
     $sh->execute();
 
-    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
-    $genomeName = ${nameForFileNames};
+    while(my ($sampleDataset) = $sh->fetchrow_array()) {
+    $genomeName = ${nameForFilenames};
       my ($sampleName) = $sampleDataset;
       my ($bigwigFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_rnaSeq_RSRC/;
       my $keyName = $bigwigFileName;
          $keyName =~ s/_/ /g;
 
-        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/*";
+        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFilenames}/bigwig/${sampleName}/mergedBigwigs/*";
         my @bigwigFiles = glob($bigWigRelativePath);
         my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
         foreach(@bigwigFiles){
@@ -402,7 +422,7 @@ my @urlArrayProject;
                 my $bigwigName = (split '/', $bigwigPath)[-1];
                 my $shortBigwigName = $bigwigName;
                 my $shortBigwigName = substr($shortBigwigName,0, -3);
-                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
+                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
                 my $template = { url=>${bigwigUrl}, name=> ${shortBigwigName}, color=> 'black' };
                 push (@urlArray, $template);
                 push (@urlArrayProject, $template);
@@ -521,7 +541,7 @@ sub addProteinExpressionMassSpec {
 }
 
 sub addSmallNcRnaSeq {
-  my ($dbh, $result, $datasetProperties) = @_;
+  my ($dbh, $result, $datasetProperties, $nameForFilenames) = @_;
 
   foreach my $dataset (keys %$datasetProperties) {
     next unless($dataset =~ /smallNcRna/);
@@ -532,16 +552,16 @@ sub addSmallNcRnaSeq {
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
 
-    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '${organismAbbrev}%_smallNcRnaSample_RSRC'";
+    my $sql = "select ds.name from apidb.datasource ds where ds.name like '${organismAbbrev}%_smallNcRnaSample_RSRC'";
 
     my $sh = $dbh->prepare($sql);
     $sh->execute();
 
-    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+    while(my ($sampleDataset) = $sh->fetchrow_array()) {
       my ($sampleName) = $sampleDataset =~ /${organismAbbrev}_${experimentName}_(.+)_smallNcRnaSample_RSRC/;
 
       # Example: EhistolyticaHM1IMSS/bam/Singh_Small_RNA/Rahman/Rahman.bam
-      my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bam/$experimentName/${sampleName}/${sampleName}.bam");
+      my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/bam/$experimentName/${sampleName}/${sampleName}.bam");
 
       my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
                        urlTemplate => $bamUrl,
@@ -1116,16 +1136,9 @@ sub makeChipChipSmoothed {
 
 
 sub addNrdbProteinAlignments {
-  my ($dbh, $result, $datasetProperties, $projectName) = @_;
+  my ($dbh, $result, $datasetProperties, $projectName, $nameForFileNames) = @_;
 
   my $proteinAlignTrack;
-
-    my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
-    my $sh = $dbh->prepare($sql);
-    $sh->execute();
-    my ($nameForFileNames) = $sh->fetchrow_array();
-    $sh->finish();
-
     my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
 
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
@@ -1256,6 +1269,100 @@ sub addPopsets {
     push @{$result->{tracks}}, $track;
   }
 }
+
+
+
+sub addLongReadRNASeq {
+  my ($result, $datasetProperties, $nameForFilenames, $webservicesDir) = @_;
+
+  foreach my $dataset (keys %$datasetProperties) {
+    next unless($dataset =~ /nanopore_rnaSeqNextflow/);
+
+    # TODO: check these
+    my $experimentName = $datasetProperties->{$dataset}->{experimentName};
+    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+    my $summary = $datasetProperties->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+
+
+    #----------------------------
+
+    # TODO make gff track
+
+    my $featuresTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+                          urlTemplate => $gffUrl, #TODO
+                          key => "TODO",
+                          label => "TODO",
+                          category => "Gene Models",
+                          type => "JBrowse/View/Track/CanvasFeatures",
+                          glyph => "JBrowse/View/FeatureGlyph/Segments",
+                          fmtMetaValue_Description => "function(){return datasetDescription(\"$summary\", \"\");}",
+                          metadata => {
+                            subcategory => "TODO",
+                            trackType => 'TODO',
+                            description => $summary,
+                          },
+                          # onClick => {
+                          #   content => "TODO",
+                          # },
+                         # TODO
+                          # menuTemplate => [ 
+                          #     ],
+                          # style => {
+                          #   color => "{}",
+                          #   borderColor => "{processedTranscriptBorderColor}"
+                          # },
+                          displayMode => "compact",
+
+      };
+
+
+
+    #----------------------------
+    # TODO make bam tracks (need to read the metadata txt
+
+    # webservicesPath will be different per server.  on palm it will be like:  /var/www/Common/apiSiteFilesMirror/webServices/
+    # append path to your "metadata.txt file like this:
+    my $metadataFile = "$projectName/build-$buildNumber/$nameForFileNames/longReadRNASeq/bam/$datasetName/metadata.txt";
+
+    open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
+#    while(my ($sampleDataset) = $sh->fetchrow_array()) {
+    while(<FILE>) {
+      chomp;
+      my ($sampleType, $sampleFile, $sampleDisplayName) = split(/\t/, $_);
+
+      # Example: EhistolyticaHM1IMSS/bam/Singh_Small_RNA/Rahman/Rahman.bam
+
+      #TODO Saikou
+      my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/TODO?/TODO?bam/$experimentName/${sampleName}/${sampleName}.bam");
+
+      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
+                       urlTemplate => $bamUrl,
+                       # TODO Saikou
+                           key => "${sampleName} Small Non-coding RNAs",
+                           label => "${sampleName} Small Non-coding RNAs",
+                           type => "JBrowse/View/Track/Alignments2",
+                           category => "Gene Models",
+                           yScalePosition => "left",
+                       unsafePopup => JSON::true,
+                           metadata => {
+                             subcategory => 'Long Read RNASeq',
+                             dataset => $datasetDisplayName,
+                             trackType => 'TODO',
+                             attribution => $shortAttribution,
+                             description => $summary,
+                           },
+                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+      };
+
+      push @{$result->{tracks}}, $alignment;
+    }
+  }
+}
+
+
 
 1;
 
