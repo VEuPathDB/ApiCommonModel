@@ -12,6 +12,7 @@ use Tie::IxHash;
 
 my %datasets;
 my $t = tie %datasets, 'Tie::IxHash';
+my %strain;
 
 
 my ($organismAbbrev, $projectName, $isApollo, $buildNumber) = @ARGV;
@@ -60,6 +61,12 @@ if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
 unless($isApollo) {
   $result->{datasets} = \%datasets;
   $result->{dataset_id} = $organismAbbrev;
+
+  # $organismAbbrev is internal_abbrev here; if not same as public_abbrev
+  # then the dataset_id needs be set to public_abbrev
+  if ($strain{$organismAbbrev}->{public} ne $organismAbbrev) {
+    $result->{dataset_id} = $strain{$organismAbbrev}->{public};
+  }
 }
 
 print encode_json($result);
@@ -68,16 +75,18 @@ print encode_json($result);
 sub addDatasets {
   my ($dbh) = @_;
   #Public facing track requires public_abbrev here!
-  my $sql = "select public_abbrev, organism_name FROM APidbtuning.organismattributes order by organism_name";
+  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes order by organism_name";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
 
-  while(my ($abbrev, $name) = $sh->fetchrow_array()) {
+  while(my ($abbrev, $internalAbbrev, $name) = $sh->fetchrow_array()) {
     $datasets{$abbrev}->{name} = $name;
     $datasets{$abbrev}->{url} = "?data=/a/service/jbrowse/tracks/${abbrev}";
 #    $result->{datasets}->{$abbrev}->{name} = $name;
 #    $result->{datasets}->{$abbrev}->{url} = "?data=tracks/${abbrev}";
+
+    $strain{$internalAbbrev}->{public} = $abbrev;
   }
   $sh->finish();
 }
