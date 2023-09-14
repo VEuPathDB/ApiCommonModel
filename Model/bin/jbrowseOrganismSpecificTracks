@@ -4,6 +4,15 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
+use ApiCommonModel::Model::JBrowseTrackConfig::Segments;
+use ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::PopsetsTrackConfig;
+#use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrack;
 use Data::Dumper;
 use URI::Escape;
 
@@ -14,48 +23,72 @@ my %datasets;
 my $t = tie %datasets, 'Tie::IxHash';
 
 
-my ($organismAbbrev, $projectName, $isApollo, $buildNumber) = @ARGV;
+my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $applicationType) = @ARGV;
 
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_organismSpecificCache.json"});
+
+my $buildProps = $jbrowseUtil->getBuildProperties();
+
+#my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
 
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $result = {"tracks" => [] };
 #my $result = {"tracks" => []};
 
+### Get organism properties
+my $orgHash = ($buildProps->{'organism'});
+my $nameForFileNames = ($orgHash->{organismNameForFiles});
+my $projectName = ($orgHash->{projectName});
+my $isAnnotated = ($orgHash->{isAnnotatedGenome});
+#print "NfFN=$nameForFileNames\n";
+
 &addScaffolds($dbh, $result);
+
 &addCentromere($dbh, $result);
+
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
 
-&addSynteny($dbh, $result);
+# TODO: Add back
+# &addSynteny($dbh, $result);
 &addDatasets($dbh, \%datasets) unless($isApollo);
 
 my $datasetProperties = &datasetProperties($dbh);
 
-&addChipChipTracks($dbh, $result, $datasetProperties);
+#&addChipChipTracks($dbh, $result, $datasetProperties);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
-&addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
+
+# TODO: Add back
+# &addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
 &addVCF($dbh, $result, $datasetProperties);
-&addGFF($dbh, $result, $datasetProperties);
+#&addGFF($dbh, $result, $datasetProperties);
 
-
+# TODO: Add back
 &addTRNA($dbh, $result, $datasetProperties);
 if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
   &addNrdbProteinAlignments($dbh, $result, $datasetProperties, $projectName);
 }
+
+# TODO: Add back
 &addPopsets($dbh, $result, $datasetProperties);
 
 if ($organismAbbrev !~ m/dmeliso-1/ ){
-&addApolloGFF($dbh, $result);
+# TODO: Add back
+# &addApolloGFF($dbh, $result);
 }
 &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName);
 
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-  &addCnvArray($dbh, $result);
+# TODO: Add back
+# &addCnvArray($dbh, $result);
 }
-
+# TODO: Add back
+#if ($isAnnotated eq 'true'){
+#    &addAnnotatedGenome($dbh, $result, $datasetProperties);
+#}
+#&addFastaAssemblyTrack($dbh, $result, $datasetProperties);
 
 unless($isApollo) {
   $result->{datasets} = \%datasets;
@@ -63,7 +96,28 @@ unless($isApollo) {
 }
 
 print encode_json($result);
-
+# TODO: make new method to add GFF
+#sub addAnnotatedGenome {
+#    my annotatedGffTrack;
+#    my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/annotated_transcripts.gff.gz");
+#    my $annotatedGenomeTrack = ApiCommonModel::Model::JBrowseTrackConfig::AnnotatedGenomeTrackConfig->new({dataset_name => $dsName,
+#                                                                                                url_template => $gffUrl,
+#                                                                                                application_type => $applicationType,
+#                                                                                                label => $label,
+                                                                                                #strand =>  $strand,
+#                                                                                                category => $category,
+#                                                                                                subcategory => $subCategory,
+#                                                                                                attribution => $shortAttribution,
+#                                                                                                summary => $summary,
+                                                                                                #alignment => $alignment,
+#                                                                                                organism_abbrev => $organismAbbrev
+#                                                                                              })->getConfigurationObject();
+#}
+# TODO: make new method to add FASTA
+#sub addFastaAssemblyTrack{
+#    my fastaAssembly;
+#    my $fastaFile = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/fasta/genome.fasta");
+#}
 
 sub addDatasets {
   my ($dbh) = @_;
@@ -163,168 +217,187 @@ sub addVCF {
       my ($sampleName) = $sampleDataset;
       my ($vcfFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
       my $keyName = $vcfFileName;
- 	 $keyName =~ s/_/ /g;
+ 	  $keyName =~ s/_/ /g;
       my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
-      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
-                       urlTemplate => $vcfUrl,
-                           #key => "${vcfFileName} SNPs from VCF",
-                           key => "$keyName SNPs from VCF",
-                           label => "${sampleName} SNPs",
-                           type => "JBrowse/View/Track/CanvasVariants",
-                           glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-                           category => "Genetic Variation",
-                           chunkSizeLimit => '10000000',
-                           metadata => {
-                             subcategory => 'DNA polymorphism',
-                             dataset => $datasetDisplayName,
-                             trackType => 'VCF from VectorBase',
-                             attribution => $shortAttribution,
-                             description => $summary,
-                           },
-                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-      };
+#      my $alignment = {my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
+#                       urlTemplate => $vcfUrl,
+#                           #key => "${vcfFileName} SNPs from VCF",
+#                           key => "$keyName SNPs from VCF",
+#                           label => "${sampleName} SNPs",
+#                           type => "JBrowse/View/Track/CanvasVariants",
+#                           glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
+#                           category => "Genetic Variation",
+#                           chunkSizeLimit => '10000000',
+#                           metadata => {
+#                             subcategory => 'DNA polymorphism',
+#                             dataset => $datasetDisplayName,
+#                             trackType => 'VCF from VectorBase',
+#                             attribution => $shortAttribution,
+#                             description => $summary,
+#                           },
+#                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+#                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+#      };
+
+      my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/VCFTabix",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "$keyName SNPs from VCF",
+                                                                                                label => "${sampleName} SNPs",
+                                                                                                category => "Genetic Variation",
+                                                                                                subcategory => "DNA polymorphism",
+                                                                                                url_template => $vcfUrl,
+                                                                                                application_type => $applicationType,
+                                                                                                chunkSizeLimit => '10000000',
+                                                                                                trackType => 'VCF from VectorBase',
+                                                                                                attribution => $shortAttribution,
+                                                                                                description => $summary,
+                                                                                                glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
+                                                                                                fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+                                                                                                fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+
+                                                                                              })->getConfigurationObject();
 
       push @{$result->{tracks}}, $alignment;
     }
   }
 }
 
-sub addGFF {
-  my ($dbh, $result, $datasetProperties) = @_;
+#sub addGFF {
+#  my ($dbh, $result, $datasetProperties) = @_;
+#
+#  foreach my $dataset (keys %$datasetProperties) {
+#    next unless($dataset =~ /GFF/);
+#
+#    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;;
+#    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
+#    my $summary = $datasetProperties->{$dataset}->{summary};
+#    $summary =~ s/\n/ /g;
+#    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+#
+#    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+#    my $sh = $dbh->prepare($sql);
+#    $sh->execute();
+#
+#    my %lookup = (aaegLVP_AGWG => 'Aedes aegypti LVP_AGWG %5BAaegL5.2%5D',
+#                  aalbSTECLA => 'Anopheles albimanus STECLA %5BAalbS2.6%5D',
+#                  aaraDongola => 'Anopheles arabiensis Dongola %5BAaraD1.11%5D',
+#                  aatrEBRO => 'Anopheles atroparvus EBRO %5BAatrE3.1%5D',
+#                  achrACHKN1017 => 'Anopheles christyi ACHKN1017 %5BAchrA1.7%5D',
+#                  acolNgousso => 'Anopheles coluzzii Ngousso %5BAcolN1.0%5D',
+#                  'aculA-37' => 'Anopheles culicifacies A-37 %5BAculA1.6%5D',
+#                  adarCoari => 'Anopheles darlingi Coari %5BAdarC3.8%5D',
+#                  adirWRAIR2 => 'Anopheles dirus WRAIR2 %5BAdirW1.8%5D',
+#                  aepiEpiroticus2 => 'Anopheles epiroticus Epiroticus2 %5BAepiE1.7%5D',
+#                  afarFAR1 => 'Anopheles farauti FAR1 %5BAfarF2.6%5D',
+#                  afunFUMOZ => 'Anopheles funestus FUMOZ %5BAfunF3.1%5D',
+#                  agamPEST => 'Anopheles gambiae str. PEST %5BAgamP4.12%5D',
+#                  amacmaculatus3 => 'Anopheles maculatus maculatus3 %5BAmacM1.5%5D',
+#                  amelCM1001059 => 'Anopheles melas CM1001059_A %5BAmelC2.6%5D',
+#                  amerMAF => 'Anopheles merus MAF %5BAmerM2.9%5D',
+#                  aminMINIMUS1 => 'Anopheles minimus MINIMUS1 %5BAminM1.8%5D',
+#                  aquaSANGWE => 'Anopheles quadriannulatus SANGWE %5BAquaS1.11%5D',
+#                  asinSINENSIS => 'Anopheles sinensis SINENSIS %5BAsinS2.5%5D',
+#                  'asteSDA-500' => 'Anopheles stephensi SDA-500 %5BAsteS1.7%5D',
+#                  bglaBB02 => 'Biomphalaria glabrata BB02 %5BBglaB1.6%5D',
+#                  cquiJohannesburg => 'Culex quinquefasciatus Johannesburg %5BCpipJ2.4%5D',
+#                  gausTTRI => 'Glossina austeni TTRI %5BGausT1.7%5D',
+#                  gfusIAEA => 'Glossina fuscipes IAEA %5BGfusI1.7%5D',
+#                  gmorYale => 'Glossina morsitans Yale %5BGmorY1.9%5D',
+#                  gpalIAEA => 'Glossina pallidipes IAEA %5BGpalI1.7%5D',
+#                  gpapIAEA => 'Glossina palpalis IAEA %5BGpapI1.4%5D',
+#                  iscaWikel => 'Ixodes scapularis Wikel %5BIscaW1.6%5D',
+#                  llonJacobina => 'Lutzomyia longipalpis Jacobina %5BLlonJ1.5%5D',
+#                  mdomaabys => 'Musca domestica aabys %5BMdomA1.3%5D',
+#                  phumUSDA => 'Pediculus humanus USDA %5BPhumU2.4%5D',
+#                  ppapIsrael => 'Phlebotomus papatasi Israel %5BPpapI1.5%5D',
+#                  rproCDC => 'Rhodnius prolixus CDC %5BRproC3.3%5D',
+#                  scalUSDA => 'Stomoxys calcitrans USDA %5BScalU1.5%5D',
+#                  );
+#
+#    my $organismLookup = $lookup{${organismAbbrev}};
+#    my $organismUrl = $organismLookup;
+#    $organismUrl =~ s/ /%20/g;
+#    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+#      my ($sampleName) = $sampleDataset;
+#      my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
+#      my $keyName = $datasetDisplayName;
+#      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
+#      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+#                       urlTemplate => $gffUrl,
+#                           key => "$keyName",
+#                           label => "${sampleName}",
+#                           category => "Gene Models",
+#			   type => "NeatCanvasFeatures/View/Track/NeatFeatures",
+#			   menuTemplate => [
+#			   {label =>  'Open {name} in Apollo',
+#			    iconClass => 'dijitIconDatabase' ,
+#			    action => 'iframeDialog',
+#			    url => "function(track,feature,featureDiv) {return 'https://apollo.veupathdb.org/annotator/loadLink?loc='  + feature.get('seq_id') +  ':' + feature.get('start') + '..' + feature.get('end') + '&organism=$organismLookup&tracks=' }" } ],
+#			   noncodingType => "nc_transcript",
+#			   subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
+#			   impliedUTRs => "true",
+#                           metadata => {
+#                             subcategory => "Annotation Updates",
+#                             dataset => $datasetDisplayName,
+#                             trackType => "Community Updates from Apollo",
+#                             attribution => $shortAttribution,
+#                             description => $summary,
+#                             apollo => '',
+#                           },
+#                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+#                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+#                          fmtMetaValue_Apollo => "function() { return '<a href=https://apollo.veupathdb.org/annotator/loadLink?organism=$organismUrl&tracks= target=_blank>Add annotations in Apollo</a>'; }"
+#      };
+#
+#      push @{$result->{tracks}}, $alignment;
+#    }
+#  }
+#}
 
-  foreach my $dataset (keys %$datasetProperties) {
-    next unless($dataset =~ /GFF/);
-
-    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;;
-    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-    my $summary = $datasetProperties->{$dataset}->{summary};
-    $summary =~ s/\n/ /g;
-    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
-
-    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
-    my $sh = $dbh->prepare($sql);
-    $sh->execute();
-
-    my %lookup = (aaegLVP_AGWG => 'Aedes aegypti LVP_AGWG %5BAaegL5.2%5D',
-                  aalbSTECLA => 'Anopheles albimanus STECLA %5BAalbS2.6%5D',
-                  aaraDongola => 'Anopheles arabiensis Dongola %5BAaraD1.11%5D',
-                  aatrEBRO => 'Anopheles atroparvus EBRO %5BAatrE3.1%5D',
-                  achrACHKN1017 => 'Anopheles christyi ACHKN1017 %5BAchrA1.7%5D',
-                  acolNgousso => 'Anopheles coluzzii Ngousso %5BAcolN1.0%5D',
-                  'aculA-37' => 'Anopheles culicifacies A-37 %5BAculA1.6%5D',
-                  adarCoari => 'Anopheles darlingi Coari %5BAdarC3.8%5D',
-                  adirWRAIR2 => 'Anopheles dirus WRAIR2 %5BAdirW1.8%5D',
-                  aepiEpiroticus2 => 'Anopheles epiroticus Epiroticus2 %5BAepiE1.7%5D',
-                  afarFAR1 => 'Anopheles farauti FAR1 %5BAfarF2.6%5D',
-                  afunFUMOZ => 'Anopheles funestus FUMOZ %5BAfunF3.1%5D',
-                  agamPEST => 'Anopheles gambiae str. PEST %5BAgamP4.12%5D',
-                  amacmaculatus3 => 'Anopheles maculatus maculatus3 %5BAmacM1.5%5D',
-                  amelCM1001059 => 'Anopheles melas CM1001059_A %5BAmelC2.6%5D',
-                  amerMAF => 'Anopheles merus MAF %5BAmerM2.9%5D',
-                  aminMINIMUS1 => 'Anopheles minimus MINIMUS1 %5BAminM1.8%5D',
-                  aquaSANGWE => 'Anopheles quadriannulatus SANGWE %5BAquaS1.11%5D',
-                  asinSINENSIS => 'Anopheles sinensis SINENSIS %5BAsinS2.5%5D',
-                  'asteSDA-500' => 'Anopheles stephensi SDA-500 %5BAsteS1.7%5D',
-                  bglaBB02 => 'Biomphalaria glabrata BB02 %5BBglaB1.6%5D',
-                  cquiJohannesburg => 'Culex quinquefasciatus Johannesburg %5BCpipJ2.4%5D',
-                  gausTTRI => 'Glossina austeni TTRI %5BGausT1.7%5D',
-                  gfusIAEA => 'Glossina fuscipes IAEA %5BGfusI1.7%5D',
-                  gmorYale => 'Glossina morsitans Yale %5BGmorY1.9%5D',
-                  gpalIAEA => 'Glossina pallidipes IAEA %5BGpalI1.7%5D',
-                  gpapIAEA => 'Glossina palpalis IAEA %5BGpapI1.4%5D',
-                  iscaWikel => 'Ixodes scapularis Wikel %5BIscaW1.6%5D',
-                  llonJacobina => 'Lutzomyia longipalpis Jacobina %5BLlonJ1.5%5D',
-                  mdomaabys => 'Musca domestica aabys %5BMdomA1.3%5D',
-                  phumUSDA => 'Pediculus humanus USDA %5BPhumU2.4%5D',
-                  ppapIsrael => 'Phlebotomus papatasi Israel %5BPpapI1.5%5D',
-                  rproCDC => 'Rhodnius prolixus CDC %5BRproC3.3%5D',
-                  scalUSDA => 'Stomoxys calcitrans USDA %5BScalU1.5%5D',
-                  );
-
-    my $organismLookup = $lookup{${organismAbbrev}};
-    my $organismUrl = $organismLookup;
-    $organismUrl =~ s/ /%20/g;
-    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
-      my ($sampleName) = $sampleDataset;
-      my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
-      my $keyName = $datasetDisplayName;
-      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
-      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-                       urlTemplate => $gffUrl,
-                           key => "$keyName",
-                           label => "${sampleName}",
-                           category => "Gene Models",
-			   type => "NeatCanvasFeatures/View/Track/NeatFeatures",
-			   menuTemplate => [ 
-			   {label =>  'Open {name} in Apollo', 
-			    iconClass => 'dijitIconDatabase' ,
-			    action => 'iframeDialog',
-			    url => "function(track,feature,featureDiv) {return 'https://apollo.veupathdb.org/annotator/loadLink?loc='  + feature.get('seq_id') +  ':' + feature.get('start') + '..' + feature.get('end') + '&organism=$organismLookup&tracks=' }" } ],
-			   noncodingType => "nc_transcript",
-			   subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
-			   impliedUTRs => "true",
-                           metadata => {
-                             subcategory => "Annotation Updates",
-                             dataset => $datasetDisplayName,
-                             trackType => "Community Updates from Apollo",
-                             attribution => $shortAttribution,
-                             description => $summary,
-                             apollo => '',
-                           },
-                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-                          fmtMetaValue_Apollo => "function() { return '<a href=https://apollo.veupathdb.org/annotator/loadLink?organism=$organismUrl&tracks= target=_blank>Add annotations in Apollo</a>'; }"
-      };
-
-      push @{$result->{tracks}}, $alignment;
-    }
-  }
-}
-
-sub addFunctionalAnnotations {
-  my ($dbh, $result) = @_;
-  
-  my $sql = "select count(*) from apidbtuning.ApolloUpdate";
-  
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-  my $count = $sh->fetchrow_array();
-  $sh->finish(); 
-  if($count > 0) {
-    
-    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                 baseUrl => "/a/service/jbrowse",
-                 type => "NeatCanvasFeatures/View/Track/NeatFeatures",
-                 key => "Functional Annotations",
-                 label => "Functional Annotations",
-                 category => "Gene Models",
-                 unsafePopup => JSON::true,
-                 displayMode => "normal",
-                 noncodingType => "nc_transcript",
-                 subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
-                 style => {
-                 color => "{processedApolloTranscriptColor}",
-                 borderColor => "{processedTranscriptBorderColor}",
-                 },
-                 impliedUTRs => "true", 
-                 query => {'feature' => "gff:apolloTranscript",
-                 },
-                 onClick => {
-                 content => "{functionalAnnotationDetails}",
-                 },
-                 menuTemplate => [
-                   {label => "View Details",
-                    content => "{functionalAnnotationDetails}",
-                   },
-                     ],
-    };
-    push @{$result->{tracks}}, $track;
-  }
-}
+#sub addFunctionalAnnotations {
+#  my ($dbh, $result) = @_;
+#
+#  my $sql = "select count(*) from apidbtuning.ApolloUpdate";
+#
+#  my $sh = $dbh->prepare($sql);
+#  $sh->execute();
+#  my $count = $sh->fetchrow_array();
+#  $sh->finish();
+#  if($count > 0) {
+#
+#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                 baseUrl => "/a/service/jbrowse",
+#                 type => "NeatCanvasFeatures/View/Track/NeatFeatures",
+#                 key => "Functional Annotations",
+#                 label => "Functional Annotations",
+#                 category => "Gene Models",
+#                 unsafePopup => JSON::true,
+#                 displayMode => "normal",
+#                 noncodingType => "nc_transcript",
+#                 subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
+#                 style => {
+#                 color => "{processedApolloTranscriptColor}",
+#                 borderColor => "{processedTranscriptBorderColor}",
+#                 },
+#                 impliedUTRs => "true",
+#                 query => {'feature' => "gff:apolloTranscript",
+#                 },
+#                 onClick => {
+#                 content => "{functionalAnnotationDetails}",
+#                 },
+#                 menuTemplate => [
+#                   {label => "View Details",
+#                    content => "{functionalAnnotationDetails}",
+#                   },
+#                     ],
+#    };
+#    push @{$result->{tracks}}, $track;
+#  }
+#}
 
 sub addApolloGFF {
-  my ($dbh, $result) = @_;
+    my ($dbh, $result) = @_;
 
   my $sql = "select count(*) from apidbtuning.ApolloId aid, apidbtuning.organismattributes oa where oa.public_abbrev='".$organismAbbrev."' and aid.organism = oa.organism_name";
 
@@ -577,37 +650,50 @@ sub addCentromere {
   $sh->finish();
   if($count > 0) {
 
-    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                 baseUrl => "/a/service/jbrowse",
-                 type => "JBrowse/View/Track/CanvasFeatures",
-                 glyph => "JBrowse/View/FeatureGlyph/Box",
-                 key => "Centromere",
-                 label => "Centromere",
-                 category => "Sequence Analysis",
-                 displayMode => "normal",
-                 style => {
-                   color => "blue",
-                 },
-                 metadata => {
-                   subcategory => "Sequence sites, features and motifs",
-                   trackType => 'Segments',
-                 },
-                 query => {'feature' => "Centromere:overview",
-                 },
-                 onClick => {
-                   content => "{positionTitle}",
-                 },
-                 menuTemplate => [
-                   {label => "View Details", 
-                    content => "{positionTitle}",
-                   },
-                     ],
-    };
+#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                 baseUrl => "/a/service/jbrowse",
+#                 type => "JBrowse/View/Track/CanvasFeatures",
+#                 glyph => "JBrowse/View/FeatureGlyph/Box",
+#                 key => "Centromere",
+#                 label => "Centromere",
+#                 category => "Sequence Analysis",
+#                 displayMode => "normal",
+#                 style => {
+#                   color => "blue",
+#                 },
+#                 metadata => {
+#                   subcategory => "Sequence sites, features and motifs",
+#                   trackType => 'Segments',
+#                 },
+#                 query => {'feature' => "Centromere:overview",
+#                 },
+#                 onClick => {
+#                   content => "{positionTitle}",
+#                 },
+#                 menuTemplate => [
+#                   {label => "View Details",
+#                    content => "{positionTitle}",
+#                   },
+#                     ],
+#    };
+     my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "Centromere",
+                                                                                                label => "Centromere",
+                                                                                                category => "Sequence Analysis",
+                                                                                                subcategory => "Sequence sites, features and motifs",
+                                                                                                baseUrl => "/a/service/jbrowse",
+                                                                                                application_type => $applicationType,
+                                                                                                display_mode => "normal",
+                                                                                                glyph => "JBrowse/View/FeatureGlyph/Box",
+                                                                                                color => "blue",
+                                                                                              })->getConfigurationObject();
 
     push @{$result->{tracks}}, $track;
+    };
 
 
-  }
 
 }
 
@@ -623,40 +709,53 @@ sub addScaffolds {
   $sh->finish();
   if($count > 0) {
 
-    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                 baseUrl => "/a/service/jbrowse",
-                 type => "JBrowse/View/Track/CanvasFeatures",
-                 glyph => "JBrowse/View/FeatureGlyph/Box",
-#                 glyph => "function(feature){ return changeScaffoldType(feature)}",
-                 key => "Scaffolds and Gaps",
-                 label => "Scaffolds",
-                 category => "Sequence Analysis",
-                 displayMode => "normal",
-                 subParts => "sgap",
-                    style => {
-                      color => "function( feature, variableName, glyphObject, track ){ var c = track.browser.config; return c.scaffoldColor(feature)}",
-                      height => "function(feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldHeight(feature)}",
-                    },
-                    metadata => {
-                      subcategory => "Sequence assembly",
-                      trackType => 'Segments',
-                    },
-                    query => {'feature' => "scaffold:genome",
-                    },
-                     onClick => {
-                       content => "function(track, feature){ var c = track.browser.config; return c.scaffoldDetails(track, feature)}",
-                     },
-                     menuTemplate => [
-                       {label => "View Details", 
-                        content => "function(track, feature){ var c = track.browser.config; return c.scaffoldDetails(track, feature)}",
-                       },
-                         ],
-    };
+#     my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                 baseUrl => "/a/service/jbrowse",
+#                 type => "JBrowse/View/Track/CanvasFeatures",
+#                 glyph => "JBrowse/View/FeatureGlyph/Box",
+###  #                 glyph => "function(feature){ return changeScaffoldType(feature)}",
+#                 key => "Scaffolds and Gaps",
+#                 label => "Scaffolds",
+#                 category => "Sequence Analysis",
+#                 displayMode => "normal",
+#                 subParts => "sgap",
+#                    style => {
+#                      color => "function( feature, variableName, glyphObject, track ){ var c = track.browser.config; return c.scaffoldColor(feature)}",
+#                      height => "function(feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldHeight(feature)}",
+#                    },
+#                    metadata => {
+#                      subcategory => "Sequence assembly",
+#                      trackType => 'Segments',
+#                    },
+#                    query => {'feature' => "scaffold:genome",
+#                    },
+#                     onClick => {
+#                       content => "function(track, feature){ var c = track.browser.config; return c.scaffoldDetails(track, feature)}",
+#                     },
+#                     menuTemplate => [
+#                       {label => "View Details",
+#                        content => "function(track, feature){ var c = track.browser.config; return c.scaffoldDetails(track, feature)}",
+#                       },
+#                         ],
+#    };
+
+     my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "Scaffolds and Gaps",
+                                                                                                label => "Scaffolds",
+                                                                                                category => "Sequence Analysis",
+                                                                                                subcategory => "Sequence assembly",
+                                                                                                baseUrl => "/a/service/jbrowse",
+                                                                                                application_type => $applicationType,
+                                                                                                display_mode => "normal",
+                                                                                                glyph => "JBrowse/View/FeatureGlyph/Box",
+                                                                                              })->getConfigurationObject();
 
     push @{$result->{tracks}}, $track;
+    };
 
 
-  }
 }
 
 sub addSynteny {
@@ -845,42 +944,58 @@ sub addUnifiedSnp {
   if($snpCount > 0) {
 
     my $desc ="The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.";
-    my $snpTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                    baseUrl => "/a/service/jbrowse",
-                    type => "JBrowse/View/Track/CanvasFeatures",
-                    glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-                    key => "SNPs by coding potential",
-                    label => "SNPs by coding potential",
-                    maxFeatureScreenDensity => 0.01,
-                    region_feature_densities => "function(){return true}",
-                    category => "Genetic Variation",
-                    displayMode => "normal",
-                    style => {
-                      color => "{snpColorFxn}",
-                      strandArrow => "function(){return false}",
-                      labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
-                    },
-                    metadata => {
-                      subcategory => "DNA polymorphism",
-                      trackType => 'Unified SNPs',
-		      description => $desc
-                    },
-                    query => {'feature' => "SNP:Population",
-                              'edname' => 'InsertSnps.pm NGS SNPs INTERNAL'
-                    },
-                     onClick => {
-                       content => "{snpTitleFxn}",
-                     },
-                     menuTemplate => [
-                       {label => "View Details", 
-                        content => "{snpTitleFxn}",
-                       },
-                         ],
-    };
+#    my $snpTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                    baseUrl => "/a/service/jbrowse",
+#                    type => "JBrowse/View/Track/CanvasFeatures",
+#                    glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
+#                    key => "SNPs by coding potential",
+#                    label => "SNPs by coding potential",
+#                    maxFeatureScreenDensity => 0.01,
+#                    region_feature_densities => "function(){return true}",
+#                    category => "Genetic Variation",
+#                    displayMode => "normal",
+#                    style => {
+#                      color => "{snpColorFxn}",
+#                      strandArrow => "function(){return false}",
+#                      labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
+#                    },
+#                    metadata => {
+#                      subcategory => "DNA polymorphism",
+#                      trackType => 'Unified SNPs',
+#                      description => $desc
+#                    },
+#                    query => {'feature' => "SNP:Population",
+#                              'edname' => 'InsertSnps.pm NGS SNPs INTERNAL'
+#                    },
+#                     onClick => {
+#                       content => "{snpTitleFxn}",
+#                     },
+#                     menuTemplate => [
+#                       {label => "View Details",
+#                        content => "{snpTitleFxn}",
+#                       },
+#                         ],
+    my $snpTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "SNPs by coding potential",
+                                                                                                label => "SNPs by coding potential",
+                                                                                                max_feature_screen_density => 0.01,
+                                                                                                region_feature_densities => "function(){return true}",
+                                                                                                category => "Genetic Variation",
+                                                                                                subcategory => "DNA polymorphism",
+                                                                                                color => "{snpColorFxn}",
+                                                                                                baseUrl => "/a/service/jbrowse",
+                                                                                                application_type => $applicationType,
+                                                                                                display_mode => "normal",
+                                                                                                glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
+                                                                                              })->getConfigurationObject();
+
+#    };
 
     push @{$result->{tracks}}, $snpTrack;
 
-  }
+  };
 
 }
 
@@ -894,37 +1009,52 @@ sub addUnifiedMassSpec {
   $sh->finish();
 
   if($massSpecCount > 0) {
-    my $unifiedMassSpecTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                                baseUrl => "/a/service/jbrowse",
-                                type => "JBrowse/View/Track/CanvasFeatures",
-                                key => "All MS/MS Peptides",
-                                label => "UnifiedMassSpecPeptides",
-                                maxFeatureScreenDensity => 0.01,
-                                region_feature_densities => "function(){return true}",
-                                category => "Proteomics",
-                                displayMode => "compact",
-                                style => {
-                                  color => "{massSpecColor}",
-                                },
-                                metadata => {
-                                  subcategory => "Protein Expression",
-                                  trackType => 'Segments',
-                                },
-                                query => {'feature' => "domain:UnifiedMassSpecPeptides",
-                                },
-                                onClick => {
-                                  content => "{massSpecDetails}",
-                                },
-                                menuTemplate => [
-                                  {label => "View Details", 
-                                   content => "{massSpecDetails}",
-                                  },
-                                    ],
-    };
+#    my $unifiedMassSpecTrack = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                                baseUrl => "/a/service/jbrowse",
+#                                type => "JBrowse/View/Track/CanvasFeatures",
+#                                key => "All MS/MS Peptides",
+#                                label => "UnifiedMassSpecPeptides",
+#                                maxFeatureScreenDensity => 0.01,
+#                                region_feature_densities => "function(){return true}",
+#                                category => "Proteomics",
+#                                displayMode => "compact",
+#                                style => {
+#                                  color => "{massSpecColor}",
+#                                },
+#                                metadata => {
+#                                  subcategory => "Protein Expression",
+#                                  trackType => 'Segments',
+#                                },
+#                                query => {'feature' => "domain:UnifiedMassSpecPeptides",
+#                                },
+#                                onClick => {
+#                                  content => "{massSpecDetails}",
+#                                },
+#                                menuTemplate => [
+      #                                  {label => "View Details",
+#                                   content => "{massSpecDetails}",
+#                                  },
+#                                    ],
+    my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "All MS/MS Peptides",
+                                                                                                label => "UnifiedMassSpecPeptides",
+                                                                                                max_feature_screen_density => 0.01,
+                                                                                                region_feature_densities => "function(){return true}",
+                                                                                                category => "Proteomics",
+                                                                                                subcategory => "Protein Expression",
+                                                                                                color => "{massSpecColor}",
+                                                                                                baseUrl => "/a/service/jbrowse",
+                                                                                                application_type => $applicationType,
+                                                                                                display_mode => "compact"
+                                                                                              })->getConfigurationObject();
+
+#  };
 
     push @{$result->{tracks}}, $unifiedMassSpecTrack;
+   };
 
-  }
 
 
 }
@@ -1120,43 +1250,55 @@ sub addNrdbProteinAlignments {
 
   my $proteinAlignTrack;
 
-    my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
-    my $sh = $dbh->prepare($sql);
-    $sh->execute();
-    my ($nameForFileNames) = $sh->fetchrow_array();
-    $sh->finish();
+#     my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
+#     my $sh = $dbh->prepare($sql);
+#     $sh->execute();
+#     my ($nameForFileNames) = $sh->fetchrow_array();
+#     $sh->finish();
 
     my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
 
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
 
-    $proteinAlignTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-                          urlTemplate => $gffUrl,
-                          key => "NRDB Protein Alignments",
-                          label => "NRDB Protein Alignments",
-                          category => "Sequence Analysis",
-                          type => "JBrowse/View/Track/CanvasFeatures",
-                          glyph => "JBrowse/View/FeatureGlyph/Segments",
-                          fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
-                          metadata => {
-                            subcategory => "BLAT and Blast Alignments",
-                            trackType => 'Segments',
-                            description => $methodDescription,
-                          },
-                          onClick => {
-                            content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",
-                          },
-                          menuTemplate => [
-                            {label =>  "View Details", content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",}, 
-                            {label => "View in Genbank",title => "Genbank {name}", iconClass => "dijitIconDatabase", action => "newWindow", url => "https://www.ncbi.nlm.nih.gov/protein/{name}"}
-                              ],
-                          style => {
-                            color => "{nrdbColor}",
-                            borderColor => "{processedTranscriptBorderColor}"
-                          },
-                          displayMode => "compact",
+#    $proteinAlignTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+#                          urlTemplate => $gffUrl,
+#                          key => "NRDB Protein Alignments",
+#                          label => "NRDB Protein Alignments",
+#                          category => "Sequence Analysis",
+#                          type => "JBrowse/View/Track/CanvasFeatures",
+#                          glyph => "JBrowse/View/FeatureGlyph/Segments",
+#                          fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
+#                          metadata => {
+#                            subcategory => "BLAT and Blast Alignments",
+#                            trackType => 'Segments',
+#                            description => $methodDescription,
+#                          },
+#                          onClick => {
+#                            content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",
+#                          },
+#                          menuTemplate => [
+#                            {label =>  "View Details", content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",},
+#                            {label => "View in Genbank",title => "Genbank {name}", iconClass => "dijitIconDatabase", action => "newWindow", url => "https://www.ncbi.nlm.nih.gov/protein/{name}"}
+#                              ],
+#                          style => {
+#                            color => "{nrdbColor}",
+#                            borderColor => "{processedTranscriptBorderColor}"
+#                          },
+#                          displayMode => "compact",
+#
+#      };
+    $proteinAlignTrack = ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig->new({
+                                                                                                fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
+                                                                                                store_type => "JBrowse/Store/SeqFeature/GFF3Tabix",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                subcategory => "BLAT and Blast Alignments",
+                                                                                                url_template => $gffUrl,
+                                                                                                application_type => $applicationType,
+                                                                                                summary => $methodDescription,
+                                                                                                display_mode => "compact",
+                                                                                                glyph => "JBrowse/View/FeatureGlyph/Segments",
+                                                                                              })->getConfigurationObject();
 
-      };
 
     push @{$result->{tracks}}, $proteinAlignTrack;
 
@@ -1175,33 +1317,49 @@ and ot.name ='tRNA'";
   $sh->finish();
   if($count > 0) {
 
-    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                 baseUrl => "/a/service/jbrowse",
-                 type => "JBrowse/View/Track/CanvasFeatures",
-                 glyph => "JBrowse/View/FeatureGlyph/Box",
-                 key => "tRNAscan",
-                 label => "tRNAscan",
-                 category => "Sequence Analysis",
-                 displayMode => "normal",
-                 style => {
-                   color => "white",
-		   borderColor => "{processedTranscriptBorderColor}"
-                 },
-                 metadata => {
-                   subcategory => "Sequence sites, features and motifs",
-                   trackType => 'Segments',
-                 },
-                 query => {'feature' => "domain:tRNA",
-                 },
-                 onClick => {
-                   content => "{positionTitle}",
-                 },
-                 menuTemplate => [
-                   {label => "View Details",
-                    content => "{positionTitle}",
-                   },
-                     ],
-    };
+#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                 baseUrl => "/a/service/jbrowse",
+#                 type => "JBrowse/View/Track/CanvasFeatures",
+#                 glyph => "JBrowse/View/FeatureGlyph/Box",
+#                 key => "tRNAscan",
+#                 label => "tRNAscan",
+#                 category => "Sequence Analysis",
+#                 displayMode => "normal",
+#                 style => {
+#                   color => "white",
+#		   borderColor => "{processedTranscriptBorderColor}"
+#                 },
+#                 metadata => {
+#                   subcategory => "Sequence sites, features and motifs",
+#                   trackType => 'Segments',
+#                 },
+#                 query => {'feature' => "domain:tRNA",
+#                 },
+#                 onClick => {
+#                   content => "{positionTitle}",
+#                 },
+#                 menuTemplate => [
+#                   {label => "View Details",
+#                    content => "{positionTitle}",
+#                   },
+#                     ],
+#    };
+     my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "tRNAscan",
+                                                                                                label => "tRNAscan",
+                                                                                                category => "Sequence Analysis",
+                                                                                                subcategory => "Sequence sites, features and motifs",
+                                                                                                baseUrl => "/a/service/jbrowse",
+                                                                                                application_type => $applicationType,
+                                                                                                display_mode => "normal",
+                                                                                                glyph => "JBrowse/View/FeatureGlyph/Box",
+                                                                                                color => "white",
+                                                                                                borderColor => "{processedTranscriptBorderColor}",
+                                                                                              })->getConfigurationObject();
+
+
     push @{$result->{tracks}}, $track;
   }
 }
@@ -1218,41 +1376,60 @@ sub addPopsets {
   $sh->finish();
   if($count > 0) {
 
-    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                 baseUrl => "/a/service/jbrowse",
-                 type => "JBrowse/View/Track/CanvasFeatures",
-                 glyph => "JBrowse/View/FeatureGlyph/Box",
-                 key => "Popset Isolate Sequence Alignments",
-                 label => "popsetIsolates",
-		 maxFeatureScreenDensity => 0.03,
-                 region_feature_densities => "function(){return true}",
-                 category => "Sequence Analysis",
-                 displayMode => "compact",
-                 style => {
-                   color => "{popsetColor}",
-                 },
-                 metadata => {
-                   subcategory => "BLAT and Blast Alignments",
-                   trackType => 'Segments',
-                 },
-                 query => {'feature' => "match:IsolatePopset",
-                 },
-                 onClick => {
-                   content => "{popsetDetails}",
-                 },
-                 menuTemplate =>
-		 [
-		  {label => "View Details",
-		   content => "{popsetDetails}",
-		  },
-		  {label => "View Popset Sequence Page",
-		   title => "{popsetDetails}",
-		   iconClass => "dijitIconDatabase",
-		   action => "newWindow",
-		   url => "/a/app/record/popsetSequence/{name}",
-		  },
-		 ],
-		};
+#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                 baseUrl => "/a/service/jbrowse",
+#                 type => "JBrowse/View/Track/CanvasFeatures",
+#                 glyph => "JBrowse/View/FeatureGlyph/Box",
+#                 key => "Popset Isolate Sequence Alignments",
+#                 label => "popsetIsolates",
+#		 maxFeatureScreenDensity => 0.03,
+#                 region_feature_densities => "function(){return true}",
+#                 category => "Sequence Analysis",
+#                 displayMode => "compact",
+#                 style => {
+#                   color => "{popsetColor}",
+#                 },
+#                 metadata => {
+#                   subcategory => "BLAT and Blast Alignments",
+#                   trackType => 'Segments',
+#                 },
+#                 query => {'feature' => "match:IsolatePopset",
+#                 },
+#                 onClick => {
+#                   content => "{popsetDetails}",
+#                 },
+#                 menuTemplate =>
+#		 [
+#		  {label => "View Details",
+#		   content => "{popsetDetails}",
+#		  },
+#		  {label => "View Popset Sequence Page",
+#		   title => "{popsetDetails}",
+#		   iconClass => "dijitIconDatabase",
+#		   action => "newWindow",
+#		   url => "/a/app/record/popsetSequence/{name}",
+#		  },
+#		 ],
+#		};
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::PopsetsTrackConfig->new({
+                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
+                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+                                                                                                key => "All MS/MS Peptides",
+                                                                                                label => "popsetIsolates",
+                                                                                                max_feature_screen_density => 0.03,
+                                                                                                region_feature_densities => "function(){return true}",
+                                                                                                category => "Sequence Analysis",
+                                                                                                subcategory => "BLAT and Blast Alignment",
+                                                                                                color => "{popsetColor}",
+                                                                                                baseUrl => "/a/service/jbrowse",
+                                                                                                application_type => $applicationType,
+                                                                                                display_mode => "compact",
+                                                                                                glyph => "JBrowse/View/FeatureGlyph/Box",
+
+                                                                                              })->getConfigurationObject();
+
+
+
     push @{$result->{tracks}}, $track;
   }
 }
