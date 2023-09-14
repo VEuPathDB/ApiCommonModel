@@ -48,7 +48,8 @@ sub setSummary {$_[0]->{summary} = $_[1]}
 sub getAttribution {$_[0]->{attribution}}
 sub setAttribution {
     my ($self, $attribution) = @_;
-    return if ($attribution eq '${shortAttribution}');
+    # Make attribution null if property has not been set
+    return if ($attribution && $attribution eq '${shortAttribution}');
     $self->{attribution} = $attribution;
 }
 
@@ -80,6 +81,8 @@ sub new {
     $self->setProject($args->{project});
     $self->setCategory($args->{category});
     $self->setSubcategory($args->{subcategory});
+    $self->setStoreType($args->{store_type});
+    $self->setId($args->{id});
 
     $self->setAttribution($args->{attribution});
     $self->setDescription($args->{description});
@@ -90,12 +93,12 @@ sub new {
     $self->setOrganismAbbrev($args->{organism_abbrev});
 
     my $summary = $args->{summary};
-    $summary =~ s/\n//g;
-    $self->setSummary($summary);
+    $summary =~ s/\n//g if $summary;
+    $self->setSummary($summary) if $summary;
 
     unless($self->getSubcategory()) {
         print Dumper $args;
-        die "";
+        die "Error: Subcategory isn't defined\n ";
     }
     return $self;
 }
@@ -106,13 +109,15 @@ sub getJBrowseStyle {
 
     my $color = $self->getColor();
     my $height = $self->getHeight();
+    my $borderColor = $self->getBorderColor();
 
-    return undef unless(defined($color) || defined($height));
+    return undef unless(defined($color) || defined($height || $borderColor));
 
     my $style = {};
 
     $style->{color} = $color if($color);
     $style->{height} = $height if($height);
+    $style->{border_color} = $borderColor if($borderColor);
 
     return $style;
 }
