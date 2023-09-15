@@ -99,6 +99,7 @@
         <paramRef ref="organismParams.organismLongread"/>
         <paramRef ref="geneParams.long_read_datasets"/>
         <paramRef ref="SpanParams.transcript_length"/>
+	<paramRef ref="geneParams.ismTypes_span"/>
 	<column name="source_id"/>
         <column name="project_id"/>
         <column name="min_start"/>
@@ -109,36 +110,45 @@
         <column name="chr_source_id"/>
         <column name="contextStart"/>
         <column name="contextEnd"/>
+        <column name="transcript_novelty"/>
         
 	<sql includeProjects="PlasmoDB">
         <![CDATA[
 
-	select distinct source_id
+select distinct source_id, project_id , min_start, contextStart, max_end, contextEnd, chr_source_id, internal_abbrev, organism
+, listagg(distinct dataset_name, ', ') WITHIN GROUP (ORDER BY transcript_novelty) AS dataset_name
+,listagg(distinct transcript_novelty, ', ') within group (order by transcript_novelty) as transcript_novelty
+from (
+select distinct
+  source_id
 , project_id
 , min_start
-, min_start - 1000 as contextStart
+, case when min_start - 1000 < 1 THEN 1 ELSE min_start - 1000 END as contextStart
 , max_end
-, max_end + 1000 as contextEnd
+, CASE WHEN max_end + 1000  > length THEN length ELSE max_end + 1000 END as contextEnd
 , chr_source_id
 , internal_abbrev
 , dataset_name
 , organism
+, transcript_novelty
 from(
              select distinct lrt.na_seq_source_id as chr_source_id
              ,gsa.project_id
              ,lrt.min_start
-             ,lrt.max_end 
+             ,lrt.max_end
              ,lrt.na_seq_source_id || ':' || lrt.min_start || '-' ||  lrt.max_end || ':f' as source_id
              ,ed.name as dataset_name
              ,ab.internal_abbrev
              ,gsa.organism
+             ,lrt.transcript_novelty
+             , gsa.length
         from
               apidb.longreadtranscript lrt
              ,apidbtuning.genomicseqattributes gsa
              ,sres.externaldatabaserelease edr
              ,sres.externaldatabase ed
              ,apidbtuning.organismattributes ab
-        where 
+        where
              edr.external_database_release_id = lrt.external_database_release_id
              and ed.external_database_id = edr.external_database_id
              and gsa.source_id = lrt.na_seq_source_id
@@ -146,10 +156,13 @@ from(
              and lrt.gene_novelty not in ('Known')
              and gsa.organism in ($$organismLongread$$)
              and lrt.transcript_length >= $$transcript_length$$
-             
-        )       
+	     and lrt.transcript_novelty in ($$ismTypes_span$$)
+
+        )
         where dataset_name in ($$long_read_datasets$$)
-        order by source_id, min_start 
+        order by source_id, min_start
+)
+group by source_id, project_id , min_start, contextStart, max_end, contextEnd, chr_source_id, internal_abbrev, organism
 
            ]]>
         </sql>
@@ -179,7 +192,7 @@ from(
 
 
 	select 
-                     chr_source_id, min_start, min_start - 100 as contextStart, max_end , max_end + 100 as contextEnd, organism, project_id, source_id ,internal_abbrev, Confidence
+                     chr_source_id, min_start, min_start - 1000 as contextStart, max_end , max_end + 1000 as contextEnd, organism, project_id, source_id ,internal_abbrev, Confidence
                      from (
 select INTRON_FEATURE_ID as feature_id,                                                                                                                                                      
                      segment_start - 10 as startm,
@@ -262,8 +275,6 @@ where (confidence = $$Intron_junction_confidence$$ or 'all' = $$Intron_junction_
  <!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
   <!-- Location : NOT IN USE **   for eupath this sql needs to get the project from the apidb.sequenceattribute table  -->
   <!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
-
-
 
    <sqlQuery name="DynSpansByLocation" excludeProjects="EuPathDB"  doNotTest="true">
         <paramRef ref="sharedParams.sequenceId"/>
