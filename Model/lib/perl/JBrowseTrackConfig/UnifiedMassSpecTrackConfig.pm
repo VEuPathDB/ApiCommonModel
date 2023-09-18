@@ -18,13 +18,17 @@ sub new {
     $self->setId("All MS/MS Peptides");
     $self->setLabel("UnifiedMassSpecPeptides");
 
+    my $store;
+
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        my $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
         $store->setQuery("domain:UnifiedMassSpecPeptides");
     }
     else {
         # TODO
     }
+
+    $self->setStore($store);
 
     my $detailsFunction = "{massSpecDetails}";
     $self->setOnClickContent($detailsFunction);

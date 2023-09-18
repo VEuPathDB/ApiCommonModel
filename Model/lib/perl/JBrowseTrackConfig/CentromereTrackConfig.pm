@@ -17,13 +17,17 @@ sub new {
     $self->setId("Centromere");
     $self->setLabel("Centromere");
 
+    my $store;
+
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        my $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
         $store->setQuery("Centromere:overview");
     }
     else {
         # TODO
     }
+
+    $self->setStore($store);
 
     $self->setColor("blue")
     $self->setSubParts("sgap");

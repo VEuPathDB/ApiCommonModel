@@ -3,46 +3,47 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
-# TODO: Set border color here in new method
-sub getBorderColor {$_[0]->{border_color}}
-sub setBorderColor {$_[0]->{border_color} = $_[1]}
-
-sub getBaseUrl {$_[0]->{baseUrl} }
-sub setBaseUrl {
-    my($self, $baseUrl) = @_;
-    die "required baseUrl not set" unless $baseUrl;
-    $self->{baseUrl} = $baseUrl;
-}
+use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setColor($args->{color});
-    $self->setCategory("Sequence Analysis");
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
+
+    my $datasetConfig = $self->getDatasetConfig();
+    $datasetConfig->setCategory("Sequence Analysis");
+    $datasetConfig->setSubcategory("BLAT and Blast Alignments");
+
     $self->setId("Popset Isolate Sequence Alignments");
     $self->setLabel("popsetIsolates");
-    $self->setSubcategory("BLAT and Blast Alignments");
-    $self->setBaseUrl($args->{baseUrl});
+
+    my $store;
+
+    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store->setQuery("match:IsolatePopset");
+    }
+    else {
+        # TODO
+    }
+
+    $self->setStore($store);
+
+    my $detailsFunction = "{popsetDetails}";
+    $self->setOnClickContent($detailsFunction);
+    $self->setViewDetailsContent($detailsFunction);
+
+    $self->setColor("{popsetColor}");
+    $self->setBorderColor("{processedTranscriptBorderColor}");
+
+    $self->setMaxFeatureScreenDensity(0.03);
+    $self->setRegionFeatureDensities(JSON::true);
+    $self->setDisplayMode("compact");
+
 
     return $self;
 }
 
-sub getJBrowseObject{
-        my $self = shift;
-
-        my $jbrowseObject = $self->SUPER::getJBrowseObject();
-        $jbrowseObject->{onClick} = {content => "{popsetDetails}",};
-        $jbrowseObject->{menuTemplate} = [
-                            {label =>  "View Details", content => "{popsetDetails}",},
-        ];
-        $jbrowseObject->{style} = {color => "{popsetColor}"};
-        $jbrowseObject->{baseUrl}= $self->getBaseUrl();
-        $jbrowseObject->{query} = {'feature' => "match:IsolatePopset",};
-
-    return $jbrowseObject;
-}
 
 # TODO:
 sub getJBrowse2Object{

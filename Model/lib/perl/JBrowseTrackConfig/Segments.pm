@@ -100,6 +100,11 @@ sub getJBrowseObject{
         }
     }
 
+    if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::GFFStore') {
+        my $urlTemplate = $store->getUrlTemplate();
+
+        $jbrowseObject->{urlTemplate}= $urlTemplate;
+    }
 
     return $jbrowseObject;
 }

@@ -4,16 +4,18 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
-use ApiCommonModel::Model::JBrowseTrackConfig::Segments;
-use ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig;
+
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::PopsetsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig;
+
 use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrack;
+
 use Data::Dumper;
+
 use URI::Escape;
 
 use Storable 'dclone';
@@ -34,27 +36,26 @@ my $buildProps = $jbrowseUtil->getBuildProperties();
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $result = {"tracks" => [] };
-#my $result = {"tracks" => []};
 
 ### Get organism properties
 my $orgHash = ($buildProps->{'organism'});
 my $nameForFileNames = ($orgHash->{organismNameForFiles});
 my $projectName = ($orgHash->{projectName});
 my $isAnnotated = ($orgHash->{isAnnotatedGenome});
-#print "NfFN=$nameForFileNames\n";
 
 &addScaffolds($dbh, $result);
-
 &addCentromere($dbh, $result);
-
 &addUnifiedMassSpec($dbh, $result);
 &addUnifiedSnp($dbh, $result);
 
 # TODO: Add back
 # &addSynteny($dbh, $result);
+
 &addDatasets($dbh, \%datasets) unless($isApollo);
 
-my $datasetProperties = &datasetProperties($dbh);
+# TODO: get these from buildProps
+my $datasetProperties;
+#my $datasetProperties = &datasetProperties($dbh);
 
 #&addChipChipTracks($dbh, $result, $datasetProperties);
 &addSmallNcRnaSeq($dbh, $result, $datasetProperties);
@@ -64,14 +65,10 @@ my $datasetProperties = &datasetProperties($dbh);
 &addVCF($dbh, $result, $datasetProperties);
 #&addGFF($dbh, $result, $datasetProperties);
 
-# TODO: Add back
 &addTRNA($dbh, $result, $datasetProperties);
 if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
   &addNrdbProteinAlignments($dbh, $result, $datasetProperties, $projectName);
 }
-
-# TODO: Add back
-&addPopsets($dbh, $result, $datasetProperties);
 
 if ($organismAbbrev !~ m/dmeliso-1/ ){
 # TODO: Add back
@@ -130,8 +127,6 @@ sub addDatasets {
   while(my ($abbrev, $name) = $sh->fetchrow_array()) {
     $datasets{$abbrev}->{name} = $name;
     $datasets{$abbrev}->{url} = "?data=/a/service/jbrowse/tracks/${abbrev}";
-#    $result->{datasets}->{$abbrev}->{name} = $name;
-#    $result->{datasets}->{$abbrev}->{url} = "?data=tracks/${abbrev}";
   }
   $sh->finish();
 }
@@ -219,43 +214,16 @@ sub addVCF {
       my $keyName = $vcfFileName;
  	  $keyName =~ s/_/ /g;
       my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
-#      my $alignment = {my $alignment = {storeClass => "JBrowse/Store/SeqFeature/VCFTabix",
-#                       urlTemplate => $vcfUrl,
-#                           #key => "${vcfFileName} SNPs from VCF",
-#                           key => "$keyName SNPs from VCF",
-#                           label => "${sampleName} SNPs",
-#                           type => "JBrowse/View/Track/CanvasVariants",
-#                           glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-#                           category => "Genetic Variation",
-#                           chunkSizeLimit => '10000000',
-#                           metadata => {
-#                             subcategory => 'DNA polymorphism',
-#                             dataset => $datasetDisplayName,
-#                             trackType => 'VCF from VectorBase',
-#                             attribution => $shortAttribution,
-#                             description => $summary,
-#                           },
-#                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-#                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-#      };
 
       my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
-                                                                                                store_type => "JBrowse/Store/SeqFeature/VCFTabix",
-                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
+
+
                                                                                                 key => "$keyName SNPs from VCF",
                                                                                                 label => "${sampleName} SNPs",
-                                                                                                category => "Genetic Variation",
-                                                                                                subcategory => "DNA polymorphism",
                                                                                                 url_template => $vcfUrl,
                                                                                                 application_type => $applicationType,
-                                                                                                chunkSizeLimit => '10000000',
-                                                                                                trackType => 'VCF from VectorBase',
                                                                                                 attribution => $shortAttribution,
                                                                                                 description => $summary,
-                                                                                                glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-                                                                                                fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-                                                                                                fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-
                                                                                               })->getConfigurationObject();
 
       push @{$result->{tracks}}, $alignment;
@@ -861,53 +829,7 @@ sub addUnifiedSnp {
 
     my $desc ="The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.";
 
-#                    glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-#                    key => "SNPs by coding potential",
-#                    label => "SNPs by coding potential",
-
-    #                    maxFeatureScreenDensity => 0.01,
-#                    region_feature_densities => "function(){return true}",
-
-
-
-#                    style => {
-#                      color => "",
-#                      strandArrow => "function(){return false}",
-#                      labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
-#                    },
-#                    metadata => {
-#                      subcategory => "DNA polymorphism",
-#                      trackType => 'Unified SNPs',
-#                      description => $desc
-#                    },
-#                    query => {'feature' => "SNP:Population",
-#                              'edname' => 'InsertSnps.pm NGS SNPs INTERNAL'
-#                    },
-#                     onClick => {
-#                       content => "{snpTitleFxn}",
-#                     },
-#                     menuTemplate => [
-#                       {label => "View Details",
-#                        content => "{snpTitleFxn}",
-#                       },
-#                         ],
-    my $snpTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig->new({
-                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
-                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
-                                                                                                key => "SNPs by coding potential",
-                                                                                                label => "SNPs by coding potential",
-                                                                                                max_feature_screen_density => 0.01,
-                                                                                                region_feature_densities => "function(){return true}",
-                                                                                                category => "Genetic Variation",
-                                                                                                subcategory => "DNA polymorphism",
-                                                                                                color => "{snpColorFxn}",
-                                                                                                baseUrl => "/a/service/jbrowse",
-                                                                                                application_type => $applicationType,
-                                                                                                display_mode => "normal",
-                                                                                                glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-                                                                                              })->getConfigurationObject();
-
-#    };
+    my $snpTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
 
     push @{$result->{tracks}}, $snpTrack;
 
@@ -1138,56 +1060,14 @@ sub addNrdbProteinAlignments {
   my ($dbh, $result, $datasetProperties, $projectName) = @_;
 
   my $proteinAlignTrack;
-
-#     my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
-#     my $sh = $dbh->prepare($sql);
-#     $sh->execute();
-#     my ($nameForFileNames) = $sh->fetchrow_array();
-#     $sh->finish();
-
-    my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
+  my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
 
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
 
-#    $proteinAlignTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-#                          urlTemplate => $gffUrl,
-#                          key => "NRDB Protein Alignments",
-#                          label => "NRDB Protein Alignments",
-#                          category => "Sequence Analysis",
-#                          type => "JBrowse/View/Track/CanvasFeatures",
-#                          glyph => "JBrowse/View/FeatureGlyph/Segments",
-#                          fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
-#                          metadata => {
-#                            subcategory => "BLAT and Blast Alignments",
-#                            trackType => 'Segments',
-#                            description => $methodDescription,
-#                          },
-#                          onClick => {
-#                            content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",
-#                          },
-#                          menuTemplate => [
-#                            {label =>  "View Details", content => "{nrdbGffDetails}", title => "----------------------------- {id} -----------------------------",},
-#                            {label => "View in Genbank",title => "Genbank {name}", iconClass => "dijitIconDatabase", action => "newWindow", url => "https://www.ncbi.nlm.nih.gov/protein/{name}"}
-#                              ],
-#                          style => {
-#                            color => "{nrdbColor}",
-#                            borderColor => "{processedTranscriptBorderColor}"
-#                          },
-#                          displayMode => "compact",
-#
-#      };
-    $proteinAlignTrack = ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig->new({
-                                                                                                fmtMetaValue_Description => "function(){return datasetDescription(\"$methodDescription\", \"\");}",
-                                                                                                store_type => "JBrowse/Store/SeqFeature/GFF3Tabix",
-                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
-                                                                                                subcategory => "BLAT and Blast Alignments",
-                                                                                                url_template => $gffUrl,
-                                                                                                application_type => $applicationType,
-                                                                                                summary => $methodDescription,
-                                                                                                display_mode => "compact",
-                                                                                                glyph => "JBrowse/View/FeatureGlyph/Segments",
-                                                                                              })->getConfigurationObject();
-
+    $proteinAlignTrack = ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig->new({url_template => $gffUrl,
+                                                                                                 application_type => $applicationType,
+                                                                                                 summary => $methodDescription,
+                                                                                                })->getConfigurationObject();
 
     push @{$result->{tracks}}, $proteinAlignTrack;
 
@@ -1206,122 +1086,13 @@ and ot.name ='tRNA'";
   $sh->finish();
   if($count > 0) {
 
-#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                 baseUrl => "/a/service/jbrowse",
-#                 type => "JBrowse/View/Track/CanvasFeatures",
-#                 glyph => "JBrowse/View/FeatureGlyph/Box",
-#                 key => "tRNAscan",
-#                 label => "tRNAscan",
-#                 category => "Sequence Analysis",
-#                 displayMode => "normal",
-#                 style => {
-#                   color => "white",
-#		   borderColor => "{processedTranscriptBorderColor}"
-#                 },
-#                 metadata => {
-#                   subcategory => "Sequence sites, features and motifs",
-#                   trackType => 'Segments',
-#                 },
-#                 query => {'feature' => "domain:tRNA",
-#                 },
-#                 onClick => {
-#                   content => "{positionTitle}",
-#                 },
-#                 menuTemplate => [
-#                   {label => "View Details",
-#                    content => "{positionTitle}",
-#                   },
-#                     ],
-#    };
-     my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig->new({
-                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
-                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
-                                                                                                key => "tRNAscan",
-                                                                                                label => "tRNAscan",
-                                                                                                category => "Sequence Analysis",
-                                                                                                subcategory => "Sequence sites, features and motifs",
-                                                                                                baseUrl => "/a/service/jbrowse",
-                                                                                                application_type => $applicationType,
-                                                                                                display_mode => "normal",
-                                                                                                glyph => "JBrowse/View/FeatureGlyph/Box",
-                                                                                                color => "white",
-                                                                                                borderColor => "{processedTranscriptBorderColor}",
-                                                                                              })->getConfigurationObject();
+     my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig->new({application_type => $applicationType })->getConfigurationObject();
 
-
-    push @{$result->{tracks}}, $track;
+     push @{$result->{tracks}}, $track;
   }
 }
 
 
-sub addPopsets {
-  my ($dbh, $result) = @_;
-
-  my $sql = "select count(*) from apidbtuning.popsetAttributes";
-
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-  my $count = $sh->fetchrow_array();
-  $sh->finish();
-  if($count > 0) {
-
-#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                 baseUrl => "/a/service/jbrowse",
-#                 type => "JBrowse/View/Track/CanvasFeatures",
-#                 glyph => "JBrowse/View/FeatureGlyph/Box",
-#                 key => "Popset Isolate Sequence Alignments",
-#                 label => "popsetIsolates",
-#		 maxFeatureScreenDensity => 0.03,
-#                 region_feature_densities => "function(){return true}",
-#                 category => "Sequence Analysis",
-#                 displayMode => "compact",
-#                 style => {
-#                   color => "{popsetColor}",
-#                 },
-#                 metadata => {
-#                   subcategory => "BLAT and Blast Alignments",
-#                   trackType => 'Segments',
-#                 },
-#                 query => {'feature' => "match:IsolatePopset",
-#                 },
-#                 onClick => {
-#                   content => "{popsetDetails}",
-#                 },
-#                 menuTemplate =>
-#		 [
-#		  {label => "View Details",
-#		   content => "{popsetDetails}",
-#		  },
-#		  {label => "View Popset Sequence Page",
-#		   title => "{popsetDetails}",
-#		   iconClass => "dijitIconDatabase",
-#		   action => "newWindow",
-#		   url => "/a/app/record/popsetSequence/{name}",
-#		  },
-#		 ],
-#		};
-    my $track = ApiCommonModel::Model::JBrowseTrackConfig::PopsetsTrackConfig->new({
-                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
-                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
-                                                                                                key => "All MS/MS Peptides",
-                                                                                                label => "popsetIsolates",
-                                                                                                max_feature_screen_density => 0.03,
-                                                                                                region_feature_densities => "function(){return true}",
-                                                                                                category => "Sequence Analysis",
-                                                                                                subcategory => "BLAT and Blast Alignment",
-                                                                                                color => "{popsetColor}",
-                                                                                                baseUrl => "/a/service/jbrowse",
-                                                                                                application_type => $applicationType,
-                                                                                                display_mode => "compact",
-                                                                                                glyph => "JBrowse/View/FeatureGlyph/Box",
-
-                                                                                              })->getConfigurationObject();
-
-
-
-    push @{$result->{tracks}}, $track;
-  }
-}
 
 1;
 

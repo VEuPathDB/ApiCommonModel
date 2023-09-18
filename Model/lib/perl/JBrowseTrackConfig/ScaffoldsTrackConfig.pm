@@ -19,13 +19,17 @@ sub new {
     $self->setId("Scaffolds and Gaps");
     $self->setLabel("Scaffolds");
 
+    my $store;
+
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        my $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
         $store->setQuery("scaffold:genome");
     }
     else {
         # TODO
     }
+
+    $self->setStore($store);
 
     $self->setSubParts("sgap");
 
