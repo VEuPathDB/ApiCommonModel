@@ -5,24 +5,20 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-
-
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
     $self->setUrlTemplate($args->{url_template});
-
-    my $studyDisplayName = $self->getStudyDisplayName();
+    my $datasetConfig = $self->getDatasetConfig()
+    my $studyDisplName = $datasetConfig->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
 
     my $label = $self->getLabel();
-    my $datasetName = $self->getDatasetName();
+    my $datasetName = $datasetConfig->getDatasetName();
 
     $self->setId("${datasetName}_${displayName}_Coverage");
     $self->setLabel("$studyDisplayName - $displayName Coverage");
-
-    $self->setHeight(40);
 
     return $self;
 }
@@ -31,7 +27,7 @@ sub getJBrowseStyle {
     my $self = shift;
 
     my $style = {pos_color => $self->getColor(),
-                 clip_marker_color => "black",
+                 clip_marker_color => $self->getClipMarkerColor(),
                  height => $self->getHeight(),
     };
     return $style;

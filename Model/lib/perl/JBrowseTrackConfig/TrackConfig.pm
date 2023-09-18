@@ -5,12 +5,6 @@ use warnings;
 
 use Data::Dumper;
 
-sub getOrganismAbbrev {$_[0]->{organism_abbrev}}
-sub setOrganismAbbrev {$_[0]->{organism_abbrev} = $_[1]}
-
-sub getDisplayName {$_[0]->{display_name}}
-sub setDisplayName {$_[0]->{display_name} = $_[1]}
-
 sub getApplicationType {$_[0]->{application_type}}
 sub setApplicationType {$_[0]->{application_type} = $_[1]}
 
@@ -20,11 +14,8 @@ sub setLabel {$_[0]->{label} = $_[1]}
 sub getId {$_[0]->{id}}
 sub setId {$_[0]->{id} = $_[1]}
 
-sub getProject {$_[0]->{project}}
-sub setProject {$_[0]->{project} = $_[1]}
-
-sub getStoreType {$_[0]->{store_type}}
-sub setStoreType {$_[0]->{store_type} = $_[1]}
+sub getStore {$_[0]->{store}}
+sub setStore {$_[0]->{store} = $_[1]}
 
 sub getDisplayType {$_[0]->{display_type}}
 sub setDisplayType {$_[0]->{display_type} = $_[1]}
@@ -35,34 +26,6 @@ sub setTrackType {$_[0]->{track_type} = $_[1]}
 sub getTrackTypeDisplay {$_[0]->{track_type_display} || $_[0]->getTrackType()}
 sub setTrackTypeDisplay {$_[0]->{track_type_display} = $_[1]}
 
-# Some basic metadata things
-sub getCategory {$_[0]->{category}}
-sub setCategory {$_[0]->{category} = $_[1]}
-
-sub getSubcategory {$_[0]->{subcategory}}
-sub setSubcategory {$_[0]->{subcategory} = $_[1]}
-
-sub getSummary {$_[0]->{summary}  || ""}
-sub setSummary {$_[0]->{summary} = $_[1]}
-
-sub getAttribution {$_[0]->{attribution}}
-sub setAttribution {
-    my ($self, $attribution) = @_;
-    # Make attribution null if property has not been set
-    return if ($attribution && $attribution eq '${shortAttribution}');
-    $self->{attribution} = $attribution;
-}
-
-sub getDescription {$_[0]->{description}}
-sub setDescription {$_[0]->{description} = $_[1]}
-
-sub getStudyDisplayName {$_[0]->{study_display_name}}
-sub setStudyDisplayName {$_[0]->{study_display_name} = $_[1]}
-
-sub getDatasetName {$_[0]->{dataset_name}}
-sub setDatasetName {$_[0]->{dataset_name} = $_[1]}
-
-
 # Some basic style things
 sub getColor {$_[0]->{color}}
 sub setColor {$_[0]->{color} = $_[1]}
@@ -70,36 +33,36 @@ sub setColor {$_[0]->{color} = $_[1]}
 sub getHeight {$_[0]->{height}}
 sub setHeight {$_[0]->{height} = $_[1]}
 
+sub getDisplayName {$_[0]->{display_name}}
+sub setDisplayName {$_[0]->{display_name} = $_[1]}
+
+# this is the track description if we need one
+sub getDescription {$_[0]->{description}}
+sub setDescription {$_[0]->{description} = $_[1]}
+
+
+sub getDatasetConfigObj {$_[0]->{dataset_config}}
+sub setDatasetConfigObj {$_[0]->{dataset_config} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
     my $self = bless {}, $class;
 
+    $self->setDatasetConfigObj($args->{dataset_config});
+
     $self->setDisplayName($args->{display_name});
     $self->setApplicationType($args->{application_type});
     $self->setLabel($args->{label});
-    $self->setProject($args->{project});
-    $self->setCategory($args->{category});
-    $self->setSubcategory($args->{subcategory});
-    $self->setStoreType($args->{store_type});
+
     $self->setId($args->{id});
 
-    $self->setAttribution($args->{attribution});
-    $self->setDescription($args->{description});
-    $self->setStudyDisplayName($args->{study_display_name});
-    $self->setDatasetName($args->{dataset_name});
     $self->setColor($args->{color});
     $self->setHeight($args->{height});
-    $self->setOrganismAbbrev($args->{organism_abbrev});
 
-    my $summary = $args->{summary};
-    $summary =~ s/\n//g if $summary;
-    $self->setSummary($summary) if $summary;
+    $self->setStoreType($args->{store});
 
-    unless($self->getSubcategory()) {
-        print Dumper $args;
-        die "Error: Subcategory isn't defined\n ";
-    }
+    $self->setDescription($args->{description});
+
     return $self;
 }
 
@@ -126,11 +89,14 @@ sub getJBrowseStyle {
 sub getMetadata {
     my $self = shift;
 
-    my $subcategory = $self->getSubcategory();
+
+    my $datasetConfig = $self->getDatasetConfigObj();
+
+    my $subcategory = $datasetConfig->getSubcategory();
     my $trackType = $self->getTrackTypeDisplay();
-    my $attribution = $self->getAttribution();
-    my $summary = $self->getSummary();
-    my $studyDisplayName = $self->getStudyDisplayName();
+    my $attribution = $datasetConfig->getAttribution();
+    my $summary = $datasetConfig->getSummary();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
 
     unless(defined($subcategory) || defined($trackType)
            || defined($attribution) || defined($summary) || defined($studyDisplayName)) {
@@ -149,18 +115,20 @@ sub getMetadata {
 sub getJBrowseObject{
     my $self = shift;
 
-    my $datasetName = $self->getDatasetName();
-    my $studyDisplayName = $self->getStudyDisplayName();
-    my $summary = $self->getSummary();
+    my $datasetConfig = $self->getDatasetConfigObj();
+
+    my $datasetName = $datasetConfig->getDatasetName();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
+    my $summary = $datasetConfig->getSummary();
 
     my $style = $self->getJBrowseStyle();
     my $metadata = $self->getMetadata();
 
     my $id = $self->getId();
-    my $storeType = $self->getStoreType();
+    my $storeType = $self->getStore()->getStoreType();
     my $label = $self->getLabel();
     my $displayType = $self->getDisplayType();
-    my $category = $self->getCategory();
+    my $category = $datasetConfig->getCategory();
 
     unless($id && $storeType && $label && $displayType && $category) {
         print Dumper $self;
@@ -191,21 +159,23 @@ sub getJBrowseObject{
 sub getJBrowse2Object {
     my $self = shift;
 
-    my $datasetName = $self->getDatasetName();
-    my $studyDisplayName = $self->getStudyDisplayName();
-    my $summary = $self->getSummary();
+    my $datasetConfig = $self->getDatasetConfigObj();
+
+    my $datasetName = $datasetConfig->getDatasetName();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
+    my $summary = $datasetConfig->getSummary();
 
     my $metadata = $self->getMetadata();
 
     my $id = $self->getId();
     my $label = $self->getLabel();
 
-    my $storeType = $self->getStoreType();
+    my $storeType = $self->getStore()->getStoreType();
     my $displayType = $self->getDisplayType();
     my $trackType = $self->getTrackType();
 
-    my $category = $self->getCategory();
-    my $subcategory = $self->getSubcategory();
+    my $category = $datasetConfig->getCategory();
+    my $subcategory = $datasetConfig->getSubcategory();
 
     my @categoryHierarchy = ($category);
     if($subcategory) {
@@ -226,7 +196,7 @@ sub getJBrowse2Object {
                          name => $label,
                          category => \@categoryHierarchy,
                          adapter => { type => $storeType },
-                         assemblyNames =>  [ $self->getOrganismAbbrev() ],
+                         assemblyNames =>  [ $datasetConfig->getOrganismAbbrev() ],
                          displays => [{ type => $displayType }]
     };
 

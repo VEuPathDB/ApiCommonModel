@@ -3,46 +3,40 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
-# TODO: Set border color here in new method
-sub getBorderColor {$_[0]->{border_color}}
-sub setBorderColor {$_[0]->{border_color} = $_[1]}
-
-sub getBaseUrl {$_[0]->{baseUrl} }
-sub setBaseUrl {
-    my($self, $baseUrl) = @_;
-    die "required baseUrl not set" unless $baseUrl;
-    $self->{baseUrl} = $baseUrl;
-}
+use JSON;
 
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setColor($args->{color});
-    $self->setCategory("Proteomics");
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
+    $self->setColor("{massSpecColor}");
+
+    my $datasetConfig = $self->getDatasetConfig();
+    $datasetConfig->setCategory("Proteomics");
+    $datasetConfig->setSubcategory("Protein Expression");
+
     $self->setId("All MS/MS Peptides");
     $self->setLabel("UnifiedMassSpecPeptides");
-    $self->setSubcategory("Protein Expression");
-    $self->setBaseUrl($args->{baseUrl});
+
+    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+        my $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store->setQuery("domain:UnifiedMassSpecPeptides");
+    }
+    else {
+        # TODO
+    }
+
+    my $detailsFunction = "{massSpecDetails}";
+    $self->setOnClickContent($detailsFunction);
+    $self->setViewDetailsContent($detailsFunction);
+
+    $self->setMaxFeatureScreenDensity(0.01);
+    $self->setRegionFeatureDensities(JSON::true);
+    $self->setDisplayMode("compact")
 
     return $self;
 }
 
-sub getJBrowseObject{
-        my $self = shift;
-
-        my $jbrowseObject = $self->SUPER::getJBrowseObject();
-        $jbrowseObject->{onClick} = {content => "{massSpecDetails}",};
-        $jbrowseObject->{menuTemplate} = [
-                            {label =>  "View Details", content => "{massSpeDetails}",},
-        ];
-        $jbrowseObject->{style} = {color => "{massSpecColor}"};
-        $jbrowseObject->{baseUrl}= $self->getBaseUrl();
-        $jbrowseObject->{query} = {'feature' => "domain:UnifiedMassSpecPeptides",};
-
-    return $jbrowseObject;
-}
 
 # TODO:
 sub getJBrowse2Object{

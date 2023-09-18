@@ -3,47 +3,39 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
-# TODO: Set border color here in new method
-#sub getBorderColor {$_[0]->{border_color}}
-#sub setBorderColor {$_[0]->{border_color} = $_[1]}
+use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
-sub getBaseUrl {$_[0]->{baseUrl} }
-sub setBaseUrl {
-    my($self, $baseUrl) = @_;
-    die "required baseUrl not set" unless $baseUrl;
-    $self->{baseUrl} = $baseUrl;
-}
 
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
+    my $datasetConfig = $self->getDatasetConfig();
+    $datasetConfig->setCategory("Sequence Analysis");
+    $datasetConfig->setSubcategory("Sequence sites, features and motifs");
 
-    $self->setColor($args->{color});
-    $self->setCategory("Sequence Analysis");
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
     $self->setId("Centromere");
     $self->setLabel("Centromere");
-    $self->setSubcategory("Sequence assembly");
-    $self->setBaseUrl($args->{baseUrl});
+
+    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+        my $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store->setQuery("Centromere:overview");
+    }
+    else {
+        # TODO
+    }
+
+    $self->setColor("blue")
+    $self->setSubParts("sgap");
+
+    my $detailsFunction = "{positionTitle}";
+    $self->setOnClickContent($detailsFunction);
+    $self->setViewDetailsContent($detailsFunction);
+
 
     return $self;
 }
 
-sub getJBrowseObject{
-        my $self = shift;
-
-        my $jbrowseObject = $self->SUPER::getJBrowseObject();
-        $jbrowseObject->{onClick} = {content => "{positionTitle}"};
-        $jbrowseObject->{menuTemplate} = [
-                            {label =>  "View Details", content => "{positionTitle}",}
-        ];
-        $jbrowseObject->{baseUrl}= $self->getBaseUrl();
-        $jbrowseObject->{query} = {'feature' => "Centromere:overview"};
-
-
-    return $jbrowseObject;
-}
 
 # TODO:
 sub getJBrowse2Object{

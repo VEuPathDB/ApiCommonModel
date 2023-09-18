@@ -31,23 +31,6 @@ my $buildProps = $jbrowseUtil->getBuildProperties();
 #open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 #my $dbh = $jbrowseUtil->getDbh();
 
-
-# if($technologyType eq 'ChIPSeq') {
-#   $category = 'Epigenomics';
-# #TODO  $covMaxScoreDefault = 200;
-#   $multiCovScale = "linear";
-#   $subCategory = "ChIP-Seq";
-# }
-# elsif($technologyType eq 'RNASeq') {
-#   $category = 'Transcriptomics';
-# #  $covMaxScoreDefault = 1000;
-#   $multiCovScale = "log";
-#   $subCategory = "RNA-Seq";
-# }
-# else {
-#   die "technologyType must be either RNASeq or ChIPSeq";
-# }
-
 my $result = {"tracks" => [] };
 
 ### Get organism properties
@@ -59,9 +42,6 @@ my $allDatasetPropertiesForAssayType = ($buildProps->{lc($technologyType)});
 
 foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   my %studyProperties = %{$allDatasetPropertiesForAssayType->{$datasetName}};
-
-
-
 
   my $category = $studyProperties{category};
   my $covMaxScoreDefault = $studyProperties{covMaxScoreDefault};
@@ -87,8 +67,6 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   #print $bigWigRelativePath."\n";
   my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
 
-
-
   if(! -e $metadataFile) {
     #TODO:  take out the print if everything looks ok
     print STDERR "SKIPPING dataset $datasetName.  File not found:  $metadataFile";
@@ -101,10 +79,26 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   
   my @multiUrls;
 
+
+  my $studyDisplayName = $studyProperties{datasetDisplayName};
+
+  my $shortAttribution = $studyProperties{shortAttribution};
+  my $summary = $studyProperties{summary};
+  $summary =~ s/\n/ /g;
+
+  my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new({ dataset_name => $datasetName,
+                                                                                      study_display_name => $studyDisplayName,
+                                                                                      category => $category,
+                                                                                      subcategory => $subCategory,
+                                                                                      attribution => $shortAttribution,
+                                                                                      summary => $summary,
+                                                                                      organism_abbrev => $organismAbbrev,
+                                                                                    });
+
   while(<FILE>) {
     chomp;
     if(/^\[(.+)\]$/) {
-      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $subCategory, $category, $covMaxScoreDefault, $multiCovScale) if($start);
+      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig) if($start);
       $file = $1;
       $start = 1;
     }
@@ -127,83 +121,55 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
     }
     
   }
-  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $datasetName, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $subCategory, $category, $covMaxScoreDefault, $multiCovScale);
+  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig);
 
   # ChipSeq are all unique
   my @uniqueOnlyUrls = grep { $technologyType eq 'ChIPSeq' || $_->{alignment} eq 'unique' } @multiUrls;
 
-  my $studyDisplayName = $studyProperties{datasetDisplayName};
 
-  my $shortAttribution = $studyProperties{shortAttribution};
-  my $summary = $studyProperties{summary};
-  $summary =~ s/\n/ /g;
 
-  my $color = 'black';
-  my $multiBigWigDensity = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density->new({ dataset_name => $datasetName,
-                                                                                                         multi_urls => \@multiUrls,
-                                                                                                         display_name => $displayName,
-                                                                                                         study_display_name => $studyDisplayName,
-                                                                                                         application_type => $applicationType,
-                                                                                                         color => $color,
-                                                                                                         cov_max_score_default => $covMaxScoreDefault,
-                                                                                                         scale => $multiCovScale,
-                                                                                                         category => $category,
-                                                                                                         summary => $summary,
-                                                                                                         subcategory => $subCategory,
-                                                                                                         attribution => $shortAttribution,
-													 description => $summary,
-                                                                                                       })->getConfigurationObject();
+  my $multiBigWigDensity = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density->new({dataset_config => $datasetConfig,
+                                                                                                            multi_urls => \@multiUrls,
+                                                                                                            display_name => $displayName,
+                                                                                                            application_type => $applicationType,
+                                                                                                            cov_max_score_default => $covMaxScoreDefault,
+                                                                                                            scale => $multiCovScale,
+                                                                                                            description => $summary,
+                                                                                                           })->getConfigurationObject();
 
 
 
-  my $uniqueMultiBigWigDensity = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density->new({ dataset_name => $datasetName,
-                                                                                                               multi_urls => \@uniqueOnlyUrls,
-                                                                                                               display_name => $displayName,
-                                                                                                               study_display_name => $studyDisplayName,
-                                                                                                               application_type => $applicationType,
-                                                                                                               color => $color,
-                                                                                                               cov_max_score_default => $covMaxScoreDefault,
-                                                                                                               scale => $multiCovScale,
-                                                                                                               category => $category,
-                                                                                                               summary => $summary,
-                                                                                                               subcategory => $subCategory,
-                                                                                                               attribution => $shortAttribution,
-                                                                                                               alignment => "unique",
-													       description => $summary,
-                                                                                                             })->getConfigurationObject();
+  my $uniqueMultiBigWigDensity = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density->new({ dataset_config => $datasetConfig,
+                                                                                                                   multi_urls => \@uniqueOnlyUrls,
+                                                                                                                   display_name => $displayName,
+                                                                                                                   application_type => $applicationType,
+                                                                                                                   cov_max_score_default => $covMaxScoreDefault,
+                                                                                                                   scale => $multiCovScale,
+                                                                                                                   alignment => "unique",
+                                                                                                                   description => $summary,
+                                                                                                                 })->getConfigurationObject();
 
 
-  my $multiBigWigXYPlot = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY->new({ dataset_name => $datasetName,
+  my $multiBigWigXYPlot = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY->new({ dataset_config => $datasetConfig,
                                                                                                        multi_urls => \@multiUrls,
                                                                                                        display_name => $displayName,
-                                                                                                       study_display_name => $studyDisplayName,
                                                                                                        application_type => $applicationType,
-                                                                                                       color => $color,
                                                                                                        cov_max_score_default => $covMaxScoreDefault,
                                                                                                        scale => $multiCovScale,
-                                                                                                       category => $category,
-                                                                                                       summary => $summary,
-                                                                                                       subcategory => $subCategory,
                                                                                                        attribution => $shortAttribution,
-												       description => $summary,
+                                                                                                       description => $summary,
                                                                                                      })->getConfigurationObject();
 
 
 
-  my $uniqueMultiBigWigXYPlot = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY->new({ dataset_name => $datasetName,
+  my $uniqueMultiBigWigXYPlot = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY->new({ dataset_config => $datasetConfig,
                                                                                                              multi_urls => \@uniqueOnlyUrls,
                                                                                                              display_name => $displayName,
-                                                                                                             study_display_name => $studyDisplayName,
                                                                                                              application_type => $applicationType,
-                                                                                                             color => $color,
                                                                                                              cov_max_score_default => $covMaxScoreDefault,
                                                                                                              scale => $multiCovScale,
-                                                                                                             category => $category,
-                                                                                                             summary => $summary,
-                                                                                                             subcategory => $subCategory,
-                                                                                                             attribution => $shortAttribution,
                                                                                                              alignment => "unique",
-													     description => $summary,
+                                                                                                             description => $summary,
                                                                                                            })->getConfigurationObject();
 
   # push @{$result->{tracks}}, $uniqueMultiBigWigDensity; # ChipSeq are all unique
@@ -328,14 +294,10 @@ close CACHE;
 #$dbh->disconnect();
 
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignment, $properties, $datasetName, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $subCategory, $category, $covMaxScoreDefault, $multiCovScale) = @_;
+  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig) = @_;
 
   $strand = 'not strand specific' unless($strand);
 
-  my $studyDisplayName = $properties->{datasetDisplayName};
-  my $shortAttribution = $properties->{shortAttribution};
-  my $summary = $properties->{summary};
-  $summary =~ s/\n/ /g;
 
   # old, direct file access; replaced by jbrowse service
   #my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
@@ -346,23 +308,17 @@ sub addConfiguration {
 
   my $label = $dbid ? $dbid : ($sample ? $sample : $displayName);
 
-  my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig->new({ dataset_name => $datasetName,
+  my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig->new({ dataset_config => $datasetConfig,
                                                                                                 url_template => $bwUrl,
                                                                                                 display_name => $displayName,
-                                                                                                study_display_name => $studyDisplayName,
                                                                                                 application_type => $applicationType,
                                                                                                 color => $color,
                                                                                                 label => $label,
                                                                                                 cov_max_score_default => $covMaxScoreDefault,
                                                                                                 scale => $multiCovScale,
                                                                                                 strand =>  $strand,
-                                                                                                category => $category,
-                                                                                                subcategory => $subCategory,
-                                                                                                attribution => $shortAttribution,
-                                                                                                summary => $summary,
                                                                                                 alignment => $alignment,
-                                                                                                organism_abbrev => $organismAbbrev,
-												description => $summary,
+                                                                                                description => $summary,
                                                                                               })->getConfigurationObject();
 
   my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color, alignment => $alignment};

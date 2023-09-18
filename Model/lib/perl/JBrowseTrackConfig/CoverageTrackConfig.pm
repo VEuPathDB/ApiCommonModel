@@ -10,6 +10,9 @@ sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 sub getCovMaxScoreDefault {$_[0]->{cov_max_score_default} || 1000}
 sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1] + 0}
 
+sub getClipMarkerColor {$_[0]->{clip_marker_color} }
+sub setClipMarkerColor {$_[0]->{clip_marker_color} = $_[1]}
+
 sub getCovMinScoreDefault {
     my $self = shift;
     my $min = $self->{cov_min_score_default};
@@ -61,6 +64,10 @@ sub new {
     # These are optional
     $self->setStrand($args->{strand});
     $self->setAlignment($args->{alignment});
+
+    $self->setHeight(40) unless(defined $self->getHeight());
+    $self->setColor("black") unless(defined $self->getColor());
+    $self->setClipMarkerColor("red") unless(defined $self->getClipMarkerColor());
 
     return $self;
 }
