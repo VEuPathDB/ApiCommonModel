@@ -12,7 +12,8 @@ sub new {
     $self->setColor("function( feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldColor(feature)}");
     $self->setHeight("function(feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldHeight(feature)}");
 
-    my $datasetConfig = $self->getDatasetConfig();
+
+    my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Sequence Analysis");
     $datasetConfig->setSubcategory("Sequence assembly");
 

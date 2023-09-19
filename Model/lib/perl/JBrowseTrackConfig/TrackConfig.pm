@@ -59,7 +59,8 @@ sub new {
     $self->setColor($args->{color});
     $self->setHeight($args->{height});
 
-    $self->setStoreType($args->{store});
+#    $self->setStoreType($args->{store});
+    $self->setStore($args->{store});
 
     $self->setDescription($args->{description});
 

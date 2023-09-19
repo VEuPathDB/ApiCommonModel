@@ -11,7 +11,7 @@ sub new {
 
     $self->setColor("{massSpecColor}");
 
-    my $datasetConfig = $self->getDatasetConfig();
+    my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Proteomics");
     $datasetConfig->setSubcategory("Protein Expression");
 
@@ -36,7 +36,7 @@ sub new {
 
     $self->setMaxFeatureScreenDensity(0.01);
     $self->setRegionFeatureDensities(JSON::true);
-    $self->setDisplayMode("compact")
+    $self->setDisplayMode("compact");
 
     return $self;
 }
