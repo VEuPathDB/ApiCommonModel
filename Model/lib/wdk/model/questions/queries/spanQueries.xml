@@ -153,7 +153,7 @@ from(
              and ed.external_database_id = edr.external_database_id
              and gsa.source_id = lrt.na_seq_source_id
              and ab.organism_name = gsa.organism
-             and lrt.gene_novelty not in ('Known')
+            -- and lrt.gene_novelty not in ('Known')
              and gsa.organism in ($$organismLongread$$)
              and lrt.transcript_length >= $$transcript_length$$
 	     and lrt.transcript_novelty in ($$ismTypes_span$$)
@@ -175,6 +175,7 @@ group by source_id, project_id , min_start, contextStart, max_end, contextEnd, c
 
     <sqlQuery name="DynSpansIntronJunction" includeProjects="PlasmoDB" >
         <paramRef ref="organismParams.organism_span"/>
+        <paramRef ref="SpanParams.Intron_junction_novelty"/>
         <paramRef ref="SpanParams.Intron_junction_confidence"/>
         <column name="source_id"/>
         <column name="project_id"/>
@@ -186,16 +187,18 @@ group by source_id, project_id , min_start, contextStart, max_end, contextEnd, c
         <column name="contextEnd"/>
         <column name="chr_source_id"/>
         <column name="Confidence"/>
+        <column name="Intron_novelty"/>
 
         <sql includeProjects="PlasmoDB">
         <![CDATA[
 
 
 	select 
-                     chr_source_id, min_start, min_start - 1000 as contextStart, max_end , max_end + 1000 as contextEnd, organism, project_id, source_id ,internal_abbrev, Confidence
+                     chr_source_id, min_start, min_start - 1000 as contextStart, max_end , max_end + 1000 as contextEnd, organism, project_id, source_id ,internal_abbrev, Confidence, annotated_intron, Intron_novelty
                      from (
 select INTRON_FEATURE_ID as feature_id,                                                                                                                                                      
                      segment_start - 10 as startm,
+		     case when gij.annotated_intron = 'No' then 'Novel' else 'Known' end as Intron_novelty,
                      segment_END + 10 as end,
                      CONTAINED, -- is the intron junction in a gene - you probably want contained=0
                      MATCHES_GENE_STRAND,
@@ -217,13 +220,14 @@ select INTRON_FEATURE_ID as feature_id,
 		and ab.organism_name = gsa.organism
                 and gsa.organism in ($$organism_span$$)
                 AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
-                AND gij.annotated_intron = 'No'
+                --AND gij.annotated_intron = 'No'
                 AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
                 AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
-                AND gij.gene_source_id is NULL
+                --AND gij.gene_source_id is NULL
 Union
 select INTRON_FEATURE_ID as feature_id, 
                      segment_start - 10 as startm,
+		     case when gij.annotated_intron = 'No' then 'Novel' else 'Known' end as Intron_novelty,
                      segment_END + 10 as end,
                      CONTAINED, -- is the intron junction in a gene - you probably want contained=0
                      MATCHES_GENE_STRAND,
@@ -245,23 +249,23 @@ select INTRON_FEATURE_ID as feature_id,
 		and ab.organism_name = gsa.organism
                 and gsa.organism in ($$organism_span$$)
                 AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
-                AND gij.annotated_intron = 'No'
+               -- AND gij.annotated_intron = 'No'
                 AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
                 AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
-                AND gij.gene_source_id is NULL
+                --AND gij.gene_source_id is NULL
                 AND gij.intron_feature_id not in (
                 select gij.intron_feature_id
                 from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
                 WHERE gij.na_sequence_id = stats.na_sequence_id
                 AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
-                AND gij.annotated_intron = 'No'
+                --AND gij.annotated_intron = 'No'
                 AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
                 AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
                 
                )
 )
 where (confidence = $$Intron_junction_confidence$$ or 'all' = $$Intron_junction_confidence$$)
-
+and annotated_intron in ($$Intron_junction_novelty$$)
 
            ]]>
         </sql>
