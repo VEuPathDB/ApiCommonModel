@@ -14,8 +14,8 @@ sub new {
 
 
     my $datasetConfig = $self->getDatasetConfigObj();
-    $datasetConfig->setCategory("Sequence Analysis");
-    $datasetConfig->setSubcategory("Sequence assembly");
+    $datasetConfig->setCategory("Sequence Analysis") if $datasetConfig;
+    $datasetConfig->setSubcategory("Sequence assembly") if $datasetConfig;
 
     $self->setId("Scaffolds and Gaps");
     $self->setLabel("Scaffolds");

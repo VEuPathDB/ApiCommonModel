@@ -5,7 +5,6 @@ use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
-
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -30,7 +29,6 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("blue");
-    $self->setSubParts("sgap");
 
     my $detailsFunction = "{positionTitle}";
     $self->setOnClickContent($detailsFunction);
