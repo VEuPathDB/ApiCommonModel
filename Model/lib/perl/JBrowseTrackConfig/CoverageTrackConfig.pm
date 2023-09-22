@@ -4,9 +4,6 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 use strict;
 use warnings;
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
-
 sub getCovMaxScoreDefault {$_[0]->{cov_max_score_default} || 1000}
 sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1] + 0}
 
@@ -48,13 +45,14 @@ sub new {
     $self->setCovMinScoreDefault($args->{cov_min_score_default});
     $self->setScale($args->{scale});
 
+    my $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
+    $self->setStore($store);
+
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $self->setStoreType("JBrowse/Store/SeqFeature/BigWig");
         $self->setDisplayType("JBrowse/View/Track/Wiggle/XYPlot");
         $self->setTrackTypeDisplay("Coverage");
     }
     else {
-        $self->setStoreType("BigWigAdapter");
         $self->setTrackType("QuantitativeTrack");
         $self->setDisplayType("LinearWiggleDisplay");
 
@@ -106,8 +104,6 @@ sub getJBrowse2Object{
 
     return $jbrowse2Object;
 }
-
-
 
 
 

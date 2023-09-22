@@ -3,6 +3,7 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
+use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
 sub new {
     my ($class, $args) = @_;

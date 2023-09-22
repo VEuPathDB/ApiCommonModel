@@ -83,28 +83,6 @@ sub getJBrowseObject{
     $jbrowseObject->{onClick} = {content => $onClickContent} if($onClickContent);
     $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => $viewDetailsContent,}];
 
-    my $store = $self->getStore();
-    if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::RestStore') {
-        my $query = $store->getQuery();
-        my $baseUrl = $store->getBaseUrl();
-
-        $jbrowseObject->{baseUrl}= $baseUrl;
-        $jbrowseObject->{query} = {'feature' => $query };
-        my $queryParams = $store->getQueryParamsHash();
-
-        # add query param values
-        if($queryParams) {
-            foreach my $pk(keys %$queryParams) {
-                $jbrowseObject->{query}->{$pk} = $queryParams->{$pk};
-            }
-        }
-    }
-
-    if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::GFFStore') {
-        my $urlTemplate = $store->getUrlTemplate();
-
-        $jbrowseObject->{urlTemplate}= $urlTemplate;
-    }
 
     return $jbrowseObject;
 }

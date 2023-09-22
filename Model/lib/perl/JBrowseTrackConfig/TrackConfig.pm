@@ -150,6 +150,30 @@ sub getJBrowseObject{
         $jbrowseObject->{fmtMetaValue_Description} = "function() { return datasetDescription('${summary}', ''); }";
     }
 
+    my $store = $self->getStore();
+    if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::RestStore') {
+        my $query = $store->getQuery();
+        my $baseUrl = $store->getBaseUrl();
+
+        $jbrowseObject->{baseUrl}= $baseUrl;
+        $jbrowseObject->{query} = {'feature' => $query };
+        my $queryParams = $store->getQueryParamsHash();
+
+        # add query param values
+        if($queryParams) {
+            foreach my $pk(keys %$queryParams) {
+                $jbrowseObject->{query}->{$pk} = $queryParams->{$pk};
+            }
+        }
+    }
+
+    if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::GFFStore' ||
+        ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore') {
+        my $urlTemplate = $store->getUrlTemplate();
+        $jbrowseObject->{urlTemplate}= $urlTemplate;
+    }
+
+
 
     return $jbrowseObject;
 }
