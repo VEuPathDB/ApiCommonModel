@@ -54,9 +54,11 @@ sub new {
     $summary =~ s/\n//g if $summary;
     $self->setSummary($summary) if $summary;
 
-    unless($self->getSubcategory()) {
-        print Dumper $args;
-        die "Error: Subcategory isn't defined\n ";
-    }
+#    unless($self->getSubcategory()) {
+#        print Dumper $args;
+#        die "Error: Subcategory isn't defined\n ";
+#    }
     return $self;
 }
+
+1;

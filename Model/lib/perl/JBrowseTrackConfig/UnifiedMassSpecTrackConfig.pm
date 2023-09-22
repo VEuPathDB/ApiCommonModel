@@ -3,6 +3,8 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
+use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
+
 use JSON;
 
 sub new {

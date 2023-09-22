@@ -26,8 +26,8 @@ sub new {
 
     $self->setStore($store);
 
-    my $detailsFunction = "{positionTitle}";
-    $self->setOnClickContent($detailsFunction);
+#    my $detailsFunction = "{nrdbGffDetails}";
+#    $self->setOnClickContent($detailsFunction);
 #    $self->setViewDetailsContent($detailsFunction); this is set below because of the extra title
 
     $self->setColor("{nrdbColor}");
