@@ -1,6 +1,8 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 
+use ApiCommonModel::Model::JBrowseTrackConfig::VCFStore;
+
 use strict;
 use warnings;
 

@@ -9,7 +9,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    my $datasetConfig = $self->getDatasetConfig();
+    my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Sequence Analysis");
     $datasetConfig->setSubcategory("BLAT and Blast Alignments");
 
@@ -25,10 +25,6 @@ sub new {
     }
 
     $self->setStore($store);
-
-#    my $detailsFunction = "{positionTitle}";
-#    $self->setOnClickContent($detailsFunction);
-#    $self->setViewDetailsContent($detailsFunction); this is set below because of the extra title
 
     $self->setColor("{nrdbColor}");
     $self->setBorderColor("{processedTranscriptBorderColor}");

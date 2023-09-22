@@ -11,8 +11,8 @@ use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig;
-
-use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrack;
+use ApiCommonModel::Model::JBrowseTrackConfig::VCFStore;
+#use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrack;
 
 use Data::Dumper;
 
@@ -214,7 +214,6 @@ sub addVCF {
       my $keyName = $vcfFileName;
  	  $keyName =~ s/_/ /g;
       my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
-
       my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
 
 
@@ -523,39 +522,43 @@ sub addProteinExpressionMassSpec {
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
 
-    my $massSpec = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                    baseUrl => "/a/service/jbrowse",
-                    type => "JBrowse/View/Track/CanvasFeatures",
-                    glyph => "JBrowse/View/FeatureGlyph/Segments",
-                    subParts => "Peptide",
-                    displayMode => "compact",
-                    query => {'feature' => "domain:MassSpecPeptide",
-                              'edName' => "like '${datasetExtdbName}'",
-                    },
-                    key => "${datasetDisplayName}  MS/MS Peptides  ${shortAttribution}",
-                    label => "${dataset}",
-                    category => "Proteomics",
-                    style => {'color' => "{massSpecColor}",
-                              'label' => "Sample,sample,name",
-                    },
-                    metadata => {
-                      subcategory => 'Protein Expression',
-                      dataset => $datasetDisplayName,
-                      trackType => 'Segments',
-                      attribution => $shortAttribution,
-                      description => $summary,
-                    },
-                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
-                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-                    onClick => {
-                      content => "{massSpecDetails}",
-                    },
-                    menuTemplate => [
-                      {label => "View Details", 
-                       content => "{massSpecDetails}",
-                      },
-                        ],
-    };
+#    my $massSpec = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                    baseUrl => "/a/service/jbrowse",
+#                    type => "JBrowse/View/Track/CanvasFeatures",
+#                    glyph => "JBrowse/View/FeatureGlyph/Segments",
+#                    subParts => "Peptide",
+#                    displayMode => "compact",
+#                    query => {'feature' => "domain:MassSpecPeptide",
+#                              'edName' => "like '${datasetExtdbName}'",
+#                    },
+#                    key => "${datasetDisplayName}  MS/MS Peptides  ${shortAttribution}",
+#                    label => "${dataset}",
+#                    category => "Proteomics",
+#                    style => {'color' => "{massSpecColor}",
+#                              'label' => "Sample,sample,name",
+#                    },
+#                    metadata => {
+#                      subcategory => 'Protein Expression',
+#                      dataset => $datasetDisplayName,
+#                      trackType => 'Segments',
+#                      attribution => $shortAttribution,
+#                      description => $summary,
+#                    },
+#                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
+#                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+#                    onClick => {
+#                      content => "{massSpecDetails}",
+#                    },
+#                    menuTemplate => [
+#                      {label => "View Details",
+#                       content => "{massSpecDetails}",
+#                      },
+#                        ],
+#    };
+    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
+                                                                                                fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+                                                                                                fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
+                                                                                              })->getConfigurationObject();
 
     push @{$result->{tracks}}, $massSpec;
   }
@@ -943,15 +946,14 @@ sub makeChipChipPeak {
 #    };
 
   my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
-                                                                                                fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-                                                                                                fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
-                                                                                                store_type => "JBrowse/Store/SeqFeature/REST",
-                                                                                                type => "JBrowse/View/Track/CanvasFeatures",
-                                                                                                subcategory => "ChIP chip",
-                                                                                                color => "{$colorFunction}",
-                                                                                                key => $key,
-                                                                                                label => $key,
-                                                                                                category => "Epigenomics",
+                                                                                                dataset_name => $dataset,
+                                                                                                subTrackAttr => $subTrackAttr,
+                                                                                                cutoff => $cutoff,
+                                                                                                pan_id => $panId,
+                                                                                                pan_name => $panName,
+                                                                                                attribution => $shortAttribution,
+                                                                                                study_display_name => $datasetDisplayName,
+                                                                                                description => $summary,
 
                                                                                               })->getConfigurationObject();
 
@@ -975,33 +977,38 @@ order by pan.name";
   my $sh = $dbh->prepare($sql);
   $sh->execute();
 
-  my $desc = "Comparative Genomic Hybridization to determine regions of significant Copy Number Variation in <i>T. cruzi</i> strains with strain CL Brener as reference. Type I strains used include: Brazil, Chinata, Colombiana, M78, Montalvania, PalDa1 (clone 9), SylvioX10/4, TCC, TEDa2 (clone 4), TEP6 (clone 5). Type II-VI strains used include: Esmeraldo, M5631, Tu18 (clone 1), Tulahuen, wtCL, Y. Scores from Type I strain is shown in Green and from Type II-VI are show in Brown. Score value represents the number of strains showing CNV , with a postive score implying amplification and a negative score implying deletion with respect to CL Brener. CNV criteria: minimum log2 ratio of signal intensities (test strain/reference) +/- 0.6, minimum number of probes 5. For more details refer the following manuscript: <a href=\"http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3060142/\">Widespread, focal copy number variations (CNV) and whole chromosome aneuploidies in Trypanosoma cruzi strains revealed by array comparative genomic hybridization</a> ";
+#  my $desc = "Comparative Genomic Hybridization to determine regions of significant Copy Number Variation in <i>T. cruzi</i> strains with strain CL Brener as reference. Type I strains used include: Brazil, Chinata, Colombiana, M78, Montalvania, PalDa1 (clone 9), SylvioX10/4, TCC, TEDa2 (clone 4), TEP6 (clone 5). Type II-VI strains used include: Esmeraldo, M5631, Tu18 (clone 1), Tulahuen, wtCL, Y. Scores from Type I strain is shown in Green and from Type II-VI are show in Brown. Score value represents the number of strains showing CNV , with a postive score implying amplification and a negative score implying deletion with respect to CL Brener. CNV criteria: minimum log2 ratio of signal intensities (test strain/reference) +/- 0.6, minimum number of probes 5. For more details refer the following manuscript: <a href=\"http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3060142/\">Widespread, focal copy number variations (CNV) and whole chromosome aneuploidies in Trypanosoma cruzi strains revealed by array comparative genomic hybridization</a> ";
 
   while(my ($name) = $sh->fetchrow_array()) {
 
 
-    my $cnv = {storeClass => "JBrowse/Store/SeqFeature/REST",
-               baseUrl => "/a/service/jbrowse",
-               type => "JBrowse/View/Track/Wiggle/XYPlot",
-               key => $name,
-               label => $name,
-               category => "Genetic Variation",
-               style => {height => 40},
-               metadata => {
-                 subcategory => "CGH Array",
-                 dataset => "Comparative Genomic Hybridizations of 33 strains",
-                 trackType => 'XYPlot',
-                 description => $desc,
-               },
-               fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('tcruCLBrenerEsmeraldo-like_cghArrayPlatform_GPL10781_RSRC', 'Comparative Genomic Hybridizations of 33 strains'); }",
-               fmtMetaValue_Description => "function() { return datasetDescription('${desc}', ''); }",
-               query => {'feature' => "cnv:ArrayJBrowse",
-                         'sample' => $name,
-               },
-               max_score => 3,
-               min_score => -3,
-               yScalePosition => "left"
-    };
+#    my $cnv = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#               baseUrl => "/a/service/jbrowse",
+#               type => "JBrowse/View/Track/Wiggle/XYPlot",
+#               key => $name,
+#               label => $name,
+#               category => "Genetic Variation",
+#               style => {height => 40},
+#               metadata => {
+#                 subcategory => "CGH Array",
+#                 dataset => "Comparative Genomic Hybridizations of 33 strains",
+#                 trackType => 'XYPlot',
+#                 description => $desc,
+#               },
+#               fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('tcruCLBrenerEsmeraldo-like_cghArrayPlatform_GPL10781_RSRC', 'Comparative Genomic Hybridizations of 33 strains'); }",
+#               fmtMetaValue_Description => "function() { return datasetDescription('${desc}', ''); }",
+#               query => {'feature' => "cnv:ArrayJBrowse",
+#                         'sample' => $name,
+#               },
+#               max_score => 3,
+#               min_score => -3,
+#               yScalePosition => "left"
+#    };
+    my $cnv = ApiCommonModel::Model::JBrowseTrackConfig::CnvArrayTrackConfig->new({}
+                                                                                                application_type => $applicationType,
+                                                                                                name => $name,
+
+                                                                                              })->getConfigurationObject();
     push @{$result->{tracks}}, $cnv;
 
   }
@@ -1021,36 +1028,44 @@ sub makeChipChipSmoothed {
   my $key = $panName;
   my $subTrackAttr = $datasetProperties->{$dataset}->{subTrackAttr};
 
-  my $smoothed = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                  baseUrl => "/a/service/jbrowse",
-                  type => "JBrowse/View/Track/Wiggle/XYPlot",
-                  key => $key,
-                  label => $key,
-                  category => "Epigenomics",
-                  style => {
-                    pos_color => "{chipColor}",
-                    neg_color => "{chipColor}",
-                    height => 40,
-                  },
-                  metadata => {
-                    subcategory => "ChIP chip",
-                    dataset => $datasetDisplayName,
-                    trackType => 'XYPlot',
-                    attribution => $shortAttribution,
-                    description => $summary,
-                   },
-                   fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-                   fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-                  query => {'feature' => "ChIP:ChIPchip_smoothedjbrowse",
-                            'exp' => $dataset,
-                            'sub' => $subTrackAttr,
-                            'panId' => $panId
-                  },
-                  max_score => 3,
-                  min_score => -3,
-                  yScalePosition => "left"
-    };
+#  my $smoothed = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                  baseUrl => "/a/service/jbrowse",
+#                  type => "JBrowse/View/Track/Wiggle/XYPlot",
+#                  key => $key,
+#                  label => $key,
+#                  category => "Epigenomics",
+#                  style => {
+#                    pos_color => "{chipColor}",
+#                    neg_color => "{chipColor}",
+#                    height => 40,
+#                  },
+#                  metadata => {
+#                    subcategory => "ChIP chip",
+#                    dataset => $datasetDisplayName,
+#                    trackType => 'XYPlot',
+#                    attribution => $shortAttribution,
+#                    description => $summary,
+#                   },
+#                   fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+#                   fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+#                  query => {'feature' => "ChIP:ChIPchip_smoothedjbrowse",
+#                            'exp' => $dataset,
+#                            'sub' => $subTrackAttr,
+#                            'panId' => $panId
+#                  },
+#                  max_score => 3,
+#                  min_score => -3,
+#                  yScalePosition => "left"
+#    };
+   my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
+                                                                                                fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+                                                                                                fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+                                                                                                dataset => $dataset,
+                                                                                                subTrackAttr => $subTrackAttr,
+                                                                                                pan_id => $panId,
+                                                                                                pan_name => $panName,
 
+                                                                                              })->getConfigurationObject();
 
   return $smoothed;
 }

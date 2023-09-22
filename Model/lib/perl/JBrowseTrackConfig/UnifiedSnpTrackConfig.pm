@@ -9,7 +9,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    my $datasetConfig = $self->getDatasetConfig();
+    my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Genetic Variation");
     $datasetConfig->setSubcategory("DNA polymorphism");
 
@@ -43,7 +43,7 @@ sub new {
 
     $self->setTrackTypeDisplay("Unified SNPs");
 
-    $self->setDescription("The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.";);
+    $self->setDescription("The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.");
     return $self;
 }
 
@@ -54,7 +54,7 @@ sub getJBrowseStyle {
 
     $jbrowseStyle->{strandArrow} = JSON::false;
     $jbrowseStyle->{labelScale} = 1000000000000000;
-    return $style;
+    return $jbrowseStyle;
 }
 
 

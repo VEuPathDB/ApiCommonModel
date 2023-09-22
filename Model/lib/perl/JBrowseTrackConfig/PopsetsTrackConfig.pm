@@ -10,7 +10,7 @@ sub new {
     my $self = $class->SUPER::new($args);
 
 
-    my $datasetConfig = $self->getDatasetConfig();
+    my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Sequence Analysis");
     $datasetConfig->setSubcategory("BLAT and Blast Alignments");
 

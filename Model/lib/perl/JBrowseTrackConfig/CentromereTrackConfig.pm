@@ -5,12 +5,11 @@ use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
-
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    my $datasetConfig = $self->getDatasetConfig();
+    my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Sequence Analysis");
     $datasetConfig->setSubcategory("Sequence sites, features and motifs");
 
@@ -29,8 +28,7 @@ sub new {
 
     $self->setStore($store);
 
-    $self->setColor("blue")
-    $self->setSubParts("sgap");
+    $self->setColor("blue");
 
     my $detailsFunction = "{positionTitle}";
     $self->setOnClickContent($detailsFunction);

@@ -1,4 +1,5 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
 
 use strict;
 use warnings;
@@ -48,7 +49,13 @@ sub new {
     my ($class, $args) = @_;
     my $self = bless {}, $class;
 
-    $self->setDatasetConfigObj($args->{dataset_config});
+    if ($args->{dataset_config}) { 
+      $self->setDatasetConfigObj($args->{dataset_config});
+    }
+    else {
+      my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new($args);
+      $self->setDatasetConfigObj($datasetConfig);
+    }
 
     $self->setDisplayName($args->{display_name});
     $self->setApplicationType($args->{application_type});
@@ -59,7 +66,8 @@ sub new {
     $self->setColor($args->{color});
     $self->setHeight($args->{height});
 
-    $self->setStoreType($args->{store});
+#    $self->setStoreType($args->{store});
+    $self->setStore($args->{store});
 
     $self->setDescription($args->{description});
 
@@ -92,11 +100,11 @@ sub getMetadata {
 
     my $datasetConfig = $self->getDatasetConfigObj();
 
-    my $subcategory = $datasetConfig->getSubcategory();
+    my $subcategory = $datasetConfig->getSubcategory() if ($datasetConfig);
     my $trackType = $self->getTrackTypeDisplay();
-    my $attribution = $datasetConfig->getAttribution();
-    my $summary = $datasetConfig->getSummary();
-    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
+    my $attribution = $datasetConfig->getAttribution() if ($datasetConfig);
+    my $summary = $datasetConfig->getSummary() if ($datasetConfig);
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
 
     unless(defined($subcategory) || defined($trackType)
            || defined($attribution) || defined($summary) || defined($studyDisplayName)) {
@@ -117,9 +125,9 @@ sub getJBrowseObject{
 
     my $datasetConfig = $self->getDatasetConfigObj();
 
-    my $datasetName = $datasetConfig->getDatasetName();
-    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
-    my $summary = $datasetConfig->getSummary();
+    my $datasetName = $datasetConfig->getDatasetName() if ($datasetConfig);
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
+    my $summary = $datasetConfig->getSummary() if ($datasetConfig);
 
     my $style = $self->getJBrowseStyle();
     my $metadata = $self->getMetadata();
@@ -128,8 +136,7 @@ sub getJBrowseObject{
     my $storeType = $self->getStore()->getStoreType();
     my $label = $self->getLabel();
     my $displayType = $self->getDisplayType();
-    my $category = $datasetConfig->getCategory();
-
+    my $category = $datasetConfig->getCategory() if ($datasetConfig);
     unless($id && $storeType && $label && $displayType && $category) {
         print Dumper $self;
         die "missing a required property (id, storeClass,label, displayType, category)";
