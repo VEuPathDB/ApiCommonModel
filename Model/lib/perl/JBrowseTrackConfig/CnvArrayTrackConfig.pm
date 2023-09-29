@@ -58,8 +58,6 @@ sub getJBrowseObject{
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
     my $desc = $self->getDescription();
-    $jbrowseObject->{fmtMetaValue_Description} =  "function() { return datasetDescription('${desc}', ''); }";
-    $jbrowseObject->{fmtMetaValue_Dataset} = "function() { return datasetLinkByDatasetName('tcruCLBrenerEsmeraldo-like_cghArrayPlatform_GPL10781_RSRC', 'Comparative Genomic Hybridizations of 33 strains'); }";
     $jbrowseObject->{max_score} =  "3";
     $jbrowseObject->{min_score} =  "-3";
     return $jbrowseObject;
