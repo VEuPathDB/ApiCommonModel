@@ -36,6 +36,11 @@ public class ChIPChip extends DatasetInjector {
         injectTemplate("chipchipQuestion");
     }
 
+    String presenterId = getPropValue("presenterId");
+    setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+    setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
+    injectTemplate("jbrowseChipChipExperSampleBuildProps");
+
   }
 
   @Override

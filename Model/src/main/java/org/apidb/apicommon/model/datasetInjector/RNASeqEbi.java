@@ -12,6 +12,13 @@ public class RNASeqEbi extends RNASeq {
    */
 
     @Override
+    public void injectTemplates() {
+    setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+    setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
+    injectTemplate("jbrowseEbiRnaSeqSampleBuildProps");
+    }
+
+    @Override
     protected void setProfileSamplesHelp() {
         String profileSamplesHelp = "Transcript abundance in Transcripts per Million (TPM)";
         setPropValue("profileSamplesHelp", profileSamplesHelp);
