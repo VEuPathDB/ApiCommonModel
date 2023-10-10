@@ -11,11 +11,23 @@ public class Coexpression extends  DatasetInjector {
 
       String datasetName = getDatasetName();
 
+      String projectName = getPropValue("projectName");
+
       String dataSource  = getPropValue("dataSource");
       String exampleGeneIds  = getPropValue("exampleGeneIds");
       String defaultCoefficient = getPropValue("defaultCoefficient");
 
-      //injectTemplate("datasetCategory");
+
+
+      if(getPropValueAsBoolean("isEuPathDBSite")) {
+          setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
+      } else {
+          setPropValue("includeProjects", projectName + ",UniDB");
+      }
+      setPropValue("includeProjectsExcludeEuPathDB", projectName + ",UniDB");
+
+
+      injectTemplate("datasetCategory");
 
       setPropValue("searchCategory", "searchCategory-coexpression");
       setPropValue("questionName", "GeneQuestions.GenesByCoexpression" + getDatasetName());
@@ -23,6 +35,7 @@ public class Coexpression extends  DatasetInjector {
 
 
       injectTemplate("coexpressionQuestion");
+      injectTemplate("coexpressionSourceQuery");
     }
 
   @Override
