@@ -385,9 +385,9 @@ public class RNASeq extends  DatasetInjector {
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
 
           //addWdkReference("GeneRecordClasses.GeneRecordClass", "question","DatasetQuestions.DatasetsByReferenceName");
-          //if (getPropValueAsBoolean("showIntronJunctions")) {
-          	//addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.IntronJunctionDynamicSearch");
-          //}
+          if (getPropValueAsBoolean("showIntronJunctions")) {
+          	addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.IntronJunctionDynamicSearch");
+          }
 
       }
   }

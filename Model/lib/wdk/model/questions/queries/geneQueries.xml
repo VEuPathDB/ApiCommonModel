@@ -6349,97 +6349,6 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <wsColumn name="pdbIds" width="200"/>
     </processQuery>
 
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- GenesByProteinDbAccession -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- query appears unused
-    <sqlQuery name="GenesByProteinDbAccession" includeProjects="PlasmoDB"  >
-        <paramRef ref="geneParams.accession"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withPlasmoGenes" includeProjects="PlasmoDB"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withTriTrypGenes" includeProjects="TriTrypDB"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <sql>
-            <![CDATA[
-            SELECT DISTINCT gf.source_id, '@PROJECT_ID@' as project_id
-             FROM ApidbTuning.GeneAttributes gf, dots.DbRefNaFeature drnf,
-                  sres.DbRef dr, sres.ExternalDatabaseRelease edr,
-                  sres.ExternalDatabase ed, dots.ExternalNaSequence ens
-             WHERE (dr.primary_identifier = $$accession$$
-                    OR dr.secondary_identifier = $$accession$$)
-               AND gf.na_feature_id = drnf.na_feature_id
-               AND drnf.db_ref_id = dr.db_ref_id
-               AND dr.external_database_release_id
-                     = edr.external_database_release_id
-               AND edr.external_database_id = ed.external_database_id
-               AND ed.name IN ('NRDB_gb_dbXRefBySeqIdentity',
-                           /*  'NRDB_pdb_dbXRefBySeqIdentity', */
-                               'NRDB_ref_dbXRefBySeqIdentity',
-                               'NRDB_sp_dbXRefBySeqIdentity',
-                               'GenBank')
-              AND gf.na_sequence_id = ens.na_sequence_id
-              AND ens.taxon_id IN ($$organism$$)
-            ORDER BY gf.source_id
-            ]]>
-       </sql>
-    </sqlQuery>
-
-   -->
-<!-- I THINK IT I NOT USED 
-    <processQuery name="GenesByProteinDbAccession" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.accession"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withPlasmoGenes" includeProjects="PlasmoDB"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withTriTrypGenes" includeProjects="TriTrypDB"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-    </processQuery>
--->
-
-
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- GenesWithProteinLowComplexity -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-  <!--
-    <sqlQuery name="GenesWithProteinLowComplexity" includeProjects="PlasmoDB" >
-        <paramRef ref="geneParams.percentLowComplexity"/>
-        <paramRef ref="sharedParams.chromosome"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="matched_result"/>
-        <sql>
-            <![CDATA[
-	    select gf.source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
-	    from Dots.LowComplexityAAFeature lc, ApidbTuning.GeneAttributes gf,
-	         Dots.ExternalNASequence ens, Dots.AALocation al, 
-                 Dots.AASequence s, Dots.Transcript t, Dots.TranslatedAAFeature taf
-            where ens.source_id in ($$chromosome$$)
-            and gf.na_sequence_id = ens.na_sequence_id
-            and t.parent_id = gf.na_feature_id
-            and taf.na_feature_id = t.na_feature_id
-            and s.aa_sequence_id = taf.aa_sequence_id
-            and lc.aa_sequence_id = s.aa_sequence_id
-            and al.aa_feature_id = lc.aa_feature_id
-	    group by gf.source_id
-	    having sum(100 *(al.end_max - al.start_min)/s.length ) > $$percentLowComplexity$$
-            ORDER BY gf.source_id
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesWithProteinLowComplexity" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.percentLowComplexity"/>
-        <paramRef ref="sharedParams.chromosome"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-    </processQuery>
-   -->
 
 
     <sqlQuery name="ByWeightFilter"  doNotTest="true">
@@ -7199,6 +7108,49 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <wsColumn name="project_id" width="20" />
         <wsColumn name="input_id" width="32"/>
         <wsColumn name="coefficient" width="10" wsName="coefficient"/>
+    </processQuery>
+
+    <sqlQuery name="GenesByAnigerCoexpression"  doNotTest="true" includeProjects="FungiDB,UniDB">
+        <paramRef ref="sharedParams.ds_gene_ids"/>
+        <paramRef ref="geneParams.coexp_correlation" quote="false"/>
+        <paramRef ref="geneParams.coexp_value"/>
+        <column name="source_id"/>
+        <column name="matched_result"/>
+        <column name="gene_source_id"/>
+        <column name="project_id"/>
+        <column name="input_id"/>
+        <column name="min_coeff"/>
+        <column name="max_coeff"/>
+       <sql>
+        <![CDATA[
+  SELECT ta.gene_source_id, ta.source_id
+         ,ta.project_id, 'Y' as matched_result
+         ,apidb.tab_to_string(SET(CAST(COLLECT(ds.gene_source_id) AS apidb.varchartab)), ', ') AS input_id
+         , max(coefficient) as max_coeff, min(coefficient) as min_coeff
+  FROM  ApidbTuning.TranscriptAttributes ta, Apidb.FungiCoexpression c,
+        ($$ds_gene_ids$$) ds, ApidbTuning.GeneId gi
+  WHERE  ds.gene_source_id = c.gene_id
+    AND  c.associated_gene_id = gi.id
+    AND  gi.gene= ta.gene_source_id
+    AND  c.coefficient $$coexp_correlation$$ $$coexp_value$$
+    AND  c.source='Cairns'
+  GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
+           ]]>
+       </sql>
+    </sqlQuery>
+
+    <processQuery name="GenesByAnigerCoexpression" includeProjects="EuPathDB" doNotTest="true"
+              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        <paramRef ref="sharedParams.ds_gene_ids" noTranslation="true"/>
+        <paramRef ref="geneParams.coexp_correlation" quote="false"/>
+        <paramRef ref="geneParams.coexp_value"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="input_id" width="32"/>
+        <wsColumn name="min_coeff" width="10" wsName="min_coeff"/>
+        <wsColumn name="max_coeff" width="10" wsName="max_coeff"/>
     </processQuery>
 
 

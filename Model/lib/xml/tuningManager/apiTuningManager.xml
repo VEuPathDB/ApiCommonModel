@@ -2808,12 +2808,12 @@ from (  select gene_source_id, source_id, taxon_id,
         
      UNION
         select atr.gene_source_id, atr.source_id, atr.taxon_id, 
-        'intron_junction' as ontology_term_name, gj.annotated_intron string_value,
+        'intron_junction' as ontology_term_name, it.string_value string_value,
             null as number_value
-        from 
-        GeneIntronJunction gj
+        from
+	 IntronSupportLevel it 
         ,TranscriptAttributes atr
-        where gj.gene_source_id =  atr.gene_source_id
+        where it.gene_source_id =  atr.gene_source_id
         
      UNION
         select atr.gene_source_id, atr.source_id, atr.taxon_id, 
@@ -2909,13 +2909,14 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         
     UNION
         select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
-        'intron_junction' as ontology_term_name, gj.annotated_intron string_value,
+        'intron_junction' as ontology_term_name, it.string_value string_value,
             null as number_value
         from 
-        GeneIntronJunction gj
+        IntronSupportLevel it
         ,TranscriptAttributes atr
-        where gj.gene_source_id =  atr.gene_source_id
-        
+        where it.gene_source_id =  atr.gene_source_id
+     
+   
      UNION
         select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
         'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value           
@@ -9362,5 +9363,134 @@ tablespace indx
     </sql>
 
   </tuningTable>
+
+
+<tuningTable name="IntronSupportLevel" prefixEnabled="true">
+    <comment>
+      Stores intron support for introns
+    </comment>
+    <internalDependency name="GeneModelDump"/>
+    <internalDependency name="GeneIntronJunction"/>
+    <sql>
+
+     <![CDATA[
+create table &prefixIntronSupportLevel&1 NOLOGGING as 
+
+select * from (
+select gene_source_id, ontology_term, replace(string_value, 'All' , 'Any-high') as string_value from (
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All'
+    when count(*) = 0 THEN 'None'
+    else 'Any' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+)
+group by gene_source_id, ontology_term, intron_count
+
+)
+where string_value = 'All'
+
+union
+
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All-high'
+    when count(*) = 0 THEN 'None'
+    else 'Any-high' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2)
+)
+group by gene_source_id, ontology_term, intron_count
+
+union
+
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All-low'
+    when count(*) = 0 THEN 'None'
+    else 'Any-low' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+AND gij.intron_feature_id not in (
+select gij.intron_feature_id
+from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+WHERE gij.na_sequence_id = stats.na_sequence_id
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2) )
+)
+group by gene_source_id, ontology_term, intron_count
+
+union
+select gene_source_id, ontology_term, replace(string_value, 'All' , 'Any-low') as string_value from (
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All'
+    when count(*) = 0 THEN 'None'
+    else 'Any' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+AND gij.intron_feature_id not in (
+select gij.intron_feature_id
+from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+WHERE gij.na_sequence_id = stats.na_sequence_id
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2) )
+)
+group by gene_source_id, ontology_term, intron_count
+
+)
+where string_value = 'All'
+)
+
+
+]]>
+   </sql>
+</tuningTable>
+
+
+
 
 </tuningConfig>
