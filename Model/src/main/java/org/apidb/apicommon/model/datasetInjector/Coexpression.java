@@ -13,7 +13,16 @@ public class Coexpression extends  DatasetInjector {
 
       String dataSource  = getPropValue("dataSource");
       String exampleGeneIds  = getPropValue("exampleGeneIds");
-      String spearmanCoefficient = getPropValue("spearmanCoefficient");
+      String defaultCoefficient = getPropValue("defaultCoefficient");
+
+      //injectTemplate("datasetCategory");
+
+      setPropValue("searchCategory", "searchCategory-coexpression");
+      setPropValue("questionName", "GeneQuestions.GenesByCoexpression" + getDatasetName());
+      injectTemplate("internalGeneSearchCategory");
+
+
+      injectTemplate("coexpressionQuestion");
     }
 
   @Override
