@@ -5,9 +5,13 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class LongReadRNASeq extends DatasetInjector {
 
 
-   protected String getInternalQuestionName() {
+   protected String getInternalGeneQuestionName() {
         return "GeneQuestions.GenesByLongReadEvidence_" + getDatasetName();
     }
+
+  protected String getInternalSpanQuestionName() {
+	return "SpanQuestions.GenomicSpanLongReadEvidence_" + getDatasetName();
+  }
 
   @Override
   public void injectTemplates() {
@@ -15,17 +19,22 @@ public class LongReadRNASeq extends DatasetInjector {
     String projectName = getPropValue("projectName");
     setPropValue("includeProjects", projectName);
     injectTemplate("LongReadGeneModelQuestion");
+    injectTemplate("LongReadGeneModelSpanQuestion");
 
 
-    setPropValue("questionName", getInternalQuestionName());
+    setPropValue("questionName", getInternalGeneQuestionName());
     setPropValue("searchCategory", "searchCategory-longread");
+    injectTemplate("internalGeneSearchCategory");
+
+    setPropValue("questionName", getInternalSpanQuestionName());
+    setPropValue("searchCategory", "searchCategory-longreadspan");
     injectTemplate("internalGeneSearchCategory");
   }
 
   @Override
   public void addModelReferences() {
-	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", getInternalQuestionName());
-	  addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.LongReadNovelGeneSpansBySourceId");
+	  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", getInternalGeneQuestionName());
+	  addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", getInternalSpanQuestionName());
 	  //addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.IntronJunctionDynamicSearch");
   }
 
