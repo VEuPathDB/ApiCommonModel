@@ -10,7 +10,7 @@ public class LongReadRNASeq extends DatasetInjector {
     }
 
   protected String getInternalSpanQuestionName() {
-	return "SpanQuestions.GenomicSpanLongReadEvidence_" + getDatasetName();
+	return "SpanQuestions.GenomicSpanByLongReadEvidence_" + getDatasetName();
   }
 
   @Override
@@ -28,7 +28,7 @@ public class LongReadRNASeq extends DatasetInjector {
 
     setPropValue("questionName", getInternalSpanQuestionName());
     setPropValue("searchCategory", "searchCategory-longreadspan");
-    injectTemplate("internalGeneSearchCategory");
+    injectTemplate("internalSpanSearchCategory");
   }
 
   @Override
