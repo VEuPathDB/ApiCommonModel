@@ -1008,12 +1008,10 @@ FROM
 <!--  			Talon Long Read				  -->
 <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-   <sqlQuery name="GenesByISM" includeProjects="PlasmoDB" >
-        <paramRef ref="organismParams.organismLongread"/>
+   <sqlQuery name="GenesByISM" includeProjects="PlasmoDB,ToxoDB" >
 	<paramRef ref="geneParams.long_read_datasets"/>
-  <!--      <paramRef ref="geneParams.long_read_transcript_novelty"/> -->
-  <!--      <paramRef ref="geneParams.incomplete_splice_type"/>i -->
-        <paramRef ref="geneParams.ismTypes"/>
+    <paramRef ref="geneParams.ismTypes"/>
+	<paramRef ref="SpanParams.transcript_length"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="num_new_models"  />
@@ -1026,41 +1024,55 @@ FROM
         <column name="max_end"/>
         <column name="project_id"/>
 	<column name="matched_result"/>
+	<column name="internal_abbrev"/>
+	<column name="all_datasets"/>
+	<column name="na_seq_source_id"/>
+	<column name="contextStart"/>
+	<column name="contextEnd"/>
         <sql>
 
-        select
-	source_id
-	, gene_source_id
-	, count(source_id) as num_new_models
-	, min(transcript_length) as min_new_transcript_length
-	, max(transcript_length) as max_new_transcript_length
-	, listagg(distinct gene_novelty, ', ') within group (order by gene_novelty) as gene_novelty
-	, listagg(distinct transcript_novelty, ', ') within group (order by transcript_novelty) as transcript_novelty
-	, listagg(distinct incomplete_splice_match_type, ', ') within group (order by incomplete_splice_match_type) as incomplete_splice_match_type
-	, min(min_start) as min_start 
-	, max(max_end) as max_end
-	, project_id
-	, 'Y' as matched_result
-	from (
-    		select ed.name as dataset_name --eventually join this to apidbtuning.datasetPresenter - but the data isn't there yet
-    		, ta.organism
-    		, lrt.* 
-    		, ta.project_id
-    		, ta.source_id
-    		from apidb.longreadtranscript lrt
-    		, sres.externaldatabaserelease edr
-    		, sres.externaldatabase ed
-    		,apidbtuning.transcriptattributes ta
-    		where edr.external_database_release_id = lrt.external_database_release_id
-    		and ed.external_database_id = edr.external_database_id
-   		 and ta.gene_source_id = lrt.gene_source_id
-    		and ta.organism in ('Plasmodium falciparum 3D7')
-    		and (lrt.transcript_novelty in ($$ismTypes$$) or lrt.incomplete_splice_match_type in ($$ismTypes$$))
-    	)       
-	where dataset_name in ($$long_read_datasets$$)
-	group by source_id, gene_source_id, project_id
-	order by source_id desc 
 
+	select
+        source_id
+        , gene_source_id
+        , count(source_id) as num_new_models
+        , min(transcript_length) as min_new_transcript_length
+        , max(transcript_length) as max_new_transcript_length
+        , listagg(distinct gene_novelty, ', ') within group (order by gene_novelty) as gene_novelty
+        , listagg(distinct transcript_novelty, ', ') within group (order by transcript_novelty) as transcript_novelty
+        , listagg(distinct incomplete_splice_match_type, ', ') within group (order by incomplete_splice_match_type) as incomplete_splice_match_type
+        , min(min_start) as min_start
+	, min(min_start) - 1000 as contextStart
+        , max(max_end) as max_end
+	, max(max_end) + 1000 contextEnd
+        , project_id
+	, listagg( distinct dataset_name,',') as all_datasets
+	, na_seq_source_id
+	, internal_abbrev
+        , 'Y' as matched_result
+        from (
+                select ed.name as dataset_name
+		, ab.internal_abbrev 
+                , lrt.*
+                , ta.project_id
+                , ta.source_id
+                from apidb.longreadtranscript lrt
+                , sres.externaldatabaserelease edr
+                , sres.externaldatabase ed
+                , apidbtuning.transcriptattributes ta
+		, apidbtuning.organismattributes ab
+                , apidbtuning.datasetPresenter dp
+                where edr.external_database_release_id = lrt.external_database_release_id
+                and ed.external_database_id = edr.external_database_id
+                and ta.gene_source_id = lrt.gene_source_id
+		and ab.organism_name = ta.organism
+                and ed.name = dp.name
+		and lrt.transcript_length >= $$transcript_length$$
+		and (lrt.transcript_novelty in ($$ismTypes$$) or (lrt.transcript_novelty = 'ISM' and lrt.incomplete_splice_match_type in ($$ismTypes$$)))
+        )
+        where dataset_name = '$$long_read_datasets$$'
+        group by source_id, gene_source_id, project_id, na_seq_source_id,internal_abbrev
+        order by source_id desc
 
 	</sql>
     </sqlQuery>
@@ -1105,7 +1117,7 @@ FROM
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
     <sqlQuery name="GenesByGeneModelChars">
-        <paramRef ref="organismParams.organism_select_all" visible="true"/>
+        <paramRef ref="organismParams.organism_gene_chars" visible="true"/>
         <paramRef ref="geneParams.gene_or_transcript"/>
         <paramRef ref="geneParams.gene_model_char"/>
         <column name="project_id"/>
