@@ -384,8 +384,9 @@ public class RNASeq extends  DatasetInjector {
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
 
-          //addWdkReference("GeneRecordClasses.GeneRecordClass", "question","DatasetQuestions.DatasetsByReferenceName");
-          if (getPropValueAsBoolean("showIntronJunctions")) {
+          // this question does not display on Host or Trich
+          String projectName = getPropValue("projectName");
+          if (getPropValueAsBoolean("showIntronJunctions") && !projectName.equals("HostDB") && !projectName.equals("TrichDB")) {
           	addWdkReference("DynSpanRecordClasses.DynSpanRecordClass", "question", "SpanQuestions.IntronJunctionDynamicSearch");
           }
 
