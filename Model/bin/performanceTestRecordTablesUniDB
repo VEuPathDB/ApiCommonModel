@@ -1,20 +1,24 @@
 #!/usr/bin/perl
 
 use strict;
+use Data::Dumper;
 
-usage() unless scalar(@ARGV) == 3;
+usage() unless scalar(@ARGV) == 4;
 
-my ($site1ServiceUrl, $site2ServiceUrl, $ids_file) = @ARGV;
+my ($site1ServiceUrl, $idsFile1, $site2ServiceUrl, $idsFile2) = @ARGV;
 
-my $result1 = perfTestRecordTables($site1ServiceUrl, $ids_file);
-my $result2 = perfTestRecordTables($site2ServiceUrl, $ids_file);
+my $result1 = perfTestRecordTables($site1ServiceUrl, $idsFile1);
+print STDERR Dumper $result1;
+my $result2 = perfTestRecordTables($site2ServiceUrl, $idsFile2);
 
 foreach my $recordtype (sort keys %$result1) {
-  foreach my $table (sort keys %$recordtype) {
-    foreach my $id (sort keys %$table) {
-      my $row1 = $result1->{$table}->{$id};
-      my $row2 = $result2->{$table}->{$id};
-      my @a = ($recordtype, $table, $id, $row1->{startTime}, $row1->{endTime}, $row1->{duration}, $row2->{startTime}, $row2->{endTime}, $row2->{duration});
+  my %t = %{$result1->{$recordtype}};
+  foreach my $table (sort keys %t) {
+    my %ig = %{$result1->{$recordtype}->{$table}};
+    foreach my $id (sort keys %ig) {
+      my $row1 = $result1->{$recordtype}->{$table}->{$id};
+      my $row2 = $result2->{$recordtype}->{$table}->{$id};
+      my @a = ($recordtype, $table, $id, $row1->[0], $row1->[1], $row2->[2], $row2->[0], $row2->[1], $row2->[2]);
       print STDOUT join("\t", @a) . "\n";
     }
   }
@@ -63,7 +67,7 @@ sub perfTestRecordTables {
   die "Can't open IDs file '$idsFile' for reading\n" unless -e $idsFile;
 
   my $idsMap = LoadFile($idsFile);
-  my $resultMap = {};
+  my $resultMap;
 
   print STDERR "Reading from wdk /record-types endpoint\n";
   my $recordsString = get("https://$siteServiceUrl/record-types?format=expanded");
@@ -78,11 +82,10 @@ sub perfTestRecordTables {
     foreach my $table (@{$recordClass->{tables}}) {
       my $tableName = $table->{name};
       foreach my $id (@{$idsMap->{$className}}) {
-	my ($start, $end, $duration) = runTest($id, $className, $tableName, $siteServiceUrl);
-	$resultMap->{$className}->{$tableName}->{$id} = [$start, $end, $duration];
+	my ($prunedIdString, $start, $duration, $rowCount) = runTest($id, $className, $tableName, $siteServiceUrl);
+	$resultMap->{$className}->{$tableName}->{$prunedIdString} = [$start, $duration, $rowCount];
       }
     }
-
   }
   return $resultMap;
 }
@@ -92,10 +95,13 @@ sub runTest {
 
   print STDERR "running test: $className $tableName\n";
   my $testResult = {};
-  $testResult->{id} = "" . join(", ", values(%$id));
   my $ua = LWP::UserAgent->new;
 
   my $wdkPk = convertPkToWdkFormat($id);
+  my %prunedId = %$id;
+  delete $prunedId{project_id};  # gets in the way of comparing with unidb
+  $testResult->{id} = "" . join(", ", values(%prunedId));
+
   my $requestBody = {};
   $requestBody->{primaryKey} = $wdkPk;
   $requestBody->{tables} = [$tableName];
@@ -109,15 +115,15 @@ sub runTest {
   my $start = time;
   my $resp = $ua->request($req);
   my $end = time;
-  $testResult->{duration} = sprintf("%.1f", $end - $start);
+  $testResult->{duration} = sprintf("%.2f", $end - $start);
   die "HTTP POST error code: " . $resp->code . " " . $resp->message . "\n" unless $resp->is_success;
   my $message = $resp->decoded_content;
   my $f = decode_json($message);
   my $table = $f->{tables}->{$tableName};
   die "Table $tableName not returned in result\n" unless $table;
   die "Had table errors: " . $f->{tableErrors} if scalar(@{$f->{tableErrors}});
-  $testResult->{count} = scalar(@$table);
-  print Dumper $testResult;
+  $testResult->{rowCount} = scalar(@$table);
+  return ($testResult->{id}, $testResult->{timestamp}, $testResult->{duration}, $testResult->{rowCount});
 }
 
 sub convertPkToWdkFormat {
