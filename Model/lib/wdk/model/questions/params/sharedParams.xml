@@ -1137,6 +1137,41 @@ With this option selected you can cut and paste a FASTA sequence in upper case c
          </help>
        </filterParam>
 
+<!-- disused
+       <filterParam name="snpchip_strain_meta" includeProjects="PlasmoDB,EuPathDB" 
+                      metadataQueryRef="SharedVQ.SnpChipStrainsMetadata"
+                      backgroundQueryRef="SharedVQ.SnpChipStrainsMetadata"
+                      ontologyQueryRef="SharedVQ.SnpChipStrainsMetadataSpec"
+                      prompt="Isolates"
+                      dependedParamRef="organismParams.organismSinglePick,sharedParams.snp_assay_type">
+         <help>
+              Select isolates to compare using associated meta data.
+         </help>
+       </filterParam>
+
+       <filterParam name="snpchip_strain_meta_a" includeProjects="PlasmoDB,EuPathDB" 
+                      metadataQueryRef="SharedVQ.SnpChipStrainsMetadata"
+                      backgroundQueryRef="SharedVQ.SnpChipStrainsMetadata"
+                      ontologyQueryRef="SharedVQ.SnpChipStrainsMetadataSpec"
+                      prompt="Isolates"
+                      dependedParamRef="organismParams.organismSinglePick,sharedParams.snp_assay_type">
+         <help>
+           Select characteristics to filter the isolates you want to include for set A .... for example, choose Country in the left panel and select the country or countries from which you want to choose isolates for SNP detection.
+         </help>
+       </filterParam>
+
+       <filterParam name="snpchip_strain_meta_b" includeProjects="PlasmoDB,EuPathDB" 
+                      metadataQueryRef="SharedVQ.SnpChipStrainsMetadata"
+                      backgroundQueryRef="SharedVQ.SnpChipStrainsMetadata"
+                      ontologyQueryRef="SharedVQ.SnpChipStrainsMetadataSpec"
+                      prompt="Isolates"
+                      dependedParamRef="organismParams.organismSinglePick,sharedParams.snp_assay_type">
+         <help>
+           Select characteristics to filter the isolates you want to include for set B .... for example, choose Country in the left panel and select the country or countries from which you want to choose isolates for SNP detection.
+         </help>
+       </filterParam>
+-->
+
 
        <filterParam name="ngsSnp_strain_meta_a" includeProjects="PiroplasmaDB,GiardiaDB,TriTrypDB,AmoebaDB,PlasmoDB,CryptoDB,ToxoDB,FungiDB,MicrosporidiaDB,EuPathDB,UniDB" 
                       metadataQueryRef="SnpVQ.SamplesMetadataByOrganism"
@@ -2829,6 +2864,253 @@ where oe.value = main.property
         </processQuery>
 
 
+        <sqlQuery name="SnpChipStrainsMetadata" doNotTest="true" isCacheable="true" includeProjects="PlasmoDB,UniDB"> 
+            <paramRef ref="organismParams.organismSinglePick" quote="true" queryRef="organismVQ.withSNPs"/>  
+            <paramRef ref="sharedParams.snp_assay_type" quote="true"/> 
+            <column name="ontology_term_name"/>
+            <column name="internal"/>
+            <column name="number_value"/>
+            <column name="date_value"/>
+            <column name="string_value"/>
+            <sql>
+           <![CDATA[
+select * from (    
+    Select distinct ss.strain as term,
+      initcap (
+      case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
+           then (regexp_replace(bmc.value,'\s[^0-9]+',''))
+           else bmc.value
+      end) as value, 
+      oe.value as property
+ from              
+      Apidbtuning.SnpChipStrains ss,
+        study.study s,
+        rad.studybiomaterial sb,
+        study.biosample bs,
+        study.biomaterialcharacteristic bmc,
+        study.Ontologyentry oe
+ Where  s.study_id = sb.study_id
+   and  sb.bio_material_id = bs.bio_material_id
+   and  bmc.bio_material_Id = bs.bio_material_Id
+   and  ss.strain = bs.NAME
+   and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+   and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
+   and  ss.organism = $$organismSinglePick$$
+   and  ss.name in ($$snp_assay_type$$)
+   and oe.value not in ( 'StrainOrLine', 'Organism')
+   Union 
+ Select distinct ss.isolate_id as term,
+      ss.strain as value,
+      'StrainOrLine' as property
+ from Apidbtuning.SnpChipStrains ss
+  union 
+ select ss.isolate_id as term,
+        dp.display_name as value,
+        'Experiment' as property
+  from apidbtuning.SnpChipStrains ss, apidbTuning.DatasetPresenter dp
+  where dp.name =  ss.extdb_name 
+      and  ss.organism = $$organismSinglePick$$
+      and  ss.name in ($$snp_assay_type$$)
+ )
+ where value is not null
+  and lower(value) != 'unknown'
+            ]]>
+            </sql>
+        </sqlQuery>
+
+        <processQuery name="SnpChipStrainsMetadata" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+           <paramRef ref="organismParams.organismSinglePick" quote="true" queryRef="organismVQ.withSNPs"/>
+           <paramRef ref="sharedParams.snp_assay_type" quote="true"/> 
+            <wsColumn name="ontology_term_name" width="100" wsName="ontology_term_name"/>
+            <wsColumn name="internal" width="100" wsName="internal"/>
+            <wsColumn name="number_value" width="100" wsName="number_value"/>
+            <wsColumn name="date_value" width="100" wsName="date_value"/>
+            <wsColumn name="string_value" width="100" wsName="string_value"/>
+        </processQuery>
+
+
+<!-- disused
+        <sqlQuery name="SnpChipStrainsMetadataSpec" doNotTest="1" isCacheable="true" includeProjects="PlasmoDB">  
+          <paramRef ref="organismParams.organismSinglePick" quote="true" queryRef="organismVQ.withSNPs"/>
+          <paramRef ref="sharedParams.snp_assay_type" quote="true"/> 
+            <column name="ontology_term_name"/>
+            <column name="parent_ontology_term_name"/>
+            <column name="display_name"/>
+            <column name="description"/>
+            <column name="type"/>
+            <column name="units"/>
+            <column name="precision"/>
+            <column name="is_range"/>
+            <sql>
+           <![CDATA[
+  With property_set as (
+select distinct property
+from (    
+     select oe.value as property
+ from              
+      Apidbtuning.SnpChipStrains ss,
+        study.study s,
+        rad.studybiomaterial sb,
+        study.biosample bs,
+        study.biomaterialcharacteristic bmc,
+        study.Ontologyentry oe
+ Where  s.study_id = sb.study_id
+   and  sb.bio_material_id = bs.bio_material_id
+   and  bmc.bio_material_Id = bs.bio_material_Id
+   and  ss.strain = bs.NAME
+   and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+   and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
+   and  ss.organism = $$organismSinglePick$$
+   and  ss.name in ($$snp_assay_type$$)
+   and oe.value not in ( 'StrainOrLine', 'Organism')
+   Union 
+ Select 'StrainOrLine' as property
+ from dual
+  union 
+ select 'Experiment' as property
+  from dual)
+ )
+, FullSpec as (
+ select ps.property as property,
+        'type' as spec_property, 
+        'string' as spec_value 
+  from property_set ps
+ where ps.property not in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+ select ps.property as property,
+        'type' as spec_property, 
+        'number' as spec_value 
+  from property_set ps
+ where ps.property in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+select ps.property as property,
+        'filter' as spec_property, 
+        'membership' as spec_value
+   from property_set ps
+  where ps.property not in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+ select ps.property as property,
+        'filter' as spec_property, 
+        'range' as spec_value 
+  from property_set ps
+ where ps.property in ( 'ClearanceHalfLife','ClearanceRate','ClearanceTime','HostAge','ParasitemiaStart')
+union
+select ps.property as property,
+        'display' as spec_property, 
+        ps.property as spec_value 
+        from property_set ps)
+, main as (
+select distinct fs.*
+            from fullspec fs,
+                 (
+select * from ( 
+ Select distinct ss.strain as term,
+      initcap (
+      case when regexp_like (bmc.value,'^([0-9])+\s([^0-9])+$') 
+           then (regexp_replace(bmc.value,'\s[^0-9]+',''))
+           else bmc.value
+      end) as value, 
+      oe.value as property
+ from              
+      Apidbtuning.SnpChipStrains ss,
+        study.study s,
+        rad.studybiomaterial sb,
+        study.biosample bs,
+        study.biomaterialcharacteristic bmc,
+        study.Ontologyentry oe
+ Where  s.study_id = sb.study_id
+   and  sb.bio_material_id = bs.bio_material_id
+   and  bmc.bio_material_Id = bs.bio_material_Id
+   and  ss.strain = bs.NAME
+   and  Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+   and  s.external_database_release_id = ss.EXTERNAL_DATABASE_RELEASE_ID
+   and  ss.organism = $$organismSinglePick$$
+   and  ss.name in ($$snp_assay_type$$)
+   and  oe.value != 'StrainOrLine'
+ Union 
+ Select distinct ss.isolate_id as term,
+      ss.strain as value,
+      'StrainOrLine' as property
+ from Apidbtuning.SnpChipStrains ss
+ union 
+ select ss.strain as term,
+        dp.display_name as value,
+        'Experiment' as property
+  from apidbtuning.SnpChipStrains ss, apidbTuning.DatasetPresenter dp
+  where dp.name =  ss.extdb_name
+)
+where value is not null
+  and lower(value) != 'unknown'
+                  ) categories
+            where fs.property = categories.property
+)
+, Tree as (
+(SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
+           START WITH oe.value = main.property
+                 CONNECT BY (PRIOR oe.category = oe.value)
+                 
+intersect
+SELECT distinct oe.value as property, 'parent' as spec_property, oe.category as spec_value
+           FROM STUDY.ontologyentry oe, main
+           START WITH oe.category = 'BioMaterialCharacteristics'
+                 CONNECT BY PRIOR oe.value = oe.category and PRIOR oe.category not in (select property from main) 
+)
+union 
+select 'BioMaterialCharacteristics', 'parent' as spec_property, '' as spec_value from dual
+union
+select 'Experiment', 'parent' as spec_property, 'BioMaterialCharacteristics' as spec_value from dual
+)
+, FilterTree as  ( 
+select * from tree
+                 minus
+                 (select * from tree where property in (select distinct property from tree where spec_value != 'BioMaterialCharacteristics'  )
+                                       and property in (select distinct property from tree where spec_value = 'BioMaterialCharacteristics' )
+                                       and spec_value != 'BioMaterialCharacteristics' 
+                                                      
+  )                                                  
+)               
+, TreeDisplay as ( 
+         SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
+           FROM FilterTree
+          WHERE property != 'BioMaterialCharacteristics'
+          UNION
+         SELECT 'BioMaterialCharacteristics' as property, 'display' as spec_property, 'Characteristics' as spec_value from dual
+          MINUS 
+         SELECT property as property, 'display' as spec_property, initcap(replace(property,'_',' ')) as spec_value
+           FROM main
+)
+Select * from main
+union
+select ft.* from filterTree ft
+union
+select treeDisplay.* from treeDisplay
+union
+SELECT oe.value as property, 'description' as spec_property, definition as spec_value FROM STUDY.ontologyentry oe, main
+where oe.value = main.property
+      and oe.definition is not null
+union
+SELECT oe.value as property, 'leaf' as spec_property, 'true' as spec_value FROM STUDY.ontologyentry oe, main
+where oe.value = main.property
+order by property
+           ]]> 
+
+            </sql>
+        </sqlQuery>
+-->
+        <processQuery name="SnpChipStrainsMetadataSpec" doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
+          <paramRef ref="organismParams.organismSinglePick" quote="true" queryRef="organismVQ.withSNPs"/>
+          <paramRef ref="sharedParams.snp_assay_type" quote="true"/> 
+          <wsColumn name="ontology_term_name" width="100" wsName="ontology_term_name"/>
+          <wsColumn name="parent_ontology_term_name" width="100" wsName="parent_ontology_term_name"/>
+          <wsColumn name="display_name" width="100" wsName="display_name"/>
+          <wsColumn name="description" width="100" wsName="description"/>
+          <wsColumn name="type" width="100" wsName="type"/>
+          <wsColumn name="units" width="100" wsName="units"/>
+          <wsColumn name="precision" width="100" wsName="precision"/>
+          <wsColumn name="is_range" width="100" wsName="is_range"/>
+        </processQuery>
+
 
         <sqlQuery name="profileOntologyTerm" includeProjects="PlasmoDB,UniDB" doNotTest="true">
           <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false" queryRef="GeneVQ.GenericProfiles"/>
@@ -2855,6 +3137,82 @@ where oe.value = main.property
             <wsColumn name="display" width="32" wsName="display"/>
         </processQuery>
 
+        <sqlQuery name="profileOntology" includeProjects="PlasmoDB,UniDB" doNotTest="true">
+          <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false" queryRef="GeneVQ.GenericProfiles"/>
+          <column name="display"/>
+          <column name="internal"/>
+          <column name="term"/>
+          <sql>
+
+            Select * from 
+            (Select Oe.Value As display,
+                   Bmc.ontology_entry_id As internal,
+                   oe.value As term, 1 as order_num
+            From
+                 Study.Study S,
+                 Apidb.Profileset Ps,
+                 Rad.Studybiomaterial Sbm,
+                 Study.Biomaterialcharacteristic Bmc,
+                 Study.Ontologyentry oe
+            Where Ps.External_Database_Release_Id = S.External_Database_Release_Id  
+              And S.Study_Id = Sbm.Study_Id 
+              And Bmc.Bio_Material_Id = Sbm.Bio_Material_Id
+              And Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+              And Ps.Profile_Set_Id = $$profileset_generic$$
+            Group by Oe.value, bmc.ontology_entry_id
+            having count(distinct BMC.value) >1
+           )
+            Order By order_num,term
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="profileOntology" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="display ASC"  includeProjects="EuPathDB" doNotTest="true">
+           <paramRef ref="geneParams.profileset_generic" quote="true" queryRef="GeneVQ.GenericProfiles"/>  
+            <wsColumn name="internal" width="32" wsName="internal"/>
+            <wsColumn name="term" width="32" wsName="term"/>
+            <wsColumn name="display" width="32" wsName="display"/>
+        </processQuery>
+
+
+        <sqlQuery name="profileOntologyOptional" includeProjects="PlasmoDB,UniDB" doNotTest="true">
+          <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic" quote="false" queryRef="GeneVQ.GenericProfiles"/>
+          <column name="display"/>
+          <column name="internal"/>
+          <column name="term"/>
+          <sql>
+            Select * from 
+            (Select Oe.Value As display,
+                   Bmc.ontology_entry_id As internal,
+                   oe.value As term, 1 as order_num
+            From
+                 Study.Study S,
+                 Apidb.Profileset Ps,
+                 Rad.Studybiomaterial Sbm,
+                 Study.Biomaterialcharacteristic Bmc,
+                 Study.Ontologyentry oe
+            Where Ps.External_Database_Release_Id = S.External_Database_Release_Id  
+              And S.Study_Id = Sbm.Study_Id 
+              And Bmc.Bio_Material_Id = Sbm.Bio_Material_Id
+              And Bmc.Ontology_Entry_Id = Oe.Ontology_Entry_Id
+              And Ps.Profile_Set_Id = $$profileset_generic$$
+            Group by Oe.value, bmc.ontology_entry_id
+            having count(distinct BMC.value) >1
+            Union
+            Select 'Do Not Care' as display,
+                   -1 as internal,
+                   'Do Not Care' as term,
+                   2 as order_num
+            From Dual)
+            Order By order_num,term
+          </sql>
+        </sqlQuery>
+
+        <processQuery name="profileOntologyOptional" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" sorting="display ASC"  includeProjects="EuPathDB" doNotTest="true">
+           <paramRef ref="geneParams.profileset_generic" quote="true" queryRef="GeneVQ.GenericProfiles"/>  
+            <wsColumn name="internal" width="32" wsName="internal"/>
+            <wsColumn name="term" width="32" wsName="term"/>
+            <wsColumn name="display" width="32" wsName="display"/>
+        </processQuery>
 
         <sqlQuery name="ChromosomeOrderNumSeq" 
                   isCacheable="true" 
