@@ -7,8 +7,8 @@ public class Dummy extends DatasetInjector {
   @Override
   public void injectTemplates() {
  
-  setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
-  setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
+  //setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+  //setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
   injectTemplate("jbrowseVcfSampleBuildProps");
 
   }

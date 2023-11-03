@@ -19,14 +19,15 @@ sub setIndexUrlTemplate {
 
 
 sub getBigwigUrl {$_[0]->{bw_url_template}}
-sub setBigwigUrl {
-    my($self, $bigwigUrl) = @_;
-    die "required bigwigUrl not set" unless $bigwigUrl;
-    $self->{bw_url_template} = $bigwigUrl;
-}
+sub setBigwigUrl {$_[0]->{bw_url_template} = $_[1] }
+#sub setBigwigUrl {
+#    my($self, $bigwigUrl) = @_;
+#    die "required bigwigUrl not set" unless $bigwigUrl;
+#    $self->{bw_url_template} = $bigwigUrl;
+#}
 
-sub getBigwigStoreType {$_[0]->{bw_store_type}}
-sub setBigwigStoreType {$_[0]->{bw_store_type} = $_[1] }
+sub getBigWigStoreType {$_[0]->{bw_store_type}}
+sub setBigWigStoreType {$_[0]->{bw_store_type} = $_[1] }
 
 sub new {
     my ($class, $args) = @_;
