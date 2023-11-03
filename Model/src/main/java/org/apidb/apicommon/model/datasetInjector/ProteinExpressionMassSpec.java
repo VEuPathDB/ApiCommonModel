@@ -46,6 +46,25 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       else {
           injectTemplate("proteinExpressionMassSpecPBrowseTrack");
       }
+
+      String presenterId = getPropValue("presenterId");
+      String datasetClassCategory = getPropValue("category");
+      String organismAbbrev = getPropValue("organismAbbrev");
+      String datasetName = getPropValue("datasetName");
+      String dsExtName = organismAbbrev + datasetName;
+      //setPropValue("datasetExtdbName", getPropValue("edNameParamValue"));
+      if (datasetName.startsWith("_")) {
+      setPropValue("datasetExtdbName", dsExtName);
+      }
+      else {
+      setPropValue("datasetExtdbName", datasetName);
+      }
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
+      injectTemplate("jbrowseProteinExpressionMassSpecSampleBuildProps");
+
+
+
   }
 
   @Override
