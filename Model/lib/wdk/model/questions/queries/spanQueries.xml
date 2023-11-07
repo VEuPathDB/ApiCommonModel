@@ -111,58 +111,59 @@
         <column name="contextStart"/>
         <column name="contextEnd"/>
         <column name="transcript_novelty"/>
+        <column name="total_count"/>
         
 	<sql includeProjects="PlasmoDB,ToxoDB">
         <![CDATA[
 
-select distinct source_id, project_id , min_start, contextStart, max_end, contextEnd, chr_source_id, internal_abbrev, organism
-, listagg(distinct dataset_name, ', ') WITHIN GROUP (ORDER BY transcript_novelty) AS dataset_name
-,listagg(distinct transcript_novelty, ', ') within group (order by transcript_novelty) as transcript_novelty
-from (
-select distinct
-  source_id
-, project_id
-, min_start
-, case when min_start - 1000 < 1 THEN 1 ELSE min_start - 1000 END as contextStart
-, max_end
-, CASE WHEN max_end + 1000  > length THEN length ELSE max_end + 1000 END as contextEnd
-, chr_source_id
-, internal_abbrev
-, dataset_name
-, organism
-, transcript_novelty
-from(
-             select distinct lrt.na_seq_source_id as chr_source_id
-             ,gsa.project_id
-             ,lrt.min_start
-             ,lrt.max_end
-             ,lrt.na_seq_source_id || ':' || lrt.min_start || '-' ||  lrt.max_end || ':f' as source_id
-             ,ed.name as dataset_name
-             ,ab.internal_abbrev
-             ,gsa.organism
-             ,lrt.transcript_novelty
-             , gsa.length
-        from
-              apidb.longreadtranscript lrt
-             ,apidbtuning.genomicseqattributes gsa
-             ,sres.externaldatabaserelease edr
-             ,sres.externaldatabase ed
-             ,apidbtuning.organismattributes ab
-        where
-             edr.external_database_release_id = lrt.external_database_release_id
-             and ed.external_database_id = edr.external_database_id
-             and gsa.source_id = lrt.na_seq_source_id
-             and ab.organism_name = gsa.organism
-             and lrt.transcript_length >= $$transcript_length$$
-	     and lrt.transcript_novelty in ($$ismTypes_span$$)
-
+        SELECT DISTINCT * FROM (
+            SELECT DISTINCT source_id
+            , project_id
+            , min_start
+            , contextStart
+            , max_end
+            , contextEnd
+            , chr_source_id
+            , internal_abbrev
+            , organism
+            , dataset_name
+            , LISTAGG(DISTINCT transcript_novelty) WITHIN GROUP (ORDER BY transcript_novelty) AS transcript_novelty
+            , SUM(reads) AS total_count
+            FROM (
+                SELECT DISTINCT lrt.na_seq_source_id AS chr_source_id
+                , gsa.project_id
+                , lrt.min_start
+                , CASE WHEN lrt.min_start - 1000 < 1
+                    THEN 1
+                    ELSE lrt.min_start - 1000 END as contextStart
+                , lrt.max_end
+                , CASE WHEN lrt.max_end + 1000 > gsa.length
+                    THEN gsa.length
+                    ELSE lrt.max_end + 1000 END as contextEnd
+                , lrt.na_seq_source_id || ':' || lrt.min_start || '-' || lrt.max_end || ':f' AS source_id
+                , count_table.reads
+                , ed.name AS dataset_name
+                , oa.internal_abbrev
+                , gsa.organism
+                , lrt.transcript_novelty
+                FROM apidb.longreadtranscript lrt
+                , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) count_table
+                , apidbtuning.genomicseqattributes gsa
+                , sres.externaldatabase ed
+                , sres.externaldatabaserelease edr
+                , apidbtuning.organismattributes oa
+                WHERE edr.external_database_release_id = lrt.external_database_release_id
+                AND ed.external_database_id = edr.external_database_id
+                AND ed.name = '$$long_read_datasets$$'
+                AND gsa.source_id = lrt.na_seq_source_id
+                AND oa.organism_name = gsa.organism
+                AND lrt.transcript_length >= $$transcript_length$$
+                AND lrt.transcript_novelty in ($$ismTypes_span$$)
+            )
+            GROUP BY source_id, project_id, min_start, contextStart, max_end, contextEnd, chr_source_id, internal_abbrev, organism, dataset_name
         )
-        where dataset_name = '$$long_read_datasets$$'
-        order by source_id, min_start
-)
-group by source_id, project_id , min_start, contextStart, max_end, contextEnd, chr_source_id, internal_abbrev, organism
-
-           ]]>
+        WHERE total_count >= $$supporting_read_count$$
+        ]]>
         </sql>
 
     </sqlQuery>
