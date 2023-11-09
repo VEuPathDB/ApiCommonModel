@@ -2899,14 +2899,21 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         from TranscriptAttributes
         
     UNION
-        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
-               'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
-               null as number_value
-        from TranscriptAttributes atr
-        ,apidb.longreadtranscript ltr
-        where 
-        ltr.gene_source_id = atr.gene_source_id
-        
+        SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
+        , string_value, number_value
+        FROM (
+            select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+                'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
+                 null as number_value, sum(counts.reads) as total_reads
+            from TranscriptAttributes atr
+            , apidb.longreadtranscript ltr
+            , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
+            where ltr.gene_source_id = atr.gene_source_id
+            AND ltr.transcript_length >= 20
+            GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty
+        )
+        WHERE total_reads >= 5
+
     UNION
         select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
         'intron_junction' as ontology_term_name, it.string_value string_value,
