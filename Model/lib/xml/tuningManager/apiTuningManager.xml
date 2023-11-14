@@ -2992,6 +2992,83 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
+  <tuningTable name="GeneProduct" prefixEnabled="true">
+  <comment>A single product string per gene
+   </comment>
+    <internalDependency name=""/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.Transcript"/>
+    <sql>
+      <![CDATA[
+        create table *prefixGeneProduct&1 as
+        with gfp_preferred
+             as (select source_id,
+                        to_char(substr(rtrim(xmlagg(xmlelement(e, product,', ').extract('//text()') order by product).getclobval(),', '), 1, 4000)) as product
+                 from (select distinct gf.source_id,  gfp.product
+                       from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
+                       where gfp.na_feature_id = gf.na_feature_id
+                         and gfp.is_preferred = 1)
+                 group by source_id),
+             gfp_any
+             as (select source_id,
+                        to_char(substr(rtrim(xmlagg(xmlelement(e, product,', ').extract('//text()') order by product).getclobval(),', '), 1, 4000)) as product
+                 from (select distinct gf.source_id,  gfp.product
+                       from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
+                       where gfp.na_feature_id = gf.na_feature_id)
+                       group by source_id),
+             tp_preferred
+             as (select source_id,
+                        to_char(substr(rtrim(xmlagg(xmlelement(e, product,', ').extract('//text()') order by product).getclobval(),', '), 1, 4000)) as product
+                 from (select distinct gf.source_id, tp.product
+                       from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
+                       where t.parent_id = gf.na_feature_id
+                         and tp.na_feature_id = t.na_feature_id
+                         and tp.is_preferred = 1)
+                       group by source_id),
+             gf_product
+             as (select source_id, product
+                 from dots.GeneFeature gf
+                 where product is not null),
+             tp_any
+             as (select source_id,
+                        to_char(substr(rtrim(xmlagg(xmlelement(e, product,', ').extract('//text()') order by product).getclobval(),', '), 1, 4000)) as product
+                 from (select distinct gf.source_id, tp.product
+                       from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
+                       where t.parent_id = gf.na_feature_id
+                         and tp.na_feature_id = t.na_feature_id)
+                       group by source_id),
+             t_product
+             as (select source_id,
+                        to_char(substr(rtrim(xmlagg(xmlelement(e, product,', ').extract('//text()') order by product).getclobval(),', '), 1, 4000)) as product
+                 from (select gf.source_id, t.product
+                       from dots.GeneFeature gf, dots.Transcript t
+                       where t.parent_id = gf.na_feature_id
+                         and t.product is not null)
+                       group by source_id)
+        select gf.source_id,
+               coalesce(gfp_preferred.product, gfp_any.product, tp_preferred.product,
+                        gf.product, tp_any.product, t_product.product)
+                 as product
+        from dots.GeneFeature gf, gfp_preferred, gfp_any, tp_preferred, gf_product, tp_any, t_product
+        where gf.source_id = gfp_preferred.source_id(+)
+          and gf.source_id = gfp_any.source_id(+)
+          and gf.source_id = tp_preferred.source_id(+)
+          and gf.source_id = gf_product.source_id(+)
+          and gf.source_id = tp_any.source_id(+)
+          and gf.source_id = t_product.source_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE INDEX GeneProduct_gene_idx&1 ON &prefixGeneProduct&1 (source_id, product)
+tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="GeneAttributes" prefixEnabled="true">
     <comment>The BFMV for the gene record. Each gene gets a single record, which
          stores all its attributes. 
