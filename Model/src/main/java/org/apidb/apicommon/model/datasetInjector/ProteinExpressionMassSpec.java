@@ -2,6 +2,8 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
+import java.util.Map;
+
 public class ProteinExpressionMassSpec extends DatasetInjector {
 
   @Override
@@ -9,6 +11,29 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       setShortAttribution();
 
       // TODO:  How else can we get this??
+      String projectName = getPropValue("projectName");
+      //String organismAbbrev = getPropValue("organismAbbrev");
+      String datasetNamePattern = getPropValue("datasetNamePattern");
+      String javaDatasetNamePattern = "";
+
+      if (datasetNamePattern != null){
+      	javaDatasetNamePattern = datasetNamePattern.replace("%", "");
+      }	
+      else{
+        javaDatasetNamePattern = getPropValue("datasetName");
+      }
+      Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
+      //String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+      //Map<String, String> orgProps = globalProps.get(orgPropsKey);
+
+      for (String key : globalProps.keySet()){
+        //iterate over keys
+        if (key.contains(javaDatasetNamePattern)){ 
+                System.out.println(key);
+                    }
+	}
+                    
+
       setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_0108");
 
       setOrganismAbbrevFromDatasetName();
@@ -23,8 +48,6 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       String datasetDisplayName = getPropValue("datasetDisplayName");
       String cleanDatasetDisplayName = cleanString(datasetDisplayName);
       setPropValue("cleanDatasetDisplayName",cleanDatasetDisplayName);
-
-       String datasetNamePattern = getPropValue("datasetNamePattern");
 
       if (datasetNamePattern == null || datasetNamePattern.equals("")) {
           setPropValue("edNameParamValue", getDatasetName());
@@ -52,8 +75,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       String organismAbbrev = getPropValue("organismAbbrev");
       String datasetName = getPropValue("datasetName");
 
-
-      String dsExtName = organismAbbrev + datasetName;
+      String dsExtName = optionalOrganismAbbrev + datasetName;
       //setPropValue("datasetExtdbName", getPropValue("edNameParamValue"));
       if (datasetName.startsWith("_")) {
       setPropValue("datasetExtdbName", dsExtName);
