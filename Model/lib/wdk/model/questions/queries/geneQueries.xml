@@ -1009,16 +1009,17 @@ FROM
 <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
    <sqlQuery name="GenesByISM" includeProjects="PlasmoDB,ToxoDB" >
-	<paramRef ref="geneParams.long_read_datasets"/>
+	    <paramRef ref="geneParams.long_read_datasets"/>
         <paramRef ref="geneParams.ismTypes"/>
-	<paramRef ref="SpanParams.transcript_length"/>
+        <paramRef ref="sharedParams.supporting_read_count"/>
+	    <paramRef ref="sharedParams.transcript_length"/>
         <column name="project_id"/>
         <column name="source_id"/>
         <column name="gene_source_id"/>
         <column name="num_new_models"  />
         <column name="transcript_novelty"/>
         <column name="incomplete_splice_match_type"/>
-	<column name="matched_result"/>
+	    <column name="matched_result"/>
         <!-- these used for JBrowse link -->
         <column name="min_start"/>
         <column name="max_end"/>
@@ -1029,9 +1030,8 @@ FROM
 	    <column name="contextEnd"/>
         <sql>
 
-
-	select
-        source_id
+        <![CDATA[
+	    select distinct source_id
         , gene_source_id
         , count(source_id) as num_new_models
         , min(transcript_length) as min_new_transcript_length
@@ -1040,38 +1040,49 @@ FROM
         , listagg(distinct transcript_novelty, ', ') within group (order by transcript_novelty) as transcript_novelty
         , listagg(distinct incomplete_splice_match_type, ', ') within group (order by incomplete_splice_match_type) as incomplete_splice_match_type
         , min(min_start) as min_start
-	, min(min_start) - 1000 as contextStart
+	    , min(min_start) - 1000 as contextStart
         , max(max_end) as max_end
-	, max(max_end) + 1000 contextEnd
+	    , max(max_end) + 1000 contextEnd
         , project_id
-	, listagg( distinct dataset_name,',') as all_datasets
-	, na_seq_source_id
-	, internal_abbrev
+	    , listagg( distinct dataset_name,',') as all_datasets
+	    , na_seq_source_id
+	    , internal_abbrev
         , 'Y' as matched_result
         from (
                 select ed.name as dataset_name
-		, ab.internal_abbrev 
-                , lrt.*
+		        , ab.internal_abbrev
+                , lrt.gene_source_id
+                , lrt.transcript_length
+                , lrt.gene_novelty
+                , lrt.transcript_novelty
+                , lrt.incomplete_splice_match_type
+                , lrt.min_start
+                , lrt.max_end
+                , lrt.na_seq_source_id
                 , ta.project_id
                 , ta.source_id
+                , sum(count_table.reads) as totalReads
                 from apidb.longreadtranscript lrt
+                , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) count_table
                 , sres.externaldatabaserelease edr
                 , sres.externaldatabase ed
                 , apidbtuning.transcriptattributes ta
-		, apidbtuning.organismattributes ab
+		        , apidbtuning.organismattributes ab
                 , apidbtuning.datasetPresenter dp
                 where edr.external_database_release_id = lrt.external_database_release_id
                 and ed.external_database_id = edr.external_database_id
                 and ta.gene_source_id = lrt.gene_source_id
-		and ab.organism_name = ta.organism
+		        and ab.organism_name = ta.organism
                 and ed.name = dp.name
-		and lrt.transcript_length >= $$transcript_length$$
-		and (lrt.transcript_novelty in ($$ismTypes$$) or (lrt.transcript_novelty = 'ISM' and lrt.incomplete_splice_match_type in ($$ismTypes$$)))
+		        and lrt.transcript_length >= $$transcript_length$$
+		        and (lrt.transcript_novelty in ($$ismTypes$$) or (lrt.transcript_novelty = 'ISM' and lrt.incomplete_splice_match_type in ($$ismTypes$$)))
+                GROUP BY ed.name, ab.internal_abbrev, lrt.gene_source_id, lrt.transcript_length, lrt.gene_novelty, lrt.transcript_novelty
+                , lrt.incomplete_splice_match_type, lrt.min_start, lrt.max_end, lrt.na_seq_source_id, ta.project_id, ta.source_id
         )
         where dataset_name = '$$long_read_datasets$$'
+        AND totalReads >= $$supporting_read_count$$
         group by source_id, gene_source_id, project_id, na_seq_source_id,internal_abbrev
-        order by source_id desc
-
+        ]]>
 	</sql>
     </sqlQuery>
 
@@ -1079,9 +1090,10 @@ FROM
     <processQuery name="GenesByISM" 
              includeProjects="EuPathDB"
              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-	<paramRef ref="geneParams.long_read_datasets"/>
+	    <paramRef ref="geneParams.long_read_datasets"/>
         <paramRef ref="geneParams.ismTypes"/>
-        <paramRef ref="SpanParams.transcript_length"/>
+        <paramRef ref="sharedParams.supporting_read_count"/>
+        <paramRef ref="sharedParams.transcript_length"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
         <wsColumn name="project_id" width="20" />
