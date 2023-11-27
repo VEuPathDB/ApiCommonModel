@@ -9,6 +9,7 @@ use Getopt::Long qw(GetOptions);
 use Data::Dumper;
 use EbrcModelCommon::Model::tmUtils;
 use ApiCommonModel::Model::Pubmed;
+use XML::Simple;
 
 my ($help, $propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug);
 
@@ -29,6 +30,12 @@ die "required parameter missing" unless ($propfile && $instance && $suffix);
 
 my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
 
+my $xmlParser = new XML::Simple();
+my $props = $xmlParser->XMLin($propfile);
+my $apiKey = $props->{ncbiApiKey};
+
+
+
 # create table
 $dbh->do(<<SQL) or die "creating table";
    create table Pubmed$suffix (
@@ -39,44 +46,15 @@ $dbh->do(<<SQL) or die "creating table";
    )
 SQL
 
-$dbh->commit();
 # try getting wanted references from an existing version of the table
 $dbh->{PrintError} = 0;
 $dbh->{RaiseError} = 0;
 my $rtn = $dbh->do(<<SQL);
   insert into Pubmed$suffix (pubmed_id, title, authors, doi)
-  with wanted_pmids
-  as (select to_number(pubmed_id) as pubmed_id
-      from (  -- PMIDs in current Pubmed table
-              select to_char(pubmed_id) as pubmed_id
-              from (select pubmed_id
-                    from Pubmed
-                    group by pubmed_id
-                    having count(*) = 1) -- avoid duplicates
-            intersect
-              -- PMIDs in DbRef
-              select regexp_replace(primary_identifier, '[^0-9]', '')
-              from sres.DbRef
-              where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
-                and external_database_release_id
-                    in (select edd.external_database_release_id
-                        from ExternalDbDatasetPresenter edd
-                          where lower(edd.dataset_presenter_display_name) like '%pubmed%')
-                and primary_identifier
-                    not in (select dr.primary_identifier
-                            from sres.DbRef dr,
-                                 sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
-                            where dr.external_database_release_id = edr.external_database_release_id
-                              and ed.external_database_id = edr.external_database_id
-                              and ed.name like '%DELETED_RSRC'
-                           )
-           ) t
-     )
-  select p.pubmed_id, p.title, p.authors, p.doi
-  from Pubmed p, wanted_pmids wp
-  where P.pubmed_id = wp.pubmed_id
+  select pubmed_id, title, authors, doi
+  from Pubmed
 SQL
-$dbh->commit();
+
 $dbh->{PrintError} = 1;
 $dbh->{RaiseError} = 1;
 
@@ -144,7 +122,7 @@ while (@pmids) {
   # create Pubmed object (and query NCBI for data)
   print STDERR "getting PubMed data from NCBI\n"
     if $debug;
-  my $pubmed = ApiCommonModel::Model::Pubmed->new(\@chunkOfPmids);
+  my $pubmed = ApiCommonModel::Model::Pubmed->new($apiKey, \@chunkOfPmids);
 
   print STDERR "processing PubMed data\n"
     if $debug;
@@ -170,7 +148,7 @@ $dbh->do(<<SQL) or die "creating index";
    create index pmix$suffix
       on Pubmed$suffix (pubmed_id, title, doi)
 SQL
-$dbh->commit();
+
 $dbh->disconnect();
 
 sub usage {

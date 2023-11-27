@@ -2,16 +2,17 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class GeneList extends  DatasetInjector {
+public abstract class GeneList extends  DatasetInjector {
 
-  @Override
+    public abstract String searchCategory();
+    public abstract String questionName();
+    public abstract String questionTemplateName();
+
+    @Override
     public void injectTemplates() {
       setShortAttribution();
 
-
       String projectName = getPropValue("projectName");
-      //String presenterId = getPropValue("presenterId");
-      //String datasetName = getDatasetName();
 
       setOrganismAbbrevFromDatasetName();
 
@@ -21,21 +22,28 @@ public class GeneList extends  DatasetInjector {
           setPropValue("includeProjects", projectName + ",UniDB");
       }
 
-     String searchCategory = "searchCategory-functional-gene-list";
-     String questionName = "GeneQuestions.GenesByFunctionalGeneList" + getDatasetName();
+
+     String searchCategory = searchCategory();
+     String questionName = questionName();
+     String questionTemplateName = questionTemplateName();
 
      setPropValue("searchCategory", searchCategory);
      setPropValue("questionName", questionName);
 
-     injectTemplate("geneListFunctional");
+     injectTemplate(questionTemplateName);
+
+
+     setPropValue("questionName", "GeneQuestions." + questionName);
      injectTemplate("internalGeneSearchCategory");
     }
 
 
   @Override
     public void addModelReferences() {
-                addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                                "GeneQuestions.GenesByFunctionalGeneList" + getDatasetName());
+     String questionName = questionName();
+
+     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
+                     "GeneQuestions." + questionName);
   }
 
 

@@ -60,141 +60,172 @@ my %daysSinceRelease;
 my @filteredOrganisms;
 my @gffData;
 
+# Make a hash of the VEuPath organisms of the database instance we're updating
+my %veupathOrganisms;
+my $organismQ = $dbh->prepare(<<SQL) or die "parsing organism query";
+  select distinct organism
+  from GenomicSeqAttributes
+SQL
+$organismQ->execute() or die "running organism query";
+while (my ($org) = $organismQ->fetchrow_array()) {
+  $veupathOrganisms{$org} = 1;
+}
+$organismQ->finish();
+
+# prepare na_sequence_id query
+my $sequenceIdQ = $dbh->prepare(<<SQL) or die "parsing organism query";
+  select na_sequence_id
+  from dots.NaSequence where source_id = ?
+SQL
+
 #Get number of days since release and filter organisms
 foreach my $item( @$organismJSON){
     my $organism = $item->{commonName};
+    my ($veupathId) = $organism =~ /(.*)\s+\[/;
 
-    #Get organism ID
+    next unless $veupathOrganisms{$veupathId};
+
+    # Get organism ID
     my $organismIdCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','organism':\"".$organism."\"}' https://apollo-api\.veupathdb\.org/organism/findAllOrganisms --silent --show-error";
     my $organismIdJSONResponse = &runCmd($organismIdCmd);
     my $organismIdJSON = decode_json($organismIdJSONResponse);
     my $organismId;
     foreach my $line( @$organismIdJSON ) {
-    $organismId = $line->{id};
-    $apolloID{$organism} = $organismId;
-    my ($veupathId) = $organism =~ /(.*)\s+\[/;
-    #Write to the organism table called apolloID
-    insertApolloIdTable($dbh, $prefix, $suffix,  $veupathId, $organism, $organismId);
-    $dbh->commit() or print STDERR $dbh->errstr;
+      $organismId = $line->{id};
+      $apolloID{$organism} = $organismId;
+      #Write to the organism table called apolloID
+      insertApolloIdTable($dbh, $prefix, $suffix,  $veupathId, $organism, $organismId);
     }
-	push (@filteredOrganisms, $organism);
-    }
+    push (@filteredOrganisms, $organism);
+  }
+$dbh->commit() or die $dbh->errstr;
+
+my $insertCount = 0;
 
 foreach(@filteredOrganisms){
 
-my $organismName = $_;
-my ($org, $abbrev) = split (/\[/, $organismName, 2);
-#extract annotations
-    my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','type':'GFF3','organism':\"".$organismName."\",'output':'text'}' https://apollo-api\.veupathdb\.org/IOService/write --silent --show-error";
+  my $organismName = $_;
 
-open (GFF, "$getGFFCmd|") or die "Can't open $getGFFCmd\n";
+  my $apolloID = $apolloID{$organismName};
 
-my @gffArray;
-while (<GFF>) {
+  my ($org, $abbrev) = split (/\[/, $organismName, 2);
+  #extract annotations
+  my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','type':'GFF3','organism':\"".$organismName."\",'output':'text'}' https://apollo-api\.veupathdb\.org/IOService/write --silent --show-error";
+
+  print STDERR "Fetching Apollo GFF from URL \"$getGFFCmd\"\n";
+
+  open (GFF, "$getGFFCmd|") or die "Can't open $getGFFCmd\n";
+
+  my @gffArray;
+  while (<GFF>) {
     my $line = $_;
-    
+
     if ($line !~ /^###$/){
-    push @gffArray, $line;
+      push @gffArray, $line;
     }
     else{
-    my $match = "status=Finished";
-    chomp @gffArray;
-    if (grep(/$match/, @gffArray)) {
-    foreach (@gffArray){
-        #Skip whitespace or comments
-        next if /^(\s*(#.*)?)?$/;
-        my ($seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes) = split ( /\t/, $_);
-        #Fix any single quotes in attributes string
-        $attributes =~ s/\'/\'\'/g;
-        #Decode uri encoding
-        $attributes = uri_unescape( $attributes );
-        my $creationDate;
-        my $parentAttr="";
-        my $idAttr="";
-        my $apolloProduct="";
-        my $apolloSymbol="";
-        my $apolloOwner="";
-        my $apolloGoTerm="";
-        my $apolloPmid="";
-        my $apolloTranscriptId="";
-        my $apolloEvidenceCode="";
-        my $apolloObsolete="";
-        my $evidenceCodeAssignment="";
-        #Parse creation date
-        if ($attributes =~ m/date_creation=([0-9-]+)/ ){
-        $creationDate = $1;
-        }
-        #Parse parent attr
-        if ($attributes =~ m/Parent=([0-9a-zA-Z-]+);/ ){
-        $parentAttr = $1;
-        }
-        #Parse id attr
-        if ($attributes =~ m/ID=([0-9a-zA-Z-]+);/ ){
-        $idAttr = $1;
-        }
-        #Parse apollo product
-        if ($attributes =~ m/gene_product=rank=1;term=(.+?);/  ||  $attributes =~ m/description=(.+?);/   ){
-        $apolloProduct = $1;
-        }
-        #Parse apollo symbol
-        if ($attributes =~ m/symbol=([0-9a-zA-Z-]+);/ ){
-        $apolloSymbol = $1;
-        }
-        #Parse apollo owner
-        if ($attributes =~ m/owner=([0-9a-zA-Z-\.,]+);/ ){
-        $apolloOwner = $1;
-        }
-        #Parse apollo GO term
-        my @goMatches;
-        push @goMatches, $1 while ($attributes=~ m{term=(GO:[0-9]+);}g);
-        my @uniqGoMatches = uniq(@goMatches);
-        $apolloGoTerm = join(", ", @uniqGoMatches);
+      my $match = "status=Finished";
+      chomp @gffArray;
+      if (grep(/$match/, @gffArray)) {
+	foreach (@gffArray){
+	  #Skip whitespace or comments
+	  next if /^(\s*(#.*)?)?$/;
+	  my ($seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes) = split ( /\t/, $_);
+	  #Fix any single quotes in attributes string
+	  $attributes =~ s/\'/\'\'/g;
+	  #Decode uri encoding
+	  $attributes = uri_unescape( $attributes );
+	  my $creationDate;
+	  my $parentAttr="";
+	  my $idAttr="";
+	  my $apolloProduct="";
+	  my $apolloSymbol="";
+	  my $apolloOwner="";
+	  my $apolloGoTerm="";
+	  my $apolloPmid="";
+	  my $apolloTranscriptId="";
+	  my $apolloEvidenceCode="";
+	  my $apolloObsolete="";
+	  my $evidenceCodeAssignment="";
+	  #Parse creation date
+	  if ($attributes =~ m/date_creation=([0-9-]+)/ ){
+	    $creationDate = $1;
+	  }
+	  #Parse parent attr
+	  if ($attributes =~ m/Parent=([0-9a-zA-Z-]+);/ ){
+	    $parentAttr = $1;
+	  }
+	  #Parse id attr
+	  if ($attributes =~ m/ID=([0-9a-zA-Z-]+);/ ){
+	    $idAttr = $1;
+	  }
+	  #Parse apollo product
+	  if ($attributes =~ m/gene_product=rank=1;term=(.+?);/  ||  $attributes =~ m/description=(.+?);/   ){
+	    $apolloProduct = $1;
+	  }
+	  #Parse apollo symbol
+	  if ($attributes =~ m/symbol=([0-9a-zA-Z-]+);/ ){
+	    $apolloSymbol = $1;
+	  }
+	  #Parse apollo owner
+	  if ($attributes =~ m/owner=([0-9a-zA-Z-\.,]+);/ ){
+	    $apolloOwner = $1;
+	  }
+	  #Parse apollo GO term
+	  my @goMatches;
+	  push @goMatches, $1 while ($attributes=~ m{term=(GO:[0-9]+);}g);
+	  my @uniqGoMatches = uniq(@goMatches);
+	  $apolloGoTerm = join(", ", @uniqGoMatches);
 
-        #Parse apollo PMID
-        my @pmidMatches;
-        push @pmidMatches, $1 while ($attributes=~ m{db_xref=(PMID:[0-9]+);}g);
-        my @uniqPmidMatches = uniq(@pmidMatches);
-        $apolloPmid = join(", ", @uniqPmidMatches);
+	  #Parse apollo PMID
+	  my @pmidMatches;
+	  push @pmidMatches, $1 while ($attributes=~ m{db_xref=(PMID:[0-9]+);}g);
+	  my @uniqPmidMatches = uniq(@pmidMatches);
+	  $apolloPmid = join(", ", @uniqPmidMatches);
 
-        #Get Apollo numerical organism ID
-        my $apolloID = getApolloID($dbh, $prefix, $suffix,$seqID);
+	  # (don't) Get Apollo numerical organism ID
+	  # my $apolloID = getApolloID($dbh, $prefix, $suffix,$seqID);
 
-        #Get Apollo transcript ID
-        if ($attributes =~ m/Name=([0-9a-zA-Z-\._:]+);/ ){
-        $apolloTranscriptId = $1;
-        }
-        #Parse apollo Evidence code
-        if ($attributes =~ m/evidence=([0-9a-zA-Z-:]+);/ ){
-        $apolloEvidenceCode = $1;
-        }
-        #Parse apollo obsolete
-        if ($attributes =~ m/(obsolete)=true;/ ){
-        $apolloObsolete = $1;
-        }
-	#Parse apollo Evidence Code Assignment
-	if ($attributes =~ m/based_on=\[\"([0-9a-zA-Z-:]+)\"\];/ ){
-        $evidenceCodeAssignment = $1;
-        }
-        
-        #Check if NA_Sequence_ID is available
-        $NASequenceID = getNASequenceID($dbh, $seqID);
-        if ($NASequenceID ne ""){
-        #Insert Gff into table
-        insertAttribute($dbh, $prefix, $suffix, $NASequenceID,  $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr, $apolloProduct, $apolloSymbol, $apolloOwner, $apolloGoTerm, $apolloPmid, $apolloTranscriptId, $apolloEvidenceCode, $apolloObsolete, $evidenceCodeAssignment);
-        $dbh->commit() or print STDERR $dbh->errstr;
-        }
-        else{ 
-        #print "ERROR: $getGFFCmd\n";
-        next;
-        }
+	  #Get Apollo transcript ID
+	  if ($attributes =~ m/Name=([0-9a-zA-Z-\._:]+);/ ){
+	    $apolloTranscriptId = $1;
+	  }
+	  #Parse apollo Evidence code
+	  if ($attributes =~ m/evidence=([0-9a-zA-Z-:]+);/ ){
+	    $apolloEvidenceCode = $1;
+	  }
+	  #Parse apollo obsolete
+	  if ($attributes =~ m/(obsolete)=true;/ ){
+	    $apolloObsolete = $1;
+	  }
+	  #Parse apollo Evidence Code Assignment
+	  if ($attributes =~ m/based_on=\[\"([0-9a-zA-Z-:]+)\"\];/ ){
+	    $evidenceCodeAssignment = $1;
+	  }
+
+	  #Check if NA_Sequence_ID is available
+	  $NASequenceID = getNASequenceID($dbh, $sequenceIdQ, $seqID);
+	  if ($NASequenceID ne ""){
+	    #Insert Gff into table
+	    insertAttribute($dbh, $prefix, $suffix, $NASequenceID,  $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr, $apolloProduct, $apolloSymbol, $apolloOwner, $apolloGoTerm, $apolloPmid, $apolloTranscriptId, $apolloEvidenceCode, $apolloObsolete, $evidenceCodeAssignment);
+	    unless ($insertCount++ % 1000) {
+	      $dbh->commit() or die $dbh->errstr;
+	    }
+	  }
+	  else{
+	    #print "ERROR: $getGFFCmd\n";
+	    next;
+	  }
+	}
+      }
+      undef @gffArray;
     }
-    }
-    undef @gffArray;
-    }
-    }
-    close GFF;
+  }
+  $dbh->commit() or die $dbh->errstr;
+  close GFF;
 
 }
+$sequenceIdQ->finish();
 $dbh->disconnect;
 
 sub insertAttribute {
@@ -256,11 +287,9 @@ SQL
 }
 
 sub getNASequenceID {
-    my ($dbh, $seqID) = @_;
-    my $sql = "select NA_SEQUENCE_ID from dots.nasequence where SOURCE_ID = ?";
-    my $sh = $dbh->prepare($sql);
-    $sh->execute($seqID);
-    my ($NASequenceID) = $sh->fetchrow_array();
+    my ($dbh, $sequenceIdQ, $seqID) = @_;
+    $sequenceIdQ->execute($seqID);
+    my ($NASequenceID) = $sequenceIdQ->fetchrow_array();
     return $NASequenceID;
 }
 

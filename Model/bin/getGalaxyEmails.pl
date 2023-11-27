@@ -80,14 +80,19 @@ sub writeOutputFile {
 }
 
 sub usage {
-    print "\ngetGalaxyEmails --help/-h --inputFile <file-with-galaxy-accounts> --outputFile <file-name>\n\n";
-    print "This script takes a file with one Globus/Navipoint/Galaxy user id per line. Other fields can be one the line.\n";
-    print "User ids are in the form of markhic.123456789\@veupathdb.org or human\@gmail.com. The veupath ids are used with the\n";
-    print "database to retrieve the email address. All email addresses are placed into one line of the output file\n";
-    print "delimited by a comma.\n\n";
-    exit;
+    die "
+getGalaxyEmails --help/-h --inputFile <file-with-galaxy-accounts> --outputFile <file-name>
+
+Required Environment Variables: DBI_USER DBI_DSN DBI_PASS
+
+This script takes a file with one Globus/Navipoint/Galaxy user id per line. Other fields can be on the line.
+
+User ids are in the form of markhic.123456789\@veupathdb.org or human\@gmail.com. The veupath ids are used with the 
+database to retrieve the email address. All email addresses are placed into one line of the output file delimited by a comma
+"
 }
 
+# use DBI's standard env vars to get credentials
 sub connectToDb {
   my ($instance) = @_;
   my $dbiDsn = 'dbi:Oracle:' . $instance;

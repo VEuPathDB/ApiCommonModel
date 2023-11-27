@@ -9,7 +9,7 @@ use Data::Dumper;
 use Time::HiRes qw(usleep);
 
 sub new {
-  my ($class, $pmidList) = @_;
+  my ($class, $apiKey, $pmidList) = @_;
 
   my $ua = LWP::UserAgent->new;
   $ua->timeout(10);
@@ -20,7 +20,7 @@ sub new {
   push(@formdata, "email", "help\@eupathdb.org");
   push(@formdata, "db", "pubmed");
   push(@formdata, "id", join(',', @$pmidList));
-  push(@formdata, "api_key", "f2006d7a9fa4e92b2931d964bb75ada85a08");
+  push(@formdata, "api_key", $apiKey);
   my $response = $ua->post($pubmedUrl, \@formdata);
   if (!($response->is_success)) {
     die $response->status_line;

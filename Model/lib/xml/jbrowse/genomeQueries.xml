@@ -77,6 +77,7 @@ ORDER BY
        ga.na_sequence_id parent_id,
        ga.start_min startm,
        ga.end_max end,
+       aid.apolloid apolloid,
        decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
        'Note=' || ga.product  || '$dlm' ||
        'soTerm=' || ga.so_term_name || '$dlm' ||
@@ -94,11 +95,13 @@ ORDER BY
 FROM
        ApidbTuning.GeneAttributes ga
      , apidb.organism o, apidb.featurelocation fl
+     , apidbtuning.apolloid aid
 WHERE  fl.na_sequence_id = $srcfeature_id
   AND  fl.start_min <= $rend
   AND  fl.end_max >= $base_start
   AND  fl.na_feature_id = ga.na_feature_id
   AND  ga.taxon_id = o.taxon_id
+  AND  ga.organism = aid.organism (+)
 ]]>
   </query>
 
@@ -947,20 +950,6 @@ AND rl.reporter_end >= $base_start
        ]]>
   </query> 
 
-  <query name="cnv:Array"  includeProjects="TriTrypDB,UniDB">
-       <![CDATA[
-SELECT a.name      as feature_id,
-       'cnv'       as type, 
-       'Array'     as source,
-       $base_start as startm,
-       $rend       as end, 
-       'sample=' || a.name as atts
-FROM   rad.protocol p,
-       rad.analysis a
-WHERE p.protocol_id = a.protocol_id
-  AND p.name ='dna_array_simple'
-       ]]>
-  </query> 
 
   <query name="MicroArrayProbes:expressionProbes" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,VectorBase,UniDB">
 <![CDATA[
@@ -1711,7 +1700,7 @@ ORDER BY
 ]]>
   </query>
 
-  <query name="gff:basic" includeProjects="PlasmoDB,ToxoDB,CryptoDB,FungiDB,AmoebaDB,TrichDB,UniDB">
+  <query name="gff:basic" includeProjects="AmoebaDB,CryptoDB,FungiDB,PlasmoDB,ToxoDB,TrichDB,TriTrypDB,VectorBase,UniDB">
 <![CDATA[ 
 SELECT g3.gff3_feature_id feature_id,
        'gff' type,
@@ -1722,19 +1711,49 @@ SELECT g3.gff3_feature_id feature_id,
        g3.mapping_start startm,
        g3.mapping_end end,
        decode (g3.is_reversed, 0, '+1', 1, '-1', '.') strand,
-      replace( g3.attr, ';', '$dlm') atts 
+       'soTerm=' || ot.name || '$dlm' ||
+       'source=' || g3.source|| '$dlm' ||
+        replace( g3.attr, ';', '$dlm') atts 
 FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
-       sres.ExternalDatabase ed
+       sres.ExternalDatabase ed, sres.ontologyTerm ot
 WHERE g3.external_database_release_id = edr.external_database_release_id
   AND edr.external_database_id = ed.external_database_id
   AND g3.na_sequence_id = $srcfeature_id
   AND g3.mapping_start <= $rend
   AND g3.mapping_end >= $base_start
-  AND  ed.name = $$edName$$
+  AND ed.name = $$edName$$
+  AND ot.ontology_term_id = g3.sequence_ontology_id
 ]]>
   </query>
 
-  <query name="gff:processedTranscript" includeProjects="PlasmoDB,ToxoDB,CryptoDB,UniDB">
+  <query name="gff:basicAlt" includeProjects="PlasmoDB,ToxoDB,CryptoDB,FungiDB,AmoebaDB,TrichDB,UniDB">
+<![CDATA[ 
+SELECT g3.gff3_feature_id feature_id,
+       'gff' type,
+       source,
+       g3.id_attr name,
+       nvl(to_char(score),'.') score,
+       g3.na_sequence_id parent_id,
+       g3.mapping_start startm,
+       g3.mapping_end end,
+       decode (g3.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'soTerm=' || ot.name ||
+        replace( g3.attr, ';', '$dlm') atts 
+FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
+       sres.ExternalDatabase ed, sres.ontologyTerm ot
+WHERE g3.external_database_release_id = edr.external_database_release_id
+  AND edr.external_database_id = ed.external_database_id
+  AND g3.na_sequence_id = $srcfeature_id
+  AND g3.mapping_start <= $rend
+  AND g3.mapping_end >= $base_start
+  AND ed.name = $$edName$$
+  AND source = $$source$$
+  AND ot.ontology_term_id = g3.sequence_ontology_id
+]]>
+  </query>
+
+
+  <query name="gff:processedTranscript" includeProjects="PlasmoDB,ToxoDB,CryptoDB,VectorBase,UniDB">
 <![CDATA[ 
 SELECT g3.id_attr feature_id,
        'gff' type,
@@ -1795,7 +1814,7 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
 ]]>
   </query>
 
-  <query name="alignment:sequence" includeProjects="AmoebaDB,CryptoDB,FungiDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
+  <query name="alignment:sequence" includeProjects="AmoebaDB,CryptoDB,FungiDB,GiardiaDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'alignment' type, 
@@ -2747,7 +2766,7 @@ FROM
        apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
 WHERE  exon_loc.na_sequence_id = $srcfeature_id
   AND  (exon_loc.feature_type = 'CDS'
-     OR exon_loc.feature_type = 'UTR' AND ta.transcript_type != 'pseudogenic_transcript')
+     OR exon_loc.feature_type in ('five_prime_UTR', 'three_prime_UTR') AND ta.transcript_type != 'pseudogenic_transcript')
   AND  exon_loc.start_min <= $rend
   AND  exon_loc.end_max >= $base_start
   AND ta.na_feature_id = exon_loc.parent_id
@@ -2789,14 +2808,14 @@ SELECT distinct exon_loc.feature_location_id feature_id,
 FROM   
        apidb.FeatureLocation exon_loc, ApidbTuning.TranscriptAttributes ta
 WHERE  exon_loc.na_sequence_id = $srcfeature_id
-  AND  (exon_loc.feature_type = 'CDS' or exon_loc.feature_type = 'UTR')
+  AND  (exon_loc.feature_type = 'CDS' or exon_loc.feature_type = 'five_prime_UTR' or exon_loc.feature_type = 'three_prime_UTR')
   AND  exon_loc.start_min <= $rend
   AND  exon_loc.end_max >= $base_start
   AND ta.na_feature_id = exon_loc.parent_id
 ]]>
   </query>
 
-  <query name="gff:processedTranscript:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB,CryptoDB,UniDB">
+  <query name="gff:processedTranscript:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB,CryptoDB,VectorBase,UniDB">
 <![CDATA[ 
 SELECT g3.id_attr feature_id,
        so.name type,
@@ -2815,8 +2834,7 @@ FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
        sres.ExternalDatabase ed, sres.ontologyterm so
 WHERE g3.external_database_release_id = edr.external_database_release_id
   AND g3.sequence_ontology_id = so.ontology_term_id
-  AND (so.name = 'CDS'
-     OR so.name = 'UTR')
+  AND SO.name in ('CDS', 'UTR') 
   AND edr.external_database_id = ed.external_database_id
   AND g3.na_sequence_id = $srcfeature_id
   AND g3.mapping_start <= $rend
@@ -3221,7 +3239,7 @@ where sg.na_sequence_id = $srcfeature_id
   AND sg.start_min <=  $$visibleRegionEnd$$
   AND sg.end_max >=  $$visibleRegionStart$$
   AND sg.syn_na_feature_id = ta.gene_na_feature_id
-  and fl.feature_type in ('CDS', 'UTR')
+  and fl.feature_type in ('CDS', 'five_prime_UTR', 'three_prime_UTR')
   and ta.na_feature_id = fl.parent_id
 ),
 -- calc stats for scaling
@@ -3292,7 +3310,7 @@ SELECT sg.syn_na_feature_id || '_syncdsorutr' as feature_id,
        ' ' atts,
        0 as has_children
 FROM   scaled_syngenes sg
-WHERE sg.feature_type in ('CDS', 'UTR')
+WHERE sg.feature_type in ('CDS', 'five_prime_UTR', 'three_prime_UTR')
   AND sg.ref_na_sequence_id = $srcfeature_id
   AND sg.s <= $rend
   AND sg.e >= $base_start
@@ -3333,7 +3351,7 @@ SELECT distinct loc.feature_location_id || '_refexon' feature_id,
 FROM   
        apidb.FeatureLocation loc, ApidbTuning.TranscriptAttributes ta
 WHERE  loc.na_sequence_id = $srcfeature_id
-  AND  loc.feature_type in ( 'CDS', 'UTR')
+  AND  loc.feature_type in ( 'CDS', 'five_prime_UTR', 'three_prime_UTR')
   AND  loc.start_min <= $$visibleRegionEnd$$
   AND  loc.end_max >= $$visibleRegionStart$$
   AND  ta.na_feature_id = loc.parent_id
@@ -3582,7 +3600,7 @@ ORDER BY blat.target_start
 ]]>
   </query>
 
-  <query name="alignment:sequence:bulksubfeatures" includeProjects="AmoebaDB,CryptoDB,FungiDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
+  <query name="alignment:sequence:bulksubfeatures" includeProjects="AmoebaDB,CryptoDB,FungiDB,GiardiaDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type, 
@@ -3700,36 +3718,6 @@ WHERE fl.na_sequence_id = $srcfeature_id
         ]]>
   </query>
 
-  <query name="cnv:Array:bulksubfeatures"  includeProjects="TriTrypDB,UniDB">
-<![CDATA[
-     SELECT interval as feature_id,
-            'cnv_sub' as type,
-            'Array' as source,
-            round (avg(score), 3) as score,
-            parent_id,
-            cast( $base_start + interval * (($rend - $base_start + 1) / 800) as integer) startm,
-            cast( $base_start + (interval + 1) * (($rend - $base_start + 1) / 800) as integer ) end,
-              atts
-     FROM
-     (
-     SELECT ee.na_feature_id as feature_id,
-            ee.score,
-            a.name as parent_id,
-            ceil((ee.start_min - $base_start)  / (($rend - $base_start + 1) / 800)) interval,
-            'sample=' || a.name  as atts
-     FROM APIDBTUNING.expressionelement ee,          
-          RAD.protocol p,
-          rad.analysis a
-     WHERE p.protocol_id = a.protocol_id
-       AND p.name  ='dna_array_simple'
-       AND ee.analysis_id = a.analysis_id
-      AND ee.na_sequence_id = $srcfeature_id
-      AND ee.start_min <= $rend
-      AND ee.end_max >= $base_start
-     )
-     GROUP BY interval,parent_id,atts 
-   ]]>
-  </query> 
   
   <query name="mapp:promoters:bulksubfeatures"  includeProjects="PlasmoDB,UniDB">
 <![CDATA[
