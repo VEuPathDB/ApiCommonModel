@@ -2190,6 +2190,7 @@ ORDER BY
             <column name ="ortho_source_id"/>
             <column name="organism"/>
             <column name="gene_product"/>
+            <column name="protein_length"/>
             <column name="is_syntenic"/>
             <column name="is_reference_strain"/>
             <column name="has_comment"/>
@@ -2208,6 +2209,7 @@ ORDER BY
                      , og.ortho_gene_source_id
                      , og.ortho_source_id
                      , og.ortho_product AS gene_product
+                     , og.protein_length
                      , og.ortho_organism AS organism
                      , CASE
                             WHEN og.is_syntenic = 1
@@ -2915,38 +2917,49 @@ FROM
 	    <column name="assigned_by"/>
             <sql>
             <![CDATA[
-
-
-WITH evids AS (
-  SELECT DISTINCT gaiec.go_evidence_code_id, ot.name
-  FROM  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
-  WHERE ot.ontology_term_id = gaiec.go_evidence_code_id)
-SELECT
-  ta.gene_source_id AS source_id
-, tp.product
-, ta.project_id
-, DECODE(tp.is_preferred, 1, 'No', 0, 'Yes') AS is_alternate
-, LISTAGG(source_id, ', ') WITHIN GROUP(ORDER BY source_id) AS transcript_ids
-, LISTAGG(publication, ', ') WITHIN GROUP(ORDER BY source_id) AS reference
-, e.name AS evidence_code
-, tp.with_from AS evidence_code_parameter
-, tp.assigned_by
-FROM
-  apidb.transcriptproduct tp
-, apidbtuning.transcriptattributes ta
-, evids e
-WHERE
-  ta.na_feature_id = tp.na_feature_id
-  AND tp.evidence_code = e.go_evidence_code_id(+)
-GROUP BY
-  gene_source_id
-, ta.project_id
-, tp.product
-, tp.is_preferred
-, e.name
-, tp.with_from
-, tp.assigned_by
-ORDER by is_preferred desc, transcript_ids
+with evids
+     as (select distinct gaiec.go_evidence_code_id, ot.name
+         from  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
+         where ot.ontology_term_id = gaiec.go_evidence_code_id)
+  select ta.gene_source_id AS source_id, tp.product, ta.project_id,
+         decode(tp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+         listagg(source_id, ', ') within group(order by source_id) as transcript_ids,
+         listagg(publication, ', ') within group(order by source_id) as reference,
+         e.name as evidence_code, tp.with_from as evidence_code_parameter,
+         tp.assigned_by, 'apidb.TranscriptProduct' as source
+  from apidb.TranscriptProduct tp, apidbTuning.TranscriptAttributes ta, evids e
+  where ta.na_feature_id = tp.na_feature_id
+    and tp.evidence_code = e.go_evidence_code_id(+)
+  group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
+        tp.with_from, tp.assigned_by
+union
+  select ga.source_id as source_id, gfp.product, ga.project_id,
+         decode(gfp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+         null as transcript_ids, null as reference, null as evidence_code,
+         null as evidence_code_parameter, null as assigned_by,
+         'apidb.GeneFeatureProduct' as source
+  from apidb.GeneFeatureProduct gfp, apidbTuning.GeneAttributes ga
+  where ga.na_feature_id = gfp.na_feature_id
+union
+  select ga.source_id as source_id, gf.product, ga.project_id,
+         null as  is_alternate,
+         null as transcript_ids, null as reference, null as evidence_code,
+         null as evidence_code_parameter, null as assigned_by,
+         'dots.GeneFeature' as source
+  from dots.GeneFeature gf, apidbTuning.GeneAttributes ga
+  where ga.na_feature_id = gf.na_feature_id
+    and gf.product is not null
+union
+  select ta.gene_source_id AS source_id, t.product, ta.project_id,
+         null as is_alternate,
+         listagg(ta.source_id, ', ') within group(order by ta.source_id) as transcript_ids,
+         null as reference, null as evidence_code, null as evidence_code_parameter,
+         null as assigned_by, 'dots.Transcript' as source
+  from apidbTuning.TranscriptAttributes ta, dots.Transcript t
+  where ta.na_feature_id = t.na_feature_id
+    and t.product is not null
+  group by ta.gene_source_id, ta.project_id, t.product
+order by is_alternate desc, transcript_ids
             ]]>
             </sql>
         </sqlQuery> 
