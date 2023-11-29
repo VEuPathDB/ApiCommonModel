@@ -51,7 +51,7 @@
 <!--    </sql>-->
   </tuningTable>
 
-  <tuningTable name="SignalPeptideDomains" prefixEnabled="false">
+  <tuningTable name="SignalPeptideDomains" prefixEnabled="false" target="orgDB">
     <comment>Locations and Sequence of Signal Peptide Domains (SignalP)
     </comment>
     <externalDependency name="dots.AaLocation"/>
@@ -65,12 +65,11 @@
       <![CDATA[
           CREATE TABLE SignalPeptideDomains&1 AS
           SELECT
-              gf.source_id gene_source_id
+              '&ORG_ABBREV' as org_abbrev
+              , gf.source_id gene_source_id
               , t.source_id transcript_source_id
-              , taf.na_feature_id
-              , spf.aa_feature_id
-              , spf.aa_sequence_id
-              , spf.parent_id
+              , '&ORG_ABBREV_' || spf.aa_feature_id as internal_feature_id
+              , s.source_id as aa_seq_source_id
               , aal.start_min
               , aal.end_max
               , spf.algorithm_name
@@ -102,7 +101,7 @@
     <sql>
       <![CDATA[
           CREATE INDEX SignalP1_ix&1
-          ON SignalPeptideDomains&1 (aa_sequence_id)
+          ON SignalPeptideDomains&1 (aa_seq_source_id)
           TABLESPACE indx
         ]]>
     </sql>
@@ -1986,12 +1985,10 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="ProteinAttributes" prefixEnabled="true">
+  <tuningTable name="ProteinAttributes" prefixEnabled="true" target="orgDB">
     <comment>The BFMV for proteins. Each protein gets a single record, which
       stores all its attributes. Used mainly to create TranscriptAttributes
     </comment>
-    <internalDependency name="GoTermSummary"/>
-    <internalDependency name="GeneGoTerms"/>
     <internalDependency name="SignalPeptideDomains"/>
     <externalDependency name="apidb.CdsLocation"/>
     <externalDependency name="apidb.AaSequenceAttribute"/>
@@ -2006,100 +2003,16 @@ tablespace indx
     <externalDependency name="dots.TranslatedAaSequence"/>
     <externalDependency name="dots.TransmembraneAaFeature"/>
     <externalDependency name="sres.EnzymeClass"/>
-    <ancillaryTable name="GoTermList"/>
-    <ancillaryTable name="ProteinGoAttributes"/>
-    <sql>
-      <![CDATA[
-        CREATE TABLE &prefixGoTermList&1 AS
-        SELECT aa_sequence_id, ontology, source,
-             string_agg(go_term_name, ';' ORDER BY go_term_name) AS go_terms,
-             string_agg(go_id, ';' ORDER BY go_term_name) AS go_ids
-        FROM (
-          SELECT aa_sequence_id, ontology,
-                 CASE evidence_code WHEN 'IEA' THEN 'predicted' ELSE 'annotated' END AS source, go_term_name, go_id
-          FROM  &prefixGeneGoTerms
-        ) t
-        GROUP BY aa_sequence_id, ontology, source
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE TABLE &prefixProteinGoAttributes&1 AS
-        SELECT DISTINCT gts.aa_sequence_id,
-               substr(annotated_go_component.go_terms, 1, 300) AS annotated_go_component,
-               substr(annotated_go_function.go_terms, 1, 300) AS annotated_go_function,
-               substr(annotated_go_process.go_terms, 1, 300) AS annotated_go_process,
-               substr(predicted_go_component.go_terms, 1, 300) AS predicted_go_component,
-               substr(predicted_go_function.go_terms, 1, 300) AS predicted_go_function,
-               substr(predicted_go_process.go_terms, 1, 300) AS predicted_go_process,
-               substr(annotated_go_component.go_ids, 1, 300) AS annotated_go_id_component,
-               substr(annotated_go_function.go_ids, 1, 300) AS annotated_go_id_function,
-               substr(annotated_go_process.go_ids, 1, 300) AS annotated_go_id_process,
-               substr(predicted_go_component.go_ids, 1, 300) AS predicted_go_id_component,
-               substr(predicted_go_function.go_ids, 1, 300) AS predicted_go_id_function,
-               substr(predicted_go_process.go_ids, 1, 300) AS predicted_go_id_process
-        FROM
-          (SELECT DISTINCT aa_sequence_id FROM &prefixGoTermSummary) gts
-          LEFT JOIN (
-            SELECT * FROM &prefixGoTermList&1
-            WHERE source = 'annotated' AND ontology = 'Cellular Component'
-          ) annotated_go_component ON
-            gts.aa_sequence_id = annotated_go_component.aa_sequence_id
-            AND 'annotated' = annotated_go_component.source
-            AND 'Cellular Component' = annotated_go_component.ontology
-          LEFT JOIN (
-            SELECT * FROM &prefixGoTermList&1
-            WHERE source = 'annotated' AND ontology = 'Molecular Function'
-          ) annotated_go_function ON
-            gts.aa_sequence_id = annotated_go_function.aa_sequence_id
-            AND 'annotated' = annotated_go_function.source
-            AND 'Molecular Function' = annotated_go_function.ontology
-          LEFT JOIN (
-            SELECT * FROM &prefixGoTermList&1
-            WHERE source = 'annotated' AND ontology = 'Biological Process'
-          ) annotated_go_process ON
-            gts.aa_sequence_id = annotated_go_process.aa_sequence_id
-            AND 'annotated' = annotated_go_process.source
-            AND 'Biological Process' = annotated_go_process.ontology
-          LEFT JOIN (
-            SELECT * FROM &prefixGoTermList&1
-            WHERE source = 'predicted' AND ontology = 'Cellular Component'
-          ) predicted_go_component ON
-            gts.aa_sequence_id = predicted_go_component.aa_sequence_id
-            AND 'predicted' = predicted_go_component.source
-            AND 'Cellular Component' = predicted_go_component.ontology
-          LEFT JOIN (
-            SELECT * FROM &prefixGoTermList&1
-            WHERE source = 'predicted' AND ontology = 'Molecular Function'
-          ) predicted_go_function ON
-            gts.aa_sequence_id = predicted_go_function.aa_sequence_id
-            AND 'predicted' = predicted_go_function.source
-            AND 'Molecular Function' = predicted_go_function.ontology
-          LEFT JOIN (
-            SELECT * FROM &prefixGoTermList&1
-            WHERE source = 'predicted' AND ontology = 'Biological Process'
-          ) predicted_go_process ON
-            gts.aa_sequence_id = predicted_go_process.aa_sequence_id
-            AND 'predicted' = predicted_go_process.source
-            AND 'Biological Process' = predicted_go_process.ontology
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        create index ProteinGoAttr_aaSequenceId&1 ON &prefixProteinGoAttributes&1 (aa_sequence_id)
-        tablespace indx
-      ]]>
-    </sql>
-
     <sql>
       <![CDATA[
         CREATE TABLE &prefixProteinAttributes&1 AS
-        SELECT pi.name as project_id,
+        SELECT 
+          '&ORG_ABBREV' as org_abbrev,
+          '&PROJECT_ID' as project_id,
           tas.source_id, 
- --        tas.aa_sequence_id,
           t.source_id as transcript_source_id,
           gf.source_id as gene_source_id,
---          cdsl.na_sequence_id as na_sequence_id,
+          cdsl.sequence_source_id as cds_seq_source_id,
           cdsl.is_reversed,
           cdsl.start_min as cds_start,
           cdsl.end_max as cds_end,
@@ -2113,18 +2026,6 @@ tablespace indx
           SUBSTR(sigp.peptide_sequence, 1, 200) as signalp_peptide,
           ec_numbers,
           ec_numbers_derived,
-          go.annotated_go_component,
-          go.annotated_go_function,
-          go.annotated_go_process,
-          go.predicted_go_component,
-          go.predicted_go_function,
-          go.predicted_go_process,
-          go.annotated_go_id_component,
-          go.annotated_go_id_function,
-          go.annotated_go_id_process,
-          go.predicted_go_id_component,
-          go.predicted_go_id_function,
-          go.predicted_go_id_process,
           SUBSTR(coalesce(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
           0 AS has_seqedit,
           row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript,
@@ -2140,15 +2041,15 @@ tablespace indx
           LEFT JOIN apidb.AaSequenceAttribute asa ON taf.aa_sequence_id = asa.aa_sequence_id
 --          LEFT JOIN &prefixProteinGoAttributes&1 go ON tas.aa_sequence_id = go.aa_sequence_id
           LEFT JOIN (
-            SELECT aa_sequence_id, string_agg(peptide_sequence, ', ') peptide_sequence
-            FROM (SELECT DISTINCT aa_sequence_id, peptide_sequence FROM SignalPeptideDomains) t
-            GROUP BY aa_sequence_id
-          ) sigp ON tas.aa_sequence_id = sigp.aa_sequence_id
+            SELECT aa_seq_source_id, string_agg(peptide_sequence, ', ') peptide_sequence
+            FROM (SELECT DISTINCT aa_seq_source_id, peptide_sequence FROM SignalPeptideDomains) t
+            GROUP BY aa_seq_source_id
+          ) sigp ON tas.source_id = sigp.aa_seq_source_id
           LEFT JOIN (
-            SELECT protein_source_id, na_sequence_id, is_reversed,
+            SELECT protein_source_id, sequence_source_id, is_reversed,
                MIN(start_min) AS start_min, MAX(end_max) AS end_max
             FROM apidb.CdsLocation WHERE is_top_level=1
-            GROUP BY protein_source_id, na_sequence_id, is_reversed
+            GROUP BY protein_source_id, sequence_source_id, is_reversed
           ) cdsl ON tas.source_id = cdsl.protein_source_id
           LEFT JOIN (
             SELECT aa_sequence_id, max(tm_domains) AS tm_domains
@@ -2203,12 +2104,6 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX PA_sourceId&1 ON &prefixProteinAttributes&1 (source_id)
-        tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX PA_aaSequenceId&1 ON &prefixProteinAttributes&1 (aa_sequence_id)
         tablespace indx
       ]]>
     </sql>
