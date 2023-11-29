@@ -32,10 +32,20 @@ print  "Number of projects to handle = " . ($#projects + 1) . "\n\n";
 
 # build hash of project_id and staging_dir
 my %stagingDir;
+my $d;
 open (IN, "$configFile") || die "ERROR: Couldn't open prop file '$configFile'\n";;
+
 while (<IN>) {
   chomp;
-  $stagingDir{$1} = $2   if ($_ =~/^(.*)\t(.*)$/  );
+  if ($_ =~/^(.*)\t(.*)$/  ){
+    if ($1 ne 'OrthoMCL'){
+      $d = $2 . 'webServices/' . $1 . '/release-CURRENT/';
+    } else {
+      $d = $2 . 'webServices/' . $1 . '/build-CURRENT/';
+    }
+
+    $stagingDir{$1} = $d;
+  }
 }
 close (IN);
 

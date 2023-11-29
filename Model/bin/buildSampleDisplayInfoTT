@@ -21,14 +21,14 @@ use EbrcModelCommon::Model::tmUtils;
 my ($help, $propfile, $instance, $schema, $suffix, $prefix, $filterValue, $debug);
 
 GetOptions("propfile=s" => \$propfile,
-  "instance=s" => \$instance,
-  "schema=s" => \$schema,
-  "suffix=s" => \$suffix,
-  "prefix=s" => \$prefix,
-  "filterValue=s" => \$filterValue,
-  "debug!" => \$debug,
-  "help|h" => \$help,
-);
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "suffix=s" => \$suffix,
+           "prefix=s" => \$prefix,
+           "filterValue=s" => \$filterValue,
+           "debug!" => \$debug,
+           "help|h" => \$help,
+          );
 
 die "required parameter missing" unless ($propfile && $instance && $suffix);
 
@@ -53,7 +53,6 @@ sub run{
 
   my $insertStatement = "INSERT INTO SampleDisplayInfo$suffix(dataset_name, sample, sample_display_name, sort_order, html_color) VALUES (?,?,?, NULLIF(?,'')::Numeric,?)";
   my $insertRow = $dbh->prepare($insertStatement);
-  my @lines = [];
   createEmptyTable($dbh,$suffix);
   if ($tabFileLocation =~ /\.xls$/ || $tabFileLocation =~ /\.xlsx$/) {
     eval {
@@ -74,7 +73,6 @@ sub run{
         my $maxCol = $oSheet->{MaxCol};
         if($maxRow) {
           for(my $i = $minRow; $i <= $maxRow; $i++) {
-            # skip comments / header
             my @row;
             for(my $j = $minCol; $j <= $maxCol; $j++) {
               my $oCell = $oSheet->{Cells}[$i][$j];
@@ -82,19 +80,18 @@ sub run{
               $cellValue =~ s/["\']//g;
               push(@row, $cellValue);
             }
-            push @lines, join("\t", @row);
+
+	    my ($ext_db_name, $sample, $sample_display, $sort_order, $color ) = @row ;
+
+            # skip comments / header
+	    next if($ext_db_name =~ /^#/);
+
+	    if ($ext_db_name) {
+	      $insertRow->execute($ext_db_name, $sample, $sample_display, $sort_order,$color);
+	    }
           }
         }
       }
-    }
-  }
-
-  foreach my $line (@lines) {
-    next if($line=~/^#/);
-
-    my ($ext_db_name, $sample, $sample_display, $sort_order, $color ) = split("\t",$line) ;
-    if ($ext_db_name) {
-      $insertRow->execute($ext_db_name, $sample, $sample_display, $sort_order,$color);
     }
   }
 
@@ -103,7 +100,7 @@ sub run{
 }
 
 sub createEmptyTable {
-  my ($dbh, $suffix) = @_;
+     my ($dbh, $suffix) = @_;
 
   $dbh->do(<<SQL) or die "creating table";
      create table SampleDisplayInfo$suffix (

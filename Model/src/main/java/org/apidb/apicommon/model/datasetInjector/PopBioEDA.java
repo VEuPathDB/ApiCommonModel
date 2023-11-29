@@ -37,7 +37,8 @@ public class PopBioEDA extends DatasetInjector {
 
   @Override
   public void addModelReferences() {
-   // EDA doesn't have these
+      String className = this.getClass().getSimpleName();
+      setPropValue("templateInjectorClassName", className);
   }
 
   @Override
