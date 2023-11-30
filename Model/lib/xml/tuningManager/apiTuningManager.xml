@@ -29,7 +29,7 @@
           , dots.translatedaafeature taf
           , dots.translatedaasequence tas
           , dots.transmembraneaafeature tmf
-        WHERE ta.internal_feature_id = taf.na_feature_id
+        WHERE ta.internal_feature_id = '&ORG_ABBREV_' || taf.na_feature_id
         AND taf.aa_sequence_id = tas.aa_sequence_id
         AND tas.aa_sequence_id = tmf.aa_sequence_id
         and tmf.aa_feature_id = aal.aa_feature_id
@@ -675,8 +675,8 @@
         , sres.ExternalDatabase xd3
         , sres.DbRef dr
         , dots.DbRefAaFeature draf
-        , dots.DomainFeature df
         , dots.AASequence aas
+        , dots.DomainFeature df
         LEFT JOIN dots.DomainFeature df2 ON df.parent_id = df2.aa_feature_id
         WHERE xd3.name IN('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP', 'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF', 'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan', 'PFAM', 'SMART', 'CDD', 'PANTHER')
           AND ta.protein_source_id = aas.source_id
@@ -2183,6 +2183,7 @@ tablespace indx
           t.source_id,
           -- first the gene attributes:
           gf.source_id AS gene_source_id,
+          '&ORG_ABBREV_' || gf.na_feature_id AS gene_internal_feature_id,
           LEAST(nl.start_min, nl.end_max) AS gene_start_min,
           GREATEST(nl.start_min, nl.end_max) AS gene_end_max,
           COALESCE(preferred_name.name, any_name.name) AS gene_name,
@@ -6791,7 +6792,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="EqtlSpan">
+  <tuningTable name="EqtlSpan" target="orgDB">
     <externalDependency name="dots.ChromosomeElementFeature"/>
     <externalDependency name="apidb.NaFeatureHaploblock"/>
     <externalDependency name="dots.ExternalNaSequence"/>
@@ -6800,29 +6801,28 @@ tablespace indx
     <sql>
       <![CDATA[
         create table eqtlSpan&1 as
-        SELECT gene_source_id, project_id, haplotype_block_name as hapblock_id, sequence_id,
+        SELECT '&ORG_ABBREV' as org_abbrev, gene_source_id, project_id, haplotype_block_name as hapblock_id, sequence_id,
                start_min, end_max, start_max, end_min,
-               max(score) as lod_score, organism
-        FROM (SELECT ga.gene_source_id, ga.project_id, gls.haplotype_block_name,
+               max(score) as lod_score
+        FROM (SELECT ta.gene_source_id, ta.project_id, gls.haplotype_block_name,
                      ens.source_id as sequence_id, nl.start_min, nl.end_max, nl.start_max, nl.end_min,
-                     gls.lod_score_mant * power(10::double precision, gls.lod_score_exp) as score,
-                     replace (ga.organism, ' ', '+') as organism
+                     gls.lod_score_mant * power(10::double precision, gls.lod_score_exp) as score
               FROM dots.ChromosomeElementFeature cef, apidb.NAFeatureHaploblock gls,
-                   dots.ExternalNaSequence ens, dots.NaLocation nl, TranscriptAttributes ga
-              WHERE gls.na_feature_id = ga.gene_na_feature_id
+                   dots.ExternalNaSequence ens, dots.NaLocation nl, TranscriptAttributes ta
+              WHERE '&ORG_ABBREV_' || gls.na_feature_id = ta.gene_internal_feature_id
                 AND cef.name = gls.haplotype_block_name
                 AND nl.na_feature_id = cef.na_feature_id
                 AND cef.na_sequence_id = ens.na_sequence_id
                 AND (gls.lod_score_mant * power(10::double precision, gls.lod_score_exp)) >= 1.5
         ) t
         GROUP BY gene_source_id, project_id, sequence_id, haplotype_block_name,
-                 start_min, end_max, start_max, end_min, organism
+                 start_min, end_max, start_max, end_min
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create index eqtlSpan_ix&1
-        on eqtlSpan&1 (gene_source_id, project_id, hapblock_id, sequence_id, start_min, end_max, start_max, end_min, organism, lod_score)
+        on eqtlSpan&1 (gene_source_id, project_id, hapblock_id, sequence_id, start_min, end_max, start_max, end_min, org_abbrev, lod_score)
         tablespace indx
       ]]>
     </sql>
