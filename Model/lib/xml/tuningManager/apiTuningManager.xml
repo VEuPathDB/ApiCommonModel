@@ -3,7 +3,7 @@
 
   <import file="tuningManager.xml"/>
 
-  <tuningTable name="TransmembraneDomains" prefixEnabled="false">
+  <tuningTable name="TransmembraneDomains" prefixEnabled="false" target="orgDB">
     <comment>Locations and Sequence of Transmembrane Domains (TMHMM)
     </comment>
     <internalDependency name="TranscriptAttributes"/>
@@ -14,22 +14,22 @@
     <sql>
       <![CDATA[
         CREATE TABLE TransmembraneDomains&1 AS
-        SELECT ta.source_id as transcript_source_id
+        SELECT '&ORG_ABBREV' as org_abbrev
+            , '&PROJECT_ID' as project_id
+            , ta.source_id as transcript_source_id
             , ta.gene_source_id AS gene_source_id
-            , ta.project_id
             , tmf.topology AS tmf_topology
             , aal.start_min AS tmf_start_min
             , aal.end_max AS tmf_end_max
             , substr(tas.sequence, aal.end_max::INTEGER - aal.start_min::INTEGER + 1, aal.start_min::INTEGER) AS tmf_sequence
-            , tmf.aa_feature_id tmf_aa_feature_id
-            , tmf.aa_sequence_id tmf_aa_sequence_id
+            , '&ORG_ABBREV_' || tmf.aa_feature_id as internal_feature_id
             , tas.source_id as protein_source_id
         FROM dots.aalocation aal
           , transcriptattributes ta
           , dots.translatedaafeature taf
           , dots.translatedaasequence tas
           , dots.transmembraneaafeature tmf
-        WHERE ta.na_feature_id = taf.na_feature_id
+        WHERE ta.internal_feature_id = taf.na_feature_id
         AND taf.aa_sequence_id = tas.aa_sequence_id
         AND tas.aa_sequence_id = tmf.aa_sequence_id
         and tmf.aa_feature_id = aal.aa_feature_id
@@ -38,7 +38,7 @@
     <sql>
       <![CDATA[
         create index TransDom1_ix&1
-        on TransmembraneDomains&1 (tmf_aa_sequence_id, tmf_aa_feature_id, tmf_start_min, tmf_end_max, tmf_topology)
+        on TransmembraneDomains&1 (protein_source_id, internal_feature_id, tmf_start_min, tmf_end_max, tmf_topology)
         tablespace indx
       ]]>
     </sql>
@@ -1435,7 +1435,7 @@
   </tuningTable>
 
 
-  <tuningTable name="PdbSimilarity">
+  <tuningTable name="PdbSimilarity" target="orgDB">
     <comment> Each record maps a gene to a PDB structure. Used by the model to find
       genes that have a PDB structure and to find the PDB structures for a
       given gene.
@@ -1443,14 +1443,15 @@
     <internalDependency name="TranscriptAttributes"/>
     <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.ExternalAaSequence"/>
+    <externalDependency name="dots.TranslatedAaSequence"/>
     <externalDependency name="dots.Similarity"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
         CREATE TABLE PdbSimilarity&1 AS
-        SELECT ta.source_id, eas.source_id AS pdb_chain,
+        SELECT '&ORG_ABBREV' as org_abbrev,
+               ta.source_id, eas.source_id AS pdb_chain,
                substr(eas.description, 1, 100) AS pdb_title,
                substr(eas.source_id
                       , 1
@@ -1461,29 +1462,29 @@
                       )
                ) AS pdb_id,
                s.pvalue_mant, s.pvalue_exp,
-               SUBSTR(tn.name, 1, 100) AS taxon,
                ROUND( (s.number_identical / s.total_match_length) * 100) AS percent_identity,
                ROUND( (s.total_match_length / ta.protein_length) * 100) AS percent_plasmo_coverage,
-               s.score, eas.taxon_id as pdb_taxon_id, ta.taxon_id as gene_taxon_id
+               s.score, t.ncbi_tax_id as pdb_ncbi_tax_id, ta.ncbi_tax_id as gene_ncbi_tax_id
         FROM core.TableInfo tas_ti,
              dots.Similarity s,
              core.TableInfo eas_ti,
              dots.ExternalAaSequence eas,
+             dots.TranslatedAaSequence tas,
              sres.ExternalDatabaseRelease edr,
              sres.ExternalDatabase ed,
-             sres.TaxonName tn,
+             sres.Taxon t,
              TranscriptAttributes ta
-        WHERE ta.aa_sequence_id = s.query_id
+        WHERE tas.aa_sequence_id = s.query_id
+          AND ta.protein_source_id = tas.source_id
           AND tas_ti.name = 'TranslatedAASequence'
           AND tas_ti.table_id = s.query_table_id
           AND eas_ti.name = 'ExternalAASequence'
           AND eas_ti.table_id = s.subject_table_id
+          AND t.taxon_id = eas.taxon_id
           AND s.subject_id = eas.aa_sequence_id
-          AND tn.name_class = 'scientific name'
           AND eas.external_database_release_id = edr.external_database_release_id
           AND edr.external_database_id = ed.external_database_id
           AND ed.name in ('PDBProteinSequences_RSRC','PDB protein sequences')
-          AND eas.taxon_id = tn.taxon_id
         ORDER BY ta.source_id, eas.source_id
       ]]>
     </sql>
@@ -2216,6 +2217,7 @@ tablespace indx
           gloc.locations AS gene_locations,
           -- next the transcript attributes:
           t.source_id AS transcript_source_id,
+          t.na_feature_id as internal_feature_id,
           tso.source_id as transcript_so_id,
           CAST(coalesce(preferred_tx_product.product, any_tx_product.product,
                          t.product,
@@ -8620,12 +8622,13 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="InterproData">
+  <tuningTable name="InterproData" target="orgDB">
     <comment>for TranscriptAttributes.InterproColumns</comment>
     <internalDependency name="TranscriptAttributes"/>
     <externalDependency name="dots.AaLocation"/>
     <externalDependency name="dots.DbRefAaFeature"/>
     <externalDependency name="dots.DomainFeature"/>
+    <externalDependency name="dots.TranslatedAASequence"/>
     <externalDependency name="sres.DbRef"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
@@ -8655,7 +8658,7 @@ tablespace indx
                 SELECT DISTINCT
                   dr.primary_identifier as primary_id,
                   dr.remark, xd1.name as interpro_name, ta.source_id
-                FROM TranscriptAttributes ta, dots.AaLocation al,
+                FROM TranscriptAttributes ta, dots.AaLocation al, dots.TranslatedAASequence tas,
                   sres.ExternalDatabaseRelease xdr1, sres.ExternalDatabase xd1,
                   sres.ExternalDatabaseRelease xdr3, sres.ExternalDatabase xd3,
                   sres.DbRef dr, dots.DbRefAaFeature draf, dots.DomainFeature df
@@ -8665,7 +8668,8 @@ tablespace indx
                     'PFAM', 'PIRSF', 'PROSITEPROFILES',
                     'SMART', 'SUPERFAMILY', 'TIGRFAM'
                   )
-                  AND ta.aa_sequence_id = df.aa_sequence_id
+                  AND ta.protein_source_id = tas.source_id
+                  AND tas.aa_sequence_id = df.aa_sequence_id
                   AND df.aa_feature_id = draf.aa_feature_id
                   AND df.aa_feature_id = al.aa_feature_id
                   AND draf.db_ref_id = dr.db_ref_id
@@ -8676,7 +8680,8 @@ tablespace indx
             ) t
             GROUP BY source_id
           )
-          SELECT source_id,
+          SELECT '&ORG_ABBREV' as org_abbrev,
+                 source_id,
                  substr(interpro_id, 1, 200)||substr(interpro2_id, 1, 200) as interpro_id,
                  substr(interpro_description, 1, 3000)||substr(interpro2_description, 1, 3000) as interpro_description,
                  substr(pfam_id, 1, 200) as pfam_id,
