@@ -634,7 +634,7 @@
 
 
 
-  <tuningTable name="InterproResults" prefixEnabled="true">
+  <tuningTable name="InterproResults" prefixEnabled="true" target="orgDB">
     <comment>GeneGoTerms: each row represents one GO term assignment to one gene, right from what was loaded.
     </comment>
     <internalDependency name="TranscriptAttributes"/>
@@ -642,17 +642,18 @@
     <externalDependency name="dots.domainfeature"/>
     <externalDependency name="dots.dbrefaafeature"/>
     <externalDependency name="dots.aalocation"/>
+    <externalDependency name="dots.aasequence"/>
     <ancillaryTable name="InterproDomainDatabase"/>
     <ancillaryTable name="InterproDomainAccession"/>
     <sql>
       <![CDATA[
         CREATE TABLE &prefixInterproResults&1 AS
         SELECT
-          ta.source_id as transcript_source_id
+        '&ORG_ABBREV' as org_abbrev
+        , ta.source_id as transcript_source_id
         , ta.protein_source_id
         , ta.gene_source_id as gene_source_id
         , ta.project_id
-        , ta.organism
         , xd1.name AS interpro_db_name
         , dr.primary_identifier AS interpro_primary_id
         , dr.secondary_identifier AS interpro_secondary_id
@@ -675,10 +676,11 @@
         , sres.DbRef dr
         , dots.DbRefAaFeature draf
         , dots.DomainFeature df
+        , dots.AASequence aas
         LEFT JOIN dots.DomainFeature df2 ON df.parent_id = df2.aa_feature_id
         WHERE xd3.name IN('InterproscanData_RSRC', 'INTERPRO', 'Prints', 'HAMAP', 'SFLD', 'TIGRFAM', 'SUPERFAMILY', 'Pfam', 'PIRSF', 'PROSITE patterns', 'Superfamily', 'PRINTS', 'InterProScan', 'PFAM', 'SMART', 'CDD', 'PANTHER')
-          AND ta.aa_sequence_id = df.aa_sequence_id
-          AND (ta.taxon_id::VARCHAR = '&filterValue' OR length('&filterValue') = 0)
+          AND ta.protein_source_id = aas.source_id
+          AND aas.aa_sequence_id = df.aa_sequence_id
           AND df.aa_feature_id = draf.aa_feature_id
           AND df.aa_feature_id = al.aa_feature_id
           AND draf.db_ref_id = dr.db_ref_id
@@ -692,7 +694,7 @@
     <sql>
       <!-- gene/transcript id search (primary use case) -->
       <![CDATA[
-        create index ips_resix&1 on &prefixInterproResults&1 (organism, interpro_db_name, interpro_primary_id, interpro_secondary_id, interpro_desc, transcript_source_id, gene_source_id, project_id, interpro_e_value)
+        create index ips_resix&1 on &prefixInterproResults&1 (interpro_db_name, interpro_primary_id, interpro_secondary_id, interpro_desc, transcript_source_id, gene_source_id, project_id, interpro_e_value)
         tablespace indx
       ]]>
     </sql>
@@ -2217,7 +2219,7 @@ tablespace indx
           gloc.locations AS gene_locations,
           -- next the transcript attributes:
           t.source_id AS transcript_source_id,
-          t.na_feature_id as internal_feature_id,
+          '&ORG_ABBREV_' || t.na_feature_id as internal_feature_id,
           tso.source_id as transcript_so_id,
           CAST(coalesce(preferred_tx_product.product, any_tx_product.product,
                          t.product,
@@ -2480,15 +2482,15 @@ tablespace indx
           TABLESPACE INDX
       ]]>
     </sql>
-    <!--  NOT SURE WHY WE R DOING THIS AND IT IS GIVING ME (STEVE) TROUBLE
     <sql>
       <![CDATA[
         UPDATE &prefixTranscriptAttributes&1 ta
-        SET exon_count = (SELECT count(*) + 1 FROM apidb.IntronLocation il WHERE il.parent_id = ta.na_feature_id AND il.end_max - il.start_min + 1 > 10 )
+        SET exon_count = (SELECT count(*) + 1 FROM apidb.IntronLocation il 
+                          WHERE '&ORG_ABBREV_' || il.parent_id = ta.internal_feature_id
+                          AND il.end_max - il.start_min + 1 > 10 )
         WHERE ta.project_id = 'TriTrypDB'
       ]]>
     </sql>
-   -->
     <sql>
       <![CDATA[
         UPDATE &prefixTranscriptAttributes&1
