@@ -2248,7 +2248,7 @@ tablespace indx
           edr.version AS external_db_version,
           CAST(gsa.chromosome AS VARCHAR(20)) AS chromosome,
           gsa.so_id as sequence_so_id,
-          gsa.chromosome_order_num, gsa.source_id as na_seq_source_id,
+          gsa.chromosome_order_num, 
           --next the protein attributes:
           pa.source_id AS protein_source_id,
           pa.cds_start as coding_start,
@@ -2535,62 +2535,63 @@ tablespace indx
       <![CDATA[
         CREATE TABLE &prefixGeneModelCharMD&1
          (
+          org_abbrev,
           ontology_term_name,
           gene_source_id,
           source_id,
-          taxon_id,
+          ncbi_tax_id,
           string_value,
           number_value
          )
         AS
-        SELECT ontology_term_name, gene_source_id, source_id, taxon_id, coalesce(string_value,'NA'), coalesce(number_value,-1)
-        FROM (  SELECT gene_source_id, source_id, taxon_id,
+        SELECT '&ORG_ABBREV' as org_abbrev, ontology_term_name, gene_source_id, source_id, ncbi_tax_id, coalesce(string_value,'NA'), coalesce(number_value,-1)
+        FROM (  SELECT gene_source_id, source_id, ncbi_tax_id,
                        'transcript_count' as ontology_term_name,
                        null as string_value, gene_transcript_count as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'transcript_exon_count' as ontology_term_name, null as string_value,
                        exon_count as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'gene_exon_count' as ontology_term_name, null as string_value,
                        gene_exon_count as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'is_pseudo' as ontology_term_name, CASE is_pseudo WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END as string_value,
                        null as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'is_deprecated' as ontology_term_name, CASE is_deprecated WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END as string_value,
                        null as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'transcript_type' as ontology_term_name, transcript_type as string_value,
                        null as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id,
+                SELECT gene_source_id, source_id, ncbi_tax_id,
                        'organism' as ontology_term_name, organism as string_value,
                        null as number_value
                 FROM TranscriptAttributes
               UNION
-                SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
+                SELECT gene_source_id, source_id, ncbi_tax_id, organism, ontology_term_name
                   , string_value, number_value
                 FROM (
-                    select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+                    select atr.gene_source_id, atr.source_id, atr.ncbi_tax_id, atr.organism,
                         'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
                          null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
                     from TranscriptAttributes atr
@@ -2598,11 +2599,11 @@ tablespace indx
                     , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
                     where ltr.gene_source_id = atr.gene_source_id
                     AND ltr.transcript_length >= 20
-                    GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
+                    GROUP BY atr.gene_source_id, atr.source_id, atr.ncbi_tax_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
                 ) t
                 WHERE total_reads >= 5
               UNION
-                SELECT atr.gene_source_id, atr.source_id, atr.taxon_id,
+                SELECT atr.gene_source_id, atr.source_id, atr.ncbi_tax_id,
                 'intron_junction' as ontology_term_name, it.string_value string_value,
                     null as number_value
                 FROM
@@ -2610,7 +2611,7 @@ tablespace indx
                   , TranscriptAttributes atr
                 WHERE it.gene_source_id =  atr.gene_source_id
              UNION
-                SELECT atr.gene_source_id, atr.source_id, atr.taxon_id,
+                SELECT atr.gene_source_id, atr.source_id, atr.ncbi_tax_id,
                 'Unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
                 FROM
                   GeneIntronJunction gj
@@ -2622,7 +2623,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX &prefixGeneModelCharMD_pk&1
-          ON &prefixGeneModelCharMD&1  (ontology_term_name, gene_source_id, source_id, taxon_id, string_value, number_value)
+          ON &prefixGeneModelCharMD&1  (ontology_term_name, gene_source_id, source_id, ncbi_tax_id, string_value, number_value)
         TABLESPACE indx
       ]]>
     </sql>
@@ -2855,19 +2856,17 @@ tablespace indx
     </sql>
   </tuningTable>
 
-  <tuningTable name="GeneAttributes" prefixEnabled="true">
+  <tuningTable name="GeneAttributes" prefixEnabled="true" target="orgDB">
     <comment>The BFMV for the gene record. Each gene gets a single record, which
       stores all its attributes.
     </comment>
     <internalDependency name="TranscriptAttributes"/>
-    <ancillaryTable name="SpeciesInfo"/>
     <sql>
       <![CDATA[
 	    CREATE TABLE &prefixGeneAttributes&1 AS
-	    SELECT DISTINCT project_id
+	    SELECT DISTINCT project_id, ta.org_abbrev
         , ta.gene_source_id AS source_id
-		, gene_na_feature_id AS na_feature_id
-		, na_sequence_id
+		, gene_internal_feature_id AS internal_feature_id
 		, is_reversed
 		, gene_start_min AS start_min
 		, gene_end_max AS end_max
@@ -2878,34 +2877,20 @@ tablespace indx
 		, gp.product
 		, gene_type
         , gene_ebi_biotype
-		, gene_id
 		, aggregates.is_pseudo
-		, organism
-		, species
-		, taxon_id
-		, species as genus_species
-        , strain
 		, ncbi_tax_id
 		, so_id
-		, so_term_name
-		, so_term_definition
-		, so_version
 		, anticodon
 		, external_db_name
 		, external_db_version
-		, external_db_rls_id
 		, chromosome
 		, chromosome_order_num
-		, sequence_type
 		, gene_transcript_count AS transcript_count
 		, gene_exon_count as exon_count
 		, gene_previous_ids as previous_ids
 		, is_deprecated
-		, gene_paralog_number as paralog_number
-		, gene_ortholog_number as ortholog_number
 		, gene_context_start as context_start
 		, gene_context_end as context_end
-		, orthomcl_name
 		, gene_total_hts_snps as total_hts_snps
 		, gene_hts_nonsynonymous_snps as hts_nonsynonymous_snps
 		, gene_hts_stop_codon_snps as hts_stop_codon_snps
@@ -2946,27 +2931,9 @@ tablespace indx
                      OR d.name like '%_dbxref_uniprot_from_annotation_RSRC')
                ) t
             GROUP BY na_feature_id
-          ) uniprot ON ta.gene_na_feature_id = uniprot.na_feature_id
+          ) uniprot ON ta.gene_internal_feature_id = 'ORG_ABBREV_' || uniprot.na_feature_id
           LEFT JOIN &prefixGeneProduct gp ON ta.gene_source_id = gp.source_id
         ORDER BY ta.gene_source_id
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE TABLE &prefixSpeciesInfo&1 as
-        SELECT genus_species, count(distinct organism) as strain_count
-        FROM &prefixGeneAttributes&1
-        GROUP BY genus_species
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        UPDATE &prefixGeneAttributes&1 ga
-        SET strain_count = (
-          SELECT strain_count
-          FROM &prefixSpeciesInfo&1 si
-          WHERE si.genus_species = ga.genus_species
-        )
       ]]>
     </sql>
     <sql>
@@ -2986,65 +2953,49 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_loc_ix&1
-          ON &prefixGeneAttributes&1 (na_sequence_id, start_min, end_max, is_reversed, na_feature_id, is_deprecated)
+          ON &prefixGeneAttributes&1 (sequence_id, start_min, end_max, is_reversed, internal_feature_id, is_deprecated)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_feat_ix&1
-           ON &prefixGeneAttributes&1 (na_feature_id, na_sequence_id, start_min, end_max, is_reversed)
+           ON &prefixGeneAttributes&1 (internal_feature_id, sequence_id, start_min, end_max, is_reversed)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE INDEX GeneAttr_orthoname_ix&1 ON &prefixGeneAttributes&1 (
-          orthomcl_name, source_id, taxon_id, gene_type, na_feature_id,
-          na_sequence_id, start_min, end_max, organism, species,
-          product, project_id
-        ) TABLESPACE indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX GeneAttr_ortholog_ix&1
-          ON &prefixGeneAttributes&1 (source_id, na_sequence_id, start_min, end_max, orthomcl_name, na_feature_id)
-        tablespace indx
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
         CREATE INDEX GeneAttr_orgsrc_ix&1
-          ON &prefixGeneAttributes&1 (organism, source_id, na_sequence_id, start_min, end_max)
+          ON &prefixGeneAttributes&1 (source_id, sequence_id, start_min, end_max)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_prjsrc_ix&1
-          ON &prefixGeneAttributes&1 (project_id, organism, source_id, coalesce(IS_DEPRECATED,0))
+          ON &prefixGeneAttributes&1 (source_id, coalesce(IS_DEPRECATED,0))
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_txid_ix&1
-          ON &prefixGeneAttributes&1 (taxon_id, source_id, gene_type, na_feature_id, project_id)
+          ON &prefixGeneAttributes&1 (ncbi_tax_id, source_id, gene_type, internal_feature_id, project_id)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_ids_ix&1
-          ON &prefixGeneAttributes&1 (na_feature_id, source_id, project_id)
+          ON &prefixGeneAttributes&1 (internal_feature_id, source_id, project_id)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_loc_intjunc_ix&1
-          ON &prefixGeneAttributes&1 (NA_SEQUENCE_ID, START_MIN, IS_REVERSED, END_MAX)
+          ON &prefixGeneAttributes&1 (SEQUENCE_ID, START_MIN, IS_REVERSED, END_MAX)
         TABLESPACE indx
       ]]>
     </sql>
@@ -4300,7 +4251,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="TranscriptSequence" prefixEnabled="true">
+  <tuningTable name="TranscriptSequence" prefixEnabled="true" target="orgDB">
     <comment> Each record stores the transcript sequence of one gene. Used by the
       gene record and the sequence retrieval tool. Propagated to the portal.
     </comment>
@@ -4309,7 +4260,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE TABLE &prefixTranscriptSequence&1 AS
-        SELECT ta.source_id, ta.project_id, sns.sequence
+        SELECT '&ORG_ABBREV' as org_abbrev, ta.source_id, ta.project_id, sns.sequence
         FROM &prefixTranscriptAttributes ta, dots.SplicedNaSequence sns
         WHERE ta.source_id = sns.source_id
       ]]>
@@ -4323,7 +4274,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="CodingSequence">
+  <tuningTable name="CodingSequence" target="orgDB">
     <comment> Each record stores the coding sequence of one gene. Used by the
       gene record and the sequence retrieval tool. Propagated to the portal.
     </comment>
@@ -4333,12 +4284,12 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE TABLE CodingSequence&1 AS
-        SELECT ta.source_id, ta.project_id,
+        SELECT '&ORG_ABBREV' as org_abbrev, ta.source_id, ta.project_id,
                SUBSTR(sns.sequence, tf.translation_start::INTEGER,
                       tf.translation_stop::INTEGER - tf.translation_start::INTEGER + 1) as sequence
         FROM TranscriptAttributes ta, dots.SplicedNaSequence sns, dots.TranslatedAaFeature tf
         WHERE ta.source_id = sns.source_id
-         AND ta.na_feature_id = tf.na_feature_id
+         AND ta.internal_feature_id = '&ORG_ABBREV_' || tf.na_feature_id
       ]]>
     </sql>
     <sql>
@@ -4350,24 +4301,24 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="ProteinSequence">
+  <tuningTable name="ProteinSequence" target="orgDB">
     <comment> Each record stores the coding sequence of one gene. Used by the
       gene record and the sequence retrieval tool, as well as by
       buildTrackOldAnnotationTT. Propagated to the portal.
     </comment>
-    <externalDependency name="core.ProjectInfo"/>
     <externalDependency name="dots.TranslatedAaSequence"/>
     <internalDependency name="ProteinAttributes"/>
     <sql>
       <![CDATA[
         CREATE TABLE ProteinSequence&1 AS
         WITH pAttr AS (
-           SELECT distinct source_id, aa_sequence_id
+           SELECT distinct source_id
            FROM ProteinAttributes)
-        SELECT pa.source_id, pi.name AS project_id, tas.sequence
-        FROM pAttr pa, dots.TranslatedAaSequence tas, core.Projectinfo pi
-        WHERE pa.aa_sequence_id = tas.aa_sequence_id
-          AND pi.project_id = tas.row_project_id
+        SELECT '&ORG_ABBREV' as org_abbrev, 
+               '&PROJECT_ID' as project_id,
+               pa.source_id, tas.sequence
+        FROM pAttr pa, dots.TranslatedAaSequence tas
+        WHERE pa.source_id = tas.source_id
       ]]>
     </sql>
     <sql>
@@ -8192,7 +8143,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="GeneModelDump">
+  <tuningTable name="GeneModelDump" target="orgDB">
     <comment>
       Materialization of GeneTables.GeneModelDump.
     </comment>
@@ -8204,10 +8155,12 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE TABLE GeneModelDump&1 as
-        SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
+        SELECT '&ORG_ABBREV' as org_abbrev,
+               '&PROJECT_ID' as project_id,
+               source_id, sequence_id, gm_start,gm_end, type, is_reversed,
                string_agg(transcript_id, ',' ORDER BY transcript_id) AS transcript_ids
         FROM (
-          SELECT distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+          SELECT distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, 
               ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
               gm.type, gl.is_reversed
           FROM
@@ -8220,21 +8173,21 @@ tablespace indx
               WHERE el.feature_type in  ('ExonFeature','five_prime_UTR', 'three_prime_UTR','CDS','Intron')
                 AND el.is_top_level = 1
             ) gm
-          WHERE gm.na_feature_id = ta.na_feature_id
+          WHERE '&ORG_ABBREV_' || gm.na_feature_id = ta.internal_feature_id
             AND s.na_sequence_id = gl.na_sequence_id
-            AND ta.na_feature_id = gl.na_feature_id
+            AND gm.na_feature_id = gl.na_feature_id
             AND gl.is_top_level = 1
         ) t
-        GROUP BY source_id, project_id, sequence_id,
+        GROUP BY source_id, sequence_id,
                  gm_start,  gm_end, type, is_reversed
-        ORDER BY CASE WHEN is_reversed = 1 THEN -1 * gm_start ELSE gm_start END
+        ORDER BY CASE WHEN is_reversed = 1 THEN -1 * gm_start ELSE gm_start END -- WHY DO WE NEED THIS ORDER BY?
        ]]>
     </sql>
     <sql>
       <![CDATA[
         create index gmd_ix&1
           on GeneModelDump&1
-            (source_id, project_id, sequence_id, gm_start, gm_end, is_reversed, type, transcript_ids)
+            (source_id, sequence_id, gm_start, gm_end, is_reversed, type, transcript_ids)
         tablespace indx
       ]]>
     </sql>
