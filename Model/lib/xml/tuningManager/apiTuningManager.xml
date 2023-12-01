@@ -1023,7 +1023,7 @@
         WITH profiles AS (
           SELECT p.source_id,
                  ga.project_id,
-                 ga.sequence_id,
+                 ga.na_sequence_source_id,
                  d.name,
                  row_number() over(partition by d.name
                                    order by ga.chromosome_order_num, p.profile_as_string desc) as rn
@@ -2012,10 +2012,11 @@ tablespace indx
         SELECT 
           '&ORG_ABBREV' as org_abbrev,
           '&PROJECT_ID' as project_id,
-          tas.source_id, 
+          tas.source_id as source_id,                    -- not sure what is best, so keeping both these source_ids
+          tas.source_id as aa_sequence_source_id, 
           t.source_id as transcript_source_id,
           gf.source_id as gene_source_id,
-          cdsl.sequence_source_id as cds_seq_source_id,
+          cdsl.sequence_source_id as na_sequence_source_id,
           cdsl.is_reversed,
           cdsl.start_min as cds_start,
           cdsl.end_max as cds_end,
@@ -2101,12 +2102,12 @@ tablespace indx
       <![CDATA[
        update &prefixProteinAttributes&1 gaup
        set has_seqedit  = 1
-       where source_id in (select source_id from apidb.seqedit)
+       where aa_sequence_source_id in (select aa_sequence_source_id from apidb.seqedit)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE INDEX PA_sourceId&1 ON &prefixProteinAttributes&1 (source_id)
+        CREATE INDEX PA_sourceId&1 ON &prefixProteinAttributes&1 (aa_sequence_source_id)
         tablespace indx
       ]]>
     </sql>
@@ -2180,7 +2181,6 @@ tablespace indx
         SELECT DISTINCT
           '&ORG_ABBREV' as org_abbrev,
           '&PROJECT_ID' as project_id,
-          t.source_id,
           -- first the gene attributes:
           gf.source_id AS gene_source_id,
           '&ORG_ABBREV_' || gf.na_feature_id AS gene_internal_feature_id,
@@ -2219,7 +2219,7 @@ tablespace indx
           entrez_table.entrez_id AS gene_entrez_id,
           gloc.locations AS gene_locations,
           -- next the transcript attributes:
-          t.source_id AS transcript_source_id,
+          t.source_id,
           '&ORG_ABBREV_' || t.na_feature_id as internal_feature_id,
           tso.source_id as transcript_so_id,
           CAST(coalesce(preferred_tx_product.product, any_tx_product.product,
@@ -2236,8 +2236,9 @@ tablespace indx
           CASE coalesce(tl.is_reversed, 0) WHEN 0 THEN 'forward' WHEN 1 THEN 'reverse' ELSE tl.is_reversed::varchar END AS strand,
           CASE t.is_pseudo WHEN null THEN 0 ELSE t.is_pseudo END as is_pseudo,
           transcript_exons.exon_count,
-          sns.length AS length, sns.source_id as spliced_na_seq_source_id,
-          CAST(gsa.source_id AS VARCHAR(50)) AS sequence_id,
+          sns.length AS length, 
+          sns.source_id as spliced_na_seq_source_id,
+          CAST(gsa.source_id AS VARCHAR(50)) AS na_sequence_source_id,
           gsa.ncbi_tax_id, 
           so.source_id as so_id,
           CAST(so.name AS VARCHAR(150)) AS so_term_name,
@@ -2250,7 +2251,8 @@ tablespace indx
           gsa.so_id as sequence_so_id,
           gsa.chromosome_order_num, 
           --next the protein attributes:
-          pa.source_id AS protein_source_id,
+          pa.source_id as protein_source_id,
+          pa.aa_sequence_source_id as aa_sequence_source_id,
           pa.cds_start as coding_start,
           pa.cds_end as coding_end,
           pa.cds_length,
@@ -2456,7 +2458,7 @@ tablespace indx
       <![CDATA[
         CREATE UNIQUE INDEX TranscriptAttr_loc_ix&1
           ON &prefixTranscriptAttributes&1
-               (sequence_id, gene_start_min, gene_end_max, is_reversed,
+               (na_sequence_source_id, gene_start_min, gene_end_max, is_reversed,
                 is_deprecated, source_id, gene_source_id, project_id)
         TABLESPACE INDX
       ]]>
@@ -2479,7 +2481,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX TransAttr_orgsrc_ix&1
-          ON &prefixTranscriptAttributes&1 (source_id, sequence_id, gene_start_min, gene_end_max)
+          ON &prefixTranscriptAttributes&1 (source_id, na_sequence_source_id, gene_start_min, gene_end_max)
           TABLESPACE INDX
       ]]>
     </sql>
@@ -2502,7 +2504,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX TransAttr_lwrsrc_ix&1
-          ON &prefixTranscriptAttributes&1 (lower(source_id), gene_source_id, project_id, source_id)
+          ON &prefixTranscriptAttributes&1 (lower(source_id), gene_source_id, project_id)
           TABLESPACE INDX
       ]]>
     </sql>
@@ -2517,7 +2519,7 @@ tablespace indx
       <![CDATA[
         CREATE INDEX TransAttr_locsIds_ix&1
           ON &prefixTranscriptAttributes&1
-             (sequence_id, start_min, end_max, is_reversed, gene_source_id, source_id, project_id)
+             (na_sequence_source_id, start_min, end_max, is_reversed, gene_source_id, source_id, project_id)
           TABLESPACE INDX
       ]]>
     </sql>
@@ -2871,7 +2873,7 @@ tablespace indx
 		, gene_start_min AS start_min
 		, gene_end_max AS end_max
         , CASE strand WHEN 'forward' THEN '+' WHEN 'reverse' THEN '-' ELSE null END as strand_plus_minus
-		, sequence_id
+		, na_sequence_source_id
 		, gene_name AS name
 		, COALESCE(aggregates.product, aggregates.transcript_product) as  old_product
 		, gp.product
@@ -2953,21 +2955,21 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_loc_ix&1
-          ON &prefixGeneAttributes&1 (sequence_id, start_min, end_max, is_reversed, internal_feature_id, is_deprecated)
+          ON &prefixGeneAttributes&1 (na_sequence_source_id, start_min, end_max, is_reversed, internal_feature_id, is_deprecated)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_feat_ix&1
-           ON &prefixGeneAttributes&1 (internal_feature_id, sequence_id, start_min, end_max, is_reversed)
+           ON &prefixGeneAttributes&1 (internal_feature_id, na_sequence_source_id, start_min, end_max, is_reversed)
         TABLESPACE indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_orgsrc_ix&1
-          ON &prefixGeneAttributes&1 (source_id, sequence_id, start_min, end_max)
+          ON &prefixGeneAttributes&1 (source_id, na_sequence_source_id, start_min, end_max)
         TABLESPACE indx
       ]]>
     </sql>
@@ -2995,7 +2997,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE INDEX GeneAttr_loc_intjunc_ix&1
-          ON &prefixGeneAttributes&1 (SEQUENCE_ID, START_MIN, IS_REVERSED, END_MAX)
+          ON &prefixGeneAttributes&1 (NA_SEQUENCE_SOURCE_ID, START_MIN, IS_REVERSED, END_MAX)
         TABLESPACE indx
       ]]>
     </sql>
@@ -3030,7 +3032,7 @@ tablespace indx
         SELECT '&ORG_ABBREV' as org_abbrev,
                '&PROJECT_ID' as project_id,
                ed.name as dataset,
-               sequence.source_id as seq_source_id,
+               sequence.source_id as sequence_source_id,
                snp.location,
                snp.source_id,
                snp.reference_strain,
@@ -3095,7 +3097,7 @@ tablespace indx
     <sql>
       <![CDATA[
         create index Snp_Seq_ix&1
-               ON &prefixSnpAttributes&1 (seq_source_id, dataset, location)
+               ON &prefixSnpAttributes&1 (sequence_source_id, dataset, location)
         tablespace indx
       ]]>
     </sql>
@@ -3225,7 +3227,7 @@ tablespace indx
         WHERE e.na_sequence_id = ba.query_na_sequence_id
           AND aseq.na_sequence_id = ba.query_na_sequence_id
           AND sequence.na_sequence_id = ba.target_na_sequence_id
-          AND ga.sequence_id = sequence.source_id
+          AND ga.na_sequence_source_id = sequence.source_id
           AND least(ba.target_end, ga.gene_end_max) - greatest(ba.target_start, ga.gene_start_min) >= 0
           AND query_sequence.na_sequence_id = ba.query_na_sequence_id
           AND query_sequence.sequence_ontology_id = so.ontology_term_id
@@ -3918,7 +3920,7 @@ tablespace indx
                ed.name AS dataset,
                snp.name as type,
                ds.subtype as platform,
-               sequence.source_id AS seq_source_id,
+               sequence.source_id AS sequence_source_id,
                snp_loc.start_min,
                SUBSTR(snp.reference_strain, 1, 200) AS reference_strain,
                SUBSTR(snp.reference_na, 1, 200) AS reference_na,
@@ -3988,7 +3990,7 @@ tablespace indx
     <sql>
       <![CDATA[
         create index SnpDoTS_Seq_ix&1
-               ON SnpAttributesDoTS&1 (seq_source_id, dataset, start_min, source_id)
+               ON SnpAttributesDoTS&1 (sequence_source_id, dataset, start_min, source_id)
         tablespace indx
       ]]>
     </sql>
@@ -4041,48 +4043,47 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="Blastp">
+  <tuningTable name="Blastp" target="orgDB">
     <comment> Each record stores a Blastp similarity of a gene. Used by the gene-page
          Blastp table. 
      </comment>
     <internalDependency name="TranscriptAttributes"/>
-    <internalDependency name="TaxonSpecies"/>
     <externalDependency name="dots.Similarity"/>
     <externalDependency name="dots.ExternalAaSequence"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="dots.TranslatedAaFeature"/>
     <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.Taxon"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="core.TableInfo"/>
     <sql>
       <![CDATA[
         CREATE TABLE Blastp&1 AS
-        SELECT row_number() over () as blastp_id, ga.source_id, ga.gene_source_id, ga.project_id, sim.similarity_id,
+        SELECT '&ORG_ABBREV' as org_abbrev,
+               row_number() over () as blastp_id, ga.source_id, ga.gene_source_id, ga.project_id, sim.similarity_id,
                subject.source_id as subject_source_id, sim.score score, sim.query_id,
                sim.min_query_start, sim.max_query_end, sim.pvalue_mant, sim.pvalue_exp,
                sim.number_identical, sim.total_match_length,
                substr(replace(subject.description, chr(1), ''), 1, 300) as description,
                sim.number_positive, ed.name as external_database_name,
-               substr(tn.name, 1, 50) AS query_organism, ns.taxon_id as query_taxon_id
+               tax.ncbi_tax_id as query_ncbi_tax_id
         FROM dots.Similarity sim, core.TableInfo qti, core.TableInfo sti, dots.ExternalAaSequence subject,
              dots.Transcript t, dots.TranslatedAaFeature taf,
              sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
-             dots.NaSequence ns, /* TaxonSpecies st, */
-             sres.TaxonName tn, TranscriptAttributes ga
+             dots.NaSequence ns,
+             sres.Taxon tax, TranscriptAttributes ga
         WHERE qti.table_id = sim.query_table_id
           AND qti.name = 'TranslatedAASequence'
           AND sti.table_id = sim.subject_table_id
           AND sti.name = 'ExternalAASequence'
           AND subject.aa_sequence_id = sim.subject_id
-          AND ga.na_feature_id = t.na_feature_id
+          AND ga.internal_feature_id = '&ORG_ABBREV_' || t.na_feature_id
           AND t.na_feature_id = taf.na_feature_id
           AND taf.aa_sequence_id = sim.query_id
           AND subject.external_database_release_id = edr.external_database_release_id
           AND edr.external_database_id = ed.external_database_id
-          AND ga.na_sequence_id = ns.na_sequence_id
-          AND ns.taxon_id = tn.taxon_id
-          /*  st.taxon_id and st.species_taxon_id = # TaxonSpecies mapping commented out */
-          AND tn.name_class = 'scientific name'
+          AND ga.na_sequence_source_id = ns.source_id
+          AND ns.taxon_id = tax.taxon_id
       ]]>
     </sql>
     <sql>
@@ -4312,18 +4313,18 @@ tablespace indx
       <![CDATA[
         CREATE TABLE ProteinSequence&1 AS
         WITH pAttr AS (
-           SELECT distinct source_id
+           SELECT distinct aa_sequence_source_id 
            FROM ProteinAttributes)
         SELECT '&ORG_ABBREV' as org_abbrev, 
                '&PROJECT_ID' as project_id,
-               pa.source_id, tas.sequence
+               pa.aa_sequence_source_id, tas.sequence
         FROM pAttr pa, dots.TranslatedAaSequence tas
-        WHERE pa.source_id = tas.source_id
+        WHERE pa.aa_sequence_source_id = tas.source_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index ProtSeq_ix&1 on ProteinSequence&1 (source_id, project_id)
+        create index ProtSeq_ix&1 on ProteinSequence&1 (aa_sequence_source_id, project_id)
         tablespace indx
       ]]>
     </sql>
@@ -6611,15 +6612,15 @@ tablespace indx
         WITH rnaseqgenes AS (
           SELECT p.DATASET_NAME
                 , p.source_id as gene_source_id
-                , ga.sequence_id as sequence_id
+                , ga.na_sequence_source_id as sequence_id
                 , row_number() over (partition by p.dataset_name
-                                    order by p.max_value, p.source_id, ga.sequence_id) as rn
+                                    order by p.max_value, p.source_id, ga.na_sequence_source_id) as rn
           FROM profile p, geneattributes ga
           WHERE dataset_type = 'transcript_expression' and dataset_subtype =  'rnaseq'
             AND p.source_id = ga.source_id
         ), proteomicsgenes as (
           SELECT ga.gene_source_id,
-                 ga.SEQUENCE_ID,
+                 ga.na_sequence_source_id,
                  ga.protein_source_id,
                  d.name,
                  row_number() over(partition by d.name
@@ -6645,7 +6646,7 @@ tablespace indx
                , dnt.name
                , dsp.name as dataset_presenter_name
                , sa.source_id as sequence_source_id
-               , pg.sequence_id as p_sequence_source_id
+G               , pg.sequence_id as p_sequence_source_id
                , pg.gene_source_id as p_gene_id
                , pg.protein_source_id as p_protein_id
                , rg.sequence_id as r_sequence_source_id
@@ -8161,7 +8162,7 @@ tablespace indx
                string_agg(transcript_id, ',' ORDER BY transcript_id) AS transcript_ids
         FROM (
           SELECT distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, 
-              ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
+              ta.na_sequence_source_id as sequence_id, gm.start_min as gm_start, gm.end_max as gm_end,
               gm.type, gl.is_reversed
           FROM
             apidb.FeatureLocation gl, dots.NaSequence s,
@@ -8723,14 +8724,14 @@ tablespace indx
     <sql>
       <![CDATA[
         create table DatabaseTaxonUrl&1 as
-        select edd.dataset_presenter_display_name AS dataset, ga.taxon_id, edr.id_url
+        select edd.dataset_presenter_display_name AS dataset, ga.ncbi_tax_id, edr.id_url
         from sres.DbRef db, dots.DbRefNaFeature dbna,
              ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
              GeneAttributes ga
         where db.external_database_release_id = edd.external_database_release_id
           and edr.external_database_release_id = edd.external_database_release_id
          and dbna.db_ref_id = db.db_ref_id
-         and ga.na_feature_id = dbna.na_feature_id
+         and ga.internal_feature_id = '&ORG_ABBREV_' || dbna.na_feature_id
          and id_url not like 'http://chemlims.com/%'
       union
         select edd.dataset_presenter_display_name AS dataset, ta.taxon_id, edr.id_url
@@ -8740,7 +8741,7 @@ tablespace indx
         where db.external_database_release_id = edd.external_database_release_id
           and edr.external_database_release_id = edd.external_database_release_id
           and dbna.db_ref_id = db.db_ref_id
-          and ta.na_feature_id = dbna.na_feature_id
+          and ta.internal_feature_id = '&ORG_ABBREV_' || dbna.na_feature_id
       union
         select d.name as dataset, ga.taxon_id, eru.id_url
         from sres.DbRef dbr, dots.DbRefNaFeature dbrf, sres.ExternalDatabaseRelease r,
@@ -8749,7 +8750,7 @@ tablespace indx
         where dbr.external_database_release_id = r.external_database_release_id
           and r.external_database_id = d.external_database_id
           and dbr.db_ref_id = dbrf.db_ref_id
-          and dbrf.na_feature_id = ga.na_feature_id
+          and '&ORG_ABBREV_' || dbrf.na_feature_id = ga.internal_feature_id
           and upper(d.name) = eru.database_name
       union
         select distinct
@@ -8768,7 +8769,7 @@ tablespace indx
     <sql>
       <![CDATA[
         create index dtaxu_ix&1
-          on DatabaseTaxonUrl&1 (taxon_id, dataset, id_url)
+          on DatabaseTaxonUrl&1 (ncbi_tax_id, dataset, id_url)
           tablespace indx
       ]]>
     </sql>
@@ -9117,7 +9118,7 @@ tablespace indx
           AND d.external_database_release_id = edr.external_database_release_id
           AND db.db_ref_id = d.db_ref_id
           AND na.na_feature_id = db.na_feature_id
-          AND (ta.transcript_source_id = na.source_id OR ta.gene_source_id = na.source_id)
+          AND (ta.source_id = na.source_id OR ta.gene_source_id = na.source_id)
       ]]>
     </sql>
     <sql>
