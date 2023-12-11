@@ -1049,7 +1049,7 @@
     <sql>
       <![CDATA[
         CREATE TABLE GeneWord&1 AS
-        SELECT source_id, taxon_id,
+        SELECT '&ORG_ABBREV' as org_abbrev, source_id, ncbi_tax_id,
                -- for each rn (1 - max_words_in_any_product),
                --    print the rn-th word.
                --    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
@@ -1511,7 +1511,6 @@ tablespace indx
       understand which part (or parts) of the SQL is responsible for each ID-to-gene
       mapping.
     </comment>
-    <internalDependency name="GenomicSeqAttributes"/>
     <externalDependency name="apidb.FeatureLocation"/>
     <externalDependency name="apidb.GeneFeatureName"/>
     <externalDependency name="dots.DbRefNaFeature"/>
@@ -2132,25 +2131,18 @@ tablespace indx
     <externalDependency name="apidb.TranscriptProduct"/>
     <externalDependency name="apidb.GeneFeatureProduct"/>
     <externalDependency name="apidb.UtrLocation"/>
-    <externalDependency name="apidb.Organism"/>
-    <externalDependency name="core.TableInfo"/>
     <externalDependency name="dots.DbRefNaFeature"/>
     <externalDependency name="dots.ExonFeature"/>
     <externalDependency name="dots.GeneFeature"/>
-    <externalDependency name="dots.GeneInstance"/>
     <externalDependency name="dots.NaFeatureComment"/>
     <externalDependency name="dots.RnaFeatureExon"/>
     <externalDependency name="dots.RnaType"/>
-    <externalDependency name="dots.SequenceGroup"/>
-    <externalDependency name="dots.SequenceSequencegroup"/>
     <externalDependency name="dots.SplicedNaSequence"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.DbRef"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="sres.OntologyTerm"/>
-    <externalDependency name="sres.Taxon"/>
-    <externalDependency name="sres.TaxonName"/>
     <ancillaryTable name="TranscriptUniprot"/>
     <sql>
       <![CDATA[
@@ -3192,7 +3184,7 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="EstAlignmentGeneSummary">
+  <tuningTable name="EstAlignmentGeneSummary" target="orgDB">
     <comment> Each row represents a colocated EST alignment - gene pair. Used by the
       model, by generateGeneMetrics, and in the creation of the
       OrganismAttributes tuning table
@@ -3205,16 +3197,22 @@ tablespace indx
     <externalDependency name="dots.Est"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="sres.OntologyTerm"/>
+    <externalDependency name="sres.Taxon"/>
     <intermediateTable name="EstAlignmentGene"/>
     <intermediateTable name="EstAlignmentNoGene"/>
     <sql>
       <![CDATA[
         CREATE TABLE EstAlignmentGene AS
-        SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
-                 e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
-                 ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
+        SELECT  '&ORG_ABBREV' as org_abbrev,
+                '&ORG_ABBREV_' || ba.blat_alignment_id as internal_blat_alignment_id, 
+                 query_sequence.source_id as query_sequence_source_id, 
+                 e.accession,
+                 e.library_id, 
+                 t.ncbi_tax_id as query_ncbi_tax_id,
+                 ba.percent_identity, ba.is_consistent,
                  ba.is_best_alignment, ba.is_reversed, ba.target_start, ba.target_end,
                  sequence.source_id AS target_sequence_source_id,
+                 sequence.ncbi_tax_id as target_ncbi_tax_id,
                  least(ba.target_end, ga.gene_end_max)
                  - greatest(ba.target_start, ga.gene_start_min) + 1
                    AS est_gene_overlap_length,
@@ -3223,48 +3221,59 @@ tablespace indx
                  ga.gene_source_id AS gene
         FROM dots.BlatAlignment ba, dots.Est e, dots.AssemblySequence aseq,
              TranscriptAttributes ga, GenomicSeqAttributes sequence,
-             dots.NaSequence query_sequence, sres.OntologyTerm so
+             dots.NaSequence query_sequence, sres.OntologyTerm so,
+             sres.Taxon t, dots.NaSequence target_sequence
         WHERE e.na_sequence_id = ba.query_na_sequence_id
           AND aseq.na_sequence_id = ba.query_na_sequence_id
-          AND sequence.na_sequence_id = ba.target_na_sequence_id
           AND ga.na_sequence_source_id = sequence.source_id
           AND least(ba.target_end, ga.gene_end_max) - greatest(ba.target_start, ga.gene_start_min) >= 0
           AND query_sequence.na_sequence_id = ba.query_na_sequence_id
           AND query_sequence.sequence_ontology_id = so.ontology_term_id
-          AND so.name = 'EST'
-          AND ba.target_na_sequence_id = sequence.na_sequence_id
+          AND so.source_id = 'SO:0000345' --EST
+          AND ba.target_na_sequence_id = target_sequence.na_sequence_id
+          AND sequence.source_id = target_sequence.source_id
+          AND ba.query_taxon_id = t.taxon_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
         CREATE TABLE EstAlignmentNoGene AS
         SELECT * from EstAlignmentGene WHERE 1=0 UNION /* define datatype for null column */
-        SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
-               e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
-               ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
+        SELECT  '&ORG_ABBREV' as org_abbrev,
+                '&ORG_ABBREV_' || ba.blat_alignment_id as internal_blat_alignment_id, 
+               query_sequence.source_id as query_sequence_source_id, 
+               e.accession,
+               e.library_id, 
+               t.ncbi_tax_id as query_ncbi_tax_id,
+               ba.percent_identity, ba.is_consistent,
                ba.is_best_alignment, ba.is_reversed, ba.target_start, ba.target_end,
                sequence.source_id AS target_sequence_source_id,
+               sequence.ncbi_tax_id as target_ncbi_tax_id,
                NULL AS est_gene_overlap_length,
                ba.query_bases_aligned / (query_sequence.length)
                * 100 AS percent_est_bases_aligned,
                NULL AS gene
         FROM dots.BlatAlignment ba, dots.Est e, dots.AssemblySequence aseq,
-             dots.NaSequence sequence, dots.NaSequence query_sequence
+             GenomicSeqAttributes sequence, dots.NaSequence query_sequence,
+             sres.Taxon t, dots.NaSequence target_sequence
         WHERE e.na_sequence_id = ba.query_na_sequence_id
           AND e.na_sequence_id = query_sequence.na_sequence_id
           AND aseq.na_sequence_id = ba.query_na_sequence_id
-          AND ba.target_na_sequence_id = sequence.na_sequence_id
-          AND ba.blat_alignment_id IN
+          AND ba.target_na_sequence_id = target_sequence.na_sequence_id
+          AND target_sequence.source_id = sequence.source_id
+          AND '&ORG_ABBREV_' || ba.blat_alignment_id IN
            ( /* set of blat_alignment_ids not in in first leg of UNION */
             /* (because they overlap no genes) */
-            SELECT ba.blat_alignment_id
+            SELECT '&ORG_ABBREV_' || ba.blat_alignment_id
             FROM dots.BlatAlignment ba, dots.NaSequence query_sequence,
                  sres.OntologyTerm so
             WHERE query_sequence.na_sequence_id = ba.query_na_sequence_id
               AND query_sequence.sequence_ontology_id = so.ontology_term_id
-              AND so.name = 'EST'
+              AND so.source_id = 'SO:0000345' --EST
+              AND sequence.source_id = target_sequence.source_id
+              AND ba.query_taxon_id = t.taxon_id
             EXCEPT
-            SELECT blat_alignment_id FROM EstAlignmentGene)
+            SELECT internal_blat_alignment_id FROM EstAlignmentGene)
       ]]>
     </sql>
     <sql>
@@ -3697,22 +3706,22 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="TFBSGene">
+  <tuningTable name="TFBSGene" target="orgDB">
     <comment> Used by gene queries, as well as by generateGeneMetrics. Also an input
       to OrganismAttributes.
     </comment>
     <externalDependency name="apidb.FeatureLocation"/>
     <externalDependency name="dots.BindingSiteFeature"/>
+    <externalDependency name="dots.NASequence"/>
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
         CREATE TABLE TFBSGene&1 AS
         SELECT DISTINCT
+          '&ORG_ABBREV' as org_abbrev,
           ga.source_id as gene_source_id,
-          ga.organism as organism,
-          ga.genus_species as species,
           aef.source_id as probe_id,
-          aef.na_feature_id as tfbs_na_feature_id,
+          aef.na_feature_id as internal_tfbs_feature_id,
           CASE
             WHEN ga.is_reversed = 0
             THEN round(abs(ga.start_min - (((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min)),0)
@@ -3740,22 +3749,24 @@ tablespace indx
             aef.*
         FROM  dots.BindingSiteFeature aef,
               apidb.FeatureLocation arrloc,
+              dots.nasequence seq,
               GeneAttributes ga
         WHERE aef.na_feature_id = arrloc.na_feature_id
-        AND   arrloc.na_sequence_id = ga.na_sequence_id
+        AND   arrloc.na_sequence_id = seq.na_sequence_id
+        AND   seq.source_id = ga.na_sequence_source_id
         AND   ( (ga.is_reversed = 0 and abs((((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min) - ga.start_min) <= 3000)
                           or (ga.is_reversed = 1 and abs((((arrloc.end_max - arrloc.start_min) / 2) + arrloc.start_min) - ga.end_max) <= 3000) )
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index tfbs_geneid_idx&1 ON TFBSGene&1 (gene_source_id, tfbs_na_feature_id)
+        create index tfbs_geneid_idx&1 ON TFBSGene&1 (gene_source_id, internal_tfbs_feature_id)
           tablespace indx
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index geneid_tfbs_idx&1 ON TFBSGene&1 (tfbs_na_feature_id,gene_source_id)
+        create index geneid_tfbs_idx&1 ON TFBSGene&1 (internal_tfbs_feature_id, gene_source_id)
           tablespace indx
       ]]>
     </sql>
@@ -4132,7 +4143,8 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE TABLE GenePopsetOverlap&1 AS
-        SELECT substr(ia.source_id, 1, 30) as popset_source_id,
+        SELECT '&ORG_ABBREV' as org_abbrev,
+               substr(ia.source_id, 1, 30) as popset_source_id,
                fl.feature_source_id as gene_source_id,
                min(pvalue_exp) as min_pvalue_exp
         FROM PopsetAttributes ia, dots.Similarity sim, apidb.FeatureLocation fl
@@ -4331,25 +4343,22 @@ tablespace indx
   </tuningTable>
 
 
-  <tuningTable name="GenomicSequenceSequence">
+  <tuningTable name="GenomicSequenceSequence" target="orgDB">
     <comment> Each record stores the nucleotide sequence for one genomic sequence
       that is "official" (in the sense that it can be instantiated as a WDK
       sequence record. Used by generatePathoLogicFile and the sequence
       retrieval tool Propagated to portal instances.
     </comment>
-    <internalDependency name="ProjectTaxon"/>
     <internalDependency name="GenomicSeqAttributes"/>
     <externalDependency name="dots.NaSequence"/>
-    <externalDependency name="sres.TaxonName"/>
     <sql>
       <![CDATA[
         CREATE TABLE GenomicSequenceSequence&1 AS
-        SELECT sa.source_id, cast(apidb.project_id(tn.name) as varchar(20)) as project_id,
+        SELECT '&ORG_ABBREV' as org_abbrev, '&PROJECT_ID' as project_id,
+               sa.source_id,
                ns.sequence
-        FROM GenomicSeqAttributes sa, dots.NaSequence ns, sres.TaxonName tn
-        WHERE sa.na_sequence_id = ns.na_sequence_id
-          AND ns.taxon_id = tn.taxon_id
-          AND tn.name_class = 'scientific name'
+        FROM GenomicSeqAttributes sa, dots.NaSequence ns
+        WHERE sa.source_id = ns.source_id
       ]]>
     </sql>
     <sql>
@@ -8151,8 +8160,6 @@ G               , pg.sequence_id as p_sequence_source_id
     <externalDependency name="apidb.FeatureLocation"/>
     <internalDependency name="TranscriptAttributes"/>
     <externalDependency name="dots.NaSequence"/>
-    <externalDependency name="dots.GeneFeature"/>
-    <externalDependency name="dots.ExonFeature"/>
     <sql>
       <![CDATA[
         CREATE TABLE GeneModelDump&1 as
@@ -8406,7 +8413,7 @@ G               , pg.sequence_id as p_sequence_source_id
   </tuningTable>
 
 
-  <tuningTable name="RodMalPhenotype">
+  <tuningTable name="RodMalPhenotype" target="orgDB">
     <comment>
       for GeneTables.RodMalPhenotypeTable
     </comment>
@@ -8422,7 +8429,7 @@ G               , pg.sequence_id as p_sequence_source_id
              AS (SELECT DISTINCT ga.source_id, ga.project_id, pm.source_id as rmgmid,
                                  pm.pubmed_id, pm.modification_type as mod_type,
                                  pm.is_successful as suc_of_gen_mod,
-                                 pm.mutation_description, ot.name,
+                                 pm.mutation_description, ot.source_id as ontology_source_id,
                                  SUBSTR(pr.phenotype_post_composition, 4000, 1) as phenotype1,
                                  SUBSTR(pr.phenotype_post_composition, 4000, 4001) as phenotype2,
                                  pm.has_multiple_mutations AS multiple, na.NA_FEATURE_ID as id,
@@ -8434,7 +8441,7 @@ G               , pg.sequence_id as p_sequence_source_id
                       apidb.NaFeaturePhenotypeModel na
                  WHERE pm.phenotype_model_id = pr.phenotype_model_id
                    AND na.phenotype_model_id = pm.phenotype_model_id
-                   AND na.na_feature_id = ga.na_feature_id
+                   AND '&ORG_ABBREV_' || na.na_feature_id = ga.internal_feature_id
                 ),
              knockdown
              AS (SELECT DISTINCT genes.source_id, mods.phenotype_model_id as model_id
@@ -8444,7 +8451,7 @@ G               , pg.sequence_id as p_sequence_source_id
                    AND m.phenotype_model_id = nod.phenotype_model_id
                    AND mods.phenotype_model_id = nod.phenotype_model_id
                    AND m.id != nod.na_feature_id
-                   AND genes.na_feature_id = nod.na_feature_id
+                   AND genes.internal_feature_id = '&ORG_ABBREV_' || nod.na_feature_id
                    AND m.source_id != genes.source_id
                 -- AND mods.has_multiple_mutations = 1
                 ),
@@ -8459,7 +8466,7 @@ G               , pg.sequence_id as p_sequence_source_id
                           ELSE 'YES'
                         END AS suc_of_gen_mod,
                         CAST(m.mutation_description AS VARCHAR(150)) AS mutation_description,
-                        CAST(string_agg(m.name, ', ' ORDER BY m.name)
+                        CAST(string_agg(m.ontology_source_id, ', ' ORDER BY m.ontology_source_id)
                              AS VARCHAR(250)) AS life_cycle_stage,
                         CONCAT(phenotype1,phenotype2) AS phenotype,
                         m.phenotype_model_id
@@ -8468,7 +8475,7 @@ G               , pg.sequence_id as p_sequence_source_id
                           m.suc_of_gen_mod, m.mutation_description, m.phenotype1,
                           m.phenotype2,m.phenotype_model_id
                 )
-        SELECT results.*,
+        SELECT '&ORG_ABBREV' as org_abbrev, results.*,
                CAST(knockdown.source_id AS VARCHAR(30)) as other_source_id
         FROM results
              LEFT JOIN knockdown ON results.phenotype_model_id = knockdown.model_id
@@ -8713,6 +8720,7 @@ G               , pg.sequence_id as p_sequence_source_id
     </comment>
     <externalDependency name="apidb.ExternalResourceUrl"/>
     <externalDependency name="dots.AaFeature"/>
+    <externalDependency name="dots.AaSequence"/>
     <externalDependency name="dots.DbRefAaFeature"/>
     <externalDependency name="dots.DbRefNaFeature"/>
     <externalDependency name="sres.DbRef"/>
@@ -8723,8 +8731,8 @@ G               , pg.sequence_id as p_sequence_source_id
     <internalDependency name="TranscriptAttributes"/>
     <sql>
       <![CDATA[
-        create table DatabaseTaxonUrl&1 as
-        select edd.dataset_presenter_display_name AS dataset, ga.ncbi_tax_id, edr.id_url
+
+        select '&ORG_ABBREV' as org_abbrev, edd.dataset_presenter_display_name AS dataset, ga.ncbi_tax_id, edr.id_url
         from sres.DbRef db, dots.DbRefNaFeature dbna,
              ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
              GeneAttributes ga
@@ -8734,7 +8742,7 @@ G               , pg.sequence_id as p_sequence_source_id
          and ga.internal_feature_id = '&ORG_ABBREV_' || dbna.na_feature_id
          and id_url not like 'http://chemlims.com/%'
       union
-        select edd.dataset_presenter_display_name AS dataset, ta.taxon_id, edr.id_url
+        select '&ORG_ABBREV' as org_abbrev, edd.dataset_presenter_display_name AS dataset, ta.taxon_id, edr.id_url
         from sres.dbref db, dots.DbRefNaFeature dbna,
              ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
              TranscriptAttributes ta
@@ -8743,7 +8751,7 @@ G               , pg.sequence_id as p_sequence_source_id
           and dbna.db_ref_id = db.db_ref_id
           and ta.internal_feature_id = '&ORG_ABBREV_' || dbna.na_feature_id
       union
-        select d.name as dataset, ga.taxon_id, eru.id_url
+        select '&ORG_ABBREV' as org_abbrev, d.name as dataset, ga.taxon_id, eru.id_url
         from sres.DbRef dbr, dots.DbRefNaFeature dbrf, sres.ExternalDatabaseRelease r,
              sres.ExternalDatabase d, GeneAttributes ga,
              apidb.ExternalResourceUrl eru
@@ -8754,15 +8762,16 @@ G               , pg.sequence_id as p_sequence_source_id
           and upper(d.name) = eru.database_name
       union
         select distinct
-               d.name as dataset, ta.taxon_id, eru.id_url
-        from sres.DbRef dbr, dots.DbRefAaFeature dbrf, dots.AaFeature aaf,
+               '&ORG_ABBREV' as org_abbrev, d.name as dataset, ta.taxon_id, eru.id_url
+        from sres.DbRef dbr, dots.DbRefAaFeature dbrf, dots.AaFeature aaf, dots.aasequenc aas,
              sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
              TranscriptAttributes ta, apidb.ExternalResourceUrl eru
         where dbr.external_database_release_id = r.external_database_release_id
           and r.external_database_id = d.external_database_id
           and dbr.db_ref_id = dbrf.db_ref_id
           and dbrf.aa_feature_id = aaf.aa_feature_id
-          and aaf.aa_sequence_id = ta.aa_sequence_id
+          and aaf.aa_sequence_id = aas.aa_sequence_id
+          and ta.protein_source_id = aas.source_id
           and upper(d.name) = eru.database_name
       ]]>
     </sql>
@@ -9051,7 +9060,7 @@ G               , pg.sequence_id as p_sequence_source_id
   </tuningTable>
 
 
-  <tuningTable name="AlphaFoldGenes">
+  <tuningTable name="AlphaFoldGenes" target="orgDB">
     <comment>
       Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
     </comment>
@@ -9073,7 +9082,7 @@ G               , pg.sequence_id as p_sequence_source_id
     <sql>
       <![CDATA[
         CREATE TABLE uniprotGenes&1 AS
-        SELECT DISTINCT ed.name
+        SELECT DISTINCT '&ORG_ABBREV' as org_abbrev, ed.name
         , d.*
         , edr.version
         , aa.source_id
@@ -9099,7 +9108,7 @@ G               , pg.sequence_id as p_sequence_source_id
           AND aa.aa_feature_id = db.aa_feature_id
           AND pa.source_id = aa.source_id
         UNION
-        SELECT DISTINCT ed.name
+        SELECT DISTINCT  '&ORG_ABBREV' as org_abbrev, ed.name
           , d.*
           , edr.version
           , na.source_id
