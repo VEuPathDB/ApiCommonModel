@@ -4,7 +4,12 @@ use strict;
 use warnings;
 
 sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+sub setUrlTemplate {
+    my($self, $urlTemplate) = @_;
+    die "required urlTemplate not set" unless $urlTemplate;
+    $self->{url_template} = $urlTemplate;
+}
+
 
 sub getChunkSizeLimit  {$_[0]->{chunk_size_limit} }
 sub setChunkSizeLimit {$_[0]->{chunk_size_limit} = $_[1]}
@@ -14,8 +19,7 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     $self->setUrlTemplate($args->{url_template});
-
-    $self->setStoreType("JBrowse/View/Track/CanvasVariants");
+    #$self->setType("JBrowse/View/Track/CanvasVariants");
 
     $self->setChunkSizeLimit(10000000);
 
