@@ -12,27 +12,39 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
 
       // TODO:  How else can we get this??
       String projectName = getPropValue("projectName");
-      //String organismAbbrev = getPropValue("organismAbbrev");
+      String organismAbbrev = getPropValue("organismAbbrev");
       String datasetNamePattern = getPropValue("datasetNamePattern");
       String javaDatasetNamePattern = "";
 
       if (datasetNamePattern != null){
-      	javaDatasetNamePattern = datasetNamePattern.replace("%", "");
+      	javaDatasetNamePattern = datasetNamePattern.replace("%", ".*");
       }	
       else{
         javaDatasetNamePattern = getPropValue("datasetName");
       }
       Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
-      //String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
-      //Map<String, String> orgProps = globalProps.get(orgPropsKey);
+
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
 
       for (String key : globalProps.keySet()){
         //iterate over keys
         if (key.contains(javaDatasetNamePattern)){ 
-                System.out.println(key);
-                    }
+                if (!key.contains(projectName)){
+			Map<String, String> datasetProps = globalProps.get(key);
+			String datasetClassCategory = datasetProps.get("datasetClassCategory");
+			String[] parts = key.split("_");
+                        String extractOrgAbbrev = "";
+			extractOrgAbbrev = parts[0];
+			setPropValue("organismAbbrev", extractOrgAbbrev );
+			System.out.println(extractOrgAbbrev); 
+			setPropValue("datasetName", key);
+                	setPropValue("datasetExtdbName", key);
+			setPropValue("datasetClassCategory", datasetClassCategory);
+                	injectTemplate("jbrowseProteinExpressionMassSpecSampleBuildProps");
+			}
+                }
 	}
-                    
 
       setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_0108");
 
@@ -69,23 +81,6 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
       else {
           injectTemplate("proteinExpressionMassSpecPBrowseTrack");
       }
-
-      //String presenterId = getPropValue("presenterId");
-      //String datasetClassCategory = getPropValue("category");
-      String organismAbbrev = getPropValue("organismAbbrev");
-      String datasetName = getPropValue("datasetName");
-
-      String dsExtName = optionalOrganismAbbrev + datasetName;
-      //setPropValue("datasetExtdbName", getPropValue("edNameParamValue"));
-      if (datasetName.startsWith("_")) {
-      setPropValue("datasetExtdbName", dsExtName);
-      }
-      else {
-      setPropValue("datasetExtdbName", datasetName);
-      }
-      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
-      setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
-      injectTemplate("jbrowseProteinExpressionMassSpecSampleBuildProps");
 
   }
 
