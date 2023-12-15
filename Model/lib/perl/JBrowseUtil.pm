@@ -87,7 +87,7 @@ sub makeBuildProperties {
         next unless ($_);
         next if /^\s*#/;
         my ($propString, $value) = split(/\=/, $_);
-        my @props = split(/\./, $propString);
+        my @props = split(/::/, $propString);
 
         &toNestedHash($buildProperties, \@props, $value);
     }
