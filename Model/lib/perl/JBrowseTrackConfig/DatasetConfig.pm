@@ -37,7 +37,8 @@ sub setStudyDisplayName {$_[0]->{study_display_name} = $_[1]}
 sub getDatasetName {$_[0]->{dataset_name}}
 sub setDatasetName {$_[0]->{dataset_name} = $_[1]}
 
-
+sub getDatasetPresenterId {$_[0]->{dataset_presenter_id}}
+sub setDatasetPresenterId {$_[0]->{dataset_presenter_id} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -49,6 +50,7 @@ sub new {
     $self->setStudyDisplayName($args->{study_display_name});
     $self->setDatasetName($args->{dataset_name});
     $self->setOrganismAbbrev($args->{organism_abbrev});
+    $self->setDatasetPresenterId($args->{dataset_presenter_id});
 
     my $summary = $args->{summary};
     $summary =~ s/\n//g if $summary;
