@@ -5,8 +5,8 @@ use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
-sub getExtdbName {$_[0]->{extdbname}}
-sub setExtdbName {$_[0]->{extdbname} = $_[1] }
+sub getGlyph {$_[0]->{glyph} }
+sub setGlyph {$_[0]->{glyph} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -16,26 +16,21 @@ sub new {
     $datasetConfig->setCategory("Proteomics");
     $datasetConfig->setSubcategory("Protein Expression'");
 
-    $self->setId("");
-    $self->setLabel("");
-    $self->setExtdbName($args->{extdbname});
-  
-    my $datasetExtdbName = $self->getExtdbName();
+    $self->setId($args->{key});
+    $self->setLabel($args->{label}); 
 
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("domain:MassSpecPeptide"); 
-        #$store->setQueryParamsHash('edName' => "like '${datasetExtdbName}'");
-        $store->setQueryParamsHash('edName' => "like 'test'");
+	$store->setQueryParamsHash($args->{query_params});
     }
     else {
         # TODO
     }
 
     $self->setStore($store);
-
+    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments");
     my $detailsFunction = "{massSpecDetails}";
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
