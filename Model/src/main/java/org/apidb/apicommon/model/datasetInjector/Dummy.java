@@ -10,10 +10,6 @@ public class Dummy extends DatasetInjector {
 
     setOrganismAbbrevFromDatasetName();
 
-  //setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
-  //setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
-  injectTemplate("jbrowseVcfSampleBuildProps");
-
   }
 
   @Override
