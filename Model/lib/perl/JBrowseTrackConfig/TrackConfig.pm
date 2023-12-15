@@ -41,7 +41,6 @@ sub setDisplayName {$_[0]->{display_name} = $_[1]}
 sub getDescription {$_[0]->{description}}
 sub setDescription {$_[0]->{description} = $_[1]}
 
-
 sub getDatasetConfigObj {$_[0]->{dataset_config}}
 sub setDatasetConfigObj {$_[0]->{dataset_config} = $_[1]}
 
@@ -128,6 +127,7 @@ sub getJBrowseObject{
     my $datasetName = $datasetConfig->getDatasetName() if ($datasetConfig);
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $summary = $datasetConfig->getSummary() if ($datasetConfig);
+    my $datasetPresenterId = $datasetConfig->getDatasetPresenterId() if ($datasetConfig);
 
     my $style = $self->getJBrowseStyle();
     my $metadata = $self->getMetadata();
@@ -152,10 +152,19 @@ sub getJBrowseObject{
     $jbrowseObject->{style} = $style if($style);
     $jbrowseObject->{metadata} = $metadata if($metadata);
 
-    if($datasetName && $studyDisplayName && $summary) {
+    if($datasetName && $studyDisplayName && $summary && $datasetPresenterId) {
+        $jbrowseObject->{fmtMetaValue_Dataset} = "function() { return datasetLinkByDatasetName('${datasetPresenterId}', '${studyDisplayName}'); }";
+        $jbrowseObject->{fmtMetaValue_Description} = "function() { return datasetDescription('${summary}', ''); }";
+    }
+    elsif($datasetName && $studyDisplayName && $summary) {
         $jbrowseObject->{fmtMetaValue_Dataset} = "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }";
         $jbrowseObject->{fmtMetaValue_Description} = "function() { return datasetDescription('${summary}', ''); }";
     }
+    elsif($datasetName && $studyDisplayName) {
+        $jbrowseObject->{fmtMetaValue_Dataset} = "function() { return datasetLinkByDatasetName('${datasetName}', '${studyDisplayName}'); }";
+        $jbrowseObject->{fmtMetaValue_Description} = "function() { return datasetDescription('', ''); }";
+    }
+
 
     my $store = $self->getStore();
     if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::RestStore') {
