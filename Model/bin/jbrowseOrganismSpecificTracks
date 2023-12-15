@@ -12,7 +12,6 @@ use ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::VCFStore;
-#use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrack;
 use ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 use ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig;
@@ -20,6 +19,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::CnvArrayTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec;
 use ApiCommonModel::Model::JBrowseTrackConfig::SmallNcRnaSeq;
 use ApiCommonModel::Model::JBrowseTrackConfig::ApolloGffTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig;
 
 use Data::Dumper;
 
@@ -81,7 +81,7 @@ if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organis
 
 if ($organismAbbrev !~ m/dmeliso-1/ ){
 # TODO: Add back
- &addApolloGFF($dbh, $result);
+#&addApolloGFF($dbh, $result);
 }
 #&addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName);
 
@@ -204,173 +204,45 @@ sub datasetProperties {
 sub addVCF {
   my ($dbh, $result, $datasetProperties) = @_;
 
-  foreach my $dataset (keys %$datasetProperties) {
+  my $vcfDatasets = $buildProps->{vcffile} ? $buildProps->{vcffile} : {};
+
+  foreach my $dataset (keys %$vcfDatasets) {
     next unless($dataset =~ /VCF/);
+    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
+    my $datasetDisplayName = $vcfDatasets->{$dataset}->{datasetDisplayName};
+    my $summary = $vcfDatasets->{$dataset}->{summary};
     
-    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;;
-    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-    my $summary = $datasetProperties->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
     my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
 
-    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
-    my $sh = $dbh->prepare($sql);
-    $sh->execute();
+    #my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
+    #my $sh = $dbh->prepare($sql);
+    #$sh->execute();
+    
 
-    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
-      my ($sampleName) = $sampleDataset;
+
+    #while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
+      my $sampleName = $vcfDatasets->{$dataset}->{datasetName};
       my ($vcfFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
       my $keyName = $vcfFileName;
  	  $keyName =~ s/_/ /g;
+	  $keyName =~ s/\./ /g;
       my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
       my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
-
-
+												dataset_name  => $dataset,
+												study_display_name => $datasetDisplayName,
+												description => $summary,
                                                                                                 key => "$keyName SNPs from VCF",
                                                                                                 label => "${sampleName} SNPs",
                                                                                                 url_template => $vcfUrl,
                                                                                                 application_type => $applicationType,
                                                                                                 attribution => $shortAttribution,
-                                                                                                description => $summary,
+                                                                                                summary => $summary,
                                                                                               })->getConfigurationObject();
 
       push @{$result->{tracks}}, $alignment;
-    }
   }
 }
-
-#sub addGFF {
-#  my ($dbh, $result, $datasetProperties) = @_;
-#
-#  foreach my $dataset (keys %$datasetProperties) {
-#    next unless($dataset =~ /GFF/);
-#
-#    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;;
-#    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-#    my $summary = $datasetProperties->{$dataset}->{summary};
-#    $summary =~ s/\n/ /g;
-#    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
-#
-#    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '$dataset'";
-#    my $sh = $dbh->prepare($sql);
-#    $sh->execute();
-#
-#    my %lookup = (aaegLVP_AGWG => 'Aedes aegypti LVP_AGWG %5BAaegL5.2%5D',
-#                  aalbSTECLA => 'Anopheles albimanus STECLA %5BAalbS2.6%5D',
-#                  aaraDongola => 'Anopheles arabiensis Dongola %5BAaraD1.11%5D',
-#                  aatrEBRO => 'Anopheles atroparvus EBRO %5BAatrE3.1%5D',
-#                  achrACHKN1017 => 'Anopheles christyi ACHKN1017 %5BAchrA1.7%5D',
-#                  acolNgousso => 'Anopheles coluzzii Ngousso %5BAcolN1.0%5D',
-#                  'aculA-37' => 'Anopheles culicifacies A-37 %5BAculA1.6%5D',
-#                  adarCoari => 'Anopheles darlingi Coari %5BAdarC3.8%5D',
-#                  adirWRAIR2 => 'Anopheles dirus WRAIR2 %5BAdirW1.8%5D',
-#                  aepiEpiroticus2 => 'Anopheles epiroticus Epiroticus2 %5BAepiE1.7%5D',
-#                  afarFAR1 => 'Anopheles farauti FAR1 %5BAfarF2.6%5D',
-#                  afunFUMOZ => 'Anopheles funestus FUMOZ %5BAfunF3.1%5D',
-#                  agamPEST => 'Anopheles gambiae str. PEST %5BAgamP4.12%5D',
-#                  amacmaculatus3 => 'Anopheles maculatus maculatus3 %5BAmacM1.5%5D',
-#                  amelCM1001059 => 'Anopheles melas CM1001059_A %5BAmelC2.6%5D',
-#                  amerMAF => 'Anopheles merus MAF %5BAmerM2.9%5D',
-#                  aminMINIMUS1 => 'Anopheles minimus MINIMUS1 %5BAminM1.8%5D',
-#                  aquaSANGWE => 'Anopheles quadriannulatus SANGWE %5BAquaS1.11%5D',
-#                  asinSINENSIS => 'Anopheles sinensis SINENSIS %5BAsinS2.5%5D',
-#                  'asteSDA-500' => 'Anopheles stephensi SDA-500 %5BAsteS1.7%5D',
-#                  bglaBB02 => 'Biomphalaria glabrata BB02 %5BBglaB1.6%5D',
-#                  cquiJohannesburg => 'Culex quinquefasciatus Johannesburg %5BCpipJ2.4%5D',
-#                  gausTTRI => 'Glossina austeni TTRI %5BGausT1.7%5D',
-#                  gfusIAEA => 'Glossina fuscipes IAEA %5BGfusI1.7%5D',
-#                  gmorYale => 'Glossina morsitans Yale %5BGmorY1.9%5D',
-#                  gpalIAEA => 'Glossina pallidipes IAEA %5BGpalI1.7%5D',
-#                  gpapIAEA => 'Glossina palpalis IAEA %5BGpapI1.4%5D',
-#                  iscaWikel => 'Ixodes scapularis Wikel %5BIscaW1.6%5D',
-#                  llonJacobina => 'Lutzomyia longipalpis Jacobina %5BLlonJ1.5%5D',
-#                  mdomaabys => 'Musca domestica aabys %5BMdomA1.3%5D',
-#                  phumUSDA => 'Pediculus humanus USDA %5BPhumU2.4%5D',
-#                  ppapIsrael => 'Phlebotomus papatasi Israel %5BPpapI1.5%5D',
-#                  rproCDC => 'Rhodnius prolixus CDC %5BRproC3.3%5D',
-#                  scalUSDA => 'Stomoxys calcitrans USDA %5BScalU1.5%5D',
-#                  );
-#
-#    my $organismLookup = $lookup{${organismAbbrev}};
-#    my $organismUrl = $organismLookup;
-#    $organismUrl =~ s/ /%20/g;
-#    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
-#      my ($sampleName) = $sampleDataset;
-#      my ($gffFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_GFF3_RSRC/;
-#      my $keyName = $datasetDisplayName;
-#      my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/gff/${sampleName}/${organismAbbrev}_apolloPatch.gff3.gz");
-#      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-#                       urlTemplate => $gffUrl,
-#                           key => "$keyName",
-#                           label => "${sampleName}",
-#                           category => "Gene Models",
-#			   type => "NeatCanvasFeatures/View/Track/NeatFeatures",
-#			   menuTemplate => [
-#			   {label =>  'Open {name} in Apollo',
-#			    iconClass => 'dijitIconDatabase' ,
-#			    action => 'iframeDialog',
-#			    url => "function(track,feature,featureDiv) {return 'https://apollo.veupathdb.org/annotator/loadLink?loc='  + feature.get('seq_id') +  ':' + feature.get('start') + '..' + feature.get('end') + '&organism=$organismLookup&tracks=' }" } ],
-#			   noncodingType => "nc_transcript",
-#			   subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
-#			   impliedUTRs => "true",
-#                           metadata => {
-#                             subcategory => "Annotation Updates",
-#                             dataset => $datasetDisplayName,
-#                             trackType => "Community Updates from Apollo",
-#                             attribution => $shortAttribution,
-#                             description => $summary,
-#                             apollo => '',
-#                           },
-#                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-#                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-#                          fmtMetaValue_Apollo => "function() { return '<a href=https://apollo.veupathdb.org/annotator/loadLink?organism=$organismUrl&tracks= target=_blank>Add annotations in Apollo</a>'; }"
-#      };
-#
-#      push @{$result->{tracks}}, $alignment;
-#    }
-#  }
-#}
-
-#sub addFunctionalAnnotations {
-#  my ($dbh, $result) = @_;
-#
-#  my $sql = "select count(*) from apidbtuning.ApolloUpdate";
-#
-#  my $sh = $dbh->prepare($sql);
-#  $sh->execute();
-#  my $count = $sh->fetchrow_array();
-#  $sh->finish();
-#  if($count > 0) {
-#
-#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                 baseUrl => "/a/service/jbrowse",
-#                 type => "NeatCanvasFeatures/View/Track/NeatFeatures",
-#                 key => "Functional Annotations",
-#                 label => "Functional Annotations",
-#                 category => "Gene Models",
-#                 unsafePopup => JSON::true,
-#                 displayMode => "normal",
-#                 noncodingType => "nc_transcript",
-#                 subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
-#                 style => {
-#                 color => "{processedApolloTranscriptColor}",
-#                 borderColor => "{processedTranscriptBorderColor}",
-#                 },
-#                 impliedUTRs => "true",
-#                 query => {'feature' => "gff:apolloTranscript",
-#                 },
-#                 onClick => {
-#                 content => "{functionalAnnotationDetails}",
-#                 },
-#                 menuTemplate => [
-#                   {label => "View Details",
-#                    content => "{functionalAnnotationDetails}",
-#                   },
-#                     ],
-#    };
-#    push @{$result->{tracks}}, $track;
-#  }
-#}
 
 sub addApolloGFF {
     my ($dbh, $result) = @_;
@@ -385,45 +257,11 @@ sub addApolloGFF {
 
     my $apolloDescription = "Community annotation represents user provided effort to improve the current gene models and offer alternatives based on -omic level evidence. Users can utilise our Apollo instance for creating and editing functional annotation to be displayed in this track. Only when the status of the gene model is changed to 'Finished' will the model be displayed, normally within 24 hours of the status change.";
 
-#    my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                 baseUrl => "/a/service/jbrowse",
-#                 type => "NeatCanvasFeatures/View/Track/NeatFeatures",
-#                 key => "Community annotations from Apollo",
-#                 label => "Community annotations from Apollo",
-#                 category => "Gene Models",
-#                 unsafePopup => JSON::true,
-#                 metadata => {
-#                     category => "Gene Models",
-#                     trackType => "Processed transcript from Apollo",
-#                     description => "Community annotation represents user provided effort to improve the current gene models and offer alternatives based on -omic level evidence. Users can utilise our Apollo instance for creating and editing functional annotation to be displayed in this track. Only when the status of the gene model is changed to 'Finished' will the model be displayed, normally within 24 hours of the status change.",
-#                 },
-#                 displayMode => "normal",
-#                 noncodingType => "nc_transcript",
-#                 subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon",
-#                 style => {
-#                 color => "{processedApolloTranscriptColor}",
-#                 borderColor => "{processedTranscriptBorderColor}",
-#                 },
-#                 impliedUTRs => "true",
-#                 query => {'feature' => "gff:apolloTranscript",
-#                 },
-#                 onClick => {
-#                 content => "{apolloGeneDetails}",
-#                 label => "{apolloProductsFxn}",
-#                 },
-#                 menuTemplate => [
-#                   {label => "View Details",
-#                    content => "{apolloGeneDetails}",
-#                   },
-#                     ],
-    
     my $track = ApiCommonModel::Model::JBrowseTrackConfig::ApolloGffTrackConfig->new({
                                                                                                 application_type => $applicationType,
 												summary => $apolloDescription,
                                                                                               })->getConfigurationObject();
-    
     push @{$result->{tracks}}, $track;
-    
   }
 }
 
@@ -535,7 +373,7 @@ sub addProteinExpressionMassSpec {
 
     my $experimentName = $proteinExpressionMassSpecDatasets->{$dataset}->{name};
     my $datasetDisplayName = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetDisplayName};
-    my $datasetPresenterId = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetPresenterId};
+    my $datasetPresenterId = $proteinExpressionMassSpecDatasets->{$dataset}->{presenterId};
     my $category = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetClassCategory};
 
     my $datasetExtdbName = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetExtdbName};
@@ -544,45 +382,21 @@ sub addProteinExpressionMassSpec {
     $summary =~ s/\n/ /g;
     my $shortAttribution = $proteinExpressionMassSpecDatasets->{$dataset}->{shortAttribution};
 
-#    my $massSpec = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                    baseUrl => "/a/service/jbrowse",
-#                    type => "JBrowse/View/Track/CanvasFeatures",
-#                    glyph => "JBrowse/View/FeatureGlyph/Segments",
-#                    subParts => "Peptide",
-#                    displayMode => "compact",
-#                    query => {'feature' => "domain:MassSpecPeptide",
-#                              'edName' => "like '${datasetExtdbName}'",
-#                    },
-#                    key => "${datasetDisplayName}  MS/MS Peptides  ${shortAttribution}",
-#                    label => "${dataset}",
-#                    category => "Proteomics",
-    #                    style => {'color' => "{massSpecColor}",
-#                              'label' => "Sample,sample,name",
-#                    },
-#                    metadata => {
-#                      subcategory => 'Protein Expression',
-#                      dataset => $datasetDisplayName,
-#                      trackType => 'Segments',
-#                      attribution => $shortAttribution,
-#                      description => $summary,
-#                    },
-#                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
-#                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-#                    onClick => {
-#                      content => "{massSpecDetails}",
-#                    },
-#                    menuTemplate => [
-#                      {label => "View Details",
-#                       content => "{massSpecDetails}",
-#                      },
-#                        ],
-#    };
+my $queryParams = {
+                            'edName' => "like '${datasetExtdbName}'",
+                            'feature' => "domain:MassSpecPeptide",
+                                           };
+    
     my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
+                                                                                                key => "${datasetDisplayName}  MS/MS Peptides  ${shortAttribution}",
+                                                                                                label => "${dataset}",
                                                                                                 dataset_name => $dataset,
                                                                                                 attribution => $shortAttribution,
                                                                                                 study_display_name => $datasetDisplayName,
-                                                                                                description => $summary,
+                                                                                                summary => $summary,
                                                                                                 application_type => $applicationType,
+                                                                                                query_params => $queryParams,
+                                                                                                dataset_presenter_id => $datasetPresenterId,
                                                                                               })->getConfigurationObject();
 
     push @{$result->{tracks}}, $massSpec;
@@ -597,7 +411,7 @@ my $smallNcRnaSeqDatasets = $buildProps->{smallncrnaseq} ? $buildProps->{smallnc
 
    my $smallNcRnaSeqDatasets = $buildProps->{smallncrnaseq} ? $buildProps->{smallncrnaseq} : {};
    foreach my $dataset (keys %$smallNcRnaSeqDatasets){
-#  foreach my $dataset (keys %$datasetProperties) {
+
     next unless($dataset =~ /smallNcRna/);
 
     my $experimentName = $smallNcRnaSeqDatasets->{$dataset}->{experimentName};
@@ -606,43 +420,11 @@ my $smallNcRnaSeqDatasets = $buildProps->{smallncrnaseq} ? $buildProps->{smallnc
     $summary =~ s/\n/ /g;
     my $shortAttribution = $smallNcRnaSeqDatasets->{$dataset}->{shortAttribution};
 
-#    my $experimentName = $datasetProperties->{$dataset}->{experimentName};
-#    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-#    my $summary = $datasetProperties->{$dataset}->{summary};
-#    $summary =~ s/\n/ /g;
-#    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+    my ($sampleName) = $dataset =~ /${organismAbbrev}_${experimentName}_(.+)_smallNcRnaSample_RSRC/;
 
-#    my $sql = "select o.NAME_FOR_FILENAMES, ds.name from apidb.datasource ds, apidb.organism o where ds.taxon_id = o.taxon_id and ds.name like '${organismAbbrev}%_smallNcRnaSample_RSRC'";
+    # Example: EhistolyticaHM1IMSS/bam/Singh_Small_RNA/Rahman/Rahman.bam
+    my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bam/$experimentName/${sampleName}/${sampleName}.bam");
 
-#    my $sh = $dbh->prepare($sql);
-#    $sh->execute();
-
-#    while(my ($nameForFileNames, $sampleDataset) = $sh->fetchrow_array()) {
-#      my ($sampleName) = $sampleDataset =~ /${organismAbbrev}_${experimentName}_(.+)_smallNcRnaSample_RSRC/;
-
-       my ($sampleName) = $dataset =~ /${organismAbbrev}_${experimentName}_(.+)_smallNcRnaSample_RSRC/;
-
-      # Example: EhistolyticaHM1IMSS/bam/Singh_Small_RNA/Rahman/Rahman.bam
-      my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bam/$experimentName/${sampleName}/${sampleName}.bam");
-
-#      my $alignment = {storeClass => "JBrowse/Store/SeqFeature/BAM",
-#                       urlTemplate => $bamUrl,
-#                           key => "${sampleName} Small Non-coding RNAs",
-#                           label => "${sampleName} Small Non-coding RNAs",
-#                           type => "SmallRNAPlugin/View/Track/smAlignments",
-#                           category => "Transcriptomics",
-#                           yScalePosition => "left",
-#                       unsafePopup => JSON::true,
-#                           metadata => {
-#                             subcategory => 'small non-coding RNA',
-#                             dataset => $datasetDisplayName,
-#                             trackType => 'Small RNA',
-#                             attribution => $shortAttribution,
-#                             description => $summary,
-#                           },
-#                          fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-#                          fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-#      };
     my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::SmallNcRnaSeq->new({
                                                                                                 dataset_name => $dataset,
                                                                                                 attribution => $shortAttribution,
@@ -654,12 +436,10 @@ my $smallNcRnaSeqDatasets = $buildProps->{smallncrnaseq} ? $buildProps->{smallnc
                                                                                                 label => "$sampleName Small Non-coding RNAs",
                                                                                                 key => "$sampleName Small Non-coding RNAs",
                                                                                               })->getConfigurationObject();
-
-
       push @{$result->{tracks}}, $alignment;
-    #}
   }
 }
+
 
 sub addCentromere {
   my ($dbh, $result) = @_;
@@ -673,10 +453,8 @@ sub addCentromere {
      my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
      push @{$result->{tracks}}, $track;
     };
-
-
-
 }
+
 
 sub addScaffolds {
   my ($dbh, $result) = @_;
@@ -694,6 +472,7 @@ sub addScaffolds {
       push @{$result->{tracks}}, $track;
   }
 }
+
 
 sub addSynteny {
   my ($dbh, $result) = @_;
@@ -890,6 +669,7 @@ sub addUnifiedSnp {
 
 }
 
+
 sub addUnifiedMassSpec {
   my ($dbh, $result) = @_;
 
@@ -905,10 +685,8 @@ sub addUnifiedMassSpec {
 
     push @{$result->{tracks}}, $unifiedMassSpecTrack;
    };
-
-
-
 }
+
 
 sub addChipChipTracks {
   my ($dbh, $result, $datasetProperties) = @_;
@@ -931,9 +709,6 @@ and s.investigation_id is null";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
-
-
-
 
   while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
 
@@ -958,55 +733,12 @@ sub makeChipChipPeak {
     my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
     my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
-
-
-#  my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-#  my $datasetPresenterId = $datasetProperties->{$dataset}->{datasetPresenterId};
-#  my $summary = $datasetProperties->{$dataset}->{summary};
-#  $summary =~ s/\n/ /g;
-#  my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+    my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
 
   my $key = $panName;
-#  my $subTrackAttr = $datasetProperties->{$dataset}->{subTrackAttr};
   my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
-  
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
-
-#  my $peaks = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                  baseUrl => "/a/service/jbrowse",
-#                  type => "JBrowse/View/Track/CanvasFeatures",
-#                  key => $key,
-#                  label => $key,
-#                  category => "Epigenomics",
-#                  style => {
-#                    color => "{$colorFunction}",
-#                  },
-#                  metadata => {
-#                    subcategory => "ChIP chip",
-#                    dataset => $datasetDisplayName,
-#                    trackType => 'Segments',
-#                    attribution => $shortAttribution,
-#                    description => $summary,
-#                   },
-#                   fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
-#                   fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-#                  query => {'feature' => "ChIP:ChIPchip_peaksjbrowse",
-#                            'exp' => $dataset,
-#                            'sub' => $subTrackAttr,
-#                            'cutoff' => $cutoff,
-#                            'panId' => $panId,
-#                  },
-#               onClick => {
-#                 content => "{peakTitleChipSeqFxn}",
-#               },
-#               menuTemplate => [
-#                 {label => "View Details",
-#                  content => "{peakTitleChipSeqFxn}",
-#                 },
-#                   ],
-#    };
 
   my $queryParams = {
                             'exp' => $dataset,
@@ -1025,13 +757,12 @@ sub makeChipChipPeak {
                                                                                                 label => $key,
                                                                                                 key => $key,
 												pan_name => $panName,
-
+												dataset_presenter_id => $datasetPresenterId,
+												summary => $summary,
                                                                                               })->getConfigurationObject();
-
-  
   return $peaks;
-
 }
+
 
 sub addCnvArray {
   my ($dbh, $result) = @_;
@@ -1049,31 +780,8 @@ order by pan.name";
 
   my $summary = "Comparative Genomic Hybridization to determine regions of significant Copy Number Variation in <i>T. cruzi</i> strains with strain CL Brener as reference. Type I strains used include: Brazil, Chinata, Colombiana, M78, Montalvania, PalDa1 (clone 9), SylvioX10/4, TCC, TEDa2 (clone 4), TEP6 (clone 5). Type II-VI strains used include: Esmeraldo, M5631, Tu18 (clone 1), Tulahuen, wtCL, Y. Scores from Type I strain is shown in Green and from Type II-VI are show in Brown. Score value represents the number of strains showing CNV , with a postive score implying amplification and a negative score implying deletion with respect to CL Brener. CNV criteria: minimum log2 ratio of signal intensities (test strain/reference) +/- 0.6, minimum number of probes 5. For more details refer the following manuscript: <a href=\"http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3060142/\">Widespread, focal copy number variations (CNV) and whole chromosome aneuploidies in Trypanosoma cruzi strains revealed by array comparative genomic hybridization</a> ";
 
-#  while(my ($name) = $sh->fetchrow_array()) {
   while(my ($dataset) = $sh->fetchrow_array()) {
 
-#    my $cnv = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#               baseUrl => "/a/service/jbrowse",
-#               type => "JBrowse/View/Track/Wiggle/XYPlot",
-#               key => $name,
-#               label => $name,
-#               category => "Genetic Variation",
-#               style => {height => 40},
-#               metadata => {
-#                 subcategory => "CGH Array",
-#                 dataset => "Comparative Genomic Hybridizations of 33 strains",
-#                 trackType => 'XYPlot',
-#                 description => $desc,
-#               },
-#               fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('tcruCLBrenerEsmeraldo-like_cghArrayPlatform_GPL10781_RSRC', 'Comparative Genomic Hybridizations of 33 strains'); }",
-#               fmtMetaValue_Description => "function() { return datasetDescription('${desc}', ''); }",
-#               query => {'feature' => "cnv:ArrayJBrowse",
-#                         'sample' => $name,
-#               },
-#               max_score => 3,
-#               min_score => -3,
-#               yScalePosition => "left"
-#    };
     my $cnv = ApiCommonModel::Model::JBrowseTrackConfig::CnvArrayTrackConfig->new({
                                                                                                 dataset_name => $dataset,
                                                                                                 study_display_name => "Comparative Genomic Hybridizations of 33 strains",
@@ -1087,6 +795,7 @@ order by pan.name";
   $sh->finish();
 }
 
+
 sub makeChipChipSmoothed {
   my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets) = @_;
 
@@ -1095,48 +804,10 @@ sub makeChipChipSmoothed {
     $summary =~ s/\n/ /g;
     my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
 
-#  my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-#  my $summary = $datasetProperties->{$dataset}->{summary};
-#  $summary =~ s/\n/ /g;
-#  my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+    my $datasetKey = $datasetProperties->{$dataset}->{key};
+    my $key = $panName;
+    my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
 
-  my $datasetKey = $datasetProperties->{$dataset}->{key};
-#  my $key = $datasetKey ? "${panName} ${datasetKey}" : $panName; # no longer valid??
-  my $key = $panName;
-#  my $subTrackAttr = $datasetProperties->{$dataset}->{subTrackAttr};
-  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-
-
-#  my $smoothed = {storeClass => "JBrowse/Store/SeqFeature/REST",
-#                  baseUrl => "/a/service/jbrowse",
-#                  type => "JBrowse/View/Track/Wiggle/XYPlot",
-#                  key => $key,
-#                  label => $key,
-#                  category => "Epigenomics",
-#                  style => {
-#                    pos_color => "{chipColor}",
-#                    neg_color => "{chipColor}",
-#                    height => 40,
-#                  },
-#                  metadata => {
-#                    subcategory => "ChIP chip",
-#                    dataset => $datasetDisplayName,
-#                    trackType => 'XYPlot',
-#                    attribution => $shortAttribution,
-#                    description => $summary,
-#                   },
-#                   fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-#                   fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-#                  query => {'feature' => "ChIP:ChIPchip_smoothedjbrowse",
-#                            'exp' => $dataset,
-#                            'sub' => $subTrackAttr,
-#                            'panId' => $panId
-#                  },
-#                  max_score => 3,
-#                  min_score => -3,
-#                  yScalePosition => "left"
-#    };
-#
     my $queryParams = {
                             'exp' => $dataset,
                             'sub' => $subTrackAttr,
@@ -1155,7 +826,7 @@ sub makeChipChipSmoothed {
                                                                                                 cov_min_score_default => 3,
                                                                                                 label => $key,
                                                                                                 key => $key,
-
+												summary => $summary,
                                                                                               })->getConfigurationObject();
   
   return $smoothed;
