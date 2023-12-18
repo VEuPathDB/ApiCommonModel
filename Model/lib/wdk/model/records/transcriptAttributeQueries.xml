@@ -509,6 +509,29 @@ WHERE ta.gene_source_id = ap.source_id (+)
        </sql>
    </sqlQuery>
 
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Apollo Link Out  -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <sqlQuery name="ApolloLinkOut" excludeProjects="EuPathDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="gene_source_id"/>
+            <column name="apollo_link_out" />
+            <sql>
+<![CDATA[
+SELECT  aid.apolloid 
+        ,source_id
+        ,gene_source_id 
+        ,project_id
+        , CASE WHEN aid.apolloid IS NOT NULL
+THEN '<a href="https://apollo.veupathdb.org/annotator/loadLink?organism=' || apolloid || chr(38) || 'loc=' || sequence_id || ':' || start_min || '..' || end_max || chr(38) || 'tracks=gene">Link to Apollo</a>' 
+ELSE 'N/A' end as apollo_link_out
+                    FROM apidbtuning.transcriptAttributes ta 
+                    LEFT JOIN apidbtuning.apolloid aid
+                    ON ta.organism = aid.organism
+]]>
+       </sql>
+   </sqlQuery>
 
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- UniProt  -->
@@ -548,10 +571,6 @@ WHERE ta.gene_source_id = ap.source_id (+)
         </sqlQuery>
 
 
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- protein sequence  -->
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
         <sqlQuery name="ChromosomeMappingText" displayName="Chromosome" includeProjects="CryptoDB,UniDB">
             <column name="source_id"/>
             <column name="gene_source_id"/>
@@ -567,6 +586,25 @@ WHERE ta.gene_source_id = ap.source_id (+)
             </sql>
         </sqlQuery>
 
+        <sqlQuery name="GenomicSequenceLength" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <column name="genomic_sequence_length"/>
+            <sql>
+            <![CDATA[
+               SELECT ta.source_id,ta.project_id as project_id, ta.gene_source_id,
+                      genomic_sequence_length
+               FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.TranscriptGenomicSequence tgs
+               WHERE ta.source_id = tgs.source_id
+            ]]>
+            </sql>
+        </sqlQuery>
+
+
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- protein sequence  -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
         <sqlQuery name="ProteinSequence">
             <column name="source_id"/>
@@ -632,7 +670,7 @@ WHERE ta.gene_source_id = ap.source_id (+)
                      SELECT ta.source_id, ta.gene_source_id, ta.project_id,
                      s.sequence AS transcript_sequence
              FROM  ApidbTuning.TranscriptSequence s, ApidbTuning.TranscriptAttributes ta
-             WHERE s.source_id = ta.source_id
+             WHERE s.source_id(+) = ta.source_id
             ]]>
             </sql>
         </sqlQuery>
@@ -1698,32 +1736,63 @@ WHERE ta.gene_source_id = res.gene_id (+)
             <column name="MCMC_location"/>
             <sql>
               <![CDATA[
-
-with mapD as (                                                                                                                 
-select  source_id, max_value as prob_MAP , REPLACE(max_timepoint,' (lopit)','')   as MAP_location                                 
-from apidbtuning.profile p                                                                                                        
-where p.dataset_name = 'tgonME49_lopit_LOPIT_RSRC'                                                                                
-and p.profile_set_name = 'TAGM-MAP-Final-Probability'                                                                             
-and p.profile_type(+) ='probability_mean'                                                                                         
-),                                                                                                                                
-mcmcD as (                                                                                                                        
-select  source_id, max_value as prob_MCMC , REPLACE(max_timepoint,' (lopit)','')  as MCMC_location,'Y' as matched_result         
-from apidbtuning.profile p                                                                                                       
-where p.dataset_name = 'tgonME49_lopit_LOPIT_RSRC'                                                                               
-and p.profile_set_name = 'TAGM-MCMC-Joint-Probability'                                                                           
-and p.profile_type(+) ='probability_mean'                                                                                        
-)                                                                                                                                
-
-select ta.source_id, ta.gene_source_id, ta.project_id, m1.prob_map, m1.map_location, m2.prob_mcmc, m2.mcmc_location             
-from mapD m1, mcmcD m2, APIDBTUNING.transcriptattributes ta                                                                     
-where m1.source_id = m2.source_id (+)                                                                                           
-and ta.gene_source_id = m1.source_id(+) 
-
-]]>
-
+  with mapD as (
+    select source_id, max_value as prob_MAP, REPLACE(max_timepoint,' (lopit)','') as MAP_location
+    from apidbtuning.profile p
+    where p.dataset_name = 'tgonME49_lopit_LOPIT_RSRC'
+    and p.profile_set_name = 'TAGM-MAP-Final-Probability'
+    and p.profile_type(+) ='probability_mean'
+  ),   mcmcD as (
+    select source_id, max_value as prob_MCMC, REPLACE(max_timepoint,' (lopit)','') as MCMC_location,'Y' as matched_result
+    from apidbtuning.profile p
+    where p.dataset_name = 'tgonME49_lopit_LOPIT_RSRC'
+    and p.profile_set_name = 'TAGM-MCMC-Joint-Probability'
+    and p.profile_type(+) ='probability_mean'
+  )
+  select ta.source_id, ta.gene_source_id, ta.project_id,
+         m1.prob_map, m1.map_location, m2.prob_mcmc, m2.mcmc_location
+  from mapD m1, mcmcD m2, APIDBTUNING.transcriptattributes ta
+  where m1.source_id = m2.source_id (+)
+  and ta.gene_source_id = m1.source_id(+)
+              ]]>
             </sql>
           </sqlQuery>
 
+
+
+<!-- TriTrypDB LOPIT Datasets -->
+          <sqlQuery name="TrypLOPIT" includeProjects="TriTrypDB,UniDB">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <column name="prob_MAP"/>
+            <column name="prob_MCMC"/>
+            <column name="MAP_location"/>
+            <column name="MCMC_location"/>
+            <sql>
+              <![CDATA[
+   with mapD as (
+     select source_id, max_value as prob_MAP, REPLACE(max_timepoint,' (lopit)','') as MAP_location
+     from apidbtuning.profile p
+     where p.dataset_name in ('tbruTREU927_lopit_hyperLopit_RSRC', 'tconIL3000_2019_lopit_hyperLopitTc_RSRC')
+     and p.profile_set_name in ('T. brucei bloodstream form', 'T. congolense bloodstream form')
+     and p.profile_type(+) ='probability_mean'
+   ),   mcmcD as (
+     select source_id, max_value as prob_MCMC, REPLACE(max_timepoint,' (lopit)','') as MCMC_location,'Y' as matched_result
+     from apidbtuning.profile p
+     where p.dataset_name in ('tbruTREU927_lopit_hyperLopit_RSRC', 'tconIL3000_2019_lopit_hyperLopitTc_RSRC')
+     and p.profile_set_name in ('T. brucei procyclic form', 'T. congolense procyclic form')
+     and p.profile_type(+) ='probability_mean'
+   )
+   select ta.source_id, ta.gene_source_id, ta.project_id,
+     ROUND(m1.prob_map,3) as prob_map, m1.map_location,
+     ROUND(m2.prob_mcmc,3) as prob_mcmc, m2.mcmc_location
+   from mapD m1, mcmcD m2, APIDBTUNING.transcriptattributes ta
+   where m1.source_id = m2.source_id (+)
+   and ta.gene_source_id = m1.source_id(+)
+              ]]>
+            </sql>
+          </sqlQuery>
     </querySet>
 
 </wdkModel>

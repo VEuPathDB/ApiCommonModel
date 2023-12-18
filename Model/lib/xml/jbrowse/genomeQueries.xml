@@ -77,14 +77,15 @@ ORDER BY
        ga.na_sequence_id parent_id,
        ga.start_min startm,
        ga.end_max end,
+       aid.apolloid apolloid,
        decode (ga.is_reversed, 0, '+1', 1, '-1', '.') strand,
-       'Note=' || ga.product  || '$dlm' ||
+       'Note=' || replace(substr(ga.product,0,400),'''','&#146;')  || ';;' ||
        'soTerm=' || ga.so_term_name || '$dlm' ||
        'biotype=' || ga.gene_ebi_biotype || '$dlm' ||
        'geneId=' || ga.source_id || '$dlm' ||
        'gName=' || ga.name || '$dlm' ||
        'Contig=' || ga.sequence_id || '$dlm' ||
-       'product=' || replace(ga.product,'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'product=' || replace(substr(ga.product,0,400),'''','&#146;') || decode(ga.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'taxon=' || ga.organism || '$dlm' ||
        'isDeprecated=' || ga.is_deprecated || '$dlm' ||
        'orthomcl_name=' || ga.orthomcl_name || '$dlm' ||
@@ -94,11 +95,13 @@ ORDER BY
 FROM
        ApidbTuning.GeneAttributes ga
      , apidb.organism o, apidb.featurelocation fl
+     , apidbtuning.apolloid aid
 WHERE  fl.na_sequence_id = $srcfeature_id
   AND  fl.start_min <= $rend
   AND  fl.end_max >= $base_start
   AND  fl.na_feature_id = ga.na_feature_id
   AND  ga.taxon_id = o.taxon_id
+  AND  ga.organism = aid.organism (+)
 ]]>
   </query>
 
@@ -333,7 +336,7 @@ select
                           anch_left.syntenic_loc, anch_right.syntenic_loc,
                           syn.b_start, syn.b_end) end,
        CASE WHEN (fl.is_reversed = syn.is_reversed) THEN 1 ELSE -1 END strand,
-       'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'Note=' || substr(gattr.product,0,400) || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'SOTerm=' || gattr.so_term_name || '$dlm' ||
        'SyntenyID=' || syn.synteny_id || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
@@ -465,7 +468,7 @@ SELECT
        gattr.start_min startm,
        gattr.end_max end,
        decode(is_reversed, 0, +1, 1, -1, +1) strand,
-       'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'Note=' || (substr(gattr.product,0,400) || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'SOTerm=' || gattr.so_term_name || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
        'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
@@ -542,7 +545,7 @@ SELECT
        gattr.start_min startm,
        gattr.end_max end,
        decode(is_reversed, 0, +1, 1, -1, +1) strand,
-       'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'Note=' || (substr(gattr.product,0,400) || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'SOTerm=' || gattr.so_term_name || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
        'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
@@ -613,7 +616,7 @@ SELECT
        sg.start_min startm,
        sg.end_max end,
        decode(sg.is_reversed, 0, +1, 1, -1, +1) strand,
-       'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'Note=' || (substr(gattr.product,0,400) || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'SOTerm=' || gattr.so_term_name || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
        'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
@@ -695,7 +698,7 @@ SELECT
        gattr.start_min startm,
        gattr.end_max end,
        decode(is_reversed, 0, +1, 1, -1, +1) strand,
-       'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+       'Note=' || substr(gattr.product,0,400) || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
        'SOTerm=' || gattr.so_term_name || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
        'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
@@ -819,7 +822,7 @@ SELECT
        sg.s startm, 
        sg.e end,
        decode(sg.syn_gene_is_reversed, 0, +1, 1, -1, +1) strand,
-      'Note=' || gattr.product || decode(gattr.is_deprecated,1,' (deprecated)') || '$dlm' ||
+      'Note=' || substr(gattr.product, 0, 400) || decode(gattr.is_deprecated,1,' (deprecated)') || ';' ||
        'SOTerm=' || gattr.so_term_name || '$dlm' ||
        'Contig=' || gattr.sequence_id || '$dlm' ||
        'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
@@ -947,20 +950,6 @@ AND rl.reporter_end >= $base_start
        ]]>
   </query> 
 
-  <query name="cnv:Array"  includeProjects="TriTrypDB,UniDB">
-       <![CDATA[
-SELECT a.name      as feature_id,
-       'cnv'       as type, 
-       'Array'     as source,
-       $base_start as startm,
-       $rend       as end, 
-       'sample=' || a.name as atts
-FROM   rad.protocol p,
-       rad.analysis a
-WHERE p.protocol_id = a.protocol_id
-  AND p.name ='dna_array_simple'
-       ]]>
-  </query> 
 
   <query name="MicroArrayProbes:expressionProbes" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,VectorBase,UniDB">
 <![CDATA[
@@ -1120,10 +1109,10 @@ SELECT distinct ssf.segment_start as  feature_id, 'domain' type,   '$source' as 
        CASE WHEN gtable.source_id is null THEN  ssf.segment_start || '(' || count(pan.name)  || ')'
             ELSE  gtable.source_id || '(' || count(pan.name)  || ')' END AS name,  
         gtable.source_id as gene_id, gtable.utr_len as utr_length, gtable.dist_to_first_atg,
-       'sample_name=' || listagg( replace(pan.name, ' [feature_loc] (SpliceSites)') , ',') within group (order by pan.name) || '$dlm' ||
-       'count_per_mill=' || listagg(ssf.count_per_million, ',') within group (order by pan.name) || '$dlm' ||
-       'is_unique=' || listagg(ssf.is_unique, ',') within group (order by pan.name)  || '$dlm' ||
-       'avg_mismatches=' || listagg(ssf.avg_mismatches, ',') within group (order by ssf.avg_mismatches)  || '$dlm' ||
+       'sample_name=' || listagg( replace(pan.name, ' [feature_loc] (SpliceSites)') , ',' on overflow truncate) within group (order by pan.name) || '$dlm' ||
+       'count_per_mill=' || listagg(ssf.count_per_million, ',' on overflow truncate) within group (order by pan.name) || '$dlm' ||
+       'is_unique=' || listagg(ssf.is_unique, ',' on overflow truncate) within group (order by pan.name)  || '$dlm' ||
+       'avg_mismatches=' || listagg(ssf.avg_mismatches, ',' on overflow truncate) within group (order by ssf.avg_mismatches)  || '$dlm' ||
        'gene_id=' || gtable.source_id || '$dlm' ||
        'type=' || ssf.type || '$dlm' ||
        'utr_length=' || gtable.utr_len    atts
@@ -1711,7 +1700,7 @@ ORDER BY
 ]]>
   </query>
 
-  <query name="gff:basic" includeProjects="PlasmoDB,ToxoDB,CryptoDB,FungiDB,AmoebaDB,TrichDB,UniDB">
+  <query name="gff:basic" includeProjects="AmoebaDB,CryptoDB,FungiDB,PlasmoDB,ToxoDB,TrichDB,TriTrypDB,VectorBase,UniDB">
 <![CDATA[ 
 SELECT g3.gff3_feature_id feature_id,
        'gff' type,
@@ -1722,19 +1711,49 @@ SELECT g3.gff3_feature_id feature_id,
        g3.mapping_start startm,
        g3.mapping_end end,
        decode (g3.is_reversed, 0, '+1', 1, '-1', '.') strand,
-      replace( g3.attr, ';', '$dlm') atts 
+       'soTerm=' || ot.name || '$dlm' ||
+       'source=' || g3.source|| '$dlm' ||
+        replace( g3.attr, ';', '$dlm') atts 
 FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
-       sres.ExternalDatabase ed
+       sres.ExternalDatabase ed, sres.ontologyTerm ot
 WHERE g3.external_database_release_id = edr.external_database_release_id
   AND edr.external_database_id = ed.external_database_id
   AND g3.na_sequence_id = $srcfeature_id
   AND g3.mapping_start <= $rend
   AND g3.mapping_end >= $base_start
-  AND  ed.name = $$edName$$
+  AND ed.name = $$edName$$
+  AND ot.ontology_term_id = g3.sequence_ontology_id
 ]]>
   </query>
 
-  <query name="gff:processedTranscript" includeProjects="PlasmoDB,ToxoDB,CryptoDB,UniDB">
+  <query name="gff:basicAlt" includeProjects="PlasmoDB,ToxoDB,CryptoDB,FungiDB,AmoebaDB,TrichDB,UniDB">
+<![CDATA[ 
+SELECT g3.gff3_feature_id feature_id,
+       'gff' type,
+       source,
+       g3.id_attr name,
+       nvl(to_char(score),'.') score,
+       g3.na_sequence_id parent_id,
+       g3.mapping_start startm,
+       g3.mapping_end end,
+       decode (g3.is_reversed, 0, '+1', 1, '-1', '.') strand,
+       'soTerm=' || ot.name ||
+        replace( g3.attr, ';', '$dlm') atts 
+FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
+       sres.ExternalDatabase ed, sres.ontologyTerm ot
+WHERE g3.external_database_release_id = edr.external_database_release_id
+  AND edr.external_database_id = ed.external_database_id
+  AND g3.na_sequence_id = $srcfeature_id
+  AND g3.mapping_start <= $rend
+  AND g3.mapping_end >= $base_start
+  AND ed.name = $$edName$$
+  AND source = $$source$$
+  AND ot.ontology_term_id = g3.sequence_ontology_id
+]]>
+  </query>
+
+
+  <query name="gff:processedTranscript" includeProjects="PlasmoDB,ToxoDB,CryptoDB,VectorBase,UniDB">
 <![CDATA[ 
 SELECT g3.id_attr feature_id,
        'gff' type,
@@ -1752,7 +1771,7 @@ FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
        sres.ExternalDatabase ed, sres.ontologyterm so
 WHERE g3.external_database_release_id = edr.external_database_release_id
   AND g3.sequence_ontology_id = so.ontology_term_id
-  AND SO.name in ('mRNA', 'transcript')
+  AND SO.name in ('rRNA', 'tRNA', 'mRNA', 'transcript')
   AND edr.external_database_id = ed.external_database_id
   AND g3.na_sequence_id = $srcfeature_id
   AND g3.mapping_start <= $rend
@@ -1795,7 +1814,7 @@ WHERE  blat.query_na_sequence_id = enas.na_sequence_id
 ]]>
   </query>
 
-  <query name="alignment:sequence" includeProjects="AmoebaDB,CryptoDB,FungiDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
+  <query name="alignment:sequence" includeProjects="AmoebaDB,CryptoDB,FungiDB,GiardiaDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'alignment' type, 
@@ -1856,7 +1875,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 , ' ' as name
                 , startm
                 , end
-                , LISTAGG(attr, '$dlm') WITHIN GROUP (ORDER BY attr) AS atts
+                , LISTAGG(attr, '$dlm' on overflow truncate) WITHIN GROUP (ORDER BY attr) AS atts
                 FROM (
                     WITH data AS (
                         SELECT DISTINCT sr.segment_result_id as feature_id
@@ -1918,7 +1937,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
                 , p_value
                 , startm
                 , end
-                , LISTAGG(attr, '$dlm') WITHIN GROUP (ORDER BY attr) AS atts
+                , LISTAGG(attr, '$dlm' on overflow truncate) WITHIN GROUP (ORDER BY attr) AS atts
                 , sample_name
                 FROM (
                     WITH data AS (
@@ -1973,7 +1992,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
             , ' ' as name
             , startm
             , end
-            , listagg (attr, '$dlm') within group (order by attr) as atts
+            , listagg (attr, '$dlm' on overflow truncate) within group (order by attr) as atts
             FROM (
                 WITH data AS (
                     SELECT DISTINCT sr.segment_result_id as feature_id
@@ -2019,7 +2038,7 @@ WHERE  etn.na_sequence_id = $srcfeature_id
             , parent_id
             , startm
             , end
-            , listagg (attr, '$dlm') within group (order by attr) as atts
+            , listagg (attr, '$dlm' on overflow truncate) within group (order by attr) as atts
             , sample_name
             FROM (
                 WITH data AS (
@@ -2127,7 +2146,7 @@ WHERE  sv.external_database_release_id = edr.external_database_release_id and
         , parent_id || '_' || nvl(max(subtrack), ' ') as parent_id
         , startm
         , end
-        , listagg (attr, '$dlm') within group (order by attr) as atts
+        , listagg (attr, '$dlm' on overflow truncate) within group (order by attr) as atts
         , sample_name
         FROM (
             WITH data AS (    
@@ -2796,7 +2815,7 @@ WHERE  exon_loc.na_sequence_id = $srcfeature_id
 ]]>
   </query>
 
-  <query name="gff:processedTranscript:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB,CryptoDB,UniDB">
+  <query name="gff:processedTranscript:bulksubfeatures" includeProjects="PlasmoDB,ToxoDB,CryptoDB,VectorBase,UniDB">
 <![CDATA[ 
 SELECT g3.id_attr feature_id,
        so.name type,
@@ -2815,7 +2834,7 @@ FROM   apidb.gff3 g3, sres.ExternalDatabaseRelease edr,
        sres.ExternalDatabase ed, sres.ontologyterm so
 WHERE g3.external_database_release_id = edr.external_database_release_id
   AND g3.sequence_ontology_id = so.ontology_term_id
-  AND SO.name in ('mRNA', 'transcript') 
+  AND SO.name in ('CDS', 'UTR', 'five_prime_UTR', 'three_prime_UTR') 
   AND edr.external_database_id = ed.external_database_id
   AND g3.na_sequence_id = $srcfeature_id
   AND g3.mapping_start <= $rend
@@ -3581,7 +3600,7 @@ ORDER BY blat.target_start
 ]]>
   </query>
 
-  <query name="alignment:sequence:bulksubfeatures" includeProjects="AmoebaDB,CryptoDB,FungiDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
+  <query name="alignment:sequence:bulksubfeatures" includeProjects="AmoebaDB,CryptoDB,FungiDB,GiardiaDB,TriTrypDB,ToxoDB,VectorBase,UniDB">
 <![CDATA[
 SELECT blat.blat_alignment_id feature_id,
        'block' type, 
@@ -3661,7 +3680,7 @@ WHERE fl.na_sequence_id = $srcfeature_id
         , parent_id || '_' || nvl(max(subtrack), ' ') as parent_id
         , startm
         , end
-        , listagg (attr, '$dlm') within group (order by attr) as atts
+        , listagg (attr, '$dlm' on overflow truncate) within group (order by attr) as atts
         FROM (
             WITH data AS (    
                 SELECT DISTINCT
@@ -3699,36 +3718,6 @@ WHERE fl.na_sequence_id = $srcfeature_id
         ]]>
   </query>
 
-  <query name="cnv:Array:bulksubfeatures"  includeProjects="TriTrypDB,UniDB">
-<![CDATA[
-     SELECT interval as feature_id,
-            'cnv_sub' as type,
-            'Array' as source,
-            round (avg(score), 3) as score,
-            parent_id,
-            cast( $base_start + interval * (($rend - $base_start + 1) / 800) as integer) startm,
-            cast( $base_start + (interval + 1) * (($rend - $base_start + 1) / 800) as integer ) end,
-              atts
-     FROM
-     (
-     SELECT ee.na_feature_id as feature_id,
-            ee.score,
-            a.name as parent_id,
-            ceil((ee.start_min - $base_start)  / (($rend - $base_start + 1) / 800)) interval,
-            'sample=' || a.name  as atts
-     FROM APIDBTUNING.expressionelement ee,          
-          RAD.protocol p,
-          rad.analysis a
-     WHERE p.protocol_id = a.protocol_id
-       AND p.name  ='dna_array_simple'
-       AND ee.analysis_id = a.analysis_id
-      AND ee.na_sequence_id = $srcfeature_id
-      AND ee.start_min <= $rend
-      AND ee.end_max >= $base_start
-     )
-     GROUP BY interval,parent_id,atts 
-   ]]>
-  </query> 
   
   <query name="mapp:promoters:bulksubfeatures"  includeProjects="PlasmoDB,UniDB">
 <![CDATA[
