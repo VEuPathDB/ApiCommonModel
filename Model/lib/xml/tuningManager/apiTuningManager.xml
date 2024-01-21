@@ -3007,7 +3007,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         create table &prefixGeneProduct&1 as
         with gfp_preferred
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id,  gfp.product
                        from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
                        where gfp.na_feature_id = gf.na_feature_id
@@ -3015,14 +3016,16 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  group by source_id),
              gfp_any
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id,  gfp.product
                        from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
                        where gfp.na_feature_id = gf.na_feature_id)
                        group by source_id),
              tp_preferred
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id, tp.product
                        from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
                        where t.parent_id = gf.na_feature_id
@@ -3035,7 +3038,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  where product is not null),
              tp_any
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id, tp.product
                        from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
                        where t.parent_id = gf.na_feature_id
@@ -3043,16 +3047,50 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                        group by source_id),
              t_product
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select gf.source_id, t.product
                        from dots.GeneFeature gf, dots.Transcript t
                        where t.parent_id = gf.na_feature_id
                          and t.product is not null)
                        group by source_id)
         select gf.source_id,
-               coalesce(gfp_preferred.product, gfp_any.product, tp_preferred.product,
-                        gf.product, tp_any.product, t_product.product, 'unspecified product')
-                 as product
+               coalesce(gfp_preferred.product, gfp_any.product,
+                        tp_preferred.product, gf.product, tp_any.product,
+                        t_product.product, 'unspecified product')
+                 as product,
+               case
+                 when gfp_preferred.product is not null
+                   then gfp_preferred.value_count
+                 when gfp_any.product is not null
+                   then gfp_any.value_count
+                 when tp_preferred.product is not null
+                   then tp_preferred.value_count
+                 when gf.product is not null
+                   then 1
+                 when tp_any.product is not null
+                   then tp_any.value_count
+                 when t_product.product is not null
+                   then t_product.value_count
+                 else 0 -- 'unspecified product'
+               end
+                 as value_count,
+               case
+                 when gfp_preferred.product is not null
+                   then 1
+                 when gfp_any.product is not null
+                   then 2
+                 when tp_preferred.product is not null
+                   then 3
+                 when gf.product is not null
+                   then 4
+                 when tp_any.product is not null
+                   then 5
+                 when t_product.product is not null
+                   then 6
+                 else 7
+               end
+                 as source_rule
         from dots.GeneFeature gf, gfp_preferred, gfp_any, tp_preferred, gf_product, tp_any, t_product
         where gf.source_id = gfp_preferred.source_id(+)
           and gf.source_id = gfp_any.source_id(+)
