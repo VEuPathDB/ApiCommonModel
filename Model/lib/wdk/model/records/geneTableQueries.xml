@@ -2821,91 +2821,6 @@ FROM
             </sql>
         </sqlQuery>
  
-        <sqlQuery name="PreferredProducts" isCacheable="false" >
-            <column name="source_id"/>
-            <column name="transcript_ids"/>
-            <column name="project_id"/>
-            <column name="product"/>
-            <column name="reference"/>
-            <column name="evidence_code"/>
-            <column name="evidence_code_parameter"/>
-	    <column name="assigned_by"/>
-            <sql>
-            <![CDATA[
-              -- PreferredProducts: check apidb.TranscriptProduct and
-              -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
-              -- (and only if) that turns up nothing, check the PRODUCT column of
-              -- dots.GeneFeature and dots.Transcript
-              with evids
-                   as (select distinct gaiec.go_evidence_code_id, ot.name
-                       from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
-                       where ot.ontology_term_id = gaiec.go_evidence_code_id)
-                select ta.gene_source_id as source_id, tp.product, ta.project_id,
-                       listagg(source_id, ', ') within group(order by source_id)
-                         as transcript_ids,
-                       listagg(publication, ', ') within group(order by source_id)
-                         as reference,
-                       e.name as evidence_code,
-                       tp.with_from AS evidence_code_parameter,
-		       tp.assigned_by AS assigned_by
-                from apidb.TranscriptProduct tp,
-                     apidbTuning.TranscriptAttributes ta, evids e
-                where ta.na_feature_id = tp.na_feature_id
-                  and tp.is_preferred = 1
-                  and tp.evidence_code = e.go_evidence_code_id(+)
-                group by gene_source_id, ta.project_id, tp.product,
-                         e.name, tp.with_from, tp.assigned_by
-              union
-                select ga.source_id, gfp.product, ga.project_id,
-                       cast (null as varchar2(1)) as transcript_ids,
-                       cast (null as varchar2(1)) as reference,
-                       cast (null as varchar2(1)) as evidence_code,
-                       cast (null as varchar2(1)) as evidence_code_parameter,
-		       cast (null as varchar2(1)) as assigned_by
-                from apidb.GeneFeatureProduct gfp,
-                     apidbTuning.GeneAttributes ga
-                where ga.na_feature_id = gfp.na_feature_id
-                  and gfp.is_preferred = 1
-                group by source_id, ga.project_id, gfp.product
-              union
-                select *
-                from (select distinct ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
-                             listagg(source_id, ', ' on overflow truncate) within group(order by source_id)
-                               as transcript_ids,
-                             cast (null as varchar2(1)) as reference,
-                             cast (null as varchar2(1)) as evidence_code,
-                             cast (null as varchar2(1)) as evidence_code_parameter,
-		             cast (null as varchar2(1)) as assigned_by
-                      from apidbTuning.TranscriptAttributes ta
-                      where ta.transcript_product is not null
-                      group by ta.gene_source_id, ta.transcript_product, ta.project_id
-                     )
-                where source_id
-                      in (  select *
-                            from (  select source_id
-                                    from dots.GeneFeature
-                                    where product is not null
-                                  union
-                                    select ga.source_id
-                                    from dots.Transcript t, apidbTuning.GeneAttributes ga
-                                    where t.product is not null
-                                      and t.parent_id = ga.na_feature_id
-                                 )
-                          minus
-                            select *
-                            from (  select ta.gene_source_id
-                                    from apidb.TranscriptProduct tp, apidbTuning.TranscriptAttributes ta
-                                    where tp.na_feature_id = ta.na_feature_id
-                                  union
-                                    select ga.source_id
-                                    from apidb.GeneFeatureProduct gfp, apidbTuning.GeneAttributes ga
-                                    where gfp.na_feature_id = ga.na_feature_id
-                                 )
-                         )
-            ]]>
-            </sql>
-        </sqlQuery> 
-
         <sqlQuery name="AllProducts" isCacheable="false">
             <column name="source_id"/>
             <column name="transcript_ids"/>
@@ -2918,49 +2833,9 @@ FROM
 	    <column name="assigned_by"/>
             <sql>
             <![CDATA[
-with evids
-     as (select distinct gaiec.go_evidence_code_id, ot.name
-         from  dots.goassocinstevidcode gaiec, sres.ontologyterm ot
-         where ot.ontology_term_id = gaiec.go_evidence_code_id)
-  select ta.gene_source_id AS source_id, tp.product, ta.project_id,
-         decode(tp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
-         listagg(source_id, ', ') within group(order by source_id) as transcript_ids,
-         listagg(publication, ', ') within group(order by source_id) as reference,
-         e.name as evidence_code, tp.with_from as evidence_code_parameter,
-         tp.assigned_by, 'apidb.TranscriptProduct' as source
-  from apidb.TranscriptProduct tp, apidbTuning.TranscriptAttributes ta, evids e
-  where ta.na_feature_id = tp.na_feature_id
-    and tp.evidence_code = e.go_evidence_code_id(+)
-  group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
-        tp.with_from, tp.assigned_by
-union
-  select ga.source_id as source_id, gfp.product, ga.project_id,
-         decode(gfp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
-         null as transcript_ids, null as reference, null as evidence_code,
-         null as evidence_code_parameter, null as assigned_by,
-         'apidb.GeneFeatureProduct' as source
-  from apidb.GeneFeatureProduct gfp, apidbTuning.GeneAttributes ga
-  where ga.na_feature_id = gfp.na_feature_id
-union
-  select ga.source_id as source_id, gf.product, ga.project_id,
-         null as  is_alternate,
-         null as transcript_ids, null as reference, null as evidence_code,
-         null as evidence_code_parameter, null as assigned_by,
-         'dots.GeneFeature' as source
-  from dots.GeneFeature gf, apidbTuning.GeneAttributes ga
-  where ga.na_feature_id = gf.na_feature_id
-    and gf.product is not null
-union
-  select ta.gene_source_id AS source_id, t.product, ta.project_id,
-         null as is_alternate,
-         listagg(ta.source_id, ', ') within group(order by ta.source_id) as transcript_ids,
-         null as reference, null as evidence_code, null as evidence_code_parameter,
-         null as assigned_by, 'dots.Transcript' as source
-  from apidbTuning.TranscriptAttributes ta, dots.Transcript t
-  where ta.na_feature_id = t.na_feature_id
-    and t.product is not null
-  group by ta.gene_source_id, ta.project_id, t.product
-order by is_alternate desc, transcript_ids
+select source_id, transcript_ids, project_id, product, is_alternate, 
+       reference, evidence_code, evidence_code_parameter, assigned_by
+from apidbTuning.AllGeneProducts
             ]]>
             </sql>
         </sqlQuery> 

@@ -1111,7 +1111,7 @@ CREATE TABLE DataSourceCount nologging as (
         )
   )
     ]]>
-   </sql>
+    </sql>
 
 
     <sql>
@@ -2827,7 +2827,7 @@ from (  select gene_source_id, source_id, taxon_id,
         where gj.gene_source_id =  atr.gene_source_id
      )
       ]]>
-   </sql>
+    </sql>
   </tuningTable>
 
 
@@ -9429,7 +9429,6 @@ tablespace indx
 
      <![CDATA[
 create table &prefixIntronSupportLevel&1 NOLOGGING as 
-
 select * from (
 select gene_source_id, ontology_term, replace(string_value, 'All' , 'Any-high') as string_value from (
 select gene_source_id
@@ -9541,10 +9540,94 @@ where string_value = 'All'
 
 
 ]]>
-   </sql>
+    </sql>
   </tuningTable>
 
+  <tuningTable name="AllGeneProducts" prefixEnabled="true">
+    <comment>
+      all products for each gene
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="GeneProduct"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.OntologyTerm"/>
 
+    <sql>
+     <![CDATA[
+       create table &prefixAllGeneProducts&1 NOLOGGING as 
+         with evids
+            as (select distinct gaiec.go_evidence_code_id, ot.name
+                from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                where ot.ontology_term_id = gaiec.go_evidence_code_id)
+         select ta.gene_source_id AS source_id, tp.product, ta.project_id,
+                decode(tp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+                listagg(source_id, ', ') within group(order by source_id) as transcript_ids,
+                listagg(publication, ', ') within group(order by source_id) as reference,
+                e.name as evidence_code, tp.with_from as evidence_code_parameter,
+                tp.assigned_by, 'apidb.TranscriptProduct' as source
+         from apidb.TranscriptProduct tp, TranscriptAttributes ta, evids e
+         where ta.na_feature_id = tp.na_feature_id
+           and tp.evidence_code = e.go_evidence_code_id(+)
+         group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
+               tp.with_from, tp.assigned_by
+       union
+         select ga.source_id as source_id, gfp.product, ga.project_id,
+                decode(gfp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'apidb.GeneFeatureProduct' as source
+         from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+         where ga.na_feature_id = gfp.na_feature_id
+       union
+         select ga.source_id as source_id, gf.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'dots.GeneFeature' as source
+         from dots.GeneFeature gf, GeneAttributes ga, GeneProduct gp
+         where ga.na_feature_id = gf.na_feature_id
+           and gf.product is not null
+           and ga.source_id = gp.source_id
+           and gp.source_rule >= 3 -- no product in apidb.GeneFeatureProduct
+       union
+         select ta.gene_source_id AS source_id, t.product, ta.project_id,
+                null as is_alternate,
+                listagg(ta.source_id, ', ') within group(order by ta.source_id) as transcript_ids,
+                null as reference, null as evidence_code, null as evidence_code_parameter,
+                null as assigned_by, 'dots.Transcript' as source
+         from TranscriptAttributes ta, dots.Transcript t
+         where ta.na_feature_id = t.na_feature_id
+           and t.product is not null
+           and ta.gene_source_id
+               not in (select source_id
+                   from GeneProduct
+                   where source_rule < 6) -- product only in dots.Transcript
+         group by ta.gene_source_id, ta.project_id, t.product
+       union
+         select gp.source_id as source_id, gp.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'unspecified product' as source
+         from GeneProduct gp, GeneAttributes ga
+         where gp.source_rule = 7
+           and gp.source_id = ga.source_id
+       order by is_alternate desc, transcript_ids
+       ]]>
+    </sql>
 
+    <sql>
+      <![CDATA[
+        create index allGeneProds_idx&1
+        on &prefixAllGeneProducts&1 (source_id, product)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
 
 </tuningConfig>
