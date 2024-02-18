@@ -2,7 +2,7 @@ package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 
-public class PopBioEDA extends DatasetInjector {
+public class GenomicsEDAStudy extends DatasetInjector {
 
 
   @Override
@@ -28,8 +28,9 @@ public class PopBioEDA extends DatasetInjector {
 
     private void injectProjectAvailability() {
         String presenterId = getPropValue("presenterId");
-        String subProjectName = getPropValue("subProjectName");
-        String projectAvailability = "UNION select '" + presenterId + "' as dataset_presenter_id, 'projectAvailability' as property, '[\"" + subProjectName +  "\",\"AllClinEpiDB\"" + (getPropValueAsBoolean("isPublic") ? ",\"ClinEpiDB\"" : "") + "]' as value from dual";
+        String projectAvailabilityProp = getPropValue("projectAvailability");
+
+        String projectAvailability = "UNION select '" + presenterId + "' as dataset_presenter_id, 'projectAvailability' as property, '" + projectAvailabilityProp + "' as value from dual";
         setPropValue("projectAvailabilitySql",projectAvailability);
         injectTemplate("injectProjectAvailability");
     }

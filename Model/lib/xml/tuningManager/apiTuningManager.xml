@@ -1111,7 +1111,7 @@ CREATE TABLE DataSourceCount nologging as (
         )
   )
     ]]>
-   </sql>
+    </sql>
 
 
     <sql>
@@ -1399,7 +1399,7 @@ and tn2.name_class = 'scientific name'
     </sql>
     <sql>
       <![CDATA[
-create index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
+create unique index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
 tablespace indx
       ]]>
     </sql>
@@ -1817,7 +1817,7 @@ FROM (
   SELECT ns.source_id as id, ns.source_id as sequence
   FROM dots.NaSequence ns, sres.OntologyTerm oterm
   WHERE ns.sequence_ontology_id = oterm.ontology_term_id
-    AND oterm.name in ('random_sequence', 'contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome','maxicircle')
+    AND oterm.name in ('random_sequence', 'contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome','maxicircle','kinetoplast')
 UNION
   SELECT dr.primary_identifier AS id, ns.source_id AS sequence
   FROM dots.NaSequence ns, dots.DbRefNaSequence drnf,
@@ -1911,7 +1911,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE TABLE TranscriptCenDistance&1 NOLOGGING AS
-        SELECT tl.feature_source_id AS transcript,
+        SELECT DISTINCT tl.feature_source_id AS transcript,
                LEAST(ABS(mfl.start_min - tl.end_max),
                      ABS(mfl.end_max - tl.start_min)) AS centromere_distance,
                tl.sequence_source_id AS genomic_sequence
@@ -2827,7 +2827,7 @@ from (  select gene_source_id, source_id, taxon_id,
         where gj.gene_source_id =  atr.gene_source_id
      )
       ]]>
-   </sql>
+    </sql>
   </tuningTable>
 
 
@@ -3007,7 +3007,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         create table &prefixGeneProduct&1 as
         with gfp_preferred
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id,  gfp.product
                        from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
                        where gfp.na_feature_id = gf.na_feature_id
@@ -3015,14 +3016,16 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  group by source_id),
              gfp_any
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id,  gfp.product
                        from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
                        where gfp.na_feature_id = gf.na_feature_id)
                        group by source_id),
              tp_preferred
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id, tp.product
                        from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
                        where t.parent_id = gf.na_feature_id
@@ -3035,7 +3038,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  where product is not null),
              tp_any
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select distinct gf.source_id, tp.product
                        from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
                        where t.parent_id = gf.na_feature_id
@@ -3043,16 +3047,50 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                        group by source_id),
              t_product
              as (select source_id,
-                        listagg(product, ', ' on overflow truncate) as product
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
                  from (select gf.source_id, t.product
                        from dots.GeneFeature gf, dots.Transcript t
                        where t.parent_id = gf.na_feature_id
                          and t.product is not null)
                        group by source_id)
         select gf.source_id,
-               coalesce(gfp_preferred.product, gfp_any.product, tp_preferred.product,
-                        gf.product, tp_any.product, t_product.product)
-                 as product
+               coalesce(gfp_preferred.product, gfp_any.product,
+                        tp_preferred.product, gf.product, tp_any.product,
+                        t_product.product, 'unspecified product')
+                 as product,
+               case
+                 when gfp_preferred.product is not null
+                   then gfp_preferred.value_count
+                 when gfp_any.product is not null
+                   then gfp_any.value_count
+                 when tp_preferred.product is not null
+                   then tp_preferred.value_count
+                 when gf.product is not null
+                   then 1
+                 when tp_any.product is not null
+                   then tp_any.value_count
+                 when t_product.product is not null
+                   then t_product.value_count
+                 else 0 -- 'unspecified product'
+               end
+                 as value_count,
+               case
+                 when gfp_preferred.product is not null
+                   then 1
+                 when gfp_any.product is not null
+                   then 2
+                 when tp_preferred.product is not null
+                   then 3
+                 when gf.product is not null
+                   then 4
+                 when tp_any.product is not null
+                   then 5
+                 when t_product.product is not null
+                   then 6
+                 else 7
+               end
+                 as source_rule
         from dots.GeneFeature gf, gfp_preferred, gfp_any, tp_preferred, gf_product, tp_any, t_product
         where gf.source_id = gfp_preferred.source_id(+)
           and gf.source_id = gfp_any.source_id(+)
@@ -8977,13 +9015,13 @@ tablespace indx
   <tuningTable name="TranscriptGenomicSequence">
     <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
     </comment>
-<!-- COMMENTING OUT DEPENDENCIES FOR NOW
+<!-- COMMENTING OUT DEPENDENCIES FOR NOW -->
     <externalDependency name="apidb.TranscriptLocation"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.TaxonName"/>
--->
+
     <sql>
       <![CDATA[
       create table TranscriptGenomicSequence&1 nologging as
@@ -9058,7 +9096,7 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
-        create index txgseq_idx&1
+        create unique index txgseq_idx&1
           on TranscriptGenomicSequence&1(source_id, gene_source_id, project_id)
           tablespace indx
       ]]>
@@ -9391,7 +9429,6 @@ tablespace indx
 
      <![CDATA[
 create table &prefixIntronSupportLevel&1 NOLOGGING as 
-
 select * from (
 select gene_source_id, ontology_term, replace(string_value, 'All' , 'Any-high') as string_value from (
 select gene_source_id
@@ -9503,10 +9540,94 @@ where string_value = 'All'
 
 
 ]]>
-   </sql>
+    </sql>
   </tuningTable>
 
+  <tuningTable name="AllGeneProducts" prefixEnabled="true">
+    <comment>
+      all products for each gene
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="GeneProduct"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.OntologyTerm"/>
 
+    <sql>
+     <![CDATA[
+       create table &prefixAllGeneProducts&1 NOLOGGING as 
+         with evids
+            as (select distinct gaiec.go_evidence_code_id, ot.name
+                from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                where ot.ontology_term_id = gaiec.go_evidence_code_id)
+         select ta.gene_source_id AS source_id, tp.product, ta.project_id,
+                decode(tp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+                listagg(source_id, ', ') within group(order by source_id) as transcript_ids,
+                listagg(publication, ', ') within group(order by source_id) as reference,
+                e.name as evidence_code, tp.with_from as evidence_code_parameter,
+                tp.assigned_by, 'apidb.TranscriptProduct' as source
+         from apidb.TranscriptProduct tp, TranscriptAttributes ta, evids e
+         where ta.na_feature_id = tp.na_feature_id
+           and tp.evidence_code = e.go_evidence_code_id(+)
+         group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
+               tp.with_from, tp.assigned_by
+       union
+         select ga.source_id as source_id, gfp.product, ga.project_id,
+                decode(gfp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'apidb.GeneFeatureProduct' as source
+         from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+         where ga.na_feature_id = gfp.na_feature_id
+       union
+         select ga.source_id as source_id, gf.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'dots.GeneFeature' as source
+         from dots.GeneFeature gf, GeneAttributes ga, GeneProduct gp
+         where ga.na_feature_id = gf.na_feature_id
+           and gf.product is not null
+           and ga.source_id = gp.source_id
+           and gp.source_rule >= 3 -- no product in apidb.GeneFeatureProduct
+       union
+         select ta.gene_source_id AS source_id, t.product, ta.project_id,
+                null as is_alternate,
+                listagg(ta.source_id, ', ') within group(order by ta.source_id) as transcript_ids,
+                null as reference, null as evidence_code, null as evidence_code_parameter,
+                null as assigned_by, 'dots.Transcript' as source
+         from TranscriptAttributes ta, dots.Transcript t
+         where ta.na_feature_id = t.na_feature_id
+           and t.product is not null
+           and ta.gene_source_id
+               not in (select source_id
+                   from GeneProduct
+                   where source_rule < 6) -- product only in dots.Transcript
+         group by ta.gene_source_id, ta.project_id, t.product
+       union
+         select gp.source_id as source_id, gp.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'unspecified product' as source
+         from GeneProduct gp, GeneAttributes ga
+         where gp.source_rule = 7
+           and gp.source_id = ga.source_id
+       order by is_alternate desc, transcript_ids
+       ]]>
+    </sql>
 
+    <sql>
+      <![CDATA[
+        create index allGeneProds_idx&1
+        on &prefixAllGeneProducts&1 (source_id, product)
+        tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
 
 </tuningConfig>
