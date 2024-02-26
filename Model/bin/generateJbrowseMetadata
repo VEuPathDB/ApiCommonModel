@@ -4,6 +4,9 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use Data::Dumper;
 
+use LWP::Simple;
+use LWP::UserAgent;
+
 use DBI;
 use DBD::Oracle;
 use WDK::Model::ModelConfig;
@@ -16,6 +19,25 @@ my ($organismAbbrev, $projectName, $buildNumber) = @ARGV;
 
 #sub getDbh {$_[0]->{_dbh}}
 
+my %websiteUrl = (AmoebaDB => 'https://amoebadb.org',
+                CryptoDB => 'https://cryptodb.org',
+                FungiDB => 'https://fungidb.org',
+                GiardiaDB => 'https://giardiadb.org',
+                MicrosporidiaDB => 'https://microsporidiadb.org',
+                PiroplasmaDB => 'https://piroplasmadb.org',
+                PlasmoDB => 'https://plasmodb.org',
+                ToxoDB => 'https://toxodb.org',
+                TrichDB => 'https://trichdb.org',
+                TriTrypDB => 'https://tritrypdb.org',
+                VectorBase => 'https://vectorbase.org');
+
+  my @websites = $websiteUrl{$projectName};
+print "DATABASE= $projectName AND WEBSITE= $websites[0] \n";
+  my $sourceWebsite = $websites[0];
+  my $websiteDir = $ENV{OLDPWD} . "/temporaryWebservices/";
+  my $organisms = &getOrganismListAndPrintJson($sourceWebsite, $websiteDir);
+
+
     my $modelConfig = new WDK::Model::ModelConfig($projectName);
     my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
                             $modelConfig->getAppDbLogin(),
@@ -23,39 +45,46 @@ my ($organismAbbrev, $projectName, $buildNumber) = @ARGV;
         )
         || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
 
-	my $metadataFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/metadata.conf";
-#print "metadataFile = $metadataFile \n";
+	#my $metadataFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/jbrowse.conf";
 
-my $result = {"jBrowseMetadata" => [] };	
+  foreach my $organism (@{$organisms->{organisms}}) {
 
-&addCentromereCount($dbh, $result, $organismAbbrev);
-&addScaffoldCount($dbh, $result, $organismAbbrev);
-&addUnifiedSnpCount($dbh, $result, $organismAbbrev); 
-&addChipChipTracks($dbh, $result, $organismAbbrev); 
-&addUnifiedMassSpecCount($dbh, $result, $organismAbbrev);
-&addTRNACount($dbh, $result);
-&addCnvArray($dbh, $result);
+    	my $organismAbbrev = $organism->{ORGANISM_ABBREV};
+
+	my $dir = $ENV{OLDPWD} . "/temporaryWebservices/$organismAbbrev";
+	mkdir $dir unless(-d $dir);
+	my $metadataFile = $ENV{OLDPWD} . "/temporaryWebservices/$organismAbbrev/jbrowse.conf";
+	open(FILE, '>>', $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
 
 
-#print Dumper $result;
-print $organismAbbrev."::centromereCount=".$result->{jBrowseMetadata}[0]{centromereCount}."\n";
-print $organismAbbrev."::scaffoldCount=".$result->{jBrowseMetadata}[1]{scaffoldCount}."\n";
-print $organismAbbrev."::unifiedSnpCount=".$result->{jBrowseMetadata}[2]{unifiedSnpCount}."\n";
-print $organismAbbrev."::unifiedMassSpecCount=".$result->{jBrowseMetadata}[4]{unifiedMassSpecCount}."\n";
-print $organismAbbrev."::tRNACount=".$result->{jBrowseMetadata}[5]{tRNACount}."\n\n";
+	my $result = {"jBrowseMetadata" => [] };	
 
-my $chipChipVarsArrayRef = $result->{jBrowseMetadata}[3]{chipChipVars};
+	&addCentromereCount($dbh, $result, $organismAbbrev);
+	&addScaffoldCount($dbh, $result, $organismAbbrev);
+	&addUnifiedSnpCount($dbh, $result, $organismAbbrev); 
+	&addChipChipTracks($dbh, $result, $organismAbbrev); 
+	&addUnifiedMassSpecCount($dbh, $result, $organismAbbrev);
+	&addTRNACount($dbh, $result);
+	&addCnvArray($dbh, $result);
 
-#print Dumper @chipChipVarsArray;
+	print FILE $organismAbbrev."::centromereCount=".$result->{jBrowseMetadata}[0]{centromereCount}."\n";
+	print FILE $organismAbbrev."::scaffoldCount=".$result->{jBrowseMetadata}[1]{scaffoldCount}."\n";
+	print FILE $organismAbbrev."::unifiedSnpCount=".$result->{jBrowseMetadata}[2]{unifiedSnpCount}."\n";
+	print FILE $organismAbbrev."::unifiedMassSpecCount=".$result->{jBrowseMetadata}[4]{unifiedMassSpecCount}."\n";
+	print FILE $organismAbbrev."::tRNACount=".$result->{jBrowseMetadata}[5]{tRNACount}."\n\n";
 
-foreach my $key (@{$chipChipVarsArrayRef}) {
-    print $organismAbbrev."::dataset=".$key->{dataset}."\n";
-    print $organismAbbrev."::study=".$key->{study}."\n";
-    print $organismAbbrev."::panName=".$key->{panName}."\n";
-    print $organismAbbrev."::panId=".$key->{panId}."\n\n";
-}
+	my $chipChipVarsArrayRef = $result->{jBrowseMetadata}[3]{chipChipVars};
 
+		foreach my $key (@{$chipChipVarsArrayRef}) {
+		    print FILE $organismAbbrev."::dataset=".$key->{dataset}."\n";
+		    print FILE $organismAbbrev."::study=".$key->{study}."\n";
+		    print FILE $organismAbbrev."::panName=".$key->{panName}."\n";
+	    	    print FILE $organismAbbrev."::panId=".$key->{panId}."\n\n";
+		}
 
+	close FILE;
+
+	}		
 
 
 sub addCentromereCount {
@@ -156,11 +185,11 @@ order by pan.name";
   return $result;
 }
 
-
+#TODO: should use query apidb.organism table (test toxo inc)
 sub addChipChipTracks {
   my ($dbh, $result, $organismAbbrev) = @_;
   
- my $sql = "select d.name, s.name, pan.name, pan.protocol_app_node_id
+ my $sql = "select d.name, s.name, pan.name
 from study.study s
    , SRES.EXTERNALDATABASERELEASE r
    , SRES.EXTERNALDATABASE d
@@ -180,7 +209,6 @@ and s.investigation_id is null";
       my $chipChipVars = {dataset => $dataset,
                           study => $study,
                           panName => $panName,
-                          panId => $panId,
 	};
   
   push @{$chipChipVarsArray->{chipChipVars}}, $chipChipVars;
@@ -193,4 +221,53 @@ and s.investigation_id is null";
 
 
 
+sub getOrganismListAndPrintJson {
+  my ($site, $websiteDir) = @_;
 
+  my $orgUrl = "$site/a/service/jbrowse/organismList";
+  my $organismsFile = "$websiteDir/organismList.json";
+
+  my $organisms = &getData($orgUrl);
+
+  open(ORGS, ">$organismsFile") or die "Cannot open file $organismsFile for writing: $!";
+  print ORGS encode_json $organisms;
+  close ORGS;
+
+  return $organisms;
+}
+
+
+sub websiteNames {
+  my ($site, $subdomain, $stripSubdomain) = @_;
+
+  if($site =~ /(https?:\/\/)?(.+).org\/?/) {
+    my $siteNoSub = "https://$2.org";
+
+    my $sourceSite = $subdomain ? "https://$subdomain.$2.org" : $siteNoSub;
+    my $siteForApolloConfig = $stripSubdomain ? $siteNoSub : $sourceSite;
+
+    my $cleanSource = $subdomain ? "$subdomain.$2.org" : "$2.org";
+    my $cleanSiteDir = $stripSubdomain ? "$2.org" : $cleanSource;
+
+    print STDERR "Configs will be generated from:  $sourceSite\n";
+    print STDERR "The website referenced in output configs will be:  $siteForApolloConfig\n";
+    print STDERR "The directory name for this website is:  $cleanSiteDir\n";
+
+    return ($sourceSite, $siteForApolloConfig, $cleanSiteDir);
+  }
+
+  die "Did not recognize veupathdb website: $site";
+}
+
+
+
+sub getData {
+  my ($url) = @_;
+
+my $agent = LWP::UserAgent->new;
+$agent->timeout(3600);
+my $json = $agent->get($url);
+$json->is_success or die $json->status_line;
+my $decodedJson = decode_json($json->content);
+return $decodedJson;
+}
