@@ -90,13 +90,218 @@
         <wsColumn name="project_id" width="20" wsName="project_id"/>
 
      </processQuery>
+    
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->   
+<!-- Long read novel gene model search query 	    --> 
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->    
 
+    <sqlQuery name="DynSpansLongReadBySourceId" includeProjects="PlasmoDB,ToxoDB">
+        <paramRef ref="geneParams.long_read_datasets"/>
+	    <paramRef ref="geneParams.ismTypes_span"/>
+        <paramRef ref="sharedParams.supporting_read_count"/>
+        <paramRef ref="sharedParams.transcript_length"/>
+	    <column name="source_id"/>
+        <column name="project_id"/>
+        <column name="min_start"/>
+        <column name="max_end"/>
+        <column name="coordinates"/>
+        <column name="dataset_name"/>
+        <column name="internal_abbrev"/>
+        <column name="chr_source_id"/>
+        <column name="contextStart"/>
+        <column name="contextEnd"/>
+        <column name="transcript_novelty"/>
+        <column name="total_count"/>
+        
+	<sql includeProjects="PlasmoDB,ToxoDB">
+        <![CDATA[
+
+        SELECT DISTINCT * FROM (
+            SELECT DISTINCT source_id
+            , project_id
+            , min_start
+            , contextStart
+            , max_end
+            , contextEnd
+            , chr_source_id
+            , internal_abbrev
+            , organism
+            , dataset_name || '_high_confidence_models' as dataset_name
+            , LISTAGG(DISTINCT transcript_novelty) WITHIN GROUP (ORDER BY transcript_novelty) AS transcript_novelty
+            , SUM(reads) AS total_count
+            FROM (
+                SELECT DISTINCT lrt.na_seq_source_id AS chr_source_id
+                , gsa.project_id
+                , lrt.min_start
+                , CASE WHEN lrt.min_start - 1000 < 1
+                    THEN 1
+                    ELSE lrt.min_start - 1000 END as contextStart
+                , lrt.max_end
+                , CASE WHEN lrt.max_end + 1000 > gsa.length
+                    THEN gsa.length
+                    ELSE lrt.max_end + 1000 END as contextEnd
+                , lrt.na_seq_source_id || ':' || lrt.min_start || '-' || lrt.max_end || ':f' AS source_id
+                , count_table.reads
+                , ed.name AS dataset_name
+                , oa.internal_abbrev
+                , gsa.organism
+                , lrt.transcript_novelty
+                FROM apidb.longreadtranscript lrt
+                , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) count_table
+                , apidbtuning.genomicseqattributes gsa
+                , sres.externaldatabase ed
+                , sres.externaldatabaserelease edr
+                , apidbtuning.organismattributes oa
+                WHERE edr.external_database_release_id = lrt.external_database_release_id
+                AND ed.external_database_id = edr.external_database_id
+                AND ed.name = '$$long_read_datasets$$'
+                AND gsa.source_id = lrt.na_seq_source_id
+                AND oa.organism_name = gsa.organism
+                AND lrt.transcript_length >= $$transcript_length$$
+                AND lrt.transcript_novelty in ($$ismTypes_span$$)
+            )
+            GROUP BY source_id, project_id, min_start, contextStart, max_end, contextEnd, chr_source_id, internal_abbrev, organism, dataset_name
+        )
+        WHERE total_count >= $$supporting_read_count$$
+        ]]>
+        </sql>
+
+    </sqlQuery>
+
+
+   <processQuery name="DynSpansLongReadBySourceId" 
+             includeProjects="EuPathDB"
+             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+        <paramRef ref="geneParams.long_read_datasets"/>
+        <paramRef ref="geneParams.ismTypes_span"/>
+        <paramRef ref="sharedParams.supporting_read_count"/>
+        <paramRef ref="sharedParams.transcript_length"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="transcript_novelty" width="50" wsName="transcript_novelty"/>
+
+    </processQuery>
+
+
+
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->
+<!-- Intron junction search query        -->
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <sqlQuery name="DynSpansIntronJunction" excludeProjects="EuPathDB,TriTrypDB,TrichDB,HostDB">
+        <paramRef ref="organismParams.organism_span"/>
+        <paramRef ref="SpanParams.Intron_junction_novelty"/>
+        <paramRef ref="SpanParams.Intron_junction_confidence"/>
+        <column name="source_id"/>
+        <column name="project_id"/>
+        <column name="min_start"/>
+        <column name="max_end"/>
+        <column name="coordinates"/>
+        <column name="internal_abbrev"/>
+        <column name="contextStart"/>
+        <column name="contextEnd"/>
+        <column name="chr_source_id"/>
+        <column name="Confidence"/>
+        <column name="Intron_novelty"/>
+
+        <sql>
+        <![CDATA[
+
+
+	select 
+                     chr_source_id, min_start, min_start - 1000 as contextStart, max_end , max_end + 1000 as contextEnd, organism, project_id, source_id ,internal_abbrev, Confidence, annotated_intron, Intron_novelty
+                     from (
+select INTRON_FEATURE_ID as feature_id,                                                                                                                                                      
+                     segment_start - 10 as startm,
+		     case when gij.annotated_intron = 'No' then 'Novel' else 'Known' end as Intron_novelty,
+                     segment_END + 10 as end,
+                     CONTAINED, -- is the intron junction in a gene - you probably want contained=0
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     total_unique as SCORE,
+                     ANNOTATED_INTRON,
+                     'high' as Confidence,
+                     gij.sequence_source_id as chr_source_id,
+                     gij.segment_start as min_start,
+                     gij.segment_end as max_end,
+                     gsa.organism,
+                     gsa.project_id,
+		     ab.internal_abbrev,
+		     gij.sequence_source_id || ':' || gij.segment_start || '-' ||  gij.segment_end || DECODE(gij.is_reversed, 0,':f', 1,':r') as source_id
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats ,sres.taxonname tn ,apidbtuning.genomicseqattributes gsa ,apidbtuning.organismattributes ab
+                WHERE gij.na_sequence_id = stats.na_sequence_id
+                and gsa.taxon_id = tn.taxon_id
+                and gsa.na_sequence_ID = gij.na_sequence_id
+		and ab.organism_name = gsa.organism
+                and gsa.taxon_id in ($$organism_span$$)
+                AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+                --AND gij.annotated_intron = 'No'
+                AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+                AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+                --AND gij.gene_source_id is NULL
+Union
+select INTRON_FEATURE_ID as feature_id, 
+                     segment_start - 10 as startm,
+		     case when gij.annotated_intron = 'No' then 'Novel' else 'Known' end as Intron_novelty,
+                     segment_END + 10 as end,
+                     CONTAINED, -- is the intron junction in a gene - you probably want contained=0
+                     MATCHES_GENE_STRAND,
+                     PERCENT_MAX,
+                     total_unique as SCORE,
+                     ANNOTATED_INTRON,
+                     'low' as Confidence,
+                     gij.sequence_source_id as chr_source_id,
+                     gij.segment_start as min_start,
+                     gij.segment_end as max_end,
+                     gsa.organism,
+		     gsa.project_id,
+                     ab.internal_abbrev,
+		     gij.sequence_source_id || ':' || gij.segment_start || '-' ||  gij.segment_end || DECODE(gij.is_reversed, 0,':f', 1,':r') as source_id
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats, sres.taxonname tn ,apidbtuning.genomicseqattributes gsa ,apidbtuning.organismattributes ab
+                WHERE gij.na_sequence_id = stats.na_sequence_id
+                and gsa.taxon_id = tn.taxon_id
+                and gsa.na_sequence_ID = gij.na_sequence_id
+		and ab.organism_name = gsa.organism
+                and gsa.taxon_id in ($$organism_span$$)
+                AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
+                AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+                AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+                AND gij.intron_feature_id not in (
+                select gij.intron_feature_id
+                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                WHERE gij.na_sequence_id = stats.na_sequence_id
+                AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+                AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+                AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+                
+               )
+)
+where (confidence = $$Intron_junction_confidence$$ or 'all' = $$Intron_junction_confidence$$)
+and annotated_intron in ($$Intron_junction_novelty$$)
+
+           ]]>
+        </sql>
+
+    </sqlQuery>
+
+    <processQuery name="DynSpansIntronJunction" 
+             includeProjects="EuPathDB"
+             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+	<paramRef ref="organismParams.organism_span"/>
+        <paramRef ref="SpanParams.Intron_junction_novelty"/>
+        <paramRef ref="SpanParams.Intron_junction_confidence"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="Confidence" width="20" wsName="Confidence"/>
+        <wsColumn name="Intron_novelty" width="50" wsName="Intron_novelty"/>
+
+    </processQuery>
+
+<!-- +++++++++++++++++++++++++++++++++++++++++++++++-->
 
  <!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
   <!-- Location : NOT IN USE **   for eupath this sql needs to get the project from the apidb.sequenceattribute table  -->
   <!-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
-
-
 
    <sqlQuery name="DynSpansByLocation" excludeProjects="EuPathDB"  doNotTest="true">
         <paramRef ref="sharedParams.sequenceId"/>
@@ -292,8 +497,7 @@
         <wsColumn name="end_loc" wsName="end_loc"/>
         <wsColumn name="assoc_genes" wsName="assoc_genes"/>
     </processQuery>
-
-</querySet>
+  </querySet>
 
 </wdkModel>
 

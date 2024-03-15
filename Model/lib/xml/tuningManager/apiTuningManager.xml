@@ -116,7 +116,7 @@
   </tuningTable>
 
   <tuningTable name="OrganismSelectTaxonRank" prefixEnabled="false">
-    <comment>Taxon ranks for organisms                                                                                                     
+    <comment>Taxon ranks for organisms
     </comment>
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.TaxonName"/>
@@ -1111,7 +1111,7 @@ CREATE TABLE DataSourceCount nologging as (
         )
   )
     ]]>
-   </sql>
+    </sql>
 
 
     <sql>
@@ -1399,7 +1399,7 @@ and tn2.name_class = 'scientific name'
     </sql>
     <sql>
       <![CDATA[
-create index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
+create unique index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
 tablespace indx
       ]]>
     </sql>
@@ -1817,7 +1817,7 @@ FROM (
   SELECT ns.source_id as id, ns.source_id as sequence
   FROM dots.NaSequence ns, sres.OntologyTerm oterm
   WHERE ns.sequence_ontology_id = oterm.ontology_term_id
-    AND oterm.name in ('random_sequence', 'contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome','maxicircle')
+    AND oterm.name in ('random_sequence', 'contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome','maxicircle','kinetoplast')
 UNION
   SELECT dr.primary_identifier AS id, ns.source_id AS sequence
   FROM dots.NaSequence ns, dots.DbRefNaSequence drnf,
@@ -1911,7 +1911,7 @@ tablespace indx
     <sql>
       <![CDATA[
         CREATE TABLE TranscriptCenDistance&1 NOLOGGING AS
-        SELECT tl.feature_source_id AS transcript,
+        SELECT DISTINCT tl.feature_source_id AS transcript,
                LEAST(ABS(mfl.start_min - tl.end_max),
                      ABS(mfl.end_max - tl.start_min)) AS centromere_distance,
                tl.sequence_source_id AS genomic_sequence
@@ -2169,6 +2169,7 @@ tablespace indx
     </comment>
     <internalDependency name="GeneId"/>
     <internalDependency name="GenomicSeqAttributes"/>
+    <internalDependency name="GeneProduct"/>
     <externalDependency name="apidb.FeatureLocation"/>
     <externalDependency name="apidb.IntronLocation"/>
     <internalDependency name="ProjectTaxon"/>
@@ -2243,7 +2244,8 @@ SELECT DISTINCT cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar2(2
                          then 'pseudogene'
                          else 'unspecified product'
                        end) as varchar2(300))
-            as gene_product,
+            as old_gene_product,
+       nvl(gp.product, 'unspecified product') as gene_product,
        REPLACE(so.name, '_', ' ') AS gene_type,
        gf.name as gene_ebi_biotype,
        gi.gene_id,
@@ -2334,7 +2336,7 @@ FROM dots.GeneFeature gf, apidb.FeatureLocation nl, sres.OntologyTerm so,
      sres.externalDatabaseRelease soRls,
      sres.Taxon, sres.TaxonName tn, dots.RnaType rt1, dots.RnaType rt2,
      dots.Transcript t, sres.ExternalDatabase ed, sres.OntologyTerm tso,
-     &prefixGeneLocations gloc,
+     &prefixGeneLocations gloc, &prefixGeneProduct gp,
      sres.ExternalDatabaseRelease edr, dots.SplicedNaSequence sns,
      &prefixTranscriptUniprot&1 transcript_uniprot,
      (SELECT rna_feature_id, count(*) as exon_count
@@ -2512,6 +2514,7 @@ WHERE gf.source_id = gene.source_id
   AND t.na_feature_id = utr_lengths.transcript_na_feature_id
   AND t.sequence_ontology_id = tso.ontology_term_id
   AND gf.source_id = gloc.source_id
+  and gf.source_id = gp.source_id(+)
 ORDER BY tn.taxon_id, t.source_id
       ]]>
     </sql>
@@ -2735,8 +2738,11 @@ and ga.orthomcl_name is null
       Stores tuned data for the genemodelchar filter search
     </comment>
     <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="GeneIntronJunction"/>
+    <externalDependency name="apidb.LongReadTranscript"/>
     <sql>
-      <![CDATA[
+    
+     <![CDATA[
 create table &prefixGeneModelCharMD&1
  (
   ontology_term_name,
@@ -2794,6 +2800,31 @@ from (  select gene_source_id, source_id, taxon_id,
                'organism' as ontology_term_name, organism as string_value,
                null as number_value
         from TranscriptAttributes
+      UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id,
+               'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
+               null as number_value
+        from TranscriptAttributes atr
+        , apidb.LongReadTranscript ltr
+        where 
+        ltr.gene_source_id = atr.gene_source_id
+        
+     UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, 
+        'intron_junction' as ontology_term_name, it.string_value string_value,
+            null as number_value
+        from
+	 IntronSupportLevel it 
+        ,TranscriptAttributes atr
+        where it.gene_source_id =  atr.gene_source_id
+        
+     UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, 
+        'Unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value           
+        from 
+        geneintronjunction gj
+        ,TranscriptAttributes atr
+        where gj.gene_source_id =  atr.gene_source_id
      )
       ]]>
     </sql>
@@ -2804,6 +2835,9 @@ from (  select gene_source_id, source_id, taxon_id,
     <comment>
       Stores tuned data for the genemodelchar filter search. Portal-specific version including taxon names.
     </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="GeneIntronJunction"/>
+    <externalDependency name="apidb.LongReadTranscript"/>
     <sql>
       <![CDATA[
 create table &prefixGeneModelCharOrgMD&1
@@ -2823,7 +2857,7 @@ nologging
 as
 select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as varchar2(53)),
        cast(nvl(string_value,'NA') as varchar2(100)), nvl(number_value,-1)
-from (  select gene_source_id, source_id, taxon_id, organism,
+       from (  select gene_source_id, source_id, taxon_id, organism,
                'transcript_count' as ontology_term_name,
                null as string_value, gene_transcript_count as number_value
         from TranscriptAttributes
@@ -2866,6 +2900,40 @@ from (  select gene_source_id, source_id, taxon_id, organism,
                'organism' as ontology_term_name, organism as string_value,
                null as number_value
         from TranscriptAttributes
+        
+    UNION
+        SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
+        , string_value, number_value
+        FROM (
+            select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+                'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
+                 null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
+            from TranscriptAttributes atr
+            , apidb.longreadtranscript ltr
+            , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
+            where ltr.gene_source_id = atr.gene_source_id
+            AND ltr.transcript_length >= 20
+            GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
+        )
+        WHERE total_reads >= 5
+
+    UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'intron_junction' as ontology_term_name, it.string_value string_value,
+            null as number_value
+        from 
+        IntronSupportLevel it
+        ,TranscriptAttributes atr
+        where it.gene_source_id =  atr.gene_source_id
+     
+   
+     UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value           
+        from 
+        GeneIntronJunction gj
+        ,TranscriptAttributes atr
+        where gj.gene_source_id =  atr.gene_source_id
      )
       ]]>
     </sql>
@@ -2927,11 +2995,131 @@ from (  select gene_source_id, source_id, taxon_id, organism,
   </tuningTable>
 
 
+  <tuningTable name="GeneProduct" prefixEnabled="true">
+  <comment>A single product string per gene
+   </comment>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.Transcript"/>
+    <sql>
+      <![CDATA[
+        create table &prefixGeneProduct&1 as
+        with gfp_preferred
+             as (select source_id,
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
+                 from (select distinct gf.source_id,  gfp.product
+                       from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
+                       where gfp.na_feature_id = gf.na_feature_id
+                         and gfp.is_preferred = 1)
+                 group by source_id),
+             gfp_any
+             as (select source_id,
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
+                 from (select distinct gf.source_id,  gfp.product
+                       from dots.GeneFeature gf, apidb.GeneFeatureProduct gfp
+                       where gfp.na_feature_id = gf.na_feature_id)
+                       group by source_id),
+             tp_preferred
+             as (select source_id,
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
+                 from (select distinct gf.source_id, tp.product
+                       from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
+                       where t.parent_id = gf.na_feature_id
+                         and tp.na_feature_id = t.na_feature_id
+                         and tp.is_preferred = 1)
+                       group by source_id),
+             gf_product
+             as (select source_id, product
+                 from dots.GeneFeature gf
+                 where product is not null),
+             tp_any
+             as (select source_id,
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
+                 from (select distinct gf.source_id, tp.product
+                       from dots.GeneFeature gf, dots.Transcript t, apidb.TranscriptProduct tp
+                       where t.parent_id = gf.na_feature_id
+                         and tp.na_feature_id = t.na_feature_id)
+                       group by source_id),
+             t_product
+             as (select source_id,
+                        listagg(product, ', ' on overflow truncate) as product,
+                        count(*) as value_count
+                 from (select gf.source_id, t.product
+                       from dots.GeneFeature gf, dots.Transcript t
+                       where t.parent_id = gf.na_feature_id
+                         and t.product is not null)
+                       group by source_id)
+        select gf.source_id,
+               coalesce(gfp_preferred.product, gfp_any.product,
+                        tp_preferred.product, gf.product, tp_any.product,
+                        t_product.product, 'unspecified product')
+                 as product,
+               case
+                 when gfp_preferred.product is not null
+                   then gfp_preferred.value_count
+                 when gfp_any.product is not null
+                   then gfp_any.value_count
+                 when tp_preferred.product is not null
+                   then tp_preferred.value_count
+                 when gf.product is not null
+                   then 1
+                 when tp_any.product is not null
+                   then tp_any.value_count
+                 when t_product.product is not null
+                   then t_product.value_count
+                 else 0 -- 'unspecified product'
+               end
+                 as value_count,
+               case
+                 when gfp_preferred.product is not null
+                   then 1
+                 when gfp_any.product is not null
+                   then 2
+                 when tp_preferred.product is not null
+                   then 3
+                 when gf.product is not null
+                   then 4
+                 when tp_any.product is not null
+                   then 5
+                 when t_product.product is not null
+                   then 6
+                 else 7
+               end
+                 as source_rule
+        from dots.GeneFeature gf, gfp_preferred, gfp_any, tp_preferred, gf_product, tp_any, t_product
+        where gf.source_id = gfp_preferred.source_id(+)
+          and gf.source_id = gfp_any.source_id(+)
+          and gf.source_id = tp_preferred.source_id(+)
+          and gf.source_id = gf_product.source_id(+)
+          and gf.source_id = tp_any.source_id(+)
+          and gf.source_id = t_product.source_id(+)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+delete from &prefixGeneProduct&1 where product is null
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+CREATE INDEX GeneProduct_gene_idx&1 ON &prefixGeneProduct&1 (source_id, product)
+tablespace indx
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="GeneAttributes" prefixEnabled="true">
     <comment>The BFMV for the gene record. Each gene gets a single record, which
          stores all its attributes. 
     </comment>
     <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="GeneProduct"/>
     <ancillaryTable name="SpeciesInfo"/>
     <sql>
       <![CDATA[
@@ -2946,7 +3134,8 @@ from (  select gene_source_id, source_id, taxon_id, organism,
                 , decode(strand,'forward','+','reverse','-',null) as strand_plus_minus
 		, sequence_id
 		, gene_name AS name
-		, aggregates.product
+		, nvl(aggregates.product, aggregates.transcript_product) as old_product
+		, nvl(gp.product, 'unspecified product') as product
 		, gene_type
                 , gene_ebi_biotype
 		, gene_id
@@ -2992,8 +3181,9 @@ from (  select gene_source_id, source_id, taxon_id, organism,
                 , gene_zoom_context_end as zoom_context_end
                 , cast (null as number) as strain_count
                 , ta.gene_locations as locations
-            FROM &prefixTranscriptAttributes ta,
-                 (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo, MIN(gene_product) AS product
+            FROM &prefixTranscriptAttributes ta, &prefixGeneProduct gp,
+                 (SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo, MIN(gene_product) AS product,
+                         cast( substr(rtrim(xmlagg(xmlelement(e, transcript_product, ', ').extract('//text()') order by transcript_product).GetClobVal(), ', ') , 1, 240) as varchar2(80)) AS transcript_product
                   FROM &prefixTranscriptAttributes
                   GROUP BY gene_source_id) aggregates,
                  (select na_feature_id,
@@ -3016,6 +3206,7 @@ from (  select gene_source_id, source_id, taxon_id, organism,
                 )  uniprot
             WHERE ta.gene_source_id = aggregates.gene_source_id
               AND ta.gene_na_feature_id = uniprot.na_feature_id(+)
+              AND ta.gene_source_id = gp.source_id(+)
             ORDER BY ta.gene_source_id
       ]]>
     </sql>
@@ -3712,87 +3903,6 @@ tablespace indx
     </sql>
   </tuningTable>
 
-<!--
-  <tuningTable name="ChIPProtocolParams">
-    <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by GBrowse.
-     </comment>
-    <externalDependency name="rad.Analysis"/>
-    <externalDependency name="rad.AnalysisParam"/>
-    <externalDependency name="rad.ProtocolParam"/>
-    <sql>
-      <![CDATA[
-        create table ChIPProtocolParams&1 NOLOGGING AS
-select pp.*, e.experiment_name from
-(
-select a.analysis_id,
-       a.protocol_id,
-       antbd.antibody as antibody,
-       strn.strain as strain,
-       treamnt.treatment as treatment,
-       replcte.replicate as replicate,
-       gentyp.genotype as genotype,
-       celltyp.celltype as celltype,
-       CASE
-          WHEN lower(p.name) like '%peak%' then 'called_peaks'
-       ELSE 'raw'
-       END as protocol_type
-from   rad.analysis a,rad.protocol p,
-      (select ap.analysis_id,ap.value as antibody
-       from   rad.analysisparam ap,rad.protocolparam pp
-       where  ap.protocol_param_id = pp.protocol_param_id
-       and    lower(name) like 'antibody') antbd,
-      (select ap.analysis_id,ap.value as strain
-       from   rad.analysisparam ap,rad.protocolparam pp
-       where  ap.protocol_param_id = pp.protocol_param_id
-       and    lower(name) like 'strain') strn,
-      (select ap.analysis_id,ap.value as treatment
-       from   rad.analysisparam ap,rad.protocolparam pp
-       where  ap.protocol_param_id = pp.protocol_param_id
-       and    lower(name) like 'treatment') treamnt,
-      (select ap.analysis_id,ap.value as replicate
-       from   rad.analysisparam ap,rad.protocolparam pp
-       where  ap.protocol_param_id = pp.protocol_param_id
-       and    lower(name) like 'replicate') replcte,
-      (select ap.analysis_id,ap.value as genotype
-       from   rad.analysisparam ap,rad.protocolparam pp
-       where  ap.protocol_param_id = pp.protocol_param_id
-       and    lower(name) like 'genotype') gentyp,
-      (select ap.analysis_id,ap.value as celltype
-       from   rad.analysisparam ap,rad.protocolparam pp
-       where  ap.protocol_param_id = pp.protocol_param_id
-       and    lower(name) like 'celltype') celltyp
-where a.protocol_id = p.protocol_id
-and p.name in ('ChIP chip Smoothed',
-               'ChIP chip Peak Calls',
-                /* legacy ones too */
-                'NimbleScan_ChIP_Hakimi_called_peaks',
-                'NimbleScan_ChIP_Hakimi',
-                'NimbleGen_ChIP_Myler_Lmajor',
-                'ChIP_chip_Einstein',
-                'ChIP_chip_Einstein_called_peaks',
-                'ChIP_chip_Einstein_ME1',
-                'ChIP_chip_Einstein_ME1_Peak_Calls')
-and   a.analysis_id = antbd.analysis_id (+)
-and   a.analysis_id = strn.analysis_id (+)
-and   a.analysis_id = treamnt.analysis_id (+)
-and   a.analysis_id = replcte.analysis_id (+)
-and   a.analysis_id = gentyp.analysis_id (+)
-and   a.analysis_id = celltyp.analysis_id (+)
-) pp, (
-select replace(d.name, '_' || a.name || '_chipChipSample_RSRC', '') as experiment_name, a.analysis_id
-from sres.ExternalDatabase d, rad.analysis a
-where d.name like '%' || a.name ||'%_chipChipSample_RSRC') e
-where pp.analysis_id = e.analysis_id (+)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-       create index chp_prtparam_idx&1 ON ChIPProtocolParams&1 (analysis_id,protocol_id)
-tablespace indx
-      ]]>
-    </sql>
-  </tuningTable>
--->
 
   <tuningTable name="ChIPchipTranscript">
     <comment> Used by the GenesByChipChip(Plasmo|Toxo) query, as well as by
@@ -4605,10 +4715,11 @@ tablespace indx
     <comment>
       Mapping table of experiment and sample names to junction protocol_app_node_id
     </comment>
+    <externalDependency name="study.Characteristic"/>
     <externalDependency name="study.Study"/>
     <externalDependency name="study.StudyLink"/>
     <internalDependency name="ExternalDbDatasetPresenter"/>
-    <!-- internalDependency name="DatasetPresenter"/--> <!-- uncomment on master after release -->
+<!--     <internalDependency name="DatasetPresenter"/> --><!-- uncomment on master after release -->
     <internalDependency name="PANIO"/>
     <intermediateTable name="JunExpGIJtmp"/>
     <intermediateTable name="MappingStatsGIJtmp"/>
@@ -5601,7 +5712,7 @@ FROM (         SELECT organism,term,parentTerm, internal,project_id
                  select distinct
                         sp.name as organism, ot.parentTerm as parent,
                         regexp_replace(org.name_for_filenames,
-                                       org.strain_abbrev,'', 1, 1)
+                               replace( org.strain_abbrev, '/','_'),'', 1, 1)
                           as abbreviation
                  from sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org,
                       OrganismTree ot
@@ -6768,7 +6879,7 @@ select p.DATASET_NAME
       , p.source_id as gene_source_id
       , ga.sequence_id as sequence_id
       , row_number() over(partition by p.dataset_name
-                          order by p.max_value desc) as rn
+                          order by p.max_value desc, p.source_id, ga.sequence_id) as rn
 from profile p, geneattributes ga
 where dataset_type = 'transcript_expression' and dataset_subtype =  'rnaseq'
 and p.source_id = ga.source_id),
@@ -6778,7 +6889,7 @@ select ga.gene_source_id,
        ga.protein_source_id,
        d.name,
        row_number() over(partition by d.name
-                         order by mss.aa_seq_percent_covered desc) as rn
+                         order by mss.aa_seq_percent_covered desc, ga.gene_source_id) as rn
 from apidb.MassSpecSummary mss, TranscriptAttributes ga,
      sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
 where mss.external_database_release_id = r.external_database_release_id
@@ -6818,7 +6929,8 @@ and sa.rn = 1
 and dnt.name = pg.name (+)
 and dnt.name = rg.dataset_name (+)
 )
-select h.dataset_link_id, h.dataset_presenter_id, h.description
+select distinct
+       h.dataset_link_id, h.dataset_presenter_id, h.description
      , replace(h.text, 'DEFAULT_PROJECT', macros.project_id) as text
      , replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(h.url
                                             , 'DEFAULT_PROJECT', macros.project_id) 
@@ -7376,7 +7488,7 @@ and h.url like '/%'
     <externalDependency name="apidb.Datasource"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
-    <externalDependency name="apidb.eigengenewgcnaresults"/>
+    <externalDependency name="apidb.EigenGeneWgcnaResults"/>
     <externalDependency name="results.CompoundMassSpec"/>
     <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="results.NaFeatureHostResponse"/>
@@ -7811,7 +7923,7 @@ and h.url like '/%'
                        max(pan.name) keep(dense_rank last order by result.value) as max_timepoint, 
                        max(pan.name) keep(dense_rank first order BY result.value) as min_timepoint
                 from study.ProtocolAppNode pan, study.StudyLink sl, study.Study s,
-                     apidb.eigengenewgcnaresults result 
+                     apidb.EigenGeneWgcnaResults result 
                      where result.protocol_app_node_id = sl.protocol_app_node_id
                        and result.protocol_app_node_id = pan.protocol_app_node_id
                        and sl.study_id = s.study_id
@@ -8056,7 +8168,7 @@ and h.url like '/%'
           pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
           pt.profile_set_suffix
         FROM profileType pt, study.study s, study.studyLink sl,
-          study.protocolAppNode pan, apidb.eigengenewgcnaresults r
+          study.protocolAppNode pan, apidb.EigenGeneWgcnaResults r
         WHERE pt.profile_study_id = s.study_id
         AND sl.study_id = s.study_id
         AND sl.protocol_app_node_id = pan.protocol_app_node_id
@@ -8295,7 +8407,7 @@ and h.url like '/%'
         CREATE TABLE GeneModelDump&1 NOLOGGING as
          SELECT source_id, project_id, sequence_id, gm_start,gm_end, type, is_reversed,
   listagg(transcript_id, ',') within GROUP(ORDER BY transcript_id) AS transcript_ids
- from ( select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, '@PROJECT_ID@' as project_id,
+ from ( select distinct ta.source_id as transcript_id, ta.gene_source_id as source_id, ta.project_id,
                 ta.sequence_id,gm.start_min as gm_start, gm.end_max as gm_end,
                 gm.type, gl.is_reversed
          from
@@ -8442,6 +8554,7 @@ with all_pairs
               , ota.project_id as ortho_project_id
               , ota.gene_na_feature_id as ortho_na_feature_id
               , ota.transcript_product as ortho_product
+              , ota.protein_length
               , ga.name as ortho_name
               , ota.organism as ortho_organism
               , ota.taxon_id as ortho_taxon_id
@@ -8902,11 +9015,13 @@ tablespace indx
   <tuningTable name="TranscriptGenomicSequence">
     <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
     </comment>
+<!-- COMMENTING OUT DEPENDENCIES FOR NOW -->
     <externalDependency name="apidb.TranscriptLocation"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.TaxonName"/>
+
     <sql>
       <![CDATA[
       create table TranscriptGenomicSequence&1 nologging as
@@ -8981,7 +9096,7 @@ tablespace indx
     </sql>
     <sql>
       <![CDATA[
-        create index txgseq_idx&1
+        create unique index txgseq_idx&1
           on TranscriptGenomicSequence&1(source_id, gene_source_id, project_id)
           tablespace indx
       ]]>
@@ -9301,6 +9416,218 @@ tablespace indx
       ]]>
     </sql>
 
+  </tuningTable>
+
+
+  <tuningTable name="IntronSupportLevel" prefixEnabled="true">
+    <comment>
+      Stores intron support for introns
+    </comment>
+    <internalDependency name="GeneModelDump"/>
+    <internalDependency name="GeneIntronJunction"/>
+    <sql>
+
+     <![CDATA[
+create table &prefixIntronSupportLevel&1 NOLOGGING as 
+select * from (
+select gene_source_id, ontology_term, replace(string_value, 'All' , 'Any-high') as string_value from (
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All'
+    when count(*) = 0 THEN 'None'
+    else 'Any' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2 /*stats.perc0005_annot_percent_max*/)
+)
+group by gene_source_id, ontology_term, intron_count
+
+)
+where string_value = 'All'
+
+union
+
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All-high'
+    when count(*) = 0 THEN 'None'
+    else 'Any-high' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2)
+)
+group by gene_source_id, ontology_term, intron_count
+
+union
+
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All-low'
+    when count(*) = 0 THEN 'None'
+    else 'Any-low' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+AND gij.intron_feature_id not in (
+select gij.intron_feature_id
+from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+WHERE gij.na_sequence_id = stats.na_sequence_id
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2) )
+)
+group by gene_source_id, ontology_term, intron_count
+
+union
+select gene_source_id, ontology_term, replace(string_value, 'All' , 'Any-low') as string_value from (
+select gene_source_id
+, ontology_term
+, case when count(*) = intron_count THEN 'All'
+    when count(*) = 0 THEN 'None'
+    else 'Any' end as string_value 
+from (
+select gij.gene_source_id
+, 'intron_junction' as ontology_term
+, intronCount.intron_count
+from apidbtuning.geneintronjunction gij, ApidbTuning.GeneIntJuncStats stats
+, (select count (*) as intron_count, source_id from apidbtuning.genemodeldump where type = 'Intron' group by source_id) intronCount
+where gij.gene_source_id = intronCount.source_id
+and gij.na_sequence_id = stats.na_sequence_id
+and gij.annotated_intron = 'Yes'
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
+AND gij.intron_feature_id not in (
+select gij.intron_feature_id
+from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+WHERE gij.na_sequence_id = stats.na_sequence_id
+AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
+AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
+AND (gij.contained = 0 or gij.percent_max >= 2) )
+)
+group by gene_source_id, ontology_term, intron_count
+
+)
+where string_value = 'All'
+)
+
+
+]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="AllGeneProducts" prefixEnabled="true">
+    <comment>
+      all products for each gene
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="GeneProduct"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.OntologyTerm"/>
+
+    <sql>
+     <![CDATA[
+       create table &prefixAllGeneProducts&1 NOLOGGING as 
+         with evids
+            as (select distinct gaiec.go_evidence_code_id, ot.name
+                from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                where ot.ontology_term_id = gaiec.go_evidence_code_id)
+         select ta.gene_source_id AS source_id, tp.product, ta.project_id,
+                decode(tp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+                listagg(source_id, ', ') within group(order by source_id) as transcript_ids,
+                listagg(publication, ', ') within group(order by source_id) as reference,
+                e.name as evidence_code, tp.with_from as evidence_code_parameter,
+                tp.assigned_by, 'apidb.TranscriptProduct' as source
+         from apidb.TranscriptProduct tp, TranscriptAttributes ta, evids e
+         where ta.na_feature_id = tp.na_feature_id
+           and tp.evidence_code = e.go_evidence_code_id(+)
+         group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
+               tp.with_from, tp.assigned_by
+       union
+         select ga.source_id as source_id, gfp.product, ga.project_id,
+                decode(gfp.is_preferred, 1, 'No', 0, 'Yes') as is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'apidb.GeneFeatureProduct' as source
+         from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+         where ga.na_feature_id = gfp.na_feature_id
+       union
+         select ga.source_id as source_id, gf.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'dots.GeneFeature' as source
+         from dots.GeneFeature gf, GeneAttributes ga, GeneProduct gp
+         where ga.na_feature_id = gf.na_feature_id
+           and gf.product is not null
+           and ga.source_id = gp.source_id
+           and gp.source_rule >= 3 -- no product in apidb.GeneFeatureProduct
+       union
+         select ta.gene_source_id AS source_id, t.product, ta.project_id,
+                null as is_alternate,
+                listagg(ta.source_id, ', ') within group(order by ta.source_id) as transcript_ids,
+                null as reference, null as evidence_code, null as evidence_code_parameter,
+                null as assigned_by, 'dots.Transcript' as source
+         from TranscriptAttributes ta, dots.Transcript t
+         where ta.na_feature_id = t.na_feature_id
+           and t.product is not null
+           and ta.gene_source_id
+               not in (select source_id
+                   from GeneProduct
+                   where source_rule < 6) -- product only in dots.Transcript
+         group by ta.gene_source_id, ta.project_id, t.product
+       union
+         select gp.source_id as source_id, gp.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'unspecified product' as source
+         from GeneProduct gp, GeneAttributes ga
+         where gp.source_rule = 7
+           and gp.source_id = ga.source_id
+       order by is_alternate desc, transcript_ids
+       ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create index allGeneProds_idx&1
+        on &prefixAllGeneProducts&1 (source_id, product)
+        tablespace indx
+      ]]>
+    </sql>
   </tuningTable>
 
 </tuningConfig>

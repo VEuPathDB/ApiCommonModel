@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <wdkModel>
 
+  <constant name="wgcnaModuleSearchVisibleHelp">
+    <![CDATA[
+             <p>Choose a co-expression module from the list below.  The resulting list of genes will have a similar expression profile for this study.</p>
+             <p>To help identify modules of interest, you may first <a target="_blank" href="@LEGACY_WEBAPP_BASE_URL@/app/workspace/analyses/DS_82dc5abc7f/new/visualizations/new">Explore and visualize this Study</a> by plotting sample details (clinical traits) and module eigengenes (best summary of standardized module expression data).</p>
+             <ul>
+             <li>Scatter plots:  Choose a clinical trait for the x-axis and module eigengene for y-axis.  Optionally add Facets, Overlays and trendline.</li>
+             <li>Correlation apps:  Find correlations between module eigengenes and clinical traits OR find correlations between eigengenes.  When applicable, wgcna modules are computed independently for both host and parasite genomes (ie. host eigengenes can be correlated with parasite ones).</li>
+             <li>Browse and Subset:  Use the <a target="_blank" href="@LEGACY_WEBAPP_BASE_URL@//app/workspace/analyses/DS_82dc5abc7f/new">Browse and Subset tab</a> to explore this Study by looking at distributions of clinical traits.  This is also useful for filtering samples prior to plotting.</li>
+             </ul>
+             <p>After running this search you can continue your analysis from the gene results page.  Examine individual gene pages OR click "Analyze Results" to look for function enrichment (GO/Pathway Enrichment tools).</p>
+          ]]>
+</constant>
+
   <querySet name="GeneId" queryType="id" isCacheable="true">
 
     <postCacheUpdateSql excludeProjects="UniDB">
@@ -143,7 +156,8 @@ from apidbtuning.transcriptattributes t
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- Question for GenesByLOPIT -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="GenesByLopit" includeProjects="ToxoDB,UniDB">
+    <sqlQuery name="GenesByLopit" includeProjects="ToxoDB,TriTrypDB,UniDB">
+        <paramRef ref="organismParams.organismWithLopitData"/>
         <paramRef ref="geneParams.lopit_method"/>
         <paramRef ref="geneParams.lopit_filter"/>
         <column name="source_id"/>
@@ -1003,6 +1017,105 @@ FROM
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
         <wsColumn name="source"  width="50" wsName="source"/>
     </processQuery>
+<!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+<!--  			Talon Long Read				  -->
+<!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+   <sqlQuery name="GenesByISM" includeProjects="PlasmoDB,ToxoDB" >
+	    <paramRef ref="geneParams.long_read_datasets"/>
+        <paramRef ref="geneParams.ismTypes"/>
+        <paramRef ref="sharedParams.supporting_read_count"/>
+	    <paramRef ref="sharedParams.transcript_length"/>
+        <column name="project_id"/>
+        <column name="source_id"/>
+        <column name="gene_source_id"/>
+        <column name="num_new_models"  />
+        <column name="transcript_novelty"/>
+        <column name="incomplete_splice_match_type"/>
+	    <column name="matched_result"/>
+        <!-- these used for JBrowse link -->
+        <column name="min_start"/>
+        <column name="max_end"/>
+    	<column name="internal_abbrev"/>
+	    <column name="all_datasets"/>
+	    <column name="na_seq_source_id"/>
+	    <column name="contextStart"/>
+	    <column name="contextEnd"/>
+        <sql>
+
+        <![CDATA[
+	    select distinct source_id
+        , gene_source_id
+        , count(source_id) as num_new_models
+        , min(transcript_length) as min_new_transcript_length
+        , max(transcript_length) as max_new_transcript_length
+        , listagg(distinct gene_novelty, ', ') within group (order by gene_novelty) as gene_novelty
+        , listagg(distinct transcript_novelty, ', ') within group (order by transcript_novelty) as transcript_novelty
+        , listagg(distinct incomplete_splice_match_type, ', ') within group (order by incomplete_splice_match_type) as incomplete_splice_match_type
+        , min(min_start) as min_start
+	    , min(min_start) - 1000 as contextStart
+        , max(max_end) as max_end
+	    , max(max_end) + 1000 contextEnd
+        , project_id
+	    , listagg( distinct dataset_name || '_high_confidence_models',',') as all_datasets
+	    , na_seq_source_id
+	    , internal_abbrev
+        , 'Y' as matched_result
+        from (
+                select ed.name as dataset_name
+		        , ab.internal_abbrev
+                , lrt.gene_source_id
+                , lrt.transcript_length
+                , lrt.gene_novelty
+                , lrt.transcript_novelty
+                , lrt.incomplete_splice_match_type
+                , lrt.min_start
+                , lrt.max_end
+                , lrt.na_seq_source_id
+                , ta.project_id
+                , ta.source_id
+                , sum(count_table.reads) as totalReads
+                from apidb.longreadtranscript lrt
+                , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) count_table
+                , sres.externaldatabaserelease edr
+                , sres.externaldatabase ed
+                , apidbtuning.transcriptattributes ta
+		        , apidbtuning.organismattributes ab
+                , apidbtuning.datasetPresenter dp
+                where edr.external_database_release_id = lrt.external_database_release_id
+                and ed.external_database_id = edr.external_database_id
+                and ta.gene_source_id = lrt.gene_source_id
+		        and ab.organism_name = ta.organism
+                and ed.name = dp.name
+		        and lrt.transcript_length >= $$transcript_length$$
+		        and (lrt.transcript_novelty in ($$ismTypes$$) or (lrt.transcript_novelty = 'ISM' and lrt.incomplete_splice_match_type in ($$ismTypes$$)))
+                GROUP BY ed.name, ab.internal_abbrev, lrt.gene_source_id, lrt.transcript_length, lrt.gene_novelty, lrt.transcript_novelty
+                , lrt.incomplete_splice_match_type, lrt.min_start, lrt.max_end, lrt.na_seq_source_id, ta.project_id, ta.source_id
+        )
+        where dataset_name = '$$long_read_datasets$$'
+        AND totalReads >= $$supporting_read_count$$
+        group by source_id, gene_source_id, project_id, na_seq_source_id,internal_abbrev
+        ]]>
+	</sql>
+    </sqlQuery>
+
+
+    <processQuery name="GenesByISM" 
+             includeProjects="EuPathDB"
+             processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
+	    <paramRef ref="geneParams.long_read_datasets"/>
+        <paramRef ref="geneParams.ismTypes"/>
+        <paramRef ref="sharedParams.supporting_read_count"/>
+        <paramRef ref="sharedParams.transcript_length"/>
+        <wsColumn name="source_id" width="50" wsName="source_id"/>
+        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+        <wsColumn name="project_id" width="20" />
+        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+        <wsColumn name="num_new_models" width="50" wsName="num_new_models"/>
+        <wsColumn name="transcript_novelty" width="50" wsName="transcript_novelty"/>
+        <wsColumn name="incomplete_splice_match_type" width="50" wsName="incomplete_splice_match_type"/>
+	
+    </processQuery>
 
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -1789,10 +1902,14 @@ AND 1=0
 --                       when ($$go_term_slim$$ = 'No' and (gs.is_go_slim = '1' or gs.is_go_slim = '0')) then 1 
 --                       else 0
  --                 end = 1 
-                AND (gs.go_id IN ($$go_typeahead$$)
-                     OR (lower(gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))
-                     OR lower( gs.go_id) like lower(REPLACE($$go_term$$, '*', '%'))
-                     OR lower(gs.go_id || ' : ' || gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%'))) )
+                AND (
+                  gs.go_id IN ($$go_typeahead$$) OR (
+                    $$go_term$$ != 'N/A' AND (               
+                      lower(gs.go_term_name) like lower(REPLACE($$go_term$$, '*', '%')) OR
+                      gs.go_id = upper($$go_term$$)
+                    )
+                  )
+                )
               GROUP BY gs.transcript_source_id, gs.gene_source_id, ta.project_id
               ORDER BY gs.transcript_source_id
            ]]>
@@ -2470,8 +2587,8 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
     <sqlQuery name="GenesByWGCNAModule" excludeProjects="EuPathDB" >
         <paramRef ref="geneParams.wgcnaParam">
           <visibleHelp><![CDATA[
-            <img id="wgcna_image" src="" height="300px" width="800px" style="vertical-align:middle;margin-top:30px">
-            <br><br>Module eigengene profile (first principle component)<br><br>
+           %%wgcnaModuleSearchVisibleHelp%%
+
           ]]></visibleHelp>
         </paramRef>
         <paramRef ref="geneParams.wgcnaDataset"/>
@@ -2501,8 +2618,7 @@ if these values change, then they must be updated in the WdkQueryPlugin.java fil
            processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin"> 
         <paramRef ref="geneParams.wgcnaParam">
           <visibleHelp><![CDATA[
-            <img id="wgcna_image" src="" height="300px" width="800px" style="vertical-align:middle;margin-top:30px">
-            <br><br>Module eigengene profile. Representative of all genes within the module (the module's first principle component)<br><br>
+           %%wgcnaModuleSearchVisibleHelp%%
            ]]></visibleHelp>
         </paramRef>
         <paramRef ref="geneParams.wgcnaDataset"/>
@@ -2813,8 +2929,7 @@ from (with genesample
 
       <!-- TODO:  check this param.  not there in trunk when merged-->
 
-        <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.withChromosomes" displayType="select" includeProjects="TriTrypDB,ToxoDB,PlasmoDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,VectorBase,UniDB" quote="true"> <help>Select the organism you wish to query against.</help></paramRef>
-        <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.withChromosomes" displayType="select" includeProjects="CryptoDB" quote="true" default="Cryptosporidium parvum Iowa II"> <help>Select the organism you wish to query against.</help></paramRef>
+        <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.withChromosomes" displayType="select" includeProjects="CryptoDB,TriTrypDB,ToxoDB,PlasmoDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,VectorBase,UniDB" quote="true"> <help>Select the organism you wish to query against.</help></paramRef>
 
         <paramRef ref="sharedParams.chromosomeOptional" includeProjects="UniDB,PlasmoDB,ToxoDB,CryptoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,HostDB,FungiDB,VectorBase"  queryRef="SharedVQ.ChromosomeOrderNum"/>
         <paramRef ref="sharedParams.sequenceId"/>
@@ -3135,7 +3250,7 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
         <testParamValues includeProjects="TriTrypDB">
             <paramValue name="ngsSnp_strain_meta">Tb-927</paramValue>
         </testParamValues>
-        <paramRef ref="organismParams.organismSinglePick" displayType="select" queryRef="organismVQ.withNgsSNPdatasets" quote="false" noTranslation="true">
+        <paramRef ref="organismParams.organismSinglePick" displayType="treeBox" queryRef="organismVQ.withNgsSNPsTree" quote="false" noTranslation="true">
           <help>The organism you choose will determine the strains/isolates from which you can identify SNPs.</help >
         </paramRef>
 
@@ -3269,11 +3384,9 @@ cds_snp_density, chip_dn_ds_ratio, chip_num_synonymous, chip_num_non_synonymous,
             WHERE ir.interpro_db_name = $$domain_database$$
               AND (ir.interpro_primary_id IN($$domain_typeahead$$)
                    OR ir.interpro_secondary_id IN($$domain_typeahead$$)
-                   OR regexp_like (lower(interpro_primary_id),   lower(REPLACE('(^|\s)'||$$domain_accession$$||'(\s|$)', '*', '%')))
-                   OR regexp_like (lower(interpro_secondary_id), lower(REPLACE('(^|\s)'||$$domain_accession$$||'(\s|$)', '*', '%')))
-                   OR regexp_like (lower(interpro_desc),         lower(REPLACE('(^|\s)'||$$domain_accession$$||'(\s|$)', '*', '%')))
-                   OR regexp_like (lower(interpro_primary_id)||' : '||lower(interpro_secondary_id)
-                      ,    lower(REPLACE('(^|\s)'||$$domain_accession$$||'(\s|$)', '*', '%')))
+                   OR lower(interpro_primary_id)   LIKE  lower(REPLACE($$domain_accession$$, '*', '%'))
+                   OR lower(interpro_secondary_id) LIKE  lower(REPLACE($$domain_accession$$, '*', '%'))
+                   OR lower(interpro_desc)         LIKE  lower(REPLACE($$domain_accession$$, '*', '%'))
                   )
               AND ir.organism IN ($$organism$$)
               GROUP BY ir.transcript_source_id,ir.gene_source_id,ir.project_id
@@ -3517,9 +3630,9 @@ SELECT q.*, 'Y' as matched_result FROM
     </processQuery>
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- Expression Percentiles ToxoDB -->
+  <!-- Expression Percentiles  -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="GenesByGenericPercentile" includeProjects="AmoebaDB,CryptoDB,ToxoDB,TriTrypDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,VectorBase,UniDB">
+    <sqlQuery name="GenesByGenericPercentile" excludeProjects="EuPathDB">
 
         <testParamValues>
          <paramValue name="samples_percentile_generic" selectMode="first"/>
@@ -3721,105 +3834,6 @@ SELECT a.gene_source_id, 'PlasmoDB' as project_id, a.lod_score, b.cut_off_score
 
 
 
-
-
-    <sqlQuery name="GenesByGenericFoldChangeWithConfidence" includeProjects="AmoebaDB,ToxoDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,VectorBase,UniDB"  >
-
-    <testParamValues>
-      <paramValue name="samples_fc_ref_generic" selectMode="all"/>
-      <paramValue name="samples_fc_comp_generic" selectMode="first"/>
-    </testParamValues>
-
-      <paramRef ref="geneParams.profileset_generic"/>
-      <paramRef ref="geneParams.regulated_dir"/>
-      <paramRef ref="geneParams.samples_fc_ref_generic"/>
-      <paramRef ref="geneParams.samples_fc_comp_generic"/>
-      <paramRef ref="geneParams.fold_change"/>
-      <paramRef ref="geneParams.confidence"/>
-      <paramRef ref="geneParams.protein_coding_only"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="confidence"/>
-        <column name="fold_change"/>
-        <column name="group_one_value"/>
-        <column name="group_two_value"/>
-
-      <sqlParamValue name="isLogged">1</sqlParamValue>
-      <sqlParamValue name="shift">1</sqlParamValue>
-      <sql>
-      <![CDATA[
-                       select distinct grp1.source_id, 'Y' as matched_result,
-                         '@PROJECT_ID@' as project_id,
-                       de.confidence as confidence,
-                       round((CASE WHEN grp1.value / grp2.value >= 1
-                                  THEN grp1.value / grp2.value
-                                  ELSE -1 * (grp2.value  / grp1.value)
-                                  END),1) as fold_change,
-                       round(grp1.value,1) as group_one_value,
-                       round(grp2.value,1) as group_two_value
-                from   (select    p.source_id,
-                                  pen.profile_element_name_id,
-                                  CASE WHEN &&isLogged&& != 1 THEN pe.value + &&shift&& ELSE power(2, pe.value) END as value
-                        from      apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
-                        where     pen.profile_element_name_id = $$samples_fc_comp_generic$$
-                        and       p.profile_set_id = pen.profile_set_id
-                        and       pe.profile_id = p.profile_id
-                        and       pe.profile_element_name_id = pen.profile_element_name_id) grp1,
-                       (select    p.source_id,
-                                  pen.profile_element_name_id,
-                                  CASE WHEN &&isLogged&& != 1 THEN pe.value + &&shift&& ELSE power(2, pe.value) END as value
-                        from      apidb.profileelementname pen, 
-                                  apidb.profile p, apidb.profileelement pe,
-                                  apidb.profileset ps
-                        where     pen.profile_element_name_id = $$samples_fc_ref_generic$$
-                        and       p.profile_set_id = pen.profile_set_id
-                        and       pe.profile_id = p.profile_id
-                        and       ps.profile_set_id = p.profile_set_id
-                        and       pe.profile_element_name_id = pen.profile_element_name_id) grp2,
-                       rad.logicalgrouplink lgl1,
-                       rad.logicalgrouplink lgl2,   
-                       ApidbTuning.GeneAttributes ga,
-                       rad.analysisinput ai, 
-                       rad.differentialexpression de
-                where grp1.profile_element_name_id = lgl1.row_id
-                and   grp2.profile_element_name_id = lgl2.row_id
-                and   grp1.source_id = grp2.source_id
-                and   ga.source_id = grp2.source_id
-                and   lgl1.logical_group_id = lgl2.logical_group_id
-                and   ai.logical_group_id = lgl1.logical_group_id
-                and   ai.analysis_id = de.analysis_id
-                and   de.row_id = ga.na_feature_id
-                and   ($$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$) 
-                and   (de.confidence is null or de.confidence >= $$confidence$$)
-                and   ($$regulated_dir$$ (grp1.value / grp2.value)  >= $$fold_change$$
-                      OR $$regulated_dir$$ (-(grp2.value / grp1.value)) >= $$fold_change$$)
-   ]]>
-      </sql>
-    </sqlQuery>
-    
-     <processQuery name="GenesByGenericFoldChangeWithConfidence" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
-        <paramRef ref="geneParams.profileset_generic"/>
-        <paramRef ref="geneParams.regulated_dir"/>
-        <paramRef ref="geneParams.samples_fc_ref_generic"/>
-        <paramRef ref="geneParams.samples_fc_comp_generic"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.confidence"/>
-        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
-     
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="confidence" wsName="confidence"/>
-        <wsColumn name="fold_change" wsName="fold_change"/>
-        <wsColumn name="group_one_value" wsName="group_one_value"/>
-        <wsColumn name="group_two_value" wsName="group_two_value"/>
-    </processQuery>				
-
-
    <sqlQuery name="GenesByDESeqAnalysis" excludeProjects="EuPathDB">
       <testParamValues>
 	<paramValue name="samples_de_ref_generic_deseq"/>
@@ -3899,106 +3913,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
     </processQuery>				
 
 
-    <sqlQuery name="GenesByGenericFoldChangeWithFDR" includeProjects="AmoebaDB,ToxoDB,FungiDB,PlasmoDB,PiroplasmaDB,GiardiaDB,TriTrypDB,UniDB"  >
-
-    <testParamValues>
-      <paramValue name="samples_fc_ref_generic" selectMode="all"/>
-      <paramValue name="samples_fc_comp_generic" selectMode="first"/>
-    </testParamValues>
-
-      <paramRef ref="geneParams.profileset_generic"/>
-      <paramRef ref="geneParams.regulated_dir"/>
-      <paramRef ref="geneParams.samples_fc_ref_generic"/>
-      <paramRef ref="geneParams.samples_fc_comp_generic"/>
-      <paramRef ref="geneParams.fold_change"/>
-      <paramRef ref="geneParams.false_discovery_rate"/>
-      <paramRef ref="geneParams.protein_coding_only"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="false_discovery_rate"/>
-        <column name="fold_change"/>
-        <column name="group_one_value"/>
-        <column name="group_two_value"/>
-
-      <sqlParamValue name="isLogged">1</sqlParamValue>
-      <sqlParamValue name="shift">1</sqlParamValue>
-
-      <sql>
-      <![CDATA[
-                       select distinct grp1.source_id, 'Y' as matched_result,
-                         '@PROJECT_ID@' as project_id,
-                       de.false_discovery_rate as false_discovery_rate,
-                       round((CASE WHEN grp1.value / grp2.value >= 1
-                                  THEN grp1.value / grp2.value
-                                  ELSE -1 * (grp2.value  / grp1.value)
-                                  END),1) as fold_change,
-                       round(grp1.value,1) as group_one_value,
-                       round(grp2.value,1) as group_two_value
-                from   (select    p.source_id,
-                                  pen.profile_element_name_id,
-                                  CASE WHEN &&isLogged&& != 1 THEN pe.value + &&shift&& ELSE power(2, pe.value) END as value
-                        from      apidb.profileelementname pen, apidb.profile p, apidb.profileelement pe
-                        where     pen.profile_element_name_id = $$samples_fc_comp_generic$$
-                        and       p.profile_set_id = pen.profile_set_id
-                        and       pe.profile_id = p.profile_id
-                        and       pe.profile_element_name_id = pen.profile_element_name_id) grp1,
-                       (select    p.source_id,
-                                  pen.profile_element_name_id,
-                                  CASE WHEN &&isLogged&& != 1 THEN pe.value + &&shift&& ELSE power(2, pe.value) END as value
-                        from      apidb.profileelementname pen, 
-                                  apidb.profile p, apidb.profileelement pe,
-                                  apidb.profileset ps
-                        where     pen.profile_element_name_id = $$samples_fc_ref_generic$$
-                        and       p.profile_set_id = pen.profile_set_id
-                        and       pe.profile_id = p.profile_id
-                        and       ps.profile_set_id = p.profile_set_id
-                        and       pe.profile_element_name_id = pen.profile_element_name_id) grp2,
-                       rad.logicalgrouplink lgl1,
-                       rad.logicalgrouplink lgl2,   
-                       ApidbTuning.GeneAttributes ga,
-                       rad.analysisinput ai, 
-                       rad.differentialexpression de
-                where grp1.profile_element_name_id = lgl1.row_id
-                and   grp2.profile_element_name_id = lgl2.row_id
-                and   grp1.source_id = grp2.source_id
-                and   ga.source_id = grp2.source_id
-                and   lgl1.logical_group_id = lgl2.logical_group_id
-                and   ai.logical_group_id = lgl1.logical_group_id
-                and   ai.analysis_id = de.analysis_id
-                and   de.row_id = ga.na_feature_id
-                and   ($$protein_coding_only$$ = 'no' OR ga.gene_type = $$protein_coding_only$$) 
-                and   (de.false_discovery_rate is null or de.false_discovery_rate >= $$false_discovery_rate$$)
-                and   ($$regulated_dir$$ (grp1.value / grp2.value)  >= $$fold_change$$
-                      OR $$regulated_dir$$ (-(grp2.value / grp1.value)) >= $$fold_change$$)
-   ]]>
-      </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesByGenericFoldChangeWithFDR" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" doNotTest="true">
-        <paramRef ref="geneParams.profileset_generic"/>
-        <paramRef ref="geneParams.regulated_dir"/>
-        <paramRef ref="geneParams.samples_fc_ref_generic"/>
-        <paramRef ref="geneParams.samples_fc_comp_generic"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.false_discovery_rate"/>
-        <paramRef ref="geneParams.protein_coding_only" quote="false"/>
-     
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="false_discovery_rate" wsName="false_discovery_rate"/>
-        <wsColumn name="fold_change" wsName="fold_change"/>
-        <wsColumn name="group_one_value" wsName="group_one_value"/>
-        <wsColumn name="group_two_value" wsName="group_two_value"/>
-    </processQuery>				
-						   
-
-    <sqlQuery name="GenesByGenericFoldChange" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,VectorBase,UniDB"  >
-
+    <sqlQuery name="GenesByGenericFoldChange" excludeProjects="EuPathDB" >
         <testParamValues>
           <paramValue name="samples_fc_ref_generic" selectMode="all"/>
           <paramValue name="samples_fc_comp_generic" selectMode="first"/>
@@ -4171,7 +4086,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
     </processQuery>
 
-    <sqlQuery name="GenesByRnaSeqFoldChange" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,VectorBase,UniDB"  >
+    <sqlQuery name="GenesByRnaSeqFoldChange" excludeProjects="EuPathDB"  >
 
         <testParamValues>
           <paramValue name="samples_fc_ref_generic" selectMode="all"/>
@@ -4353,7 +4268,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <wsColumn name="chose_group_two" wsName="chose_group_two"/>
     </processQuery>
 
-    <sqlQuery name="GenesBySenseAntisense" includeProjects="AmoebaDB,ToxoDB,TriTrypDB,FungiDB,CryptoDB,PlasmoDB,PiroplasmaDB,GiardiaDB,MicrosporidiaDB,HostDB,UniDB,VectorBase"  >
+    <sqlQuery name="GenesBySenseAntisense"  excludeProjects="EuPathDB" >
 
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_direction"/>
         <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.antisense_fold_change"/>
@@ -5403,206 +5318,12 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
     </processQuery>
 
 
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- GenesByDifferentialExpression -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="GenesByDifferentialExpression" includeProjects="ToxoDB,UniDB">
-       <paramRef ref="geneParams.exprnsample"/>
-       <paramRef ref="geneParams.confidence"/>
-       <paramRef ref="geneParams.fold_change"/>
-       <paramRef ref="geneParams.regulated_dir"/>
-        <column name="project_id"/>
-        <column name="source_id" />
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="confidence" />
-        <column name="fold_change" />
-       <sql>
-            <![CDATA[
-          select '@PROJECT_ID@' as project_id, ga.source_id as source_id, 'Y' as matched_result,
-                 round(d.fold_change, 1) as fold_change, d.confidence
-          from rad.differentialexpression d, Core.tableInfo t , 
-               ApidbTuning.GeneAttributes ga, rad.analysis a 
-          where ga.na_feature_id = d.row_id 
-           and t.table_id = d.table_id
-           and a.analysis_id = d.analysis_id
-           and t.name = 'GeneFeature'
-           and $$regulated_dir$$(d.fold_change) >= $$fold_change$$
-           and d.confidence >= $$confidence$$
-           and a.name = $$exprnsample$$
-            ]]>
-          </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesByDifferentialExpression" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.exprnsample" quote="false"/>
-        <paramRef ref="geneParams.confidence"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.regulated_dir"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="confidence" />
-        <wsColumn name="fold_change" />
-    </processQuery>
-
-    <sqlQuery name="GenesByDifferentialExpressionChooseComparisons" includeProjects="ToxoDB,UniDB">
-
-        <testParamValues includeProjects="ToxoDB">
-            <paramValue name="lineages_b">GT1 (Type I) </paramValue>
-        </testParamValues>
-        <paramRef ref="geneParams.lineages_b"/>
-        <paramRef ref="geneParams.lineages_a"/>
-        <paramRef ref="geneParams.confidence"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.regulated_dir"/>
-        <column name="project_id"/>
-        <column name="source_id" />
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="confidence" />
-        <column name="fold_change" />
-        <sql>
-            <![CDATA[
-          select '@PROJECT_ID@' as project_id, ga.source_id as source_id, 'Y' as matched_result,
-                 d.confidence, round(d.fold_change, 1) as fold_change
-          from ApidbTuning.GeneAttributes ga, 
-               (select r.row_id, r.confidence, 
-                   case when lower(a.name) = $$lineages_a$$ || 'vs' || $$lineages_b$$
-                        then r.fold_change
-                        else -(r.fold_change)
-                   end as fold_change
-                from rad.analysis a, rad.differentialexpression r, core.tableinfo t
-                where a.analysis_id = r.analysis_id
-                  and r.table_id = t.table_id
-                  and t.name = 'GeneFeature'
-                  and (lower(a.name) = $$lineages_a$$ || 'vs' || $$lineages_b$$ 
-                    or lower(a.name) = $$lineages_b$$ || 'vs' || $$lineages_a$$)
-                ) d
-           where ga.na_feature_id = d.row_id
-             and $$regulated_dir$$(d.fold_change) >= $$fold_change$$
-             and d.confidence >= $$confidence$$
-            ]]>
-          </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesByDifferentialExpressionChooseComparisons" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <testParamValues>
-            <paramValue name="lineages_b">GT1 (Type I) </paramValue>
-        </testParamValues>
-        <paramRef ref="geneParams.lineages_b" quote="false"/>
-        <paramRef ref="geneParams.lineages_a" quote="false"/>
-        <paramRef ref="geneParams.confidence"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.regulated_dir"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="confidence" />
-        <wsColumn name="fold_change" />
-    </processQuery>
 
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- GenesByDifferentialExpression -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GiardiaGenesByDifferentialExpression" includeProjects="GiardiaDB,UniDB">
-       <paramRef ref="geneParams.gl_exprnsample"/>
-       <paramRef ref="geneParams.confidence"/>
-       <paramRef ref="geneParams.fold_change"/>
-       <paramRef ref="geneParams.regulated_dir"/>
-        <column name="project_id"/>
-        <column name="source_id" />
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="confidence" />
-        <column name="fold_change" />
-       <sql>
-            <![CDATA[
-               SELECT g.source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result,
-                      avg(round(de.fold_change, 2)) as fold_change,
-                      max(round(de.confidence, 2)) as confidence                   
-                 FROM rad.differentialExpression de, core.tableInfo ti, 
-                      rad.compositeElementNaSequence cs, dots.transcript t, 
-                      ApidbTuning.GeneAttributes g, rad.analysis a
-                WHERE ti.name = 'ShortOligoFamily'
-                  AND de.table_id = ti.table_id
-                  AND de.row_id = cs.composite_element_id
-                  AND cs.na_sequence_id = t.na_sequence_id
-                  AND t.parent_id = g.na_feature_id
-                  AND de.analysis_id = a.analysis_id
-                  AND a.name = $$gl_exprnsample$$
-                  AND de.confidence >= $$confidence$$
-                  AND ($$regulated_dir$$ (de.fold_change) >= $$fold_change$$)
-                  GROUP BY g.source_id
-            ]]>
-          </sql>
-    </sqlQuery>
-
-    <processQuery name="GiardiaGenesByDifferentialExpression" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.gl_exprnsample"  quote="false"/>
-        <paramRef ref="geneParams.confidence"/>
-        <paramRef ref="geneParams.fold_change"/>
-        <paramRef ref="geneParams.regulated_dir"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="confidence" />
-        <wsColumn name="fold_change" />
-    </processQuery>
-
-    <sqlQuery name="GiardiaGenesByDifferentialExpressionTwo" includeProjects="GiardiaDB,UniDB">
-       <paramRef ref="geneParams.gl_exprnsample_two"/>
-       <paramRef ref="geneParams.confidence"/>
-       <paramRef ref="geneParams.fold_change"/>
-       <paramRef ref="geneParams.regulated_dir"/>
-        <column name="project_id"/>
-        <column name="source_id" />
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="confidence" />
-        <column name="fold_change" />
-       <sql>
-            <![CDATA[
-               SELECT g.source_id,  '@PROJECT_ID@' as project_id, 'Y' as matched_result,
-                      round(de.fold_change, 2) as fold_change,
-                      round(de.confidence, 2) as confidence
-                 FROM rad.differentialExpression de, core.tableInfo ti,
-                      ApidbTuning.GeneAttributes g, rad.analysis a
-                 WHERE ti.name = 'GeneFeature'
-                   AND de.table_id = ti.table_id
-                   AND de.row_id = g.na_feature_id
-                   AND de.analysis_id = a.analysis_id
-                   AND a.name = $$gl_exprnsample_two$$
-                   AND de.confidence >= $$confidence$$
-                   AND ($$regulated_dir$$ (de.fold_change) >= $$fold_change$$)
-            ]]>
-          </sql>
-    </sqlQuery>
-
-    <processQuery name="GiardiaGenesByDifferentialExpressionTwo" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-       <paramRef ref="geneParams.gl_exprnsample_two"  quote="false"/>
-       <paramRef ref="geneParams.confidence"/>
-       <paramRef ref="geneParams.fold_change"/>
-       <paramRef ref="geneParams.regulated_dir"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="confidence" />
-        <wsColumn name="fold_change" />
-    </processQuery>
-
-
-    <sqlQuery name="GenesByDirectComparisonGeneric" includeProjects="AmoebaDB,PlasmoDB,GiardiaDB,TriTrypDB,FungiDB,CryptoDB,ToxoDB,UniDB,VectorBase"  >
+    <sqlQuery name="GenesByDirectComparisonGeneric" includeProjects="AmoebaDB,CryptoDB,GiardiaDB,PlasmoDB,FungiDB,TrichDB,TriTrypDB,ToxoDB,UniDB,VectorBase"  >
       <paramRef ref="geneParams.profileset_generic"/> 
       <paramRef ref="geneParams.regulated_dir"/>
       <paramRef ref="geneParams.samples_fc_ref_generic"/>
@@ -5725,7 +5446,7 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
 
 
 
-    <sqlQuery name="GenesByDirectComparisonGenericPValue" includeProjects="AmoebaDB,GiardiaDB,PlasmoDB,TriTrypDB,ToxoDB,UniDB">
+    <sqlQuery name="GenesByDirectComparisonGenericPValue" includeProjects="AmoebaDB,GiardiaDB,PlasmoDB,TrichDB,TriTrypDB,ToxoDB,UniDB">
        <paramRef ref="geneParams.profileset_generic"/>
        <paramRef ref="geneParams.regulated_dir"/>
        <paramRef ref="geneParams.samples_direct_generic_confidence"/>
@@ -5773,83 +5494,6 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <wsColumn name="project_id" width="20" />
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
         <wsColumn name="pvalue" />
-        <wsColumn name="fold_change" />
-    </processQuery>
-
-
-    <sqlQuery name="GenesByDirectComparisonGenericFDR" includeProjects="PlasmoDB,GiardiaDB,TriTrypDB,AmoebaDB,UniDB" >
-      <testParamValues>
-	<paramValue name="fold_change">0.55</paramValue>
-	<paramValue name="regulated_dir">down-regulated</paramValue>
-      </testParamValues>
-       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.profileset_generic"/>
-       <paramRef groupRef="paramGroups.dynamicParams" ref="geneParams.samples_direct_comp_fdr_generic"/>
-       <paramRef ref="geneParams.regulated_dir" default="down-regulated"/>
-       <paramRef ref="geneParams.fold_difference"/>
-       <paramRef ref="geneParams.false_discovery_rate" default="0.1"/>
-       <paramRef ref="geneParams.protein_coding_only"/>
-        <column name="project_id"/>
-        <column name="source_id" />
-        <column name="gene_source_id"/>
-        <column name="matched_result"/>
-        <column name="false_discovery_rate"/>
-        <column name="fold_change" />
-       <sql>
-            <![CDATA[
-     select source_id, 
-             project_id, 'Y' as matched_result,
-             fold_difference as fold_change,
-             false_discovery_rate
-      from (
-         SELECT ga.source_id,
-                ga.gene_type, 
-                'TriTrypDB' as project_id, 
-                round(fold_difference, 2) as fold_difference,
-                round(de.false_discovery_rate, 2) as false_discovery_rate
-          from ApidbTuning.GeneAttributes ga, 
-               rad.differentialexpression de, 
-               ( select p.subject_row_id as gene_feature_id,
-                       case when pe.value < 0
-                            then -1/nvl(power(2, pe.value), 1)
-                            else  nvl(power(2, pe.value), 1) 
-                       end as fold_difference
-            from apidb.profileelement pe, apidb.profile p
-            where pe.profile_element_name_id = $$samples_direct_comp_fdr_generic$$
-            and pe.profile_id = p.profile_id
-           ) expr,
-               rad.logicalgrouplink lgl,
-               rad.analysisinput ai,
-               (select logical_group_id from rad.logicalgrouplink GROUP BY logical_group_id having count(*) = 1) lg
-          where expr.gene_feature_id = de.row_id
-          and ga.na_feature_id = expr.gene_feature_id
-          and ai.analysis_id = de.analysis_id
-          and $$regulated_dir$$ (expr.fold_difference) >=  $$fold_difference$$
-          and de.false_discovery_rate <= $$false_discovery_rate$$
-          and ai.logical_group_id  = lgl.logical_group_id
-          and lgl.row_id = $$samples_direct_comp_fdr_generic$$ 
-          and lg.logical_group_id = ai.logical_group_id)
-          where ( $$protein_coding_only$$ = 'no' OR gene_type = $$protein_coding_only$$ )
-        ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesByDirectComparisonGenericFDR" includeProjects="EuPathDB"
-        doNotTest="true" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-      <testParamValues>
-	<paramValue name="fold_change">0.55</paramValue>
-	<paramValue name="regulated_dir">up-regulated</paramValue>
-      </testParamValues>
-       <paramRef ref="geneParams.profileset_generic" quote="false"/>
-       <paramRef ref="geneParams.samples_direct_comp_fdr_generic"/>
-       <paramRef ref="geneParams.false_discovery_rate" default="0.7"/>
-       <paramRef ref="geneParams.fold_difference"/>
-       <paramRef ref="geneParams.regulated_dir"/>
-       <paramRef ref="geneParams.protein_coding_only"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="false_discovery_rate" />
         <wsColumn name="fold_change" />
     </processQuery>
 
@@ -6284,97 +5928,6 @@ and ($$regulated_dir$$ ((r.fold_change *2)/2))  >= $$fold_change$$
         <wsColumn name="pdbIds" width="200"/>
     </processQuery>
 
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- GenesByProteinDbAccession -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- query appears unused
-    <sqlQuery name="GenesByProteinDbAccession" includeProjects="PlasmoDB"  >
-        <paramRef ref="geneParams.accession"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withPlasmoGenes" includeProjects="PlasmoDB"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withTriTrypGenes" includeProjects="TriTrypDB"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <sql>
-            <![CDATA[
-            SELECT DISTINCT gf.source_id, '@PROJECT_ID@' as project_id
-             FROM ApidbTuning.GeneAttributes gf, dots.DbRefNaFeature drnf,
-                  sres.DbRef dr, sres.ExternalDatabaseRelease edr,
-                  sres.ExternalDatabase ed, dots.ExternalNaSequence ens
-             WHERE (dr.primary_identifier = $$accession$$
-                    OR dr.secondary_identifier = $$accession$$)
-               AND gf.na_feature_id = drnf.na_feature_id
-               AND drnf.db_ref_id = dr.db_ref_id
-               AND dr.external_database_release_id
-                     = edr.external_database_release_id
-               AND edr.external_database_id = ed.external_database_id
-               AND ed.name IN ('NRDB_gb_dbXRefBySeqIdentity',
-                           /*  'NRDB_pdb_dbXRefBySeqIdentity', */
-                               'NRDB_ref_dbXRefBySeqIdentity',
-                               'NRDB_sp_dbXRefBySeqIdentity',
-                               'GenBank')
-              AND gf.na_sequence_id = ens.na_sequence_id
-              AND ens.taxon_id IN ($$organism$$)
-            ORDER BY gf.source_id
-            ]]>
-       </sql>
-    </sqlQuery>
-
-   -->
-<!-- I THINK IT I NOT USED 
-    <processQuery name="GenesByProteinDbAccession" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.accession"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withPlasmoGenes" includeProjects="PlasmoDB"/>
-        <paramRef ref="organismParams.organism" queryRef="organismVQ.withTriTrypGenes" includeProjects="TriTrypDB"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-    </processQuery>
--->
-
-
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-  <!-- GenesWithProteinLowComplexity -->
-  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-  <!--
-    <sqlQuery name="GenesWithProteinLowComplexity" includeProjects="PlasmoDB" >
-        <paramRef ref="geneParams.percentLowComplexity"/>
-        <paramRef ref="sharedParams.chromosome"/>
-        <column name="project_id"/>
-        <column name="source_id"/>
-        <column name="matched_result"/>
-        <sql>
-            <![CDATA[
-	    select gf.source_id, '@PROJECT_ID@' as project_id, 'Y' as matched_result
-	    from Dots.LowComplexityAAFeature lc, ApidbTuning.GeneAttributes gf,
-	         Dots.ExternalNASequence ens, Dots.AALocation al, 
-                 Dots.AASequence s, Dots.Transcript t, Dots.TranslatedAAFeature taf
-            where ens.source_id in ($$chromosome$$)
-            and gf.na_sequence_id = ens.na_sequence_id
-            and t.parent_id = gf.na_feature_id
-            and taf.na_feature_id = t.na_feature_id
-            and s.aa_sequence_id = taf.aa_sequence_id
-            and lc.aa_sequence_id = s.aa_sequence_id
-            and al.aa_feature_id = lc.aa_feature_id
-	    group by gf.source_id
-	    having sum(100 *(al.end_max - al.start_min)/s.length ) > $$percentLowComplexity$$
-            ORDER BY gf.source_id
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesWithProteinLowComplexity" includeProjects="EuPathDB"
-        processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="geneParams.percentLowComplexity"/>
-        <paramRef ref="sharedParams.chromosome"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-    </processQuery>
-   -->
 
 
     <sqlQuery name="ByWeightFilter"  doNotTest="true">
@@ -6674,33 +6227,30 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
                 AND tp.exact_match >= $$exact_match_only$$
                 AND ta.taxon_id in ($$organism$$)
             )
-
             , pathwayAgg AS (
                 SELECT DISTINCT gene_source_id
                 , source_id
                 , project_id
                 , ec_gene
-                , listagg(ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
+                , listagg(ec_pathway, ', ' on overflow truncate) within group (order by ec_pathway) as ec_pathway
                 FROM transform
                 GROUP BY gene_source_id, source_id, ec_gene, project_id
             )
-
             , geneAgg AS (
                 SELECT DISTINCT gene_source_id
                 , source_id
                 , project_id
                 , ec_pathway
-                , listagg(ec_gene, ', ') within group (order by ec_gene) as ec_gene
+                , listagg(ec_gene, ', ' on overflow truncate) within group (order by ec_gene) as ec_gene
                 FROM pathwayAgg
                 GROUP BY gene_source_id, source_id, ec_pathway, project_id
             )
-
             SELECT DISTINCT project_id
             , gene_source_id
             , source_id
             , 'Y' as matched_result
-            , listagg(ec_pathway, ', ') within group (order by ec_pathway) as ec_pathway
-            , listagg(ec_gene, ', ') within group (order by ec_pathway) as ec_gene
+            , listagg(ec_pathway, ', ' on overflow truncate) within group (order by ec_pathway) as ec_pathway
+            , listagg(ec_gene, ', ' on overflow truncate) within group (order by ec_pathway) as ec_gene
             FROM geneAgg
             GROUP BY project_id, gene_source_id, source_id, 'Y'
           ]]>
@@ -7015,6 +6565,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <paramRef ref="sharedParams.ds_gene_ids"/>
         <paramRef ref="geneParams.coexp_correlation" quote="false"/>
         <paramRef ref="geneParams.coexp_value"/>
+        <paramRef ref="geneParams.coexp_source"/>
         <column name="source_id"/>
         <column name="matched_result"/>
         <column name="gene_source_id"/>
@@ -7030,11 +6581,11 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
          , max(coefficient) as max_coeff, min(coefficient) as min_coeff 
   FROM  ApidbTuning.TranscriptAttributes ta, Apidb.FungiCoexpression c,
         ($$ds_gene_ids$$) ds, ApidbTuning.GeneId gi
-  WHERE  ds.gene_source_id = c.gene_id
-    AND  c.associated_gene_id = gi.id
-    AND  gi.gene= ta.gene_source_id
+  WHERE  gi.gene= ta.gene_source_id
+    AND ( ( c.gene_id = gi.id  AND  c.associated_gene_id = ds.gene_source_id ) 
+       OR ( c.gene_id = ds.gene_source_id  AND  c.associated_gene_id = gi.id ))
     AND  c.coefficient $$coexp_correlation$$ $$coexp_value$$
-    AND  c.source='Meyer'
+    AND  c.source=$$coexp_source$$
   GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
            ]]>
        </sql>
@@ -7045,48 +6596,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <paramRef ref="sharedParams.ds_gene_ids" noTranslation="true"/>
         <paramRef ref="geneParams.coexp_correlation" quote="false"/>
         <paramRef ref="geneParams.coexp_value"/>
-        <wsColumn name="source_id" width="50" wsName="source_id"/>
-        <wsColumn name="matched_result" width="1" wsName="matched_result"/>
-        <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
-        <wsColumn name="project_id" width="20" />
-        <wsColumn name="input_id" width="32"/>
-        <wsColumn name="min_coeff" width="10" wsName="min_coeff"/>
-        <wsColumn name="max_coeff" width="10" wsName="max_coeff"/>
-    </processQuery>
-
-
-    <sqlQuery name="GenesByCandidaCoexpression"  doNotTest="true" includeProjects="FungiDB,UniDB">
-        <paramRef ref="sharedParams.ds_gene_ids"/>
-        <paramRef ref="geneParams.coexp_value"/>
-        <column name="source_id"/>
-        <column name="matched_result"/>
-        <column name="gene_source_id"/>
-        <column name="project_id"/>
-        <column name="input_id"/>
-        <column name="min_coeff"/>
-        <column name="max_coeff"/>
-       <sql>
-        <![CDATA[
-  SELECT ta.gene_source_id, ta.source_id
-         ,ta.project_id, 'Y' as matched_result 
-         ,apidb.tab_to_string(SET(CAST(COLLECT(ds.gene_source_id) AS apidb.varchartab)), ', ') AS input_id
-         , max(coefficient) as max_coeff, min(coefficient) as min_coeff 
-  FROM  ApidbTuning.TranscriptAttributes ta, Apidb.FungiCoexpression c,
-        ($$ds_gene_ids$$) ds, ApidbTuning.GeneId gi
-  WHERE  ds.gene_source_id = c.gene_id
-    AND  c.associated_gene_id = gi.id
-    AND  gi.gene= ta.gene_source_id
-    AND  c.coefficient > $$coexp_value$$
-    AND  c.source='OMeara'
-  GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
-           ]]>
-       </sql>
-    </sqlQuery>
-
-    <processQuery name="GenesByCandidaCoexpression" includeProjects="EuPathDB" doNotTest="true"
-              processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin">
-        <paramRef ref="sharedParams.ds_gene_ids" noTranslation="true"/>
-        <paramRef ref="geneParams.coexp_value"/>
+        <paramRef ref="geneParams.coexp_source"/>
         <wsColumn name="source_id" width="50" wsName="source_id"/>
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
         <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
@@ -7137,6 +6647,8 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
     </processQuery>
 
 
+
+
     <sqlQuery name="GenesByAlphaFold" doNotTest="true" excludeProjects="EuPathDB">
         <paramRef ref="organismParams.organismsWithAlphafold"/>
         <column name="project_id"/>
@@ -7167,7 +6679,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
     </processQuery>
 
-    <sqlQuery name="GenesBySingleCell" doNotTest="true" includeProjects="TriTrypDB,PlasmoDB,PiroplasmaDB">
+    <sqlQuery name="GenesBySingleCell" doNotTest="true" includeProjects="TriTrypDB,PlasmoDB,PiroplasmaDB,ToxoDB,CryptoDB,HostDB">
         <paramRef ref="organismParams.organismsWithSingleCell"/>
         <paramRef ref="geneParams.singleCellDataset"/>
         <column name="project_id"/>
@@ -7209,6 +6721,7 @@ ORDER BY nfe.categorical_value DESC, nfe.value DESC
         <wsColumn name="dataset_name" width="500" wsName="dataset_name"/>
         <wsColumn name="matched_result" width="1" wsName="matched_result"/>
     </processQuery>
+
 
   </querySet>
 

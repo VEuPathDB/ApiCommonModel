@@ -1,0 +1,59 @@
+#!/usr/bin/perl
+use JSON;
+use strict;
+#use Data::Dumper;
+use YAML::Tiny;
+
+local $/;
+
+my ($printHistos) = @ARGV;
+
+# takes as input (STDIN) a JSON file that has table groups (uniqueTableGroups.json)
+# filters away groups that are purely apidb tuning tables
+# outputs to yaml
+
+my $jsonString = <STDIN>;
+my $json = JSON->new;
+my $data = $json->decode($jsonString);
+
+my $count = 0;
+my $printed = 0;
+my $queriesCount = 0;
+my $tablesHisto = {};
+my $queriesHisto = {};
+my $tableGroups = [];
+for my $group (@$data) {
+  my $tables = $group->{tables};
+  my $queries = $group->{queries};
+  my $tableGroup = {};
+  for my $table (@$tables) {
+    if ($table !~ /apidbtuning/i) {
+      $count++;
+      $queriesCount += ($queries->[0] =~ /RSRC/)? 1 : scalar(@$queries);
+      $tablesHisto->{scalar(@$tables)} += 1;
+      $queriesHisto->{scalar(@$queries)} += 1;
+      my $tablesString = join(", ", @$tables);
+      my $queriesString = join(", ", @$queries);
+      $tableGroup->{ID} = $count;
+      $tableGroup->{tables} = $tablesString;
+      $tableGroup->{queries} = $queriesString;
+      push(@$tableGroups, $tableGroup);
+      last;
+    }
+  }
+}
+
+if ($printHistos) {
+  print "\nTABLES HISTOGRAM\n";
+  for my $k (sort { $a <=> $b } keys %$tablesHisto) {
+    print "$k $tablesHisto->{$k}\n";
+  }
+  print "\nQUERIES HISTOGRAM\n";
+  for my $k (sort { $a <=> $b } keys %$queriesHisto) {
+    print "$k $queriesHisto->{$k}\n";
+  }
+  print "TOTAL QUERIES: $queriesCount\n";
+} else {
+  print Dump(@$tableGroups);
+}
+
