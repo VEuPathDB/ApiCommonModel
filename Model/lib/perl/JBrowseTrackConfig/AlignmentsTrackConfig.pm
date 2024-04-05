@@ -18,6 +18,8 @@ sub setYScalePosition {$_[0]->{yscale_position} = $_[1]}
 sub getChunkSizeLimit {$_[0]->{chunk_size}}
 sub setChunkSizeLimit {$_[0]->{chunk_size} = $_[1]}
 
+sub skipHistograms {$_[0]->{_skip_histograms}}
+
 
 sub new {
     my ($class, $args) = @_;
@@ -45,6 +47,10 @@ sub new {
     $self->setMin(500);
     $self->setYScalePosition("left");
     $self->setChunkSizeLimit(50000000);
+
+    if($args->{skip_histograms}) {
+      $self->{_skip_histograms} = 1;
+    }
 
     return $self;
 }
@@ -78,8 +84,10 @@ sub getJBrowseObject{
 
     $jbrowseObject->{urlTemplate}= $self->getUrlTemplate();
 
-    my $histograms = $self->getHistograms();
-    $jbrowseObject->{histograms} = $histograms;
+    unless($self->skipHistograms()) {
+      my $histograms = $self->getHistograms();
+      $jbrowseObject->{histograms} = $histograms;
+    }
 
     return $jbrowseObject;
 }
