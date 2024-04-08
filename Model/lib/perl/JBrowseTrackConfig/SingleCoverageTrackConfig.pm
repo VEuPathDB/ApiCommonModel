@@ -10,8 +10,8 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     $self->setUrlTemplate($args->{url_template});
-    my $datasetConfig = $self->getDatasetConfig()
-    my $studyDisplName = $datasetConfig->getStudyDisplayName();
+    my $datasetConfig = $self->getDatasetConfig();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
 
     my $label = $self->getLabel();
