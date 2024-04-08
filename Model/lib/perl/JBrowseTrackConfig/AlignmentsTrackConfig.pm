@@ -18,8 +18,19 @@ sub setYScalePosition {$_[0]->{yscale_position} = $_[1]}
 sub getChunkSizeLimit {$_[0]->{chunk_size}}
 sub setChunkSizeLimit {$_[0]->{chunk_size} = $_[1]}
 
-sub skipHistograms {$_[0]->{_skip_histograms}}
+sub getColorFwdStrand {$_[0]->{color_fwd_strand}}
+sub setColorFwdStrand {$_[0]->{color_fwd_strand} = $_[1]}
 
+sub getColorRevStrand {$_[0]->{color_rev_strand}}
+sub setColorRevStrand {$_[0]->{color_rev_strand} = $_[1]}
+
+sub getUrlTemplate {$_[0]->{url_template} }
+sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+
+sub getBorderColor {$_[0]->{border_color}}
+sub setBorderColor {$_[0]->{border_color} = $_[1]}
+
+sub skipHistograms {$_[0]->{_skip_histograms}}
 
 sub new {
     my ($class, $args) = @_;
@@ -31,6 +42,7 @@ sub new {
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $self->setDisplayType("JBrowse/View/Track/Alignments2");
         $self->setTrackTypeDisplay("Coverage (Read Alignments zoomed)");
+	$self->setUrlTemplate($args->{url_template});
     }
     else {
         $self->setTrackType("AlignmentsTrack");
@@ -38,10 +50,11 @@ sub new {
         $self->setTrackTypeDisplay("Alignment");
     }
 
-    my $displayName = $self->getDisplayName();
-    my $datasetName = $self->getDatasetName();
-
-    $self->setId("${datasetName}_${displayName}_Alignments");
+    #my $displayName = $self->getDisplayName();
+    #my $datasetName = $self->getDatasetName();
+    
+    $self->setId($args->{key});
+    #$self->setId("${datasetName}_${displayName}_Alignments");
     $self->setColor("black");
     $self->setMin(0);
     $self->setMin(500);
@@ -52,9 +65,27 @@ sub new {
       $self->{_skip_histograms} = 1;
     }
 
+    if(my $colorFwdStrand = $args->{color_fwd_strand}) {
+    $self->setColorFwdStrand($colorFwdStrand);
+	}
+    if(my $colorRevStrand = $args->{color_rev_strand}) {
+    $self->setColorRevStrand($colorRevStrand);
+        }
+
     return $self;
 }
 
+sub getJBrowseStyle {
+    my $self = shift;
+    my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+    
+    if ($self->getColorFwdStrand && $self->getColorRevStrand){
+	$jbrowseStyle->{color_fwd_strand}=$self->getColorFwdStrand;
+        $jbrowseStyle->{color_rev_strand}=$self->getColorRevStrand;
+	}
+
+    return $jbrowseStyle;
+}
 
 sub getHistograms {
     my $self = shift;
