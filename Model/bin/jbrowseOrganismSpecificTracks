@@ -12,7 +12,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::VCFStore;
-
+use ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 use ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig;
@@ -22,7 +22,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::SmallNcRnaSeq;
 use ApiCommonModel::Model::JBrowseTrackConfig::ApolloGffTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::SyntenyTrackConfig;
-
+use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 
 use Data::Dumper;
 
@@ -39,9 +39,11 @@ my %strain;
 my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType) = @ARGV;
 
 
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_organismSpecificCache.json"});
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_organismSpecificCache.json"});
 
-my $buildProps = $jbrowseUtil->getBuildProperties();
+my $datasetProps = $jbrowseUtil->getDatasetProperties();
+#print Dumper ($datasetProps); 
+#exit;
 
 #my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName});
 
@@ -53,29 +55,29 @@ my $nameForFilenames = &nameForFilenames($organismAbbrev, $dbh);
 my $result = {"tracks" => [] };
 
 ### Get organism properties
-my $orgHash = ($buildProps->{'organism'});
+my $orgHash = ($datasetProps->{'organism'});
 my $nameForFileNames = ($orgHash->{organismNameForFiles});
 my $projectName = ($orgHash->{projectName});
 my $isAnnotated = ($orgHash->{isAnnotatedGenome});
 
 #&addScaffolds($dbh, $result);
-&addCentromere($dbh, $result);
-&addUnifiedMassSpec($dbh, $result);
-&addUnifiedSnp($dbh, $result);
+#&addCentromere($dbh, $result);
+#&addUnifiedMassSpec($dbh, $result);
+#&addUnifiedSnp($dbh, $result);
 
 # TODO: Add back
- &addSynteny($dbh, $result);
+# &addSynteny($dbh, $result);
 
 #&addDatasets($dbh, \%datasets) unless($isApollo);
 
 # TODO: get these from buildProps
 #my $datasetProperties = &datasetProperties($dbh);
-my $datasetProperties = $buildProps;
+my $datasetProperties = $datasetProps;
 #print Dumper ($datasetProperties);
 #die;
 
-&addChipChipTracks($dbh, $result, $datasetProperties);
-&addSmallNcRnaSeq($dbh, $result, $datasetProperties);
+#&addChipChipTracks($dbh, $result, $datasetProperties);
+#&addSmallNcRnaSeq($dbh, $result, $datasetProperties);
 
 # TODO: Add back
 #&addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
@@ -92,7 +94,6 @@ if ($organismAbbrev !~ m/dmeliso-1/ ){
 #&addApolloGFF($dbh, $result);
 }
 #&addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFilenames);
-
 
 &addLongReadRNASeq($result, $datasetProperties, $nameForFilenames, $webservicesDir);
 
@@ -214,18 +215,18 @@ sub datasetProperties {
 #and dnt.name like '%_massSpec%_RSRC'
 #and dnt.dataset_presenter_id = prop.dataset_presenter_id
 #and prop.dataset_presenter_id = dsp.dataset_presenter_id
-UNION
---select name, presenter_id, property, value, ....
-select distinct dsp.name, dsp.dataset_presenter_id, prop.property, prop.value, dnt.name as extdbName
-from apidbtuning.datasetnametaxon dnt,
-     apidbtuning.datasetproperty prop,
-     apidbtuning.datasetpresenter dsp,
-     apidb.organism o
-where dnt.taxon_id = o.taxon_id
-and o.abbrev = '${organismAbbrev}'
-and dnt.name like '%_nanopore%_RSRC'
-and dnt.dataset_presenter_id = prop.dataset_presenter_id
-and prop.dataset_presenter_id = dsp.dataset_presenter_id
+#UNION
+#--select name, presenter_id, property, value, ....
+#select distinct dsp.name, dsp.dataset_presenter_id, prop.property, prop.value, dnt.name as extdbName
+#from apidbtuning.datasetnametaxon dnt,
+#     apidbtuning.datasetproperty prop,
+#     apidbtuning.datasetpresenter dsp,
+#     apidb.organism o
+#where dnt.taxon_id = o.taxon_id
+#and o.abbrev = '${organismAbbrev}'
+#and dnt.name like '%_nanopore%_RSRC'
+#and dnt.dataset_presenter_id = prop.dataset_presenter_id
+#and prop.dataset_presenter_id = dsp.dataset_presenter_id
 #";
 
 #  my $sh = $dbh->prepare($sql);
@@ -245,7 +246,7 @@ and prop.dataset_presenter_id = dsp.dataset_presenter_id
 sub addVCF {
   my ($dbh, $result, $datasetProperties, $nameForFilenames) = @_;
 
-  my $vcfDatasets = $buildProps->{vcffile} ? $buildProps->{vcffile} : {};
+  my $vcfDatasets = $datasetProps->{vcffile} ? $datasetProps->{vcffile} : {};
 
   foreach my $dataset (keys %$vcfDatasets) {
     next unless($dataset =~ /VCF/);
@@ -311,7 +312,7 @@ sub addMergedRnaSeq {
   my @urlArray;
   my $genomeName;
 
-  my $ebiRnaSeqDatasets = $buildProps->{ebirnaseq} ? $buildProps->{ebirnaseq} : {};
+  my $ebiRnaSeqDatasets = $datasetProps->{ebirnaseq} ? $datasetProps->{ebirnaseq} : {};
   foreach my $dataset (keys %$ebiRnaSeqDatasets) {
     next unless($dataset =~ /rnaSeq/);
 
@@ -408,7 +409,7 @@ my @urlArrayProject;
 sub addProteinExpressionMassSpec {
   my ($dbh, $result, $datasetProperties) = @_;
 
-  my $proteinExpressionMassSpecDatasets = $buildProps->{protexpmassspec} ? $buildProps->{protexpmassspec} : {};
+  my $proteinExpressionMassSpecDatasets = $datasetProps->{protexpmassspec} ? $datasetProps->{protexpmassspec} : {};
 
   foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
     next unless($dataset =~ /_massSpec_/);
@@ -448,10 +449,7 @@ my $queryParams = {
 sub addSmallNcRnaSeq {
   #my ($dbh, $result, $datasetProperties) = @_;
 
-
-my $smallNcRnaSeqDatasets = $buildProps->{smallncrnaseq} ? $buildProps->{smallncrnaseq} : {};
-
-   my $smallNcRnaSeqDatasets = $buildProps->{smallncrnaseq} ? $buildProps->{smallncrnaseq} : {};
+   my $smallNcRnaSeqDatasets = $datasetProps->{smallncrnaseq} ? $datasetProps->{smallncrnaseq} : {};
    foreach my $dataset (keys %$smallNcRnaSeqDatasets){
 
     next unless($dataset =~ /smallNcRna/);
@@ -885,11 +883,7 @@ sub addNrdbProteinAlignments {
   my ($dbh, $result, $datasetProperties, $projectName, $nameForFileNames) = @_;
 
   my $proteinAlignTrack;
-<<<<<<< HEAD
-  my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
-=======
     my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
->>>>>>> master
 
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
 
@@ -928,104 +922,124 @@ and ot.name ='tRNA'";
 sub addLongReadRNASeq {
   my ($result, $datasetProperties, $nameForFileNames, $webservicesDir) = @_;
 
-  foreach my $dataset (keys %$datasetProperties) {
+   my $LongReadRnaSeqDatasets = $datasetProps->{longreadrnaseq} ? $datasetProps->{longreadrnaseq} : {};
+
+   foreach my $dataset (keys %$LongReadRnaSeqDatasets){
     next unless($dataset =~ /nanopore_rnaSeqNextflow/);
 
     
 
-    my $datasetName = $datasetProperties->{$dataset}->{datasetName};
-    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-    my $datasetPresenterId = $datasetProperties->{$dataset}->{datasetPresenterId};
-    my $summary = $datasetProperties->{$dataset}->{summary};
+    my $datasetName = $LongReadRnaSeqDatasets->{$dataset}->{datasetName};
+    my $datasetDisplayName = $LongReadRnaSeqDatasets->{$dataset}->{datasetDisplayName};
+    my $datasetPresenterId = $LongReadRnaSeqDatasets->{$dataset}->{datasetPresenterId};
+    my $summary = $LongReadRnaSeqDatasets->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
-    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution}; 
+    my $shortAttribution = $LongReadRnaSeqDatasets->{$dataset}->{shortAttribution}; 
 
     #----------------------------
 
 
     my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/longReadRNASeq/gff/${datasetName}/${datasetName}\_sorted_updated.gff.gz");
-    my $featuresTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-                         urlTemplate => $gffUrl,
-                         key => "${datasetDisplayName} all models",
-                         label => "${datasetName}_all_models",
-                         category => "Gene Models",
-                         glyph => "JBrowse/View/FeatureGlyph/ProcessedTranscript",
-                         type => "NeatCanvasFeatures/View/Track/NeatFeatures",
-                         fmtMetaValue_Description => "function(){return datasetDescription(\"$summary\", \"\");}",
-                         metadata => {
-                             subcategory => "Long Read RNA-Seq",
-                             dataset => $datasetDisplayName,
-                             trackType => 'All Gene Models',
-                             description => $summary,
-                         },
-                         displayMode => "normal",
-                         transcriptType => "transcript",
-                         topLevelFeatures => "transcript",
-                         subParts => "exon",
-                         impliedUTRs => JSON::true,
-                         topLevelFeaturesPercent => 33,
+#    my $featuresTrack = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+#                         urlTemplate => $gffUrl,
+#                         key => "${datasetDisplayName} all models",
+#                         label => "${datasetName}_all_models",
+#                         category => "Gene Models",
+#                         glyph => "JBrowse/View/FeatureGlyph/ProcessedTranscript",
+#                         type => "NeatCanvasFeatures/View/Track/NeatFeatures",
+#                         fmtMetaValue_Description => "function(){return datasetDescription(\"$summary\", \"\");}",
+#                         metadata => {
+#                             subcategory => "Long Read RNA-Seq",
+#                             dataset => $datasetDisplayName,
+#                             trackType => 'All Gene Models',
+#                             description => $summary,
+#                         },
+#                         displayMode => "normal",
+#                         transcriptType => "transcript",
+#                         topLevelFeatures => "transcript",
+#                         subParts => "exon",
+#                         impliedUTRs => JSON::true,
+#                         topLevelFeaturesPercent => 33,
+#
+#                         onClick => {
+#                             action => "iframeDialog",
+#                             hideIframeDialogUrl =>  JSON::true,
+#                             url => "/a/app/embed-record/long_read_transcript/{transcript_id}_${datasetPresenterId}?tables=SampleInfo"
+#                         },
+#                         menuTemplate => [
+#                             {label =>  "View Details", content => "{longReadRnaSeqGffDetails}"},
+#                             ],
+#
+#                         style => {
+#                             showLabels => JSON::false,
+#                             label => "function(f){return \"Model is \" + f.get(\"transcript_status\") + \"; Supporting Reads=\" + f.get(\"totalCount\");}",
+#                             color => "{processedApolloTranscriptColor}",
+#                             borderColor => "{processedTranscriptBorderColor}",
+#                         },
+#
+#    };
 
-                         onClick => {
-                             action => "iframeDialog",
-                             hideIframeDialogUrl =>  JSON::true,
-                             url => "/a/app/embed-record/long_read_transcript/{transcript_id}_${datasetPresenterId}?tables=SampleInfo"
-                         },
-                         menuTemplate => [
-                             {label =>  "View Details", content => "{longReadRnaSeqGffDetails}"},
-                             ],
+      my $featuresTrack = ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig->new({
+												url_template => $gffUrl,
+                                                                                                application_type => $applicationType,
+                                                                                                key => "${datasetDisplayName} all models",
+                                                                                                label => "${datasetName}_all_models",
+												summary => $summary,
+												type => "NeatCanvasFeatures/View/Track/NeatFeatures",
+												url => "/a/app/embed-record/long_read_transcript/{transcript_id}_${datasetPresenterId}?tables=SampleInfo",
+                                                                                              })->getConfigurationObject();
 
-                         style => {
-                             showLabels => JSON::false,
-                             label => "function(f){return \"Model is \" + f.get(\"transcript_status\") + \"; Supporting Reads=\" + f.get(\"totalCount\");}",
-                             color => "{processedApolloTranscriptColor}",
-                             borderColor => "{processedTranscriptBorderColor}",
-                         },
+#    my $highConfidenceFeaturesTrack = { storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+#                                        urlTemplate => $gffUrl,
+#                                        key => "${datasetDisplayName} high confidence models (> 5 supporting reads)",
+#                                        label => "${datasetName}_high_confidence_models",
+#                                        category => "Gene Models",
+#                                        glyph => "JBrowse/View/FeatureGlyph/ProcessedTranscript",
+#                                        type => "EbrcTracks/View/Track/GFFByReadCount",
+#                                        fmtMetaValue_Description => "function(){return datasetDescription(\"$summary\", \"\");}",
+#                                        metadata => {
+#                                            subcategory => "Long Read RNA-Seq",
+#                                            dataset => $datasetDisplayName,
+#                                            trackType => "High Confidence Gene Models",
+#                                            description => $summary,
+#                                        },
+#                                        displayMode => "normal",
+#                                        transcriptType => "transcript",
+#                                        topLevelFeatures => "transcript",
+#                                        subParts => "exon",
+#                                        impliedUTRs => JSON::true,
+#                                        topLevelFeaturesPercent => 33,
+#
+#                                        onClick => {
+#                                            action => "iframeDialog",
+#                                            hideIframeDialogUrl => JSON::true,
+#                                            url => "/a/app/embed-record/long_read_transcript/{transcript_id}_${datasetPresenterId}?tables=SampleInfo"
+#                                        },
+#                                        menuTemplate => [
+#                                            {label => "View Details", content => "{longReadRnaSeqGffDetails}"},
+#                                            ],
+#
+#                                        style => {
+#                                            showLabels => JSON::false,
+#                                            label => "function(f){return \"Model is \" + f.get(\"transcript_status\") + \"; Supporting Reads=\" + f.get(\"totalCount\");}",
+#                                            color => "{processedApolloTranscriptColor}",
+#                                            borderColor => "{processedTranscriptBorderColor}",
+#                                        },
+#    };
 
-    };
-
-    my $highConfidenceFeaturesTrack = { storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-                                        urlTemplate => $gffUrl,
-                                        key => "${datasetDisplayName} high confidence models (> 5 supporting reads)",
-                                        label => "${datasetName}_high_confidence_models",
-                                        category => "Gene Models",
-                                        glyph => "JBrowse/View/FeatureGlyph/ProcessedTranscript",
-                                        type => "EbrcTracks/View/Track/GFFByReadCount",
-                                        fmtMetaValue_Description => "function(){return datasetDescription(\"$summary\", \"\");}",
-                                        metadata => {
-                                            subcategory => "Long Read RNA-Seq",
-                                            dataset => $datasetDisplayName,
-                                            trackType => "High Confidence Gene Models",
-                                            description => $summary,
-                                        },
-                                        displayMode => "normal",
-                                        transcriptType => "transcript",
-                                        topLevelFeatures => "transcript",
-                                        subParts => "exon",
-                                        impliedUTRs => JSON::true,
-                                        topLevelFeaturesPercent => 33,
-
-                                        onClick => {
-                                            action => "iframeDialog",
-                                            hideIframeDialogUrl => JSON::true,
-                                            url => "/a/app/embed-record/long_read_transcript/{transcript_id}_${datasetPresenterId}?tables=SampleInfo"
-                                        },
-                                        menuTemplate => [
-                                            {label => "View Details", content => "{longReadRnaSeqGffDetails}"},
-                                            ],
-
-                                        style => {
-                                            showLabels => JSON::false,
-                                            label => "function(f){return \"Model is \" + f.get(\"transcript_status\") + \"; Supporting Reads=\" + f.get(\"totalCount\");}",
-                                            color => "{processedApolloTranscriptColor}",
-                                            borderColor => "{processedTranscriptBorderColor}",
-                                        },
-    };
+      my $highConfidenceFeaturesTrack = ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig->new({
+                                                                                                url_template => $gffUrl,
+                                                                                                application_type => $applicationType,
+                                                                                                key => "${datasetDisplayName} high confidence models (> 5 supporting reads)",
+                                                                                                label => "${datasetName}_high_confidence_models",
+                                                                                                summary => $summary,
+                                                                                                type => "EbrcTracks/View/Track/GFFByReadCount",
+												url => "/a/app/embed-record/long_read_transcript/{transcript_id}_${datasetPresenterId}?tables=SampleInfo",
+                                                                                              })->getConfigurationObject();
 
     push @{$result->{tracks}}, $highConfidenceFeaturesTrack;
 	push @{$result->{tracks}}, $featuresTrack; 
 
-
-    
 
     #----------------------------
     my $metadataFile = "${webservicesDir}/$projectName/build-${buildNumber}/${nameForFileNames}/longReadRNASeq/bam/${datasetName}/metadata.txt";
@@ -1038,28 +1052,40 @@ sub addLongReadRNASeq {
 
       my $bamUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFilenames}/longReadRNASeq/bam/${datasetName}/${sampleFile}");
 
-      my $alignment = {     storeClass => "JBrowse/Store/SeqFeature/BAM",
-                            urlTemplate => $bamUrl,
-                            key => "${sampleDisplayName} long read RNA-Seq",
-                            label => "${sampleDisplayName} long read RNA-Seq",
-                            type => "JBrowse/View/Track/Alignments2",
-                            category => "Transcriptomics",
-                            yScalePosition => "left",
-                            unsafePopup => JSON::true,
-                            metadata => {
-                                subcategory => 'Long Read RNA-Seq',
-                                dataset => $datasetDisplayName,
-                                trackType => 'Long Read Bam alignment',
-                                attribution => $shortAttribution,
-                                description => $summary,
-                           },
-			 style => { 
-                     color_fwd_strand => "#898FD8",
-                     color_rev_strand => "#EC8B8B",
-                         },
-             fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
-             fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-      };
+#      my $alignment = {     storeClass => "JBrowse/Store/SeqFeature/BAM",
+#                            urlTemplate => $bamUrl,
+#                            key => "${sampleDisplayName} long read RNA-Seq",
+#                            label => "${sampleDisplayName} long read RNA-Seq",
+#                            type => "JBrowse/View/Track/Alignments2",
+#                            category => "Transcriptomics",
+#                            yScalePosition => "left",
+#                            unsafePopup => JSON::true,
+#                            metadata => {
+#                                subcategory => 'Long Read RNA-Seq',
+#                                dataset => $datasetDisplayName,
+#                                trackType => 'Long Read Bam alignment',
+#                                attribution => $shortAttribution,
+#                                description => $summary,
+#                           },
+#			 style => { 
+#                     color_fwd_strand => "#898FD8",
+#                     color_rev_strand => "#EC8B8B",
+#                         },
+#             fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetName('${dataset}', '${datasetDisplayName}'); }",
+#             fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
+#      };
+       my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig->new({	
+												url_template => "$bamUrl",
+												application_type => $applicationType,
+												key => "${sampleDisplayName} long read RNA-Seq",
+												label => "${sampleDisplayName} long read RNA-Seq",
+												type => "JBrowse/View/Track/Alignments2",
+												category => "Transcriptomics",
+												color_fwd_strand => "#898FD8",
+												color_rev_strand => "#EC8B8B",
+												trackType => 'Long Read Bam alignment',
+                                                                                              })->getConfigurationObject();
+
 
       push @{$result->{tracks}}, $alignment;
     }
