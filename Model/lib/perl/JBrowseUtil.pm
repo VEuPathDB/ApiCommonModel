@@ -21,7 +21,6 @@ sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
 sub getFileName {$_[0]->{_fileName}}
 sub setFileName {$_[0]->{_fileName} = $_[1]}
 
-
 sub getType {$_[0]->{_type}}
 sub setType {$_[0]->{_type} = $_[1]}
 
@@ -31,8 +30,26 @@ sub setOrganismAbbrev {$_[0]->{_organism_abbrev} = $_[1]}
 sub getProjectName {$_[0]->{_project_name}}
 sub setProjectName {$_[0]->{_project_name} = $_[1]}
 
+sub getBuildNumber {$_[0]->{_build_number}}
+sub setBuildNumber {$_[0]->{_build_number} = $_[1]}
+
+sub getType {$_[0]->{_type}}
+sub setType {$_[0]->{_type} = $_[1]}
+
 sub getBuildProperties {$_[0]->{_build_properties}}
 sub setBuildProperties {$_[0]->{_build_properties} = $_[1]}
+
+sub getWebserviceProperties {$_[0]->{_webservice_properties}}
+sub setWebserviceProperties {$_[0]->{_webservice_properties} = $_[1]}
+
+sub getWebservicesDir {$_[0]->{web_service_dir}}
+sub setWebservicesDir {$_[0]->{web_service_dir} = $_[1]}
+
+sub getwebServicePropertiesFilePath{$_[0]->{web_service_file_path}}
+sub setwebServicePropertiesFilePath{$_[0]->{web_service_file_path} = $_[1]}
+
+sub getDatasetProperties {$_[0]->{_dataset_properties}}
+sub setDatasetProperties {$_[0]->{_dataset_properties} = $_[1]}
 
 # standard to put new method first.
 sub new {
@@ -43,9 +60,11 @@ sub new {
   bless ($self, $class);
 
   # now user your setters to populate it 
-  $self->setOrganismAbbrev($args->{organismAbbrev});
-  $self->setFileName($args->{fileName});
   $self->setProjectName($args->{projectName});
+  $self->setOrganismAbbrev($args->{organismAbbrev});
+  $self->setBuildNumber($args->{buildNumber});
+  $self->setWebservicesDir($args->{webservicesDir});
+  $self->setFileName($args->{fileName});
 
   my $type = lc($args->{type}) eq 'protein' ? 'protein' : 'genome';
   $self->setType($type);
@@ -54,9 +73,16 @@ sub new {
  # not sure if you need this
   $self->setCacheFileName();
 
-  # as above, this calls a function that calls the setter
-  $self->makeBuildProperties();
+  my $organismAbbrev = $self->getOrganismAbbrev();
+  my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/datasetAndPresenterProps.conf"; 
 
+  my $buildPropsHash = $self->makeProperties($buildPropertiesFile);
+  #$self->setDatasetProperties($datasetProperties);  
+  
+  # as above, this calls a function that calls the setter
+  #$self->makeBuildProperties();
+  #my $buildProperties = $self->getBuildProperties();
+   
     my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
     my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
                             $modelConfig->getAppDbLogin(),
@@ -67,6 +93,30 @@ sub new {
     $dbh->{LongTruncOk} = 0;
     $dbh->{LongReadLen} = 10000000;
     $self->{_dbh} = $dbh;
+
+    #my $orgHash = ($buildProperties->{'organism'});
+    my $orgHash = ($buildPropsHash->{'organism'});
+    my $nameForFileNames = ($orgHash->{organismNameForFiles});
+    my $projectName = $self->getProjectName();
+    my $buildNumber = $self->getBuildNumber();
+    my $webservicesDir = $self->getWebservicesDir();
+    my $webServicePropsHash;
+
+	if($buildNumber && $webservicesDir && $nameForFileNames ) {
+  	#todo:  construct the path
+        #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
+	my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/config/jbrowse.conf";
+	$webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
+	}
+
+    #Combine the buildProps and webService hashes
+    my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
+    foreach(keys %$webServicePropsHash){
+	if (defined $buildPropsHash->{$_}){
+	die "webservice property $_ already exists in buildPropsHash";
+	}
+    }
+    $self->setDatasetProperties($datasetPropsHash);	
 
   return $self;
 }
@@ -95,6 +145,51 @@ sub makeBuildProperties {
     $self->setBuildProperties($buildProperties);
 
 }
+
+
+#sub makeWebserviceProperties {
+#    my ($self) = @_;
+#
+#   my $webservicePropertiesFile = $self->getwebServicePropertiesFilePath();
+# 
+#   open(FILE, $webservicePropertiesFile) or die "Cannot open file $webservicePropertiesFile for reading: $!";
+#
+#    my $webserviceProperties = {};
+#    while(<FILE>) {
+#        chomp;
+#        next unless ($_);
+#        next if /^\s*#/;
+#        my ($propString, $value) = split(/\=/, $_);
+#        my @props = split(/::/, $propString);
+#
+#        &toNestedHash($webserviceProperties, \@props, $value);
+#    }
+#
+#    $self->setWebserviceProperties($webserviceProperties);
+#
+#}
+
+
+sub makeProperties {
+    my ($self, $file) = @_;
+
+   open(FILE, $file) or die "Cannot open file $file for reading: $!";
+
+    my $properties = {};
+    while(<FILE>) {
+        chomp;
+        next unless ($_);
+        next if /^\s*#/;
+        my ($propString, $value) = split(/\=/, $_);
+        my @props = split(/::/, $propString);
+
+        &toNestedHash($properties, \@props, $value);
+    }
+
+    #$self->setWebserviceProperties($properties);
+    return $properties;
+}
+
 
 
 
