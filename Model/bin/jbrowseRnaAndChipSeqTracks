@@ -6,6 +6,8 @@ use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
+
 use Data::Dumper;
 use URI::Escape;
 use XML::Simple;
@@ -14,14 +16,22 @@ use Storable 'dclone';
 use JSON qw(decode_json);
 
 # TODO:  add 3 new args:  applicationType, legacyWebappBaseUrl, localhost
-my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $applicationType) = @ARGV;
+#my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $applicationType) = @ARGV;
+my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $technologyType, $applicationType) = @ARGV;
+
 
 my $fileName = "_" . $technologyType . "Cache.json";
 
 # set applicationType, legacyWebappBaseUrl, localhost in the util class
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => $fileName});
+#my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => $fileName});
+my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => $fileName});
 
-my $buildProps = $jbrowseUtil->getBuildProperties();
+#my $buildProps = $jbrowseUtil->getBuildProperties();
+my $datasetProps = $jbrowseUtil->getDatasetProperties();
+#print Dumper ($datasetProps); 
+#exit;
+
+
 
 # TODO:  Add this back when we are done
 # # we're done if we can get from cache file
@@ -34,16 +44,22 @@ my $buildProps = $jbrowseUtil->getBuildProperties();
 my $result = {"tracks" => [] };
 
 ### Get organism properties
-my $orgHash = ($buildProps->{'organism'});
+my $orgHash = ($datasetProps->{'organism'});
 my $nameForFileNames = ($orgHash->{organismNameForFiles});
 my $projectName = ($orgHash->{projectName});
 ### Create rnaseq hash and extract datasetName
-my $allDatasetPropertiesForAssayType = ($buildProps->{lc($technologyType)});
+my $allDatasetPropertiesForAssayType = ($datasetProps->{lc($technologyType)});
+#print Dumper $allDatasetPropertiesForAssayType;
+#exit;
 
 foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   my %studyProperties = %{$allDatasetPropertiesForAssayType->{$datasetName}};
 
+print Dumper %studyProperties;
+exit;
   my $category = $studyProperties{category};
+
+
   my $covMaxScoreDefault = $studyProperties{covMaxScoreDefault};
   my $multiCovScale = $studyProperties{multiCovScale};
   my $subCategory = $studyProperties{subCategory};
@@ -98,7 +114,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   while(<FILE>) {
     chomp;
     if(/^\[(.+)\]$/) {
-      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig) if($start);
+      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary) if($start);
       $file = $1;
       $start = 1;
     }
@@ -121,7 +137,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
     }
     
   }
-  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig);
+  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary);
 
   # ChipSeq are all unique
   my @uniqueOnlyUrls = grep { $technologyType eq 'ChIPSeq' || $_->{alignment} eq 'unique' } @multiUrls;
@@ -129,6 +145,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
 
 
   my $multiBigWigDensity = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::Density->new({dataset_config => $datasetConfig,
+													    
                                                                                                             multi_urls => \@multiUrls,
                                                                                                             display_name => $displayName,
                                                                                                             application_type => $applicationType,
@@ -294,7 +311,7 @@ close CACHE;
 #$dbh->disconnect();
 
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig) = @_;
+  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary) = @_;
 
   $strand = 'not strand specific' unless($strand);
 
