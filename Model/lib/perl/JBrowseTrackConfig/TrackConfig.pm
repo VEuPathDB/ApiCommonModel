@@ -137,6 +137,7 @@ sub getJBrowseObject{
     my $label = $self->getLabel();
     my $displayType = $self->getDisplayType();
     my $category = $datasetConfig->getCategory() if ($datasetConfig);
+
     unless($id && $storeType && $label && $displayType && $category) {
         print Dumper $self;
         die "missing a required property (id, storeClass,label, displayType, category)";

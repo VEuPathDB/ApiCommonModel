@@ -5,12 +5,15 @@ use strict;
 use warnings;
 use Data::Dumper;
 
+sub getUrlTemplate {$_[0]->{url_template} }
+sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
     $self->setUrlTemplate($args->{url_template});
-    my $datasetConfig = $self->getDatasetConfig();
+    my $datasetConfig = $self->getDatasetConfigObj();
     my $studyDisplayName = $datasetConfig->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
 

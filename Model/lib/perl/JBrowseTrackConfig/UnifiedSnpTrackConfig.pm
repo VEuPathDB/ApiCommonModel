@@ -12,6 +12,7 @@ sub new {
     my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Genetic Variation");
     $datasetConfig->setSubcategory("DNA polymorphism");
+    $datasetConfig->setSummary("The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.");
 
     $self->setColor("{snpColorFxn}");
 
@@ -38,12 +39,12 @@ sub new {
     $self->setMaxFeatureScreenDensity(0.01);
     $self->setRegionFeatureDensities(JSON::true);
 
-    $self->setDisplayMode("compact");
+    $self->setDisplayMode("normal");
     $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
 
     $self->setTrackTypeDisplay("Unified SNPs");
 
-    $self->setDescription("The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.");
+#    $self->setDescription("The SNPs in this track are gathered from the high-throughput sequencing data of multiple strains and isolates. For more details on the methods used, go to the Data menu, choose Analysis Methods, and then scroll down to the Genetic Variation and SNP calling section. SNPs in this track are represented as colored diamonds, where dark blue = non-synonymous, light blue = synonymous, red = nonsense, and yellow = non-coding.");
     return $self;
 }
 

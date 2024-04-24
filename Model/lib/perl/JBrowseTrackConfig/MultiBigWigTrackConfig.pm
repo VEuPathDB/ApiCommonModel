@@ -100,6 +100,18 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig);
 use strict;
 use warnings;
 
+sub getUrlTemplate {$_[0]->{url_template} }
+sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+
+sub getStoreType {$_[0]->{store_type}}
+sub setStoreType {$_[0]->{store_type} = $_[1]}
+
+sub getStudyDisplayName {$_[0]->{study_display_name}}
+sub setStudyDisplayName {$_[0]->{study_display_name} = $_[1]}
+
+sub getDatasetName {$_[0]->{dataset_name}}
+sub setDatasetName {$_[0]->{dataset_name} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -131,6 +143,18 @@ package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig);
 use strict;
 use warnings;
+
+sub getUrlTemplate {$_[0]->{url_template} }
+sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+
+sub getStoreType {$_[0]->{store_type}}
+sub setStoreType {$_[0]->{store_type} = $_[1]}
+
+sub getStudyDisplayName {$_[0]->{study_display_name}}
+sub setStudyDisplayName {$_[0]->{study_display_name} = $_[1]}
+
+sub getDatasetName {$_[0]->{dataset_name}}
+sub setDatasetName {$_[0]->{dataset_name} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;

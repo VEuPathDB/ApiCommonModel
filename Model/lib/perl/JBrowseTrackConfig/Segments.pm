@@ -39,7 +39,7 @@ sub new {
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
         $self->setTrackTypeDisplay("Segments");
-        $self->setGlyph("JBrowse/View/FeatureGlyph/Box");
+        $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless($self->getGlyph());
     }
     else {
         # TODO

@@ -40,6 +40,10 @@ sub setDatasetName {$_[0]->{dataset_name} = $_[1]}
 sub getDatasetPresenterId {$_[0]->{dataset_presenter_id}}
 sub setDatasetPresenterId {$_[0]->{dataset_presenter_id} = $_[1]}
 
+# this is the track description if we need one
+sub getDescription {$_[0]->{description}}
+sub setDescription {$_[0]->{description} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = bless {}, $class;
@@ -51,6 +55,7 @@ sub new {
     $self->setDatasetName($args->{dataset_name});
     $self->setOrganismAbbrev($args->{organism_abbrev});
     $self->setDatasetPresenterId($args->{dataset_presenter_id});
+    $self->setDescription($args->{description});
 
     my $summary = $args->{summary};
     $summary =~ s/\n//g if $summary;
