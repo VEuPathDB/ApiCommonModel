@@ -14,7 +14,7 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     $self->setMultiUrls($args->{multi_urls});
-
+    $self->setDatasetName($args->{dataset_name});
 		$self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
 
     my $studyDisplayName = $self->getStudyDisplayName();
@@ -116,6 +116,8 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
+    $self->setDatasetName($args->{dataset_name});
+
     my $studyDisplayName = $self->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
@@ -126,12 +128,11 @@ sub new {
 		$self->setTrackType("Multi-Density");
 
 		my $alignment = $self->getAlignment();
-
 		my $alignmentDisplay = "Unique And Non-Unique";
 		if($alignment && $alignment eq 'unique') {
 			$alignmentDisplay = "Unique Only";
 		}
-
+		
 		$self->setLabel("$datasetName Density - $alignmentDisplay");
 		$self->setId("$displayName Density - $alignmentDisplay");
 
@@ -160,6 +161,8 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
+    $self->setDatasetName($args->{dataset_name});
+
     my $studyDisplayName = $self->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
@@ -169,7 +172,6 @@ sub new {
 		$self->setTrackType("Multi XY plot");
 
 		my $alignment = $self->getAlignment();
-
 		my $alignmentDisplay = "Unique And Non-Unique";
 		if($alignment && $alignment eq 'unique') {
 			$alignmentDisplay = "Unique Only";
