@@ -110,12 +110,20 @@ sub new {
 	}
 
     #Combine the buildProps and webService hashes
-    my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
-    foreach(keys %$webServicePropsHash){
-	if (defined $buildPropsHash->{$_}){
-	die "webservice property $_ already exists in buildPropsHash";
+    #my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
+
+    foreach my $hashkey (keys %$webServicePropsHash){
+	#if (defined $buildPropsHash->{$_}){
+	if (defined $buildPropsHash->{$hashkey}){
+	#print "webservice property $hashkey already exists in buildPropsHash\n";
+	next;
+	}
+	else {
+		$buildPropsHash->{$hashkey} = $webServicePropsHash->{$hashkey};
 	}
     }
+    my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};	
+
     $self->setDatasetProperties($datasetPropsHash);	
 
   return $self;
