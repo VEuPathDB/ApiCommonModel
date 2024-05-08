@@ -122,7 +122,7 @@ sub new {
 		$buildPropsHash->{$hashkey} = $webServicePropsHash->{$hashkey};
 	}
     }
-    my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};	
+    my $datasetPropsHash = {%$buildPropsHash};	
 
     $self->setDatasetProperties($datasetPropsHash);	
 
