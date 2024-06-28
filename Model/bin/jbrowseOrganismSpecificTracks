@@ -20,7 +20,7 @@ my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $proje
 
 my $dbh = $jbrowseUtil->getDbh();   
 
-my $nameForFilenames = &nameForFilenames($organismAbbrev, $dbh);
+my ($nameForFilenames, $isReference) = &nameForFilenamesAndIsReference($organismAbbrev, $dbh);
 
 
 my $result = {"tracks" => [] };
@@ -57,6 +57,12 @@ if ($organismAbbrev !~ m/dmeliso-1/ ){
 
 &addLongReadRNASeq($result, $datasetProperties, $nameForFilenames, $webservicesDir);
 
+
+if($projectName eq 'FungiDB' && $isReference) {
+  &addAntismash($result, $nameForFilenames, $webservicesDir, $projectName);
+}
+
+
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
   &addCnvArray($dbh, $result);
@@ -77,16 +83,16 @@ unless($isApollo) {
 print encode_json($result);
 
 
-sub nameForFilenames {
+sub nameForFilenamesAndIsReference {
   my ($organismAbbrev, $dbh) = @_;
 
-  my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
+  my $sql = "select name_for_filenames, is_reference_strain from apidb.organism where abbrev = '$organismAbbrev'";
   my $sh = $dbh->prepare($sql);
   $sh->execute();
-  my ($nameForFileNames) = $sh->fetchrow_array();
+  my ($nameForFileNames, $isReferenceStrain) = $sh->fetchrow_array();
   $sh->finish();
 
-  return $nameForFileNames;
+  return $nameForFileNames, $isReferenceStrain;
 }
 
 sub addDatasets {
@@ -1291,6 +1297,32 @@ sub addPopsets {
   }
 }
 
+sub addAntismash {
+  my ($result, $nameForFilenames, $webservicesDir, $projectName) = @_;
+
+  my $gffUrl = "/a/service/jbrowse/auxiliary?data=${projectName}/antismash/" . uri_escape_utf8("${nameForFilenames}.sorted.gff.gz");
+
+  my $track = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+               urlTemplate => $gffUrl,
+               category => "Sequence Analysis",
+               type => "CanvasFeatures",
+               key => "Secondary Metabolites (antiSMASH)",
+               label => "antibiotics and Secondary Metabolites Analysis SHell (antiSMASH)",
+               subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,proto_core",
+               style => {label => "{antismashLabel}",
+                         color => "{antismashColor}",
+                         utrColor => "white",
+                         borderColor => "black",
+
+               },
+               metadata => {
+                 subcategory => "Secondary Metabolites"
+               }
+
+  };
+  push @{$result->{tracks}}, $track;
+  
+}
 
 
 sub addLongReadRNASeq {
