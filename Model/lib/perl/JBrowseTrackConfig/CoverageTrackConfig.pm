@@ -4,6 +4,8 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 use strict;
 use warnings;
 
+use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
+
 sub getCovMaxScoreDefault {$_[0]->{cov_max_score_default} || 1000}
 sub setCovMaxScoreDefault {$_[0]->{cov_max_score_default} = $_[1] + 0}
 
