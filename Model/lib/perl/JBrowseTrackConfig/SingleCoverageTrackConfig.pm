@@ -20,9 +20,10 @@ sub new {
     my $label = $self->getLabel();
     my $datasetName = $datasetConfig->getDatasetName();
 
-    $self->setId("${datasetName}_${displayName}_Coverage");
+#    $self->setId("${datasetName}_${displayName}_Coverage");
+    $self->setId("$studyDisplayName - $displayName Coverage");
     $self->setLabel("$studyDisplayName - $displayName Coverage");
-
+    $self->setClipMarkerColor("black");
     return $self;
 }
 
