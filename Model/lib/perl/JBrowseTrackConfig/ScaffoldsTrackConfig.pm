@@ -9,7 +9,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setColor("function( feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldColor(feature)}");
+    $self->setColor("function( feature, variableName, glyphObject, track ){ var c = track.browser.config; return c.scaffoldColor(feature)}");
     $self->setHeight("function(feature, variableName, glyphObject, track){ var c = track.browser.config; return c.scaffoldHeight(feature)}");
 
 
@@ -34,7 +34,7 @@ sub new {
 
     $self->setSubParts("sgap");
 
-    my $detailsFunction = "{function(track, feature){ var c = track.browser.config; return c.scaffoldDetails(track, feature)}";
+    my $detailsFunction = "function(track, feature){ var c = track.browser.config; return c.scaffoldDetails(track, feature)}";
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
 
