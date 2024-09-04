@@ -37,7 +37,10 @@ sub new {
     $self->setViewDetailsContent($detailsFunction);
 
     $self->setMaxFeatureScreenDensity(0.01);
-    $self->setRegionFeatureDensities(JSON::true);
+
+    # TODO - replace with:
+    # $self->setRegionFeatureDensities(JSON::true);
+    $self->setRegionFeatureDensities('function(){return_true}');
 
     $self->setDisplayMode("normal");
     $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
@@ -53,7 +56,9 @@ sub getJBrowseStyle {
 
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
-    $jbrowseStyle->{strandArrow} = JSON::false;
+    # TODO - replace with:
+    # $jbrowseStyle->{strandArrow} = JSON::false;
+    $jbrowseStyle->{strandArrow} = 'function(){return_false}';
     $jbrowseStyle->{labelScale} = 1000000000000000;
     return $jbrowseStyle;
 }

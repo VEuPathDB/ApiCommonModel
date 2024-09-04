@@ -72,7 +72,7 @@ sub getJBrowseObject{
    
     $jbrowseObject->{glyph} = $glyph if($glyph);
     $jbrowseObject->{displayMode} = $displayMode if($displayMode);
-    $jbrowseObject->{max_feature_screen_density} = $maxFeatureScreenDensity if($maxFeatureScreenDensity);
+    $jbrowseObject->{maxFeatureScreenDensity} = $maxFeatureScreenDensity if($maxFeatureScreenDensity);
     $jbrowseObject->{region_feature_densities} = $regionFeatureDensities if($regionFeatureDensities);
     $jbrowseObject->{subParts} = $self->getSubParts() if($self->getSubParts());
 
