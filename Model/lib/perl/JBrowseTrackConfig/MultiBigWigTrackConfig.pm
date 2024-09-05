@@ -13,11 +13,13 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
+    my $datasetConfig = $self->getDatasetConfigObj();
+
     $self->setMultiUrls($args->{multi_urls});
     $self->setDatasetName($args->{dataset_name});
 		$self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
 
-    my $studyDisplayName = $self->getStudyDisplayName();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
 
@@ -41,7 +43,7 @@ sub getJBrowseObject{
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-	$jbrowseObject->{url_templates} = $self->getMultiUrls();
+	$jbrowseObject->{urlTemplates} = $self->getMultiUrls();
 	$jbrowseObject->{showTooltips} = JSON::true;
 
 	return $jbrowseObject;
@@ -116,9 +118,11 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
+    my $datasetConfig = $self->getDatasetConfigObj();
+
     $self->setDatasetName($args->{dataset_name});
 
-    my $studyDisplayName = $self->getStudyDisplayName();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
 
@@ -134,7 +138,7 @@ sub new {
 		}
 		
 		$self->setLabel("$datasetName Density - $alignmentDisplay");
-		$self->setId("$displayName Density - $alignmentDisplay");
+		$self->setId("$studyDisplayName Density - $alignmentDisplay");
 
     return $self;
 }
@@ -161,9 +165,11 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
+    my $datasetConfig = $self->getDatasetConfigObj();
+
     $self->setDatasetName($args->{dataset_name});
 
-    my $studyDisplayName = $self->getStudyDisplayName();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
 
@@ -178,7 +184,7 @@ sub new {
 		}
 
 		$self->setLabel("$datasetName XYPlot - $alignmentDisplay");
-		$self->setId("$displayName XYPlot - $alignmentDisplay");
+		$self->setId("$studyDisplayName XYPlot - $alignmentDisplay");
 
     return $self;
 }
