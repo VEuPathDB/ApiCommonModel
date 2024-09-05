@@ -32,7 +32,8 @@ sub getJBrowseStyle {
     my $self = shift;
 
 		my $style = {pos_color => "black",
-								 neg_color => "white",
+			     neg_color => "white",
+			     height => 30,
 		};
 
     return $style;
@@ -129,7 +130,7 @@ sub new {
 
     $self->setDisplayType("MultiBigWig/View/Track/MultiWiggle/MultiDensity");
 
-		$self->setTrackType("Multi-Density");
+		$self->setTrackTypeDisplay("Multi-Density");
 
 		my $alignment = $self->getAlignment();
 		my $alignmentDisplay = "Unique And Non-Unique";
@@ -175,7 +176,7 @@ sub new {
 
     $self->setDisplayType("MultiBigWig/View/Track/MultiWiggle/MultiXYPlot");
 
-		$self->setTrackType("Multi XY plot");
+		$self->setTrackTypeDisplay("Multi XY plot");
 
 		my $alignment = $self->getAlignment();
 		my $alignmentDisplay = "Unique And Non-Unique";
