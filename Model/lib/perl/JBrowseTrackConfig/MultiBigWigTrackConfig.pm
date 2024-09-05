@@ -23,8 +23,6 @@ sub new {
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
 
-    $self->setHeight(40);
-
     return $self;
 }
 
@@ -33,7 +31,7 @@ sub getJBrowseStyle {
 
 		my $style = {pos_color => "black",
 			     neg_color => "white",
-			     height => 30,
+			     height => $self->getHeight(),
 		};
 
     return $style;
@@ -140,7 +138,7 @@ sub new {
 		
 		$self->setLabel("$datasetName Density - $alignmentDisplay");
 		$self->setId("$studyDisplayName Density - $alignmentDisplay");
-
+		$self->setHeight($args->{height});
     return $self;
 }
 
@@ -186,7 +184,7 @@ sub new {
 
 		$self->setLabel("$datasetName XYPlot - $alignmentDisplay");
 		$self->setId("$studyDisplayName XYPlot - $alignmentDisplay");
-
+		$self->setHeight($args->{height});
     return $self;
 }
 
