@@ -43,7 +43,7 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    $jbrowseObject->{url_template} = $self->getUrlTemplate();
+    $jbrowseObject->{urlTemplate} = $self->getUrlTemplate();
 
     return $jbrowseObject;
 }
