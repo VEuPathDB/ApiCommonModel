@@ -11,7 +11,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setColor("{colorFunction}");
+    $self->setColor("{chipColor}");
 
     my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Epigenomics");
@@ -19,7 +19,9 @@ sub new {
 
     $self->setId($args->{pan_name});
     $self->setLabel($args->{pan_name});
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
+
+    $self->setDisplayMode(undef);
+    $self->setGlyph(undef);
 
     my $store;
 
@@ -40,6 +42,15 @@ sub new {
 
 
     return $self;
+}
+
+
+sub getMetadata {
+  my $self = shift;
+  my $metadata = $self->SUPER::getMetadata();
+
+  $metadata->{attribution} = undef;
+  return $metadata;
 }
 
 
