@@ -154,7 +154,7 @@ sub getJBrowseObject{
     $jbrowseObject->{metadata} = $metadata if($metadata);
 
     if($datasetName && $studyDisplayName && $summary && $datasetPresenterId) {
-        $jbrowseObject->{fmtMetaValue_Dataset} = "function() { return datasetLinkByDatasetName('${datasetPresenterId}', '${studyDisplayName}'); }";
+        $jbrowseObject->{fmtMetaValue_Dataset} = "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${studyDisplayName}'); }";
         $jbrowseObject->{fmtMetaValue_Description} = "function() { return datasetDescription('${summary}', ''); }";
     }
     elsif($datasetName && $studyDisplayName && $summary) {
