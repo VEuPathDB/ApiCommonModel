@@ -69,8 +69,11 @@ sub getJBrowseObject{
     $jbrowseObject->{menuTemplate} = [
     {label => "View Details", content => "{syntenyTitleFxn}",},
     {label => "View Gene or Sequence Page", title => "function(track,f) { return f.get('syntype') == 'span' ? f.get('contig') : f.get('name'); }", iconClass => "dijitIconDatabase", action => "iframeDialog", url => "function(track,f) { return f.get('syntype') == 'span' ? '/a/app/record/genomic-sequence/' + f.get('contig') : '/a/app/record/gene/' + f.get('name') }"}
-    ];    
-    $jbrowseObject->{unsafePopup} = "JSON::true";
+    ];
+    # TODO - replace with:
+    # $jbrowseObject->{unsafePopup} = "JSON::true";
+    $jbrowseObject->{unsafePopup} = 'function(){return_true}';
+
     $jbrowseObject->{transcriptType} = "processed_transcript";
     $jbrowseObject->{noncodingType} = ["nc_transcript"];
     $jbrowseObject->{subParts} = "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon";
