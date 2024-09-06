@@ -16,6 +16,7 @@ sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -28,7 +29,9 @@ sub new {
     my $panName = $self->getPanName();
     $self->setId($panName);
     $self->setLabel($panName);
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
+    #TODO
+    $self->setTrackTypeDisplay("XYPlot");
+    ###  $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
 
     my $store;
 
@@ -47,24 +50,48 @@ sub new {
     return $self;
 }
 
-#sub getJBrowseStyle {
-#    my $self = shift;
+sub getJBrowseStyle {
+    my $self = shift;
 
-#    my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+    my $jbrowseStyle = {};
 
-#    $jbrowseStyle->{height} = 40;
-#    return $jbrowseStyle;
-#}
+    $jbrowseStyle->{height} = 40;
+    $jbrowseStyle->{neg_color} = "{chipColor}";
+    $jbrowseStyle->{pos_color} = "{chipColor}";
 
-#sub getJBrowseObject{
-#        my $self = shift;
-#        my $jbrowseObject = $self->SUPER::getJBrowseObject();
+    return $jbrowseStyle;
+}
+
+sub getMetadata {
+    my $self = shift;
+
+    my $metadata = $self->SUPER::getMetadata();
+
+    $metadata->{attribution} = undef;
+
+
+    return $metadata;
+}
+
+
+sub getJBrowseObject{
+  my $self = shift;
+  my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
 #    $jbrowseObject->{max_score} =  "3";
-#    $jbrowseObject->{min_score} =  "-3";
-#    return $jbrowseObject;
+    $jbrowseObject->{min_score} =  "-3";
+  return $jbrowseObject;
 
-#}
+}
+
+##NOT NEEDED?
+##sub getJBrowseObject{
+##    my $self = shift;
+
+##    my $jbrowseObject = $self->SUPER::getJBrowseObject();
+
+##  }
+
 
 # TODO:
 sub getJBrowse2Object{
