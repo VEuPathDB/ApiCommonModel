@@ -43,7 +43,7 @@ sub new {
 
     $self->setUrlTemplate($args->{url_template});
 
-    $self->setScale($args->{scale});
+#    $self->setScale($args->{scale});
 
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
     $self->setStore($store);
@@ -75,11 +75,11 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    my $scale = $self->getScale();
+#    my $scale = $self->getScale();
     my $yScalePosition = $self->getYScalePosition();
 
     $jbrowseObject->{yScalePosition} = $yScalePosition;
-    $jbrowseObject->{scale} = $scale;
+#    $jbrowseObject->{scale} = $scale;
 
     return $jbrowseObject;
 }
