@@ -29,6 +29,9 @@ sub new {
     my $panName = $self->getPanName();
     $self->setId($panName);
     $self->setLabel($panName);
+    $self->setCovMaxScoreDefault($args->{cov_max_score_default});
+    $self->setCovMinScoreDefault($args->{cov_min_score_default});
+
     #TODO
     $self->setTrackTypeDisplay("XYPlot");
     ###  $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
@@ -78,19 +81,13 @@ sub getJBrowseObject{
   my $self = shift;
   my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-#    $jbrowseObject->{max_score} =  "3";
-    $jbrowseObject->{min_score} =  "-3";
+  $jbrowseObject->{max_score} =  "3";
+  $jbrowseObject->{min_score} =  "-3";
+ # $jbrowseObject->{scale} = undef;
+
   return $jbrowseObject;
 
 }
-
-##NOT NEEDED?
-##sub getJBrowseObject{
-##    my $self = shift;
-
-##    my $jbrowseObject = $self->SUPER::getJBrowseObject();
-
-##  }
 
 
 # TODO:
