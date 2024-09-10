@@ -19,11 +19,11 @@ sub new {
     $self->setDatasetName($args->{dataset_name});
     $self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
     $self->setAlignment($args->{alignment});
+    $self->setScale($args->{scale});
 
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $displayName = $self->getDisplayName();
-		my $datasetName = $self->getDatasetName();
-    
+    my $datasetName = $self->getDatasetName();
 
     return $self;
 }
@@ -47,6 +47,7 @@ sub getJBrowseObject{
 	$jbrowseObject->{urlTemplates} = $self->getMultiUrls();
 	$jbrowseObject->{showTooltips} = JSON::true;
 	$jbrowseObject->{storeClass} = $self->getStoreType();
+	$jbrowseObject->{scale} = $self->getScale();
 
 	return $jbrowseObject;
 }

@@ -26,6 +26,7 @@ sub new {
     $self->setClipMarkerColor("black");
     $self->setCovMaxScoreDefault($args->{cov_max_score_default});
     $self->setCovMinScoreDefault($args->{cov_min_score_default});
+    $self->setScale($args->{scale});
 
     return $self;
 }
@@ -49,6 +50,7 @@ sub getJBrowseObject{
     $jbrowseObject->{urlTemplate} = $self->getUrlTemplate();
     $jbrowseObject->{max_score} = $self->getCovMaxScoreDefault();
     $jbrowseObject->{min_score} = $self->getCovMinScoreDefault();
+    $jbrowseObject->{scale} = $self->getScale();
 
     return $jbrowseObject;
 }
