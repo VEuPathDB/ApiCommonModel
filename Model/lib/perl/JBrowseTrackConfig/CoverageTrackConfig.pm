@@ -43,8 +43,6 @@ sub new {
 
     $self->setUrlTemplate($args->{url_template});
 
-    $self->setCovMaxScoreDefault($args->{cov_max_score_default});
-    $self->setCovMinScoreDefault($args->{cov_min_score_default});
     $self->setScale($args->{scale});
 
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
@@ -78,13 +76,9 @@ sub getJBrowseObject{
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
     my $scale = $self->getScale();
-    my $minScore = $self->getCovMinScoreDefault();
-    my $maxScore = $self->getCovMaxScoreDefault();
     my $yScalePosition = $self->getYScalePosition();
 
     $jbrowseObject->{yScalePosition} = $yScalePosition;
-    $jbrowseObject->{min_score} = $minScore;
-    $jbrowseObject->{max_score} = $maxScore;
     $jbrowseObject->{scale} = $scale;
 
     return $jbrowseObject;

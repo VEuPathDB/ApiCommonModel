@@ -139,6 +139,7 @@ sub new {
 		$self->setLabel("$datasetName Density - $alignmentDisplay");
 		$self->setId("$studyDisplayName Density - $alignmentDisplay");
 		$self->setHeight($args->{height});
+
     return $self;
 }
 
@@ -185,6 +186,7 @@ sub new {
 		$self->setLabel("$datasetName XYPlot - $alignmentDisplay");
 		$self->setId("$studyDisplayName XYPlot - $alignmentDisplay");
 		$self->setHeight($args->{height});
+
     return $self;
 }
 

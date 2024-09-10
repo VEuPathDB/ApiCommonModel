@@ -24,6 +24,9 @@ sub new {
     $self->setId("$studyDisplayName - $displayName Coverage");
     $self->setLabel("$studyDisplayName - $displayName Coverage");
     $self->setClipMarkerColor("black");
+    $self->setCovMaxScoreDefault($args->{cov_max_score_default});
+    $self->setCovMinScoreDefault($args->{cov_min_score_default});
+
     return $self;
 }
 
@@ -44,6 +47,8 @@ sub getJBrowseObject{
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
     $jbrowseObject->{urlTemplate} = $self->getUrlTemplate();
+    $jbrowseObject->{max_score} = $self->getCovMaxScoreDefault();
+    $jbrowseObject->{min_score} = $self->getCovMinScoreDefault();
 
     return $jbrowseObject;
 }
