@@ -17,11 +17,13 @@ sub new {
 
     $self->setMultiUrls($args->{multi_urls});
     $self->setDatasetName($args->{dataset_name});
-		$self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
+    $self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
+    $self->setAlignment($args->{alignment});
 
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $displayName = $self->getDisplayName();
 		my $datasetName = $self->getDatasetName();
+    
 
     return $self;
 }
@@ -44,6 +46,7 @@ sub getJBrowseObject{
 
 	$jbrowseObject->{urlTemplates} = $self->getMultiUrls();
 	$jbrowseObject->{showTooltips} = JSON::true;
+	$jbrowseObject->{storeClass} = $self->getStoreType();
 
 	return $jbrowseObject;
 }
@@ -132,12 +135,15 @@ sub new {
 
 		my $alignment = $self->getAlignment();
 		my $alignmentDisplay = "Unique And Non-Unique";
+                my $alignmentReplace = "unique and non-unique";
 		if($alignment && $alignment eq 'unique') {
 			$alignmentDisplay = "Unique Only";
+                        $alignmentReplace = "unique";
 		}
 		
 		$self->setLabel("$datasetName Density - $alignmentDisplay");
 		$self->setId("$studyDisplayName Density - $alignmentDisplay");
+                $self->setAlignment($alignmentReplace);
 		$self->setHeight($args->{height});
 
     return $self;
@@ -179,12 +185,15 @@ sub new {
 
 		my $alignment = $self->getAlignment();
 		my $alignmentDisplay = "Unique And Non-Unique";
+		my $alignmentReplace = "unique and non-unique";
 		if($alignment && $alignment eq 'unique') {
 			$alignmentDisplay = "Unique Only";
+			$alignmentReplace = "unique";
 		}
 
 		$self->setLabel("$datasetName XYPlot - $alignmentDisplay");
 		$self->setId("$studyDisplayName XYPlot - $alignmentDisplay");
+		$self->setAlignment($alignmentReplace);
 		$self->setHeight($args->{height});
 
     return $self;
