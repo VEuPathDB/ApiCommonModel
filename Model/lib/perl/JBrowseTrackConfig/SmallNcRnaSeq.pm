@@ -15,15 +15,18 @@ sub setBorderColor {$_[0]->{border_color} = $_[1]}
 sub getUrlTemplate {$_[0]->{url_template} }
 sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 
+sub getLabel {$_[0]->{label} }
+sub setLabel {$_[0]->{label} = $_[1]}
+
 
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setId("Small Non-coding RNAs");
-    $self->setLabel("Small Non-coding RNAs");
+    $self->setId($args->{key});
 
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::BamStore->new($args);
+
     $self->setStore($store);
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
@@ -50,7 +53,10 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    $jbrowseObject->{unsafePopup} = "JSON::true";
+    # TODO - replace with:
+    #$jbrowseObject->{unsafePopup} = "JSON::true";
+    $jbrowseObject->{unsafePopup} = 'true';
+
     $jbrowseObject->{yScalePosition} = $self->getYScalePosition();
     $jbrowseObject->{url_template}= $self->getUrlTemplate();
 
