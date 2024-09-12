@@ -74,12 +74,9 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-
-#    my $scale = $self->getScale();
     my $yScalePosition = $self->getYScalePosition();
 
     $jbrowseObject->{yScalePosition} = $yScalePosition;
-#    $jbrowseObject->{scale} = $scale;
 
     return $jbrowseObject;
 }
