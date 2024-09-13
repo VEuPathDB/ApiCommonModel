@@ -14,7 +14,7 @@ sub new {
 
     my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Proteomics");
-    $datasetConfig->setSubcategory("Protein Expression'");
+    $datasetConfig->setSubcategory("Protein Expression");
 
     $self->setId($args->{key});
     $self->setLabel($args->{label}); 
@@ -34,6 +34,7 @@ sub new {
     my $detailsFunction = "{massSpecDetails}";
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
+    $self->setDisplayMode("compact");
 
     return $self;
 }
@@ -49,6 +50,25 @@ sub getJBrowseStyle {
 }
 
 
+sub getMetadata {
+    my $self = shift;
+
+    my $metadata = $self->SUPER::getMetadata();
+
+    $metadata->{attribution} = undef;
+
+    return $metadata;
+}
+
+
+sub getJBrowseObject{
+    my $self = shift;
+
+    my $jbrowseObject = $self->SUPER::getJBrowseObject();
+    $jbrowseObject->{subParts} = "Peptide";
+
+    return $jbrowseObject;
+  }
 
 # TODO:
 sub getJBrowse2Object{
