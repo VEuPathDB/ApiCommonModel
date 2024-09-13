@@ -32,7 +32,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setDisplayMode($args->{display_mode});
+
     $self->setMaxFeatureScreenDensity($args->{max_feature_screen_density});
     $self->setRegionFeatureDensities($args->{region_feature_densities});
 
@@ -44,8 +44,11 @@ sub new {
     else {
         # TODO
     }
-
-    $self->setDisplayMode("normal") unless($self->getDisplayMode());
+    if ($args->{display_mode}){
+      $self->setDisplayMode($args->{display_mode});
+    } else {
+      $self->setDisplayMode("normal");
+    }
 
     return $self;
 }
