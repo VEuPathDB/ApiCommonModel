@@ -33,11 +33,18 @@ sub new {
     $self->setViewDetailsContent($detailsFunction);
 
     $self->setColor("white");
-    $self->setBorderColor("{processedTranscriptBorderColor}");
-
 
 
     return $self
+}
+
+sub getJBrowseStyle {
+    my $self = shift;
+    my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+
+    $jbrowseStyle->{borderColor} = "{processedTranscriptBorderColor}";
+
+    return $jbrowseStyle;
 }
 
 
