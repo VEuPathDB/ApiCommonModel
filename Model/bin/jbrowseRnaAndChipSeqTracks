@@ -10,6 +10,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 
 use Data::Dumper;
 use URI::Escape;
+use Encode;
 use XML::Simple;
 use List::Util qw(min max);
 use Storable 'dclone';
@@ -87,7 +88,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
 
   open(FILE, $metadataFile) or die "Cannot open file $metadataFile for reading: $!";
 
-  my ($start, $file, $displayName, $strand, $alignment, $dbid, $sample);;
+  my ($start, $file, $displayName, $strand, $alignment, $dbid, $sample, $order);
   
   my @multiUrls;
 
@@ -98,6 +99,8 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   $shortAttribution =~ s/[()]//g;
   my $summary = $studyProperties{summary};
   $summary =~ s/\n/ /g;
+#  $summary = uri_unescape_utf8($summary);  
+  $summary = Encode::decode('utf8', uri_unescape($summary));
 
   my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new({ dataset_name => $datasetName,
                                                                                       study_display_name => $studyDisplayName,
@@ -111,12 +114,13 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
   while(<FILE>) {
     chomp;
     if(/^\[(.+)\]$/) {
-      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary) if($start);
+      &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order) if($start);
       $file = $1;
       $start = 1;
     }
     if(/^display_name\s*=\s*(.+)$/) {
       $displayName = $1;
+      ($order) = $displayName =~ /^(\S+) - /; #capture the order info prior to replace
       $displayName =~ s/^\S+ - //; #remove everything to the first " - "
       $displayName =~ s/ \(\)//; # remove open/close parens
     }
@@ -134,7 +138,7 @@ foreach my $datasetName (keys %$allDatasetPropertiesForAssayType){
     }
     
   }
-  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary);
+  &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order);
 
   # ChipSeq are all unique
   my @uniqueOnlyUrls = grep { $technologyType eq 'ChIPSeq' || $_->{alignment} eq 'unique' } @multiUrls;
@@ -273,10 +277,17 @@ close CACHE;
 #$dbh->disconnect();
 
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary) = @_;
+  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order) = @_;
 
+
+  ## TODO: might need to add back in
+  if ($technologyType eq 'RNASeq' ){
   $strand = 'not strand specific' unless($strand);
-
+  }
+  else {
+  $strand = undef;
+  $alignment = undef;
+  }
 
   # old, direct file access; replaced by jbrowse service
   #my $bwUrl = "/a/jbrowse/eupath_data/webServices/$bigWigRelativePath/$file";
@@ -286,20 +297,22 @@ sub addConfiguration {
 
   my $color = &color($strand, $alignment, $datasetName, $displayName);
 
-  my $label = $dbid ? $dbid : ($sample ? $sample : $displayName);
+  $dbid = $dbid ? $dbid : ($sample ? $sample : $displayName);
+  
 #print "LABEL = $label\n";
   my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig->new({ dataset_config => $datasetConfig,
                                                                                                 url_template => $bwUrl,
                                                                                                 display_name => $displayName,
                                                                                                 application_type => $applicationType,
                                                                                                 color => $color,
-                                                                                                label => $label,
+                                                                                                dbid => $dbid,
 												cov_min_score_default => 0,
                                                                                                 cov_max_score_default => $covMaxScoreDefault,
                                                                                                 scale => $multiCovScale,
                                                                                                 strand =>  $strand,
                                                                                                 alignment => $alignment,
                                                                                                 description => $summary,
+												order => $order,
                                                                                               })->getConfigurationObject();
 
   my $multiUrlHash = {url => $bwUrl, name => $displayName, color => $color, alignment => $alignment};
