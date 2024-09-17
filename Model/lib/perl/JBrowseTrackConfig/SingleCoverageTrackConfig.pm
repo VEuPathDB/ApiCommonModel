@@ -8,21 +8,32 @@ use Data::Dumper;
 sub getUrlTemplate {$_[0]->{url_template} }
 sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 
+sub getDbid {$_[0]->{dbid} }
+sub setDbid {$_[0]->{dbid} = $_[1]}
+
+sub getOrder {$_[0]->{order} }
+sub setOrder {$_[0]->{order} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
     $self->setUrlTemplate($args->{url_template});
+    $self->setOrder($args->{order});
+    $self->setDbid($args->{dbid});
+
     my $datasetConfig = $self->getDatasetConfigObj();
     my $studyDisplayName = $datasetConfig->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
 
-    my $label = $self->getLabel();
+    #my $order = $self->getTrackOrderNum();
+    my $order = $self->getOrder();
+    my $dbid = $self->getDbid();
     my $datasetName = $datasetConfig->getDatasetName();
 
-#    $self->setId("${datasetName}_${displayName}_Coverage");
-    $self->setId("$studyDisplayName - $displayName Coverage");
-    $self->setLabel("$studyDisplayName - $displayName Coverage");
+    $self->setId("$studyDisplayName - $order - $displayName Coverage");
+    $self->setLabel("$datasetName $dbid Coverage");        
+
     $self->setClipMarkerColor("black");
     $self->setCovMaxScoreDefault($args->{cov_max_score_default});
     $self->setCovMinScoreDefault($args->{cov_min_score_default});
