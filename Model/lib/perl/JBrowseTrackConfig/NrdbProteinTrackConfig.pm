@@ -27,12 +27,25 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{nrdbColor}");
-    $self->setBorderColor("{processedTranscriptBorderColor}");
+    #$self->setBorderColor("{processedTranscriptBorderColor}");
 
     $self->setDisplayMode("compact");
+    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments");
 
     return $self;
 }
+
+sub getJBrowseStyle {
+   my $self = shift;
+   my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+
+
+   $jbrowseStyle->{borderColor} = "{processedTranscriptBorderColor}";
+
+   return $jbrowseStyle;
+}
+
+
 
 sub getJBrowseObject{
 	my $self = shift;
