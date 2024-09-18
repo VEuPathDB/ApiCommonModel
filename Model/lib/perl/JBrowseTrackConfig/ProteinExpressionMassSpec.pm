@@ -50,17 +50,6 @@ sub getJBrowseStyle {
 }
 
 
-sub getMetadata {
-    my $self = shift;
-
-    my $metadata = $self->SUPER::getMetadata();
-
-    $metadata->{attribution} = undef;
-
-    return $metadata;
-}
-
-
 sub getJBrowseObject{
     my $self = shift;
 
