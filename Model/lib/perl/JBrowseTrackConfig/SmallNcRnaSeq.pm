@@ -58,7 +58,9 @@ sub getJBrowseObject{
     $jbrowseObject->{unsafePopup} = 'true';
 
     $jbrowseObject->{yScalePosition} = $self->getYScalePosition();
-    $jbrowseObject->{url_template}= $self->getUrlTemplate();
+
+    # TODO
+    $jbrowseObject->{urlTemplate}= $self->getUrlTemplate();
 
     return $jbrowseObject;
 }
