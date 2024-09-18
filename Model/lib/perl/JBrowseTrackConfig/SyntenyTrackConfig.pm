@@ -6,6 +6,8 @@ use ApiCommonModel::Model::JBrowseTrackConfig::SyntenyStore;
 use strict;
 use warnings;
 
+### NOTE: This module is NOT IN USE
+
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
 
