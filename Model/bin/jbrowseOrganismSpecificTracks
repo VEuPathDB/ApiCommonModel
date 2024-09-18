@@ -66,7 +66,7 @@ my $isAnnotated = ($orgHash->{isAnnotatedGenome});
 &addUnifiedSnp;
 
 # TODO: Add back
-&addSynteny($dbh, $result);
+&addSynteny($applicationType, $dbh, $result);
 
 &addDatasets($dbh, \%datasets) unless($isApollo);
 
@@ -465,7 +465,9 @@ sub addScaffolds {
 
 
 sub addSynteny {
-  my ($dbh, $result) = @_;
+  my ($applicationType, $dbh, $result) = @_;
+
+  return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
   my $sql = "select otr.organism, oa.internal_abbrev as public_abbrev, otr.phylum, otr.genus, otr.species, otr.kingdom, otr.class, gt.gtracks
             from APIDBTUNING.ORGANISMSELECTTAXONRANK otr
@@ -522,11 +524,62 @@ sub addSynteny {
 
     &addSubtracks($subtracksAr, $refOrganismNode, $taxonNamesToNode, \%defaults, $organismAbbrev);
 
-      my $syntenyTrack = ApiCommonModel::Model::JBrowseTrackConfig::SyntenyTrackConfig->new({
-												application_type => $applicationType,
-                                                                                                key => "Syntenic Sequences and Genes (Shaded by Orthology)",
-                                                                                                label => "Syntenic Sequences and Genes (Shaded by Orthology)",
-                                                                                              })->getConfigurationObject();
+    my $syntenyTrack = {storeClass => "EbrcTracks/Store/SeqFeature/REST",
+                        baseUrl => "/a/service/jbrowse",
+                        type => "EbrcTracks/View/Track/Synteny",
+                        transcriptType => "processed_transcript",
+                        noncodingType => ["nc_transcript"],
+                        glyph => "function(f){return f.get('syntype') === 'span' ? 'JBrowse/View/FeatureGlyph/Box' : 'JBrowse/View/FeatureGlyph/Gene'; }",
+                        subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon",
+                        key => "Syntenic Sequences and Genes (Shaded by Orthology)",
+                        label => "Syntenic Sequences and Genes (Shaded by Orthology)",
+                        region_feature_densities => "function(){return false}",
+                        category => "Comparative Genomics",
+			unsafePopup => JSON::true,
+                        geneGroupAttributeName => "orthomcl_name",
+                        displayMode => "normal",
+
+                        style => {
+                          color => "{syntenyColorFxn}",
+                          unprocessedTranscriptColor => "lightgrey",
+                          utrColor => "grey",
+#                          borderWidth => 4,
+                          connectorThickness => "function(f){return f.get('syntype') === 'span' ? 3 : 1; }",
+                          showLabels => "function(){return false}",
+                          strandArrow => "function(f){return f.get('syntype') === 'span' ? false : true; }",
+                          height => "function(f){return f.get('syntype') === 'span' ? 2 : 5; }",
+#                          height => 5,
+                          marginBottom => 0,
+                       },
+                        metadata => {
+                          subcategory => "Orthology and Synteny",
+                          trackType => 'Segments',
+                        },
+                        query => {'feature' => "gene:syntenyJBrowseScaled"
+                        },
+                        subtracks => $subtracksAr,
+                        onClick => {
+                          content => "{syntenyTitleFxn}",
+                        },
+                        menuTemplate => [
+                          {label => "View Details", 
+                           content => "{syntenyTitleFxn}",
+                          },
+                          {label => "View Gene or Sequence Page",
+                           title => "function(track,f) { return f.get('syntype') == 'span' ? f.get('contig') : f.get('name'); }", 
+                           iconClass => "dijitIconDatabase", 
+                           action => "iframeDialog", 
+                           url => "function(track,f) { return f.get('syntype') == 'span' ? '/a/app/record/genomic-sequence/' + f.get('contig') : '/a/app/record/gene/' + f.get('name') }"}
+                            ],
+    };
+
+#       my $syntenyTrack = ApiCommonModel::Model::JBrowseTrackConfig::SyntenyTrackConfig->new({
+# 												application_type => $applicationType,
+#                                                                                                 key => "Syntenic Sequences and Genes (Shaded by Orthology)",
+#                                                                                                 label => "Syntenic Sequences and Genes (Shaded by Orthology)",
+#                                                                                                 subTracks => $subtracksAr,
+#                                                                                               })->getConfigurationObject();
+
     push @{$result->{tracks}}, $syntenyTrack;
 
 
