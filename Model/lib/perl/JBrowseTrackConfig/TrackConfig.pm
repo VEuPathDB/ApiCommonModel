@@ -5,6 +5,8 @@ use strict;
 use warnings;
 
 use Data::Dumper;
+use URI::Escape;
+use Encode;
 
 sub getApplicationType {$_[0]->{application_type}}
 sub setApplicationType {$_[0]->{application_type} = $_[1]}
@@ -103,6 +105,7 @@ sub getMetadata {
     my $trackType = $self->getTrackTypeDisplay();
     my $attribution = $datasetConfig->getAttribution() if ($datasetConfig);
     my $summary = $datasetConfig->getSummary() if ($datasetConfig);
+    $summary = Encode::decode('utf8', uri_unescape($summary));
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
 
     unless(defined($subcategory) || defined($trackType)
@@ -127,6 +130,7 @@ sub getJBrowseObject{
     my $datasetName = $datasetConfig->getDatasetName() if ($datasetConfig);
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $summary = $datasetConfig->getSummary() if ($datasetConfig);
+    $summary = Encode::decode('utf8', uri_unescape($summary));
     my $datasetPresenterId = $datasetConfig->getDatasetPresenterId() if ($datasetConfig);
 
     my $style = $self->getJBrowseStyle();
