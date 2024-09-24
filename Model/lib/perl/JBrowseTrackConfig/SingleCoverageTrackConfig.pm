@@ -14,6 +14,9 @@ sub setDbid {$_[0]->{dbid} = $_[1]}
 sub getOrder {$_[0]->{order} }
 sub setOrder {$_[0]->{order} = $_[1]}
 
+sub getDisplayNameSuffix {$_[0]->{display_name_suffix} }
+sub setDisplayNameSuffix {$_[0]->{display_name_suffix} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -21,18 +24,33 @@ sub new {
     $self->setUrlTemplate($args->{url_template});
     $self->setOrder($args->{order});
     $self->setDbid($args->{dbid});
+    $self->setDisplayNameSuffix($args->{display_name_suffix});
 
     my $datasetConfig = $self->getDatasetConfigObj();
     my $studyDisplayName = $datasetConfig->getStudyDisplayName();
     my $displayName = $self->getDisplayName();
-
+    my $displayNameSuffix = $self->getDisplayNameSuffix();
     #my $order = $self->getTrackOrderNum();
     my $order = $self->getOrder();
     my $dbid = $self->getDbid();
     my $datasetName = $datasetConfig->getDatasetName();
 
-    $self->setId("$studyDisplayName - $order - $displayName Coverage");
+
+#    $self->setId("$studyDisplayName - $order - $displayName Coverage");
+    if ($order){
+    $self->setId("$studyDisplayName - $order - $displayName $displayNameSuffix");
+    }
+    else {
+    $self->setId("$studyDisplayName - $displayName $displayNameSuffix");
+    }
+
+    if ($dbid){
     $self->setLabel("$datasetName $dbid Coverage");        
+    }
+    else {
+    $self->setLabel("$datasetName Coverage");
+    }
+
 
     $self->setClipMarkerColor("black");
     $self->setCovMaxScoreDefault($args->{cov_max_score_default});
