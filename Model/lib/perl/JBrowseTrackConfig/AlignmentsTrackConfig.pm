@@ -55,7 +55,7 @@ sub new {
     
     $self->setId($args->{key});
     #$self->setId("${datasetName}_${displayName}_Alignments");
-    $self->setColor("black");
+    #$self->setColor("black");
     $self->setMin(0);
     $self->setMin(500);
     $self->setYScalePosition("left");
