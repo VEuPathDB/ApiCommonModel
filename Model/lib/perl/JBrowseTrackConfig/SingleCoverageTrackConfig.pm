@@ -52,7 +52,7 @@ sub new {
     }
 
 
-    $self->setClipMarkerColor("black");
+    $self->setClipMarkerColor($args->{clip_marker_color});
     $self->setCovMaxScoreDefault($args->{cov_max_score_default});
     $self->setCovMinScoreDefault($args->{cov_min_score_default});
     $self->setScale($args->{scale});
