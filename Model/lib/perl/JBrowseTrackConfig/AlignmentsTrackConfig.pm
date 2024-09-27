@@ -57,7 +57,7 @@ sub new {
     #$self->setId("${datasetName}_${displayName}_Alignments");
     #$self->setColor("black");
     $self->setMin(0);
-    $self->setMin(500);
+    $self->setMax(500);
     $self->setYScalePosition("left");
     $self->setChunkSizeLimit(50000000);
 
@@ -95,11 +95,12 @@ sub getHistograms {
     my $bigwigUrl = $store->getBigwigUrl();
 
     my $histograms = {};
-    $histograms->{color} = $self->getColor();
+    #$histograms->{color} = $self->getColor();
+    $histograms->{color} = "black";
     $histograms->{storeClass} = $store->getBigWigStoreType();
     $histograms->{min} = $self->getMin();
-    $histograms->{urlTemplate} = $bigwigUrl ;
-    $histograms->{max} = $self->getMax();;
+    $histograms->{urlTemplate} = $bigwigUrl;
+    $histograms->{max} = $self->getMax();
     return $histograms;
 }
 
