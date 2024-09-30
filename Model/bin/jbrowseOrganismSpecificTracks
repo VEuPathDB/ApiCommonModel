@@ -49,7 +49,10 @@ my $datasetProps = $jbrowseUtil->getDatasetProperties();
 
 my $dbh = $jbrowseUtil->getDbh();   
 
-#my $nameForFilenames = &nameForFilenames($organismAbbrev, $dbh);
+# TODO:  deal with "isReference" variable for antismash
+my $isReference;
+#my ($nameForFilenames, $isReference) = &nameForFilenamesAndIsReference($organismAbbrev, $dbh);
+
 
 
 my $result = {"tracks" => [] };
@@ -96,6 +99,13 @@ if ($organismAbbrev !~ m/dmeliso-1/ ){
 
 &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir);
 
+
+# TODO:  need to set isReference 
+if($projectName eq 'FungiDB' && $isReference) {
+  &addAntismash($result, $nameForFilenames, $webservicesDir, $projectName);
+}
+
+
 # other organism specific tracks
 if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
 &addCnvArray($dbh, $result);
@@ -141,17 +151,19 @@ print encode_json($result);
 #    my $fastaFile = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/fasta/genome.fasta");
 #}
 
-#sub nameForFilenames {
-#  my ($organismAbbrev, $dbh) = @_;
-#
-#  my $sql = "select name_for_filenames from apidb.organism where abbrev = '$organismAbbrev'";
-#  my $sh = $dbh->prepare($sql);
-#  $sh->execute();
-#  my ($nameForFileNames) = $sh->fetchrow_array();
-#  $sh->finish();
-#
-#  return $nameForFileNames;
-#}
+
+# sub nameForFilenamesAndIsReference {
+#   my ($organismAbbrev, $dbh) = @_;
+
+#   my $sql = "select name_for_filenames, is_reference_strain from apidb.organism where abbrev = '$organismAbbrev'";
+#   my $sh = $dbh->prepare($sql);
+#   $sh->execute();
+#   my ($nameForFileNames, $isReferenceStrain) = $sh->fetchrow_array();
+#   $sh->finish();
+
+#   return $nameForFileNames, $isReferenceStrain;
+# }
+
 
 sub addDatasets {
   my ($dbh) = @_;
@@ -838,6 +850,119 @@ sub addTRNA {
   }
 }
 
+
+# sub addPopsets {
+#   my ($dbh, $result) = @_;
+
+#   my $sql = "select count(*) from apidbtuning.popsetAttributes";
+
+#   my $sh = $dbh->prepare($sql);
+#   $sh->execute();
+#   my $count = $sh->fetchrow_array();
+#   $sh->finish();
+#   if($count > 0) {
+
+#     my $track = {storeClass => "JBrowse/Store/SeqFeature/REST",
+#                  baseUrl => "/a/service/jbrowse",
+#                  type => "JBrowse/View/Track/CanvasFeatures",
+#                  glyph => "JBrowse/View/FeatureGlyph/Box",
+#                  key => "Popset Isolate Sequence Alignments",
+#                  label => "popsetIsolates",
+# 		 maxFeatureScreenDensity => 0.03,
+#                  region_feature_densities => "function(){return true}",
+#                  category => "Sequence Analysis",
+#                  displayMode => "compact",
+#                  style => {
+#                    color => "{popsetColor}",
+#                  },
+#                  metadata => {
+#                    subcategory => "BLAT and Blast Alignments",
+#                    trackType => 'Segments',
+#                  },
+#                  query => {'feature' => "match:IsolatePopset",
+#                  },
+#                  onClick => {
+#                    content => "{popsetDetails}",
+#                  },
+#                  menuTemplate =>
+# 		 [
+# 		  {label => "View Details",
+# 		   content => "{popsetDetails}",
+# 		  },
+# 		  {label => "View Popset Sequence Page",
+# 		   title => "{popsetDetails}",
+# 		   iconClass => "dijitIconDatabase",
+# 		   action => "newWindow",
+# 		   url => "/a/app/record/popsetSequence/{name}",
+# 		  },
+# 		 ],
+# 		};
+#     push @{$result->{tracks}}, $track;
+#   }
+# }
+
+sub addAntismash {
+  my ($result, $nameForFilenames, $webservicesDir, $projectName) = @_;
+
+  # These reference genomes returned no result for antismash so no track should be shown
+  my %excludeOrganisms = ("AastaciAPO3" => 1,
+                          "Acandida2VRR" => 1,
+                          "AeuteichesMF1" => 1,
+                          "AinvadansNJM9701" => 1,
+                          "AlaibachiiNc14" => 1,
+                          "BlactucaeSF5" => 1,
+                          "GirregulareDAOMBR486" => 1,
+                          "GiwayamaeDAOMBR242034" => 1,
+                          "GultimumDAOMBR144" => 1,
+                          "HarabidopsidisEmoy2" => 1,
+                          "PaphanidermatumDAOMBR444" => 1,
+                          "ParrhenomanesATCC12531" => 1,
+                          "Pcactorum10300" => 1,
+                          "PcapsiciLT1534" => 1,
+                          "PcinnamomiGKB4" => 1,
+                          "PeffusaR13" => 1,
+                          "PinfestansT30-4" => 1,
+                          "PinsidiosumPi-s" => 1,
+                          "Ppalmivorasbr112.9" => 1,
+                          "PparasiticaINRA-310" => 1,
+                          "PsojaeP6497" => 1,
+                          "PvexansDAOMBR484" => 1,
+                          "SdiclinaVS20" => 1,
+      );
+
+  return if($excludeOrganisms{$nameForFilenames});
+
+  my $gffUrl = "/a/service/jbrowse/auxiliary?data=${projectName}/antismash/" . uri_escape_utf8("${nameForFilenames}.sorted.gff.gz");
+
+
+  my $description = "Secondary metabolite gene clusters as predicted using antiSmash version 7.1 under default parameters";
+
+  my $track = {storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+               urlTemplate => $gffUrl,
+               transcriptType => 'function(f) { return f.children()[0].get("type")}', # we have exactly 1 transcript per gene.  BUT it may be called either mRNA or transcript
+               category => "Sequence Analysis",
+               type => "CanvasFeatures",
+               key => "Secondary Metabolites (antiSMASH)",
+               label => "antibiotics and Secondary Metabolites Analysis SHell (antiSMASH)",
+               subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,proto_core",
+               style => {label => "{antismashLabel}",
+                         color => "{antismashColor}",
+                         utrColor => "white",
+                         borderColor => "black",
+
+               },
+               metadata => {
+                 subcategory => "Secondary Metabolites",
+                 description => $description,
+                 "Gene Legend" => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH6_colorcode_features.png'/>",
+                 "Region Legend" => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
+               },
+               unsafePopup => JSON::true
+
+  };
+  push @{$result->{tracks}}, $track;
+  
+}
 
 sub addLongReadRNASeq {
   my ($result, $datasetProperties, $nameForFileNames, $webservicesDir) = @_;

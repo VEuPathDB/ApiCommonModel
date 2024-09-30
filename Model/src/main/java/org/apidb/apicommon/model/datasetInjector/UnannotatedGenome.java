@@ -74,7 +74,6 @@ public class UnannotatedGenome extends DatasetInjector {
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesBySimilarity");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Taxonomy");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequencePieces");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Aliases");

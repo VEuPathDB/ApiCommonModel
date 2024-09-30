@@ -659,12 +659,12 @@ select ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_speci
             <![CDATA[
 select ga.source_id, ga.project_id, ps.user_dataset_id as dataset_id, pan.name as sample_name, naf.value, ps.unit
 from apidbtuning.geneattributes ga
-   , apidbuserdatasets.USERDATASETACCESSCONTROL ac
-   , apidbuserdatasets.ud_profileset ps
-   , apidbuserdatasets.ud_protocolappnode pan
-   , apidbuserdatasets.ud_nafeatureexpression naf
-where ac.user_id = $$user_id$$
-and ac.user_dataset_id = ps.user_dataset_id
+   , @VDI_CONTROL_SCHEMA@.availableUserDatasets da
+   , @VDI_DATASETS_SCHEMA@.ud_profileset ps
+   , @VDI_DATASETS_SCHEMA@.ud_protocolappnode pan
+   , @VDI_DATASETS_SCHEMA@.ud_nafeatureexpression naf
+where da.user_id = $$user_id$$
+and da.user_dataset_id = ps.user_dataset_id
 and ps.profile_set_id = pan.profile_set_id
 and pan.protocol_app_node_id = naf.PROTOCOL_APP_NODE_ID
 and naf.na_feature_id = ga.na_feature_id
@@ -707,27 +707,24 @@ SELECT DISTINCT g.*, DECODE('@PROJECT_ID@', 'UniDB', 'EuPathDB', g.project_id) A
 FROM (SELECT DECODE(ps.unit,'TPM','Transcript levels in TPM (transcripts per million).',
              'FPKM','Transcript levels in FPKM (fragments per kilobase of exon model per million mapped reads).') AS y_axis,
 	     ga.source_id, ga.project_id,
-             ga.organism AS gene_organism, ga.genus_species, i.name AS dataset_name, ga.source_id AS graph_ids,
+             ga.organism AS gene_organism, ga.genus_species, da.name AS dataset_name, ga.source_id AS graph_ids,
              CASE WHEN ga.source_id IS NULL THEN 0 ELSE 1 END AS has_graph_data, ga.organism AS graph_organism,
 	     'TRUE' AS mainOpen, 'FALSE' AS dataOpen, 'FALSE' AS has_meta_data, '' AS meta_data_categories,
-             graph_descrip.*, '' AS summary, '' AS short_attribution, i.name AS display_name, '' AS description,
-	     'RNA-Seq' AS assay_type, i.user_dataset_id AS dataset_id
+             graph_descrip.*, '' AS summary, '' AS short_attribution, da.name AS display_name, '' AS description,
+	     'RNA-Seq' AS assay_type, da.user_dataset_id AS dataset_id
       FROM apidbtuning.geneattributes ga,
-           APIDBUSERDATASETS.INSTALLEDUSERDATASET i,
-           APIDBUSERDATASETS.USERDATASETACCESSCONTROL ac,
-           APIDBUSERDATASETS.UD_NAFEATUREEXPRESSION naf,
-           APIDBUSERDATASETS.UD_PROTOCOLAPPNODE pan,
-           APIDBUSERDATASETS.UD_PROFILESET ps,
+           @VDI_CONTROL_SCHEMA@.AvailableUserDatasets da,
+           @VDI_DATASETS_SCHEMA@.UD_NAFEATUREEXPRESSION naf,
+           @VDI_DATASETS_SCHEMA@.UD_PROTOCOLAPPNODE pan,
+           @VDI_DATASETS_SCHEMA@.UD_PROFILESET ps,
            (SELECT 'UserDatasets::RNASeq' AS module,
                    'Stage/Sample' AS x_axis,
                    'true' AS is_graph_custom,
                    1 AS order_num
             FROM dual
            ) graph_descrip
-        WHERE i.user_dataset_id = ps.user_dataset_id
-          AND (i.is_invalid is null or i.is_invalid = 0)
-          AND ac.user_dataset_id = i.user_dataset_id
-          AND ac.user_id = $$user_id$$
+        WHERE ps.user_dataset_id = da.user_dataset_id
+          AND da.user_id = $$user_id$$
           AND ps.profile_set_id = pan.profile_set_id
           AND pan.protocol_app_node_id = naf.protocol_app_node_id
           AND naf.na_feature_id = ga.na_feature_id
@@ -931,7 +928,17 @@ from (
                      'true' as has_special_jbrowse, 1 as order_num
               from dual
               union
+            select 'pknoA1H1_phenotype_piggyBac_mutagenesis_MIS_MFS_RSRC' as dataset, 'PhenotypeScore' as module,
+                     'Genes ranked by score' as x_axis, 'MIS/MFS Scores' y_axis,  'false' as is_graph_custom,
+                     'true' as has_special_jbrowse, 1 as order_num
+              from dual
+              union
             select 'pberANKA_phenotype_Bushnell_functional_profiling_RSRC' as dataset, 'PhenotypeScore' as module,
+                     'Genes ranked by score' as x_axis, 'Relative Growth Rate' y_axis,  'false' as is_graph_custom,
+                     'false' as has_special_jbrowse, 1 as order_num
+              from dual
+              union
+            select 'pknoH_phenotype_piggyBac_mutagenesis_HME_MIS_OIS_RSRC' as dataset, 'PhenotypeScore' as module,
                      'Genes ranked by score' as x_axis, 'Relative Growth Rate' y_axis,  'false' as is_graph_custom,
                      'false' as has_special_jbrowse, 1 as order_num
               from dual
@@ -1280,17 +1287,60 @@ AND ((ga.start_min <= pw.mapping_start AND pw.mapping_start <= ga.end_max)
             <sql>
 <![CDATA[ 
 select ga.source_id, ga.project_id, r.score, r.score_type
-from APIDB.phenotypescore r, apidbtuning.geneattributes ga
+from apidb.phenotypescore r, apidbtuning.geneattributes ga
 where ga.na_feature_id = r.na_feature_id
-  and r.ROW_ALG_INVOCATION_ID in 
-  (select distinct s.ROW_ALG_INVOCATION_ID
+  and r.row_alg_invocation_id in 
+  (select distinct s.row_alg_invocation_id
    from study.study s, sres.externaldatabase ed, sres.externaldatabaserelease edr
-   where ed.EXTERNAL_DATABASE_ID = edr.EXTERNAL_DATABASE_ID
-   and s.EXTERNAL_DATABASE_RELEASE_ID=edr.EXTERNAL_DATABASE_RELEASE_ID
+   where ed.external_database_id = edr.external_database_id
+   and s.external_database_release_id=edr.external_database_release_id
    and ed.name='pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC')
  ]]>
        </sql>
+       </sqlQuery>
 
+       <sqlQuery name="pknoH_phenotype_piggyBac_mutagenesis_HME_MIS_OIS_RSRC" includeProjects="PlasmoDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="score"/>
+            <column name="score_type"/>
+            <sql>
+<![CDATA[ 
+select ga.source_id, ga.project_id, r.score, r.score_type
+from apidb.phenotypescore r, apidbtuning.geneattributes ga
+where ga.na_feature_id = r.na_feature_id
+  and r.row_alg_invocation_id in 
+  (select distinct s.row_alg_invocation_id
+   from study.study s, sres.externaldatabase ed, sres.externaldatabaserelease edr
+   where ed.external_database_id = edr.external_database_id
+   and s.external_database_release_id=edr.external_database_release_id
+   and ed.name='pknoH_phenotype_piggyBac_mutagenesis_HME_MIS_OIS_RSRC')
+ ]]>
+        </sql>
+        </sqlQuery>
+
+
+       <sqlQuery name="pknoA1H1_phenotype_piggyBac_mutagenesis_MIS_MFS_RSRC" includeProjects="PlasmoDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="score"/>
+            <column name="score_type"/>
+            <sql>
+<![CDATA[ 
+select ga.source_id, ga.project_id, r.score_type
+     , CASE WHEN r.score_type = 'mutability in CDS'
+       THEN CASE when r.score = 0 then 'mutable' when r.score = 1 then 'nonmutable' else 'not_determined' end
+       ELSE cast(round(r.score, 2) as  VARCHAR(10)) END as score
+from apidb.phenotypescore r, apidbtuning.geneattributes ga
+where ga.na_feature_id = r.na_feature_id
+  and r.row_alg_invocation_id in 
+  (select distinct s.row_alg_invocation_id
+   from study.study s, sres.externaldatabase ed, sres.externaldatabaserelease edr
+   where ed.external_database_id = edr.external_database_id
+   and s.external_database_release_id=edr.external_database_release_id
+   and ed.name='pknoA1H1_phenotype_piggyBac_mutagenesis_MIS_MFS_RSRC')
+ ]]>
+        </sql>
         </sqlQuery>
 
 
@@ -3119,7 +3169,6 @@ FROM
             <sql>
                <![CDATA[
 select distinct * from (
-
 SELECT * FROM (
 SELECT 
   edd.dataset_presenter_display_name AS dataset
@@ -3150,11 +3199,28 @@ WHERE dataset != 'Malaria Literature Database'
 AND dataset != 'Ontology Based Pattern Identification'
 AND dataset != 'GeneDB: The Sanger Institute Pathogen Genomics Database'
 UNION
-SELECT REPLACE(substr(ed.name, instr(ed.name, '_', 1, 3)+1), '_geneMapping_RSRC', '') as dataset,
-  ga.source_id
+SELECT
+  regexp_replace(replace(replace(regexp_replace(ed.name, '^.*_dbxref_', ''),
+                                 '_geneMapping_RSRC', ''),
+                         '-Agilent', ''),
+                 '_.*$', '')
+  as dataset
+, ga.source_id
 , ga.project_id
 , sref.primary_identifier as ext_id
-, '' as link_url 
+, case
+    when ed.name like '%_dbxref_A-%'
+      then 'https://www.ebi.ac.uk/biostudies/arrayexpress/arrays/'
+           || regexp_replace(replace(replace(replace(ed.name, '_geneMapping_RSRC', ''),
+                                             '-Agilent', ''),
+                                     '_GenePix', ''),
+                             '^.*_dbxref_', '')
+    when ed.name like '%_dbxref_GPL%'
+      then 'http://ncbi.nlm.nih.gov/geo/query/acc.cgi?acc='
+           || regexp_replace(regexp_replace(ed.name, '^.*dbxref_GPL', 'GPL'),
+                             '[-_].*$', '')
+    else ''
+  end as link_url 
 FROM SRes.DbRef sref
 , DoTS.DbRefNAFeature refea
 , SRES.ExternalDatabase ed
@@ -3165,9 +3231,7 @@ WHERE sref.external_database_release_id  = edr.external_database_release_id
   AND ed.name like '%geneMapping%'
   AND refea.db_ref_id = sref.db_ref_id 
   AND refea.na_feature_id = ga.na_feature_id 
-
 UNION
-
 SELECT 
   edd.dataset_presenter_display_name AS dataset
 , ta.gene_source_id
@@ -3195,7 +3259,6 @@ SELECT d.name as dataset
 , ga.project_id
 , dbr.primary_identifier AS ext_id
 , REPLACE(eru.id_url, '###ID###', dbr.primary_identifier) AS link_url
-
 FROM
    sres.dbref dbr
 , DOTS.dbrefnafeature dbrf
@@ -3215,7 +3278,6 @@ SELECT d.name as dataset
 , ga.project_id
 , dbr.primary_identifier AS ext_id
 , REPLACE(eru.id_url, '###ID###', dbr.primary_identifier) AS link_url
-
 FROM
    sres.dbref dbr
 , DOTS.dbrefnafeature dbrf
@@ -4160,13 +4222,16 @@ order by pan.node_order_num
             <column name="score_type"/>
             <sql>
             <![CDATA[
-select ggp.source_id
+select distinct ggp.source_id
 , ggp.profile_graph_id AS gene
 , ga.project_id
 , dnt.dataset_presenter_id as dataset_id
 , nvl(psdi.profile_set_display_name, ps.name) as profile_set_display_name
 , pan.name as sample_name
-, round(cp.score, 2) as phenotype_score
+, CASE WHEN cp.score_type = 'mutability in CDS'
+       THEN CASE when cp.score = 0 then 'mutable' when cp.score = 1 then 'nonmutable' else 'not_determined' end
+       ELSE cast(round(cp.score, 2) as  VARCHAR(10)) END as phenotype_score
+--, round(cp.score, 2) as phenotype_score
 , cp.score_type
 from apidb.phenotypescore cp
  , apidbtuning.geneattributes ga
@@ -4192,7 +4257,9 @@ and r.external_database_id = d.external_database_id
 and ps.name = psdi.profile_set_name (+)
 and d.name = dnt.name
 and ggp.profile_graph_id = ga.source_id
-and d.name='pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC'
+and d.name in ('pfal3D7_phenotype_pB_mutagenesis_MIS_MFS_RSRC',
+               'pknoH_phenotype_piggyBac_mutagenesis_HME_MIS_OIS_RSRC',
+               'pknoA1H1_phenotype_piggyBac_mutagenesis_MIS_MFS_RSRC')
 UNION
 select ggp.source_id
 , ggp.profile_graph_id AS gene
@@ -4200,7 +4267,7 @@ select ggp.source_id
 , dnt.dataset_presenter_id as dataset_id
 , nvl(psdi.profile_set_display_name, ps.name) as profile_set_display_name
 , pan.name as sample_name
-, round(cp.relative_growth_rate, 2) as phenotype_score
+, cast(round(cp.relative_growth_rate, 2) as  VARCHAR(10))   as phenotype_score
 , 'relative growth rate' as score_type
 from apidb.phenotypegrowthrate cp
  , apidbtuning.geneattributes ga
@@ -4241,8 +4308,10 @@ and ggp.profile_graph_id = ga.source_id
             <![CDATA[
 SELECT ga.source_id
      , ga.project_id
-     , ps.score
      , ps.score_type
+     , CASE WHEN ps.score_type = 'mutability in CDS'
+            THEN CASE when score = 0 then 'mutable' when score = 1 then 'nonmutable' else 'not_determined' end
+            ELSE cast(ps.score as  VARCHAR(10)) END score
      , pan.name
 FROM apidbtuning.geneattributes ga
    , apidb.phenotypescore ps
