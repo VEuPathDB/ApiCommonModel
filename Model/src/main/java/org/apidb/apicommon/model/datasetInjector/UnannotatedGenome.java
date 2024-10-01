@@ -26,7 +26,7 @@ public class UnannotatedGenome extends DatasetInjector {
       for (Map.Entry<String, String> entry : orgProps.entrySet()) {
           setPropValue(entry.getKey(), entry.getValue());
       }
- 
+
       injectTemplate("jbrowseOrganismBuildProps");
   }
 
