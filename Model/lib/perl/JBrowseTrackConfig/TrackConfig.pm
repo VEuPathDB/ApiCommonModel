@@ -46,6 +46,13 @@ sub setDescription {$_[0]->{description} = $_[1]}
 sub getDatasetConfigObj {$_[0]->{dataset_config}}
 sub setDatasetConfigObj {$_[0]->{dataset_config} = $_[1]}
 
+# These are optional  metadata
+sub getGeneLegend {$_[0]->{gene_legend}}
+sub setGeneLegend {$_[0]->{gene_legend} = $_[1]}
+
+sub getRegionLegend {$_[0]->{region_legend}}
+sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = bless {}, $class;
@@ -71,6 +78,10 @@ sub new {
     $self->setStore($args->{store});
 
     $self->setDescription($args->{description});
+
+    # These are optional
+    $self->setGeneLegend($args->{gene_legend});
+    $self->setRegionLegend($args->{region_legend});
 
     return $self;
 }
@@ -108,6 +119,9 @@ sub getMetadata {
     $summary = Encode::decode('utf8', uri_unescape($summary));
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
 
+    my $geneLegend = $self->getGeneLegend();
+    my $regionLegend = $self->getRegionLegend();
+
     unless(defined($subcategory) || defined($trackType)
            || defined($attribution) || defined($summary) || defined($studyDisplayName)) {
         return undef;
@@ -119,6 +133,8 @@ sub getMetadata {
     $metadata->{attribution} = $attribution if($attribution);
     $metadata->{dataset} = $studyDisplayName if($studyDisplayName);
     $metadata->{description} = $summary if($summary);
+    $metadata->{GeneLegend} = $geneLegend if($geneLegend);
+    $metadata->{RegionLegend} = $regionLegend if($regionLegend);
     return $metadata;
 }
 
