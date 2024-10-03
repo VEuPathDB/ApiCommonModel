@@ -1,5 +1,5 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig;
-use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 use strict;
 use warnings;
 
@@ -59,9 +59,9 @@ sub getJBrowseStyle {
 
     $jbrowseStyle->{postHeight} = "{gsnapIntronPostHeight}";
     $jbrowseStyle->{lineThickness} = "{gsnapIntronLineThickness}";
-    $jbrowseStyle->{showLabels} = "false";
+    $jbrowseStyle->{showLabels} = JSON::false;
     $jbrowseStyle->{label} = "function(f){return \"Reads=\" + f.get(\"score\");}";
-    $jbrowseStyle->{strandArrow} = "JSON::false";
+    $jbrowseStyle->{strandArrow} = JSON::false;
     $jbrowseStyle->{color} = "{gsnapIntronColorFromStrandAndScore}";
    
     return $jbrowseStyle;
@@ -81,7 +81,7 @@ sub getJBrowseObject{
         $jbrowseObject->{maxFeatureScreenDensity} = 0.5;
         $jbrowseObject->{subtracks} = [{featureFilters => {annotated_intron => "Yes", evidence => "Strong Evidence",},visible => 1, label => "Matches Annotation", metadata => {},},{featureFilters => {annotated_intron => "No",evidence => "Strong Evidence",},visible => 1,label => "Unannotated (Strong Evidence)",metadata => {},},{featureFilters => {annotated_intron => "No",evidence => "Weak Evidence",},visible => 0,label => "Unannotated (Weak Evidence)",metadata => {},}];
         $jbrowseObject->{glyph} = "EbrcTracks/View/FeatureGlyph/AnchoredSegment";
-        $jbrowseObject->{unsafePopup} = "JSON::true";
+        $jbrowseObject->{unsafePopup} = JSON::true;
         $jbrowseObject->{displayMode} = "normal";
 
 
