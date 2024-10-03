@@ -18,6 +18,7 @@ sub new {
 
     $self->setId($args->{key});
     $self->setLabel($args->{label}); 
+    $self->setGlyph($args->{glyph});
 
     my $store;
 
@@ -30,7 +31,9 @@ sub new {
     }
 
     $self->setStore($store);
-    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments");
+    
+    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments") unless(defined $self->getGlyph());
+
     my $detailsFunction = "{massSpecDetails}";
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
@@ -54,7 +57,8 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-    $jbrowseObject->{subParts} = "Peptide";
+    $jbrowseObject->{subParts} = "Peptide"; 
+
 
     return $jbrowseObject;
   }
