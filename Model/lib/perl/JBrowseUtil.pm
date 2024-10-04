@@ -9,7 +9,22 @@ use DBD::Oracle;
 use WDK::Model::ModelConfig;
 use Data::Dumper;
 
-sub getDbh {$_[0]->{_dbh}}
+sub getDbh {
+  my ($self) = @_;
+
+  my $projectName = $self->getProjectName();
+
+  my $modelConfig = new WDK::Model::ModelConfig($projectName);
+  my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                            $modelConfig->getAppDbLogin(),
+                            $modelConfig->getAppDbPassword()
+        )
+    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+  $dbh->{LongTruncOk} = 0;
+  $dbh->{LongReadLen} = 10000000;
+  return $dbh;
+}
 
 # this is invariant - hard coded below
 #my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
@@ -73,21 +88,10 @@ sub new {
  # not sure if you need this
   $self->setCacheFileName();
 
-  my $modelConfig = new WDK::Model::ModelConfig($args->{projectName});
-  my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
-                            $modelConfig->getAppDbLogin(),
-                            $modelConfig->getAppDbPassword()
-        )
-    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
-
-  $dbh->{LongTruncOk} = 0;
-  $dbh->{LongReadLen} = 10000000;
-  $self->{_dbh} = $dbh;
 
   #my $organismAbbrev ="tgonME49"; # $args->{organismAbbrev};;$self->getOrganismAbbrev();
   my $organismAbbrev = $self->getOrganismAbbrev();
-
-  return if !($organismAbbrev);
+  return $self unless $organismAbbrev;
 
   my $buildPropertiesFile = $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/datasetAndPresenterProps.conf"; 
 
