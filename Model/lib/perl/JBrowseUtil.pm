@@ -66,6 +66,15 @@ sub setwebServicePropertiesFilePath{$_[0]->{web_service_file_path} = $_[1]}
 sub getDatasetProperties {$_[0]->{_dataset_properties}}
 sub setDatasetProperties {$_[0]->{_dataset_properties} = $_[1]}
 
+sub getApplicationType {$_[0]->{application_type}}
+sub setApplicationType {$_[0]->{application_type} = $_[1]}
+
+sub getLegacyWebappBaseUrl {$_[0]->{legacy_webapp_base_url}}
+sub setLegacyWebappBaseUrl {$_[0]->{legacy_webapp_base_url} = $_[1]}
+
+sub getLocalHost {$_[0]->{local_host}}
+sub setLocalHost {$_[0]->{local_host} = $_[1]}
+
 # standard to put new method first.
 sub new {
   my ($class, $args) = @_;
@@ -80,6 +89,9 @@ sub new {
   $self->setBuildNumber($args->{buildNumber});
   $self->setWebservicesDir($args->{webservicesDir});
   $self->setFileName($args->{fileName});
+  $self->setApplicationType($args->{applicationType});
+  $self->setLegacyWebappBaseUrl($args->{legacyWebappBaseUrl});
+  $self->setLocalHost($args->{localhost});
 
   my $type = lc($args->{type}) eq 'protein' ? 'protein' : 'genome';
   $self->setType($type);
