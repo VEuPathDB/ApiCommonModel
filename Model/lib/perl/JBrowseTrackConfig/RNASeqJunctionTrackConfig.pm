@@ -34,7 +34,7 @@ sub new {
     my $store;
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("{gsnapIntronColorFromStrandAndScore}");
+        $store->setQuery("gsnap:unifiedintronjunctionnew");
 
         $self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
         $self->setTrackTypeDisplay("Predicted Intron Junctions");
