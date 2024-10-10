@@ -58,7 +58,7 @@ public class RNASeq extends  DatasetInjector {
       Boolean switchStrandsGBrowse = getPropValueAsBoolean("switchStrandsGBrowse");
       Boolean switchStrandsProfiles = getPropValueAsBoolean("switchStrandsProfiles");
 
-      setPropValue("metadataFileSuffix","");
+      setPropValue("metadataFileSuffix","NA");
       setOrganismAbbrevFromDatasetName();
 
 
@@ -341,8 +341,10 @@ public class RNASeq extends  DatasetInjector {
           //          injectTemplate("gbrowseTrackCategory");
       }
 
-      String studyName = getPropValue("name");
-      setPropValue("studyName", studyName);
+      // String studyName = getPropValue("name");
+      // setPropValue("studyName", studyName);
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      injectTemplate("jbrowseRNASeqBuildProps");
   }
 
 

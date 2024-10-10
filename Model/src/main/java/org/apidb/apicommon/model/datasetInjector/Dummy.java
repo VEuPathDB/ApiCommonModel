@@ -6,6 +6,10 @@ public class Dummy extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
+
+
+    setOrganismAbbrevFromDatasetName();
+
   }
 
   @Override

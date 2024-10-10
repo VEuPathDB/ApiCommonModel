@@ -7,58 +7,29 @@ use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 use URI::Escape;
 use Storable 'dclone';
+use ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec;
+use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedPostTranslationalMod;
 
-my ($organismAbbrev, $projectName) = @ARGV;
+my ($organismAbbrev, $projectName, $applicationType) = @ARGV;
 
 my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_organismSpecificProteinTracksCache.json", type => 'protein' });
-
-# we're done if we can get from cache file
-if($jbrowseUtil->printFromCache()) {
-  exit 0;
-}
-open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
 
 my $dbh = $jbrowseUtil->getDbh();   
 
 my $result = {"tracks" => [] };
 
-my $datasetProperties = &datasetProperties($dbh);
 
-&addProteinExpressionMassSpec($dbh, $result, $datasetProperties);
+my $datasetProps = $jbrowseUtil->getDatasetProperties();
+#print Dumper ($datasetProps);
 
-print CACHE encode_json($result);
+
+&addProteinExpressionMassSpec($dbh, $result, $datasetProps);
+
+
 print encode_json($result);
-close CACHE;
 
 
-sub datasetProperties {
-  my ($dbh) = @_;
 
-  my $sql = "select distinct dsp.name, dnt.name as extdbName, dsp.dataset_presenter_id, prop.property, prop.value
-from apidbtuning.datasetnametaxon dnt,
-     apidbtuning.datasetproperty prop,
-     apidbtuning.datasetpresenter dsp,
-     apidb.organism o
-where dnt.taxon_id = o.taxon_id
-and o.abbrev = '${organismAbbrev}'
-and dnt.name like '%_massSpec%_RSRC'
-and dnt.dataset_presenter_id = prop.dataset_presenter_id
-and prop.dataset_presenter_id = dsp.dataset_presenter_id
-";
-
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-
-  my %datasetProperties;
-  while(my ($datasetName, $extdbName, $datasetPresenterId, $prop, $val) = $sh->fetchrow_array()) {
-    $datasetProperties{$datasetName}->{$prop} = $val;
-    $datasetProperties{$datasetName}->{datasetPresenterId} = $datasetPresenterId;
-    $datasetProperties{$datasetName}->{datasetExtdbName} = $extdbName;
-  }
-  $sh->finish();
-
-  return \%datasetProperties;
-}
 
 sub addProteinExpressionMassSpec {
   my ($dbh, $result, $datasetProperties) = @_;
@@ -66,20 +37,22 @@ sub addProteinExpressionMassSpec {
 
   my $hasPTMDataset;
 
-  foreach my $dataset (keys %$datasetProperties) {
+  my $proteinExpressionMassSpecDatasets = $datasetProps->{protexpmassspec} ? $datasetProps->{protexpmassspec} : {};
+
+  foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
     next unless($dataset =~ /_massSpec_/);
 
-    my $experimentName = $datasetProperties->{$dataset}->{name};
-    my $datasetDisplayName = $datasetProperties->{$dataset}->{datasetDisplayName};
-    my $datasetPresenterId = $datasetProperties->{$dataset}->{datasetPresenterId};
-    my $datasetExtdbName = $datasetProperties->{$dataset}->{datasetExtdbName};
-    my $category = $datasetProperties->{$dataset}->{datasetClassCategory};
+    my $experimentName = $proteinExpressionMassSpecDatasets->{$dataset}->{name};
+    my $datasetDisplayName = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetDisplayName};
+    my $datasetPresenterId = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetPresenterId};
+    my $datasetExtdbName = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetExtdbName};
+    my $category = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetClassCategory};
 
-    my $hasPTMs = $datasetProperties->{$dataset}->{hasPTMs};
+    my $hasPTMs = $proteinExpressionMassSpecDatasets->{$dataset}->{hasPTMs};
 
-    my $summary = $datasetProperties->{$dataset}->{summary};
+    my $summary = $proteinExpressionMassSpecDatasets->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
-    my $shortAttribution = $datasetProperties->{$dataset}->{shortAttribution};
+    my $shortAttribution = $proteinExpressionMassSpecDatasets->{$dataset}->{shortAttribution};
 
     my $feature = "domain:MassSpecPeptide";
 
@@ -88,70 +61,38 @@ sub addProteinExpressionMassSpec {
       $hasPTMDataset = 1;
     }
 
-    my $massSpec = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                    baseUrl => "/a/service/jbrowse",
-                    type => "JBrowse/View/Track/CanvasFeatures",
-                    glyph => "JBrowse/View/FeatureGlyph/Box",
-                    subParts => "Peptide",
-                    displayMode => "compact",
-                    query => {'feature' => $feature,
-                              'edName' => "like '${datasetExtdbName}'",
-                              'seqType' => "protein",
-                    },
-                    key => "${datasetDisplayName}  MS/MS Peptides  ${shortAttribution}",
-                    label => "${dataset}",
-                    category => "Proteomics",
-                    style => {'color' => "{massSpecColor}",
-                              'label' => "Sample,sample,name",
-                    },
-                    metadata => {
-                      dataset => $datasetDisplayName,
-                      trackType => 'Segments',
-                      attribution => $shortAttribution,
-                      description => $summary,
-                    },
-                    fmtMetaValue_Dataset => "function() { return datasetLinkByDatasetId('${datasetPresenterId}', '${datasetDisplayName}'); }",
-                    fmtMetaValue_Description => "function() { return datasetDescription('${summary}', ''); }",
-                    onClick => {
-                      content => "{massSpecDetails}",
-                    },
-                    menuTemplate => [
-                      {label => "View Details", 
-                       content => "{massSpecDetails}",
-                      },
-                        ],
-    };
+    my $queryParams = {         
+                            'edName' => "like '${datasetExtdbName}'",
+                            'feature' => $feature,
+                            'seqType' => "protein",
+                                           };
+
+    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
+                                                                                                key => "${datasetDisplayName}  MS/MS Peptides  $shortAttribution",
+                                                                                                label => "${dataset}",
+                                                                                                dataset_name => $dataset,
+                                                                                                attribution => $shortAttribution,
+                                                                                                study_display_name => $datasetDisplayName,
+                                                                                                summary => $summary,
+                                                                                                application_type => $applicationType,
+                                                                                                query_params => $queryParams,
+                                                                                                dataset_presenter_id => $datasetPresenterId,
+												glyph => "JBrowse/View/FeatureGlyph/Box",
+                                                                                              })->getConfigurationObject();
 
     push @{$result->{tracks}}, $massSpec;
   }
 
   if($hasPTMDataset) {
 
-    my $unifiedPtm = {storeClass => "JBrowse/Store/SeqFeature/REST",
-                    baseUrl => "/a/service/jbrowse",
-                    type => "JBrowse/View/Track/CanvasFeatures",
-                    glyph => "EbrcTracks/View/FeatureGlyph/Diamond",
-                    query => {'feature' => "domain:UnifiedPostTraslationalMod",
-                              'seqType' => "protein",
-                    },
-                    key => "Unified Post Translational Modification MassSpec",
-                    label => "UnifiedMassSpecPeptides",
-                    category => "Proteomics",
-                    style => {'color' => "{unifiedPostTranslationalModColor}",
-                      labelScale => 1000000000000000, #some really big number so labels are not shown; showLabels=false not working here or in hook TODO
-                    },
-                    metadata => {
-                      trackType => 'Diamond',
-                    },
-                    onClick => {
-                      content => "{unifiedPostTranslationalModTitle}",
-                    },
-                    menuTemplate => [
-                      {label => "View Details", 
-                       content => "{unifiedPostTranslationalModTitle}",
-                      },
-                        ],
-    };
+  my $ptmQueryParams  = {
+                            'seqType' => "protein",
+                            'feature' => "domain:UnifiedPostTraslationalMod",
+                                           };
+
+  my $unifiedPtm = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedPostTranslationalMod->new({application_type => $applicationType,
+                                                                                               query_params => $ptmQueryParams,
+                                                                                              })->getConfigurationObject();
 
     push @{$result->{tracks}}, $unifiedPtm;
   }
