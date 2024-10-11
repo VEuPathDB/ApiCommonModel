@@ -36,7 +36,6 @@ sub new {
     my $datasetName = $datasetConfig->getDatasetName();
 
 
-#    $self->setId("$studyDisplayName - $order - $displayName Coverage");
     if ($order){
     $self->setId("$studyDisplayName - $order - $displayName $displayNameSuffix");
     }
@@ -48,9 +47,12 @@ sub new {
     $self->setLabel("$datasetName $dbid Coverage");        
     }
     else {
-    $self->setLabel("$datasetName Coverage");
+    $self->setLabel("$displayName $displayNameSuffix");
     }
-
+    
+    if (!defined($order) && !defined($dbid)) {
+    $self->setTrackTypeDisplay("Coverage (ploidy Normalized)");;
+    }
 
     $self->setClipMarkerColor($args->{clip_marker_color});
     $self->setCovMaxScoreDefault($args->{cov_max_score_default});
