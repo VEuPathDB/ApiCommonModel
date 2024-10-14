@@ -5,6 +5,9 @@ use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
+#sub getProjectUrl {$_[0]->{project_url}}
+#sub setProjectUrl {$_[0]->{project_url} = $_[1] }
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -18,6 +21,7 @@ sub new {
 
     $self->setId("SNPs by coding potential");
     $self->setLabel("SNPs by coding potential");
+#    $self->setProjectUrl($args->{project_url}); 
 
     my $store;
 
@@ -25,6 +29,9 @@ sub new {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
         $store->setQuery("SNP:Population");
         $store->setQueryParamsHash({edname => "InsertSnps.pm NGS SNPs INTERNAL"});
+#	my $projectUrl = $self->getProjectUrl();
+#        my $baseUrl = $projectUrl . "/a/service/jbrowse";
+#        $store->setBaseUrl($baseUrl);
     }
     else {
         # TODO
@@ -40,7 +47,7 @@ sub new {
 
     # TODO - replace with:
     # $self->setRegionFeatureDensities(JSON::true);
-    $self->setRegionFeatureDensities('function(){return_true}');
+    $self->setRegionFeatureDensities('function(){return true}');
 
     $self->setDisplayMode("normal");
     $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
@@ -58,7 +65,7 @@ sub getJBrowseStyle {
 
     # TODO - replace with:
     # $jbrowseStyle->{strandArrow} = JSON::false;
-    $jbrowseStyle->{strandArrow} = 'function(){return_false}';
+    $jbrowseStyle->{strandArrow} = 'function(){return false}';
     $jbrowseStyle->{labelScale} = 1000000000000000;
     return $jbrowseStyle;
 }
