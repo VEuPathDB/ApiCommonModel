@@ -115,6 +115,7 @@ sub getMetadata {
     my $subcategory = $datasetConfig->getSubcategory() if ($datasetConfig);
     my $trackType = $self->getTrackTypeDisplay();
     my $attribution = $datasetConfig->getAttribution() if ($datasetConfig);
+    $attribution = Encode::decode('utf8', uri_unescape($attribution));
     my $summary = $datasetConfig->getSummary() if ($datasetConfig);
     $summary = Encode::decode('utf8', uri_unescape($summary));
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
