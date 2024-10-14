@@ -74,7 +74,7 @@ sub getJBrowseObject{
     ];
     # TODO - replace with:
     # $jbrowseObject->{unsafePopup} = "JSON::true";
-    $jbrowseObject->{unsafePopup} = 'function(){return_true}';
+    $jbrowseObject->{unsafePopup} = 'function(){return true}';
 
     $jbrowseObject->{transcriptType} = "processed_transcript";
     $jbrowseObject->{noncodingType} = ["nc_transcript"];
