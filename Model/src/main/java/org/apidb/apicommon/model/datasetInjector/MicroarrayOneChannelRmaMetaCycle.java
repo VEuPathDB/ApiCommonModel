@@ -8,11 +8,8 @@ public class MicroarrayOneChannelRmaMetaCycle extends MicroarrayOneChannelRma {
 
       super.injectTemplates();
 
-      injectTemplate("metaCycleQuestion");
-      //      injectTemplate("metaCycleParamQuery");
-
       setPropValue("searchCategory", "searchCategory-transcriptomics-metacycle");
-      setPropValue("questionName", "GeneQuestions.GenesByMetaCycle" + getDatasetName());
+
       injectTemplate("internalGeneSearchCategory");
 
   }
@@ -24,7 +21,7 @@ public class MicroarrayOneChannelRmaMetaCycle extends MicroarrayOneChannelRma {
 
       super.addModelReferences();
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMetaCycle" + getDatasetName()); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMicroarrayMetaCycle" + getDatasetName()); 
 
   }
 

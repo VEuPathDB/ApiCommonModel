@@ -24,10 +24,10 @@ public abstract class Expression extends DatasetInjector {
     protected abstract void setProfileSamplesHelp();
 
     protected String getSearchCategoryType() {
-        //	System.out.println("dataset="+getDatasetName());
+	System.out.println("dataset="+getDatasetName());
 	String lcDatasetClassCategory=getPropValue("datasetClassCategory").toLowerCase();
 	if (lcDatasetClassCategory.equals("proteomics")) {
-            //  System.out.println(lcDatasetClassCategory);
+	    System.out.println(lcDatasetClassCategory);
 	    return lcDatasetClassCategory;
 	}
 	return "transcriptomics";
@@ -84,10 +84,6 @@ public abstract class Expression extends DatasetInjector {
 
     @Override
     public void addModelReferences() {
-
-      String className = this.getClass().getSimpleName();
-      setPropValue("templateInjectorClassName", className);
-
       setGraphModule();
       setProfileSamplesHelp();
 
@@ -98,15 +94,12 @@ public abstract class Expression extends DatasetInjector {
     @Override
     public void injectTemplates() {
 
-
-
         // perl packages disallow some characters in the package name... use this to name the graphs
         setGraphDatasetName();
 	setShortAttribution();
         setOrganismAbbrevFromDatasetName();
 
         String projectName = getPropValue("projectName");
-
 
 
         if(getPropValueAsBoolean("isEuPathDBSite")) {

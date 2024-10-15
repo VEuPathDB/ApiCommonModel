@@ -1,7 +1,8 @@
 package org.apidb.apicommon.model.datasetInjector.custom.TriTrypDB;
 
-import org.apidb.apicommon.model.datasetInjector.RNASeqEbi;
-public class RNASeqMetaCycle extends RNASeqEbi {
+import org.apidb.apicommon.model.datasetInjector.RNASeq;
+public class RNASeqMetaCycle extends RNASeq {
+
 
   @Override
   public void addModelReferences() {

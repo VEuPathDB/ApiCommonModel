@@ -8,12 +8,12 @@ public class RNASeqMetaCycle extends RNASeqEbi {
 
       super.injectTemplates();
 
-      injectTemplate("metaCycleQuestion");
+      injectTemplate("rnaSeqMetaCycleQuestion");
 
-      //      injectTemplate("metaCycleParamQuery");
+      //      injectTemplate("rnaSeqMetaCycleParamQuery");
 
       setPropValue("searchCategory", "searchCategory-transcriptomics-metacycle");
-      setPropValue("questionName", "GeneQuestions.GenesByMetaCycle" + getDatasetName());
+      setPropValue("questionName", "GeneQuestions.GenesByRNASeqMetaCycle" + getDatasetName());
 
       injectTemplate("internalGeneSearchCategory");
 
@@ -26,7 +26,7 @@ public class RNASeqMetaCycle extends RNASeqEbi {
 
       super.addModelReferences();
 
-      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByMetaCycle" + getDatasetName()); 
+      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeqMetaCycle" + getDatasetName()); 
 
   }
 

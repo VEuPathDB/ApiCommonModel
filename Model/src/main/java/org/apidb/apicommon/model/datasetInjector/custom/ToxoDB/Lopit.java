@@ -26,6 +26,7 @@ public class Lopit extends DatasetInjector {
      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLOPIT"); 
  
 
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "LOPITdescription");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "LOPITGraphSVG");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "LOPITMAP");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "LOPITMCMC");
