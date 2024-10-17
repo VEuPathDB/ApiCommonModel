@@ -37,7 +37,7 @@ public class ProteinExpressionMassSpec extends DatasetInjector {
                         String extractOrgAbbrev = "";
 			extractOrgAbbrev = parts[0];
 			setPropValue("organismAbbrev", extractOrgAbbrev );
-			System.out.println(extractOrgAbbrev); 
+			//System.out.println(extractOrgAbbrev); 
 			setPropValue("datasetName", key);
                 	setPropValue("datasetExtdbName", key);
 			setPropValue("datasetClassCategory", datasetClassCategory);
