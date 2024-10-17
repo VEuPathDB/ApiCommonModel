@@ -49,8 +49,9 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    $jbrowseObject->{url_template}= $self->getUrlTemplate();
+    $jbrowseObject->{urlTemplate}= $self->getUrlTemplate();
     $jbrowseObject->{chunkSizeLimit} = '10000000';
+    $jbrowseObject->{glyph} = $self->getGlyph();
     return $jbrowseObject;
 }
 
