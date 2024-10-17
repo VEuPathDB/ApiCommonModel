@@ -44,6 +44,7 @@ public class Coexpression extends  DatasetInjector {
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
 
+  @Override
   public String[][] getPropertiesDeclaration() {
     String [][] propertiesDeclaration = { {"dataSource", "data source in the coexpression table"},
                                           {"exampleGeneIds", "Gene Ids provided as default on coexpression Q page"},
