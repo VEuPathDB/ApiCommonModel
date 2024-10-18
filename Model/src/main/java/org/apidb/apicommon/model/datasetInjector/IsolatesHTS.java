@@ -47,7 +47,7 @@ public class IsolatesHTS extends DatasetInjector {
       }
       setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
       setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
-      String shortAttribution = getPropValue("shortAttribution");
+      //String shortAttribution = getPropValue("shortAttribution");
       injectTemplate("jbrowseDnaSeqBuildProps");
 
       if(getPropValueAsBoolean("hasCNVData")) {
