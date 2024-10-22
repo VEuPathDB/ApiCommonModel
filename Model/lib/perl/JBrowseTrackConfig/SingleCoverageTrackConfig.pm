@@ -91,7 +91,10 @@ sub getJBrowse2Object{
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
-    my $studyDisplayName = $self->getStudyDisplayName();
+    my $datasetConfig = $self->getDatasetConfigObj();
+    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
+
+
 
     $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getUrlTemplate(),locationType => "UriLocation"};
     $jbrowse2Object->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
