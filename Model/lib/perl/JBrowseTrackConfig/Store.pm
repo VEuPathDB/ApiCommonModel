@@ -18,8 +18,22 @@ sub setRelativePathToFile {$_[0]->{relative_path_to_file} = $_[1]}
 
 my $JBROWSE_STORE_ENDPOINT = "/a/service/jbrowse/store?data=";
 
+sub new {
+    my ($class, $args) = @_;
+    my $self = $class->SUPER::new($args);
 
-sub setUriTemplateForStore {
+    $self->setStoreType($args->{store_type});
+
+    if(my $relativePathToFile = $args->{relative_path_to_file}) {
+      $self->setRelativePathToFile();
+    }
+
+    $self->setUrlTemplateForStore();
+
+    return $self;
+}
+
+sub setUrlTemplateForStore {
   my ($self) = @_;
 
   my $projectName = $self->getProjectName();
@@ -29,6 +43,14 @@ sub setUriTemplateForStore {
   return unless($projectName && $buildNumber && $relativePathToFile);
 
   my $applicationType = $self->getApplicationType();
+
+  my $urlTemplate = $self->makeUrlTemplate($applicationType, $relativePathToFile, $projectName, $buildNumber);
+
+  $self->setUrlTemplate($urlTemplate);
+}
+
+sub makeUrlTemplate {
+  my ($self, $applicationType, $relativePathToFile, $projectName, $buildNumber) = @_;
 
   my $urlTemplate;
 
@@ -45,24 +67,8 @@ sub setUriTemplateForStore {
   else {
     die "Unsupported application type for Store: $applicationType";
   }
-
-  $self->setUrlTemplate($urlTemplate);
+  return $urlTemplate;
 }
 
-
-sub new {
-    my ($class, $args) = @_;
-    my $self = $class->SUPER::new($args);
-
-    $self->setStoreType($args->{store_type});
-
-    if(my $relativePathToFile = $args->{relative_path_to_file}) {
-      $self->setRelativePathToFile();
-    }
-
-    $self->setUriTemplateForStore();
-
-    return $self;
-}
 
 1;
