@@ -26,6 +26,8 @@ sub setUriTemplateForStore {
   my $buildNumber = $self->getBuildNumber();
   my $relativePathToFile = $self->getRelativePathToFile();
   
+  return unless($projectName && $buildNumber && $relativePathToFile);
+
   my $applicationType = $self->getApplicationType();
 
   my $urlTemplate;
@@ -51,8 +53,14 @@ sub setUriTemplateForStore {
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
-#    my $self = bless {}, $class;
+
     $self->setStoreType($args->{store_type});
+
+    if(my $relativePathToFile = $args->{relative_path_to_file}) {
+      $self->setRelativePathToFile();
+    }
+
+    $self->setUriTemplateForStore();
 
     return $self;
 }
