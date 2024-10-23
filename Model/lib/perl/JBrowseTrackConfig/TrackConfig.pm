@@ -52,18 +52,12 @@ sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
-    my $self = bless {}, $class;
 
-    if ($args->{dataset_config}) { 
-      $self->setDatasetConfigObj($args->{dataset_config});
-    }
-    else {
-      my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new($args);
-      $self->setDatasetConfigObj($datasetConfig);
-    }
+    my $self = $class->SUPER::new($args);
+
 
     $self->setDisplayName($args->{display_name});
-    $self->setApplicationType($args->{application_type});
+
     $self->setLabel($args->{label});
 
     $self->setId($args->{id});

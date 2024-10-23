@@ -18,6 +18,24 @@ sub setProjectName {$_[0]->{project_name} = $_[1]}
 sub getBuildNumber {$_[0]->{build_number}}
 sub setBuildNumber {$_[0]->{build_number} = $_[1]}
 
-sub new { die ""}
+sub new { 
+  my ($class, $args) = @_;
+  my $self = bless {}, $class;
+
+  $self->setProjectName($args->{project_name});
+
+  $self->setBuildNumber($args->{build_number});
+  $self->setApplicationType($args->{application_type});
+
+  if ($args->{dataset_config}) { 
+    $self->setDatasetConfigObj($args->{dataset_config});
+  }
+  else {
+    my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new($args);
+    $self->setDatasetConfigObj($datasetConfig);
+  }
+
+  return $self;
+}
 
 1;
