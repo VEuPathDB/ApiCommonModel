@@ -12,8 +12,6 @@ sub setGlyph {$_[0]->{glyph} = $_[1]}
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -26,7 +24,6 @@ sub new {
     $self->setId($args->{key});
     $self->setLabel($args->{label});
     $self->setDisplayType("JBrowse/View/Track/CanvasVariants");
-    $self->setUrlTemplate($args->{url_template});
 
     my $store;
 
@@ -49,7 +46,7 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    $jbrowseObject->{urlTemplate}= $self->getUrlTemplate();
+    $jbrowseObject->{urlTemplate}= $self->getStore()->getUrlTemplate();
     $jbrowseObject->{chunkSizeLimit} = '10000000';
     $jbrowseObject->{glyph} = $self->getGlyph();
     return $jbrowseObject;
