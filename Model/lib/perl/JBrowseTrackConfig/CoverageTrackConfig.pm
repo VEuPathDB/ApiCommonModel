@@ -41,8 +41,6 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplate($args->{url_template});
-
 #    $self->setScale($args->{scale});
 
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);

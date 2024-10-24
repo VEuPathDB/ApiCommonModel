@@ -1,4 +1,6 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::JBrowseBaseConfig);
+
 use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
 
 use strict;
@@ -7,9 +9,6 @@ use warnings;
 use Data::Dumper;
 use URI::Escape;
 use Encode;
-
-sub getApplicationType {$_[0]->{application_type}}
-sub setApplicationType {$_[0]->{application_type} = $_[1]}
 
 sub getLabel {$_[0]->{label}}
 sub setLabel {$_[0]->{label} = $_[1]}
@@ -43,8 +42,6 @@ sub setDisplayName {$_[0]->{display_name} = $_[1]}
 sub getDescription {$_[0]->{description}}
 sub setDescription {$_[0]->{description} = $_[1]}
 
-sub getDatasetConfigObj {$_[0]->{dataset_config}}
-sub setDatasetConfigObj {$_[0]->{dataset_config} = $_[1]}
 
 # These are optional  metadata
 sub getGeneLegend {$_[0]->{gene_legend}}
@@ -55,18 +52,12 @@ sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
-    my $self = bless {}, $class;
 
-    if ($args->{dataset_config}) { 
-      $self->setDatasetConfigObj($args->{dataset_config});
-    }
-    else {
-      my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new($args);
-      $self->setDatasetConfigObj($datasetConfig);
-    }
+    my $self = $class->SUPER::new($args);
+
 
     $self->setDisplayName($args->{display_name});
-    $self->setApplicationType($args->{application_type});
+
     $self->setLabel($args->{label});
 
     $self->setId($args->{id});

@@ -14,9 +14,6 @@ sub setUrl {$_[0]->{url} = $_[1]}
 sub getSummary {$_[0]->{summary} }
 sub setSummary {$_[0]->{summary} = $_[1]}
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
-
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 

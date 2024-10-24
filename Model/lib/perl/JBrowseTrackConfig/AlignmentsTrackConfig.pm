@@ -24,9 +24,6 @@ sub setColorFwdStrand {$_[0]->{color_fwd_strand} = $_[1]}
 sub getColorRevStrand {$_[0]->{color_rev_strand}}
 sub setColorRevStrand {$_[0]->{color_rev_strand} = $_[1]}
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
-
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
@@ -42,7 +39,6 @@ sub new {
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $self->setDisplayType("JBrowse/View/Track/Alignments2");
         $self->setTrackTypeDisplay("Coverage (Read Alignments zoomed)");
-	$self->setUrlTemplate($args->{url_template});
     }
     else {
         $self->setTrackType("AlignmentsTrack");
@@ -114,7 +110,7 @@ sub getJBrowseObject{
     $jbrowseObject->{yScalePosition} = $self->getYScalePosition();
     $jbrowseObject->{chunkSizeLimit} = $self->getChunkSizeLimit();;
 
-    $jbrowseObject->{urlTemplate}= $self->getUrlTemplate();
+    $jbrowseObject->{urlTemplate}= $self->getStore()->getUrlTemplate();
 
     unless($self->skipHistograms()) {
       my $histograms = $self->getHistograms();
@@ -132,7 +128,7 @@ sub getJBrowse2Object{
     my $indexLocation = $self->getIndexUrlTemplate();
 
     $jbrowse2Object->{adapter}->{index}->{location}->{uri} = $indexLocation;
-    $jbrowse2Object->{adapter}->{bamLocation} = {uri => $self->getUrlTemplate(),locationType => "UriLocation"};
+    $jbrowse2Object->{adapter}->{bamLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
 
     $jbrowse2Object->{displays}->[0]->{displayId} = "bam_" . scalar($self);
 

@@ -38,9 +38,7 @@ sub new {
 
     $self->setMaxFeatureScreenDensity(0.01);
 
-    # TODO - replace with:
-    # $self->setRegionFeatureDensities(JSON::true);
-    $self->setRegionFeatureDensities('function(){return_true}');
+    $self->setRegionFeatureDensities(JSON::true);
 
     $self->setDisplayMode("compact");
     $self->setGlyph("");

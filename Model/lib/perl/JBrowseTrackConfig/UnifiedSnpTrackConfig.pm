@@ -3,6 +3,8 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
+use JSON;
+
 use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
 sub new {
@@ -38,9 +40,7 @@ sub new {
 
     $self->setMaxFeatureScreenDensity(0.01);
 
-    # TODO - replace with:
-    # $self->setRegionFeatureDensities(JSON::true);
-    $self->setRegionFeatureDensities('function(){return true}');
+    $self->setRegionFeatureDensities(JSON::true);
 
     $self->setDisplayMode("normal");
     $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
@@ -56,9 +56,7 @@ sub getJBrowseStyle {
 
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
-    # TODO - replace with:
-    # $jbrowseStyle->{strandArrow} = JSON::false;
-    $jbrowseStyle->{strandArrow} = 'function(){return false}';
+    $jbrowseStyle->{strandArrow} = JSON::false;
     $jbrowseStyle->{labelScale} = 1000000000000000;
     return $jbrowseStyle;
 }
