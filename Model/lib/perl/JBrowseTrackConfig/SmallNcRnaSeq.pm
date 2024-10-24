@@ -49,13 +49,10 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    # TODO - replace with:
-    #$jbrowseObject->{unsafePopup} = "JSON::true";
-    $jbrowseObject->{unsafePopup} = 'true';
+    $jbrowseObject->{unsafePopup} = "JSON::true";
 
     $jbrowseObject->{yScalePosition} = $self->getYScalePosition();
 
-    # TODO
     $jbrowseObject->{urlTemplate}= $self->getStore()->getUrlTemplate();
 
     return $jbrowseObject;
