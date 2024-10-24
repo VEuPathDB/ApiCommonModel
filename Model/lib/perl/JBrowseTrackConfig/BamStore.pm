@@ -18,8 +18,8 @@ sub setIndexUrlTemplate {
 }
 
 
-sub getBigwigUrl {$_[0]->{bw_url_template}}
-sub setBigwigUrl {$_[0]->{bw_url_template} = $_[1] }
+sub getBigwigUrl {$_[0]->{bw_relative_path_to_file}}
+sub setBigwigUrl {$_[0]->{bw_relative_path_to_file} = $_[1] }
 #sub setBigwigUrl {
 #    my($self, $bigwigUrl) = @_;
 #    die "required bigwigUrl not set" unless $bigwigUrl;
@@ -34,7 +34,7 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     $self->setUrlTemplate($args->{url_template});
-    $self->setBigwigUrl($args->{bw_url_template});
+    $self->setBigwigUrl($args->{bw_relative_path_to_file});
 
     my $indexLocation = $args->{url_template} . ".bai";
     $self->setIndexUrlTemplate($indexLocation);
