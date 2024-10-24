@@ -3,12 +3,6 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Store);
 use strict;
 use warnings;
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {
-    my($self, $urlTemplate) = @_;
-    die "required urlTemplate not set" unless $urlTemplate;
-    $self->{url_template} = $urlTemplate;
-}
 
 sub getIndexUrlTemplate {$_[0]->{index_url_template} }
 sub setIndexUrlTemplate {
@@ -33,7 +27,6 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplate($args->{url_template});
     $self->setBigwigUrl($args->{bw_relative_path_to_file});
 
     my $indexLocation = $args->{url_template} . ".bai";
