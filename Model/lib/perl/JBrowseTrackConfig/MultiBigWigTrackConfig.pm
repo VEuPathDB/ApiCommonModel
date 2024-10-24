@@ -68,7 +68,8 @@ sub getJBrowseObject{
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-	$jbrowseObject->{urlTemplates} = $self->getStore()->getUrlTemplate();
+        # NOTE: For multibigwig we want url_templates
+	$jbrowseObject->{urlTemplates} = $self->getStore()->getUrlTemplates();
 	$jbrowseObject->{storeClass} = $self->getStore()->getStoreType();
 
 	$jbrowseObject->{showTooltips} = JSON::true;

@@ -32,6 +32,9 @@ sub setUrlTemplatesFromMultiUrls {
     push @res, {url => $urlTemplate, name => $displayName, color => $color, alignment => $alignment};
   }
 
+
+  $self->setUrlTemplates(\@res);
+
   return \@res;
 }
 
