@@ -7,7 +7,6 @@ use JSON;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigStore;
 
-
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -69,7 +68,7 @@ sub getJBrowseObject{
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-	$jbrowseObject->{urlTemplates} = $self->getStore()->getUrlTemplatesFromMultiUrls();
+	$jbrowseObject->{urlTemplates} = $self->getStore()->getUrlTemplate();
 	$jbrowseObject->{storeClass} = $self->getStore()->getStoreType();
 
 	$jbrowseObject->{showTooltips} = JSON::true;
