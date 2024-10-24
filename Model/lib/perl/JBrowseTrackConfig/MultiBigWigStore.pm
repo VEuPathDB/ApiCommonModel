@@ -23,9 +23,9 @@ sub setUrlTemplatesFromMultiUrls {
     my $name = $_->{name};
     my $color = $_->{color};
     my $alignment = $_->{alignment};
-
+    my $displayName = $_->{display_name};
   
-    return unless($projectName && $buildNumber && );
+    return unless($projectName && $buildNumber);
 
     my $urlTemplate = $self->makeUrlTemplate($applicationType, $relativePathToFile, $projectName, $buildNumber);
 

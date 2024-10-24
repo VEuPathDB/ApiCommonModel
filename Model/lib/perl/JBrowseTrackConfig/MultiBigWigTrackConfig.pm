@@ -24,7 +24,7 @@ sub new {
 
     my $studyDisplayName = $datasetConfig->getStudyDisplayName() if ($datasetConfig);
     my $displayName = $self->getDisplayName();
-    my $datasetName = $self->getDatasetName();
+    my $datasetName = $datasetConfig->getDatasetName();
 
     my $alignment = $self->getAlignment();
 
