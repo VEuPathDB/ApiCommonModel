@@ -18,6 +18,7 @@ sub new {
     $store->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
     $store->setUrlTemplatesFromMultiUrls();
 
+    $self->setStore($store);
     $self->setAlignment($args->{alignment});
     $self->setScale($args->{scale});
 
@@ -92,7 +93,6 @@ use warnings;
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
-
 
     $self->setDisplayType("MultiBigWig/View/Track/MultiWiggle/MultiDensity");
     $self->setTrackTypeDisplay("Multi-Density");
