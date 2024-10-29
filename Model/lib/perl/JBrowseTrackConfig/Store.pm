@@ -25,7 +25,7 @@ sub new {
     $self->setStoreType($args->{store_type});
 
     if(my $relativePathToFile = $args->{relative_path_to_file}) {
-      $self->setRelativePathToFile();
+      $self->setRelativePathToFile($relativePathToFile);
     }
 
     $self->setUrlTemplateForStore();
