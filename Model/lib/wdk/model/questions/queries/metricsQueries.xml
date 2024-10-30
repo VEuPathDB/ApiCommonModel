@@ -1,0 +1,245 @@
+<wdkModel>
+
+  <querySet name="MetricsId" queryType="id" isCacheable="true">
+
+
+    <!-- ************************************************************ -->
+    <!--  Organism-related page views  stats   -->
+    <!--    project_id | organismName |  recordPageCount -->
+    <!--      (only for organism related record types:  gene, genomic sequence, SNP, and dataset)   -->
+    <!-- ************************************************************ -->
+
+    <sqlQuery name="OrgPageViewMetrics" doNotTest="true" >
+
+      <paramRef ref="MetricsParams.date"/>
+
+      <!-- <paramRef ref="MetricsParams.projectIdSelect"/>
+       -->
+
+      <column name="source_id"/>
+      <column name="organism"/>
+      <column name="is_reference"/>
+      <column name="count"/>
+      <column name="start_date"/>
+      <column name="end_date"/>
+
+      <sql>
+        <![CDATA[
+          SELECT to_char(rownum) as source_id, organism, is_reference, count,
+                 to_char(start_date,'YYYY-MM-DD') as start_date, to_char(end_date,'YYYY-MM-DD') as end_date
+          FROM (
+            SELECT organism, IS_REFERENCE_STRAIN as is_reference, count, start_date, end_date
+            FROM sfischer.ORGANISMVIEWSTATS@USER_DBLINK@ ovs, apidbtuning.organismattributes oa
+            WHERE ovs.organism = oa.ORGANISM_NAME
+              AND start_date >= $$date.min$$ 
+              AND end_date <= $$date.max$$
+            --AND project_id in ( $$projectIdSelect$$ )
+          )
+          ORDER BY count desc,organism asc
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <!-- ************************************************************ -->
+    <!--  Organism param stats   -->
+    <!--    OrgParamCountMetrics:    projectId |  organismValueCount |  stepCount  -->
+    <!--    OrgParamNameMetrics:    projectId |  organismName |  stepCount  -->
+    <!-- ************************************************************ -->
+
+    <sqlQuery name="OrgParamCountMetrics" doNotTest="true" >
+
+      <paramRef ref="MetricsParams.date"/>
+      <paramRef ref="MetricsParams.org_count"/>
+      <paramRef ref="MetricsParams.projectIdSelect"/>
+
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="number_of_organisms"/>
+      <column name="steps_count"/>
+      <column name="start_date"/>
+      <column name="end_date"/>
+
+      <sql>
+        <![CDATA[
+          SELECT to_char(rownum) as source_id, 
+                 CASE when project in ('EuPathDB') then 'VEuPathDB'
+                   else project
+                   end as project_id,
+                 number_of_organisms, steps_count, 
+                 to_char(start_date,'YYYY-MM-DD') as start_date, to_char(end_date,'YYYY-MM-DD') as end_date
+          FROM (
+            SELECT project_id as project, number_of_organisms, steps_count, start_date, end_date
+            FROM sfischer.ORGANISMSPERSTEP@USER_DBLINK@
+            WHERE project_id in ( $$projectIdSelect$$ )
+             AND start_date >= $$date.min$$ 
+             AND end_date <= $$date.max$$
+             AND number_of_organisms >= $$org_count.min$$ 
+             AND number_of_organisms <= $$org_count.max$$
+          )
+          ORDER BY number_of_organisms desc,steps_count desc,project_id asc
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <sqlQuery name="OrgParamNameMetrics" doNotTest="true" >
+
+      <paramRef ref="MetricsParams.date"/>
+      <paramRef ref="MetricsParams.projectIdSelect"/>
+
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="organism"/>
+      <column name="is_reference"/>
+      <column name="steps_count"/>
+      <column name="start_date"/>
+      <column name="end_date"/>
+
+      <sql>
+        <![CDATA[
+          SELECT to_char(rownum) as source_id, 
+                 CASE when project in ('EuPathDB') then 'VEuPathDB'
+                   else project
+                   end as project_id,
+                 organism, is_reference, steps_count, 
+                 to_char(start_date,'YYYY-MM-DD') as start_date, to_char(end_date,'YYYY-MM-DD') as end_date
+          FROM (
+            SELECT ovs.project_id as project, ovs.organism, IS_REFERENCE_STRAIN as is_reference, steps_count, start_date, end_date
+            FROM sfischer.STEPSPERORGANISM@USER_DBLINK@ ovs, apidbtuning.organismattributes oa
+            WHERE ovs.organism = oa.ORGANISM_NAME 
+              AND ovs.project_id in ( $$projectIdSelect$$ )
+              --AND organism in (select organism from APIDBTUNING.organismtree where tree_level = 1)
+              AND start_date >= $$date.min$$ 
+              AND end_date <= $$date.max$$
+          )
+          ORDER BY steps_count desc,organism asc,project_id asc
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <!-- ************************************************************ -->
+    <!--  Gene Page Tables   -->
+    <!--   projectId   |  wdkTableName |  requestCount   -->
+    <!-- ************************************************************ -->
+
+    <sqlQuery name="GenePageTableMetrics" doNotTest="true" >
+
+      <paramRef ref="MetricsParams.date"/>
+<!--
+      <paramRef ref="MetricsParams.projectIdSelect"/>
+-->
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="record_class"/>
+      <column name="table_name"/>
+      <column name="count"/>
+      <column name="start_date"/>
+      <column name="end_date"/>
+
+      <sql>
+        <![CDATA[
+          SELECT to_char(rownum) as source_id, 
+                 CASE when project_id in ('EuPathDB') then 'VEuPathDB'
+                   else project_id 
+                   end as project_id,
+                 record_class, table_name, count, 
+                 to_char(start_date,'YYYY-MM-DD') as start_date, to_char(end_date,'YYYY-MM-DD') as end_date
+          FROM (
+            SELECT project_id,RECORD_CLASS_URL_SEGMENT as record_class,table_name,count,start_date,end_date
+            FROM sfischer.GENEPAGETABLESTATS@USER_DBLINK@
+            WHERE start_date >= $$date.min$$ 
+              AND end_date <= $$date.max$$
+            --AND project_id in ( $$projectIdSelect$$ )
+          )
+          ORDER BY count desc,record_class asc,table_name asc,project_id asc
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <!-- ************************************************************ -->
+    <!--  Tools   -->
+    <!--    projectId | toolName | requestCount  -->
+    <!-- ************************************************************ -->
+
+    <sqlQuery name="ToolMetrics" doNotTest="true" >
+
+      <paramRef ref="MetricsParams.date"/>
+      <paramRef ref="MetricsParams.projectIdSelect"/>
+
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="tool"/>
+      <column name="count"/>
+      <column name="start_date"/>
+      <column name="end_date"/>
+
+      <sql>
+        <![CDATA[
+          SELECT to_char(rownum) as source_id,
+                 CASE when project in ('EuPathDB') then 'VEuPathDB'
+                   else project
+                   end as project_id,
+                 tool,count,to_char(start_date,'YYYY-MM-DD') as start_date, to_char(end_date,'YYYY-MM-DD') as end_date
+          FROM (
+            SELECT project_id as project,tool,count,start_date,end_date
+            FROM sfischer.TOOLSSTATS@USER_DBLINK@
+            WHERE project_id in ( $$projectIdSelect$$ )
+              AND start_date >= $$date.min$$ 
+              AND end_date <= $$date.max$$
+          )
+          ORDER BY count desc,tool asc,project_id asc
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+
+    <!-- ************************************************************ -->
+    <!--  Searches   -->
+    <!--    projectId | searchName | stepCount  --> 
+    <!-- ************************************************************ -->
+
+    <sqlQuery name="SearchMetrics" doNotTest="true" >
+
+      <paramRef ref="MetricsParams.date"/>
+      <paramRef ref="MetricsParams.step_count"/>
+      <paramRef ref="MetricsParams.projectIdSelect"/>
+
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="record_name"/>
+      <column name="search_name"/>
+      <column name="steps_count"/>
+      <column name="start_date"/>
+      <column name="end_date"/>
+
+      <sql>
+        <![CDATA[
+          SELECT to_char(rownum) as source_id, 
+                 CASE when project in ('EuPathDB') then 'VEuPathDB'
+                   else project
+                   end as project_id,
+                 record_name, singlesearch_name as search_name, steps_count, 
+                 to_char(start_date,'YYYY-MM-DD') as start_date, to_char(end_date,'YYYY-MM-DD') as end_date
+          FROM (
+            SELECT project_id as project, steps_count, start_date, end_date,
+                  SUBSTR(search_name, 1, INSTR(search_name, '.')-1) AS record_name,
+                  SUBSTR(search_name, INSTR(search_name, '.')+1) AS singlesearch_name
+            FROM sfischer.SEARCHESSTATS@USER_DBLINK@
+            WHERE project_id in ( $$projectIdSelect$$ )
+              AND steps_count  >= $$step_count.min$$ 
+              AND steps_count <= $$step_count.max$$
+              AND start_date >= $$date.min$$ 
+              AND end_date <= $$date.max$$
+          )
+          ORDER BY steps_count desc,search_name asc,project_id asc
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+
+</wdkModel>

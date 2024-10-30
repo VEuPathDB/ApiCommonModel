@@ -1,7 +1,7 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-import org.gusdb.wdk.model.WdkRuntimeException;
+
 
 public class Coexpression extends  DatasetInjector {
 
@@ -9,15 +9,12 @@ public class Coexpression extends  DatasetInjector {
   public void injectTemplates() {
       setShortAttribution();
 
-      String datasetName = getDatasetName();
+      //String datasetName = getDatasetName();
 
       String projectName = getPropValue("projectName");
-
-      String dataSource  = getPropValue("dataSource");
-      String exampleGeneIds  = getPropValue("exampleGeneIds");
-      String defaultCoefficient = getPropValue("defaultCoefficient");
-
-
+      //String dataSource  = getPropValue("dataSource");
+      //String exampleGeneIds  = getPropValue("exampleGeneIds");
+      //String defaultCoefficient = getPropValue("defaultCoefficient");
 
       if(getPropValueAsBoolean("isEuPathDBSite")) {
           setPropValue("includeProjects", projectName + ",EuPathDB,UniDB");
@@ -46,6 +43,8 @@ public class Coexpression extends  DatasetInjector {
 
   // declare properties required beyond those inherited from the datasetPresenter
   // second column is for documentation
+
+  @Override
   public String[][] getPropertiesDeclaration() {
     String [][] propertiesDeclaration = { {"dataSource", "data source in the coexpression table"},
                                           {"exampleGeneIds", "Gene Ids provided as default on coexpression Q page"},

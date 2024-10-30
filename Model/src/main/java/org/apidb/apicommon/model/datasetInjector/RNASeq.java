@@ -58,7 +58,7 @@ public class RNASeq extends  DatasetInjector {
       Boolean switchStrandsGBrowse = getPropValueAsBoolean("switchStrandsGBrowse");
       Boolean switchStrandsProfiles = getPropValueAsBoolean("switchStrandsProfiles");
 
-      setPropValue("metadataFileSuffix","");
+      setPropValue("metadataFileSuffix","NA");
       setOrganismAbbrevFromDatasetName();
 
 
@@ -341,8 +341,10 @@ public class RNASeq extends  DatasetInjector {
           //          injectTemplate("gbrowseTrackCategory");
       }
 
-      String studyName = getPropValue("name");
-      setPropValue("studyName", studyName);
+      // String studyName = getPropValue("name");
+      // setPropValue("studyName", studyName);
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      injectTemplate("jbrowseRNASeqBuildProps");
   }
 
 
@@ -383,6 +385,11 @@ public class RNASeq extends  DatasetInjector {
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
                           "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+
+          if (getPropValueAsBoolean("showIntronJunctions") && getPropValueAsBoolean("includeInUnifiedJunctions")){
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByIntronJunctions");
+	   }
+
 
           // this question does not display on Host or Trich
           String projectName = getPropValue("projectName");
