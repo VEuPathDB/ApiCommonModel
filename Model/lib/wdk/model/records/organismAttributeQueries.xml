@@ -239,29 +239,102 @@
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="IsPublished">
-      <column name="source_id"/>
-      <column name="project_id"/>
-      <column name="is_published"/>
-      <column name="dataset_page"/>
-      <sql>
-        <![CDATA[
-          SELECT o.source_id, o.project_id,
-             CASE WHEN (dp.dataset_presenter_id in
-                (SELECT dataset_presenter_id FROM apidbtuning.datasetpublication WHERE pmid IS NOT NULL ) )
-                THEN 1 ELSE 0 END AS is_published
-             , '<a href = "/a/app/record/dataset/' || dp.dataset_presenter_id || '">' || dp.display_name || '</a><br>' as dataset_page
-          FROM APIDBTUNING.datasetnametaxon dt,
-              apidbtuning.organismattributes o,
-              apidb.datasource ds,
-              apidbtuning.datasetpresenter dp
-          WHERE o.component_taxon_id  = dt.taxon_id
-            AND dt.name       = ds.name
-            AND ds.type       = 'genome'
-            AND dt.dataset_presenter_id = dp.dataset_presenter_id
-        ]]>
-      </sql>
-    </sqlQuery>
+        <sqlQuery name="BuscoGenomeCounts">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="busco_genome"/>
+            <column name="busco_lineage_dataset"/>
+            <sql>
+            <![CDATA[
+              SELECT o.source_id, o.project_id, busco_genome, lineage_dataset as busco_lineage_dataset
+              FROM apidbtuning.organismattributes o
+                   LEFT JOIN (WITH busco_data AS (
+                          SELECT
+                              oa.source_id,
+                              sequence_type, lineage_dataset,
+                              to_char(c_score /(c_score + f_score + m_score) * 100, '990.9') AS c_per,
+                              to_char(s_score /(c_score + f_score + m_score) * 100, '990.9') AS s_per,
+                              to_char(d_score /(c_score + f_score + m_score) * 100, '990.9') AS d_per,
+                              to_char(f_score /(c_score + f_score + m_score) * 100, '990.9') AS f_per,
+                              to_char(m_score /(c_score + f_score + m_score) * 100, '990.9') AS m_per,
+                              ( c_score + f_score + m_score )                        AS total
+                          FROM
+                              apidbtuning.organismattributes oa,
+                              apidb.organism                 o,
+                              apidb.busco                    b
+                          WHERE b.organism_id = o.organism_id
+                            AND o.taxon_id = oa.component_taxon_id
+                      )
+                      SELECT  oa.source_id, lineage_dataset,
+                          'C:' || b.c_per || '%[S:' || b.s_per || '%,D:' || b.d_per || '%],F:' || b.f_per || '%,M:' || b.m_per || '%,n:' || b.total AS busco_genome
+                      FROM apidbtuning.organismattributes oa,
+                           busco_data                     b
+                      WHERE   b.sequence_type = 'genome'
+                          AND b.source_id = oa.source_id
+                  ) busco ON o.source_id = busco.source_id
+            ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="BuscoProteinCounts">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="busco_protein"/>
+            <sql>
+            <![CDATA[
+SELECT o.source_id, o.project_id, busco_protein
+FROM apidbtuning.organismattributes o
+     LEFT JOIN (WITH busco_data AS (
+            SELECT
+                oa.source_id,
+                sequence_type,
+                to_char(c_score /(c_score + f_score + m_score) * 100, '990.9') AS c_per,
+                to_char(s_score /(c_score + f_score + m_score) * 100, '990.9') AS s_per,
+                to_char(d_score /(c_score + f_score + m_score) * 100, '990.9') AS d_per,
+                to_char(f_score /(c_score + f_score + m_score) * 100, '990.9') AS f_per,
+                to_char(m_score /(c_score + f_score + m_score) * 100, '990.9') AS m_per,
+                ( c_score + f_score + m_score )                        AS total
+            FROM
+                apidbtuning.organismattributes oa,
+                apidb.organism                 o,
+                apidb.busco                    b
+            WHERE b.organism_id = o.organism_id
+              AND o.taxon_id = oa.component_taxon_id
+        )
+        SELECT  oa.source_id,
+            'C:' || b.c_per || '%[S:' || b.s_per || '%,D:' || b.d_per || '%],F:' || b.f_per || '%,M:' || b.m_per || '%,n:' || b.total AS busco_protein
+        FROM apidbtuning.organismattributes oa,
+             busco_data                     b
+        WHERE   b.sequence_type = 'protein'
+            AND b.source_id = oa.source_id
+    ) busco ON o.source_id = busco.source_id
+             ]]>
+           </sql>
+        </sqlQuery>
+
+        <sqlQuery name="IsPublished">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="is_published"/>
+            <column name="dataset_page"/>
+            <sql>
+            <![CDATA[
+               SELECT o.source_id, o.project_id,
+                   CASE WHEN (dp.dataset_presenter_id in
+                      (SELECT dataset_presenter_id FROM apidbtuning.datasetpublication WHERE pmid IS NOT NULL ) )
+                      THEN 1 ELSE 0 END AS is_published
+                 , '<a href = "/a/app/record/dataset/' || dp.dataset_presenter_id || '">' || dp.display_name || '</a><br>' as dataset_page
+               FROM APIDBTUNING.datasetnametaxon dt,
+                    apidbtuning.organismattributes o,
+                    apidb.datasource ds,
+                    apidbtuning.datasetpresenter dp
+               WHERE o.component_taxon_id  = dt.taxon_id
+                AND dt.name       = ds.name
+                AND ds.type       = 'genome'
+                AND dt.dataset_presenter_id = dp.dataset_presenter_id
+             ]]>
+           </sql>
+        </sqlQuery>
 
 
     <sqlQuery name="ReleasePolicy">

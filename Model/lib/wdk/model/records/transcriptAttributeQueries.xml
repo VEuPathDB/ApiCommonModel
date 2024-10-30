@@ -258,6 +258,8 @@
 
       <!-- TRANSCRIPT specific -->
       <column name="transcript_product"/>
+      <column name="start_min"/>
+      <column name="end_max"/>
       <column name="coding_start"/>
       <column name="coding_end"/>
       <column name="strand"/>
@@ -423,6 +425,7 @@
             -- PROTEIN ATTRIBUTES:
                bfmv.protein_source_id,
                bfmv.aa_sequence_id,
+               bfmv.start_min, bfmv.end_max,
                bfmv.coding_start, bfmv.coding_end,
                CASE WHEN (bfmv.transcript_type LIKE 'pseudogen%' OR bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
                THEN NULL ELSE bfmv.cds_length END AS cds_length,
@@ -489,6 +492,29 @@
       </sql>
     </sqlQuery>
 
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <!-- Apollo Link Out  -->
+       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+       <sqlQuery name="ApolloLinkOut" excludeProjects="EuPathDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="gene_source_id"/>
+            <column name="apollo_link_out" />
+            <sql>
+<![CDATA[
+SELECT  aid.apolloid
+        ,source_id
+        ,gene_source_id
+        ,project_id
+        , CASE WHEN aid.apolloid IS NOT NULL
+THEN '<a href="https://apollo.veupathdb.org/annotator/loadLink?organism=' || apolloid || chr(38) || 'loc=' || sequence_id || ':' || start_min || '..' || end_max || chr(38) || 'tracks=gene">Link to Apollo</a>'
+ELSE 'N/A' end as apollo_link_out
+                    FROM apidbtuning.transcriptAttributes ta
+                    LEFT JOIN apidbtuning.apolloid aid
+                    ON ta.organism = aid.organism
+]]>
+       </sql>
+   </sqlQuery>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- UniProt  -->
@@ -527,26 +553,40 @@
     </sqlQuery>
 
 
+        <sqlQuery name="ChromosomeMappingText" displayName="Chromosome" includeProjects="CryptoDB,UniDB">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <column name="chromosomemappingtext"/>
+            <sql>
+            <![CDATA[
+              SELECT ta.source_id,ta.project_id as project_id, ta.gene_source_id,
+                CASE WHEN ta.chromosome IS NOT NULL
+                     THEN '( ' || ta.chromosome || ' )'
+                     ELSE '' END AS chromosomemappingtext
+              FROM ApidbTuning.TranscriptAttributes ta
+            ]]>
+            </sql>
+        </sqlQuery>
+
+        <sqlQuery name="GenomicSequenceLength" excludeProjects="EuPathDB">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <column name="genomic_sequence_length"/>
+            <sql>
+            <![CDATA[
+               SELECT ta.source_id,ta.project_id as project_id, ta.gene_source_id,
+                      genomic_sequence_length
+               FROM ApidbTuning.TranscriptAttributes ta, ApidbTuning.TranscriptGenomicSequence tgs
+               WHERE ta.source_id = tgs.source_id
+            ]]>
+            </sql>
+        </sqlQuery>
+
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- protein sequence  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="ChromosomeMappingText" displayName="Chromosome" includeProjects="CryptoDB,UniDB">
-      <column name="source_id"/>
-      <column name="gene_source_id"/>
-      <column name="project_id"/>
-      <column name="chromosomemappingtext"/>
-      <sql>
-        <![CDATA[
-          SELECT ta.source_id,ta.project_id as project_id, ta.gene_source_id,
-            CASE WHEN ta.chromosome IS NOT NULL
-                 THEN '( ' || ta.chromosome || ' )'
-                 ELSE '' END AS chromosomemappingtext
-          FROM ApidbTuning.TranscriptAttributes ta
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
     <sqlQuery name="ProteinSequence">
       <column name="source_id"/>
       <column name="gene_source_id"/>
@@ -610,8 +650,8 @@
         <![CDATA[
           SELECT ta.source_id, ta.gene_source_id, ta.project_id,
             s.sequence AS transcript_sequence
-          FROM  ApidbTuning.TranscriptSequence s, ApidbTuning.TranscriptAttributes ta
-          WHERE s.source_id = ta.source_id
+          FROM ApidbTuning.TranscriptAttributes ta
+            LEFT JOIN ApidbTuning.TranscriptSequence s ON s.source_id = ta.source_id
         ]]>
       </sql>
     </sqlQuery>
@@ -1486,6 +1526,79 @@
       </sql>
     </sqlQuery>
 
+    <sqlQuery name="Phenotype_pknoH_phenotype_piggyBac_mutagenesis_HME_MIS_OIS_RSRC">
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id"/>
+      <column name="pknoHPiggyBacMutOIS"/>
+      <column name="pknoHPiggyBacMutHMS"/>
+      <sql>
+        <![CDATA[
+          select ta.source_id
+               , ta.gene_source_id
+               , ta.project_id
+               , hms.score as pknoHPiggyBacMutHMS
+               , ois.score as pknoHPiggyBacMutOIS
+          from apidbtuning.transcriptattributes ta
+               LEFT JOIN (select na_feature_id
+                     , score
+                from apidb.phenotypescore ps
+                where score_type = 'Hybrid model score'
+                ) hms ON ta.gene_na_feature_id = hms.na_feature_id
+                LEFT JOIN (select na_feature_id
+                     , score
+                from apidb.phenotypescore ps
+                where score_type = 'Occupancy index score'
+                ) ois ON ta.gene_na_feature_id = ois.na_feature_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <sqlQuery name="Phenotype_pknoA1H1_phenotype_piggyBac_mutagenesis_MIS_MFS_RSRC">
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id"/>
+      <column name="pknoA1H1PiggyBacMutMISplus"/>
+      <column name="pknoA1H1PiggyBacMutMIS"/>
+      <column name="pknoA1H1PiggyBacMutMFS"/>
+      <column name="pknoA1H1PiggyBacMutMutability"/>
+      <sql>
+        <![CDATA[
+          select ta.source_id
+               , ta.gene_source_id
+               , ta.project_id
+               , mis.score as pknoA1H1PiggyBacMutMIS
+               , misplus.score as pknoA1H1PiggyBacMutMISplus
+               , mfs.score as pknoA1H1PiggyBacMutMFS
+               , mut.score as pknoA1H1PiggyBacMutMutability
+          from apidbtuning.transcriptattributes ta
+                LEFT JOIN (select na_feature_id
+                     , score
+                from apidb.phenotypescore ps
+                where score_type = 'MIS'
+                ) mis ON ta.gene_na_feature_id = mis.na_feature_id
+                LEFT JOIN (select na_feature_id
+                     , score
+                from apidb.phenotypescore ps
+                where score_type = 'MIS plus'
+                ) misplus ON ta.gene_na_feature_id = misplus.na_feature_id
+                LEFT JOIN (select na_feature_id
+                     , score
+                from apidb.phenotypescore ps
+                where score_type = 'MFS'
+                ) mfs ON ta.gene_na_feature_id = mfs.na_feature_id
+                LEFT JOIN (select na_feature_id
+                   , CASE WHEN score_type = 'mutability in CDS'
+                     THEN CASE when score = 0 then 'mutable' when score = 1 then 'nonmutable' else 'not_determined' end
+                     ELSE cast(round(score, 2) as  VARCHAR(10)) END as score
+                from apidb.phenotypescore ps
+                where score_type = 'mutability in CDS'
+                ) mut ON ta.gene_na_feature_id = mut.na_feature_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
 
     <!-- Test meta attribute query that defines random integer attribute -->
     <sqlQuery name="MetaRandomIntAttr">
@@ -1687,6 +1800,39 @@
               AND p.profile_type(+) ='probability_mean'
           )
           SELECT ta.source_id, ta.gene_source_id, ta.project_id, m1.prob_map, m1.map_location, m2.prob_mcmc, m2.mcmc_location
+          FROM APIDBTUNING.transcriptattributes ta
+            LEFT JOIN mapD m1 ON ta.gene_source_id = m1.source_id
+            LEFT JOIN mcmcD m2 ON m1.source_id = m2.source_id
+        ]]>
+      </sql>
+    </sqlQuery>
+    <!-- TriTrypDB LOPIT Datasets -->
+    <sqlQuery name="TrypLOPIT" includeProjects="TriTrypDB,UniDB">
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id"/>
+      <column name="prob_MAP"/>
+      <column name="prob_MCMC"/>
+      <column name="MAP_location"/>
+      <column name="MCMC_location"/>
+      <sql>
+        <![CDATA[
+          WITH mapD AS (
+            select source_id, max_value as prob_MAP, REPLACE(max_timepoint,' (lopit)','') as MAP_location
+            from apidbtuning.profile p
+            where p.dataset_name in ('tbruTREU927_lopit_hyperLopit_RSRC', 'tconIL3000_2019_lopit_hyperLopitTc_RSRC')
+            and p.profile_set_name in ('T. brucei bloodstream form', 'T. congolense bloodstream form')
+            and p.profile_type(+) ='probability_mean'
+          ),   mcmcD as (
+           select source_id, max_value as prob_MCMC, REPLACE(max_timepoint,' (lopit)','') as MCMC_location,'Y' as matched_result
+           from apidbtuning.profile p
+           where p.dataset_name in ('tbruTREU927_lopit_hyperLopit_RSRC', 'tconIL3000_2019_lopit_hyperLopitTc_RSRC')
+           and p.profile_set_name in ('T. brucei procyclic form', 'T. congolense procyclic form')
+           and p.profile_type(+) ='probability_mean'
+          )
+          select ta.source_id, ta.gene_source_id, ta.project_id,
+           ROUND(m1.prob_map,3) as prob_map, m1.map_location,
+           ROUND(m2.prob_mcmc,3) as prob_mcmc, m2.mcmc_location
           FROM APIDBTUNING.transcriptattributes ta
             LEFT JOIN mapD m1 ON ta.gene_source_id = m1.source_id
             LEFT JOIN mcmcD m2 ON m1.source_id = m2.source_id

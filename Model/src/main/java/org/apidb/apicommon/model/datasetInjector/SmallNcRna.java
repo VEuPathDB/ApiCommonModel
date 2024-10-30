@@ -30,6 +30,10 @@ public class SmallNcRna extends  DatasetInjector {
 
           //          setPropValue("gbrowseTrackName", getDatasetName() + sampleName);
           //          injectTemplate("gbrowseTrackCategory");
+
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
+      injectTemplate("jbrowseSmallNcRnaSampleBuildProps");
       }
 
   }

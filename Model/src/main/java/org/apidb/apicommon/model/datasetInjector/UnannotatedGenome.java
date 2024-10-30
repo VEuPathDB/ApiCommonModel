@@ -12,6 +12,22 @@ public class UnannotatedGenome extends DatasetInjector {
   public void injectTemplates() {
       setOrgProperties();
       injectTemplate("jbrowseCommon");
+
+      String projectName = getPropValue("projectName");
+      String organismAbbrev = getPropValue("organismAbbrev");
+
+      Map<String, Map<String, String>> globalProps = getGlobalDatasetProperties();
+      String orgPropsKey = projectName + ":" + organismAbbrev + "_RSRC";
+      Map<String, String> orgProps = globalProps.get(orgPropsKey);
+      
+      if (orgProps == null) throw new WdkRuntimeException("No global property set for " + orgPropsKey);
+
+
+      for (Map.Entry<String, String> entry : orgProps.entrySet()) {
+          setPropValue(entry.getKey(), entry.getValue());
+      }
+
+      injectTemplate("jbrowseOrganismBuildProps");
   }
 
 
@@ -58,7 +74,6 @@ public class UnannotatedGenome extends DatasetInjector {
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "attribute", "overview");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequenceBySourceId");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesByTaxon");
-    addWdkReference("SequenceRecordClasses.SequenceRecordClass", "question", "GenomicSequenceQuestions.SequencesBySimilarity");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Taxonomy");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "SequencePieces");
     addWdkReference("SequenceRecordClasses.SequenceRecordClass", "table", "Aliases");

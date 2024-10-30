@@ -260,7 +260,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
     super.addModelReferences();
 
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByLocation");
-    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesBySimilarity");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GeneByLocusTag");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTaxon");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByGeneModelChars");
@@ -298,11 +297,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
     // getting properties defined in .prop file
     String projectName = getPropValue("projectName");
 
-    // no Popsets for VectorBase
-    if (!(projectName.equals("VectorBase") ||
-	  projectName.equals("HostDB"))){
-	addWdkReference("PopsetRecordClasses.PopsetRecordClass", "question", "PopsetQuestions.PopsetsBySimilarity");
-    }
 
     // no genes TrichDB organism
     if (!(projectName.equals("TrichDB"))){

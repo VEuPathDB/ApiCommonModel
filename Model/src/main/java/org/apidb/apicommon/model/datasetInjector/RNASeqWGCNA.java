@@ -1,6 +1,6 @@
 package org.apidb.apicommon.model.datasetInjector;
 
-public class RNASeqWGCNA extends RNASeq {
+public class RNASeqWGCNA extends RNASeqEbi {
 
 
   @Override
