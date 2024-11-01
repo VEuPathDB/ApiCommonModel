@@ -220,8 +220,8 @@ sub getJBrowse2Object {
 
     my $metadata = $self->getMetadata();
 
-    my $id = $self->getId();
-    my $label = $self->getLabel();
+    my $name = $self->getId();
+    my $trackId = $self->getLabel();
 
     my $storeType = $self->getStore()->getStoreType();
     my $displayType = $self->getDisplayType();
@@ -239,14 +239,14 @@ sub getJBrowse2Object {
     }
 
 
-    unless($id && $storeType && $label && $displayType && $trackType && $category) {
+    unless($name && $storeType && $trackId && $displayType && $trackType && $category) {
         print Dumper $self;
         die "missing a required property (id, storeType,label, displayType, trackType category)";
     }
 
     my $jbrowseObject = {type => $trackType,
-                         trackId => $id,
-                         name => $label,
+                         trackId => $trackId,
+                         name => $name,
                          category => \@categoryHierarchy,
                          adapter => { type => $storeType },
                          assemblyNames =>  [ $datasetConfig->getOrganismAbbrev() ],
