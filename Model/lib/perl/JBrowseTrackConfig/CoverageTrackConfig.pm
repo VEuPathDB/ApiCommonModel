@@ -14,10 +14,9 @@ sub setClipMarkerColor {$_[0]->{clip_marker_color} = $_[1]}
 
 sub getCovMinScoreDefault {
     my $self = shift;
-    my $min = $self->{cov_min_score_default} + 0;
 
-    if(defined($min)) {
-      return $min;
+    if(defined($self->{cov_min_score_default})) {
+      return $self->{cov_min_score_default};
     }
     return $self->getScale eq "log" ? 1 : 0;
 }
@@ -94,7 +93,7 @@ sub getJBrowse2Object{
       $minScore = 1;
     }
 
-    $jbrowse2Object->{displays}->[0]->{minScore} = $minScore;
+    $jbrowse2Object->{displays}->[0] = {minScore => $minScore};
     $jbrowse2Object->{displays}->[0]->{maxScore} = $maxScore;
     $jbrowse2Object->{displays}->[0]->{scaleType} = $scale;
 

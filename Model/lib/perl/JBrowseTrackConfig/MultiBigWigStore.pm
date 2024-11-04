@@ -23,17 +23,26 @@ sub setUrlTemplatesFromMultiUrls {
     my $name = $_->{name};
     my $color = $_->{color};
     my $alignment = $_->{alignment};
-    my $displayName = $_->{display_name};
   
     return unless($projectName && $buildNumber);
 
     my $urlTemplate = $self->makeUrlTemplate($applicationType, $relativePathToFile, $projectName, $buildNumber);
 
-    push @res, {url => $urlTemplate, name => $displayName, color => $color, alignment => $alignment};
+    push @res, {url => $urlTemplate, name => $name, color => $color, alignment => $alignment};
   }
 
 
   $self->setUrlTemplates(\@res);
+
+  if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+    $self->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
+  }
+  else {
+    $self->setStoreType("MultiWiggleAdapter");
+  }
+
+
+
 
   return \@res;
 }

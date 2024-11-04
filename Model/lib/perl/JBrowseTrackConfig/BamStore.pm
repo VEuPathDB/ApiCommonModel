@@ -3,6 +3,8 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Store);
 use strict;
 use warnings;
 
+use Data::Dumper;
+
 
 sub getIndexUrlTemplate {$_[0]->{index_url_template} }
 sub setIndexUrlTemplate {
@@ -29,7 +31,7 @@ sub new {
 
     $self->setBigwigUrl($args->{bw_relative_path_to_file});
 
-    my $indexLocation = $args->{url_template} . ".bai";
+    my $indexLocation = $self->getUrlTemplate() . ".bai";
     $self->setIndexUrlTemplate($indexLocation);
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {

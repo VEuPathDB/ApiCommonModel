@@ -88,7 +88,9 @@ sub getJBrowseObject{
     return $jbrowseObject;
 }
 
-sub getJBrowse2Object{
+sub getJBrowse2Object{ }
+
+sub _getJBrowse2Object{
     my $self = shift;
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();

@@ -3,6 +3,8 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
 
+use Data::Dumper;
+
 use JSON;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigStore;
@@ -15,8 +17,7 @@ sub new {
 
     my $multiUrls = $args->{multi_urls};
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigStore->new($args);
-    $store->setStoreType("MultiBigWig/Store/SeqFeature/MultiBigWig");
-    $store->setUrlTemplatesFromMultiUrls();
+    $store->setUrlTemplatesFromMultiUrls($multiUrls);
 
     $self->setStore($store);
     $self->setAlignment($args->{alignment});
@@ -50,6 +51,15 @@ sub new {
 
     $self->setHeight($args->{height});
 
+    unless($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+      $self->setTrackType("MultiQuantitativeTrack");
+
+      $self->setLabel("$datasetName - $alignmentDisplay");
+      $self->setId("$studyDisplayName - $alignmentDisplay");
+
+    }
+
+
     return $self;
 }
 
@@ -80,7 +90,46 @@ sub getJBrowseObject{
 }
 
 
-sub getJBrowse2Object { }
+sub getJBrowse2Object { 
+  my ($self) = @_;
+
+  $self->setDisplayType(undef);
+
+  my $jbrowseObject = $self->SUPER::getJBrowse2Object();
+
+  my $store =   $self->getStore();
+  my $urlTemplates = $store->getUrlTemplates();
+
+
+  $jbrowseObject->{displays}->[0]->{type} = "MultiLinearWiggleDisplay";
+
+
+  $jbrowseObject->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
+  $jbrowseObject->{displays}->[0]->{defaultRendering} = "multirowxy";
+
+  foreach(@{$urlTemplates}) {
+    my $name = $_->{name};
+    my $uri = $_->{url};
+    my $color = $_->{color};
+
+    my $subadapter = {
+      type => "BigWigAdapter",
+      name => $name,
+      color => $color,
+      bigWigLocation => {
+        uri => $uri,
+        locationType => "UriLocation",
+
+      }
+    };
+
+    push @{$jbrowseObject->{adapter}->{subadapters}}, $subadapter;
+  }
+
+  #$jbrowseObject->{displays} = [];
+
+  return $jbrowseObject;
+}
 
 
 
@@ -126,5 +175,8 @@ sub getJBrowseObject{
 
 	return $jbrowseObject;
 }
+
+# NOTE: for jbrowse 2 we only need one track with multiple displays
+sub getJBrowse2Object { }
 
 1;
