@@ -88,10 +88,12 @@ sub getJBrowseObject{
     return $jbrowseObject;
 }
 
-sub getJBrowse2Object{ }
 
-sub _getJBrowse2Object{
-    my $self = shift;
+sub getJBrowse2Object{
+    my ($self, $doNotSkip) = @_;
+
+    # JBrowse2 has nice multicoverage things for RNASeq and ChipSeq
+    return undef unless($doNotSkip);
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
@@ -111,6 +113,20 @@ sub _getJBrowse2Object{
     };
 
     return $jbrowse2Object;
+}
+
+
+
+
+
+package ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::CNV;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig);
+
+use strict;
+
+sub getJBrowse2Object{
+    my $self = shift;
+    my $jbrowse2Object = $self->SUPER::getJBrowse2Object(1);
 }
 
 
