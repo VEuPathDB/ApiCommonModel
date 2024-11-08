@@ -149,6 +149,10 @@ sub new {
     return $self;
 }
 
+# NOTE: for jbrowse 2 we only need one track with multiple displays
+sub getJBrowse2Object { }
+
+
 package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY;
 
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig);
@@ -176,7 +180,22 @@ sub getJBrowseObject{
 	return $jbrowseObject;
 }
 
-# NOTE: for jbrowse 2 we only need one track with multiple displays
-sub getJBrowse2Object { }
+
+package ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XYLine;
+
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XY);
+use strict;
+use warnings;
+
+
+sub getJBrowse2Object {
+  my ($self) = @_;
+  my $jbrowseObject = $self->SUPER::getJBrowse2Object();
+
+  $jbrowseObject->{displays}->[0]->{defaultRendering} = "multiline";
+
+  return $jbrowseObject;
+}
+
 
 1;
