@@ -223,19 +223,26 @@ sub getJBrowse2Object {
     my $name = $self->getId();
     my $trackId = $self->getLabel();
 
-    my $store = $self->getStore()
-    my $storeType = $store->getStoreType();
+    my $storeType = $self->getStore()->getStoreType();
+#    my $store = $self->getStore()
+#    my $storeType = $store->getStoreType();
 
     # JBrowse 2 does not work with REST Store
-    if(ref($store) eq "ApiCommonModel::Model::JBrowseTrackConfig::RestStore") {
-        return undef;
-    }
+#    if(ref($store) eq "ApiCommonModel::Model::JBrowseTrackConfig::RestStore") {
+#        return undef;
+#    }
 
     my $displayType = $self->getDisplayType();
     my $trackType = $self->getTrackType();
 
-    my $category = $datasetConfig->getCategory();
+    #my $category = $datasetConfig->getCategory();
     my $subcategory = $datasetConfig->getSubcategory();
+
+
+    my $id = $self->getId();
+    my $label = $self->getLabel();
+    my $category = $datasetConfig->getCategory() if ($datasetConfig);
+
 
     my @categoryHierarchy = ($category);
     if($subcategory) {
@@ -245,10 +252,9 @@ sub getJBrowse2Object {
         }
     }
 
-
-    unless($name && $storeType && $trackId && $trackType && $category) {
+    unless($id || $name && $storeType && $trackId && $trackType && $category) {
         print Dumper $self;
-        die "missing a required property (id, storeType,label, displayType, trackType category)";
+        die "missing a required property (id, storeType, label, displayType, trackType, category)";
     }
 
     my $jbrowseObject = {type => $trackType,
