@@ -223,14 +223,13 @@ sub getJBrowse2Object {
     my $name = $self->getId();
     my $trackId = $self->getLabel();
 
-    my $storeType = $self->getStore()->getStoreType();
-#    my $store = $self->getStore()
-#    my $storeType = $store->getStoreType();
+    my $store = $self->getStore();
+    my $storeType = $store->getStoreType();
 
     # JBrowse 2 does not work with REST Store
-#    if(ref($store) eq "ApiCommonModel::Model::JBrowseTrackConfig::RestStore") {
-#        return undef;
-#    }
+    if(ref($store) eq "ApiCommonModel::Model::JBrowseTrackConfig::RestStore") {
+        return undef;
+    }
 
     my $displayType = $self->getDisplayType();
     my $trackType = $self->getTrackType();
