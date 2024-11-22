@@ -16,7 +16,8 @@ sub new {
         $self->setStoreType("JBrowse/Store/SeqFeature/GFF3Tabix");
     }
     else {
-        die "No GFF Equivalent For JBrowse2 YET";
+        #die "No GFF Equivalent For JBrowse2 YET";
+        $self->setStoreType("Gff3TabixAdapter");
     }
 
     return $self;
