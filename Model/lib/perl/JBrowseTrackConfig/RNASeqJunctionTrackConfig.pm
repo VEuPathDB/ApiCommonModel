@@ -42,6 +42,8 @@ sub new {
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $self->setDisplayType("LinearBasicDisplay")
     }
 
     $self->setStore($store);
@@ -89,7 +91,7 @@ sub getJBrowse2Object{
 	my $self = shift;
 
 	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-
+	
 
 	return $jbrowse2Object;
 }

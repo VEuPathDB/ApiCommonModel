@@ -30,6 +30,7 @@ sub new {
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
     }
 
     $self->setStore($store);

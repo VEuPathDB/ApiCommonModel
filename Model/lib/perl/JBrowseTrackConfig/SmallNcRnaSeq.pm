@@ -63,12 +63,13 @@ sub getJBrowse2Object{
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
-    my $indexLocation = $self->getIndexUrlTemplate();
+    my $indexLocation = $self->getStore()->getIndexUrlTemplate();
 
     $jbrowse2Object->{adapter}->{index}->{location}->{uri} = $indexLocation;
     $jbrowse2Object->{adapter}->{bamLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
 
     $jbrowse2Object->{displays}->[0]->{displayId} = "bam_" . scalar($self);
+    $jbrowse2Object->{urlTemplate}= $self->getStore()->getUrlTemplate();
 
     return $jbrowse2Object;
 }

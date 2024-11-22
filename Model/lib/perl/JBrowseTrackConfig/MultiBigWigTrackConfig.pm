@@ -44,7 +44,11 @@ sub new {
       $self->setLabel("$datasetName Density - $alignmentDisplay");
       $self->setId("$studyDisplayName Density - $alignmentDisplay");
     }
-    else {
+    elsif($subclassName =~ /XYLine/) {
+      $self->setLabel("Label Combined RNSeq");
+      $self->setId("Key Combined RNASeq");
+    }
+    else{
       $self->setLabel("$datasetName XYPlot - $alignmentDisplay");
       $self->setId("$studyDisplayName XYPlot - $alignmentDisplay");
     }
@@ -187,14 +191,24 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::X
 use strict;
 use warnings;
 
+sub new {
+    my ($class, $args) = @_;
+    my $self = $class->SUPER::new($args);
+
+    $self->setLabel($args->{label});
+
+    return $self;
+}
 
 sub getJBrowse2Object {
   my ($self) = @_;
-  my $jbrowseObject = $self->SUPER::getJBrowse2Object();
+  my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+  $jbrowse2Object->{displays}->[0]->{defaultRendering} = "multiline";
+  my $label = $self->getLabel();
+  $jbrowse2Object->{name} = $label;
+  $jbrowse2Object->{metadata}{dataset} = $label;
 
-  $jbrowseObject->{displays}->[0]->{defaultRendering} = "multiline";
-
-  return $jbrowseObject;
+  return $jbrowse2Object;
 }
 
 

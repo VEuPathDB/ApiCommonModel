@@ -26,6 +26,7 @@ sub new {
     }
     else {
         die "No REST Equivalent For JBrowse2";
+	$self->setStoreType("JBrowse/Store/SeqFeature/REST");
     }
 
     return $self;
