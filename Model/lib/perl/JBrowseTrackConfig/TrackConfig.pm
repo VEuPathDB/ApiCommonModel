@@ -1,4 +1,6 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::JBrowseBaseConfig);
+
 use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
 
 use strict;
@@ -7,9 +9,6 @@ use warnings;
 use Data::Dumper;
 use URI::Escape;
 use Encode;
-
-sub getApplicationType {$_[0]->{application_type}}
-sub setApplicationType {$_[0]->{application_type} = $_[1]}
 
 sub getLabel {$_[0]->{label}}
 sub setLabel {$_[0]->{label} = $_[1]}
@@ -43,8 +42,6 @@ sub setDisplayName {$_[0]->{display_name} = $_[1]}
 sub getDescription {$_[0]->{description}}
 sub setDescription {$_[0]->{description} = $_[1]}
 
-sub getDatasetConfigObj {$_[0]->{dataset_config}}
-sub setDatasetConfigObj {$_[0]->{dataset_config} = $_[1]}
 
 # These are optional  metadata
 sub getGeneLegend {$_[0]->{gene_legend}}
@@ -55,18 +52,12 @@ sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
-    my $self = bless {}, $class;
 
-    if ($args->{dataset_config}) { 
-      $self->setDatasetConfigObj($args->{dataset_config});
-    }
-    else {
-      my $datasetConfig = ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig->new($args);
-      $self->setDatasetConfigObj($datasetConfig);
-    }
+    my $self = $class->SUPER::new($args);
+
 
     $self->setDisplayName($args->{display_name});
-    $self->setApplicationType($args->{application_type});
+
     $self->setLabel($args->{label});
 
     $self->setId($args->{id});
@@ -229,15 +220,28 @@ sub getJBrowse2Object {
 
     my $metadata = $self->getMetadata();
 
-    my $id = $self->getId();
-    my $label = $self->getLabel();
+    my $name = $self->getId();
+    my $trackId = $self->getLabel();
 
-    my $storeType = $self->getStore()->getStoreType();
+    my $store = $self->getStore();
+    my $storeType = $store->getStoreType();
+
+    # JBrowse 2 does not work with REST Store
+    if(ref($store) eq "ApiCommonModel::Model::JBrowseTrackConfig::RestStore") {
+        return undef;
+    }
+
     my $displayType = $self->getDisplayType();
     my $trackType = $self->getTrackType();
 
-    my $category = $datasetConfig->getCategory();
+    #my $category = $datasetConfig->getCategory();
     my $subcategory = $datasetConfig->getSubcategory();
+
+
+    my $id = $self->getId();
+    my $label = $self->getLabel();
+    my $category = $datasetConfig->getCategory() if ($datasetConfig);
+
 
     my @categoryHierarchy = ($category);
     if($subcategory) {
@@ -247,22 +251,24 @@ sub getJBrowse2Object {
         }
     }
 
-
-    unless($id && $storeType && $label && $displayType && $trackType && $category) {
+    unless($id || $name && $storeType && $trackId && $trackType && $category) {
         print Dumper $self;
-        die "missing a required property (id, storeType,label, displayType, trackType category)";
+        die "missing a required property (id, storeType, label, displayType, trackType, category)";
     }
 
     my $jbrowseObject = {type => $trackType,
-                         trackId => $id,
-                         name => $label,
+                         trackId => $trackId,
+                         name => $name,
                          category => \@categoryHierarchy,
                          adapter => { type => $storeType },
                          assemblyNames =>  [ $datasetConfig->getOrganismAbbrev() ],
-                         displays => [{ type => $displayType }]
+                         displays => []
+
     };
 
-
+    if($displayType) {
+        $jbrowseObject->{displays}->[0] = {type => $displayType};
+    }
     $jbrowseObject->{metadata} = $metadata if($metadata);
 
     return $jbrowseObject;

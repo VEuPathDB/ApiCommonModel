@@ -18,7 +18,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplate($args->{url_template});
+    #$self->setUrlTemplate($args->{url_template});
     #$self->setType("JBrowse/View/Track/CanvasVariants");
 
     $self->setChunkSizeLimit(10000000);
@@ -27,7 +27,8 @@ sub new {
         $self->setStoreType("JBrowse/Store/SeqFeature/VCFTabix");
     }
     else {
-        die "No VCF Equivalent For JBrowse2 YET";
+        #die "No VCF Equivalent For JBrowse2 YET";
+	$self->setStoreType("VcfTabixAdapter");
     }
 
     return $self;

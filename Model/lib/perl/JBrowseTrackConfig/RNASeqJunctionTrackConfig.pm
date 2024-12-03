@@ -14,9 +14,6 @@ sub setUrl {$_[0]->{url} = $_[1]}
 sub getSummary {$_[0]->{summary} }
 sub setSummary {$_[0]->{summary} = $_[1]}
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
-
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
@@ -45,6 +42,8 @@ sub new {
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $self->setDisplayType("LinearBasicDisplay")
     }
 
     $self->setStore($store);
@@ -92,7 +91,7 @@ sub getJBrowse2Object{
 	my $self = shift;
 
 	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-
+	
 
 	return $jbrowse2Object;
 }

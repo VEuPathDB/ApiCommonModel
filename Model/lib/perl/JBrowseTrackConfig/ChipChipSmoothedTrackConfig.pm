@@ -10,9 +10,6 @@ use JSON;
 sub getPanName {$_[0]->{pan_name}}
 sub setPanName {$_[0]->{pan_name} = $_[1]}
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
-
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 

@@ -12,9 +12,6 @@ sub setYScalePosition {$_[0]->{yscale_position} = $_[1]}
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
-
 sub getLabel {$_[0]->{label} }
 sub setLabel {$_[0]->{label} = $_[1]}
 
@@ -44,7 +41,6 @@ sub new {
     $datasetConfig->setSubcategory("small non-coding RNA");
 
     $self->setYScalePosition("left");
-    $self->setUrlTemplate($args->{url_template});
     return $self;
 }
 
@@ -53,14 +49,11 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    # TODO - replace with:
-    #$jbrowseObject->{unsafePopup} = "JSON::true";
-    $jbrowseObject->{unsafePopup} = 'true';
+    $jbrowseObject->{unsafePopup} = "JSON::true";
 
     $jbrowseObject->{yScalePosition} = $self->getYScalePosition();
 
-    # TODO
-    $jbrowseObject->{urlTemplate}= $self->getUrlTemplate();
+    $jbrowseObject->{urlTemplate}= $self->getStore()->getUrlTemplate();
 
     return $jbrowseObject;
 }
@@ -70,12 +63,13 @@ sub getJBrowse2Object{
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
-    my $indexLocation = $self->getIndexUrlTemplate();
+    my $indexLocation = $self->getStore()->getIndexUrlTemplate();
 
     $jbrowse2Object->{adapter}->{index}->{location}->{uri} = $indexLocation;
-    $jbrowse2Object->{adapter}->{bamLocation} = {uri => $self->getUrlTemplate(),locationType => "UriLocation"};
+    $jbrowse2Object->{adapter}->{bamLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
 
     $jbrowse2Object->{displays}->[0]->{displayId} = "bam_" . scalar($self);
+    $jbrowse2Object->{urlTemplate}= $self->getStore()->getUrlTemplate();
 
     return $jbrowse2Object;
 }

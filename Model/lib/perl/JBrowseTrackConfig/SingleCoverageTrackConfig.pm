@@ -5,8 +5,8 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-sub getUrlTemplate {$_[0]->{url_template} }
-sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
+use JSON;
+use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 
 sub getDbid {$_[0]->{dbid} }
 sub setDbid {$_[0]->{dbid} = $_[1]}
@@ -21,10 +21,12 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplate($args->{url_template});
     $self->setOrder($args->{order});
     $self->setDbid($args->{dbid});
     $self->setDisplayNameSuffix($args->{display_name_suffix});
+ 
+    my $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
+    $self->setStore($store);
 
     my $datasetConfig = $self->getDatasetConfigObj();
     my $studyDisplayName = $datasetConfig->getStudyDisplayName();
@@ -78,7 +80,7 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    $jbrowseObject->{urlTemplate} = $self->getUrlTemplate();
+    $jbrowseObject->{urlTemplate} = $self->getStore()->getUrlTemplate();
     $jbrowseObject->{max_score} = $self->getCovMaxScoreDefault();
     $jbrowseObject->{min_score} = $self->getCovMinScoreDefault();
     $jbrowseObject->{scale} = $self->getScale();
@@ -86,17 +88,20 @@ sub getJBrowseObject{
     return $jbrowseObject;
 }
 
+
 sub getJBrowse2Object{
-    my $self = shift;
+    my ($self, $doNotSkip) = @_;
+
+    # JBrowse2 has nice multicoverage things for RNASeq and ChipSeq
+    return undef unless($doNotSkip);
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
     my $datasetConfig = $self->getDatasetConfigObj();
     my $studyDisplayName = $datasetConfig->getStudyDisplayName();
 
-
-
-    $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getUrlTemplate(),locationType => "UriLocation"};
+    $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
+    #$jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $uri,locationType => "UriLocation"};
     $jbrowse2Object->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
     $jbrowse2Object->{displays}->[0]->{defaultRendering} = "xyplot";
     $jbrowse2Object->{displays}->[0]->{renderers} = {XYPlotRenderer => {type => "XYPlotRenderer",
@@ -108,6 +113,20 @@ sub getJBrowse2Object{
     };
 
     return $jbrowse2Object;
+}
+
+
+
+
+
+package ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::CNV;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig);
+
+use strict;
+
+sub getJBrowse2Object{
+    my $self = shift;
+    my $jbrowse2Object = $self->SUPER::getJBrowse2Object(1);
 }
 
 
