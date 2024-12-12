@@ -48,7 +48,8 @@ public class RNASeq extends  DatasetInjector {
 
 
   @Override
-  public void injectTemplates() {
+  public void injectTemplates() { }
+  public void TODO_injectTemplates() {
       setShortAttribution();
 
       String projectName = getPropValue("projectName");
