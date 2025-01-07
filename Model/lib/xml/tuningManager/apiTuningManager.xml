@@ -6688,61 +6688,41 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
     <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="SampleDisplayInfo"/>
     <internalDependency name="DatasetPresenter"/>
-    <externalDependency name="apidb.MassSpecSummary"/>
-    <externalDependency name="dots.AaFeature"/>
-    <externalDependency name="dots.AaLocation"/>
+    <externalDependency name="apidb.MassSpecPeptide"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="study.ProtocolAppNode"/>
-    <intermediateTable name="MSExptTrustedSpectrum"/>
-    <sql>
-      <![CDATA[
-        CREATE UNLOGGED TABLE MSExptTrustedSpectrum as
-        SELECT DISTINCT mss.external_database_release_id, mss.protocol_app_node_id, pan.name
-        FROM apidb.massspecsummary mss, dots.massspecfeature msf, study.protocolappnode pan
-        WHERE mss.mass_spec_summary_id = msf.mass_spec_summary_id
-          AND mss.PROTOCOL_APP_NODE_ID = pan.protocol_app_node_id
-      ]]>
-    </sql>
     <sql>
       <![CDATA[
         CREATE TABLE MSPeptideSummary&1 as
         SELECT pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER
-        FROM (SELECT SUBSTR(seq.SEQUENCE, pep.aa_end_max::INTEGER - pep.aa_start_min::INTEGER + 1, pep.aa_start_min::INTEGER) as peptide_sequence,
-                pep.*
-              FROM dots.aasequence seq, (
-                SELECT ga.source_id,
+        FROM (
+                SELECT msp.peptide_sequence,
+                       ga.source_id,
                        ga.gene_source_id,
                        ga.project_id,
-                       mss.protocol_app_node_id,
+                       --mss.protocol_app_node_id,
                        dsp.display_name as experiment,
                        d.name as external_database_name,
-                       sum(msf.spectrum_count) as spectrum_count,
-                       mss.aa_sequence_id,
-                       msf.aa_feature_id as peptide_aa_feature_id,
-                       msf.na_feature_id as peptide_na_feature_id,
-                       l.start_min as aa_start_min,
-                       l.end_max as aa_end_max,
-                       good.name as sample
-                FROM apidb.massspecsummary mss
-                  INNER JOIN dots.massspecfeature msf ON mss.mass_spec_summary_id = msf.mass_spec_summary_id
-                  INNER JOIN dots.aalocation l ON msf.aa_feature_id = l.aa_feature_id
-                  INNER JOIN sres.externaldatabaserelease r ON mss.external_database_release_id = r.external_database_release_id
+                       sum(msp.spectrum_count) as spectrum_count,
+                       ga.aa_sequence_id,
+                       --msf.aa_feature_id as peptide_aa_feature_id,
+                       --msf.na_feature_id as peptide_na_feature_id,
+                       msp.peptide_start as aa_start_min,
+                       msp.peptide_end  as aa_end_max,
+                       msp.sample
+                FROM apidb.massspecpeptide msp
+                  INNER JOIN sres.externaldatabaserelease r ON msp.external_database_release_id = r.external_database_release_id
                   INNER JOIN sres.externaldatabase d ON r.external_database_id = d.external_database_id
-                  LEFT JOIN transcriptattributes ga ON mss.aa_sequence_id = ga.aa_sequence_id
-                  LEFT JOIN datasetnametaxon dsnt ON d.name = dsnt.name
-                  LEFT JOIN datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
-                  LEFT JOIN Msexpttrustedspectrum good ON
-                    mss.external_database_release_id = good.external_database_release_id
-                    AND mss.protocol_app_node_id = good.protocol_app_node_id
-                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, mss.protocol_app_node_id, dsp.display_name,
-                         mss.aa_sequence_id, msf.aa_feature_id, msf.na_feature_id,mss.spectrum_count, l.start_min, l.end_max, good.external_database_release_id, good.name
-              ) pep
-              WHERE pep.aa_sequence_id = seq.aa_sequence_id
+                  LEFT JOIN apidbtuning.transcriptattributes ga ON msp.protein_source_id = ga.protein_source_id
+                  LEFT JOIN apidbtuning.datasetnametaxon dsnt ON d.name = dsnt.name
+                  LEFT JOIN apidbtuning.datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, dsp.display_name,
+                         msp.protein_source_id, ga.aa_sequence_id, msp.peptide_sequence,
+                         msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, msp.sample
           ) pep
-          ,sampledisplayinfo sdi
-        WHERE sdi.dataset_name = pep.external_database_name
-          AND sdi.sample = replace (pep.sample ,' (MS Summary)', '')
+          ,apidbtuning.sampledisplayinfo sdi
+        WHERE sdi.dataset_name = pep.external_database_name 
+         AND pep.sample = replace (sdi.sample ,'.tab', '')
       ]]>
     </sql>
     <sql>
