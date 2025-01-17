@@ -6586,13 +6586,10 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
                        ga.source_id,
                        ga.gene_source_id,
                        ga.project_id,
-                       --mss.protocol_app_node_id
                        dsp.display_name as experiment,
                        d.name as external_database_name,
                        sum(msp.spectrum_count) as spectrum_count,
                        ga.aa_sequence_id,
-                       --msf.aa_feature_id as peptide_aa_feature_id,
-                       --msf.na_feature_id as peptide_na_feature_id,
                        msp.peptide_start as aa_start_min,
                        msp.peptide_end  as aa_end_max,
                        msp.sample
@@ -6681,10 +6678,10 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
       <![CDATA[
         CREATE TABLE MSTranscriptSummary&1 AS
         SELECT msps.source_id, msps.gene_source_id, msps.external_database_name, msps.experiment, msps.sample,
-               msps.sample_display_name, protocol_app_node_id, sum(msps.spectrum_count) as spectrum_count, count(*) as sequence_count
+               msps.sample_display_name, sum(msps.spectrum_count) as spectrum_count, count(*) as sequence_count
         FROM mspeptidesummary msps
         WHERE source_id is not null
-        GROUP BY msps.source_id, msps.gene_source_id, msps.external_database_name, msps.experiment, msps.sample, msps.sample_display_name, protocol_app_node_id
+        GROUP BY msps.source_id, msps.gene_source_id, msps.external_database_name, msps.experiment, msps.sample, msps.sample_display_name
       ]]>
     </sql>
     <sql>
@@ -6703,67 +6700,40 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
     <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="SampleDisplayInfo"/>
     <internalDependency name="DatasetPresenter"/>
-    <externalDependency name="dots.AaFeature"/>
-    <externalDependency name="dots.AaLocation"/>
-    <externalDependency name="dots.AaSequence"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="sres.OntologyTerm"/>
-    <externalDependency name="apidb.MassSpecSummary"/>
-    <externalDependency name="apidb.MassSpecSummary"/>
-    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="apidb.ModifiedMassSpecPeptide"/>
     <sql>
       <![CDATA[
         CREATE TABLE MSModifiedPeptideSummary&1 as
-        SELECT
-               substr(seq.sequence, pep.aa_end_max::INTEGER - pep.aa_start_min::INTEGER + 1,
-                      pep.aa_start_min::INTEGER) as peptide_sequence,
-               substr(seq.sequence, 1, pep.residue_location::INTEGER + 1) as residue,
-               pep.*
-        FROM   dots.aasequence seq,
-               (SELECT ga.source_id                     as source_id,
-                       ga.gene_source_id                as gene_source_id,
-                       so.name                          as modification_type,
-                       coalesce(dsp.display_name, sample)    as experiment,
-                       ed.name                          as external_database_name,
-                       mss.external_database_release_id as external_database_release_id,
-                       mst.sample_display_name          as Sample_display,
-                       mst.sample                       as sample,
-                       pan.protocol_app_node_id         as protocol_app_node_id,
-                       mss.aa_sequence_id               as aa_sequence_id,
-                       msf.aa_feature_id                as peptide_aa_feature_id,
-                       msf.spectrum_count               as spectrum_count,
-                       mst.html_color                   as html_color,
-                       aal.start_min                    as residue_location,
-                       aalp.start_min                   as aa_start_min,
-                       aalp.end_max                     as aa_end_max,
-                       pot.description                  as description
-                FROM   dots.posttranslationalmodfeature pot,
-                       dots.massspecfeature msf,
-                       apidb.massspecsummary mss,
-                       dots.aalocation aal,
-                       dots.aalocation aalp,
-                       sampledisplayinfo mst,
-                       sres.ontologyterm so,
-                       transcriptattributes ga,
-                       sres.externaldatabaserelease edr,
-                       study.protocolappnode pan,
-                       sres.externaldatabase ed
-                       LEFT JOIN datasetnametaxon dsnt ON ed.name = dsnt.name
-                       LEFT JOIN datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
-                WHERE  pot.parent_id = msf.aa_feature_id
-                   AND pot.aa_feature_id = aal.aa_feature_id
-                   AND msf.aa_feature_id = aalp.aa_feature_id
-                   AND msf.mass_spec_summary_id = mss.mass_spec_summary_id
-                   AND mss.aa_sequence_id = ga.aa_sequence_id
-                   AND mss.external_database_release_id = edr.external_database_release_id
-                   AND mss.protocol_app_node_id = pan.protocol_app_node_id
-                   AND ed.name = mst.dataset_name
-                   AND mst.sample = replace (pan.name ,' (MS Summary)', '')
-                   AND edr.external_database_id = ed.external_database_id
-                   AND pot.sequence_ontology_id = so.ontology_term_id
-        ) pep
-        WHERE  pep.aa_sequence_id = seq.aa_sequence_id
+        SELECT pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER
+        FROM (
+                SELECT ga.source_id,
+                       ga.gene_source_id,
+                       ga.project_id,
+                       ga.aa_sequence_id,
+                       dsp.display_name as experiment,
+                       d.name as external_database_name,
+                       msp.sample,
+                       sum(msp.spectrum_count) as spectrum_count,
+                       msp.residue,
+                       msp.modification_type,
+                       msp.peptide_sequence,
+                       msp.peptide_start as aa_start_min,
+                       msp.peptide_end  as aa_end_max
+                FROM apidb.ModifiedMassSpecPeptide msp
+                  INNER JOIN sres.externaldatabaserelease r ON msp.external_database_release_id = r.external_database_release_id
+                  INNER JOIN sres.externaldatabase d ON r.external_database_id = d.external_database_id
+                  LEFT JOIN apidbtuning.transcriptattributes ga ON msp.protein_source_id = ga.protein_source_id
+                  LEFT JOIN apidbtuning.datasetnametaxon dsnt ON d.name = dsnt.name
+                  LEFT JOIN apidbtuning.datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, dsp.display_name,
+                         msp.protein_source_id, ga.aa_sequence_id, msp.peptide_sequence,
+                         msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, msp.sample, msp.modification_type, msp.residue
+          ) pep
+          ,apidbtuning.sampledisplayinfo sdi
+        WHERE sdi.dataset_name = pep.external_database_name 
+         AND pep.sample = replace (sdi.sample ,'.tab', '')
       ]]>
     </sql>
     <sql>
@@ -9011,11 +8981,11 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
   </tuningTable>
 
 
-<!-- CHECK AND FIX - tuning fails
+<!-- commenting now; MUST FIX
   <tuningTable name="TranscriptGenomicSequence">
     <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
     </comment>
-   - COMMENTING OUT DEPENDENCIES FOR NOW -
+   - COMMENTING OUT DEPENDENCIES FOR NOW 
     <externalDependency name="apidb.TranscriptLocation"/>
     <externalDependency name="dots.GeneFeature"/>
     <externalDependency name="dots.NaSequence"/>
@@ -9137,7 +9107,6 @@ sub readClob {
 
 
 1;
-
       ]]>
     </perl>
 
