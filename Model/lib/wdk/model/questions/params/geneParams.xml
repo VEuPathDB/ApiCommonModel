@@ -8770,13 +8770,15 @@ end as term
         <![CDATA[
           WITH OrganismConstraint AS (
             SELECT DISTINCT sdi.sample_display_name as sample, org.organism as organism,
-                dsp.display_Name || ' (' ||  dsp.short_attribution || ')' As Experiment_Display,
-                case when dsp.dataset_name_pattern is null
-                     then dsp.name
-                     else org.organism||'_'||dsp.dataset_name_pattern
-                end as experiment,
-                  org.Project_Id,
-                  replace(sdi.sample,'.tab', '')  as internal_id,
+                CASE WHEN dsp.short_attribution IS NULL THEN dsp.display_name
+                     ELSE dsp.display_Name || ' (' ||  dsp.short_attribution || ')' 
+                END AS Experiment_Display,
+                CASE WHEN dsp.dataset_name_pattern IS NULL
+                     THEN dsp.name
+                     ELSE org.organism||'_'||dsp.dataset_name_pattern
+                END AS experiment,
+                org.Project_Id,
+                replace(sdi.sample,'.tab', '')  as internal_id,
                 sdi.sort_order
             FROM apidbTuning.sampledisplayinfo sdi,
                   apidbTuning.datasetPresenter dsp,
@@ -8785,6 +8787,7 @@ end as term
                   (SELECT DISTINCT ta.organism,ta.taxon_id,ta.project_id
                     FROM apidbtuning.transcriptattributes ta, apidb.massspecpeptide msf
                     WHERE msf.protein_source_id = ta.protein_source_id
+                   and (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
                   ) org
             WHERE sdi.dataset_name like '%_massSpec_%'
               AND sdi.dataset_name = dsnt.name
@@ -8820,7 +8823,7 @@ end as term
                 nullif(REGEXP_REPLACE(mst.sample,'[^0-9]','','g'),'')::numeric as nums
               FROM OrganismConstraint mst
               WHERE mst.experiment is not null
-            UNION
+              UNION
               SELECT mst.experiment_display as display,
                     mst.experiment as term,
                     mst.organism as parentTerm,
@@ -8853,7 +8856,7 @@ end as term
               FROM OrganismConstraint mst
               WHERE mst.experiment is not null
                 AND mst.experiment <> mst.sample
-            UNION
+              UNION
               SELECT '<b>'||REGEXP_REPLACE(mst.organism,'(.*) (.*) (.*)','\1') ||'</b>' as display,
                     REGEXP_REPLACE(mst.organism,'(.*) (.*) (.*)','\1') as term,
                     '' as parentTerm,
@@ -8869,6 +8872,7 @@ end as term
         ]]>
       </sql>
     </sqlQuery>
+
 
     <processQuery name="MassAssay" processName="org.apidb.apicomplexa.wsfplugin.apifed.ApiFedPlugin" includeProjects="EuPathDB">
       <wsColumn name="internal" width="200" wsName="internal"/>
@@ -8888,7 +8892,9 @@ end as term
           WITH organismMods AS (
             SELECT DISTINCT ta.organism
             , ms.*
-            , dp.display_name || ' (' || dp.short_attribution || ')' AS experiment_name
+            , CASE WHEN dp.short_attribution IS NULL THEN dp.display_name
+                   ELSE dp.display_Name || ' (' ||  dp.short_attribution || ')' 
+                END AS experiment_name
             FROM apidbtuning.msmodifiedpeptidesummary ms
             , apidbtuning.transcriptattributes ta
             , apidbtuning.datasetpresenter dp
@@ -8896,10 +8902,10 @@ end as term
               AND (ms.modification_type in ( $$ptm_type$$ ) OR $$ptm_type$$ = 'any')
               AND (ms.external_database_name = dp.name OR regexp_replace(ms.external_database_name, '^.+?_', '_') = dp.name)
           )
-            SELECT DISTINCT sample_display AS display
-            , replace(sample_display, ',', '') AS term
+            SELECT DISTINCT sample AS display
+            , replace(sample, ',', '') AS term
             , replace(experiment || '_' || organism, ',', '') AS parentterm
-            , sample_display AS internal
+            , sample AS internal
             FROM organismMods
           UNION
             SELECT DISTINCT experiment_name AS display
@@ -8910,18 +8916,18 @@ end as term
           UNION
             SELECT '<b>' || organism || '</b>' AS display
             , organism AS term
-            , regexp_substr(organism, '^(\w+\s\w+)') AS parentterm
+            , REGEXP_REPLACE(organism,'(.*) (.*) (.*)','\1 \2') as parentTerm
             , '-1' AS internal
             FROM  organismMods
           UNION
-            SELECT '<b>'||regexp_substr(organism, '^(\w+\s\w+)') || '</b>' AS display
-            , regexp_substr(organism, '^(\w+\s\w+)') AS term
-            , regexp_substr(organism, '^(\w+)') AS parentterm
+            SELECT '<b>'||REGEXP_REPLACE(organism,'(.*) (.*) (.*)','\1 \2') || '</b>' AS display
+            , REGEXP_REPLACE(organism,'(.*) (.*) (.*)','\1 \2') AS term
+            , REGEXP_REPLACE(organism,'(.*) (.*) (.*)','\1') as parentTerm
             , '-1' AS internal
             FROM organismMods
           UNION
-            SELECT '<b>' || regexp_substr(organism, '^(\w+)') || '</b>' AS display
-            , regexp_substr(organism, '^(\w+)') AS term
+            SELECT '<b>' || REGEXP_REPLACE(organism,'(.*) (.*) (.*)','\1') || '</b>' AS display
+            , REGEXP_REPLACE(organism,'(.*) (.*) (.*)','\1') AS term
             , '' AS parentterm
             , '-1' AS internal
             FROM organismMods
@@ -8948,13 +8954,14 @@ end as term
             , replace(replace(replace(modification_type, '-', ' '), '_', ' '), 'binding site', 'ubiquitin binding site') AS display
             , CASE WHEN modification_type = 'phosphorylation_site' THEN 1 ELSE 2 END as sort_order
             FROM apidbtuning.msmodifiedpeptidesummary
+          where modification_type is not NULL  -- FIX; REMOVE after all mod_type data is loaded
           UNION
             SELECT
               'any' as internal
               , 'any' as term
               , 'any' as display
               , 10 as sort_order
-            ORDER BY sort_order
+            ORDER BY sort_order, term
         ]]>
       </sql>
     </sqlQuery>
