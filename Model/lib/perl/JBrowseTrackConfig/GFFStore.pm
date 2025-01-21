@@ -10,7 +10,7 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setUrlTemplate($args->{url_template});
+    #$self->setUrlTemplate($args->{url_template});
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $self->setStoreType("JBrowse/Store/SeqFeature/GFF3Tabix");
