@@ -6228,14 +6228,17 @@
         <![CDATA[
           SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
             string_agg(ps.pdb_id, ', ') AS pdbIds,
-            min(ps.pvalue_mant * power(10::double precision,ps.pvalue_exp)) pvalue
+            min(ps.evalue_mant * power(10::double precision,ps.evalue_exp)) pvalue
           FROM ApidbTuning.PdbSimilarity ps, ApidbTuning.TranscriptAttributes ta
           WHERE ps.pdb_taxon_id IN
-                            (SELECT taxon_id FROM sres.taxon
-                             CONNECT BY parent_id = PRIOR taxon_id
-                             START WITH taxon_id IN ($$clades$$))
+                  (WITH RECURSIVE cbp_name AS
+                   (SELECT t1.taxon_id FROM sres.taxon t1 WHERE taxon_id IN ($$clades$$)
+                    UNION ALL
+                    SELECT t2.taxon_id FROM sres.taxon t2
+                    JOIN cbp_name on cbp_name.taxon_id = t2.parent_id)
+                   SELECT taxon_id from cbp_name)
             AND ps.gene_taxon_id IN ($$organism$$)
-            AND ps.pvalue_exp < $$pvalue_cutoff$$
+            AND ps.evalue_exp < $$pvalue_cutoff$$
             AND ps.source_id = ta.source_id
           GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
         ]]>
