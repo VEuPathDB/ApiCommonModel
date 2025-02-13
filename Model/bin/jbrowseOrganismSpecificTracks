@@ -35,92 +35,101 @@ my %datasets;
 my $t = tie %datasets, 'Tie::IxHash';
 my %strain;
 
+my ($orgAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType) = @ARGV;
 
-
-my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType) = @ARGV;
-
-
-my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_organismSpecificCache.json"});
-
-my $datasetProps = $jbrowseUtil->getDatasetProperties();
-
-my $dbh = $jbrowseUtil->getDbh();   
-
-my $result = {"tracks" => [] };
-
-### Get organism properties
-my $orgHash = ($datasetProps->{'organism'});
-my $nameForFileNames = ($orgHash->{organismNameForFiles});
-my $projectName = ($orgHash->{projectName});
-my $isAnnotated = ($orgHash->{isAnnotatedGenome});
-my $isReference = ($orgHash->{isReferenceStrain});
-
-&addScaffolds;
-&addCentromere;
-&addUnifiedMassSpec;
-&addUnifiedSnp;
-
-&addSynteny($applicationType, $dbh, $result);
-
-&addDatasets($dbh, \%datasets) unless($isApollo);
-
-# TODO: get these from buildProps
-my $datasetProperties = $datasetProps;
-
-&addSynteny($applicationType, $dbh, $result);
-&addDatasets($dbh, \%datasets) unless($isApollo);
-&addChipChipTracks($dbh, $result, $datasetProperties);
-&addSmallNcRnaSeq;
-
-&addProteinExpressionMassSpec;
-&addVCF($dbh, $result, $datasetProperties, $nameForFileNames);
-#&addGFF($dbh, $result, $datasetProperties);
-
-&addTRNA($dbh, $result, $datasetProperties);
-if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
-&addNrdbProteinAlignments;
+# support either a single orgAbbrev on cmd line or a list provided on STDIN.
+my @orgAbbrevs = $orgAbbrev eq 'FROM_STDIN'? <STDIN> : ($orgAbbrev) ;
+my $resultMap = {"tracks" => [] };
+foreach my $abbrev (@orgAbbrevs) {
+  print STDERR "Processing $abbrev\n";
+  processOrganism($abbrev, $resultMap);
+  print encode_json($resultMap);
 }
 
-if ($organismAbbrev !~ m/dmeliso-1/ ){
-&addApolloGFF($dbh, $result);
-}
+sub processOrganism {
+  my ($organismAbbrev, $result) = @_;
 
-&addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames);
+  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_organismSpecificCache.json"});
 
-&addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir);
+  my $datasetProps = $jbrowseUtil->getDatasetProperties();
 
+  my $dbh = $jbrowseUtil->getDbh();   
 
-# TODO:  need to set isReference 
-if($projectName eq 'FungiDB' && $isReference) {
-  &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName);
-}
+  my $result = {"tracks" => [] };
 
+  ### Get organism properties
+  my $orgHash = ($datasetProps->{'organism'});
+  my $nameForFileNames = ($orgHash->{organismNameForFiles});
+  my $projectName = ($orgHash->{projectName});
+  my $isAnnotated = ($orgHash->{isAnnotatedGenome});
+  my $isReference = ($orgHash->{isReferenceStrain});
 
-# other organism specific tracks
-if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-&addCnvArray($dbh, $result);
-}
-# TODO: Add back
-#if ($isAnnotated eq 'true'){
-#    &addAnnotatedGenome($dbh, $result, $datasetProperties);
-#}
-#&addFastaAssemblyTrack($dbh, $result, $datasetProperties);
+  &addScaffolds;
+  &addCentromere;
+  &addUnifiedMassSpec;
+  &addUnifiedSnp;
 
-unless($isApollo) {
-  $result->{datasets} = \%datasets;
-  $result->{dataset_id} = $organismAbbrev;
+  &addSynteny($applicationType, $dbh, $result);
 
-  # $organismAbbrev is internal_abbrev here; if not same as public_abbrev
-  # then the dataset_id needs be set to public_abbrev
-  if ($strain{$organismAbbrev}->{public} ne $organismAbbrev) {
-    $result->{dataset_id} = $strain{$organismAbbrev}->{public};
+  &addDatasets($dbh, \%datasets) unless($isApollo);
+
+  # TODO: get these from buildProps
+  my $datasetProperties = $datasetProps;
+
+  &addSynteny($applicationType, $dbh, $result);
+  &addDatasets($dbh, \%datasets) unless($isApollo);
+  &addChipChipTracks($dbh, $result, $datasetProperties);
+  &addSmallNcRnaSeq;
+
+  &addProteinExpressionMassSpec;
+  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames);
+  #&addGFF($dbh, $result, $datasetProperties);
+
+  &addTRNA($dbh, $result, $datasetProperties);
+  if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
+      &addNrdbProteinAlignments;
   }
+
+  if ($organismAbbrev !~ m/dmeliso-1/ ){
+      &addApolloGFF($dbh, $result);
+  }
+
+  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames);
+
+  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir);
+
+
+  # TODO:  need to set isReference 
+  if($projectName eq 'FungiDB' && $isReference) {
+      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName);
+  }
+
+
+  # other organism specific tracks
+  if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
+      &addCnvArray($dbh, $result);
+  }
+  # TODO: Add back
+  #if ($isAnnotated eq 'true'){
+  #    &addAnnotatedGenome($dbh, $result, $datasetProperties);
+  #}
+  #&addFastaAssemblyTrack($dbh, $result, $datasetProperties);
+
+  unless($isApollo) {
+      $result->{datasets} = \%datasets;
+      $result->{dataset_id} = $organismAbbrev;
+
+      # $organismAbbrev is internal_abbrev here; if not same as public_abbrev
+      # then the dataset_id needs be set to public_abbrev
+      if ($strain{$organismAbbrev}->{public} ne $organismAbbrev) {
+	  $result->{dataset_id} = $strain{$organismAbbrev}->{public};
+      }
+  }
+
+  my $orgPublicAbbrev = $strain{$organismAbbrev}->{public};
+
+  &addGenes($result, $orgPublicAbbrev, $projectName);
 }
-
-my $orgPublicAbbrev = $strain{$organismAbbrev}->{public};
-
-&addGenes($result, $orgPublicAbbrev, $projectName);
-print encode_json($result);
 
 sub addDatasets {
   my ($dbh) = @_;
