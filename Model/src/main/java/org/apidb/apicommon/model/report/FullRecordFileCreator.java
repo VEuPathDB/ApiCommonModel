@@ -121,7 +121,7 @@ public class FullRecordFileCreator extends BaseCLI {
   
           User user = wdkModel.getSystemUser();
           Question question = createQuestion(wdkModel, projectId, recordClass, idSql);
-          AnswerValue answerValue = AnswerValueFactory.makeAnswer(user,
+          AnswerValue answerValue = AnswerValueFactory.makeAnswer(
               AnswerSpec.builder(wdkModel).setQuestionFullName(question.getFullName())
                 .buildRunnable(user, StepContainer.emptyContainer()));
   
@@ -189,7 +189,7 @@ public class FullRecordFileCreator extends BaseCLI {
 
     private Reporter createReporter(AnswerValue answerValue, String cacheTable)
             throws WdkUserException, WdkModelException {
-        Question question = answerValue.getAnswerSpec().getQuestion();
+        Question question = answerValue.getQuestion();
         Map<String, Field> fields = FieldScope.REPORT_MAKER.filter(question.getFields());
         StringBuffer sbFields = new StringBuffer();
         for (String fieldName : fields.keySet()) {

@@ -157,14 +157,14 @@ public class Gff3Dumper {
 
     User user = wdkModel.getSystemUser();
 
-    AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(user,
+    AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(
         AnswerSpec.builder(wdkModel)
         .setQuestionFullName("SequenceDumpQuestions.SequenceDumpQuestion")
         .setQueryInstanceSpec(params)
         .buildRunnable(user, StepContainer.emptyContainer()));
     Gff3Reporter seqReport = (Gff3Reporter) ReporterFactory.getReporter(sqlAnswer, "gff3", config);
 
-    AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(user,
+    AnswerValue geneAnswer = AnswerValueFactory.makeAnswer(
         AnswerSpec.builder(wdkModel)
         .setQuestionFullName("GeneDumpQuestions.GeneDumpQuestion")
         .setQueryInstanceSpec(params)

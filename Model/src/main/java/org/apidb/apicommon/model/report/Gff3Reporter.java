@@ -118,7 +118,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
 
     if (psQuery == null) {
       // prepare the table query
-      RecordClass recordClass = _baseAnswer.getAnswerSpec().getQuestion().getRecordClass();
+      RecordClass recordClass = _baseAnswer.getQuestion().getRecordClass();
       String[] pkColumns = recordClass.getPrimaryKeyDefinition().getColumnRefs();
       StringBuilder sqlQuery = new StringBuilder("SELECT ");
       sqlQuery.append("count(*) AS cache_count FROM ").append(tableCache);

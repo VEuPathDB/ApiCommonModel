@@ -130,7 +130,7 @@ public class RecordDumper {
         QueryInstanceSpecBuilder params = QueryInstanceSpec.builder();
         params.put(organismParam, organism);
 
-        AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(user,
+        AnswerValue sqlAnswer = AnswerValueFactory.makeAnswer(
             AnswerSpec.builder(wdkModel)
             .setQuestionFullName(question.getFullName())
             .setQueryInstanceSpec(params)
