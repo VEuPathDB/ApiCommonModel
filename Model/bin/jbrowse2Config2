@@ -1,0 +1,142 @@
+#!/usr/bin/perl
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use File::Basename;
+use Tie::IxHash;
+use DBI;
+use DBD::Oracle;
+use Data::Dumper;
+use Getopt::Long;
+
+# Tie a hash to Tie::IxHash to preserve insertion order
+tie my %config, 'Tie::IxHash';
+
+my $dbDbh = DBI->connect("dbi:Oracle:$incInstance",$login,$password) or die DBI->errstr;
+$dbDbh->{RaiseError} = 1;
+
+my %trackSetVocab = ('rnaseq'=>1, 'chipseq'=>1, 'dnaseq'=>1, 'rnaseqJunctions'=>1, 'orgSpecificNa'=>1, 'orgSpecificAa'=>1);
+
+my ($project, $buildNumber, $webServicesDir, $isApollo, $orgAbbrevsString, $trackSetsString);
+&GetOptions("projectId=s" => \$project,
+            "buildNumber=s" => \$buildNumber,
+            "webSvcDir=s" => \$webServicesDir,
+            "isApollo!" => \$isApollo,
+            "orgAbbrevs=s" => \$orgAbbrevsString,
+            "trackSets=s" => \$trackSetsString);
+
+my $modelConfig = new WDK::Model::ModelConfig($projectId);
+
+my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
+                        $modelConfig->getAppDbLogin(),
+                        $modelConfig->getAppDbPassword()
+    )
+    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
+
+
+my %abbrevToFileName = getOrgNameForFiles($dbh, $orgAbbrevsString);
+my %trackSets;
+foreach my $trackSet split(",\s*", $trackSetsString) {
+  $trackSets{$trackSet} = 1;
+  die "Invalid track set '$trackSet'\n" unless $trackSetVocab{$trackSet};
+  die "Track set '$trackSet' not allowed in apollo\n" if $isApollo && $trackSet ne 'orgSpecificNa' && $trackSet ne 'rnaseqJunctions';
+}
+
+my $resultMap = {"tracks" => [] };
+
+foreach my $organismAbbrev (keys %abbrevToFileName) {
+
+  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectName, $abbrevToFileName{$organismAbbrev});
+
+  push @{$config{assemblies}}, $assembly;
+
+  if ($trackSets{'rnaseq'}) {
+    JbrowseRNASeqOrChipSeq::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, 'RNASeq', $resultMap);
+  }
+  if ($trackSets{'chipseq'}) {
+    JbrowseRNASeqOrChipSeq::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, 'ChipSeq', $resultMap);
+  }
+  if ($trackSets{'dnaseq'}) {
+    JbrowseDNASeq::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $resultMap);
+  }
+  if ($trackSets{'rnaseqJunctions'}) {
+    JbrowseRNASeqJunctions::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $isApollo, $resultMap);
+  }
+  if ($trackSets{'orgSpecificNa'}) {
+    JbrowseOrgSpecificNa::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $isApollo, $resultMap);
+  }
+  if ($trackSets{'orgSpecificAa'}) {
+    JbrowseOrgSpecificNa::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $resultMap);
+  }
+}
+
+print encode_json(\%config);
+
+
+print "\n";
+
+
+
+
+sub makeAssembly {
+  my ($organismAbbrev, $buildNumber, $projectName, $organismNameForFiles) = @_;
+
+  tie my %assembly, 'Tie::IxHash';
+
+
+  tie my %adapter, 'Tie::IxHash';
+
+  tie my %sequence, 'Tie::IxHash';
+
+  tie my %fastaLocation, 'Tie::IxHash';
+  tie my %faiLocation, 'Tie::IxHash';
+
+  $adapter{type} = "IndexedFastaAdapter";
+
+  $fastaLocation{uri} = "$projectName/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta";
+  $fastaLocation{locationType} = "UriLocation";
+
+  $faiLocation{uri} = "$projectName/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta.fai";
+  $faiLocation{locationType} = "UriLocation";
+
+  $adapter{fastaLocation} = \%fastaLocation;
+  $adapter{faiLocation} = \%faiLocation;
+
+  $sequence{type} = "ReferenceSequenceTrack";
+  $sequence{trackId} = $organismAbbrev;
+
+  $sequence{adapter} = \%adapter;
+  $sequence{rendering} = {
+        type => "DivSequenceRenderer"
+  };
+
+  $assembly{name} = $organismAbbrev; #TODO:  change this one to something nicer "Plasmodium_falciparum_3D7" but all configs need to match
+
+  $assembly{sequence} = \%sequence;
+
+
+
+  return \%assembly;
+}
+
+sub getOrgNameForFiles {
+  my ($dbh, $orgAbbrStr) = @_;
+
+  my $sql = "
+select internal_abbrev, name_for_files
+from apidbtuning.organismAttributes
+where internal_abbrev in ($orgAbbrStr)
+";
+
+  my $sh = $dbh->prepare($sql);
+  $sh->execute();
+
+  my %a2n;
+  while(my ($orgAbbrev, $orgName) = $sh->fetchrow_array()) {
+    $a2n{$orgAbbrev} = $orgName;
+  }
+  return %a2n;
+}
+
+1;
