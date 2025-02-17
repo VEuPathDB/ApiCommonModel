@@ -3,7 +3,6 @@
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
-use File::Basename;
 use Tie::IxHash;
 use DBI;
 use DBD::Oracle;
@@ -13,16 +12,12 @@ use Getopt::Long;
 # Tie a hash to Tie::IxHash to preserve insertion order
 tie my %config, 'Tie::IxHash';
 
-my $dbDbh = DBI->connect("dbi:Oracle:$incInstance",$login,$password) or die DBI->errstr;
-$dbDbh->{RaiseError} = 1;
-
 my %trackSetVocab = ('rnaseq'=>1, 'chipseq'=>1, 'dnaseq'=>1, 'rnaseqJunctions'=>1, 'orgSpecificNa'=>1, 'orgSpecificAa'=>1);
 
-my ($project, $buildNumber, $webServicesDir, $isApollo, $orgAbbrevsString, $trackSetsString);
+my ($project, $buildNumber, $webServicesDir, $orgAbbrevsString, $trackSetsString);
 &GetOptions("projectId=s" => \$project,
             "buildNumber=s" => \$buildNumber,
             "webSvcDir=s" => \$webServicesDir,
-            "isApollo!" => \$isApollo,
             "orgAbbrevs=s" => \$orgAbbrevsString,
             "trackSets=s" => \$trackSetsString);
 
@@ -40,7 +35,6 @@ my %trackSets;
 foreach my $trackSet split(",\s*", $trackSetsString) {
   $trackSets{$trackSet} = 1;
   die "Invalid track set '$trackSet'\n" unless $trackSetVocab{$trackSet};
-  die "Track set '$trackSet' not allowed in apollo\n" if $isApollo && $trackSet ne 'orgSpecificNa' && $trackSet ne 'rnaseqJunctions';
 }
 
 my $resultMap = {"tracks" => [] };
@@ -51,28 +45,29 @@ foreach my $organismAbbrev (keys %abbrevToFileName) {
 
   push @{$config{assemblies}}, $assembly;
 
+  $appType = 'jbrowse2';
+
   if ($trackSets{'rnaseq'}) {
-    JbrowseRNASeqOrChipSeq::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, 'RNASeq', $resultMap);
+    JbrowseRNASeqOrChipSeqTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', 'RNASeq', $resultMap);
   }
   if ($trackSets{'chipseq'}) {
-    JbrowseRNASeqOrChipSeq::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, 'ChipSeq', $resultMap);
+    JbrowseRNASeqOrChipSeqTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', 'ChipSeq', $resultMap);
   }
   if ($trackSets{'dnaseq'}) {
-    JbrowseDNASeq::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $resultMap);
+    JbrowseDNASeqTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
   if ($trackSets{'rnaseqJunctions'}) {
-    JbrowseRNASeqJunctions::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $isApollo, $resultMap);
+    JbrowseRNASeqJunctionTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
   if ($trackSets{'orgSpecificNa'}) {
-    JbrowseOrgSpecificNa::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $isApollo, $resultMap);
+    JbrowseOrgSpecificNaTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
   if ($trackSets{'orgSpecificAa'}) {
-    JbrowseOrgSpecificNa::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $resultMap);
+    JbrowseOrgSpecificAaTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
 }
 
 print encode_json(\%config);
-
 
 print "\n";
 
