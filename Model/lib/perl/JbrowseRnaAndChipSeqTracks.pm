@@ -17,7 +17,7 @@ use Storable 'dclone';
 use JSON qw(decode_json);
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $applicationType, $result) = @_;
+  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $technologyType, $result) = @_;
 
   my $fileName = "_" . $technologyType . "Cache.json";
 
