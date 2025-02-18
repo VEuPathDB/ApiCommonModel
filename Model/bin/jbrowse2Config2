@@ -8,18 +8,22 @@ use DBI;
 use DBD::Oracle;
 use Data::Dumper;
 use Getopt::Long;
+use WDK::Model::ModelConfig;
+use ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks;
 
 # Tie a hash to Tie::IxHash to preserve insertion order
 tie my %config, 'Tie::IxHash';
 
 my %trackSetVocab = ('rnaseq'=>1, 'chipseq'=>1, 'dnaseq'=>1, 'rnaseqJunctions'=>1, 'orgSpecificNa'=>1, 'orgSpecificAa'=>1);
 
-my ($project, $buildNumber, $webServicesDir, $orgAbbrevsString, $trackSetsString);
-&GetOptions("projectId=s" => \$project,
+my ($projectId, $buildNumber, $webServicesDir, $orgAbbrevsString, $trackSetsString);
+&GetOptions("projectId=s" => \$projectId,
             "buildNumber=s" => \$buildNumber,
             "webSvcDir=s" => \$webServicesDir,
             "orgAbbrevs=s" => \$orgAbbrevsString,
             "trackSets=s" => \$trackSetsString);
+
+usage() unless ($projectId && $buildNumber && $webServicesDir && $orgAbbrevsString && $trackSetsString);
 
 my $modelConfig = new WDK::Model::ModelConfig($projectId);
 
@@ -32,7 +36,7 @@ my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
 
 my %abbrevToFileName = getOrgNameForFiles($dbh, $orgAbbrevsString);
 my %trackSets;
-foreach my $trackSet split(",\s*", $trackSetsString) {
+foreach my $trackSet (split(",\s*", $trackSetsString)) {
   $trackSets{$trackSet} = 1;
   die "Invalid track set '$trackSet'\n" unless $trackSetVocab{$trackSet};
 }
@@ -41,29 +45,29 @@ my $resultMap = {"tracks" => [] };
 
 foreach my $organismAbbrev (keys %abbrevToFileName) {
 
-  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectName, $abbrevToFileName{$organismAbbrev});
+  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectId, $abbrevToFileName{$organismAbbrev});
 
   push @{$config{assemblies}}, $assembly;
 
-  $appType = 'jbrowse2';
+  my $appType = 'jbrowse2';
 
   if ($trackSets{'rnaseq'}) {
-    JbrowseRNASeqOrChipSeqTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', 'RNASeq', $resultMap);
+    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, '$appType', 'RNASeq', $resultMap);
   }
   if ($trackSets{'chipseq'}) {
-    JbrowseRNASeqOrChipSeqTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', 'ChipSeq', $resultMap);
+    JbrowseRNASeqOrChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, '$appType', 'ChipSeq', $resultMap);
   }
   if ($trackSets{'dnaseq'}) {
-    JbrowseDNASeqTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
+    JbrowseDNASeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
   if ($trackSets{'rnaseqJunctions'}) {
-    JbrowseRNASeqJunctionTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
+    JbrowseRNASeqJunctionTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
   if ($trackSets{'orgSpecificNa'}) {
-    JbrowseOrgSpecificNaTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
+    JbrowseOrgSpecificNaTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
   if ($trackSets{'orgSpecificAa'}) {
-    JbrowseOrgSpecificAaTracks::processOrganism($organismAbbrev, $projectName, $buildNumber, $webServicesDir, '$appType', $resultMap);
+    JbrowseOrgSpecificAaTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, '$appType', $resultMap);
   }
 }
 
@@ -71,11 +75,22 @@ print encode_json(\%config);
 
 print "\n";
 
+sub usage {
 
+my $ts = join(",", keys %trackSetVocab);
+die "
+  Usage: jbrowse2Config2 --projectId PROJECT_ID --buildNumber BLD_NUM --webSvcDir WEB_SVC_DIR --orgAbbrevs COMMA_LIST_OF_ORG_ABBREVS --trackSets COMMA_LIST_OF_TRACK_SETS
+
+  Where:
+    -orgAbbrevs: a comma delim list of organismAbbrevs (public or internal??) to make tracks for.  Must be no more than 20
+    -trackSets: a comma delim list of tracks sets, drawn from the vocabulary: $ts
+
+";
+}
 
 
 sub makeAssembly {
-  my ($organismAbbrev, $buildNumber, $projectName, $organismNameForFiles) = @_;
+  my ($organismAbbrev, $buildNumber, $projectId, $organismNameForFiles) = @_;
 
   tie my %assembly, 'Tie::IxHash';
 
@@ -89,10 +104,10 @@ sub makeAssembly {
 
   $adapter{type} = "IndexedFastaAdapter";
 
-  $fastaLocation{uri} = "$projectName/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta";
+  $fastaLocation{uri} = "$projectId/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta";
   $fastaLocation{locationType} = "UriLocation";
 
-  $faiLocation{uri} = "$projectName/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta.fai";
+  $faiLocation{uri} = "$projectId/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta.fai";
   $faiLocation{locationType} = "UriLocation";
 
   $adapter{fastaLocation} = \%fastaLocation;
@@ -116,12 +131,16 @@ sub makeAssembly {
 }
 
 sub getOrgNameForFiles {
-  my ($dbh, $orgAbbrStr) = @_;
+  my ($dbh, $orgAbbrevStr) = @_;
+
+  my @orgs = split(/,\s*/, $orgAbbrevStr);
+
+  my $str = join(",", map { "'$_'" } @orgs);
 
   my $sql = "
-select internal_abbrev, name_for_files
+select internal_abbrev, name_for_filenames
 from apidbtuning.organismAttributes
-where internal_abbrev in ($orgAbbrStr)
+where internal_abbrev in ($str)
 ";
 
   my $sh = $dbh->prepare($sql);

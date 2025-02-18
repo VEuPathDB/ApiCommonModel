@@ -17,7 +17,7 @@ use Storable 'dclone';
 use JSON qw(decode_json);
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $buildNumber, $webServicesDir, $technologyType, $applicationType, $result) = @_;
+  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $technologyType, $applicationType, $result) = @_;
 
   my $fileName = "_" . $technologyType . "Cache.json";
 
@@ -103,7 +103,7 @@ sub processOrganism {
       chomp;
       if (/^\[(.+)\]$/) {
 
-	&addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order) if($start);
+	&addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order, $technologyType, $projectName, $buildNumber, $applicationType) if($start);
 	$file = $1;
 	$start = 1;
       }
@@ -128,7 +128,7 @@ sub processOrganism {
     
     }
 
-    &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order);
+    &addConfiguration($result, $file, $displayName, $strand, $alignment, \%studyProperties, $nameForFileNames, $bigWigRelativePath, \@multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order, $technologyType, $projectName, $buildNumber, $applicationType);
 
     # ChipSeq are all unique
     my @uniqueOnlyUrls = grep { $technologyType eq 'ChIPSeq' || $_->{alignment} eq 'unique' } @multiUrls;
@@ -208,7 +208,7 @@ sub processOrganism {
 }
 
 sub addConfiguration {
-  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order) = @_;
+  my ($result, $file, $displayName, $strand, $alignment, $properties, $nameForFileNames, $bigWigRelativePath, $multiUrls, $dbid, $sample, $covMaxScoreDefault, $multiCovScale, $datasetConfig, $datasetName, $summary, $order, $technologyType, $projectName, $buildNumber, $applicationType) = @_;
 
   my $color;
   if ($technologyType eq 'RNASeq' ){
