@@ -12,7 +12,7 @@ use Data::Dumper;
 use URI::Escape;
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType) = @_;
+  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $result) = @_;
 
   my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_dnaSeqCache.json"});
 
@@ -100,10 +100,11 @@ sub processOrganism {
     }
 
   }
+
+  print encode_json($result);
+  print CACHE encode_json($result);
+  close CACHE;
 }
-print encode_json($result);
-print CACHE encode_json($result);
-close CACHE;
 
 1;
 
