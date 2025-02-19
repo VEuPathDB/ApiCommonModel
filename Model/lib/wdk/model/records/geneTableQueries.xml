@@ -809,7 +809,7 @@ where datapres.name = h.dataset_name
         </sqlQuery>
 
 
-
+        <!-- TODO:  need a tuning table here for Orthology Lookup (can't currently because of dblink)-->
        <sqlQuery name="EdaPhenotypeGraphs" includeProjects="ToxoDB,UniDB">
             <column name="source_id" />
             <column name="project_id" />
@@ -849,7 +849,31 @@ from (
            sres.taxonname tn, 
            apidbtuning.taxonspecies ts, 
            sres.taxonname sn,
-           apidbtuning.geneGroupProfile psgene, 
+           (WITH dataset_genes as ( 
+               SELECT 'tgonGT1_crisprPhenotype_CrisprFunctionalProfiling_RSRC' AS dataset_name , string_value AS source_id
+               FROM eda.ATTRIBUTEvalue_SB044A3A170_GNPD@edabl8n.upenn.edu av
+               WHERE av.attribute_stable_id = 'VAR_bdc8e679'
+               UNION
+               SELECT 'tgonGT1_crisprPhenotype_CrisprScreen_RSRC' AS dataset_name , string_value AS source_id
+               FROM eda.ATTRIBUTEvalue_sd4745ea297_GNPD@edabl8n.upenn.edu av
+               WHERE av.attribute_stable_id = 'VAR_bdc8e679'
+           )
+           select distinct other_gene.source_id, p.dataset_name,
+               this_gene.source_id as profile_graph_id
+          from apidbtuning.OrthologousTranscripts ot
+             , dataset_genes p
+             , apidbtuning.GeneAttributes this_gene
+             , apidbtuning.GeneAttributes other_gene
+          where p.source_id = ot.source_id
+            and ot.source_id = this_gene.source_id
+            and ot.ortho_gene_source_id = other_gene.source_id
+            and this_gene.species = other_gene.species
+            and ot.is_syntenic = 1
+        union 
+          select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
+          from dataset_genes p, apidbtuning.GeneAttributes ga 
+          where p.source_id = ga.source_id
+            ) psgene, 
            (  SELECT dataset_name,
                      JSON_ARRAYAGG(
                        JSON_OBJECT(
