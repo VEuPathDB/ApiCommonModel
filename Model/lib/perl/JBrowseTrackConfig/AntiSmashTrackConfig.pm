@@ -1,5 +1,6 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
+
 use strict;
 use warnings;
 
@@ -27,14 +28,19 @@ sub new {
 
     $self->setId("Secondary Metabolites (antiSMASH)");
     $self->setLabel("antibiotics and Secondary Metabolites Analysis SHell (antiSMASH)");
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
+
+
 
     my $store;
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+        $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+
+        $self->setTrackType("FeatureTrack");
     }
 
     $self->setStore($store);
@@ -86,7 +92,13 @@ sub getJBrowse2Object{
 	my $self = shift;
 
 	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+	my $uri = $self->getStore()->getUrlTemplate();
+	my $indexLocation = $uri . "\.tbi";
 
+        $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
+        $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
+        #$jbrowse2Object->{adapter}->{type} = "Gff3TabixAdapter";
+        $jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
 
 	return $jbrowse2Object;
 }
