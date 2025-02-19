@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+package ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
@@ -31,31 +31,18 @@ use URI::Escape;
 use Storable 'dclone';
 use Tie::IxHash;
 
-my %datasets;
-my $t = tie %datasets, 'Tie::IxHash';
-my %strain;
-
-my ($orgAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType) = @ARGV;
-
-# support either a single orgAbbrev on cmd line or a list provided on STDIN.
-my @orgAbbrevs = $orgAbbrev eq 'FROM_STDIN'? <STDIN> : ($orgAbbrev) ;
-my $resultMap = {"tracks" => [] };
-foreach my $abbrev (@orgAbbrevs) {
-  print STDERR "Processing $abbrev\n";
-  processOrganism($abbrev, $resultMap);
-  print encode_json($resultMap);
-}
-
 sub processOrganism {
-  my ($organismAbbrev, $result) = @_;
+  my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType, $result) = @_;
+
+  my %datasets;
+  my $t = tie %datasets, 'Tie::IxHash';
+  my %strain;
 
   my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_organismSpecificCache.json"});
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
 
-  my $dbh = $jbrowseUtil->getDbh();   
-
-  my $result = {"tracks" => [] };
+  my $dbh = $jbrowseUtil->getDbh();
 
   ### Get organism properties
   my $orgHash = ($datasetProps->{'organism'});
@@ -64,50 +51,50 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
-  &addScaffolds;
-  &addCentromere;
-  &addUnifiedMassSpec;
-  &addUnifiedSnp;
+  &addScaffolds($datasetProps, $applicationType, $result);
+  &addCentromere($datasetProps, $applicationType, $result);
+  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
+  &addUnifiedSnp($datasetProps, $applicationType, $result);
 
   &addSynteny($applicationType, $dbh, $result);
 
-  &addDatasets($dbh, \%datasets) unless($isApollo);
+  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
 
   # TODO: get these from buildProps
   my $datasetProperties = $datasetProps;
 
-  &addSynteny($applicationType, $dbh, $result);
-  &addDatasets($dbh, \%datasets) unless($isApollo);
-  &addChipChipTracks($dbh, $result, $datasetProperties);
-  &addSmallNcRnaSeq;
+  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
+  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
+  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
-  &addProteinExpressionMassSpec;
-  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames);
+  &addProteinExpressionMassSpec($datasetProperties, $applicationType, $result);
+  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
   #&addGFF($dbh, $result, $datasetProperties);
 
-  &addTRNA($dbh, $result, $datasetProperties);
+  &addTRNA($datasetProps, $result, $applicationType);
   if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
-      &addNrdbProteinAlignments;
+      &addNrdbProteinAlignments($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProperties);
   }
 
   if ($organismAbbrev !~ m/dmeliso-1/ ){
-      &addApolloGFF($dbh, $result);
+      &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
   }
 
-  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames);
+  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
 
-  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir);
+  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
 
 
   # TODO:  need to set isReference 
   if($projectName eq 'FungiDB' && $isReference) {
-      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName);
+      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType);
   }
 
 
   # other organism specific tracks
   if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-      &addCnvArray($dbh, $result);
+      &addCnvArray($dbh, $result, $projectName, $applicationType);
   }
   # TODO: Add back
   #if ($isAnnotated eq 'true'){
@@ -128,11 +115,11 @@ sub processOrganism {
 
   my $orgPublicAbbrev = $strain{$organismAbbrev}->{public};
 
-  &addGenes($result, $orgPublicAbbrev, $projectName);
+  &addGenes($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
 }
 
 sub addDatasets {
-  my ($dbh) = @_;
+  my ($dbh, $datasets, $strain) = @_;
   #Public facing track requires public_abbrev here!
   my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes order by organism_name";
 
@@ -140,18 +127,18 @@ sub addDatasets {
   $sh->execute();
 
   while(my ($abbrev, $internalAbbrev, $name) = $sh->fetchrow_array()) {
-    $datasets{$abbrev}->{name} = $name;
-    $datasets{$abbrev}->{url} = "?data=/a/service/jbrowse/tracks/${abbrev}";
-    $strain{$internalAbbrev}->{public} = $abbrev;
+    $datasets->{$abbrev}->{name} = $name;
+    $datasets->{$abbrev}->{url} = "?data=/a/service/jbrowse/tracks/${abbrev}";
+    $strain->{$internalAbbrev}->{public} = $abbrev;
   }
   $sh->finish();
 }
 
 
 sub addVCF {
-  my ($dbh, $result, $datasetProperties, $nameForFileNames) = @_;
+  my ($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType) = @_;
 
-  my $vcfDatasets = $datasetProps->{vcffile} ? $datasetProps->{vcffile} : {};
+  my $vcfDatasets = $datasetProperties->{vcffile} ? $datasetProperties->{vcffile} : {};
 
   foreach my $dataset (keys %$vcfDatasets) {
     next unless($dataset =~ /VCF/);
@@ -188,7 +175,7 @@ sub addVCF {
 }
 
 sub addApolloGFF {
-    my ($dbh, $result) = @_;
+    my ($dbh, $result, $organismAbbrev, $applicationType) = @_;
 
   my $sql = "select count(*) from apidbtuning.ApolloId aid, apidbtuning.organismattributes oa where (oa.public_abbrev='".$organismAbbrev."' OR oa.internal_abbrev='".$organismAbbrev."') and aid.organism = oa.organism_name";
 
@@ -209,15 +196,15 @@ sub addApolloGFF {
 }
 
 sub addMergedRnaSeq {
-  my ($dbh, $result, $datasetProperties, $projectName, $nameForFileNames) = @_;
+  my ($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
   my @urlArray;
   my $genomeName;
 
-  my $rnaSeqDatasets = $datasetProps->{rnaseq} ? $datasetProps->{rnaseq} : {};
+  my $rnaSeqDatasets = $datasetProperties->{rnaseq} ? $datasetProperties->{rnaseq} : {};
   foreach my $dataset (keys %$rnaSeqDatasets) {
     next unless($dataset =~ /rnaSeq/);
 
-my @urlArrayProject;
+    my @urlArrayProject;
     my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_rnaSeq_RSRC/;
     my $datasetDisplayName = $rnaSeqDatasets->{$dataset}->{datasetDisplayName};
     my $summary = $rnaSeqDatasets->{$dataset}->{summary};
@@ -275,7 +262,8 @@ my @urlArrayProject;
 
 sub addProteinExpressionMassSpec {
 
-  my $proteinExpressionMassSpecDatasets = $datasetProps->{protexpmassspec} ? $datasetProps->{protexpmassspec} : {};
+  my ($datasetProperties, $applicationType, $result) = @_;
+  my $proteinExpressionMassSpecDatasets = $datasetProperties->{protexpmassspec} ? $datasetProperties->{protexpmassspec} : {};
 
   foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
     next unless($dataset =~ /_massSpec_/);
@@ -315,8 +303,9 @@ my $queryParams = {
 }
 
 sub addSmallNcRnaSeq {
+  my($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result) = @_;
 
-   my $smallNcRnaSeqDatasets = $datasetProps->{smallncrnaseq} ? $datasetProps->{smallncrnaseq} : {};
+   my $smallNcRnaSeqDatasets = $datasetProperties->{smallncrnaseq} ? $datasetProperties->{smallncrnaseq} : {};
    foreach my $dataset (keys %$smallNcRnaSeqDatasets){
 
     next unless($dataset =~ /smallNcRna/);
@@ -358,7 +347,7 @@ sub addSmallNcRnaSeq {
 
 
 sub addCentromere {
-
+  my ($datasetProps, $applicationType, $result) = @_;
      my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
 	if($hasCentromere == 1) {
      my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
@@ -368,7 +357,7 @@ sub addCentromere {
 
 
 sub addScaffolds {
-
+  my ($datasetProps, $applicationType, $result) = @_;
      my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
         if($hasScaffold == 1) {
       my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
@@ -377,28 +366,25 @@ sub addScaffolds {
 }
 
 sub addGenes {
-  my ($result, $orgPublicAbbrev, $projectName) = @_;
+  my ($result, $orgPublicAbbrev, $projectName, $nameForFileNames) = @_;
 
   my $urlTemplate = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/gff/annotated_transcripts.gff.gz";
   my $track = {
 	       storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
-	       key => "Annotated Transcripts (UTRs in White when available)",
-	       label => "gene",
+	       key => "NEW Annotated Transcripts (UTRs in White when available)",
+	       label => "geneNEW",
 	       type  => "NeatCanvasFeatures/View/Track/NeatFeatures",
 	       category => "Gene Models",
 	       unsafePopup => JSON::true,
-	       glyph => "NeatCanvasFeatures/View/FeatureGlyph/Gene",
+	       glyph => "JBrowse/View/FeatureGlyph/Gene",
 	       urlTemplate => $urlTemplate,
 	       maxheight => 4000,
 	       style => {
-			 label => "id",
-                         description => "note, description",
-                         showLabels => JSON::true,
+			 showLabels => JSON::true,
 			 color => "{processedTranscriptColor}",
+			 utrColor => "lightgrey",
 			 borderColor=> "{processedTranscriptBorderColor}",
-			 unprocessedTranscriptColor=> "{unprocessedTranscriptColor}",
-			 topLevelFeaturesPercent => 10,
-			 labelScale=> 0.01
+			 unprocessedTranscriptColor=> "{unprocessedTranscriptColor}"
 			},
 	       metadata => {
 			    subcategory => "Transcripts",
@@ -425,7 +411,7 @@ sub addGenes {
 
 
 sub addSynteny {
-  my ($applicationType, $dbh, $result) = @_;
+  my ($applicationType, $dbh, $result, $organismAbbrev) = @_;
 
   return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
@@ -607,6 +593,7 @@ sub makeTreeNode {
 
 
 sub addUnifiedSnp {
+  my ($datasetProps, $applicationType, $result) = @_;
     my $hasSnp = $datasetProps->{hasSnp} ? $datasetProps->{hasSnp} : {};
         if($hasSnp == 1) {
 #    my $projectUrl = lc($projectName) . "\.org";
@@ -621,6 +608,7 @@ sub addUnifiedSnp {
 
 
 sub addUnifiedMassSpec {
+  my ($datasetProps, $applicationType, $result) = @_;
     my $hasMassSpec = $datasetProps->{hasMassSpec} ? $datasetProps->{hasMassSpec} : {};
         if($hasMassSpec == 1) {
     my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({application_type => $applicationType })->getConfigurationObject();
@@ -631,7 +619,7 @@ sub addUnifiedMassSpec {
 
 
 sub addChipChipTracks {
-  my ($dbh, $result, $datasetProperties) = @_;
+  my ($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType) = @_;
 
   my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
@@ -655,11 +643,11 @@ and s.investigation_id is null";
   while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
 
     if($panName =~ /_peaks \(ChIP-chip\)/) {
-        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets);
+        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets. $applicationType);
         push @{$result->{tracks}}, $peakTrack;
     }
     if($panName =~ /_smoothed \(ChIP-chip\)/) {
-      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets);
+      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
       push @{$result->{tracks}}, $track;
     }
   }
@@ -669,7 +657,7 @@ and s.investigation_id is null";
 
 
 sub makeChipChipPeak {
-  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets) = @_;
+  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
     
     my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
     my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
@@ -707,7 +695,7 @@ sub makeChipChipPeak {
 
 
 sub addCnvArray {
-  my ($dbh, $result) = @_;
+  my ($dbh, $result, $projectName, $applicationType) = @_;
 
   my $sql = "select distinct pan.name
 from study.protocolappnode pan
@@ -739,7 +727,7 @@ order by pan.name";
 
 
 sub makeChipChipSmoothed {
-  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets) = @_;
+  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
 
     my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
     my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
@@ -776,7 +764,7 @@ sub makeChipChipSmoothed {
 
 
 sub addNrdbProteinAlignments {
-
+my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProps) = @_;
     my $proteinAlignTrack;
     #my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
     my $relativePathToGffFile = "${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz";
@@ -795,7 +783,7 @@ sub addNrdbProteinAlignments {
 }
 
 sub addTRNA {
-
+  my ($datasetProps, $result, $applicationType) = @_;
      my $hasTRNA = $datasetProps->{hasTRNA} ? $datasetProps->{hasTRNA} : {};
         if($hasTRNA == 1) {
      my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig->new({application_type => $applicationType })->getConfigurationObject();
@@ -856,7 +844,7 @@ sub addTRNA {
 # }
 
 sub addAntismash {
-  my ($result, $nameForFileNames, $webservicesDir, $projectName) = @_;
+  my ($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType) = @_;
 
   # These reference genomes returned no result for antismash so no track should be shown
   my %excludeOrganisms = ("AastaciAPO3" => 1,
@@ -904,9 +892,9 @@ sub addAntismash {
 }
 
 sub addLongReadRNASeq {
-  my ($result, $datasetProperties, $nameForFileNames, $webservicesDir) = @_;
+  my ($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType) = @_;
 
-   my $LongReadRnaSeqDatasets = $datasetProps->{longreadrnaseq} ? $datasetProps->{longreadrnaseq} : {};
+   my $LongReadRnaSeqDatasets = $datasetProperties->{longreadrnaseq} ? $datasetProperties->{longreadrnaseq} : {};
 
    foreach my $dataset (keys %$LongReadRnaSeqDatasets){
     next unless($dataset =~ /nanopore_rnaSeqNextflow/);
