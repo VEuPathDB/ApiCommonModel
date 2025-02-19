@@ -28,6 +28,8 @@ sub new {
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store->setQueryParamsHash($args->{query_params});
     }
 
     $self->setStore($store);

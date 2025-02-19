@@ -39,7 +39,10 @@ sub new {
     else {
         # TODO
 	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-        
+
+        $self->setTrackType("FeatureTrack");
+	#$self->setDisplayType("LinearFeatureDisplay");
+	$self->setTrackTypeDisplay("Alignment"); 
     }
 
     $self->setStore($store);
@@ -51,9 +54,6 @@ sub new {
 
     return $self;
 }
-
-
-
 
 
 sub getJBrowseObject{
@@ -82,6 +82,12 @@ sub getJBrowse2Object{
 
 	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
+        my $uri = $self->getStore()->getUrlTemplate();
+	my $indexLocation = $uri . "\.tbi";
+        $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
+	$jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
+	#$jbrowse2Object->{adapter}->{type} = "Gff3TabixAdapter";
+	$jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
 
 	return $jbrowse2Object;
 }
