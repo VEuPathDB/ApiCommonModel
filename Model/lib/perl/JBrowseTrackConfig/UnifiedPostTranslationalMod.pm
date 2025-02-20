@@ -28,6 +28,8 @@ sub new {
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store->setQueryParamsHash($args->{query_params});
     }
 
     $self->setStore($store);
@@ -68,7 +70,7 @@ sub getJBrowse2Object{
         my $self = shift;
 
         my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-
+	$jbrowse2Object->{metadata} = {trackType => 'Diamond'};	
 
         return $jbrowse2Object;
 }

@@ -115,7 +115,7 @@
       <column name="project_id"/>
       <sql>
         <![CDATA[
-          SELECT source_id, t.gene_source_id, t.project_id, 'Y' as matched_result
+          SELECT DISTINCT(source_id), t.gene_source_id, t.project_id, 'Y' as matched_result
           FROM @VDI_DATASETS_SCHEMA@.UD_GeneId g, apidbtuning.transcriptattributes t
           WHERE (g.gene_source_id = t.gene_source_id OR g.gene_source_id = t.source_id)
             AND g.user_dataset_id = '$$geneListUserDataset$$'
@@ -159,6 +159,18 @@
       </sql>
     </sqlQuery>
 
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+  <!-- EDA Study Filtering -->
+  <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <processQuery name="GenesByEdaSubset" processName="org.apidb.apicomplexa.wsfplugin.eda.GeneEdaSubsetPlugin">
+      <paramRef ref="geneParams.eda_dataset_id"/>
+      <paramRef ref="geneParams.eda_analysis_spec"/>
+      <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="20" wsName="project_id"/>
+      <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+    </processQuery>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Question for GenesByMetaCycle -->
@@ -621,6 +633,15 @@
 
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <processQuery name="GenesByPhenotypeEdaGeneric" processName="org.apidb.apicomplexa.wsfplugin.eda.GeneEdaSubsetPlugin">
+      <paramRef ref="geneParams.eda_dataset_id"/>
+      <paramRef ref="geneParams.eda_analysis_spec"/>
+      <wsColumn name="gene_source_id" width="50" wsName="gene_source_id"/>
+      <wsColumn name="source_id" width="50" wsName="source_id"/>
+      <wsColumn name="project_id" width="20" wsName="project_id"/>
+      <wsColumn name="matched_result" width="1" wsName="matched_result"/>
+    </processQuery>
 
     <sqlQuery name="GenesByPhenotypeScoreGeneric">
       <paramRef ref="geneParams.phenotypeScoreDataset"/>
@@ -2826,8 +2847,8 @@
       <!-- TEMPLATE_ANCHOR geneEpitopeOrganismOverride -->
 
       <paramRef ref="geneParams.peptide_mismatch"/>
-      <paramRef ref="geneParams.protein_match"/>
       <paramRef ref="geneParams.taxon_match"/>
+      <paramRef ref="geneParams.protein_match"/>
       <column name="source_id"/>
       <column name="matched_result"/>
       <column name="gene_source_id"/>
@@ -2835,9 +2856,9 @@
       <column name="peptide_count"/>
       <sql>
         <![CDATA[
-        SELECT 
+        SELECT
 		ta.project_id
-		,'Y' as matched_result 
+		,'Y' as matched_result
 		,ta.gene_source_id
 		,ta.source_id
 		,count(*) as "peptide_count"
@@ -2846,12 +2867,14 @@
 		,apidb.aasequenceepitope ae
 	WHERE ae.aa_sequence_id = ta.aa_sequence_id
 	AND ta.taxon_id in ($$organism$$)
-	AND ae.taxon_match IN ($$taxon_match$$)
-	AND ae.mismatches IN ($$peptide_mismatch$$)
-	AND ae.protein_match IN ($$protein_match$$)
+
+	AND ae.taxon_match <= $$taxon_match$$
+        AND ae.mismatches <= $$peptide_mismatch$$
+        AND ae.protein_match <= $$protein_match$$
+
         AND (ta.project_id = 'PlasmoDB'  OR 'UniDB' = 'PlasmoDB')
 	GROUP BY ta.project_id, ta.gene_source_id, ta.source_id
-        	
+
 	 ]]>
       </sql>
     </sqlQuery>
@@ -3581,7 +3604,7 @@
       <column name="sorting_value"/>
       <sql>
         <![CDATA[
-          SELECT ir.transcript_source_id as source_id, ir.gene_source_id, 
+          SELECT ir.transcript_source_id as source_id, ir.gene_source_id,
                  'Y' as matched_result, '@PROJECT_ID@' as project_id,
                  to_char(avg(trunc(interpro_e_value::numeric,100)),'9.999EEEE') AS e_value,
                  max(ir.interpro_e_value) as sorting_value
@@ -3711,7 +3734,7 @@
           FROM (
             SELECT pf.gene_source_id, pf.source_id, pf.project_id, pf.gene_source_id AS interact_source_id, bait_start, bait_end
                  , prey_start, prey_end, times_observed, number_of_searches, (
-              SELECT DISTINCT prey_number_of_baits
+              SELECT COUNT(prey_number_of_baits)
               FROM apidb.geneinteraction igi
               WHERE igi.bait_gene_feature_id = pf.gene_na_feature_id
             ) AS prey_number_of_baits, bait_number_of_preys, 'bait' AS bait_or_prey
