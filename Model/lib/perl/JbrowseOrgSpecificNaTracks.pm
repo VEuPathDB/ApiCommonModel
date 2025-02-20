@@ -660,7 +660,7 @@ and s.investigation_id is null";
 
 sub makeChipChipPeak {
   my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
-    
+
     my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
     my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
