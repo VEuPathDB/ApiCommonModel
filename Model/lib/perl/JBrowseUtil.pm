@@ -5,7 +5,8 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
 use DBI;
-use DBD::Oracle;
+#use DBD::Oracle;
+use DBD::Pg;
 use WDK::Model::ModelConfig;
 use Data::Dumper;
 

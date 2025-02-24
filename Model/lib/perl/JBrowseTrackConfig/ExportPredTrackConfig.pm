@@ -43,7 +43,7 @@ sub new {
 
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
-    $self->setDisplayMode("compact");
+    #$self->setDisplayMode("compact");
 
     return $self;
 }
