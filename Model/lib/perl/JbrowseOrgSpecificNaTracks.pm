@@ -3,7 +3,6 @@ package ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
-use ApiCommonModel::Model::JBrowseUtil;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
@@ -32,13 +31,11 @@ use Storable 'dclone';
 use Tie::IxHash;
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType, $result) = @_;
+  my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
 
   my %datasets;
   my $t = tie %datasets, 'Tie::IxHash';
   my %strain;
-
-  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_organismSpecificCache.json"});
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
 

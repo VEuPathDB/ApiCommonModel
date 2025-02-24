@@ -3,7 +3,6 @@ package ApiCommonModel::Model::JbrowseOrgSpecificAaTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
-use ApiCommonModel::Model::JBrowseUtil;
 use Data::Dumper;
 use URI::Escape;
 use Storable 'dclone';
@@ -19,11 +18,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::InterproDomainsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ExportPredTrackConfig;
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $result) = @_;
-
-  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, fileName => "_organismSpecificProteinTracksCache.json", type => 'protein' });
-
-  #my $dbh = $jbrowseUtil->getDbh();
+  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
   #print Dumper ($datasetProps);

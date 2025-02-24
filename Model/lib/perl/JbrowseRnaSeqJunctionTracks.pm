@@ -10,27 +10,14 @@ use ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
 use Storable 'dclone';
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $isApollo, $applicationType) = @_;
-
-  my $jbrowseUtil;
-
-  if ($isApollo) {
-    $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev});
-  } else {
-    $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => "_junctionsCache.json"});
-  }
-
-  # we're done if we can get from cache file (unless we are making apollo config)
-  if (!$isApollo && $jbrowseUtil->printFromCache()) {
-    exit 0;
-  }
+  my ($organismAbbrev, $projectName, $isApollo, $applicationType, $jbrowseUtil, $resultMap) = @_;
 
   my $methodDescription = "<h1><u>Definitions</u>:</h1>
 
 <p><b>Contained intron</b> is an intron that is contained within the endpoints of a gene model and on the same strand as the gene. All others are not contained: opposite strand to gene, overlapping but not contained within gene boundaries, not overlapping with gene.</p>
 
 <p><b>Score</b>: the sum of all unique read alignments for all samples.</p>
-
+ 
 <p><b>Score expression ratio</b>: ratio of the score / average coverage (read depth) across the gene.  For not contained introns, the average coverage is the average coverage across the entire genome.  Note that this is computed per sample (both the score and coverage).</p>
 
 <h1><u>Thresholds used (all are applied)</u>:</h1>

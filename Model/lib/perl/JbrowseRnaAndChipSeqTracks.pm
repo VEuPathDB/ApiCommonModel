@@ -3,7 +3,6 @@ package ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
-use ApiCommonModel::Model::JBrowseUtil;
 use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
@@ -17,24 +16,9 @@ use Storable 'dclone';
 use JSON qw(decode_json);
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $technologyType, $result) = @_;
-
-  my $fileName = "_" . $technologyType . "Cache.json";
-
-  # set applicationType, legacyWebappBaseUrl, localhost in the util class
-  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, fileName => $fileName});
-  #my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => $fileName, applicationType => $applicationType, legacyWebappBaseUrl => $legacyWebappBaseUrl, localhost => $localhost});
+  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $technologyType, $jbrowseUtil, $result) = @_;
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
-
-
-  # TODO:  Add this back when we are done
-  # # we're done if we can get from cache file
-  # if($jbrowseUtil->printFromCache()) {
-  #   exit 0;
-  # }
-  #open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
-  #my $dbh = $jbrowseUtil->getDbh();
 
   ### Get organism properties
   my $orgHash = ($datasetProps->{'organism'});

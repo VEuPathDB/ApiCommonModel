@@ -3,7 +3,6 @@ package ApiCommonModel::Model::JbrowseDnaSeqTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
-use ApiCommonModel::Model::JBrowseUtil;
 use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
@@ -12,9 +11,7 @@ use Data::Dumper;
 use URI::Escape;
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $result) = @_;
-
-  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webservicesDir, fileName => "_dnaSeqCache.json"});
+  my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
 

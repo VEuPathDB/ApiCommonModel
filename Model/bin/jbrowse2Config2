@@ -14,9 +14,10 @@ use ApiCommonModel::Model::JbrowseDnaSeqTracks;
 use ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
 use ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 use ApiCommonModel::Model::JbrowseOrgSpecificAaTracks;
+use ApiCommonModel::Model::JBrowseUtil;
 
 ##
-## This program loads the jbrowse2 config into memory in order to format the JSON.  It there imposes constraints on config size.
+## This program loads the jbrowse2 config into memory in order to format the JSON.  It therefore imposes constraints on config size.
 ##  - it can produce all the tracks types for a *single* organism
 ##  - or it can produce the limited 'synteny' tracks for multipe (up to 20) organisms
 ##
@@ -37,18 +38,6 @@ usage() unless ($projectId && $buildNumber && $webServicesDir && $orgAbbrevsStri
 
 my @orgs = split(/,\s*/, $orgAbbrevsString);
 
-
-
-my $modelConfig = new WDK::Model::ModelConfig($projectId);
-
-my $dbh = DBI->connect( $modelConfig->getAppDbDbiDsn(),
-                        $modelConfig->getAppDbLogin(),
-                        $modelConfig->getAppDbPassword()
-    )
-    || die "unable to open db handle to ", $modelConfig->getAppDbDbiDsn();
-
-
-my %abbrevToFileName = getOrgNameForFiles($dbh, \@orgs);
 my %trackSets;
 foreach my $trackSet (split(",\s*", $trackSetsString)) {
   $trackSets{$trackSet} = 1;
@@ -56,9 +45,15 @@ foreach my $trackSet (split(",\s*", $trackSetsString)) {
   die "Only one organism allowed unless making 'synteny' tracks\n" if scalar(@orgs) > 1 && $trackSet ne 'synteny';
 }
 
-foreach my $organismAbbrev (keys %abbrevToFileName) {
+foreach my $organismAbbrev (@orgs) {
 
-  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectId, $abbrevToFileName{$organismAbbrev});
+  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectId, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webServicesDir});
+
+  my $datasetProps = $jbrowseUtil->getDatasetProperties();
+  my $orgHash = ($datasetProps->{'organism'});
+  my $nameForFileNames = ($orgHash->{organismNameForFiles});
+
+  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectId, $nameForFileNames);
 
   push @{$config{assemblies}}, $assembly;
 
@@ -67,22 +62,22 @@ foreach my $organismAbbrev (keys %abbrevToFileName) {
   my $resultMap = {"tracks" => [] };
 
   if ($trackSets{'rnaseq'}) {
-    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, 'RNASeq', $resultMap);
+    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, 'RNASeq', $jbrowseUtil, $resultMap);
   }
   if ($trackSets{'chipseq'}) {
-    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, 'ChipSeq', $resultMap);
+    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, 'ChipSeq', $jbrowseUtil, $resultMap);
   }
   if ($trackSets{'dnaseq'}) {
-    ApiCommonModel::Model::JbrowseDnaSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, $resultMap);
+    ApiCommonModel::Model::JbrowseDnaSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, $jbrowseUtil, $resultMap);
   }
   if ($trackSets{'rnaseqJunctions'}) {
-    ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks::processOrganism($organismAbbrev, $projectId, 0, $appType, $resultMap);
+    ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks::processOrganism($organismAbbrev, $projectId, 0, $appType, $jbrowseUtil, $resultMap);
   }
   if ($trackSets{'orgSpecificNa'}) {
-    ApiCommonModel::Model::JbrowseOrgSpecificNaTracks::processOrganism($organismAbbrev, $projectId, 0, $buildNumber, $webServicesDir, $appType, $resultMap);
+    ApiCommonModel::Model::JbrowseOrgSpecificNaTracks::processOrganism($organismAbbrev, $projectId, 0, $buildNumber, $webServicesDir, $appType, $jbrowseUtil, $resultMap);
   }
   if ($trackSets{'orgSpecificAa'}) {
-    ApiCommonModel::Model::JbrowseOrgSpecificAaTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, $resultMap);
+    ApiCommonModel::Model::JbrowseOrgSpecificAaTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, $jbrowseUtil, $resultMap);
   }
 
   push @{$config{tracks}}, @{$resultMap->{tracks}};
@@ -148,25 +143,5 @@ sub makeAssembly {
   return \%assembly;
 }
 
-sub getOrgNameForFiles {
-  my ($dbh, $orgs) = @_;
-
-  my $str = join(",", map { "'$_'" } @$orgs);
-
-  my $sql = "
-select internal_abbrev, name_for_filenames
-from apidbtuning.organismAttributes
-where internal_abbrev in ($str)
-";
-
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-
-  my %a2n;
-  while(my ($orgAbbrev, $orgName) = $sh->fetchrow_array()) {
-    $a2n{$orgAbbrev} = $orgName;
-  }
-  return %a2n;
-}
 
 1;
