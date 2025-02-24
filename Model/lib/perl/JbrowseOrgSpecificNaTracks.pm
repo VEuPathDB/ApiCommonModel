@@ -74,7 +74,7 @@ sub processOrganism {
 
   &addTRNA($datasetProps, $result, $applicationType);
   if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
-      &addNrdbProteinAlignments($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProperties);
+      &addNrdbProteinAlignments($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProperties, $webservicesDir);
   }
 
   if ($organismAbbrev !~ m/dmeliso-1/ ){
@@ -645,7 +645,7 @@ and s.investigation_id is null";
   while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
 
     if($panName =~ /_peaks \(ChIP-chip\)/) {
-        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets. $applicationType);
+        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
         push @{$result->{tracks}}, $peakTrack;
     }
     if($panName =~ /_smoothed \(ChIP-chip\)/) {
@@ -766,7 +766,7 @@ sub makeChipChipSmoothed {
 
 
 sub addNrdbProteinAlignments {
-my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProps) = @_;
+my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProps, $webservicesDir) = @_;
     my $proteinAlignTrack;
     #my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
     my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/gff/nrProteinToGenome.gff.gz";
