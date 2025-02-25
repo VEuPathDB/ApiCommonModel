@@ -3,92 +3,107 @@
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use JSON;
-use File::Basename;
-use LWP::UserAgent;
-use LWP::Simple;
 use Tie::IxHash;
-use Getopt::Long;
+use DBI;
+use DBD::Oracle;
 use Data::Dumper;
-use URI::Escape;
+use Getopt::Long;
+use WDK::Model::ModelConfig;
+use ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks;
+use ApiCommonModel::Model::JbrowseDnaSeqTracks;
+use ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
+use ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
+use ApiCommonModel::Model::JbrowseOrgSpecificAaTracks;
+use ApiCommonModel::Model::JBrowseUtil;
 
+##
+## This program loads the jbrowse2 config into memory in order to format the JSON.  It therefore imposes constraints on config size.
+##  - it can produce all the tracks types for a *single* organism
+##  - or it can produce the limited 'synteny' tracks for multipe (up to 20) organisms
+##
 
 # Tie a hash to Tie::IxHash to preserve insertion order
 tie my %config, 'Tie::IxHash';
 
-my ($projectName, $buildNumber) = @ARGV;
-    unless($projectName && $buildNumber) {
-        die "missing a required property projectName or buildNumber";
-    }
+my %trackSetVocab = ('rnaseq'=>1, 'chipseq'=>1, 'dnaseq'=>1, 'rnaseqJunctions'=>1, 'orgSpecificNa'=>1, 'orgSpecificAa'=>1, 'synteny'=>1);
 
+my ($projectId, $buildNumber, $webServicesDir, $orgAbbrevsString, $trackSetsString);
+&GetOptions("projectId=s" => \$projectId,
+            "buildNumber=s" => \$buildNumber,
+            "webSvcDir=s" => \$webServicesDir,
+            "orgAbbrevs=s" => \$orgAbbrevsString,
+            "trackSets=s" => \$trackSetsString);
 
-my %websiteUrl = (AmoebaDB => 'https://amoebadb.org',
-                CryptoDB => 'https://cryptodb.org',
-                FungiDB => 'https://fungidb.org',
-                GiardiaDB => 'https://giardiadb.org',
-                MicrosporidiaDB => 'https://microsporidiadb.org',
-                PiroplasmaDB => 'https://piroplasmadb.org',
-                PlasmoDB => 'https://plasmodb.org',
-                ToxoDB => 'https://toxodb.org',
-                TrichDB => 'https://trichdb.org',
-                TriTrypDB => 'https://tritrypdb.org',
-                VectorBase => 'https://vectorbase.org');
+usage() unless ($projectId && $buildNumber && $webServicesDir && $orgAbbrevsString && $trackSetsString);
 
-my $site = $websiteUrl{$projectName};
+my @orgs = split(/,\s*/, $orgAbbrevsString);
 
-my $organisms = &getOrganismListAndPrintJson($site);
+my %trackSets;
+foreach my $trackSet (split(",\s*", $trackSetsString)) {
+  $trackSets{$trackSet} = 1;
+  die "Invalid track set '$trackSet'\n" unless $trackSetVocab{$trackSet};
+  die "Only one organism allowed unless making 'synteny' tracks\n" if scalar(@orgs) > 1 && $trackSet ne 'synteny';
+}
 
-foreach my $organism (@{$organisms->{organisms}}) {
+foreach my $organismAbbrev (@orgs) {
 
-    my $orgAbbrev = $organism->{ORGANISM_ABBREV};
-    my $fullName = $organism->{NAME};
-    my $organismNameForFiles = $organism->{NAME_FOR_FILENAMES};
+  my $jbrowseUtil = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectId, organismAbbrev => $organismAbbrev, buildNumber => $buildNumber, webservicesDir => $webServicesDir});
 
-my @directories = glob "$ENV{GUS_HOME}/lib/jbrowse/auto_generated/*";
+  my $datasetProps = $jbrowseUtil->getDatasetProperties();
+  my $orgHash = ($datasetProps->{'organism'});
+  my $nameForFileNames = ($orgHash->{organismNameForFiles});
 
-foreach my $organismAbbrev (map { basename $_} @directories) {
-  next unless($organismAbbrev =~ /$orgAbbrev$/);
-
-  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectName, $organismNameForFiles);
+  my $assembly = &makeAssembly($organismAbbrev, $buildNumber, $projectId, $nameForFileNames);
 
   push @{$config{assemblies}}, $assembly;
 
+  my $appType = 'jbrowse2';
 
-  # TODO: annotated_genes.gff
-  # TODO: dnaseq
+  my $resultMap = {"tracks" => [] };
 
-  my $cmd = join(" ", "jbrowseRnaAndChipSeqTracks", $organismAbbrev, $projectName, $buildNumber, "/var/www/Common/apiSiteFilesMirror/webServices", "RNASeq", "jbrowse2");
-
-  my $rnaseqTracksJson = `$cmd`;
-  my $rnaseqTracks = decode_json($rnaseqTracksJson);
-
-  push @{$config{tracks}}, @{$rnaseqTracks->{tracks}};
-
-  my $chipSeqCmd = join(" ", "jbrowseRnaAndChipSeqTracks", $organismAbbrev, $projectName, $buildNumber, "/var/www/Common/apiSiteFilesMirror/webServices", "ChIPSeq", "jbrowse2");
-  my $chipseqTracksJson = `$chipSeqCmd`;
-  my $chipseqTracks = decode_json($chipseqTracksJson);
-
-  push @{$config{tracks}}, @{$chipseqTracks->{tracks}};
-
-  my $dnaSeqCmd = join(" ", "jbrowseDNASeqTracks", $organismAbbrev, $projectName, $buildNumber, "/var/www/Common/apiSiteFilesMirror/webServices", "jbrowse2");
-  my $dnaseqTracksJson = `$dnaSeqCmd`;
-  my $dnaseqTracks = decode_json($dnaseqTracksJson);
-
-  push @{$config{tracks}}, @{$dnaseqTracks->{tracks}};
-
-  my $orgSpecCmd = join(" ", "jbrowseOrganismSpecificTracks", $organismAbbrev, $projectName, "true", $buildNumber, "/var/www/Common/apiSiteFilesMirror/webServices", "jbrowse2");
-  my $orgSpecTracksJson = `$orgSpecCmd`;
-  my $orgSpecTracks = decode_json($orgSpecTracksJson);
-
-  push @{$config{tracks}}, @{$orgSpecTracks->{tracks}};
-
+  if ($trackSets{'rnaseq'}) {
+    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, 'RNASeq', $jbrowseUtil, $resultMap);
   }
+  if ($trackSets{'chipseq'}) {
+    ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, 'ChIPSeq', $jbrowseUtil, $resultMap);
+  }
+  if ($trackSets{'dnaseq'}) {
+    ApiCommonModel::Model::JbrowseDnaSeqTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, $jbrowseUtil, $resultMap);
+  }
+  if ($trackSets{'rnaseqJunctions'}) {
+    ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks::processOrganism($organismAbbrev, $projectId, 0, $appType, $jbrowseUtil, $resultMap);
+  }
+  if ($trackSets{'orgSpecificNa'}) {
+    ApiCommonModel::Model::JbrowseOrgSpecificNaTracks::processOrganism($organismAbbrev, $projectId, 0, $buildNumber, $webServicesDir, $appType, $jbrowseUtil, $resultMap);
+  }
+  if ($trackSets{'orgSpecificAa'}) {
+    ApiCommonModel::Model::JbrowseOrgSpecificAaTracks::processOrganism($organismAbbrev, $projectId, $buildNumber, $webServicesDir, $appType, $jbrowseUtil, $resultMap);
+  }
+
+  push @{$config{tracks}}, @{$resultMap->{tracks}};
+
 }
+
 print encode_json(\%config);
 
+print "\n";
+
+sub usage {
+
+my $ts = join(",", keys %trackSetVocab);
+die "
+  Usage: jbrowse2Config2 --projectId PROJECT_ID --buildNumber BLD_NUM --webSvcDir WEB_SVC_DIR --orgAbbrevs COMMA_LIST_OF_ORG_ABBREVS --trackSets COMMA_LIST_OF_TRACK_SETS
+
+  Where:
+    -orgAbbrevs: a comma delim list of organismAbbrevs (public or internal??) to make tracks for. Must be only a single organism, unless track set is 'synteny', in which case it can be up to 20.
+    -trackSets: a comma delim list of tracks sets, drawn from the vocabulary: $ts
+
+";
+}
 
 
 sub makeAssembly {
-  my ($organismAbbrev, $buildNumber, $projectName, $organismNameForFiles) = @_;
+  my ($organismAbbrev, $buildNumber, $projectId, $organismNameForFiles) = @_;
 
   tie my %assembly, 'Tie::IxHash';
 
@@ -102,10 +117,10 @@ sub makeAssembly {
 
   $adapter{type} = "IndexedFastaAdapter";
 
-  $fastaLocation{uri} = "$projectName/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta";
+  $fastaLocation{uri} = "$projectId/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta";
   $fastaLocation{locationType} = "UriLocation";
 
-  $faiLocation{uri} = "$projectName/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta.fai";
+  $faiLocation{uri} = "$projectId/build-${buildNumber}/${organismNameForFiles}/fasta/genome.fasta.fai";
   $faiLocation{locationType} = "UriLocation";
 
   $adapter{fastaLocation} = \%fastaLocation;
@@ -126,27 +141,6 @@ sub makeAssembly {
 
 
   return \%assembly;
-}
-
-sub getOrganismListAndPrintJson {
-  my ($site) = @_;
-
-  my $orgUrl = "$site/a/service/jbrowse/organismList";
-
-  my $organisms = &getData($orgUrl);
-
-  return $organisms;
-}
-
-sub getData {
-  my ($url) = @_;
-
-my $agent = LWP::UserAgent->new;
-$agent->timeout(3600);
-my $json = $agent->get($url);
-$json->is_success or die $json->status_line;
-my $decodedJson = decode_json($json->content);
-return $decodedJson;
 }
 
 
