@@ -39,6 +39,8 @@ sub new {
 
     $self->setStore($store);
 
+    $self->setViewDetailsContent("NA");
+
     return $self;
 }
 

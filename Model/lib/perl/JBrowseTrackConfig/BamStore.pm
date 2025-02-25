@@ -5,6 +5,8 @@ use warnings;
 
 use Data::Dumper;
 
+sub getBaseUrl {$_[0]->{base_url}}
+sub setBaseUrl {$_[0]->{base_url} = $_[1] }
 
 sub getIndexUrlTemplate {$_[0]->{index_url_template} }
 sub setIndexUrlTemplate {
