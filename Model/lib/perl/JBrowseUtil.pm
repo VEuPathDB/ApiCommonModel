@@ -127,7 +127,7 @@ sub new {
 	if($buildNumber && $webservicesDir && $nameForFileNames ) {
   	#todo:  construct the path
         #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
-	my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/config/jbrowse.conf";
+	my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeAndProteome/config/jbrowse.conf";
 	$webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
 	}
 
