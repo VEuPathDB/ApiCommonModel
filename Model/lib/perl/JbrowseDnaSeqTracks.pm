@@ -99,8 +99,8 @@ sub processOrganism {
   }
 
   print encode_json($result);
-  print CACHE encode_json($result);
-  close CACHE;
+#   print CACHE encode_json($result);
+#   close CACHE;
 }
 
 1;
