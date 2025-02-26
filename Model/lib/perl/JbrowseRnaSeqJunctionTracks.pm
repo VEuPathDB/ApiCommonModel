@@ -186,10 +186,10 @@ and o.ABBREV = '$organismAbbrev'";
   $dbh->disconnect();
   print encode_json($result);
 
-  unless($isApollo) {
-    open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
-    print CACHE encode_json($result);
-    close CACHE;
-  }
+#   unless($isApollo) {
+#     open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
+#     print CACHE encode_json($result);
+#     close CACHE;
+#   }
 }
 1;
