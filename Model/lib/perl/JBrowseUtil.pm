@@ -116,37 +116,37 @@ sub new {
   #my $buildProperties = $self->getBuildProperties();
    
 
-    #my $orgHash = ($buildProperties->{'organism'});
-    my $orgHash = ($buildPropsHash->{'organism'});
-    my $nameForFileNames = ($orgHash->{organismNameForFiles});
-    my $projectName = $self->getProjectName();
-    my $buildNumber = $self->getBuildNumber();
-    my $webservicesDir = $self->getWebservicesDir();
-    my $webServicePropsHash;
+  #my $orgHash = ($buildProperties->{'organism'});
+  my $orgHash = ($buildPropsHash->{'organism'});
+  my $nameForFileNames = ($orgHash->{organismNameForFiles});
+  my $projectName = $self->getProjectName();
+  my $buildNumber = $self->getBuildNumber();
+  my $webservicesDir = $self->getWebservicesDir();
+  my $webServicePropsHash;
 
-	if($buildNumber && $webservicesDir && $nameForFileNames ) {
-  	#todo:  construct the path
-        #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
-	my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeAndProteome/config/jbrowse.conf";
-	$webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
-	}
+  if($buildNumber && $webservicesDir && $nameForFileNames ) {
+    #todo:  construct the path
+    #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
+    my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeAndProteome/config/jbrowse.conf";
+    $webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
+  }
 
-    #Combine the buildProps and webService hashes
-    #my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
+  #Combine the buildProps and webService hashes
+  #my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
 
-    foreach my $hashkey (keys %$webServicePropsHash){
-	#if (defined $buildPropsHash->{$_}){
-	if (defined $buildPropsHash->{$hashkey}){
-	#print "webservice property $hashkey already exists in buildPropsHash\n";
-	next;
-	}
-	else {
-		$buildPropsHash->{$hashkey} = $webServicePropsHash->{$hashkey};
-	}
+  foreach my $hashkey (keys %$webServicePropsHash){
+    #if (defined $buildPropsHash->{$_}){
+    if (defined $buildPropsHash->{$hashkey}){
+      #print "webservice property $hashkey already exists in buildPropsHash\n";
+      next;
     }
-    my $datasetPropsHash = {%$buildPropsHash};	
+    else {
+      $buildPropsHash->{$hashkey} = $webServicePropsHash->{$hashkey};
+    }
+  }
+  my $datasetPropsHash = {%$buildPropsHash};
 
-    $self->setDatasetProperties($datasetPropsHash);	
+  $self->setDatasetProperties($datasetPropsHash);
 
   return $self;
 }
