@@ -365,7 +365,7 @@ sub addScaffolds {
 sub addGenes {
   my ($result, $orgPublicAbbrev, $projectName, $nameForFileNames) = @_;
 
-  my $urlTemplate = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/gff/genomeAndProteome/annotated_transcripts.gff.gz";
+  my $urlTemplate = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/gff/annotated_transcripts.gff.gz";
   my $track = {
 	       storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
 	       key => "Annotated Transcripts (UTRs in White when available)",
