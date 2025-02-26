@@ -31,8 +31,8 @@ sub getDbh {
 #my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
 
 # getters and setters for all class attributes
-sub getCacheFile {$_[0]->{_cache_file}}
-sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
+#sub getCacheFile {$_[0]->{_cache_file}}
+#sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
 
 sub getFileName {$_[0]->{_fileName}}
 sub setFileName {$_[0]->{_fileName} = $_[1]}
@@ -80,6 +80,8 @@ sub setLocalHost {$_[0]->{local_host} = $_[1]}
 sub new {
   my ($class, $args) = @_;
 
+my @tester = %{$args};
+
   # we want class attributes to be private, so make an empty hash and bless that with your class
   my $self = {};
   bless ($self, $class);
@@ -99,7 +101,7 @@ sub new {
  
  # this one is a bit odd because it calls a function that calls the setter
  # not sure if you need this
-  $self->setCacheFileName();
+ # $self->setCacheFileName();
 
 
   #my $organismAbbrev ="tgonME49"; # $args->{organismAbbrev};;$self->getOrganismAbbrev();
