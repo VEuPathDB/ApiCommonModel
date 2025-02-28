@@ -1,12 +1,9 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::SecondaryStructureTrackConfig;
-use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
-
-sub getUrl {$_[0]->{url} }
-sub setUrl {$_[0]->{url} = $_[1]}
 
 sub getPosColor {$_[0]->{pos_color}}
 sub setPosColor {$_[0]->{pos_color} = $_[1]}
@@ -20,14 +17,13 @@ sub new {
 
     $self->setId($args->{key});
     $self->setLabel($args->{label}); 
-    $self->setUrl($args->{relative_path_to_file});
     $self->setPosColor($args->{pos_color});
 
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
-	$store->setQueryParamsHash($args->{query_params});
+	#$store->setQueryParamsHash($args->{query_params});
 
 	$self->setDisplayType("JBrowse/View/Track/Wiggle/XYPlot");
         $self->setTrackTypeDisplay("XYPlot");
@@ -38,8 +34,6 @@ sub new {
     }
 
     $self->setStore($store);
-
-    $self->setViewDetailsContent("NA");
 
     return $self;
 }
@@ -62,7 +56,6 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-    $jbrowseObject->{urlTemplate} = $self->getUrl();    
     $jbrowseObject->{yScalePosition} = "left";
 
     return $jbrowseObject;

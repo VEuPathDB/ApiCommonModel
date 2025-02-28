@@ -28,11 +28,11 @@ sub processOrganism {
   my $projectName = ($orgHash->{projectName});
 
 
-  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+#  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+#  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+#  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addHydropathy($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureHelix($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -47,6 +47,7 @@ sub addProteinRefSeq {
 
     my $refSeqTrack;
     my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/fasta/AnnotatedProteins.fasta";
+#    my $relativePathToGffFile = "${webservicesDir}/PlasmoDB/build-68/Pfalciparum3D7/fasta/AnnotatedProteins.fasta";
 
     my $summary = "Individual amino acids are colored based on their<br>physical properties:</p><img src='/a/images/pbrowse_legend.png'  height='150' width='248' align=left/><p><table><tr><td>A - Alanine</td><td>C - Cysteine</td></tr><tr><td>D - Aspartic Acid&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td><td>E - Glutamic Acid</td></tr><tr><td>F - Phenyalanine</td><td>G - Glycine</td></tr><tr><td>H - Histidine</td><td>I - Isoleucine</td></tr><tr><td>K - Lysine</td><td>L - Leucine</td></tr><tr><td>M - Methionine</td><td>N - Asparagine</td></tr><tr><td>P - Proline</td><td>Q - Glutamine</td></tr><tr><td>R - Arginine</td><td>S - Serine</td></tr><tr><td>T - Threonine</td><td>V - Valine</td></tr><tr><td>W - Tryptophan</td><td>Y - Tyrosine</td></tr></table</p><br><b>Note:</b>The color palette for the amino acid reference<br>track can be changed by clicking on<br>Reference Sequence -> Edit config<br>and editing the proteinColorScheme to an<br>alternative palette.<br>Available palettes are:<br>buried<br>cinema<br>clustal<br>clustal2<br>helix<br>hydrophobicity<br>lesk<br>mae<br>purine<br>strand<br>taylor<br>turn<br>zappo<br><br>";
 
@@ -182,7 +183,7 @@ sub addHydropathy {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $hydropathyTrack;
-    my $relativePathToBigWigFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
+    my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
     my $summary = "Kyte-Doolittle hydropathy plot";
 
     my $queryParams = {
@@ -197,7 +198,7 @@ sub addHydropathy {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "Kyte-Doolittle hydropathy plot",
-                                                                                                label => "NA",
+                                                                                                label => "Kyte-Doolittle hydropathy plot",
                                                                                                 query_params => $queryParams,
 												pos_color => "orange",
                                                                                                 })->getConfigurationObject();
@@ -210,7 +211,7 @@ sub addSecondaryStructureHelix {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $secondaryStructureHelixTrack;
-    my $relativePathToBigWigFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/bigwig/psipred_helix.bw";
+    my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_helix.bw";
     my $summary = "PSIPRED secondary structure prediction";
 
     my $queryParams = {
@@ -225,7 +226,7 @@ sub addSecondaryStructureHelix {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Helix",
-                                                                                                label => "NA",
+                                                                                                label => "PSIPRED Helix",
                                                                                                 query_params => $queryParams,
 												pos_color => "red",
                                                                                                 })->getConfigurationObject();
@@ -238,7 +239,7 @@ sub addSecondaryStructureCoil {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $secondaryStructureCoilTrack;
-    my $relativePathToBigWigFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/bigwig/psipred_coil.bw";
+    my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_coil.bw";
     my $summary = "PSIPRED secondary structure prediction";
 
     my $queryParams = {
@@ -253,7 +254,7 @@ sub addSecondaryStructureCoil {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Coil",
-                                                                                                label => "NA",
+                                                                                                label => "PSIPRED Coil",
                                                                                                 query_params => $queryParams,
 												pos_color => "green",
                                                                                                 })->getConfigurationObject();
@@ -266,7 +267,7 @@ sub addSecondaryStructureStrand {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $secondaryStructureStrandTrack;
-    my $relativePathToBigWigFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/bigwig/psipred_extended.bw";
+    my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_extended.bw";
     my $summary = "PSIPRED secondary structure prediction";
 
     my $queryParams = {
@@ -281,7 +282,7 @@ sub addSecondaryStructureStrand {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Strand",
-                                                                                                label => "NA",
+                                                                                                label => "PSIPRED Strand",
                                                                                                 query_params => $queryParams,
 												pos_color => "blue",
                                                                                                 })->getConfigurationObject();
