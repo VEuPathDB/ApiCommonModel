@@ -23,7 +23,7 @@ sub new {
     $self->setUrlTemplate($args->{url_template});
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $self->setStoreType("JBrowse/Store/SeqFeature/BedTabix");
+        $self->setStoreType("JBrowse/Store/SeqFeature/BEDTabix");
     }
     else {
         #die "No GFF Equivalent For JBrowse2 YET";

@@ -35,6 +35,9 @@ sub setColor {$_[0]->{color} = $_[1]}
 sub getHeight {$_[0]->{height}}
 sub setHeight {$_[0]->{height} = $_[1]}
 
+sub getBorderColor {$_[0]->{border_color}}
+sub setBorderColor {$_[0]->{border_color} = $_[1]}
+
 sub getDisplayName {$_[0]->{display_name}}
 sub setDisplayName {$_[0]->{display_name} = $_[1]}
 
