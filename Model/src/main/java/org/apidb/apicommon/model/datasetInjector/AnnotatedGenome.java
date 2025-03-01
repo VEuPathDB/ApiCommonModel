@@ -14,7 +14,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
                 super.injectTemplates();
 
 
-      injectTemplate("jbrowseAnnotatedGenome");
+      //injectTemplate("jbrowseAnnotatedGenome");
       injectTemplate("jbrowseAnnotatedGeneDensity");
       injectTemplate("jbrowseCommonAa");
 
