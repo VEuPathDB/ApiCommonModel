@@ -64,7 +64,6 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-    $jbrowseObject->{urlTemplate} = $self->getUrl();
 
     return $jbrowseObject;
   }

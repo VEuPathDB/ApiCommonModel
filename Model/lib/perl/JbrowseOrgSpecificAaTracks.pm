@@ -32,7 +32,7 @@ sub processOrganism {
 #  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-#  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addHydropathy($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureHelix($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -75,7 +75,7 @@ sub addInterproDomains {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $interproDomainsTrack;
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/gff/iprscan_out.gff.gz";
+    my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/iprscan_out.gff.gz";
     my $summary = "Interpro: PFam, PIR, Prints, Prodom, Smart, Superfamily, TIGRFAM, Prosite";
 
     my $queryParams = {
@@ -102,7 +102,7 @@ sub addSignalPeptide {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
     
     my $signalPeptideTrack;
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/gff/signalP.gff.gz";
+    my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/signalP.gff.gz";
     my $summary = "Signal peptide predictions by SP-HMM/SP-NN";
 
     my $queryParams = {
@@ -129,7 +129,7 @@ sub addTmhmm {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $tmhmmTrack;
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/gff/tmhmm.gff.gz";
+    my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/tmhmm.gff.gz";
     my $summary = "Transmembrane domains detected by TMHMM";
 
     my $queryParams = {
@@ -156,7 +156,7 @@ sub addLowComplexity {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $lowComplexityTrack;
-    my $relativePathToBedFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/bed/proteinLowComplexity.bed.gz";
+    my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/proteinLowComplexity.bed.gz";
     my $summary = "Regions of low sequence complexity, as defined by the SEG algorithm of Wooton and Federhen. A description of the SEG algorithm can be found in Wootton, J.C. and Federhen, S. 1993 Statistics of local complexity in amino acid sequence and sequence database. Comput. Chem. 17149–163.";
 
     my $queryParams = {
@@ -171,7 +171,7 @@ sub addLowComplexity {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "Low Complexity Regions",
-                                                                                                label => "NA",
+                                                                                                label => "Low Complexity Regions",
                                                                                                 query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
@@ -295,7 +295,7 @@ sub addExportPred {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $exportPredTrack;
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/gff/exportpred.gff.gz";
+    my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/exportpred.gff.gz";
     my $summary = "Export domains predicted by ExportPred";
 
     my $queryParams = {
