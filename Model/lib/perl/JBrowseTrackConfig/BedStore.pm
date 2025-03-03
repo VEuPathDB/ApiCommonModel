@@ -3,9 +3,6 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Store);
 use strict;
 use warnings;
 
-sub getBaseUrl {$_[0]->{base_url}}
-sub setBaseUrl {$_[0]->{base_url} = $_[1] }
-
 sub getUrlTemplate {$_[0]->{url_template} }
 sub setUrlTemplate {$_[0]->{url_template} = $_[1]}
 
@@ -19,11 +16,8 @@ sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
 
-    $self->setBaseUrl("/a/service/jbrowse");
-    $self->setUrlTemplate($args->{url_template});
-
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $self->setStoreType("JBrowse/Store/SeqFeature/BedTabix");
+        $self->setStoreType("JBrowse/Store/SeqFeature/BEDTabix");
     }
     else {
         #die "No GFF Equivalent For JBrowse2 YET";
