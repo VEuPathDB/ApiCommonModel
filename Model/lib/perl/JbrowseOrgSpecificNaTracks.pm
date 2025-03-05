@@ -48,37 +48,37 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
-  &addScaffolds($datasetProps, $applicationType, $result);
-  &addCentromere($datasetProps, $applicationType, $result);
-  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
-  &addUnifiedSnp($datasetProps, $applicationType, $result);
+#  &addScaffolds($datasetProps, $applicationType, $result);
+#  &addCentromere($datasetProps, $applicationType, $result);
+#  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
+#  &addUnifiedSnp($datasetProps, $applicationType, $result);
 
-  &addSynteny($applicationType, $dbh, $result);
+#  &addSynteny($applicationType, $dbh, $result);
 
-  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+#  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
 
   # TODO: get these from buildProps
   my $datasetProperties = $datasetProps;
 
-  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
-  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
-  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
-  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
+#  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
+#  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+#  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
+#  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
-  &addProteinExpressionMassSpec($datasetProperties, $applicationType, $result);
-  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
+  &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
+#  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
   #&addGFF($dbh, $result, $datasetProperties);
 
-  &addTRNA($datasetProps, $result, $applicationType);
+  &addTRNA($datasetProps, $result, $nameForFileNames, $projectName, $buildNumber, $applicationType);
   if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
       &addNrdbProteinAlignments($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProperties, $webservicesDir);
   }
 
   if ($organismAbbrev !~ m/dmeliso-1/ ){
-      &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
+#      &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
   }
 
-  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
+#  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
 
 ## UNCOMMENT after longReadRNASeq data is available in webServices
 #  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
@@ -86,13 +86,13 @@ sub processOrganism {
 
   # TODO:  need to set isReference 
   if($projectName eq 'FungiDB' && $isReference) {
-      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType);
+#      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType);
   }
 
 
   # other organism specific tracks
   if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-      &addCnvArray($dbh, $result, $projectName, $applicationType);
+#      &addCnvArray($dbh, $result, $projectName, $applicationType);
   }
   # TODO: Add back
   #if ($isAnnotated eq 'true'){
@@ -260,7 +260,7 @@ sub addMergedRnaSeq {
 
 sub addProteinExpressionMassSpec {
 
-  my ($datasetProperties, $applicationType, $result) = @_;
+  my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProps, $webservicesDir) = @_;
   my $proteinExpressionMassSpecDatasets = $datasetProperties->{protexpmassspec} ? $datasetProperties->{protexpmassspec} : {};
 
   foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
@@ -280,11 +280,17 @@ sub addProteinExpressionMassSpec {
     # TODO - no need to remove "()" around attribution
     $shortAttribution =~s/\((.*)\)/$1/;
 
-my $queryParams = {
+    my $relativePathToGffFile = "${nameForFileNames}/massSpec/gff/${datasetExtdbName}/ms_peptides_genome_align.gff.gz";
+
+    my $queryParams = {
                             'edName' => "like '${datasetExtdbName}'",
                             'feature' => "domain:MassSpecPeptide",
                                            };
-    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
+    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({  
+                                                                                                project_name => $projectName,
+                                                                                                build_number => $buildNumber,
+                                                                                                relative_path_to_file => $relativePathToGffFile,
+                                                                                                application_type => $applicationType,
                                                                                                 key => "${datasetDisplayName}  MS/MS Peptides  $shortAttribution",
                                                                                                 label => "${dataset}",
                                                                                                 dataset_name => $dataset,
@@ -766,8 +772,8 @@ sub makeChipChipSmoothed {
 sub addNrdbProteinAlignments {
 my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProps, $webservicesDir) = @_;
     my $proteinAlignTrack;
-    #my $gffUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/nrProteinsToGenomeAlign/result.sorted.gff.gz");
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/gff/nrProteinToGenome.gff.gz";
+
+    my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/nrProteinToGenome.gff.gz";
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
 
     $proteinAlignTrack = ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig->new({
@@ -782,10 +788,18 @@ my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectNam
 }
 
 sub addTRNA {
-  my ($datasetProps, $result, $applicationType) = @_;
+  my ($datasetProps, $result, $nameForFileNames, $projectName, $buildNumber, $applicationType) = @_;
      my $hasTRNA = $datasetProps->{hasTRNA} ? $datasetProps->{hasTRNA} : {};
         if($hasTRNA == 1) {
-     my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig->new({application_type => $applicationType })->getConfigurationObject();
+
+     # TODO: need to switch from annotated_transcripts.gff.gz to new tRNA scan gff generated by workflow
+     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/annotated_transcripts.gff.gz";
+     my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig->new({
+										   project_name => $projectName,
+                                                                                   build_number => $buildNumber,
+                                                                                   relative_path_to_file => $relativePathToGffFile,
+										   application_type => $applicationType 
+										   })->getConfigurationObject();
 
      push @{$result->{tracks}}, $track;
   }
