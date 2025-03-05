@@ -48,25 +48,25 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
-#  &addScaffolds($datasetProps, $applicationType, $result);
-#  &addCentromere($datasetProps, $applicationType, $result);
-#  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
-#  &addUnifiedSnp($datasetProps, $applicationType, $result);
+  &addScaffolds($datasetProps, $applicationType, $result);
+  &addCentromere($datasetProps, $applicationType, $result);
+  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
+  &addUnifiedSnp($datasetProps, $applicationType, $result);
 
-#  &addSynteny($applicationType, $dbh, $result);
+  &addSynteny($applicationType, $dbh, $result);
 
-#  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
 
   # TODO: get these from buildProps
   my $datasetProperties = $datasetProps;
 
-#  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
-#  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
-#  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
-#  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
+  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
+  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
+  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
-#  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
+  &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
   #&addGFF($dbh, $result, $datasetProperties);
 
   &addTRNA($datasetProps, $result, $nameForFileNames, $projectName, $buildNumber, $applicationType);
@@ -75,10 +75,10 @@ sub processOrganism {
   }
 
   if ($organismAbbrev !~ m/dmeliso-1/ ){
-#      &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
+      &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
   }
 
-#  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
+  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
 
 ## UNCOMMENT after longReadRNASeq data is available in webServices
 #  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
@@ -86,13 +86,13 @@ sub processOrganism {
 
   # TODO:  need to set isReference 
   if($projectName eq 'FungiDB' && $isReference) {
-#      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType);
+      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType);
   }
 
 
   # other organism specific tracks
   if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-#      &addCnvArray($dbh, $result, $projectName, $applicationType);
+      &addCnvArray($dbh, $result, $projectName, $applicationType);
   }
   # TODO: Add back
   #if ($isAnnotated eq 'true'){
