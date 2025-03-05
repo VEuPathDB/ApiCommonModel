@@ -39,7 +39,7 @@ sub processOrganism {
   &addSecondaryStructureStrand($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
 
-  #&addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
 }
 
 sub addProteinRefSeq {
@@ -348,13 +348,18 @@ sub addProteinExpressionMassSpec {
       $hasPTMDataset = 1;
     }
 
+    my $relativePathToGffFile = "${nameForFileNames}/massSpec/gff/${datasetExtdbName}/ms_peptides_protein_align.gff.gz";
+
     my $queryParams = {         
                             'edName' => "like '${datasetExtdbName}'",
                             'feature' => $feature,
                             'seqType' => "protein",
                                            };
 
-    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
+    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({  
+                                                                                                project_name => $projectName,
+                                                                                                build_number => $buildNumber,
+                                                                                                relative_path_to_file => $relativePathToGffFile,
                                                                                                 key => "${datasetDisplayName}  MS/MS Peptides  $shortAttribution",
                                                                                                 label => "${dataset}",
                                                                                                 dataset_name => $dataset,
