@@ -23,6 +23,8 @@ use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::SyntenyTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 
 use Data::Dumper;
 
@@ -64,6 +66,10 @@ sub processOrganism {
   &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
   &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
+
+  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+
+  &addTandemRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
   &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
@@ -347,6 +353,49 @@ sub addSmallNcRnaSeq {
                                                                                               })->getConfigurationObject();
       push @{$result->{tracks}}, $alignment;
   }
+}
+
+
+sub addLowComplexity {
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+
+  my $track;
+  my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/lowComplexity.bed.gz";
+  my $summary = "Regions of low sequence complexity, as defined by the SEG algorithm of Wooton and Federhen. A description of the SEG algorithm can be found in Wootton, J.C. and Federhen, S. 1993 Statistics of local complexity in amino acid sequence and sequence database. Comput. Chem. 17149–163.";
+
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig->
+    new({
+	 project_name => $projectName,
+	 build_number => $buildNumber,
+	 relative_path_to_file => $relativePathToBedFile,
+	 application_type => $applicationType,
+	 summary => $summary,
+	 key => "Low Complexity Regions",
+	 label => "Low Complexity Regions",
+	})->getConfigurationObject();
+
+   push @{$result->{tracks}}, $track if($track);
+}
+
+
+sub addTandemRepeats {
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+
+  my $track;
+  my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/tandemRepeats.bed.gz";
+
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig->
+    new({
+	 project_name => $projectName,
+	 build_number => $buildNumber,
+	 relative_path_to_file => $relativePathToBedFile,
+	 application_type => $applicationType,
+	 key => "Tandem Repeats",
+	 label => "Tandem Repeats",
+         subcategory => "Sequence composition, complexity and repeats",
+	})->getConfigurationObject();
+
+   push @{$result->{tracks}}, $track if($track);
 }
 
 
