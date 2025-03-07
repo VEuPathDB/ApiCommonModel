@@ -24,7 +24,6 @@ sub new {
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("domain:UnifiedMassSpecPeptides");
     }
     else {
         # TODO

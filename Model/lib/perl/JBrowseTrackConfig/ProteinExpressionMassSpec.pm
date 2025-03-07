@@ -17,29 +17,27 @@ sub new {
     $datasetConfig->setSubcategory("Protein Expression");
 
     $self->setId($args->{key});
-    $self->setLabel($args->{label}); 
+    $self->setLabel($args->{label});
     $self->setGlyph($args->{glyph});
 
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-	$store->setQueryParamsHash($args->{query_params});
     }
     else {
         # TODO
 	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-        $store->setQueryParamsHash($args->{query_params});
     }
 
     $self->setStore($store);
-    
-    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments") unless(defined $self->getGlyph());
+    $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
 
     my $detailsFunction = "{massSpecDetails}";
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
     $self->setDisplayMode("compact");
+    $self->setBorderColor("black");
 
     return $self;
 }
