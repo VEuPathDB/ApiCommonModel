@@ -26,7 +26,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig
+use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
 
 use Data::Dumper;
 
