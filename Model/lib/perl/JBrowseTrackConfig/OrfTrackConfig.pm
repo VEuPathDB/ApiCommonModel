@@ -41,16 +41,6 @@ sub new {
     return $self;
 }
 
-sub getJBrowseStyle {
-   my $self = shift;
-   my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
-
-
-   return $jbrowseStyle;
-}
-
-
-
 sub getJBrowseObject{
 	my $self = shift;
 
