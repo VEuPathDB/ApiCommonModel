@@ -350,12 +350,6 @@ sub addProteinExpressionMassSpec {
 
     my $relativePathToGffFile = "${nameForFileNames}/massSpec/gff/${datasetExtdbName}/ms_peptides_protein_align.gff.gz";
 
-    my $queryParams = {         
-                            'edName' => "like '${datasetExtdbName}'",
-                            'feature' => $feature,
-                            'seqType' => "protein",
-                                           };
-
     my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({  
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -367,7 +361,6 @@ sub addProteinExpressionMassSpec {
                                                                                                 study_display_name => $datasetDisplayName,
                                                                                                 summary => $summary,
                                                                                                 application_type => $applicationType,
-                                                                                                query_params => $queryParams,
                                                                                                 dataset_presenter_id => $datasetPresenterId,
 												glyph => "JBrowse/View/FeatureGlyph/Box",
                                                                                               })->getConfigurationObject();
@@ -377,13 +370,8 @@ sub addProteinExpressionMassSpec {
 
   if($hasPTMDataset) {
 
-  my $ptmQueryParams  = {
-                            'seqType' => "protein",
-                            'feature' => "domain:UnifiedPostTraslationalMod",
-                                           };
-
   my $unifiedPtm = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedPostTranslationalMod->new({application_type => $applicationType,
-                                                                                               query_params => $ptmQueryParams,
+
                                                                                               })->getConfigurationObject();
 
     push @{$result->{tracks}}, $unifiedPtm if($unifiedPtm);
