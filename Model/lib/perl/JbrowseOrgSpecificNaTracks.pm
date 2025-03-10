@@ -25,7 +25,8 @@ use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig
 
 use Data::Dumper;
 
@@ -72,7 +73,11 @@ sub processOrganism {
 
   &addTandemRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
+
+  &addESTs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+
   &addOrfs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
   &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
@@ -401,6 +406,28 @@ sub addTandemRepeats {
    push @{$result->{tracks}}, $track if($track);
 }
 
+sub addESTs {
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
+
+  my $track;
+
+  my $estFilename = "${organismAbbrev}_ESTs.gff.gz";
+ 
+  my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/${estFilename}";
+
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig->
+    new({
+         project_name => $projectName,
+         build_number => $buildNumber,
+         relative_path_to_file => $relativePathToGffFile,
+         application_type => $applicationType,
+         key => "EST Alignments",
+         label => "EST Alignments",
+         subcategory => "BLAT and Blast Alignments",
+        })->getConfigurationObject();
+
+   push @{$result->{tracks}}, $track if($track);
+}
 
 sub addCentromere {
   my ($datasetProps, $applicationType, $result) = @_;
