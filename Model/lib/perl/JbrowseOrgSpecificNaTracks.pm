@@ -27,6 +27,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig;
 
 use Data::Dumper;
 
@@ -77,6 +78,9 @@ sub processOrganism {
   &addESTs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
   &addOrfs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+
+  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+
 
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
@@ -405,6 +409,28 @@ sub addTandemRepeats {
 
    push @{$result->{tracks}}, $track if($track);
 }
+
+sub addClonedInsertEnds {
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+
+  my $track;
+  my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/gff/tbruTREU927_Genbank_BACEnds_clonedInsertEnds_RSRC.gff.gz";
+
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig->
+    new({
+	 project_name => $projectName,
+	 build_number => $buildNumber,
+	 relative_path_to_file => $relativePathToBedFile,
+	 application_type => $applicationType,
+	 key => "cloned insert ends",
+	 label => "cloned insert ends",
+         subcategory => "Sequence assembly",
+	})->getConfigurationObject();
+
+   push @{$result->{tracks}}, $track if($track);
+}
+
+
 
 sub addESTs {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
