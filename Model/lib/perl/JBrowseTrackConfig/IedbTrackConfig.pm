@@ -53,7 +53,7 @@ sub getJBrowseStyle {
 
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
-    $jbrowseStyle->{color} = "blue";
+    $jbrowseStyle->{color} = "{iedbColorFxn}";
     $jbrowseStyle->{label} = "NA";
 
     return $jbrowseStyle;
