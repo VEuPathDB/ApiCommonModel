@@ -2,18 +2,15 @@ package ApiCommonModel::Model::JbrowseRnaAndChipSeqTracks;
 
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use JSON;
 use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 
 use Data::Dumper;
-
 use Encode;
 use XML::Simple;
 use List::Util qw(min max);
 use Storable 'dclone';
-use JSON qw(decode_json);
 
 sub processOrganism {
   my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $technologyType, $jbrowseUtil, $result) = @_;

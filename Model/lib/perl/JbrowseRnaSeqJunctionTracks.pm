@@ -2,7 +2,6 @@ package ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
 
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use JSON;
 use ApiCommonModel::Model::JBrowseUtil;
 use ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig;
 use ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
@@ -10,7 +9,7 @@ use ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
 use Storable 'dclone';
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $isApollo, $applicationType, $jbrowseUtil, $resultMap) = @_;
+  my ($organismAbbrev, $projectName, $isApollo, $applicationType, $jbrowseUtil, $result) = @_;
 
   my $methodDescription = "<h1><u>Definitions</u>:</h1>
 
@@ -66,7 +65,6 @@ and o.ABBREV = '$organismAbbrev'";
   my ($count) = $sh->fetchrow_array();
   $sh->finish();
 
-  my $result = {"tracks" => [] };
   if ($count > 0) {
 
     my $inclusive = ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig->new({application_type => $applicationType,
@@ -184,7 +182,6 @@ and o.ABBREV = '$organismAbbrev'";
   }
 
   $dbh->disconnect();
-  print encode_json($result);
 
 #   unless($isApollo) {
 #     open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";

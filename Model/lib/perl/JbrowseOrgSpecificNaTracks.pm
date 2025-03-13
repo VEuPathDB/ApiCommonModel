@@ -2,7 +2,6 @@ package ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use JSON;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
