@@ -78,7 +78,7 @@ sub processOrganism {
 
   &addOrfs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
-  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+#  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
 
 
