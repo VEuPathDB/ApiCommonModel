@@ -2,7 +2,6 @@ package ApiCommonModel::Model::JbrowseOrgSpecificAaTracks;
 
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use JSON;
 use Data::Dumper;
 use URI::Escape;
 use Storable 'dclone';
