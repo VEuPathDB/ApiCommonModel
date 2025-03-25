@@ -15,6 +15,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::HydropathyTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::SecondaryStructureTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::InterproDomainsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ExportPredTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::IedbTrackConfig;
 
 sub processOrganism {
   my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
@@ -37,6 +38,7 @@ sub processOrganism {
   &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureStrand($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
 
   &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
 }
@@ -316,6 +318,31 @@ sub addExportPred {
    push @{$result->{tracks}}, $exportPredTrack if($exportPredTrack);
 }
 
+sub addIedb {
+    my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+
+    my $iedbTrack;
+    my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/iedb.gff.gz";
+    my $summary = "Immune Epitope Database (IEDB) predictions";
+
+    my $queryParams = {
+                           'seqType' => "protein",
+                           'feature' => "domain:IEDB",
+                                           };
+
+    $iedbTrack = ApiCommonModel::Model::JBrowseTrackConfig::IedbTrackConfig->new({
+                                                                                                project_name => $projectName,
+                                                                                                build_number => $buildNumber,
+                                                                                                relative_path_to_file => $relativePathToGffFile,
+                                                                                                application_type => $applicationType,
+                                                                                                summary => $summary,
+                                                                                                key => "IEDB predictions",
+                                                                                                label => "IEDB predictions",
+                                                                                                query_params => $queryParams,
+                                                                                                })->getConfigurationObject();
+
+   push @{$result->{tracks}}, $iedbTrack if($iedbTrack);
+}
 
 sub addProteinExpressionMassSpec {
   my ($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
