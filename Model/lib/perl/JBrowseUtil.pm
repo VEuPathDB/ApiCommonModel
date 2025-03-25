@@ -5,7 +5,8 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
 use DBI;
-use DBD::Oracle;
+#use DBD::Oracle;
+use DBD::Pg;
 use WDK::Model::ModelConfig;
 use Data::Dumper;
 
@@ -30,8 +31,8 @@ sub getDbh {
 #my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
 
 # getters and setters for all class attributes
-sub getCacheFile {$_[0]->{_cache_file}}
-sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
+#sub getCacheFile {$_[0]->{_cache_file}}
+#sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
 
 sub getFileName {$_[0]->{_fileName}}
 sub setFileName {$_[0]->{_fileName} = $_[1]}
@@ -79,6 +80,8 @@ sub setLocalHost {$_[0]->{local_host} = $_[1]}
 sub new {
   my ($class, $args) = @_;
 
+my @tester = %{$args};
+
   # we want class attributes to be private, so make an empty hash and bless that with your class
   my $self = {};
   bless ($self, $class);
@@ -98,7 +101,7 @@ sub new {
  
  # this one is a bit odd because it calls a function that calls the setter
  # not sure if you need this
-  $self->setCacheFileName();
+ # $self->setCacheFileName();
 
 
   #my $organismAbbrev ="tgonME49"; # $args->{organismAbbrev};;$self->getOrganismAbbrev();
@@ -115,37 +118,37 @@ sub new {
   #my $buildProperties = $self->getBuildProperties();
    
 
-    #my $orgHash = ($buildProperties->{'organism'});
-    my $orgHash = ($buildPropsHash->{'organism'});
-    my $nameForFileNames = ($orgHash->{organismNameForFiles});
-    my $projectName = $self->getProjectName();
-    my $buildNumber = $self->getBuildNumber();
-    my $webservicesDir = $self->getWebservicesDir();
-    my $webServicePropsHash;
+  #my $orgHash = ($buildProperties->{'organism'});
+  my $orgHash = ($buildPropsHash->{'organism'});
+  my $nameForFileNames = ($orgHash->{organismNameForFiles});
+  my $projectName = $self->getProjectName();
+  my $buildNumber = $self->getBuildNumber();
+  my $webservicesDir = $self->getWebservicesDir();
+  my $webServicePropsHash;
 
-	if($buildNumber && $webservicesDir && $nameForFileNames ) {
-  	#todo:  construct the path
-        #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
-	my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/config/jbrowse.conf";
-	$webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
-	}
+  if($buildNumber && $webservicesDir && $nameForFileNames ) {
+    #todo:  construct the path
+    #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
+    my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeAndProteome/config/jbrowse.conf";
+    $webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
+  }
 
-    #Combine the buildProps and webService hashes
-    #my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
+  #Combine the buildProps and webService hashes
+  #my $datasetPropsHash = {%$buildPropsHash, %$webServicePropsHash};
 
-    foreach my $hashkey (keys %$webServicePropsHash){
-	#if (defined $buildPropsHash->{$_}){
-	if (defined $buildPropsHash->{$hashkey}){
-	#print "webservice property $hashkey already exists in buildPropsHash\n";
-	next;
-	}
-	else {
-		$buildPropsHash->{$hashkey} = $webServicePropsHash->{$hashkey};
-	}
+  foreach my $hashkey (keys %$webServicePropsHash){
+    #if (defined $buildPropsHash->{$_}){
+    if (defined $buildPropsHash->{$hashkey}){
+      #print "webservice property $hashkey already exists in buildPropsHash\n";
+      next;
     }
-    my $datasetPropsHash = {%$buildPropsHash};	
+    else {
+      $buildPropsHash->{$hashkey} = $webServicePropsHash->{$hashkey};
+    }
+  }
+  my $datasetPropsHash = {%$buildPropsHash};
 
-    $self->setDatasetProperties($datasetPropsHash);	
+  $self->setDatasetProperties($datasetPropsHash);
 
   return $self;
 }

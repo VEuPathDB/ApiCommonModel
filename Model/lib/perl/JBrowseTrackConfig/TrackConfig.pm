@@ -35,6 +35,9 @@ sub setColor {$_[0]->{color} = $_[1]}
 sub getHeight {$_[0]->{height}}
 sub setHeight {$_[0]->{height} = $_[1]}
 
+sub getBorderColor {$_[0]->{border_color}}
+sub setBorderColor {$_[0]->{border_color} = $_[1]}
+
 sub getDisplayName {$_[0]->{display_name}}
 sub setDisplayName {$_[0]->{display_name} = $_[1]}
 
@@ -197,9 +200,21 @@ sub getJBrowseObject{
     }
 
     if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::GFFStore' ||
-        ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore') {
+        ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore' ||
+	ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BedStore') {
+	my $query = $store->getQuery();
         my $urlTemplate = $store->getUrlTemplate();
         $jbrowseObject->{urlTemplate}= $urlTemplate if($urlTemplate);
+        $jbrowseObject->{query} = {'feature' => $query };
+        my $queryParams = $store->getQueryParamsHash();
+        
+	# add query param values
+        if($queryParams) {
+            foreach my $pk(keys %$queryParams) {
+                $jbrowseObject->{query}->{$pk} = $queryParams->{$pk};
+            }
+        }	
+
     }
 
 
