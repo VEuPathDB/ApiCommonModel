@@ -908,88 +908,106 @@
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="CrisprPhenotypeGraphs" includeProjects="ToxoDB,UniDB">
-      <column name="source_id" />
-      <column name="project_id" />
-      <column name="project_id_url" />
-      <column name="graph_ids" />
-      <column name="default_graph_id" />
-      <column name="module" />
-      <column name="species" />
-      <column name="mainOpen" />
-      <column name="dataOpen" />
-      <column name="display_name" />
-      <column name="description" />
-      <column name="x_axis" />
-      <column name="y_axis" />
-      <column name="has_graph_data"/>
-      <column name="has_meta_data"/>
-      <column name="meta_data_categories"/>
-      <column name="dataset_name"/>
-      <column name="dataset_id"/>
-      <column name="is_graph_custom"/>
-      <column name="summary"/>
-      <column name="short_attribution"/>
-      <column name="assay_type"/>
-      <column name="template"/>
-      <sql>
-        <![CDATA[
-        SELECT g.*
-          , CASE '@PROJECT_ID@' WHEN 'UniDB' THEN 'EuPathDB' ELSE g.project_id END AS project_id_url
-          , CASE lower(is_graph_custom) WHEN 'false' THEN 1 ELSE 0 END AS template
-            , SPLIT_PART(graph_ids, ',', 1) AS default_graph_id
-        FROM
-          (
-            SELECT ga.source_id
-              , ga.project_id
-              , ga.organism AS gene_organism
-              , ga.genus_species
-              , graph_descrip.dataset AS dataset_name
-              , psgene.profile_graph_id AS graph_ids
-              , CASE WHEN psgene.profile_graph_id IS NULL THEN 0 ELSE 1 END AS has_graph_data
-              , tn.name AS graph_organism
-              , 'TRUE' AS mainOpen
-              , 'FALSE' AS dataOpen
-              , 'FALSE' has_meta_data
-              , '' AS meta_data_categories
-              , graph_descrip.*
-              , dp.summary
-              , dp.short_attribution
-              , dp.display_name
-              , dp.description
-              , 'CRISPR' AS assay_type
-              , dp.dataset_presenter_id AS dataset_id
-            FROM
-              apidbtuning.geneattributes ga
-              , APIDBTUNING.datasetnametaxon dsnt
-              , apidbtuning.datasetPresenter dp
-              , sres.taxonname tn
-              , apidbtuning.taxonspecies ts
-              , sres.taxonname sn
-              , apidbtuning.geneGroupProfile psgene
-              , (
-                  SELECT 'tgonGT1_crisprPhenotype_CrisprScreen_RSRC' AS dataset
-                    , 'PhenotypeScore' AS module
-                    , 'Genes ranked by phenotype score' AS x_axis
-                    , 'log2(gRNA of infected cultures / gRNA composition of original library)' y_axis
-                    , 'false' AS is_graph_custom
-                    , 1 AS order_num
-                ) graph_descrip
-            WHERE ga.source_id = psgene.source_id
-              AND psgene.dataset_name = dsnt.name
-              AND dsnt.dataset_presenter_id = dp.dataset_presenter_id
-              AND graph_descrip.dataset = dp.name
-              AND dsnt.taxon_id = tn.taxon_id
-              AND tn.name_class = 'scientific name'
-              AND dsnt.taxon_id = ts.taxon_id
-              AND ts.species_taxon_id = sn.taxon_id
-              AND sn.name_class = 'scientific name'
-              AND ga.genus_species = sn.name
-              AND dp.type = 'phenotype'
-          ) g
-        ]]>
-      </sql>
-    </sqlQuery>
+
+        <!-- TODO:  need a tuning table here for Orthology Lookup (can't currently because of dblink)-->
+       <sqlQuery name="EdaPhenotypeGraphs" includeProjects="ToxoDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="project_id_url" />
+            <column name="graph_ids" />
+            <column name="default_graph_id" />
+            <column name="species" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
+            <column name="display_name" />
+            <column name="description" />
+            <column name="has_graph_data"/>
+	    <column name="has_meta_data"/>
+	    <column name="meta_data_categories"/>
+            <column name="dataset_name"/>
+            <column name="dataset_id"/>
+            <column name="summary"/>
+            <column name="short_attribution"/>
+            <column name="assay_type"/>
+            <column name="plot_configs_json"/>
+            <sql>
+
+<![CDATA[ 
+select g.*, decode('@PROJECT_ID@', 'UniDB', 'EuPathDB', g.project_id) as project_id_url, regexp_substr(graph_ids, '[^,]*') as default_graph_id
+from (
+        select ga.source_id, ga.project_id,
+             ga.organism as gene_organism, ga.genus_species ,
+             psgene.profile_graph_id as graph_ids,
+             case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
+             tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
+             'FALSE' has_meta_data, '' as meta_data_categories,
+             graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name,
+             dp.description, 'Phenotype' as assay_type, dp.dataset_presenter_id as dataset_id
+      from apidbtuning.geneattributes ga,
+           APIDBTUNING.datasetnametaxon dsnt,
+           apidbtuning.datasetPresenter dp,
+           sres.taxonname tn,
+           apidbtuning.taxonspecies ts,
+           sres.taxonname sn,
+           (WITH dataset_genes as (
+               SELECT 'tgonGT1_crisprPhenotype_CrisprFunctionalProfiling_RSRC' AS dataset_name , string_value AS source_id
+               FROM eda.ATTRIBUTEvalue_SB044A3A170_GNPD@eda av
+               WHERE av.attribute_stable_id = 'VAR_bdc8e679'
+               UNION
+               SELECT 'tgonGT1_crisprPhenotype_CrisprScreen_RSRC' AS dataset_name , string_value AS source_id
+               FROM eda.ATTRIBUTEvalue_sd4745ea297_GNPD@eda av
+               WHERE av.attribute_stable_id = 'VAR_bdc8e679'
+           )
+           select distinct other_gene.source_id, p.dataset_name,
+               this_gene.source_id as profile_graph_id
+          from apidbtuning.OrthologousTranscripts ot
+             , dataset_genes p
+             , apidbtuning.GeneAttributes this_gene
+             , apidbtuning.GeneAttributes other_gene
+          where p.source_id = ot.source_id
+            and ot.source_id = this_gene.source_id
+            and ot.ortho_gene_source_id = other_gene.source_id
+            and this_gene.species = other_gene.species
+            and ot.is_syntenic = 1
+        union
+          select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
+          from dataset_genes p, apidbtuning.GeneAttributes ga
+          where p.source_id = ga.source_id
+            ) psgene,
+           (  SELECT dataset_name,
+                     JSON_ARRAYAGG(
+                       JSON_OBJECT(
+                         'plotName' VALUE plot_name,
+                         'plotType' VALUE plot_type,
+                         'xAxisEntityId' VALUE x_axis_entity_id,
+                         'yAxisEntityId' VALUE y_axis_entity_id,
+                         'xAxisVariableId' VALUE x_axis_variable_id,
+                         'yAxisVariableId' VALUE y_axis_variable_id,
+                         'xMin' VALUE x_min,
+                         'xMax' VALUE x_max,
+                         'yMin' VALUE y_min,
+                         'yMax' VALUE y_max
+                        )
+                       ) AS plot_configs_json
+              FROM apidbtuning.edagenegraph
+              GROUP BY dataset_name
+           ) graph_descrip
+        where ga.source_id = psgene.source_id
+          and psgene.dataset_name = dsnt.name
+          and dsnt.dataset_presenter_id = dp.dataset_presenter_id
+          and graph_descrip.dataset_name = dp.name
+          and dsnt.taxon_id = tn.taxon_id
+          and tn.name_class = 'scientific name'
+          and dsnt.taxon_id = ts.taxon_id
+          and ts.species_taxon_id = sn.taxon_id
+          and sn.name_class = 'scientific name'
+          and ga.genus_species = sn.name
+          and dp.type = 'phenotype'
+) g
+ ]]>
+       </sql>
+
+        </sqlQuery>
 
 
     <sqlQuery name="PhenotypeScoreGraphs" includeProjects="PlasmoDB,UniDB">
@@ -2631,36 +2649,36 @@
       <sql>
         <![CDATA[
           SELECT DISTINCT
-	  	ta.project_id 
+	  	ta.project_id
 		, ae.iedb_id
 		, ta.source_id as transcript_id
-		, ta.gene_source_id as source_id 
-		, mt.sequence 
+		, ta.gene_source_id as source_id
+		, mt.sequence
 		, mt.secondary_identifier as "peptide_source_protein"
 		, concat( ae.start_min, '-', ae.end_max) as location
 		, ta.organism as name
 		, mt.description as "IEDB_Description"
-		,CASE 
+		,CASE
                 WHEN ae.mismatches = 1 THEN 'Yes'
                 WHEN ae.mismatches = 0 THEN 'No'
                 END AS mismatches
-                ,CASE 
+                ,CASE
                 WHEN ae.protein_match = 1 THEN 'Yes'
                 WHEN ae.protein_match = 0 THEN 'No'
-                END AS protein_match 
-                ,CASE 
+                END AS protein_match
+                ,CASE
                 WHEN ae.taxon_match = 1 THEN 'Yes'
                 WHEN ae.taxon_match = 0 THEN 'No'
                 END AS taxon_match
-	FROM  
+	FROM
 		dots.motifaasequence mt
 		, apidb.aasequenceepitope ae
 		, dots.translatedaasequence t
 		, ApidbTuning.transcriptAttributes ta
 	WHERE
 		ae.iedb_id = cast (mt.source_id as int) and
-		ae.aa_sequence_id = t.aa_sequence_id 
-		and ta.protein_source_id = t.source_id 
+		ae.aa_sequence_id = t.aa_sequence_id
+		and ta.protein_source_id = t.source_id
         ]]>
       </sql>
     </sqlQuery>
@@ -4458,53 +4476,38 @@ from apidbTuning.AllGeneProducts
 
 
 
-
-    <sqlQuery name="CrisprPhenotypeGraphsDataTable" isCacheable="false" includeProjects="ToxoDB,UniDB">
-      <column name="source_id"/>
-      <column name="project_id"/>
-      <column name="dataset_id"/>
-      <column name="gene"/>
-      <column name="profile_set_display_name"/>
-      <column name="sample_name"/>
-      <column name="phenotype_score"/>
-      <column name="standard_error"/>
-      <column name="gene_fdr"/>
-      <sql>
-        <![CDATA[
-          SELECT ggp.source_id
-            , ggp.profile_graph_id AS gene
-            , ga.project_id
-            , dnt.dataset_presenter_id AS dataset_id
-            , coalesce(psdi.profile_set_display_name, ps.name) AS profile_set_display_name
-            , pan.name AS sample_name
-            , round(cp.mean_phenotype, 2) AS phenotype_score
-            , round(cp.standard_error, 4) AS standard_error
-            , round(cp.gene_fdr, 4) AS gene_fdr
-          FROM
-            apidb.crisprphenotype cp
-            , apidbtuning.geneattributes ga
-            , study.protocolappnode pan
-            , study.studylink sl
-            , study.study ps
-              LEFT JOIN apidbtuning.profilesetdisplayinfo psdi ON ps.name = psdi.profile_set_name
-            , study.study i
-            , sres.externaldatabaserelease r
-            , sres.externaldatabase d
-            , apidbtuning.datasetnametaxon dnt
-            , apidbtuning.profile p
-            , apidbtuning.geneGroupProfile ggp
-          WHERE ga.na_feature_id = cp.na_feature_id
-            AND p.source_id = ga.source_id
-            AND d.name = p.dataset_name
-            AND cp.protocol_app_node_id = pan.protocol_app_node_id
-            AND pan.protocol_app_node_id = sl.protocol_app_node_id
-            AND sl.study_id = ps.study_id
-            AND ps.investigation_id = i.study_id
-            AND i.external_database_release_id = r.external_database_release_id
-            AND r.external_database_id = d.external_database_id
-            AND d.name = dnt.name
-            AND ggp.profile_graph_id = ga.source_id
-          ORDER BY pan.node_order_num
+          <!-- TODO:  this should be made by some process query? or injection -->
+          <sqlQuery name="EdaPhenotypeGraphsDataTable" isCacheable="false" includeProjects="ToxoDB,UniDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="dataset_id"/>
+            <column name="variable"/>
+            <column name="value"/>
+            <sql>
+            <![CDATA[
+SELECT ga.source_id, ga.project_id, gd.variable, nvl(gd.string_value, nvl(to_char(round(gd.number_value, 4)), to_char(gd.date_value))) AS value, gd.dataset_id
+FROM Apidbtuning.geneattributes ga, (
+SELECT genes.string_value AS gene, ag.display_name AS variable, av.string_value, AV.NUMBER_VALUE , av.date_value, 'tgonGT1_crisprPhenotype_CrisprFunctionalProfiling_RSRC' AS dataset_id
+FROM eda.ATTRIBUTEvalue_SB044A3A170_GNPD@eda av,
+   eda.ATTRIBUTEgraph_SB044A3A170_GNPD@eda ag,
+   (SELECT gnpd_stable_id, string_value
+    FROM eda.ATTRIBUTEvalue_SB044A3A170_GNPD@eda av
+    WHERE attribute_stable_id = 'VAR_bdc8e679') genes
+   WHERE av.attribute_stable_id = ag.stable_id
+   AND AV.GNPD_STABLE_ID = genes.GNPD_STABLE_ID
+   AND AV.ATTRIBUTE_STABLE_ID != 'VAR_bdc8e679'
+union
+SELECT genes.string_value AS gene, ag.display_name AS variable, av.string_value, AV.NUMBER_VALUE , av.date_value, 'tgonGT1_crisprPhenotype_CrisprScreen_RSRC' AS dataset_id
+ FROM eda.ATTRIBUTEvalue_sd4745ea297_GNPD@eda av,
+      eda.ATTRIBUTEgraph_sd4745ea297_GNPD@eda ag,
+   (SELECT gnpd_stable_id, string_value
+    FROM eda.ATTRIBUTEvalue_sd4745ea297_GNPD@eda av
+    WHERE attribute_stable_id = 'VAR_bdc8e679') genes
+   WHERE av.attribute_stable_id = ag.stable_id
+   AND AV.GNPD_STABLE_ID = genes.GNPD_STABLE_ID
+   AND AV.ATTRIBUTE_STABLE_ID != 'VAR_bdc8e679'
+   ) gd
+   WHERE ga.source_id = gd.gene
         ]]>
       </sql>
     </sqlQuery>
