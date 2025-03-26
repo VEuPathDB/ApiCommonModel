@@ -2840,26 +2840,30 @@ WHERE g3.external_database_release_id = edr.external_database_release_id
 
   <query name="gff:apolloTranscript">
 <![CDATA[ 
-SELECT g3.attr attr,
-       g3.apolloproduct apolloproduct,
-       g3.apollopmid apollopmid,
-       g3.apolloevidencecode apolloevidencecode,
-       g3.apolloobsolete apolloobsolete,
-       g3.id_attr as feature_id,
-       g3.type type,
-       '$source' source,
-       g3.seqid name,
-       '1' phase,
-       g3.score score,
-       g3.id_attr parent_id,
-       g3.mapping_start startm,
-       g3.mapping_end end,
-       g3.apolloid apolloid,
-       decode (g3.strand, '+', '+1', '-', '-1', '.') strand,
-      replace( UTL_URL.unescape(g3.attr), ';', '$dlm') atts 
-FROM   apidbtuning.ApolloUpdate g3
-  WHERE  g3.na_sequence_id = $srcfeature_id
-  AND TYPE like '%gene'
+SELECT g3.attr AS attr,
+       g3.apolloproduct AS apolloproduct,
+       g3.apollopmid AS apollopmid,
+       g3.apolloevidencecode AS apolloevidencecode,
+       g3.apolloobsolete AS apolloobsolete,
+       g3.id_attr AS feature_id,
+       g3.type AS type,
+       '$source' AS source,
+       g3.apollotranscript AS name,
+       '1' AS phase,
+       g3.score AS score,
+       g3.id_attr AS parent_id,
+       g3.mapping_start AS startm,
+       g3.mapping_end AS "end",
+       g3.apolloid AS apolloid,
+       CASE
+           WHEN g3.strand = '+' THEN '+1'
+           WHEN g3.strand = '-' THEN '-1'
+           ELSE '.'
+       END AS strand,
+       REPLACE(g3.attr, ';', '$dlm') AS atts
+FROM apidbtuning.ApolloUpdate g3
+WHERE g3.na_sequence_id = $srcfeature_id
+  AND g3.type LIKE '%gene'
   AND g3.mapping_start <= $rend
   AND g3.mapping_end >= $base_start
 ]]>
@@ -2867,64 +2871,60 @@ FROM   apidbtuning.ApolloUpdate g3
 
   <query name="gff:apolloTranscript:bulksubfeatures">
 <![CDATA[
-select apolloproduct, apollopmid, apolloevidencecode, apolloobsolete, feature_id, type, source, name, phase, score, parent_id, startm, end, apolloid, strand, atts  
-FROM( 
-WITH transcripts AS (
-       SELECT g3.attr attr,
-       g3.apolloproduct apolloproduct,
-       g3.apollopmid apollopmid,
-       g3.apolloevidencecode apolloevidencecode,
-       g3.apolloobsolete apolloobsolete,
-       g3.id_attr as feature_id,
-       g3.type type,
-       '$source' source,
-       g3.seqid name,
-       '1' phase,
-       g3.score score,
-       g3.parent_attr parent_id,
-       g3.mapping_start startm,
-       g3.mapping_end end,
-       g3.apolloid apolloid,
-       decode (g3.strand, '+', '+1', '-', '-1', '.') strand,
-      replace( UTL_URL.unescape(g3.attr), ';', '$dlm') atts
-FROM   apidbtuning.ApolloUpdate  g3
-WHERE
- g3.na_sequence_id = $srcfeature_id
-  AND (type = 'exon'
-     OR type = 'UTR'
-     OR type = 'ncRNA'
-     OR type = 'mRNA'
-     OR type = 'CDS')
-  AND g3.mapping_start <= $rend
-  AND g3.mapping_end >= $base_start
+SELECT apolloproduct, apollopmid, apolloevidencecode, apolloobsolete, feature_id, type, source, name, phase, score, parent_id, startm, "end", apolloid, strand, atts  
+FROM (
+  WITH transcripts AS (
+    SELECT g3.attr AS attr,
+           g3.apolloproduct AS apolloproduct,
+           g3.apollopmid AS apollopmid,
+           g3.apolloevidencecode AS apolloevidencecode,
+           g3.apolloobsolete AS apolloobsolete,
+           g3.id_attr AS feature_id,
+           g3.type AS type,
+           '$source' AS source,
+           g3.apollotranscript AS name,
+           '1' AS phase,
+           g3.score AS score,
+           g3.parent_attr AS parent_id,
+           g3.mapping_start AS startm,
+           g3.mapping_end AS "end",
+           g3.apolloid AS apolloid,
+           CASE 
+             WHEN g3.strand = '+' THEN '+1'
+             WHEN g3.strand = '-' THEN '-1'
+             ELSE '.' 
+           END AS strand,
+           REPLACE(g3.attr, ';', '$dlm') AS atts
+    FROM apidbtuning.ApolloUpdate g3
+    WHERE g3.na_sequence_id = $srcfeature_id
+      AND (g3.type IN ('exon', 'UTR', 'ncRNA', 'mRNA', 'CDS'))
+      AND g3.mapping_start <= $rend
+      AND g3.mapping_end >= $base_start
   )
   SELECT * FROM transcripts t
-  --WHERE  t.TYPE !='gene' AND t.TYPE !='exon'
-  --WHERE  t.TYPE !='exon'
-  UNION all
-  select t.attr, 
-        t .apolloproduct, 
-        t.apollopmid, 
-        t.apolloevidencecode, 
-        t.apolloobsolete,
-        t.feature_id,
-        'nc_exon' as type,
-        --CASE WHEN t.TYPE = 'ncRNA' AND p.TYPE = 'exon' THEN 'nc_exon' ELSE p.type END as type,
-        t.source,
-        t.name,
-        t.phase,
-        t.score,
-        t.parent_id,
-        t.startm,
-        t.end,
-        t.apolloid,
-        t.strand,
-        t.atts
-        FROM  transcripts  p, transcripts t
-  WHERE p.feature_id = t.parent_id
-  AND p.TYPE = 'ncRNA' AND t.TYPE = 'exon' 
-  )
- GROUP BY apolloproduct, apollopmid, apolloevidencecode, apolloobsolete, feature_id, type, source, name, phase, score, parent_id, startm, end, apolloid, strand, atts
+  UNION ALL
+  SELECT t.attr, 
+         t.apolloproduct, 
+         t.apollopmid, 
+         t.apolloevidencecode, 
+         t.apolloobsolete,
+         t.feature_id,
+         'nc_exon' AS type,
+         t.source,
+         t.name,
+         t.phase,
+         t.score,
+         t.parent_id,
+         t.startm,
+         t."end",
+         t.apolloid,
+         t.strand,
+         t.atts
+  FROM transcripts p
+  JOIN transcripts t ON p.feature_id = t.parent_id
+  WHERE p.type = 'ncRNA' AND t.type = 'exon'
+) AS combined
+GROUP BY apolloproduct, apollopmid, apolloevidencecode, apolloobsolete, feature_id, type, source, name, phase, score, parent_id, startm, "end", apolloid, strand, atts
 ]]>
   </query>
 
