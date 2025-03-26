@@ -129,8 +129,9 @@ sub processOrganism {
   }
 
   my $orgPublicAbbrev = $strain{$organismAbbrev}->{public};
-
-  &addGenes($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
+  if ($isAnnotated eq 'true'){
+    &addGenes($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
+  }
 }
 
 sub addDatasets {
