@@ -8,8 +8,8 @@ use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
 
-sub getUrl {$_[0]->{url} }
-sub setUrl {$_[0]->{url} = $_[1]}
+#sub getUrl {$_[0]->{url} }
+#sub setUrl {$_[0]->{url} = $_[1]}
 
 
 
@@ -23,14 +23,16 @@ sub new {
     $self->setId($args->{key});
     $self->setLabel($args->{label}); 
     $self->setGlyph($args->{glyph});
-    $self->setUrl($args->{relative_path_to_file});
+#    $self->setUrl($args->{relative_path_to_file});
 
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
 	$store->setQueryParamsHash($args->{query_params});
-        $self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
+        #$self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
+        $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");	
+	$self->setDisplayMode("stacked");
     }
     else {
         # TODO
@@ -55,7 +57,9 @@ sub getJBrowseStyle {
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
     $jbrowseStyle->{color} = "{interproColorFxn}";
-    $jbrowseStyle->{showLabels} = "false";
+    $jbrowseStyle->{showLabels} = JSON::false;
+    $jbrowseStyle->{subParts} = JSON::true;
+    $jbrowseStyle->{label} = "{source} {name}";
     return $jbrowseStyle;
 }
 
@@ -64,7 +68,7 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-    $jbrowseObject->{urlTemplate} = $self->getUrl();
+#    $jbrowseObject->{urlTemplate} = $self->getUrl();
     return $jbrowseObject;
   }
 

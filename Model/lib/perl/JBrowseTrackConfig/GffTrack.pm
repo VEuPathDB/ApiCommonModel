@@ -65,7 +65,7 @@ sub getJBrowseObject{
 
     $jbrowseObject->{onClick} = {content => $onClickContent} if($onClickContent);
     $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => $viewDetailsContent,}];
-    $jbrowseObject->{unsafePopup} = "JSON::true";
+    $jbrowseObject->{unsafePopup} = JSON::true;
     $jbrowseObject->{noncodingType} = "nc_transcript";
 
     return $jbrowseObject;

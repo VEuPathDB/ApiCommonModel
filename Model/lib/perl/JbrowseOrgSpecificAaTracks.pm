@@ -29,7 +29,7 @@ sub processOrganism {
 
 
 #  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-#  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -91,7 +91,7 @@ sub addInterproDomains {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "InterPro Domains",
-                                                                                                label => "NA",
+                                                                                                label => "InterPro Domains",
                                                                                                 query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
@@ -118,7 +118,7 @@ sub addSignalPeptide {
                                                                                                 application_type => $applicationType,
 												summary => $summary,
 												key => "Signal Peptide",
-												label => "NA",
+												label => "Signal Peptide",
 												query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
