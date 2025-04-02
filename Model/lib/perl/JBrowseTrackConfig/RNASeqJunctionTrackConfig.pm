@@ -5,17 +5,8 @@ use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
 
-sub getGlyph {$_[0]->{glyph} }
-sub setGlyph {$_[0]->{glyph} = $_[1]}
-
-sub getUrl {$_[0]->{url} }
-sub setUrl {$_[0]->{url} = $_[1]}
-
 sub getSummary {$_[0]->{summary} }
 sub setSummary {$_[0]->{summary} = $_[1]}
-
-sub getBorderColor {$_[0]->{border_color}}
-sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -35,7 +26,6 @@ sub new {
 
         $self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
         $self->setTrackTypeDisplay("Predicted Intron Junctions");
-#        $self->setGlyph("EbrcTracks/View/FeatureGlyph/AnchoredSegment");
         $self->setId("RNA-Seq Evidence for Introns");
         $self->setLabel("RNA-Seq Evidence for Introns");
         $self->setColor("{gsnapIntronColorFromStrandAndScore}");
@@ -71,11 +61,11 @@ sub getJBrowseObject{
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
-	my $url = $self->getUrl();
+	#my $url = $self->getUrl();
 	my $summary = $self->getSummary();
 
-	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl => "JSON::true", url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"};        
-        $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{gsnapUnifiedIntronJunctionTitleFxn}"}, {label => "Intron Record:  {name}", action => "iframeDialog",hideIframeDialogUrl => "JSON::true", url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"}, {label => "Highlight this Feature"}];
+	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"};        
+        $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{gsnapUnifiedIntronJunctionTitleFxn}"}, {label => "Intron Record:  {name}", action => "iframeDialog",hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"}, {label => "Highlight this Feature"}];
         $jbrowseObject->{fmtMetaValue_Description} =  "function(){return datasetDescription(\"$summary\", \"\");}";
         $jbrowseObject->{maxFeatureScreenDensity} = 0.5;
         $jbrowseObject->{subtracks} = [{featureFilters => {annotated_intron => "Yes", evidence => "Strong Evidence",},visible => 1, label => "Matches Annotation", metadata => {},},{featureFilters => {annotated_intron => "No",evidence => "Strong Evidence",},visible => 1,label => "Unannotated (Strong Evidence)",metadata => {},},{featureFilters => {annotated_intron => "No",evidence => "Weak Evidence",},visible => 0,label => "Unannotated (Weak Evidence)",metadata => {},}];

@@ -43,7 +43,7 @@ sub new {
 
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
-#    $self->setDisplayMode("compact");
+    $self->setDisplayMode("stacked");
 
     return $self;
 }
@@ -53,8 +53,11 @@ sub getJBrowseStyle {
 
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
-    $jbrowseStyle->{color} = "navy";
+#    $jbrowseStyle->{color} = "navy";
+    $jbrowseStyle->{color} = "{signalpColorFxn}";
     $jbrowseStyle->{label} = "NA";
+    $jbrowseStyle->{subfeatureClasses} = {"n-region" => "orange","h-region" => "blue","c-region" => "green"};
+    $jbrowseStyle->{subParts} = JSON::true;
 
     return $jbrowseStyle;
 }
@@ -64,7 +67,7 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-
+ #   $jbrowseObject->{subParts} = JSON::true;
     return $jbrowseObject;
   }
 
