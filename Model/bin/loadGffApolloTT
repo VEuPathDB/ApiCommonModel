@@ -18,6 +18,8 @@ use JSON;
 use Date::Manip;
 use XML::Simple;
 use URI::Escape;
+use Time::HiRes qw ( time );
+use File::Path;
 
 my $dateCmd = "date";
 my $dateStr1 = &runCmd($dateCmd);
@@ -28,13 +30,16 @@ my $NASequenceID;
 my $json;
 my %apolloID;
 
-my ($propFile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd );
+my ($propFile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd, $webServicesDir, $bioContainerName, $outputGffFileName);
 GetOptions("propfile=s" => \$propFile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
            "suffix=s" => \$suffix,
            "prefix=s" => \$prefix,
            "filterValue=s" => \$filterValue,
+           "webServicesDir=s" => \$webServicesDir,
+           "outputGffFileName=s" => \$outputGffFileName, # base name of jbrowse gff file
+           "bioContainerName=s" => \$bioContainerName,  # docker image name for samtools
            "debug!" => \$debug,
 	  );
 die "required parameter missing" unless ($propFile && $instance && $schema);
@@ -63,12 +68,13 @@ my @gffData;
 # Make a hash of the VEuPath organisms of the database instance we're updating
 my %veupathOrganisms;
 my $organismQ = $dbh->prepare(<<SQL) or die "parsing organism query";
-  select distinct organism
-  from GenomicSeqAttributes
+  select distinct ga.organism, name_for_filenames
+  from GenomicSeqAttributes ga, OrganismAttributes oa
+  where ga.organism = oa.organism_name
 SQL
 $organismQ->execute() or die "running organism query";
-while (my ($org) = $organismQ->fetchrow_array()) {
-  $veupathOrganisms{$org} = 1;
+while (my ($org, $nmForFiles) = $organismQ->fetchrow_array()) {
+  $veupathOrganisms{$org} = $nmForFiles;
 }
 $organismQ->finish();
 
@@ -83,7 +89,8 @@ foreach my $item( @$organismJSON){
     my $organism = $item->{commonName};
     my ($veupathId) = $organism =~ /(.*)\s+\[/;
 
-    next unless $veupathOrganisms{$veupathId};
+    my $orgNameForFiles = $veupathOrganisms{$veupathId};
+    next unless $orgNameForFiles;
 
     # Get organism ID
     my $organismIdCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','organism':\"".$organism."\"}' https://apollo-api\.veupathdb\.org/organism/findAllOrganisms --silent --show-error";
@@ -102,6 +109,13 @@ $dbh->commit() or die $dbh->errstr;
 
 my $insertCount = 0;
 
+my $workingDir = "/tmp/agff-" . time;  # milliseconds
+mkdir($workingDir) || die "Failed mkdir $workingDir\n";
+print STDERR "Working dir: $workingDir\n";
+my $sifFile = "$workingDir/biocontainer.sif";
+my  $cmd = "singularity pull $sifFile docker://$bioContainerName";
+system($cmd) && die "Failed running command: $cmd\n";
+
 foreach(@filteredOrganisms){
 
   my $organismName = $_;
@@ -114,12 +128,16 @@ foreach(@filteredOrganisms){
 
   print STDERR "Fetching Apollo GFF from URL \"$getGFFCmd\"\n";
 
-  open (GFF, "$getGFFCmd|") or die "Can't open $getGFFCmd\n";
+  open (APOLLOGFF, "$getGFFCmd|") or die "Can't open $getGFFCmd\n";
+
+  open(OUTPUTGFF, '>', "$workingDir/unsorted.gff");
 
   my @gffArray;
-  while (<GFF>) {
+  while (<APOLLOGFF>) {
     my $line = $_;
 
+    print OUTPUTGFF $line;
+    
     if ($line !~ /^###$/){
       push @gffArray, $line;
     }
@@ -222,11 +240,13 @@ foreach(@filteredOrganisms){
     }
   }
   $dbh->commit() or die $dbh->errstr;
-  close GFF;
-
+  close APOLLOGFF;
+  close OUTPUTGFF;
+  zipAndIndexGff($workingDir, $webServicesDir, $orgNameForFiles, $sifFile, '$outputGffFileName');
 }
 $sequenceIdQ->finish();
 $dbh->disconnect;
+unlink("$workingDir/$sifFile");
 
 sub insertAttribute {
     my ($dbh, $prefix, $suffix, $NASequenceID, $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr, $apolloProduct, $apolloSymbol, $apolloOwner, $apolloGoTerm, $apolloPmid, $apolloTranscriptId, $apolloEvidenceCode, $apolloObsolete, $evidenceCodeAssignment) = @_;
@@ -305,4 +325,23 @@ sub getApolloID {
 sub uniq {
   my %seen;
   return grep { !$seen{$_}++ } @_;
+}
+
+sub zipAndIndexGff {
+  my ($workingDir, $webServicesDir, $org, $sifFile, $outputGffFileName) = @_;
+
+  my $outputGffPath = join('/', $webServicesDir, $org, $outputGffFileName);
+
+  # sort by sequence, location, type
+  my $cmd = "sort -k1,1 -k4,4n -k3,3r $workingDir/unsorted.gff > $outputGffPath";
+  system($cmd) && die "Failed running command: $cmd\n";
+
+  unlink("$workingDir/unsorted.gff");
+
+  $cmd = "singularity exec -bind $webServicesDir/$org:/mnt $sifFile bgzip /mnt/$outputGffFileName";
+  system($cmd) && die "Failed running command: $cmd\n";
+
+  $cmd = "singularity exec -bind $webServicesDir/$org:/mnt $sifFile tabix -p gff /mnt/$outputGffFileName.gz";
+  system($cmd) && die "Failed running command: $cmd\n";
+
 }
