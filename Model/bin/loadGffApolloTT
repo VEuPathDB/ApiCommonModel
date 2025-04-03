@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-#use strict;
+use strict;
 
 use lib "$ENV{GUS_HOME}/lib/perl";
 
@@ -42,7 +42,7 @@ GetOptions("propfile=s" => \$propFile,
            "bioContainerName=s" => \$bioContainerName,  # docker image name for samtools
            "debug!" => \$debug,
 	  );
-die "required parameter missing" unless ($propFile && $instance && $schema);
+die "required parameter missing" unless ($propFile && $instance && $schema && $webServicesDir && $outputGffFileName && $bioContainerName);
 #Extract username and password from propfile
 my $xmlParser = new XML::Simple();
 my $props = $xmlParser->XMLin($propFile);
@@ -59,6 +59,7 @@ createTables($dbh, $prefix, $suffix);
 
 #Extract all organisms in Apollo
 my $organismsCmd = "curl -X POST -F 'username=".$username."' -F 'password=".$passwd."' -L https://apollo-api\.veupathdb\.org/organism/findAllOrganisms --silent --show-error";
+print STDERR "running cmd: $organismsCmd\n";
 my $organismJSONResponse = &runCmd($organismsCmd);
 my $organismJSON = decode_json($organismJSONResponse);
 my %daysSinceRelease;
@@ -68,9 +69,8 @@ my @gffData;
 # Make a hash of the VEuPath organisms of the database instance we're updating
 my %veupathOrganisms;
 my $organismQ = $dbh->prepare(<<SQL) or die "parsing organism query";
-  select distinct ga.organism, name_for_filenames
-  from GenomicSeqAttributes ga, OrganismAttributes oa
-  where ga.organism = oa.organism_name
+  select distinct organism, name_for_filenames
+  from GenomicSeqAttributes 
 SQL
 $organismQ->execute() or die "running organism query";
 while (my ($org, $nmForFiles) = $organismQ->fetchrow_array()) {
@@ -83,10 +83,11 @@ my $sequenceIdQ = $dbh->prepare(<<SQL) or die "parsing organism query";
   select na_sequence_id
   from dots.NaSequence where source_id = ?
 SQL
-
+my $cnt;
 #Get number of days since release and filter organisms
 foreach my $item( @$organismJSON){
     my $organism = $item->{commonName};
+    print STDERR "Getting meta info for $organism\n" if $debug;
     my ($veupathId) = $organism =~ /(.*)\s+\[/;
 
     my $orgNameForFiles = $veupathOrganisms{$veupathId};
@@ -94,6 +95,7 @@ foreach my $item( @$organismJSON){
 
     # Get organism ID
     my $organismIdCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','organism':\"".$organism."\"}' https://apollo-api\.veupathdb\.org/organism/findAllOrganisms --silent --show-error";
+    print STDERR "Running cmd: $organismIdCmd\n" if $debug;
     my $organismIdJSONResponse = &runCmd($organismIdCmd);
     my $organismIdJSON = decode_json($organismIdJSONResponse);
     my $organismId;
@@ -104,7 +106,7 @@ foreach my $item( @$organismJSON){
       insertApolloIdTable($dbh, $prefix, $suffix,  $veupathId, $organism, $organismId);
     }
     push (@filteredOrganisms, $organism);
-  }
+}
 $dbh->commit() or die $dbh->errstr;
 
 my $insertCount = 0;
@@ -118,11 +120,13 @@ system($cmd) && die "Failed running command: $cmd\n";
 
 foreach(@filteredOrganisms){
 
+  print STDERR "Processing organism $_\n" if $debug;
   my $organismName = $_;
 
   my $apolloID = $apolloID{$organismName};
 
-  my ($org, $abbrev) = split (/\[/, $organismName, 2);
+  my ($org) = $organismName =~ /(.*)\s+\[/;
+
   #extract annotations
   my $getGFFCmd = "curl -X POST -H \"Content-Type: application/json\" --data '{'username':'".$username."','password':'".$passwd."','type':'GFF3','organism':\"".$organismName."\",'output':'text'}' https://apollo-api\.veupathdb\.org/IOService/write --silent --show-error";
 
@@ -242,7 +246,7 @@ foreach(@filteredOrganisms){
   $dbh->commit() or die $dbh->errstr;
   close APOLLOGFF;
   close OUTPUTGFF;
-  zipAndIndexGff($workingDir, $webServicesDir, $orgNameForFiles, $sifFile, '$outputGffFileName');
+  zipAndIndexGff($workingDir, $webServicesDir, $veupathOrganisms{$org}, $sifFile, $outputGffFileName);
 }
 $sequenceIdQ->finish();
 $dbh->disconnect;
@@ -257,8 +261,9 @@ SQL
 
 sub createTables {
     my ($dbh, $prefix, $suffix) = @_;
+    print STDERR "Creating ${prefix}ApolloUpdate$suffix Table\n";
 
-    $dbh->do(<<SQL) or die "creating ApolloUpdate table";
+    $dbh->do(<<SQL) or die "failed creating ${prefix}ApolloUpdate$suffix table";
 create table ${prefix}ApolloUpdate$suffix (
    NA_SEQUENCE_ID  numeric(10),
    SeqID           varchar(50),
@@ -289,6 +294,7 @@ SQL
 
 sub insertApolloIdTable {
     my ($dbh, $prefix, $suffix, $veupathId, $organism, $organismID) = @_;
+    print STDERR "Inserting $veupathId into ApolloID Table\n" if $debug;
     $dbh->do(<<SQL) or die "inserting attribute";
     INSERT INTO ${prefix}apolloid$suffix (organism, commonname, apolloid) VALUES ('$veupathId','$organism','$organismID')
 SQL
@@ -296,7 +302,7 @@ SQL
 
 sub createApolloIdTable {
     my ($dbh, $prefix, $suffix) = @_;
-
+    print STDERR "Creating ${prefix}ApolloID$suffix Table\n";
     $dbh->do(<<SQL) or die "creating ApolloID  table";
 create table ${prefix}ApolloID$suffix (
     ORGANISM         VARCHAR(100),
@@ -338,10 +344,11 @@ sub zipAndIndexGff {
 
   unlink("$workingDir/unsorted.gff");
 
-  $cmd = "singularity exec -bind $webServicesDir/$org:/mnt $sifFile bgzip /mnt/$outputGffFileName";
+  $cmd = "singularity exec --bind $webServicesDir/$org:/mnt $sifFile bgzip /mnt/$outputGffFileName";
+  print STDERR "Running cmd: $cmd\n";
   system($cmd) && die "Failed running command: $cmd\n";
 
-  $cmd = "singularity exec -bind $webServicesDir/$org:/mnt $sifFile tabix -p gff /mnt/$outputGffFileName.gz";
+  $cmd = "singularity exec --bind $webServicesDir/$org:/mnt $sifFile tabix -p gff /mnt/$outputGffFileName.gz";
   system($cmd) && die "Failed running command: $cmd\n";
 
 }
