@@ -20,6 +20,7 @@ use XML::Simple;
 use URI::Escape;
 use Time::HiRes qw ( time );
 use File::Path;
+use File::Copy;
 
 my $dateCmd = "date";
 my $dateStr1 = &runCmd($dateCmd);
@@ -30,25 +31,26 @@ my $NASequenceID;
 my $json;
 my %apolloID;
 
-my ($propFile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd, $webServicesDir, $bioContainerName, $outputGffFileName);
+my $outputGffFileName = "apollo.gff";
+
+my ($propFile, $instance, $schema, $suffix, $prefix, $filterValue, $debug,  $username, $passwd);
 GetOptions("propfile=s" => \$propFile,
            "instance=s" => \$instance,
            "schema=s" => \$schema,
            "suffix=s" => \$suffix,
            "prefix=s" => \$prefix,
            "filterValue=s" => \$filterValue,
-           "webServicesDir=s" => \$webServicesDir,
-           "outputGffFileName=s" => \$outputGffFileName, # base name of jbrowse gff file
-           "bioContainerName=s" => \$bioContainerName,  # docker image name for samtools
            "debug!" => \$debug,
 	  );
-die "required parameter missing" unless ($propFile && $instance && $schema && $webServicesDir && $outputGffFileName && $bioContainerName);
+die "required parameter missing" unless ($propFile && $instance && $schema);
 #Extract username and password from propfile
 my $xmlParser = new XML::Simple();
 my $props = $xmlParser->XMLin($propFile);
 my $passwd = $props->{apolloPassword};
 my $username = $props->{apolloUserId};
-die "required parameters userID and password missing from propfile" unless ($passwd && $username);
+my $webServicesDir = $props->{webServicesDir};
+my $bioContainerName = $props->{bioContainerImageName};
+die "required parameters missing from propfile" unless ($passwd && $username && $webServicesDir && $bioContainerName);
 
 my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propFile);
 
@@ -250,7 +252,9 @@ foreach(@filteredOrganisms){
 }
 $sequenceIdQ->finish();
 $dbh->disconnect;
-unlink("$workingDir/$sifFile");
+print STDERR "Cleaning up $workingDir\n" if $debug;
+unlink($sifFile) || die "Can't delete $sifFile";
+rmdir("$workingDir");
 
 sub insertAttribute {
     my ($dbh, $prefix, $suffix, $NASequenceID, $seqID, $source, $type, $start, $end, $score, $strand, $phase, $attributes, $creationDate, $apolloID, $parentAttr, $idAttr, $apolloProduct, $apolloSymbol, $apolloOwner, $apolloGoTerm, $apolloPmid, $apolloTranscriptId, $apolloEvidenceCode, $apolloObsolete, $evidenceCodeAssignment) = @_;
@@ -336,19 +340,21 @@ sub uniq {
 sub zipAndIndexGff {
   my ($workingDir, $webServicesDir, $org, $sifFile, $outputGffFileName) = @_;
 
-  my $outputGffPath = join('/', $webServicesDir, $org, $outputGffFileName);
+  mkdir("$webServicesDir/$org") || die "Failed mkdir($webServicesDir/$org)" unless -e "$webServicesDir/$org";
 
   # sort by sequence, location, type
-  my $cmd = "sort -k1,1 -k4,4n -k3,3r $workingDir/unsorted.gff > $outputGffPath";
+  my $cmd = "sort -k1,1 -k4,4n -k3,3r $workingDir/unsorted.gff > $workingDir/$outputGffFileName";
   system($cmd) && die "Failed running command: $cmd\n";
 
   unlink("$workingDir/unsorted.gff");
 
-  $cmd = "singularity exec --bind $webServicesDir/$org:/mnt $sifFile bgzip /mnt/$outputGffFileName";
+  $cmd = "singularity exec --bind $workingDir:/mnt $sifFile bgzip /mnt/$outputGffFileName";
   print STDERR "Running cmd: $cmd\n";
   system($cmd) && die "Failed running command: $cmd\n";
 
-  $cmd = "singularity exec --bind $webServicesDir/$org:/mnt $sifFile tabix -p gff /mnt/$outputGffFileName.gz";
+  $cmd = "singularity exec --bind $workingDir:/mnt $sifFile tabix -p gff /mnt/$outputGffFileName.gz";
   system($cmd) && die "Failed running command: $cmd\n";
 
+  move("$workingDir/$outputGffFileName.gz", "$webServicesDir/$org/$outputGffFileName.gz") || die "Can't rename $workingDir/$outputGffFileName.gz";
+  move("$workingDir/$outputGffFileName.gz.tbi", "$webServicesDir/$org/$outputGffFileName.gz.tbi") || die "Can't rename $workingDir/$outputGffFileName.gz.tbi";
 }
