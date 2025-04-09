@@ -104,12 +104,13 @@ sub addSignalPeptide {
     
     my $signalPeptideTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/signalP.gff.gz";
+
     my $summary = "Signal peptide predictions by SP-HMM/SP-NN";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "domain:SignalP",
-                                           };
+#    my $queryParams = {
+#                            'seqType' => "protein",
+#                            'feature' => "domain:SignalP",
+#                                           };
 
     $signalPeptideTrack = ApiCommonModel::Model::JBrowseTrackConfig::SignalPeptideTrackConfig->new({
                                                                                                 project_name => $projectName,
@@ -119,7 +120,7 @@ sub addSignalPeptide {
 												summary => $summary,
 												key => "Signal Peptide",
 												label => "Signal Peptide",
-												query_params => $queryParams,
+#												query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $signalPeptideTrack if($signalPeptideTrack);
