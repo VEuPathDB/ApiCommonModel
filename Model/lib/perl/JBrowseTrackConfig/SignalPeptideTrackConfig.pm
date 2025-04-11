@@ -37,13 +37,13 @@ sub new {
 
     $self->setStore($store);
     
-    $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
+#    $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
 
     my $detailsFunction = "{signalpTitleFxn}";
 
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
-#    $self->setDisplayMode("compact");
+#    $self->setDisplayMode("stacked");
 
     return $self;
 }
@@ -53,9 +53,12 @@ sub getJBrowseStyle {
 
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
-    $jbrowseStyle->{color} = "navy";
-    $jbrowseStyle->{label} = "NA";
-
+    $jbrowseStyle->{color} = "{signalpColorFxn}";
+    $jbrowseStyle->{label} = "Signal Peptide";
+#    $jbrowseStyle->{className} = "signal_peptide";
+#    $jbrowseStyle->{subfeatureClasses} = {"n-region" => "orange","h-region" => "blue","c-region" => "green"};
+#    $jbrowseStyle->{subParts} = JSON::true;
+#    $jbrowseStyle->{showSubfeatures} = JSON::true;
     return $jbrowseStyle;
 }
 
@@ -64,7 +67,10 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-
+#    $jbrowseObject->{subParts} = JSON::true;
+    $jbrowseObject->{unsafePopup} = "JSON::true";
+    $jbrowseObject->{subParts} = ["n-region","h-region","c-region"];
+    $jbrowseObject->{topLevelFeatures} = ["SIGNAL","signal_peptide"];
     return $jbrowseObject;
   }
 
@@ -77,6 +83,5 @@ sub getJBrowse2Object{
 
         return $jbrowse2Object;
 }
-
 
 1;
