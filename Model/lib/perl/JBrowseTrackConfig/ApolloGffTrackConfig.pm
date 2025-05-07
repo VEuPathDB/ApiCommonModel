@@ -32,12 +32,32 @@ sub new {
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
 
-    $self->setColor("{processedApolloTranscriptColor}");
-    $self->setBorderColor("{processedTranscriptBorderColor}");
+#    $self->setColor("{processedApolloTranscriptColor}");
+#    $self->setBorderColor("{processedTranscriptBorderColor}");
 
     $self->setDescription("Community annotation represents user provided effort to improve the current gene models and offer alternatives based on -omic level evidence. Users can utilise our Apollo instance for creating and editing functional annotation to be displayed in this track. Only when the status of the gene model is changed to 'Finished' will the model be displayed, normally within 24 hours of the status change.");
 
     return $self
+}
+
+sub getJBrowseStyle {
+   my $self = shift;
+   my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+
+   $jbrowseStyle->{borderColor} = "{processedTranscriptBorderColor}";
+   $jbrowseStyle->{unprocessedTranscriptColor} = "{unprocessedApolloTranscriptColor}";
+   $jbrowseStyle->{color} = "{processedApolloTranscriptColor}";
+   return $jbrowseStyle;
+}
+
+sub getJBrowseObject{
+        my $self = shift;
+
+        my $jbrowseObject = $self->SUPER::getJBrowseObject();
+
+        $jbrowseObject->{impliedUTRs} = "JSON::true";
+
+    return $jbrowseObject;
 }
 
 
