@@ -2155,7 +2155,7 @@ create unique index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
         CREATE TABLE &prefixTranscriptAttributes&1 AS
         WITH genefeat AS (
           SELECT DISTINCT
-            cast(apidb.prefixed_project_id(tn.name, '') as varchar(20)) as project_id,
+            cast(apidb.prefixed_project_id(tn.name, '&prefix') as varchar(20)) as project_id,
             -- first the gene attributes:
             gf.source_id AS gene_source_id,
             gf.na_feature_id AS gene_na_feature_id,
@@ -2682,213 +2682,118 @@ create unique index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
     </sql>
   </tuningTable>
 
-<!-- TODO: add back after LongRead table added to schema
-  <tuningTable name="GeneModelCharMD" prefixEnabled="true">
-    <comment>
-      Stores tuned data for the genemodelchar filter search
-    </comment>
-    <internalDependency name="TranscriptAttributes"/>
-    <internalDependency name="GeneIntronJunction"/>
-    <externalDependency name="apidb.LongReadTranscript"/>
-    <sql>
-      <![CDATA[
-        CREATE TABLE &prefixGeneModelCharMD&1
-         (
-          ontology_term_name,
-          gene_source_id,
-          source_id,
-          taxon_id,
-          string_value,
-          number_value
-         )
-        AS
-        SELECT ontology_term_name, gene_source_id, source_id, taxon_id, coalesce(string_value,'NA'), coalesce(number_value,-1)
-        FROM (  SELECT gene_source_id, source_id, taxon_id,
-                       'transcript_count' as ontology_term_name,
-                       null as string_value, gene_transcript_count as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'transcript_exon_count' as ontology_term_name, null as string_value,
-                       exon_count as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'gene_exon_count' as ontology_term_name, null as string_value,
-                       gene_exon_count as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'is_pseudo' as ontology_term_name, CASE is_pseudo WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END as string_value,
-                       null as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'is_deprecated' as ontology_term_name, CASE is_deprecated WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END as string_value,
-                       null as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'transcript_type' as ontology_term_name, transcript_type as string_value,
-                       null as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id,
-                       'organism' as ontology_term_name, organism as string_value,
-                       null as number_value
-                FROM TranscriptAttributes
-              UNION
-                SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
-                  , string_value, number_value
-                FROM (
-                    select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
-                        'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
-                         null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
-                    from TranscriptAttributes atr
-                    , apidb.longreadtranscript ltr
-                    , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
-                    where ltr.gene_source_id = atr.gene_source_id
-                    AND ltr.transcript_length >= 20
-                    GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
-                ) t
-                WHERE total_reads >= 5
-              UNION
-                SELECT atr.gene_source_id, atr.source_id, atr.taxon_id,
-                'intron_junction' as ontology_term_name, it.string_value string_value,
-                    null as number_value
-                FROM
-                  IntronSupportLevel it
-                  , TranscriptAttributes atr
-                WHERE it.gene_source_id =  atr.gene_source_id
-             UNION
-                SELECT atr.gene_source_id, atr.source_id, atr.taxon_id,
-                'Unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
-                FROM
-                  GeneIntronJunction gj
-                  , TranscriptAttributes atr
-                WHERE gj.gene_source_id =  atr.gene_source_id
-             ) t
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX &prefixGeneModelCharMD_pk&1
-          ON &prefixGeneModelCharMD&1  (ontology_term_name, gene_source_id, source_id, taxon_id, string_value, number_value)
 
-      ]]>
-   </sql>
-  </tuningTable>
--->
-
-<!-- TODO: add back after LongRead table added to schema
+<!-- TODO: add back after LongRead table added to schema.  also fix oracle syntax
 
   <tuningTable name="GeneModelCharOrgMD" prefixEnabled="true">
     <comment>
       Stores tuned data for the genemodelchar filter search. Portal-specific version including taxon names.
     </comment>
     <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="IntronSupportLevel"/>
     <internalDependency name="GeneIntronJunction"/>
     <externalDependency name="apidb.LongReadTranscript"/>
     <sql>
       <![CDATA[
-        CREATE TABLE &prefixGeneModelCharOrgMD&1
-         (
-          ontology_term_name,
-          gene_source_id,
-          source_id,
-          taxon_id,
-          taxon_name,
-          string_value,
-          number_value
-         )
-        AS
-        SELECT ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as varchar(53)),
-               cast(coalesce(string_value,'NA') as varchar(100)), coalesce(number_value,-1)
-        FROM (  select gene_source_id, source_id, taxon_id, organism,
-                       'transcript_count' as ontology_term_name,
-                       null as string_value, gene_transcript_count as number_value
-                from TranscriptAttributes
-              UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'transcript_exon_count' as ontology_term_name, null as string_value,
-                       exon_count as number_value
-                from TranscriptAttributes
-              UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'gene_exon_count' as ontology_term_name, null as string_value,
-                       gene_exon_count as number_value
-                from TranscriptAttributes
-              UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'is_pseudo' as ontology_term_name, CASE is_pseudo WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END as string_value,
-                       null as number_value
-                from TranscriptAttributes
-              UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'is_deprecated' as ontology_term_name, CASE is_deprecated WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END as string_value,
-                       null as number_value
-                from TranscriptAttributes
-              UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
-                from TranscriptAttributes
-              UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
-                from TranscriptAttributes
-             UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'transcript_type' as ontology_term_name, transcript_type as string_value,
-                       null as number_value
-                from TranscriptAttributes
-             UNION
-                select gene_source_id, source_id, taxon_id, organism,
-                       'organism' as ontology_term_name, organism as string_value,
-                       null as number_value
-                from TranscriptAttributes
-             UNION
-                select atr.gene_source_id, atr.source_id, atr.taxon_id,
-                     'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
-                     null as number_value
-                from TranscriptAttributes atr
-                  , apidb.longreadtranscript ltr
-                where
-                ltr.gene_source_id = atr.gene_source_id
-             UNION
-                select atr.gene_source_id, atr.source_id, atr.taxon_id,
-                'intron_junction' as ontology_term_name, gj.annotated_intron string_value,
-                    null as number_value
-                from
-                  GeneIntronJunction gj
-                    ,TranscriptAttributes atr
-                where gj.gene_source_id =  atr.gene_source_id
+create table &prefixGeneModelCharOrgMD&1
+ (
+  ontology_term_name,
+  gene_source_id,
+  source_id,
+  taxon_id,
+  taxon_name,
+  string_value,
+  number_value,
+  CONSTRAINT &prefixGeneModelCharOrgMD_pk&1 PRIMARY KEY
+        (ontology_term_name, gene_source_id, source_id, taxon_id, taxon_name, string_value, number_value)
+ )
+organization index
+nologging
+as
+select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as varchar2(53)),
+       cast(nvl(string_value,'NA') as varchar2(100)), nvl(number_value,-1)
+       from (  select gene_source_id, source_id, taxon_id, organism,
+               'transcript_count' as ontology_term_name,
+               null as string_value, gene_transcript_count as number_value
+        from TranscriptAttributes
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'transcript_exon_count' as ontology_term_name, null as string_value,
+               exon_count as number_value
+        from TranscriptAttributes
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'gene_exon_count' as ontology_term_name, null as string_value,
+               gene_exon_count as number_value
+        from TranscriptAttributes
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'is_pseudo' as ontology_term_name, decode(is_pseudo,1,'Yes',0,'No') as string_value,
+               null as number_value
+        from TranscriptAttributes
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'is_deprecated' as ontology_term_name, decode(is_deprecated,1,'Yes',0,'No') as string_value,
+               null as number_value
+        from TranscriptAttributes
 
-             UNION
-                select atr.gene_source_id, atr.source_id, atr.taxon_id,
-                'Unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
-                from
-                  GeneIntronJunction gj
-                  ,TranscriptAttributes atr
-                where gj.gene_source_id =  atr.gene_source_id
-             ) t
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX &prefixGeneModelCharOrgMD_pk&1
-          ON &prefixGeneModelCharOrgMD&1 (ontology_term_name, gene_source_id, source_id, taxon_id, taxon_name, string_value, number_value)
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
+        from TranscriptAttributes
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
+        from TranscriptAttributes
+     UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'transcript_type' as ontology_term_name, transcript_type as string_value,
+               null as number_value
+        from TranscriptAttributes
+      UNION
+        select gene_source_id, source_id, taxon_id, organism,
+               'organism' as ontology_term_name, organism as string_value,
+               null as number_value
+        from TranscriptAttributes
 
+    UNION
+        SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
+        , string_value, number_value
+        FROM (
+            select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+                'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
+                 null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
+            from TranscriptAttributes atr
+            , apidb.longreadtranscript ltr
+            , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
+            where ltr.gene_source_id = atr.gene_source_id
+            AND ltr.transcript_length >= 20
+            GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
+        )
+        WHERE total_reads >= 5
+
+    UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'intron_junction' as ontology_term_name, it.string_value string_value,
+            null as number_value
+        from
+        IntronSupportLevel it
+        ,TranscriptAttributes atr
+        where it.gene_source_id =  atr.gene_source_id
+
+
+     UNION
+        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
+        from
+        GeneIntronJunction gj
+        ,TranscriptAttributes atr
+        where gj.gene_source_id =  atr.gene_source_id
+     )
       ]]>
     </sql>
   </tuningTable>
+
 -->
 
   <tuningTable name="IntronUtrCoords">
@@ -3468,35 +3373,30 @@ delete from &prefixGeneProduct&1 where product is null
     <intermediateTable name="EstAlignmentNoGene"/>
     <sql>
       <![CDATA[
-        CREATE TABLE EstAlignmentGene AS
+        CREATE UNLOGGED TABLE EstAlignmentGene AS
         SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
                  e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
                  ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
                  ba.is_best_alignment, ba.is_reversed, ba.target_start, ba.target_end,
-                 sequence.source_id AS target_sequence_source_id,
+                 ga.sequence_id AS target_sequence_source_id,
                  least(ba.target_end, ga.gene_end_max)
                  - greatest(ba.target_start, ga.gene_start_min) + 1
                    AS est_gene_overlap_length,
                  ba.query_bases_aligned / (query_sequence.length)
                  * 100 AS percent_est_bases_aligned,
                  ga.gene_source_id AS gene
-        FROM dots.BlatAlignment ba, dots.Est e, dots.AssemblySequence aseq,
-             TranscriptAttributes ga, GenomicSeqAttributes sequence,
-             dots.NaSequence query_sequence, sres.OntologyTerm so
+        FROM dots.BlatAlignment ba, dots.Est e,
+             apidbtuning.TranscriptAttributes ga, 
+             dots.NaSequence query_sequence 
         WHERE e.na_sequence_id = ba.query_na_sequence_id
-          AND aseq.na_sequence_id = ba.query_na_sequence_id
-          AND sequence.na_sequence_id = ba.target_na_sequence_id
-          AND ga.sequence_id = sequence.source_id
+          AND ga.na_sequence_id = ba.target_na_sequence_id
           AND least(ba.target_end, ga.gene_end_max) - greatest(ba.target_start, ga.gene_start_min) >= 0
           AND query_sequence.na_sequence_id = ba.query_na_sequence_id
-          AND query_sequence.sequence_ontology_id = so.ontology_term_id
-          AND so.name = 'EST'
-          AND ba.target_na_sequence_id = sequence.na_sequence_id
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE TABLE EstAlignmentNoGene AS
+        CREATE UNLOGGED TABLE EstAlignmentNoGene AS
         SELECT * from EstAlignmentGene WHERE 1=0 UNION /* define datatype for null column */
         SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
                e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
@@ -7639,35 +7539,36 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
                             AND min_max.node_set_id = sl.node_set_id
                           GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
                         ) t15
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                              SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                  null::numeric as max_value,
-                                  null::numeric as min_value,
-                                  last_value(pan.name) over w1 as max_timepoint,
-                                  first_value(pan.name) over w1 as min_timepoint
-                              FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result
-                              WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                                AND result.protocol_app_node_id = pan.protocol_app_node_id
-                                AND sl.node_set_id = s.node_set_id
-                              WINDOW w1 AS (
-                                PARTITION BY sl.node_set_id, result.na_feature_id
-                                ORDER BY result.value ASC
-                                ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                              )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t16
+-- TO FIX
+--                      UNION ALL
+--                        SELECT * FROM (
+--                          WITH min_max AS (
+--                              SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+--                                  null as max_value,
+--                                  null as min_value,
+--                                  last_value(pan.name) over w1 as max_timepoint,
+--                                  first_value(pan.name) over w1 as min_timepoint
+--                              FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result
+--                              WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+--                                AND result.protocol_app_node_id = pan.protocol_app_node_id
+--                                AND sl.node_set_id = s.node_set_id
+--                              WINDOW w1 AS (
+--                                PARTITION BY sl.node_set_id, result.na_feature_id
+--                                ORDER BY result.value ASC
+--                                ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+--                              )
+--                          )
+--                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+--                              string_agg(coalesce(result.value, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+--                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+--                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result, min_max
+--                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+--                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+--                            AND sl.node_set_id = s.node_set_id
+--                            AND min_max.na_feature_id = result.na_feature_id
+--                            AND min_max.node_set_id = sl.node_set_id
+--                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+--                        ) t16
                     ) gene_profile
                   WHERE ga.na_feature_id = gene_profile.na_feature_id
                 UNION ALL
@@ -7899,6 +7800,7 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
               AND ds.version = r.version
               AND d.external_database_id = r.external_database_id
               AND profile.node_set_id = ps.node_set_id
+              AND ps.external_database_release_id = r.external_database_release_id
           )
           LOOP
             ctrows := ctrows + 1;
@@ -9426,7 +9328,10 @@ sub readClob {
       Stores intron support for introns
     </comment>
     <internalDependency name="GeneModelDump"/>
+    <internalDependency name="GeneIntJuncStats"/>
     <internalDependency name="GeneIntronJunction"/>
+    <!-- TODO:  should NOT use GeneModelDump here.  relpace that with Apidb.intronlocation.  can join to transcript to get intron count per transcript as intermediate tt -->
+        
     <sql>
       <![CDATA[
         create table &prefixIntronSupportLevel&1 as

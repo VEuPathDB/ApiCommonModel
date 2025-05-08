@@ -486,6 +486,8 @@ sub addGenes {
 	       category => "Gene Models",
 	       unsafePopup => JSON::true,
 	       glyph => "NeatCanvasFeatures/View/FeatureGlyph/Gene",
+               noncodingType => ["nc_transcript"],
+               transcriptType => "{geneTranscriptType}",
 	       urlTemplate => $urlTemplate,
 	       maxheight => 4000,
 	       style => {
