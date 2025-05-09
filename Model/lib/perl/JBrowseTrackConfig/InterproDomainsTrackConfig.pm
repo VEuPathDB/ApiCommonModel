@@ -46,7 +46,6 @@ sub new {
 
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
-#    $self->setDisplayMode("compact");
 
     return $self;
 }
@@ -68,7 +67,9 @@ sub getJBrowseObject{
     my $self = shift;
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
-#    $jbrowseObject->{urlTemplate} = $self->getUrl();
+    $jbrowseObject->{featureTooltips} = JSON::true;
+    $jbrowseObject->{showTooltips} = JSON::true;
+    $jbrowseObject->{topLevelFeatures} = "protein_match";
     return $jbrowseObject;
   }
 
