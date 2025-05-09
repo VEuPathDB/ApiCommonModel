@@ -1,8 +1,8 @@
-
-      
-        CREATE TABLE :ORG_ABBREVGenomicSeqAttributes  AS
+:CREATE_AND_POPULATE
         SELECT
-               cast(apidb.prefixed_project_id(tn.name, ':ORG_ABBREV') as varchar(20)) as project_id,
+               :PROJECT_ID as project_id,
+               :ORG_ABBREV as org_abbrev,
+               current_timestamp as modification_date,
                SUBSTR(sequence.source_id, 1, 60) AS source_id, sequence.a_count,
                sequence.c_count, sequence.g_count, sequence.t_count,
                (sequence.length
@@ -22,18 +22,15 @@
                SUBSTR(sequence.chromosome, 1, 20) AS chromosome,
                sequence.external_database_release_id, sequence.sequence_ontology_id,
                sequence.chromosome_order_num, so.source_id as so_id, so.name as sequence_type,
-               coalesce(virtualization.is_top_level, 1) as is_top_level,
+               1 as is_top_level,
                sequence.na_sequence_id, organism.genome_source,
                organism.name_for_filenames, coalesce(msa.has_msa, 0) as has_msa
-        FROM sres.Taxon LEFT JOIN apidb.Organism ON taxon.taxon_id = organism.taxon_id,
+        FROM sres.Taxon LEFT JOIN apidb.Organism ON taxon_id = :TAXON_ID and taxon.taxon_id = organism.taxon_id,
              sres.OntologyTerm so,
              ( SELECT na_sequence_id, source_id, length, chromosome, chromosome_order_num, taxon_id, description,
                       a_count, c_count, g_count, t_count, external_database_release_id, sequence_ontology_id
                FROM dots.ExternalNaSequence
-              UNION
-               SELECT na_sequence_id, source_id, length, chromosome, chromosome_order_num, taxon_id, description,
-                      a_count, c_count, g_count, t_count, external_database_release_id, sequence_ontology_id
-               FROM dots.VirtualSequence
+               WHERE taxon_id = :TAXON_ID
              ) sequence
              LEFT JOIN
              (SELECT drns.na_sequence_id, max(dr.primary_identifier) AS genbank_accession
@@ -53,10 +50,6 @@
               WHERE edr.external_database_id = ed.external_database_id
              ) db ON sequence.external_database_release_id = db.external_database_release_id
              LEFT JOIN
-             (SELECT distinct piece_na_sequence_id, 0 as is_top_level
-              FROM :ORG_ABBREVSequencePieceClosure
-             ) virtualization ON  sequence.na_sequence_id = virtualization.piece_na_sequence_id
-             LEFT JOIN
              (SELECT a_na_sequence_id as na_sequence_id, 1 as has_msa
               FROM apidb.Synteny syn
               GROUP BY a_na_sequence_id
@@ -73,30 +66,6 @@
           AND (sequence.taxon_id::varchar = ':TAXON_IDValue' OR length(':TAXON_IDValue') = 0)
           AND so.name IN ('random_sequence', 'chromosome', 'contig', 'supercontig','mitochondrial_chromosome','plastid_sequence','cloned_genomic','apicoplast_chromosome','maxicircle')
         ORDER BY organism, source_id
-      
-    ;
+     
 
-
-      
-        create unique index pk_SeqAttr_  ON :ORG_ABBREVGenomicSeqAttributes  (lower(source_id), project_id)
-      
-    ;
-
-
-      
-        create unique index SeqAttr_source_id  ON :ORG_ABBREVGenomicSeqAttributes  (source_id)
-      
-    ;
-
-
-      
-        create unique index SeqAttr_naseqid  ON :ORG_ABBREVGenomicSeqAttributes  (na_sequence_id)
-      
-    ;
-
-
-      
-        create unique index SeqAttr_taxsrc_id  ON :ORG_ABBREVGenomicSeqAttributes  (taxon_id, source_id)
-      
-    ;
-
+:DECLARE_PARTITION;
