@@ -1,6 +1,4 @@
-
-      
-        CREATE UNLOGGED TABLE NodesWithTypes AS
+        CREATE UNLOGGED TABLE :SCHEMA.NodesWithTypes AS
         SELECT pn.pathway_id
           , CASE WHEN pa.name IS NOT NULL THEN pa.name ELSE pn.display_label END AS display_label
           , pa.url
@@ -17,7 +15,7 @@
           , NULL AS default_structure
         FROM sres.pathwaynode pn
           INNER JOIN sres.ontologyterm ot ON pn.pathway_node_type_id = ot.ontology_term_id
-          LEFT JOIN PathwayAttributes pa ON pn.display_label = pa.source_id
+          LEFT JOIN :SCHEMA.PathwayAttributes pa ON pn.display_label = pa.source_id
         WHERE ot.name = 'metabolic process'
         UNION ALL
         SELECT pn.pathway_id
@@ -37,7 +35,7 @@
         FROM sres.pathwaynode pn
           INNER JOIN sres.ontologyterm ot ON pn.pathway_node_type_id = ot.ontology_term_id
           LEFT JOIN sres.enzymeclass ec ON pn.row_id = ec.enzyme_class_id
-          LEFT JOIN PathwayNodeGene tp ON pn.pathway_node_id = tp.pathway_node_id
+          LEFT JOIN :SCHEMA.PathwayNodeGene tp ON pn.pathway_node_id = tp.pathway_node_id
         WHERE ot.name = 'enzyme'
         GROUP BY pn.pathway_id
           , pn.display_label
@@ -83,26 +81,20 @@
             AND s.default_structure = 'Y'
           ) st ON c.chebi_accession = st.compound
         WHERE ot.name = 'molecular entity'
-      
     ;
 
-
-      
-        CREATE UNLOGGED TABLE ReactionsWithReversibility AS
+        CREATE UNLOGGED TABLE :SCHEMA.ReactionsWithReversibility AS
         SELECT DISTINCT spr.pathway_relationship_id
         , tpr.is_reversible
         , tpr.reaction_source_id
         FROM sres.pathwayrelationship spr
         , apidb.pathwayreactionrel prr
-        , PathwayReactions tpr
+        , :SCHEMA.PathwayReactions tpr
         WHERE prr.pathway_relationship_id = spr.pathway_relationship_id
         AND tpr.reaction_id = prr.pathway_reaction_id
-      
-    ;
+     ;
 
-
-      
-        CREATE UNLOGGED TABLE EnzymeEdges AS
+        CREATE UNLOGGED TABLE :SCHEMA.EnzymeEdges AS
         SELECT DISTINCT nwt.pathway_id AS pathway_id
           , nwt.pathway_node_id AS e_id
           , nwt.type
@@ -113,9 +105,9 @@
           , i.associated_node_id || '_' || o.node_id || '_' || rri.is_reversible || '_' || rro.is_reversible as io
         FROM sres.pathwayrelationship i
           , sres.pathwayrelationship o
-          , NodesWithTypes nwt
-          , ReactionsWithReversibility rri
-          , ReactionsWithReversibility rro
+          , :SCHEMA.NodesWithTypes nwt
+          , :SCHEMA.ReactionsWithReversibility rri
+          , :SCHEMA.ReactionsWithReversibility rro
         WHERE i.node_id = nwt.pathway_node_id
           AND o.associated_node_id = nwt.pathway_node_id
           AND i.pathway_relationship_id = rri.pathway_relationship_id
@@ -123,12 +115,9 @@
           AND nwt.type = 'enzyme'
           AND rri.is_reversible = rro.is_reversible
           AND rri.reaction_source_id = rro.reaction_source_id
-      
-    ;
+          ;
 
-
-      
-        CREATE UNLOGGED TABLE ParentNodes AS
+        CREATE UNLOGGED TABLE :SCHEMA.ParentNodes AS
         WITH AllEnzymeEdges AS (
             SELECT string_agg(io, ',' ORDER BY io) AS all_edges
             , e_id
@@ -141,7 +130,7 @@
             SELECT pathway_id
             , all_edges
             , string_agg(e_id::varchar, '_' ORDER BY e_id) AS parent
-            FROM AllEnzymeEdges
+            FROM :SCHEMA.AllEnzymeEdges
             GROUP BY pathway_id
             , all_edges
             HAVING COUNT (*) > 1
@@ -150,26 +139,20 @@
         FROM pn
         , AllEnzymeEdges aee
         WHERE aee.all_edges = pn.all_edges
-      
     ;
 
-
-      
-        CREATE UNLOGGED TABLE NodesWithParents AS
+        CREATE UNLOGGED TABLE :SCHEMA.NodesWithParents AS
         SELECT DISTINCT ee.e_id AS pathway_node_id
           , pn.parent
           , ee.type AS node_type
           , ee.pathway_id
-        FROM EnzymeEdges ee
-          , ParentNodes pn
+        FROM :SCHEMA.EnzymeEdges ee
+          , :SCHEMA.ParentNodes pn
         WHERE pn.pathway_id = ee.pathway_id
           AND ee.e_id = pn.e_id
-      
     ;
-
-
       
-        CREATE UNLOGGED TABLE EnzymeReactions AS
+        CREATE UNLOGGED TABLE :SCHEMA.EnzymeReactions AS
         SELECT DISTINCT pn.PATHWAY_NODE_ID node_id
           , pr.SOURCE_ID AS reaction_source_id
         FROM sres.pathwaynode pn
@@ -181,28 +164,22 @@
           AND prr.PATHWAY_RELATIONSHIP_ID = prel.PATHWAY_RELATIONSHIP_ID
           AND pr.PATHWAY_REACTION_ID = prr.PATHWAY_REACTION_ID
           AND ot.name = 'enzyme'
-          AND pn.PATHWAY_NODE_TYPE_ID = ot.ONTOLOGY_TERM_ID
-      
+          AND pn.PATHWAY_NODE_TYPE_ID = ot.ONTOLOGY_TERM_ID      
     ;
-
-
       
-        CREATE UNLOGGED TABLE ParentsForEdges AS
+        CREATE UNLOGGED TABLE :SCHEMA.ParentsForEdges AS
         SELECT ee.e_id
             , ee.m1_id
             , ee.ir1
             , ee.m2_id
             , ee.ir2
             , np.parent
-        FROM EnzymeEdges ee
-            , NodesWithParents np
+        FROM :SCHEMA.EnzymeEdges ee
+            , :SCHEMA.NodesWithParents np
         WHERE ee.e_id = np.pathway_node_id
-      
     ;
 
-
-      
-        CREATE TABLE PathwayEdges  AS
+        CREATE TABLE :SCHEMA.PathwayEdges  AS
         SELECT pa.source_id
           , pa.pathway_source
           , rel.*
@@ -211,16 +188,16 @@
             , coalesce(pe.parent, ee.e_id::varchar) AS source
             , ee.m1_id::varchar AS target
             , max(ee.ir1) AS is_reversible
-          FROM EnzymeEdges ee
-            LEFT JOIN ParentsForEdges pe ON ee.e_id = pe.e_id
+          FROM :SCHEMA.EnzymeEdges ee
+            LEFT JOIN :SCHEMA.ParentsForEdges pe ON ee.e_id = pe.e_id
           GROUP BY ee.pathway_id, ee.m1_id, coalesce(pe.parent, ee.e_id::varchar)
           UNION
           SELECT DISTINCT ee.pathway_id
             , ee.m2_id::varchar AS source
             , coalesce(pe.parent, ee.e_id::varchar) AS target
             , max(ee.ir2) AS is_reversible
-          FROM EnzymeEdges ee
-            LEFT JOIN ParentsForEdges pe ON ee.e_id = pe.e_id
+          FROM :SCHEMA.EnzymeEdges ee
+            LEFT JOIN :SCHEMA.ParentsForEdges pe ON ee.e_id = pe.e_id
           GROUP BY ee.pathway_id, ee.m2_id, coalesce(pe.parent, ee.e_id::varchar)
           UNION
           SELECT pn1.pathway_id
@@ -241,12 +218,9 @@
         ) rel
         , PathwayAttributes pa
         WHERE pa.pathway_id = rel.pathway_id
-      
     ;
-
-
-      
-        CREATE TABLE PathwayNodes  AS
+     
+        CREATE TABLE :SCHEMA.PathwayNodes  AS
         SELECT pa.source_id
           , pa.pathway_source
           , pn.display_label
@@ -280,27 +254,40 @@
               , type AS node_type
               , ee.pathway_id
               , er.reaction_source_id
-            FROM EnzymeEdges ee
-              INNER JOIN EnzymeReactions er ON er.node_id = ee.e_id
-              LEFT JOIN NodesWithParents nwp ON ee.e_id = nwp.pathway_node_id
+            FROM :SCHEMA.EnzymeEdges ee
+              INNER JOIN :SCHEMA.EnzymeReactions er ON er.node_id = ee.e_id
+              LEFT JOIN :SCHEMA.NodesWithParents nwp ON ee.e_id = nwp.pathway_node_id
             UNION
             SELECT nwp.parent
               , NULL
               , 'nodeOfNodes'
               , pathway_id
               , NULL
-            FROM NodesWithParents nwp
+            FROM :SCHEMA.NodesWithParents nwp
             UNION
             SELECT nwt.pathway_node_id::varchar AS pathway_node_id
               , NULL AS parent
               , nwt.type
               , nwt.pathway_id
               , NULL
-            FROM NodesWithTypes nwt
+            FROM :SCHEMA.NodesWithTypes nwt
             WHERE nwt.type != 'enzyme'
           ) nodes_with_parents
-          INNER JOIN PathwayAttributes pa ON nodes_with_parents.pathway_id = pa.pathway_id
-          LEFT JOIN NodesWithTypes pn ON nodes_with_parents.pathway_node_id = pn.pathway_node_id::varchar
-      
+          INNER JOIN :SCHEMA.PathwayAttributes pa ON nodes_with_parents.pathway_id = pa.pathway_id
+          LEFT JOIN :SCHEMA.NodesWithTypes pn ON nodes_with_parents.pathway_node_id = pn.pathway_node_id::varchar
     ;
+
+drop table :SCHEMA.NodesWithTypes;
+drop table :SCHEMA.ReactionsWithReversibility;
+drop table :SCHEMA.EnzymeEdges;
+drop table :SCHEMA.ParentNodes;
+drop table :SCHEMA.NodesWithParents;
+drop table :SCHEMA.EnzymeReactions;
+drop table :SCHEMA.ParentsForEdges;
+drop table :SCHEMA.ParentsForEdges;
+
+
+
+
+
 
