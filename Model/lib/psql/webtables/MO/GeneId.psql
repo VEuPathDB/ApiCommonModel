@@ -1,0 +1,265 @@
+:CREATE_AND_POPULATE
+
+      
+        CREATE TABLE :ORG_ABBREVGeneId  AS
+        SELECT substr(mapping.id, 1, 100) as id, mapping.gene, cast (0 as NUMERIC(1)) as unique_mapping,
+               SUBSTR(string_agg(distinct union_member,'; ' order by union_member), 1, 100) as union_member,
+               SUBSTR(string_agg(distinct database_name,'; ' order by database_name), 1, 200) as database_name
+        FROM (SELECT substr(t.protein_id, 1, nullif(position('.' IN t.protein_id) - 1, -1)) AS id,
+                     gf.source_id AS gene,
+                     'Transcript.protein_id before dot' as union_member, ed.name as database_name /* dots.Transcript.protein_id, trimmed at period */
+              FROM dots.Transcript t, dots.GeneFeature gf,
+                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+              WHERE t.parent_id = gf.na_feature_id
+                AND substr(t.protein_id, 1, nullif(position('.' IN t.protein_id) - 1, -1)) IS NOT NULL
+                AND gf.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+             UNION
+              SELECT t.protein_id AS id,
+                     gf.source_id AS gene,
+                     'Transcript.protein_id' as union_member, ed.name as database_name /* dots.Transcript.protein_id */
+              FROM dots.Transcript t, dots.GeneFeature gf,
+                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+              WHERE t.parent_id = gf.na_feature_id
+                AND t.protein_id IS NOT NULL
+                AND gf.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+             UNION
+              SELECT dr.primary_identifier AS id,
+                     gf.source_id AS gene,
+                     'DbRef.primary_identifier' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier */
+              FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                   sres.ExternalDatabase ed
+              WHERE dr.primary_identifier IS NOT NULL
+                AND gf.na_feature_id = drnf.na_feature_id
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id
+                      = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                -- CHECK AND FIX
+                --AND NOT (ed.name in ('NRDB_gb_dbXRefBySeqIdentity','NRDB_ref_dbXRefBySeqIdentity')
+                --                          AND NOT REGEXP_LIKE (dr.primary_identifier, '\D') )
+                AND NOT ed.name in ('NRDB_gb_dbXRefBySeqIdentity','NRDB_ref_dbXRefBySeqIdentity')
+                AND NOT edr.id_type = 'synonym'
+             UNION
+              SELECT dr.primary_identifier AS id,
+                     gf.source_id AS gene,
+                     'DbRef.primary_identifier on Transcript' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier */
+              FROM dots.GeneFeature gf, dots.Transcript t, dots.DbRefNaFeature drnf,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                   sres.ExternalDatabase ed
+              WHERE dr.primary_identifier IS NOT NULL
+                AND gf.na_feature_id = t.parent_id
+                AND t.na_feature_id = drnf.na_feature_id
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id
+                      = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                -- CHECK AND FIX
+                --AND NOT (ed.name in ('NRDB_gb_dbXRefBySeqIdentity','NRDB_ref_dbXRefBySeqIdentity')
+                --                     AND NOT REGEXP_LIKE (dr.primary_identifier, '\D') )
+                AND NOT ed.name in ('NRDB_gb_dbXRefBySeqIdentity','NRDB_ref_dbXRefBySeqIdentity')
+             UNION
+              SELECT dr.primary_identifier AS id,
+                     gf.source_id AS gene,
+                     'DbRef.primary_identifier on Gene' as union_member, ed.name as database_name
+              FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                   sres.ExternalDatabase ed
+              WHERE dr.primary_identifier IS NOT NULL
+                AND gf.na_feature_id = drnf.na_feature_id
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                AND ed.name ='RefSeq_gene_name'
+             UNION
+              SELECT dr.primary_identifier AS id,
+                     gf.source_id AS gene,
+                     'VectorBase alternate names' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier */
+              FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                   sres.ExternalDatabase ed
+              WHERE dr.primary_identifier IS NOT NULL
+                AND gf.na_feature_id = drnf.na_feature_id
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id
+                      = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                and ed.name in ('VB_Community_Annotation', 'VB_Community_Symbol') /* vectorbase alt names  */
+             UNION
+             SELECT dr.primary_identifier AS id,
+                     gf.source_id AS gene,
+                     'synonym' as union_member, ed.name as database_name
+              FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                   sres.ExternalDatabase ed
+              WHERE dr.primary_identifier IS NOT NULL
+                AND gf.na_feature_id = drnf.na_feature_id
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                AND edr.id_type  = 'synonym'
+             UNION
+              SELECT dr.secondary_identifier AS id,
+                     gf.source_id AS gene,
+                     'DbRef.secondary_identifier' as union_member, ed.name as database_name /* sres.DbRef.secondary_identifier */
+              FROM dots.GeneFeature gf, dots.DbRefNaFeature drnf,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                   sres.ExternalDatabase ed
+              WHERE dr.secondary_identifier IS NOT NULL
+                AND gf.na_feature_id = drnf.na_feature_id
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id
+                      = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                AND ed.name IN ('NRDB_gb_dbXRefBySeqIdentity',
+                                'NRDB_pdb_dbXRefBySeqIdentity',
+                                'NRDB_ref_dbXRefBySeqIdentity',
+                                'NRDB_sp_dbXRefBySeqIdentity',
+                                'Predicted protein structures','Pf_predictedProteinStructures_RSRC',
+                                'GenBank')
+             UNION
+              SELECT dr.primary_identifier AS id,
+                     gf.source_id AS gene,
+                     'genbank DbRef.primary_identifier' as union_member, ed.name as database_name /* sres.DbRef.primary_identifier for Genbank records */
+              FROM dots.GeneFeature gf, dots.Transcript t, dots.DbRefNaSequence drns,
+                   sres.DbRef dr, sres.ExternalDatabaseRelease edr,
+                    sres.ExternalDatabase ed
+              WHERE gf.na_feature_id = t.parent_id
+                AND t.na_sequence_id = drns.na_sequence_id
+                AND drns.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                AND ed.name = 'GenBank'
+             UNION
+              SELECT pred_loc.feature_source_id AS id,
+                     gene_loc.feature_source_id AS gene,
+                     'overlapping predicted gene source_id' as union_member, ed.name as database_name /* dots.GeneFeature.source_id for predicted genes that overlap */
+              FROM apidb.FeatureLocation gene_loc, apidb.FeatureLocation pred_loc,
+                   sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+              WHERE pred_loc.feature_type = 'GenePrediction'
+                AND gene_loc.feature_type = 'GeneFeature'
+                AND pred_loc.na_sequence_id = gene_loc.na_sequence_id
+                AND gene_loc.start_min <= pred_loc.end_max
+                AND gene_loc.end_max >= pred_loc.start_min
+                AND pred_loc.is_reversed = gene_loc.is_reversed
+                AND pred_loc.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+             UNION
+              SELECT ng.name AS id, gf.source_id AS gene,
+                     'NaGene' as union_member, ed.name as database_name /* dots.NaGene.name */
+              FROM dots.GeneFeature gf, dots.NaFeatureNaGene nfng, dots.NaGene ng,
+                   sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+              WHERE gf.na_feature_id = nfng.na_feature_id
+                AND ng.na_gene_id = nfng.na_gene_id
+                AND gf.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+             UNION
+              SELECT source_id AS id, source_id AS gene,
+                     'same ID' as union_member, ed.name as database_name /* same ID (reflexive mapping) */
+              FROM dots.GeneFeature gf,
+                   sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+              WHERE gf.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+             UNION
+              SELECT n.name AS id, gf.source_id AS gene,
+                     'gene name' as union_member, d.name as database_name -- apidb.GeneFeatureName.name
+              from dots.genefeature gf, sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+                   (  select na_feature_id, name
+                      from apidb.GeneFeatureName
+                      where is_preferred = 1
+                    EXCEPT
+                      -- suppress gene/name associations from the *DELETED_RSRC databases
+                      select gfn.na_feature_id, gfn.name
+                      from apidb.GeneFeatureName gfn,
+                           sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+                      where gfn.external_database_release_id = edr.external_database_release_id
+                        and ed.external_database_id = edr.external_database_id
+                        and ed.name like '%DELETED_RSRC'
+                   ) n
+              where n.na_feature_id = gf.na_feature_id
+                and gf.external_database_release_id = r.external_database_release_id
+                and r.external_database_id = d.external_database_id
+             UNION
+              select dr.primary_identifier as id,
+                     gf.source_id as gene,
+                     'AA feature DbRef primary ID' as union_member,
+                     ed.name as database_name /* DbRef.primary_identifier mapped through DbRefAaFeature */
+              from dots.GeneFeature gf, dots.Transcript t, dots.TranslatedAaFeature taf,
+                   dots.DbRefAaFeature draf,  sres.DbRef dr,
+                   sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+              where gf.na_feature_id = t.parent_id
+                and t.na_feature_id = taf.na_feature_id
+                and taf.aa_feature_id = draf.aa_feature_id
+                and draf.db_ref_id = dr.db_ref_id
+                and dr.external_database_release_id = edr.external_database_release_id
+                and edr.external_database_id = ed.external_database_id
+                and ed.name
+                    not in ('INTERPRO', 'PFAM', 'PIRSF', 'PRODOM', 'PROSITEPROFILES',
+                            'SMART', 'SUPERFAMILY', 'TIGRFAM', 'CDD','HAMAP','HMMPANTHER',
+                            'PRINTS','SCANPROSITE','SFLD')
+            ) mapping,
+              dots.GeneFeature gf, dots.NaSequence ns
+        WHERE mapping.gene = gf.source_id
+          AND gf.na_sequence_id = ns.na_sequence_id
+          AND (ns.taxon_id::varchar = ':TAXON_IDValue' or length(':TAXON_IDValue') = 0)
+          AND (gf.is_predicted != 1 OR gf.is_predicted is null)
+        GROUP BY mapping.id, mapping.gene
+      
+    
+:DECLARE_PARTITION;
+
+
+      
+        INSERT INTO :ORG_ABBREVGeneId 
+                    (id, gene, unique_mapping, union_member, database_name)
+        WITH munge
+             AS (SELECT DISTINCT
+                        regexp_replace(id, '\.\d\d?$', '') as id,
+                        gene, unique_mapping, union_member, database_name
+                 FROM :ORG_ABBREVGeneId 
+                -- CHECK AND FIX
+                 --WHERE regexp_like(id, '(.*)\.\d\d?$')
+                 )
+        SELECT id, gene, 0 as unique_mapping, 'base ID' as union_member, database_name
+        FROM munge
+        WHERE id NOT IN (SELECT id FROM :ORG_ABBREVGeneId )
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE :ORG_ABBREVOneGeneIds (lower_id) AS
+        SELECT lower_id
+        FROM (SELECT DISTINCT lower(id) as lower_id, gene
+              FROM :ORG_ABBREVGeneId 
+        ) t
+        GROUP BY lower_id
+        HAVING count(*) = 1
+      
+    ;
+
+
+      
+        CREATE UNIQUE INDEX gix _pk ON :ORG_ABBREVOneGeneIds (lower_id)
+
+      
+    ;
+
+
+      
+        UPDATE :ORG_ABBREVGeneId 
+        SET unique_mapping = 1
+        WHERE id = gene
+      
+    ;
+
+
+      
+        UPDATE :ORG_ABBREVGeneId 
+        SET unique_mapping = 1
+        WHERE lower(id) IN (select lower_id from :ORG_ABBREVOneGeneIds)
+      
+    ;
+

@@ -1,0 +1,28 @@
+:CREATE_AND_POPULATE
+
+      
+        CREATE TABLE Taxonomy  as
+        WITH RECURSIVE cte AS (
+          WITH tax AS(
+              SELECT t.taxon_id, t.parent_id, t.ncbi_tax_id,
+                cast(tn.name as varchar(80)) as name,
+                cast(t.rank as varchar(24)) as rank
+              FROM sres.Taxon t, sres.TaxonName tn
+              WHERE t.taxon_id = tn.taxon_id
+                  AND tn.name_class = 'scientific name'
+          )
+          SELECT tax.*, name as organism, ARRAY[taxon_id::numeric] as path
+          FROM tax
+          WHERE name IN (SELECT DISTINCT organism FROM GeneAttributes)
+          UNION
+          SELECT tax.*, cte.organism, cte.path || tax.taxon_id as path
+          FROM tax, cte
+          WHERE cte.parent_id = tax.taxon_id
+              AND tax.name != 'root'
+        )
+        SELECT taxon_id, parent_id, ncbi_tax_id, name, rank, organism, row_number() over() as orderNum
+        FROM (SELECT cte.* FROM cte ORDER BY path) t
+      
+    
+:DECLARE_PARTITION;
+

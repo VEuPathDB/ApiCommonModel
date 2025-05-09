@@ -1,0 +1,48 @@
+
+      
+        CREATE TABLE :ORG_ABBREVSequencePieceClosure  AS
+        SELECT sp.sequence_piece_id,
+            sp.virtual_na_sequence_id,
+            sp.piece_na_sequence_id,
+            sp.sequence_order,
+            sp.distance_from_left,
+            sp.uncertainty,
+            sp.strand_orientation,
+            sp.start_position,
+            sp.end_position,
+            sp.modification_date,
+            1 AS edge_level
+        FROM dots.SequencePiece sp, dots.NaSequence ns
+        WHERE sp.piece_na_sequence_id = ns.na_sequence_id
+              AND (ns.taxon_id::varchar = ':TAXON_IDValue' OR length(':TAXON_IDValue') = 0)
+      
+    ;
+
+
+      
+        /* known issue: this should be run not just once, but iteratively
+           until it doesn't create new records.  Currently (7/2008),
+           SequencePieces aren't nested even once. */
+        INSERT INTO :ORG_ABBREVSequencePieceClosure 
+                    (edge_level, virtual_na_sequence_id, piece_na_sequence_id,
+                     distance_from_left, strand_orientation, modification_date, 
+                     start_position, end_position, sequence_order, sequence_piece_id)
+        SELECT 2, higher.virtual_na_sequence_id, lower.piece_na_sequence_id,
+               higher.distance_from_left,
+               case
+                 when coalesce(higher.strand_orientation, '+') = coalesce(lower.strand_orientation, '+')
+                 then '+'
+                 else '-'
+               end as strand_orientation,
+               now(),
+               higher.start_position - lower.distance_from_left, 
+               higher.end_position - lower.distance_from_left, 
+               higher.sequence_order,
+               nextval('dots.sequencepiece_sq')
+        FROM :ORG_ABBREVSequencePieceClosure  higher, :ORG_ABBREVSequencePieceClosure  lower
+        WHERE higher.piece_na_sequence_id = lower.virtual_na_sequence_id
+         AND higher.start_position >= lower.start_position + lower.distance_from_left
+         AND higher.end_position <= lower.end_position + lower.distance_from_left
+      
+    ;
+

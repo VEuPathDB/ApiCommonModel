@@ -1,0 +1,141 @@
+
+      
+        CREATE TABLE PathwayReactions  AS
+        SELECT o.*
+        , CASE WHEN o.expasy_url IS NOT NULL THEN '<a href="' || o.expasy_url || '">' || o.enzyme || '</a>' ELSE o.enzyme END as expasy_html
+        FROM (
+          SELECT i.*
+          , CASE WHEN i.enzyme like '%.%.%.%' and i.enzyme != '-.-.-.-'
+            THEN
+              'http://enzyme.expasy.org/cgi-bin/enzyme/enzyme-search-ec?field1='
+              || ec.ec_number_1
+              || CASE ec.ec_number_2 WHEN null THEN null ELSE chr(38) || 'field2=' || ec.ec_number_2 END
+              || CASE ec.ec_number_3 WHEN null THEN null ELSE chr(38) || 'field3=' || ec.ec_number_3 END
+              || CASE ec.ec_number_4 WHEN null THEN null ELSE chr(38) || 'field4=' || ec.ec_number_4 END
+            ELSE reaction_url END as expasy_url
+          , ec.description as enzyme_description
+          FROM (
+            SELECT
+              reaction_id
+              , reaction_source_id
+              , reaction_url
+              , ext_db_name
+              , ext_db_version
+              , enzyme
+              , substrates_html || ' ' || sign || ' ' || products_html as equation_html
+              , substrates_text || ' ' || sign || ' ' || products_text as equation_text
+              , case when sign = '<=>' then 1 else 0 end as is_reversible
+              , substrates_text
+              , products_text
+            FROM (
+              SELECT
+                reaction_id
+                , reaction_source_id
+                , reaction_url
+                , ext_db_name
+                , ext_db_version
+                , enzyme
+                , (case when (string_agg (case when type_list like '%substrate%' then compound end, ',' order by compound)) = (string_agg (case when type_list like '%product%' then compound end, ',' order by compound)) or is_reversible = 1 then '<=>' else '=>' end) as sign
+                , string_agg(case when type like '%substrate%' then compound_url end, ' + ' order by compound_url) as substrates_html
+                , string_agg(case when type like '%substrate%' then compound end, ' + ' order by compound) as substrates_text
+                , string_agg(case when type like '%product%' then compound_url end, ' + ' order by compound_url) as products_html
+                , string_agg(case when type like '%product%' then compound end, ' + ' order by compound) as products_text
+              FROM (
+                WITH rep AS (
+                  SELECT DISTINCT
+                    pr.PATHWAY_REACTION_ID as reaction_id
+                    , pr.SOURCE_ID as reaction_source_id
+                    , pn.DISPLAY_LABEL as enzyme
+                    , coalesce(ca.compound_name, pc.compound_source_id) as compound
+                    , prel.is_reversible as is_reversible_og
+                    , last_value(prel.is_reversible) OVER (partition by pr.pathway_reaction_id ORDER BY prel.is_reversible ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING ) as is_reversible
+                    , first_value(pc.type) over (partition by pr.pathway_reaction_id, pr.SOURCE_ID, pn.DISPLAY_LABEL, prel.IS_REVERSIBLE, coalesce(pc.chebi_accession, pc.compound_source_id), coalesce(ca.compound_name, pc.compound_source_id) ORDER BY pc.pathway_id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) as type
+                  FROM
+                    sres.pathway p
+                    , apidb.pathwayreaction pr
+                    , APIDB.PATHWAYREACTIONREL prr
+                    , SRES.PATHWAYNODE pn
+                    , SRES.PATHWAYRELATIONSHIP prel
+                    , SRES.ONTOLOGYTERM ot
+                    , PathwayCompounds pc
+                    LEFT JOIN CompoundAttributes ca ON pc.chebi_accession = ca.source_id
+                  WHERE p.PATHWAY_ID = prr.PATHWAY_ID
+                    AND pr.PATHWAY_REACTION_ID = prr.PATHWAY_REACTION_ID
+                    AND prr.PATHWAY_RELATIONSHIP_ID = prel.PATHWAY_RELATIONSHIP_ID
+                    AND prel.NODE_ID = pn.PATHWAY_NODE_ID
+                    AND ot.name = 'enzyme'
+                    AND ot.ONTOLOGY_TERM_ID = pn.PATHWAY_NODE_TYPE_ID
+                    AND pc.PATHWAY_ID = p.PATHWAY_ID
+                    AND pc.REACTION_id = pr.PATHWAY_REACTION_ID
+                )
+                SELECT DISTINCT
+                  pr.PATHWAY_REACTION_ID as reaction_id
+                  , pr.SOURCE_ID as reaction_source_id
+                  , ed.NAME as ext_db_name
+                  , edr.VERSION as ext_db_version
+                  , cast(pn.DISPLAY_LABEL as varchar(20)) as enzyme
+                  , min(rep.is_reversible) as is_reversible
+                  , min(rep.type) as type
+                  , string_agg (pc.type, ',' order by p.pathway_id) as type_list
+                  , coalesce(ca.compound_name, pc.compound_source_id) as compound
+                  , CASE
+                    WHEN coalesce(pc.CHEBI_ACCESSION, pc.compound_source_id) LIKE 'CHEBI%'
+                    THEN '<a href="/a/app/record/compound/' || coalesce(pc.chebi_accession, pc.compound_source_id)
+                         || '" title="' || coalesce(pc.chebi_accession, pc.compound_source_id) || '">' || coalesce(ca.compound_name, pc.compound_source_id) || '</a>'
+                    ELSE coalesce(pc.chebi_accession, pc.compound_source_id)
+                    END as compound_url
+                  , CASE (replace (replace (ed.name, 'Pathways_', ''), '_RSRC', ''))
+                    WHEN 'KEGG' THEN 'https://www.genome.jp/dbget-bin/www_bget?rn:' || pr.source_id
+                    WHEN 'MetaCyc' THEN 'https://metacyc.org/META/new-image?type=REACTION' || chr(38) || 'object=' || pr.source_id
+                    WHEN 'TrypanoCyc' THEN 'http://vm-trypanocyc.toulouse.inra.fr/TRYPANO/new-image?type=REACTION' || chr(38) || 'object=' || pr.source_id
+                    WHEN 'LeishCyc' THEN 'http://vm-trypanocyc.toulouse.inra.fr/LEISH/new-image?tyrp=REACTION' || chr(38) || 'object=' || pr.source_id
+                    WHEN 'FungiCyc' THEN NULL
+                    END as reaction_url
+                FROM
+                  sres.pathway p
+                  , apidb.pathwayreaction pr
+                  , APIDB.PATHWAYREACTIONREL prr
+                  , SRES.PATHWAYNODE pn
+                  , SRES.PATHWAYRELATIONSHIP prel
+                  , SRES.EXTERNALDATABASE ed
+                  , SRES.EXTERNALDATABASERELEASE edr
+                  , SRES.ONTOLOGYTERM ot
+                  , rep
+                  , PathwayCompounds pc
+                  LEFT JOIN CompoundAttributes ca ON pc.chebi_accession = ca.source_id
+                WHERE p.PATHWAY_ID = prr.PATHWAY_ID
+                  AND pr.PATHWAY_REACTION_ID = prr.PATHWAY_REACTION_ID
+                  AND prr.PATHWAY_RELATIONSHIP_ID = prel.PATHWAY_RELATIONSHIP_ID
+                  AND prel.NODE_ID = pn.PATHWAY_NODE_ID
+                  AND ot.name = 'enzyme'
+                  AND ot.ONTOLOGY_TERM_ID = pn.PATHWAY_NODE_TYPE_ID
+                  AND pc.EXT_DB_NAME = ed.NAME
+                  AND pc.EXT_DB_VERSION = edr.VERSION
+                  AND ed.EXTERNAL_DATABASE_ID = edr.EXTERNAL_DATABASE_ID
+                  AND pc.PATHWAY_ID = p.PATHWAY_ID
+                  AND pc.REACTION_id = pr.PATHWAY_REACTION_ID
+                  AND rep.reaction_id = pr.pathway_reaction_id
+                  AND rep.reaction_source_id = pr.source_id
+                  AND rep.compound = coalesce(ca.compound_name, pc.compound_source_id)
+                  AND rep.enzyme = pn.DISPLAY_LABEL
+                  AND rep.is_reversible_og = prel.is_reversible
+                GROUP BY pr.pathway_reaction_id, pr.SOURCE_ID, ed.NAME, edr.VERSION, pn.DISPLAY_LABEL, prel.IS_REVERSIBLE
+                  , coalesce(pc.chebi_accession, pc.compound_source_id)
+                  , coalesce(ca.compound_name, pc.compound_source_id)
+              ) t1
+              GROUP BY reaction_id, reaction_source_id, reaction_url, ext_db_name, ext_db_version, enzyme, is_reversible
+            ) t2
+          ) i
+          LEFT OUTER JOIN sres.enzymeclass ec ON i.enzyme = ec.ec_number
+        ) o
+      
+    ;
+
+
+      
+        create index PathRcts_id_ix 
+        on PathwayReactions  (reaction_id, reaction_source_id, enzyme, expasy_url, ext_db_name)
+
+      
+    ;
+

@@ -1,0 +1,103 @@
+
+      
+        CREATE TABLE uniprotGenes  AS
+        SELECT DISTINCT ed.name
+        , d.*
+        , edr.version
+        , aa.source_id
+        , pa.gene_source_id
+        , CASE WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xrefuniparc') THEN 1
+            WHEN (ed.name like '%SPTREMBL%' AND edr.version = 'xrefuniparc') THEN 2
+            WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xref_sprot_blastp') THEN 4
+            WHEN (ed.name like '%SPTREMBL%' and edr.version = 'xref_trembl_blastp') THEN 5
+            ELSE 6 END as rank
+        , (af.last_residue_index - af.first_residue_index + 1) as hit_length
+        FROM sres.dbref d
+        LEFT JOIN apidb.AlphaFold af ON d.primary_identifier = af.uniprot_id
+        , sres.externaldatabase ed
+        , sres.externaldatabaserelease edr
+        , dots.dbrefaafeature db
+        , dots.aafeature aa
+        , ProteinAttributes pa
+        WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
+          AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp')
+          AND edr.external_database_id = ed.external_database_id
+          AND d.external_database_release_id = edr.external_database_release_id
+          AND db.db_ref_id = d.db_ref_id
+          AND aa.aa_feature_id = db.aa_feature_id
+          AND pa.source_id = aa.source_id
+        UNION
+        SELECT DISTINCT ed.name
+          , d.*
+          , edr.version
+          , na.source_id
+          , ta.gene_source_id
+          , 3 as rank
+          , (af.last_residue_index - af.first_residue_index + 1) as hit_length
+        FROM sres.dbref d
+          LEFT JOIN apidb.AlphaFold af ON d.primary_identifier = af.uniprot_id
+          , sres.externaldatabase ed
+          , sres.externaldatabaserelease edr
+          , dots.dbrefnafeature db
+          , dots.nafeature na
+          , TranscriptAttributes ta
+        WHERE ed.name like '%_dbxref_%niprot_%RSRC'
+          AND edr.external_database_id = ed.external_database_id
+          AND d.external_database_release_id = edr.external_database_release_id
+          AND db.db_ref_id = d.db_ref_id
+          AND na.na_feature_id = db.na_feature_id
+          AND (ta.transcript_source_id = na.source_id OR ta.gene_source_id = na.source_id)
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE minRank AS (
+            SELECT gene_source_id
+              , MIN(rank) as min_rank
+            FROM uniprotGenes  upg
+            WHERE hit_length is not null
+            GROUP BY gene_source_id
+        )
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE alphaFoldHits AS (
+          SELECT DISTINCT gene_source_id
+            , last_value(primary_identifier) over (PARTITION BY gene_source_id ORDER BY hit_length ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS uniprot_id
+          FROM (
+            SELECT upg.*
+            FROM uniprotGenes  upg
+              , minRank
+            WHERE upg.gene_source_id = minRank.gene_source_id
+            AND upg.rank = minRank.min_rank
+          ) t
+        )
+      
+    ;
+
+
+      
+        CREATE TABLE AlphaFoldGenes  AS (
+          SELECT afh.gene_source_id
+            , af.uniprot_id
+            , af.source_id as alphafold_id
+            , af.alphafold_version
+            , af.first_residue_index
+            , af.last_residue_index
+          FROM apidb.alphafold af
+            , alphaFoldHits afh
+          WHERE afh.uniprot_id = af.uniprot_id
+        )
+      
+    ;
+
+
+      
+        CREATE index AlphaFoldGenes_idx  ON AlphaFoldGenes  (gene_source_id, uniprot_id)                                                                                                
+
+      
+    ;
+

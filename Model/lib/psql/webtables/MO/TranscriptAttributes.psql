@@ -1,0 +1,440 @@
+
+      
+        CREATE table :ORG_ABBREVTranscriptUniprot  AS
+        select na_feature_id,
+               substr(string_agg(uniprot_id, ',' order by uniprot_id), 1, 240) as uniprot_id,
+               substr(string_agg(uniprot_id, '+or+' order by uniprot_id), 1, 240) as uniprot_id_internal
+        FROM (SELECT DISTINCT t.na_feature_id, dr.primary_identifier as uniprot_id
+              FROM sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+                   sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+              WHERE dr.db_ref_id = x.DB_REF_ID
+              AND (x.na_feature_id = t.na_feature_id --
+                   or x.na_feature_id = t.parent_id)
+              AND dr.external_database_release_id = r.external_database_release_id
+              AND r.external_database_id = d.external_database_id
+              AND (d.name like '%uniprot_dbxref_RSRC'
+                   OR d.name like '%dbxref_gene2Uniprot_RSRC'
+                   OR d.name = 'Links to Uniprot Genes'
+                   OR d.name like '%_dbxref_uniprot_linkout_RSRC'
+                   OR d.name like '%_dbxref_uniprot_from_annotation_RSRC')
+             ) t
+        GROUP BY na_feature_id
+      
+    ;
+
+:CREATE_AND_POPULATE
+
+      
+        CREATE TABLE :ORG_ABBREVTranscriptAttributes  AS
+        WITH genefeat AS (
+          SELECT DISTINCT
+            cast(apidb.prefixed_project_id(tn.name, ':ORG_ABBREV') as varchar(20)) as project_id,
+            -- first the gene attributes:
+            gf.source_id AS gene_source_id,
+            gf.na_feature_id AS gene_na_feature_id,
+            LEAST(nl.start_min, nl.end_max) AS gene_start_min,
+            GREATEST(nl.start_min, nl.end_max) AS gene_end_max,
+            COALESCE(preferred_name.name, any_name.name) AS gene_name,
+            cast(coalesce(preferred_gene_product.product, any_gene_product.product, gf.product)
+              as VARCHAR(300)) as old_gene_product,
+            COALESCE(gp.product, 'unspecified product') as gene_product,
+            REPLACE(so.name, '_', ' ') AS gene_type,
+            gf.name as gene_ebi_biotype,
+            gi.gene_id,
+            transcripts.gene_transcript_count,
+            exons.gene_exon_count,
+            olds.old_ids AS gene_previous_ids,
+            coalesce(deprecated.is_deprecated, 0) as is_deprecated,
+            GREATEST(1, least(nl.start_min, nl.end_max) - 15000) AS gene_context_start,
+            LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 15000) AS gene_context_end,
+            GREATEST(1, least(nl.start_min, nl.end_max) - 1500) AS gene_zoom_context_start,
+            LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 1500) AS gene_zoom_context_end,
+            CAST(orthologs.name AS VARCHAR(60)) AS orthomcl_name,
+            coalesce(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps,
+            coalesce(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
+            coalesce(tothtssnps.hts_stop_codon_snps,0) AS gene_hts_stop_codon_snps,
+            coalesce(tothtssnps.hts_noncoding_snps,0) AS gene_hts_noncoding_snps,
+            coalesce(tothtssnps.hts_synonymous_snps,0) AS gene_hts_synonymous_snps,
+            coalesce(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio,
+            CAST(cmnt.comment_string AS VARCHAR(300)) AS comment_string,
+            entrez_table.entrez_id AS gene_entrez_id,
+            gloc.locations AS gene_locations,
+            CAST(gsa.source_id AS VARCHAR(50)) AS sequence_id,
+            CAST(SUBSTR(tn.name, 1, 80) AS VARCHAR(80)) AS organism,
+            CAST(species_name.name AS VARCHAR(60)) AS species,
+            LTRIM(REGEXP_REPLACE(tn.name, replace (replace (species_name.name,'[',''), ']','') ,'')) AS strain,
+            taxon.ncbi_tax_id,  tn.taxon_id,
+            so.source_id as so_id,
+            CAST(so.name AS VARCHAR(150)) AS so_term_name,
+            CAST(SUBSTR(so.definition, 1, 150) AS VARCHAR(150)) AS so_term_definition,
+            CAST(soRls.version AS VARCHAR(7)) AS so_version,
+            rt2.anticodon rt2_anticodon,
+            ed.name AS external_db_name,
+            edr.version AS external_db_version,
+            edr.external_database_release_id AS external_db_rls_id,
+            CAST(gsa.chromosome AS VARCHAR(20)) AS chromosome,
+            gsa.sequence_type,
+            gsa.chromosome_order_num, gsa.na_sequence_id
+          FROM dots.GeneFeature gf
+            INNER JOIN apidb.FeatureLocation nl ON gf.na_feature_id = nl.na_feature_id
+            INNER JOIN sres.OntologyTerm so ON gf.sequence_ontology_id = so.ontology_term_id
+            INNER JOIN :ORG_ABBREVGeneLocations gloc ON gf.source_id = gloc.source_id
+            LEFT JOIN :ORG_ABBREVGeneProduct gp ON gf.source_id = gp.source_id
+            INNER JOIN sres.ExternalDatabaseRelease edr ON gf.external_database_release_id = edr.external_database_release_id
+            INNER JOIN sres.ExternalDatabase ed ON edr.external_database_id = ed.external_database_id
+            INNER JOIN :ORG_ABBREVGenomicSeqAttributes gsa ON nl.na_sequence_id = gsa.na_sequence_id
+            INNER JOIN sres.TaxonName tn ON gsa.taxon_id = tn.taxon_id
+            INNER JOIN sres.Taxon ON gsa.taxon_id = taxon.taxon_id
+            INNER JOIN sres.externalDatabaseRelease soRls ON so.external_database_release_id = soRls.external_database_release_id
+            INNER JOIN (
+              SELECT DISTINCT gene AS source_id FROM :ORG_ABBREVGeneId
+            ) gene ON gf.source_id = gene.source_id
+            LEFT JOIN dots.RnaType rt2 ON gf.na_feature_id = rt2.parent_id
+            LEFT JOIN :ORG_ABBREVTaxonSpecies ts ON gsa.taxon_id = ts.taxon_id
+            LEFT JOIN dots.geneinstance gi ON gf.na_feature_id = gi.na_feature_id
+            INNER JOIN sres.TaxonName species_name ON ts.species_taxon_id = species_name.taxon_id
+            LEFT JOIN (
+              SELECT parent_id, count(*) AS gene_transcript_count
+              FROM dots.Transcript
+              GROUP BY parent_id
+            ) transcripts ON gf.na_feature_id = transcripts.parent_id
+            LEFT JOIN (
+              SELECT parent_id, count(*) AS gene_exon_count
+              FROM dots.ExonFeature
+              GROUP BY parent_id
+            ) exons ON gf.na_feature_id = exons.parent_id
+            LEFT JOIN (
+              SELECT nfc.na_feature_id, MAX(SUBSTR(nfc.comment_string, 300, 1)) AS comment_string
+              FROM dots.NaFeatureComment nfc
+              GROUP BY nfc.na_feature_id
+            ) cmnt ON gf.na_feature_id = cmnt.na_feature_id
+            LEFT JOIN (
+              SELECT distinct drnf.na_feature_id as gene_na_feature_id, 1 as is_deprecated
+              FROM dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+              WHERE drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                AND ed.name = 'gassAWB_dbxref_gene2Deprecated_RSRC'
+            ) deprecated ON gf.na_feature_id = deprecated.gene_na_feature_id
+            LEFT JOIN (
+              SELECT gene_source_id, total_hts_snps, hts_nonsynonymous_snps, hts_stop_codon_snps,hts_noncoding_snps,hts_synonymous_snps,
+                case when (hts_nonsynonymous_snps is null) then 0
+                when (hts_synonymous_snps = 0) then 0
+                else round ((hts_nonsynonymous_snps/ hts_synonymous_snps), 2) end as hts_nonsyn_syn_ratio
+              FROM (
+                select gene_source_id,
+                  count(*) as total_hts_snps,
+                  sum(has_nonsynonymous_allele) as hts_nonsynonymous_snps,
+                  sum(has_stop_codon) as hts_stop_codon_snps,
+                  sum(is_noncoding_snp) as hts_noncoding_snps,
+                  count(*) - sum(has_nonsynonymous_allele) - sum(has_stop_codon) - sum(is_noncoding_snp)  as hts_synonymous_snps
+                FROM :ORG_ABBREVSnpAttributes
+                WHERE  gene_source_id is not null
+                GROUP by gene_source_id
+              ) t
+            ) tothtssnps ON gf.source_id = tothtssnps.gene_source_id
+            LEFT JOIN (
+              SELECT ssg.sequence_id as gene_na_feature_id, sg.name
+              FROM dots.SequenceSequenceGroup ssg,
+                   dots.sequencegroup sg, core.tableinfo ti
+              WHERE ssg.sequence_group_id = sg.sequence_group_id
+                AND ssg.source_table_id = ti.table_id
+                AND ti.name = 'GeneFeature'
+            ) orthologs ON gf.na_feature_id = orthologs.gene_na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.GeneFeatureProduct
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+            ) preferred_gene_product ON gf.na_feature_id = preferred_gene_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.GeneFeatureProduct
+              GROUP BY na_feature_id
+            ) any_gene_product ON gf.na_feature_id = any_gene_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(name) as name
+              FROM apidb.GeneFeatureName
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+              EXCEPT
+                  -- suppress gene/name associations from the *DELETED_RSRC databases
+              SELECT gfn.na_feature_id, gfn.name
+              FROM apidb.GeneFeatureName gfn,
+                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+              WHERE gfn.external_database_release_id = edr.external_database_release_id
+                AND ed.external_database_id = edr.external_database_id
+                AND ed.name like '%DELETED_RSRC'
+            ) preferred_name ON gf.na_feature_id = preferred_name.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(name) as name
+              FROM apidb.GeneFeatureName
+              GROUP by na_feature_id
+              EXCEPT
+              -- suppress gene/name associations from the *DELETED_RSRC databases
+              SELECT gfn.na_feature_id, gfn.name
+              FROM apidb.GeneFeatureName gfn,
+                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+              WHERE gfn.external_database_release_id = edr.external_database_release_id
+                AND ed.external_database_id = edr.external_database_id
+                AND ed.name like '%DELETED_RSRC'
+            ) any_name ON gf.na_feature_id = any_name.na_feature_id
+            LEFT JOIN (
+              SELECT dbna.na_feature_id,
+                     substr(string_agg(db.primary_identifier, ',' order by db.primary_identifier), 1, 300) as entrez_id
+              FROM sres.ExternalDatabaseRelease edr, sres.DbRef db,
+                   dots.DbRefNaFeature dbna, sres.ExternalDatabase ed
+              WHERE edr.external_database_release_id = db.external_database_release_id
+                AND ed.external_database_id = edr.external_database_id
+                AND dbna.db_ref_id = db.db_ref_id
+                AND lower(ed.name) like '%entrez%'
+              GROUP BY dbna.na_feature_id
+            ) entrez_table ON gf.na_feature_id = entrez_table.na_feature_id
+            LEFT JOIN (
+              SELECT drnf.na_feature_id,
+                     substr(string_agg(dr.primary_identifier, ';' order by dr.primary_identifier), 1, 900) as old_ids
+              FROM dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+              WHERE dr.primary_identifier is not null
+                AND drnf.db_ref_id = dr.db_ref_id
+                AND dr.external_database_release_id = edr.external_database_release_id
+                AND edr.external_database_id = ed.external_database_id
+                AND edr.id_type = 'previous id'
+              GROUP BY drnf.na_feature_id
+            ) olds ON gf.na_feature_id = olds.na_feature_id
+          WHERE nl.is_top_level = 1
+            AND nl.feature_type = 'GeneFeature'
+            AND (gsa.taxon_id::varchar = ':TAXON_IDValue' OR length(':TAXON_IDValue') = 0)
+            AND species_name.name_class = 'scientific name'
+            AND (gf.is_predicted != 1 OR gf.is_predicted is null)
+            AND tn.name_class = 'scientific name'
+            AND tn.taxon_id NOT IN (SELECT o.taxon_id FROM apidb.Organism o WHERE o.is_annotated_genome=0)
+            AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
+        ), transcript AS (
+          SELECT DISTINCT
+            t.parent_id as transcript_parent_id,
+            -- first the gene attributes:
+            cast(null as varchar(80)) as representative_transcript,
+            0 as gene_paralog_number, 0 as gene_ortholog_number,
+            transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
+            -- next the transcript attributes:
+            t.source_id AS transcript_source_id,
+            tso.name as transcript_type,
+            t.na_feature_id,
+            CAST(coalesce(preferred_tx_product.product, any_tx_product.product, t.product)
+              AS VARCHAR(300))
+              AS transcript_product,
+            tl.start_min, tl.end_max,
+            tl.is_reversed,   --CHECK if needed
+            CASE coalesce(tl.is_reversed, 0) WHEN 0 THEN 'forward' WHEN 1 THEN 'reverse' ELSE tl.is_reversed::varchar END AS strand,
+            CASE t.is_pseudo WHEN null THEN 0 ELSE t.is_pseudo END as is_pseudo,
+            transcript_exons.exon_count,
+            sns.length AS length, sns.na_sequence_id as spliced_na_sequence_id,
+            rt1.anticodon rt1_anticodon,
+            utr_lengths.five_prime_utr_length,
+            utr_lengths.three_prime_utr_length
+          FROM dots.Transcript t
+            LEFT JOIN dots.RnaType rt1 ON t.na_feature_id = rt1.parent_id
+            LEFT JOIN dots.SplicedNaSequence sns ON t.na_sequence_id = sns.na_sequence_id
+            INNER JOIN sres.OntologyTerm tso ON t.sequence_ontology_id = tso.ontology_term_id
+            INNER JOIN apidb.TranscriptLocation tl ON tl.feature_source_id =  t.source_id
+            INNER JOIN (
+              SELECT rna_feature_id, count(*) as exon_count
+              FROM dots.RnaFeatureExon
+              GROUP BY rna_feature_id
+            ) transcript_exons ON t.na_feature_id = transcript_exons.rna_feature_id
+            INNER JOIN (
+              SELECT t.na_feature_id as transcript_na_feature_id, five_prime.utr_length as five_prime_utr_length, three_prime.utr_length as three_prime_utr_length
+              FROM dots.transcript t
+                LEFT JOIN (
+                  SELECT parent_id, sum(end_max-start_min + 1) as utr_length FROM apidb.UtrLocation
+                  WHERE direction = 5 AND is_top_level = 1
+                  GROUP BY parent_id
+                 ) five_prime ON t.na_feature_id = five_prime.parent_id
+                LEFT JOIN (
+                  SELECT parent_id, sum(end_max-start_min + 1) as utr_length FROM apidb.UtrLocation
+                  WHERE direction = 3 AND is_top_level = 1
+                  GROUP BY parent_id
+                ) three_prime ON t.na_feature_id = three_prime.parent_id
+            ) utr_lengths ON t.na_feature_id = utr_lengths.transcript_na_feature_id
+            LEFT JOIN :ORG_ABBREVTranscriptUniprot  transcript_uniprot ON t.na_feature_id = transcript_uniprot.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.TranscriptProduct
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+            ) preferred_tx_product ON t.na_feature_id = preferred_tx_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.TranscriptProduct
+              GROUP BY na_feature_id
+            ) any_tx_product ON t.na_feature_id = any_tx_product.na_feature_id
+          WHERE
+            tl.is_top_level=1
+        )
+        SELECT DISTINCT
+          genefeat.project_id,
+          transcript.transcript_source_id AS source_id,
+          -- first the gene attributes:
+          genefeat.gene_source_id,
+          genefeat.gene_na_feature_id,
+          genefeat.gene_start_min,
+          genefeat.gene_end_max,
+          genefeat.gene_name,
+          CAST(COALESCE(genefeat.old_gene_product, transcript.transcript_product,
+                        case when transcript.is_pseudo = 1
+                          then 'pseudogene'
+                          else 'unspecified product'
+                        end
+                ) as VARCHAR(300)
+            ) as old_gene_product,
+          genefeat.gene_product,
+          genefeat.gene_type,
+          genefeat.gene_ebi_biotype,
+          genefeat.gene_id,
+          genefeat.gene_transcript_count,
+          genefeat.gene_exon_count,
+          cast(null as varchar(80)) as representative_transcript,
+          genefeat.gene_previous_ids,
+          genefeat.is_deprecated,
+          0 as gene_paralog_number, 0 as gene_ortholog_number,
+          genefeat.gene_context_start,
+          genefeat.gene_context_end,
+          genefeat.gene_zoom_context_start,
+          genefeat.gene_zoom_context_end,
+          genefeat.orthomcl_name,
+          genefeat.gene_total_hts_snps,
+          genefeat.gene_hts_nonsynonymous_snps,
+          genefeat.gene_hts_stop_codon_snps,
+          genefeat.gene_hts_noncoding_snps,
+          genefeat.gene_hts_synonymous_snps,
+          genefeat.gene_hts_nonsyn_syn_ratio,
+          genefeat.comment_string,
+          transcript.uniprot_id, transcript.uniprot_id_internal,
+          genefeat.gene_entrez_id,
+          genefeat.gene_locations,
+          -- next the transcript attributes:
+          transcript.transcript_source_id,
+          transcript.transcript_type,
+          transcript.na_feature_id,
+          CAST(coalesce(transcript.transcript_product, genefeat.old_gene_product,
+                          case when transcript.is_pseudo = 1
+                          then 'pseudogene'
+                          else 'unspecified product'
+                        end
+                )AS VARCHAR(300)
+            ) as transcript_product,
+          transcript.start_min, transcript.end_max,
+          transcript.is_reversed,   --CHECK if needed
+          transcript.strand,
+          transcript.is_pseudo,
+          transcript.exon_count,
+          transcript.length,
+          transcript.spliced_na_sequence_id,
+          genefeat.sequence_id,
+          genefeat.organism,
+          genefeat.species,
+          genefeat.strain,
+          genefeat.ncbi_tax_id,  genefeat.taxon_id,
+          genefeat.so_id,
+          genefeat.so_term_name,
+          genefeat.so_term_definition,
+          genefeat.so_version,
+          CAST(coalesce(rt1_anticodon, rt2_anticodon)AS VARCHAR(3)) AS anticodon,
+          genefeat.external_db_name,
+          genefeat.external_db_version,
+          genefeat.external_db_rls_id,
+          genefeat.chromosome,
+          genefeat.sequence_type,
+          genefeat.chromosome_order_num, genefeat.na_sequence_id,
+          --next the protein attributes:
+          pa.source_id AS protein_source_id,
+          pa.aa_sequence_id,
+          pa.cds_start as coding_start,
+          pa.cds_end as coding_end,
+          pa.cds_length,
+          pa.protein_length,
+          pa.has_seqedit,
+          pa.tm_count,
+          pa.molecular_weight,
+          pa.isoelectric_point,
+          pa.signalp_peptide,
+          pa.ec_numbers, pa.ec_numbers_derived,
+          pa.annotated_go_component,
+          pa.annotated_go_function,
+          pa.annotated_go_process,
+          pa.predicted_go_component,
+          pa.predicted_go_function,
+          pa.predicted_go_process,
+          pa.annotated_go_id_component,
+          pa.annotated_go_id_function,
+          pa.annotated_go_id_process,
+          pa.predicted_go_id_component,
+          pa.predicted_go_id_function,
+          pa.predicted_go_id_process,
+          transcript.five_prime_utr_length,
+          transcript.three_prime_utr_length
+        FROM genefeat
+          INNER JOIN transcript ON genefeat. gene_na_feature_id = transcript.transcript_parent_id
+          LEFT JOIN :ORG_ABBREVproteinattributes pa ON transcript.transcript_source_id = pa.transcript_source_id AND pa.rank_in_transcript = 1
+        ORDER BY taxon_id, source_id
+      
+    
+:DECLARE_PARTITION;
+
+
+      
+        UPDATE :ORG_ABBREVTranscriptAttributes  ta
+        SET exon_count = (SELECT count(*) + 1 FROM apidb.IntronLocation il WHERE il.parent_id = ta.na_feature_id AND il.end_max - il.start_min + 1 > 10 )
+        WHERE ta.project_id = 'TriTrypDB'
+      
+    ;
+
+
+      
+        UPDATE :ORG_ABBREVTranscriptAttributes  gaup
+        SET gene_paralog_number = (
+          SELECT count(distinct gene_source_id)
+          FROM :ORG_ABBREVTranscriptAttributes  g1
+          WHERE g1.orthomcl_name = gaup.orthomcl_name
+          AND g1.organism = gaup.organism
+          AND gaup.gene_source_id != g1.gene_source_id
+        ),
+        gene_ortholog_number = (
+          SELECT count(distinct gene_source_id)
+          FROM :ORG_ABBREVTranscriptAttributes  g1
+          WHERE g1.orthomcl_name = gaup.orthomcl_name
+          AND g1.organism != gaup.organism
+        )
+        WHERE (gaup.gene_type = 'protein coding' or gaup.gene_type = 'protein coding gene')
+      
+    ;
+
+
+      
+        UPDATE :ORG_ABBREVTranscriptAttributes 
+        SET gene_id = gene_na_feature_id + (select coalesce(max(gene_id), 0) from dots.gene)
+        WHERE gene_id is null
+      
+    ;
+
+
+      
+        UPDATE :ORG_ABBREVTranscriptAttributes 
+        SET representative_transcript = (
+          select min(source_id)
+          from :ORG_ABBREVTranscriptAttributes  ga
+          where ga.gene_source_id = :ORG_ABBREVTranscriptAttributes .gene_source_id
+        )
+        WHERE representative_transcript is null
+          AND gene_id is not null
+      
+    ;
+
+
+      
+        UPDATE :ORG_ABBREVTranscriptAttributes 
+        SET representative_transcript = source_id
+        WHERE representative_transcript is null
+      
+    ;
+

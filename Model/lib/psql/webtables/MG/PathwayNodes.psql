@@ -1,0 +1,306 @@
+
+      
+        CREATE UNLOGGED TABLE NodesWithTypes AS
+        SELECT pn.pathway_id
+          , CASE WHEN pa.name IS NOT NULL THEN pa.name ELSE pn.display_label END AS display_label
+          , pa.url
+          , CASE WHEN pa.name IS NOT NULL THEN pa.name ELSE pn.display_label END AS name
+          , pa.source_id AS node_identifier
+          , pn.pathway_node_id AS pathway_node_id
+          , pn.x
+          , pn.y
+          , pn.width
+          , pn.height
+          , pn.cellular_location
+          , ot.name AS type
+          , NULL AS gene_count
+          , NULL AS default_structure
+        FROM sres.pathwaynode pn
+          INNER JOIN sres.ontologyterm ot ON pn.pathway_node_type_id = ot.ontology_term_id
+          LEFT JOIN PathwayAttributes pa ON pn.display_label = pa.source_id
+        WHERE ot.name = 'metabolic process'
+        UNION ALL
+        SELECT pn.pathway_id
+          , pn.display_label
+          , NULL AS url
+          , coalesce(ec.description, pn.display_label) AS name
+          , ec.ec_number AS node_identifier
+          , pn.pathway_node_id AS pathway_node_id
+          , pn.x
+          , pn.y
+          , pn.width
+          , pn.height
+          , pn.cellular_location
+          , ot.name AS type
+          , count (tp.gene_source_id) as gene_count
+          , NULL AS default_structure
+        FROM sres.pathwaynode pn
+          INNER JOIN sres.ontologyterm ot ON pn.pathway_node_type_id = ot.ontology_term_id
+          LEFT JOIN sres.enzymeclass ec ON pn.row_id = ec.enzyme_class_id
+          LEFT JOIN PathwayNodeGene tp ON pn.pathway_node_id = tp.pathway_node_id
+        WHERE ot.name = 'enzyme'
+        GROUP BY pn.pathway_id
+          , pn.display_label
+          , ec.description
+          , ec.ec_number
+          , pn.pathway_node_id
+          , pn.x
+          , pn.y
+          , pn.width
+          , pn.height
+          , pn.cellular_location
+          , ot.name
+        UNION ALL
+        SELECT pn.pathway_id
+          , pn.display_label
+          , NULL AS url
+          , coalesce(c.name, pn.display_label) AS name
+          , c.chebi_accession AS node_identifier
+          , pn.pathway_node_id AS pathway_node_id
+          , pn.x
+          , pn.y
+          , pn.width
+          , pn.height
+          , pn.cellular_location
+          , ot.name AS type
+          , NULL AS gene_count
+          , st.default_structure
+        FROM sres.pathwaynode pn
+          INNER JOIN sres.ontologyterm ot ON pn.pathway_node_type_id = ot.ontology_term_id
+          LEFT JOIN chebi.compounds c ON pn.row_id = c.id
+          LEFT JOIN (
+            SELECT n.compound
+              , s.structure AS default_structure
+            FROM chebi.structures s
+              , (SELECT id
+                  , compound
+                  FROM CompoundId
+                  WHERE type IN ('same ID', 'child ID')
+                  ) n
+            WHERE n.id = 'CHEBI:' || s.compound_id
+            AND s.type = 'mol'
+            AND s.dimension = '2D'
+            AND s.default_structure = 'Y'
+          ) st ON c.chebi_accession = st.compound
+        WHERE ot.name = 'molecular entity'
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE ReactionsWithReversibility AS
+        SELECT DISTINCT spr.pathway_relationship_id
+        , tpr.is_reversible
+        , tpr.reaction_source_id
+        FROM sres.pathwayrelationship spr
+        , apidb.pathwayreactionrel prr
+        , PathwayReactions tpr
+        WHERE prr.pathway_relationship_id = spr.pathway_relationship_id
+        AND tpr.reaction_id = prr.pathway_reaction_id
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE EnzymeEdges AS
+        SELECT DISTINCT nwt.pathway_id AS pathway_id
+          , nwt.pathway_node_id AS e_id
+          , nwt.type
+          , i.associated_node_id AS m1_id
+          , rri.is_reversible AS ir1
+          , o.node_id AS m2_id
+          , rro.is_reversible AS ir2
+          , i.associated_node_id || '_' || o.node_id || '_' || rri.is_reversible || '_' || rro.is_reversible as io
+        FROM sres.pathwayrelationship i
+          , sres.pathwayrelationship o
+          , NodesWithTypes nwt
+          , ReactionsWithReversibility rri
+          , ReactionsWithReversibility rro
+        WHERE i.node_id = nwt.pathway_node_id
+          AND o.associated_node_id = nwt.pathway_node_id
+          AND i.pathway_relationship_id = rri.pathway_relationship_id
+          AND o.pathway_relationship_id = rro.pathway_relationship_id
+          AND nwt.type = 'enzyme'
+          AND rri.is_reversible = rro.is_reversible
+          AND rri.reaction_source_id = rro.reaction_source_id
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE ParentNodes AS
+        WITH AllEnzymeEdges AS (
+            SELECT string_agg(io, ',' ORDER BY io) AS all_edges
+            , e_id
+            , pathway_id
+            FROM EnzymeEdges
+            GROUP BY pathway_id
+            , e_id
+        )
+        , pn as (
+            SELECT pathway_id
+            , all_edges
+            , string_agg(e_id::varchar, '_' ORDER BY e_id) AS parent
+            FROM AllEnzymeEdges
+            GROUP BY pathway_id
+            , all_edges
+            HAVING COUNT (*) > 1
+        )
+        SELECT aee.e_id, pn.*
+        FROM pn
+        , AllEnzymeEdges aee
+        WHERE aee.all_edges = pn.all_edges
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE NodesWithParents AS
+        SELECT DISTINCT ee.e_id AS pathway_node_id
+          , pn.parent
+          , ee.type AS node_type
+          , ee.pathway_id
+        FROM EnzymeEdges ee
+          , ParentNodes pn
+        WHERE pn.pathway_id = ee.pathway_id
+          AND ee.e_id = pn.e_id
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE EnzymeReactions AS
+        SELECT DISTINCT pn.PATHWAY_NODE_ID node_id
+          , pr.SOURCE_ID AS reaction_source_id
+        FROM sres.pathwaynode pn
+          , apidb.pathwayreaction pr
+          , APIDB.PATHWAYREACTIONREL prr
+          , SRES.PATHWAYRELATIONSHIP prel
+          , sres.ontologyterm ot
+        WHERE (prel.NODE_ID = pn.PATHWAY_NODE_ID OR prel.ASSOCIATED_NODE_ID = pn.PATHWAY_NODE_ID)
+          AND prr.PATHWAY_RELATIONSHIP_ID = prel.PATHWAY_RELATIONSHIP_ID
+          AND pr.PATHWAY_REACTION_ID = prr.PATHWAY_REACTION_ID
+          AND ot.name = 'enzyme'
+          AND pn.PATHWAY_NODE_TYPE_ID = ot.ONTOLOGY_TERM_ID
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE ParentsForEdges AS
+        SELECT ee.e_id
+            , ee.m1_id
+            , ee.ir1
+            , ee.m2_id
+            , ee.ir2
+            , np.parent
+        FROM EnzymeEdges ee
+            , NodesWithParents np
+        WHERE ee.e_id = np.pathway_node_id
+      
+    ;
+
+
+      
+        CREATE TABLE PathwayEdges  AS
+        SELECT pa.source_id
+          , pa.pathway_source
+          , rel.*
+        FROM (
+          SELECT DISTINCT ee.pathway_id
+            , coalesce(pe.parent, ee.e_id::varchar) AS source
+            , ee.m1_id::varchar AS target
+            , max(ee.ir1) AS is_reversible
+          FROM EnzymeEdges ee
+            LEFT JOIN ParentsForEdges pe ON ee.e_id = pe.e_id
+          GROUP BY ee.pathway_id, ee.m1_id, coalesce(pe.parent, ee.e_id::varchar)
+          UNION
+          SELECT DISTINCT ee.pathway_id
+            , ee.m2_id::varchar AS source
+            , coalesce(pe.parent, ee.e_id::varchar) AS target
+            , max(ee.ir2) AS is_reversible
+          FROM EnzymeEdges ee
+            LEFT JOIN ParentsForEdges pe ON ee.e_id = pe.e_id
+          GROUP BY ee.pathway_id, ee.m2_id, coalesce(pe.parent, ee.e_id::varchar)
+          UNION
+          SELECT pn1.pathway_id
+            , pr.node_id::varchar AS source
+            , pr.associated_node_id::varchar AS target
+            , pr.is_reversible
+          FROM sres.pathwayrelationship pr
+            , sres.pathwaynode pn1
+            , sres.pathwaynode pn2
+            , sres.ontologyterm ot1
+            , sres.ontologyterm ot2
+          WHERE pr.node_id = pn1.pathway_node_id
+            AND pr.associated_node_id = pn2.pathway_node_id
+            AND pn1.pathway_node_type_id = ot1.ontology_term_id
+            AND pn2.pathway_node_type_id = ot2.ontology_term_id
+            AND ot1.name != 'enzyme'
+            AND ot2.name != 'enzyme'
+        ) rel
+        , PathwayAttributes pa
+        WHERE pa.pathway_id = rel.pathway_id
+      
+    ;
+
+
+      
+        CREATE TABLE PathwayNodes  AS
+        SELECT pa.source_id
+          , pa.pathway_source
+          , pn.display_label
+          , pn.x
+          , pn.y
+          , pn.width
+          , pn.height
+          , pn.cellular_location
+          , coalesce(pn.url,
+              CASE WHEN coalesce(type, nodes_with_parents.node_type) = 'enzyme' THEN
+                  CASE 
+                -- CHECK AND FIX
+                --WHEN REGEXP_LIKE (display_label, '^\d+\.(\d|-)+\.(\d|-)+\.(\d|-)+$') THEN 'https://enzyme.expasy.org/EC/' || display_label
+                  WHEN pa.pathway_source = 'KEGG' THEN 'https://www.genome.jp/dbget-bin/www_bget?rn:' || reaction_source_id
+                  WHEN pa.pathway_source = 'MetaCyc' THEN 'https://metacyc.org/META/new-image?type=REACTION' || chr(38) || 'object=' || reaction_source_id
+                  WHEN pa.pathway_source = 'TrypanoCyc' THEN 'http://vm-trypanocyc.toulouse.inra.fr/TRYPANO/new-image?type=REACTION' || chr(38) || 'object=' || reaction_source_id
+                  WHEN pa.pathway_source = 'LeishCyc' THEN 'http://vm-trypanocyc.toulouse.inra.fr/LEISH/new-image?tyrp=REACTION' || chr(38) || 'object=' || reaction_source_id
+                  ELSE NULL END
+              ELSE NULL END) AS url
+          , pn.name
+          , pn.node_identifier
+          , nodes_with_parents.pathway_node_id AS id
+          , nodes_with_parents.parent
+          , reaction_source_id
+          , coalesce(type, nodes_with_parents.node_type) AS node_type
+          , pn.gene_count
+          , pn.default_structure
+        FROM
+          ( SELECT e_id::varchar AS pathway_node_id
+              , nwp.parent
+              , type AS node_type
+              , ee.pathway_id
+              , er.reaction_source_id
+            FROM EnzymeEdges ee
+              INNER JOIN EnzymeReactions er ON er.node_id = ee.e_id
+              LEFT JOIN NodesWithParents nwp ON ee.e_id = nwp.pathway_node_id
+            UNION
+            SELECT nwp.parent
+              , NULL
+              , 'nodeOfNodes'
+              , pathway_id
+              , NULL
+            FROM NodesWithParents nwp
+            UNION
+            SELECT nwt.pathway_node_id::varchar AS pathway_node_id
+              , NULL AS parent
+              , nwt.type
+              , nwt.pathway_id
+              , NULL
+            FROM NodesWithTypes nwt
+            WHERE nwt.type != 'enzyme'
+          ) nodes_with_parents
+          INNER JOIN PathwayAttributes pa ON nodes_with_parents.pathway_id = pa.pathway_id
+          LEFT JOIN NodesWithTypes pn ON nodes_with_parents.pathway_node_id = pn.pathway_node_id::varchar
+      
+    ;
+

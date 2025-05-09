@@ -1,0 +1,73 @@
+
+      
+         create UNLOGGED table SyntenicPairs as
+         select distinct ga.na_feature_id, sg.syn_na_feature_id
+         from apidb.SyntenicGene sg, GeneAttributes ga
+         where sg.na_sequence_id = ga.na_sequence_id
+           and sg.end_max >= ga.start_min
+           and sg.start_min <= ga.end_max
+       
+    ;
+
+
+      
+        create index SynPair_idx 
+          on SyntenicPairs (na_feature_id, syn_na_feature_id)
+
+      
+    ;
+
+
+      
+        create table OrthologousTranscripts  as
+        with all_pairs
+             as (select ga.source_id
+                      , ga.project_id
+                      , ga.na_feature_id
+                      , ota.source_id as ortho_source_id
+                      , ota.gene_source_id as ortho_gene_source_id
+                      , ota.project_id as ortho_project_id
+                      , ota.gene_na_feature_id as ortho_na_feature_id
+                      , ota.transcript_product as ortho_product
+                      , ota.protein_length
+                      , ga.name as ortho_name
+                      , ota.organism as ortho_organism
+                      , ota.taxon_id as ortho_taxon_id
+                      , o.is_reference_strain
+                 from Geneattributes ga
+                    , TranscriptAttributes ota
+                    , apidb.Organism o
+                 where ga.ORTHOMCL_NAME = ota.ORTHOMCL_NAME
+                 and ota.taxon_id = o.taxon_id
+             ),
+             syn_pairs
+             as (select na_feature_id, syn_na_feature_id, 1 as is_syntenic from SyntenicPairs
+             )
+        select all_pairs.*
+             , coalesce(syn_pairs.is_syntenic, 0) as is_syntenic
+        from all_pairs
+             left join syn_pairs
+             on all_pairs.na_feature_id = syn_pairs.na_feature_id
+                and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+       
+    ;
+
+
+      
+        create index ot_idx 
+          on OrthologousTranscripts  (source_id, project_id, is_syntenic desc, ortho_source_id,
+                                       ortho_project_id, ortho_gene_source_id, ortho_product,
+                                       ortho_name, ortho_organism, ortho_taxon_id, is_reference_strain)
+
+      
+    ;
+
+
+      
+        create index ot_smol_idx 
+          on OrthologousTranscripts  (is_syntenic, ortho_taxon_id, source_id, ortho_source_id,
+                                       ortho_project_id, ortho_gene_source_id)
+
+      
+    ;
+

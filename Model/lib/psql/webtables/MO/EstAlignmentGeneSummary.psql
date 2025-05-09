@@ -1,0 +1,68 @@
+
+      
+        CREATE UNLOGGED TABLE EstAlignmentGene AS
+        SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
+                 e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
+                 ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
+                 ba.is_best_alignment, ba.is_reversed, ba.target_start, ba.target_end,
+                 ga.sequence_id AS target_sequence_source_id,
+                 least(ba.target_end, ga.gene_end_max)
+                 - greatest(ba.target_start, ga.gene_start_min) + 1
+                   AS est_gene_overlap_length,
+                 ba.query_bases_aligned / (query_sequence.length)
+                 * 100 AS percent_est_bases_aligned,
+                 ga.gene_source_id AS gene
+        FROM dots.BlatAlignment ba, dots.Est e,
+             apidbtuning.TranscriptAttributes ga, 
+             dots.NaSequence query_sequence 
+        WHERE e.na_sequence_id = ba.query_na_sequence_id
+          AND ga.na_sequence_id = ba.target_na_sequence_id
+          AND least(ba.target_end, ga.gene_end_max) - greatest(ba.target_start, ga.gene_start_min) >= 0
+          AND query_sequence.na_sequence_id = ba.query_na_sequence_id
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE EstAlignmentNoGene AS
+        SELECT * from EstAlignmentGene WHERE 1=0 UNION /* define datatype for null column */
+        SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
+               e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
+               ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
+               ba.is_best_alignment, ba.is_reversed, ba.target_start, ba.target_end,
+               sequence.source_id AS target_sequence_source_id,
+               NULL AS est_gene_overlap_length,
+               ba.query_bases_aligned / (query_sequence.length)
+               * 100 AS percent_est_bases_aligned,
+               NULL AS gene
+        FROM dots.BlatAlignment ba, dots.Est e, dots.AssemblySequence aseq,
+             dots.NaSequence sequence, dots.NaSequence query_sequence
+        WHERE e.na_sequence_id = ba.query_na_sequence_id
+          AND e.na_sequence_id = query_sequence.na_sequence_id
+          AND aseq.na_sequence_id = ba.query_na_sequence_id
+          AND ba.target_na_sequence_id = sequence.na_sequence_id
+          AND ba.blat_alignment_id IN
+           ( /* set of blat_alignment_ids not in in first leg of UNION */
+            /* (because they overlap no genes) */
+            SELECT ba.blat_alignment_id
+            FROM dots.BlatAlignment ba, dots.NaSequence query_sequence,
+                 sres.OntologyTerm so
+            WHERE query_sequence.na_sequence_id = ba.query_na_sequence_id
+              AND query_sequence.sequence_ontology_id = so.ontology_term_id
+              AND so.name = 'EST'
+            EXCEPT
+            SELECT blat_alignment_id FROM EstAlignmentGene)
+      
+    ;
+
+:CREATE_AND_POPULATE
+
+      
+        CREATE TABLE EstAlignmentGeneSummary  AS
+        SELECT * FROM EstAlignmentNoGene
+        UNION
+        SELECT * FROM EstAlignmentGene
+      
+    
+:DECLARE_PARTITION;
+
