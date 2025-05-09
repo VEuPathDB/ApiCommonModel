@@ -29,7 +29,7 @@ sub processOrganism {
 
 
 #  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-#  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -91,7 +91,7 @@ sub addInterproDomains {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "InterPro Domains",
-                                                                                                label => "NA",
+                                                                                                label => "InterPro Domains",
                                                                                                 query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
@@ -104,12 +104,13 @@ sub addSignalPeptide {
     
     my $signalPeptideTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/signalP.gff.gz";
+
     my $summary = "Signal peptide predictions by SP-HMM/SP-NN";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "domain:SignalP",
-                                           };
+#    my $queryParams = {
+#                            'seqType' => "protein",
+#                            'feature' => "domain:SignalP",
+#                                           };
 
     $signalPeptideTrack = ApiCommonModel::Model::JBrowseTrackConfig::SignalPeptideTrackConfig->new({
                                                                                                 project_name => $projectName,
@@ -118,8 +119,8 @@ sub addSignalPeptide {
                                                                                                 application_type => $applicationType,
 												summary => $summary,
 												key => "Signal Peptide",
-												label => "NA",
-												query_params => $queryParams,
+												label => "Signal Peptide",
+#												query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $signalPeptideTrack if($signalPeptideTrack);
