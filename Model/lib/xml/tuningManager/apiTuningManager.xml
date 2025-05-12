@@ -363,12 +363,9 @@
           INSERT INTO TranscriptPathway&1
             WITH transcript_ec AS (
               SELECT ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
-                -- CHECK AND FIX
-                -- regexp_count( ec.ec_number, '-') as wildcard_count
-                count( ec.ec_number) as wildcard_count
+                regexp_count( ec.ec_number, '-') as wildcard_count
               FROM sres.EnzymeClass ec
               WHERE enzyme_class_id IN (SELECT enzyme_class_id FROM dots.AaSequenceEnzymeClass)
-              GROUP BY ec.enzyme_class_id
             ),
             pathway_node_ec AS (
               SELECT distinct pn.pathway_id, pn.row_id as enzyme_class_id
@@ -379,9 +376,7 @@
             ),
             pathway_ec AS (
               SELECT ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
-                -- CHECK AND FIX
-                --   regexp_count( ec.ec_number, '-') as wildcard_count
-                     count( ec.ec_number) as wildcard_count
+                     regexp_count( ec.ec_number, '-') as wildcard_count
               FROM sres.EnzymeClass ec
               WHERE enzyme_class_id IN (SELECT enzyme_class_id FROM pathway_node_ec)
               GROUP BY ec.enzyme_class_id
@@ -930,23 +925,24 @@
   </tuningTable>
 
 
-<!-- CHECK AND FIX - regexp_count issue
+
   <tuningTable name="GeneWord">
-     Each row maps a gene source_id to all words found in the gene's product field
+    <!-- Each row maps a gene source_id to all words found in the gene's product field
          Used in the word enrichment analysis plugin
          The trick sql was cribbed and modified from: nuijten.blogspot.com/2011/08/splitting-comma-delimited-string-regexp.html
+      -->
     <internalDependency name="GeneAttributes"/>
     <sql>
       <![CDATA[
         CREATE TABLE GeneWord&1 AS
         SELECT source_id, taxon_id,
-               - for each rn (1 - max_words_in_any_product),
-               -    print the rn-th word.
-               -    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
+               -- for each rn (1 - max_words_in_any_product),
+               --    print the rn-th word.
+               --    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
                substr(regexp_replace(regexp_substr (product, '[^ ,]+', 1, rn), '[\)\(]', ''), 1, 200) word
         FROM GeneAttributes
         CROSS JOIN (
-          - create a table of integers 1 - n where n is the max number of words in any product
+          -- create a table of integers 1 - n where n is the max number of words in any product
           SELECT generate_series(1,(SELECT max (regexp_count (product, '[ ,]')) + 1 mx FROM GeneAttributes)) as rn
         ) t
         WHERE regexp_substr (product, '[^, ]+', 1, rn) is not null
@@ -1607,8 +1603,7 @@ create unique index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
                         regexp_replace(id, '\.\d\d?$', '') as id,
                         gene, unique_mapping, union_member, database_name
                  FROM &prefixGeneId&1
-                -- CHECK AND FIX
-                 --WHERE regexp_like(id, '(.*)\.\d\d?$')
+                 WHERE regexp_like(id, '(.*)\.\d\d?$')
                  )
         SELECT id, gene, 0 as unique_mapping, 'base ID' as union_member, database_name
         FROM munge
@@ -6385,8 +6380,7 @@ WHERE blat.query_na_sequence_id = etn.na_sequence_id
           , coalesce(pn.url,
               CASE WHEN coalesce(type, nodes_with_parents.node_type) = 'enzyme' THEN
                   CASE 
-                -- CHECK AND FIX
-                --WHEN REGEXP_LIKE (display_label, '^\d+\.(\d|-)+\.(\d|-)+\.(\d|-)+$') THEN 'https://enzyme.expasy.org/EC/' || display_label
+                  WHEN REGEXP_LIKE (display_label, '^\d+\.(\d|-)+\.(\d|-)+\.(\d|-)+$') THEN 'https://enzyme.expasy.org/EC/' || display_label
                   WHEN pa.pathway_source = 'KEGG' THEN 'https://www.genome.jp/dbget-bin/www_bget?rn:' || reaction_source_id
                   WHEN pa.pathway_source = 'MetaCyc' THEN 'https://metacyc.org/META/new-image?type=REACTION' || chr(38) || 'object=' || reaction_source_id
                   WHEN pa.pathway_source = 'TrypanoCyc' THEN 'http://vm-trypanocyc.toulouse.inra.fr/TRYPANO/new-image?type=REACTION' || chr(38) || 'object=' || reaction_source_id
