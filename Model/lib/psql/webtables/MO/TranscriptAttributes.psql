@@ -1,13 +1,17 @@
-
+\
       
-        CREATE table :ORG_ABBREVTranscriptUniprot  AS
+        CREATE table :SCHEMA.:ORG_ABBREVTranscriptUniprot_tmp  AS
         select na_feature_id,
                substr(string_agg(uniprot_id, ',' order by uniprot_id), 1, 240) as uniprot_id,
                substr(string_agg(uniprot_id, '+or+' order by uniprot_id), 1, 240) as uniprot_id_internal
         FROM (SELECT DISTINCT t.na_feature_id, dr.primary_identifier as uniprot_id
               FROM sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+                   dots.genefeature gf, dots.nasequence nas
                    sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
               WHERE dr.db_ref_id = x.DB_REF_ID
+              AND t.parent_id = gf.na_feature_id
+              and gf.na_sequence_id = nas.na_sequence_id
+              and nas.taxon_id = :TAXON_ID
               AND (x.na_feature_id = t.na_feature_id --
                    or x.na_feature_id = t.parent_id)
               AND dr.external_database_release_id = r.external_database_release_id
@@ -23,12 +27,8 @@
     ;
 
 :CREATE_AND_POPULATE
-
-      
-        CREATE TABLE :ORG_ABBREVTranscriptAttributes  AS
         WITH genefeat AS (
           SELECT DISTINCT
-            cast(apidb.prefixed_project_id(tn.name, ':ORG_ABBREV') as varchar(20)) as project_id,
             -- first the gene attributes:
             gf.source_id AS gene_source_id,
             gf.na_feature_id AS gene_na_feature_id,
@@ -50,12 +50,12 @@
             GREATEST(1, least(nl.start_min, nl.end_max) - 1500) AS gene_zoom_context_start,
             LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 1500) AS gene_zoom_context_end,
             CAST(orthologs.name AS VARCHAR(60)) AS orthomcl_name,
-            coalesce(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps,
-            coalesce(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
-            coalesce(tothtssnps.hts_stop_codon_snps,0) AS gene_hts_stop_codon_snps,
-            coalesce(tothtssnps.hts_noncoding_snps,0) AS gene_hts_noncoding_snps,
-            coalesce(tothtssnps.hts_synonymous_snps,0) AS gene_hts_synonymous_snps,
-            coalesce(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio,
+            -- coalesce(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps,
+            -- coalesce(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
+            -- coalesce(tothtssnps.hts_stop_codon_snps,0) AS gene_hts_stop_codon_snps,
+            -- coalesce(tothtssnps.hts_noncoding_snps,0) AS gene_hts_noncoding_snps,
+            -- coalesce(tothtssnps.hts_synonymous_snps,0) AS gene_hts_synonymous_snps,
+            -- coalesce(tothtssnps.hts_nonsyn_syn_ratio,0) AS gene_hts_nonsyn_syn_ratio,
             CAST(cmnt.comment_string AS VARCHAR(300)) AS comment_string,
             entrez_table.entrez_id AS gene_entrez_id,
             gloc.locations AS gene_locations,
@@ -76,21 +76,22 @@
             gsa.sequence_type,
             gsa.chromosome_order_num, gsa.na_sequence_id
           FROM dots.GeneFeature gf
+            INNER JOIN dots.nasequence seq ON seq.na_sequence_id = gf.na_sequence_id and nas.taxon_id = :TAXON_ID
             INNER JOIN apidb.FeatureLocation nl ON gf.na_feature_id = nl.na_feature_id
             INNER JOIN sres.OntologyTerm so ON gf.sequence_ontology_id = so.ontology_term_id
-            INNER JOIN :ORG_ABBREVGeneLocations gloc ON gf.source_id = gloc.source_id
-            LEFT JOIN :ORG_ABBREVGeneProduct gp ON gf.source_id = gp.source_id
+            INNER JOIN :SCHEMA.GeneLocations gloc ON gf.source_id = gloc.source_id and gloc.org_abbrev = ':ORG_ABBREV'
+            LEFT JOIN :SCHEMA.GeneProduct gp ON gf.source_id = gp.source_id and gp.org_abbrev = ':ORG_ABBREV'
             INNER JOIN sres.ExternalDatabaseRelease edr ON gf.external_database_release_id = edr.external_database_release_id
             INNER JOIN sres.ExternalDatabase ed ON edr.external_database_id = ed.external_database_id
-            INNER JOIN :ORG_ABBREVGenomicSeqAttributes gsa ON nl.na_sequence_id = gsa.na_sequence_id
+            INNER JOIN :SCHEMA.GenomicSeqAttributes gsa ON nl.na_sequence_id = gsa.na_sequence_id and gsa.org_abbrev = ':ORG_ABBREV'
             INNER JOIN sres.TaxonName tn ON gsa.taxon_id = tn.taxon_id
             INNER JOIN sres.Taxon ON gsa.taxon_id = taxon.taxon_id
             INNER JOIN sres.externalDatabaseRelease soRls ON so.external_database_release_id = soRls.external_database_release_id
             INNER JOIN (
-              SELECT DISTINCT gene AS source_id FROM :ORG_ABBREVGeneId
+              SELECT DISTINCT gene AS source_id FROM :SCHEMA.GeneId where org_abbrev = ':ORG_ABBREV'
             ) gene ON gf.source_id = gene.source_id
             LEFT JOIN dots.RnaType rt2 ON gf.na_feature_id = rt2.parent_id
-            LEFT JOIN :ORG_ABBREVTaxonSpecies ts ON gsa.taxon_id = ts.taxon_id
+            LEFT JOIN :SCHEMA.TaxonSpecies ts ON gsa.taxon_id = ts.taxon_id and ts.org_abbrev = ':ORG_ABBREV'
             LEFT JOIN dots.geneinstance gi ON gf.na_feature_id = gi.na_feature_id
             INNER JOIN sres.TaxonName species_name ON ts.species_taxon_id = species_name.taxon_id
             LEFT JOIN (
@@ -116,23 +117,24 @@
                 AND edr.external_database_id = ed.external_database_id
                 AND ed.name = 'gassAWB_dbxref_gene2Deprecated_RSRC'
             ) deprecated ON gf.na_feature_id = deprecated.gene_na_feature_id
-            LEFT JOIN (
-              SELECT gene_source_id, total_hts_snps, hts_nonsynonymous_snps, hts_stop_codon_snps,hts_noncoding_snps,hts_synonymous_snps,
-                case when (hts_nonsynonymous_snps is null) then 0
-                when (hts_synonymous_snps = 0) then 0
-                else round ((hts_nonsynonymous_snps/ hts_synonymous_snps), 2) end as hts_nonsyn_syn_ratio
-              FROM (
-                select gene_source_id,
-                  count(*) as total_hts_snps,
-                  sum(has_nonsynonymous_allele) as hts_nonsynonymous_snps,
-                  sum(has_stop_codon) as hts_stop_codon_snps,
-                  sum(is_noncoding_snp) as hts_noncoding_snps,
-                  count(*) - sum(has_nonsynonymous_allele) - sum(has_stop_codon) - sum(is_noncoding_snp)  as hts_synonymous_snps
-                FROM :ORG_ABBREVSnpAttributes
-                WHERE  gene_source_id is not null
-                GROUP by gene_source_id
-              ) t
-            ) tothtssnps ON gf.source_id = tothtssnps.gene_source_id
+            -- NEED NEW TUNING TABLE ONCE NGS SNP WORK IS DONE
+            -- LEFT JOIN (
+            --   SELECT gene_source_id, total_hts_snps, hts_nonsynonymous_snps, hts_stop_codon_snps,hts_noncoding_snps,hts_synonymous_snps,
+            --     case when (hts_nonsynonymous_snps is null) then 0
+            --     when (hts_synonymous_snps = 0) then 0
+            --     else round ((hts_nonsynonymous_snps/ hts_synonymous_snps), 2) end as hts_nonsyn_syn_ratio
+            --   FROM (
+            --     select gene_source_id,
+            --       count(*) as total_hts_snps,
+            --       sum(has_nonsynonymous_allele) as hts_nonsynonymous_snps,
+            --       sum(has_stop_codon) as hts_stop_codon_snps,
+            --       sum(is_noncoding_snp) as hts_noncoding_snps,
+            --       count(*) - sum(has_nonsynonymous_allele) - sum(has_stop_codon) - sum(is_noncoding_snp)  as hts_synonymous_snps
+            --     FROM :ORG_ABBREVSnpAttributes
+            --     WHERE  gene_source_id is not null
+            --     GROUP by gene_source_id
+            --   ) t
+            -- ) tothtssnps ON gf.source_id = tothtssnps.gene_source_id
             LEFT JOIN (
               SELECT ssg.sequence_id as gene_na_feature_id, sg.name
               FROM dots.SequenceSequenceGroup ssg,
@@ -191,6 +193,7 @@
               GROUP BY dbna.na_feature_id
             ) entrez_table ON gf.na_feature_id = entrez_table.na_feature_id
             LEFT JOIN (
+              -- TODO:  PERFORMANCE
               SELECT drnf.na_feature_id,
                      substr(string_agg(dr.primary_identifier, ';' order by dr.primary_identifier), 1, 900) as old_ids
               FROM dots.DbRefNaFeature drnf, sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
@@ -208,7 +211,8 @@
             AND (gf.is_predicted != 1 OR gf.is_predicted is null)
             AND tn.name_class = 'scientific name'
             AND tn.taxon_id NOT IN (SELECT o.taxon_id FROM apidb.Organism o WHERE o.is_annotated_genome=0)
-            AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
+            -- JB:  NOT SURE WHY THERE ARE COMMENTED.  (if needed, move to model)
+            --AND tn.name not in ('Plasmodium gallinaceum','Plasmodium reichenowi')
         ), transcript AS (
           SELECT DISTINCT
             t.parent_id as transcript_parent_id,
@@ -233,6 +237,8 @@
             utr_lengths.five_prime_utr_length,
             utr_lengths.three_prime_utr_length
           FROM dots.Transcript t
+            INNER JOIN dots.genefeature gf on t.parent_id = gf.na_feature_id
+            INNER JOIN dots.nasequence nas on gf.na_sequence_id = nas.na_sequence_id and nas.taxon_id = :TAXON_ID
             LEFT JOIN dots.RnaType rt1 ON t.na_feature_id = rt1.parent_id
             LEFT JOIN dots.SplicedNaSequence sns ON t.na_sequence_id = sns.na_sequence_id
             INNER JOIN sres.OntologyTerm tso ON t.sequence_ontology_id = tso.ontology_term_id
@@ -256,7 +262,7 @@
                   GROUP BY parent_id
                 ) three_prime ON t.na_feature_id = three_prime.parent_id
             ) utr_lengths ON t.na_feature_id = utr_lengths.transcript_na_feature_id
-            LEFT JOIN :ORG_ABBREVTranscriptUniprot  transcript_uniprot ON t.na_feature_id = transcript_uniprot.na_feature_id
+            LEFT JOIN :SCHEMA.:ORG_ABBREVTranscriptUniprot_tmp  transcript_uniprot ON t.na_feature_id = transcript_uniprot.na_feature_id
             LEFT JOIN (
               SELECT na_feature_id, max(product) as product
               FROM apidb.TranscriptProduct
@@ -272,7 +278,9 @@
             tl.is_top_level=1
         )
         SELECT DISTINCT
-          genefeat.project_id,
+          ':PROJECT_ID' as project_id,
+          ':ORG_ABBREV' as org_abbrev,
+          current_timestamp as modification_date,
           transcript.transcript_source_id AS source_id,
           -- first the gene attributes:
           genefeat.gene_source_id,
@@ -302,12 +310,12 @@
           genefeat.gene_zoom_context_start,
           genefeat.gene_zoom_context_end,
           genefeat.orthomcl_name,
-          genefeat.gene_total_hts_snps,
-          genefeat.gene_hts_nonsynonymous_snps,
-          genefeat.gene_hts_stop_codon_snps,
-          genefeat.gene_hts_noncoding_snps,
-          genefeat.gene_hts_synonymous_snps,
-          genefeat.gene_hts_nonsyn_syn_ratio,
+          -- genefeat.gene_total_hts_snps,
+          -- genefeat.gene_hts_nonsynonymous_snps,
+          -- genefeat.gene_hts_stop_codon_snps,
+          -- genefeat.gene_hts_noncoding_snps,
+          -- genefeat.gene_hts_synonymous_snps,
+          -- genefeat.gene_hts_nonsyn_syn_ratio,
           genefeat.comment_string,
           transcript.uniprot_id, transcript.uniprot_id_internal,
           genefeat.gene_entrez_id,
@@ -375,55 +383,60 @@
           transcript.three_prime_utr_length
         FROM genefeat
           INNER JOIN transcript ON genefeat. gene_na_feature_id = transcript.transcript_parent_id
-          LEFT JOIN :ORG_ABBREVproteinattributes pa ON transcript.transcript_source_id = pa.transcript_source_id AND pa.rank_in_transcript = 1
+          LEFT JOIN :SCHEMA.proteinattributes pa ON pa.org_abbrev = ':ORG_ABBREV' and transcript.transcript_source_id = pa.transcript_source_id AND pa.rank_in_transcript = 1
         ORDER BY taxon_id, source_id
       
     
 :DECLARE_PARTITION;
 
 
-      
-        UPDATE :ORG_ABBREVTranscriptAttributes  ta
-        SET exon_count = (SELECT count(*) + 1 FROM apidb.IntronLocation il WHERE il.parent_id = ta.na_feature_id AND il.end_max - il.start_min + 1 > 10 )
+        -- ADDED ORG_ABBREV filter in 2 places just in case
+        UPDATE :SCHEMA.TranscriptAttributes  ta
+        SET exon_count = (SELECT count(*) + 1 FROM apidb.IntronLocation il WHERE  ta.org_abbrev = ':ORG_ABBREV' AND il.parent_id = ta.na_feature_id AND il.end_max - il.start_min + 1 > 10 )
         WHERE ta.project_id = 'TriTrypDB'
+        AND ta.org_abbrev = ':ORG_ABBREV'
       
     ;
 
 
       
-        UPDATE :ORG_ABBREVTranscriptAttributes  gaup
+        UPDATE :SCHEMA.TranscriptAttributes  gaup
         SET gene_paralog_number = (
           SELECT count(distinct gene_source_id)
-          FROM :ORG_ABBREVTranscriptAttributes  g1
+          FROM :SCHEMA.TranscriptAttributes  g1
           WHERE g1.orthomcl_name = gaup.orthomcl_name
           AND g1.organism = gaup.organism
           AND gaup.gene_source_id != g1.gene_source_id
+          AND g1.org_abbrev = ':ORG_ABBREV'
         ),
         gene_ortholog_number = (
           SELECT count(distinct gene_source_id)
-          FROM :ORG_ABBREVTranscriptAttributes  g1
+          FROM :SCHEMA.TranscriptAttributes  g1
           WHERE g1.orthomcl_name = gaup.orthomcl_name
           AND g1.organism != gaup.organism
+          AND g1.org_abbrev = ':ORG_ABBREV'
         )
         WHERE (gaup.gene_type = 'protein coding' or gaup.gene_type = 'protein coding gene')
+         and gaup.org_abbrev = ':ORG_ABBREV'
       
     ;
 
 
-      
-        UPDATE :ORG_ABBREVTranscriptAttributes 
-        SET gene_id = gene_na_feature_id + (select coalesce(max(gene_id), 0) from dots.gene)
+-- TODO:  test this
+        UPDATE :SCHEMA.TranscriptAttributes 
+        SET gene_id = gene_na_feature_id + (select nextval('dots.gene_sq'))
         WHERE gene_id is null
+        and org_abbrev = ':ORG_ABBREV'
       
     ;
 
 
-      
-        UPDATE :ORG_ABBREVTranscriptAttributes 
+      -- TODO:  THIS IS BROKEN. 
+        UPDATE :SCHEMA.TranscriptAttributes 
         SET representative_transcript = (
           select min(source_id)
-          from :ORG_ABBREVTranscriptAttributes  ga
-          where ga.gene_source_id = :ORG_ABBREVTranscriptAttributes .gene_source_id
+          from :SCHEMA.TranscriptAttributes  ga
+          where ga.gene_source_id = :SCHEMA.TranscriptAttributes.gene_source_id
         )
         WHERE representative_transcript is null
           AND gene_id is not null
@@ -431,11 +444,12 @@
     ;
 
 
-      
+            -- TODO:  THIS IS BROKEN.
         UPDATE :ORG_ABBREVTranscriptAttributes 
         SET representative_transcript = source_id
         WHERE representative_transcript is null
       
     ;
-
-drop table :ORG_ABBREVTranscriptUniprot
+      -- TODO:  THIS IS BROKEN. 
+drop table :SCHEMA.:ORG_ABBREVTranscriptUniprot_tmp
+;

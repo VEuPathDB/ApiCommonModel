@@ -1,13 +1,15 @@
 
       
-        CREATE UNLOGGED TABLE :ORG_ABBREVGoTermList  AS
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVGoTermList_tmp  AS
         SELECT aa_sequence_id, ontology, source,
              string_agg(go_term_name, ';' ORDER BY go_term_name) AS go_terms,
              string_agg(go_id, ';' ORDER BY go_term_name) AS go_ids
         FROM (
           SELECT aa_sequence_id, ontology,
                  CASE evidence_code WHEN 'IEA' THEN 'predicted' ELSE 'annotated' END AS source, go_term_name, go_id
-          FROM  :ORG_ABBREVGeneGoTerms
+          FROM  :SCHEMA.GeneGoTerms
+          WHERE org_abbrev = ':ORG_ABBREV'
+          
         ) t
         GROUP BY aa_sequence_id, ontology, source
       
@@ -15,7 +17,7 @@
 
 
       
-        CREATE UNLOGGED TABLE :ORG_ABBREVProteinGoAttributes  AS
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVProteinGoAttributes_tmp AS
         SELECT DISTINCT gts.aa_sequence_id,
                substr(annotated_go_component.go_terms, 1, 300) AS annotated_go_component,
                substr(annotated_go_function.go_terms, 1, 300) AS annotated_go_function,
@@ -30,44 +32,44 @@
                substr(predicted_go_function.go_ids, 1, 300) AS predicted_go_id_function,
                substr(predicted_go_process.go_ids, 1, 300) AS predicted_go_id_process
         FROM
-          (SELECT DISTINCT aa_sequence_id FROM :ORG_ABBREVGoTermSummary) gts
+          (SELECT DISTINCT aa_sequence_id FROM :SCHEMA.GoTermSummary where org_abbrev = ':ORG_ABBREV') gts
           LEFT JOIN (
-            SELECT * FROM :ORG_ABBREVGoTermList 
+            SELECT * FROM :SCHEMA.:ORG_ABBREVGoTermList_tmp 
             WHERE source = 'annotated' AND ontology = 'Cellular Component'
           ) annotated_go_component ON
             gts.aa_sequence_id = annotated_go_component.aa_sequence_id
             AND 'annotated' = annotated_go_component.source
             AND 'Cellular Component' = annotated_go_component.ontology
           LEFT JOIN (
-            SELECT * FROM :ORG_ABBREVGoTermList 
+            SELECT * FROM :SCHEMA.:ORG_ABBREVGoTermList_tmp 
             WHERE source = 'annotated' AND ontology = 'Molecular Function'
           ) annotated_go_function ON
             gts.aa_sequence_id = annotated_go_function.aa_sequence_id
             AND 'annotated' = annotated_go_function.source
             AND 'Molecular Function' = annotated_go_function.ontology
           LEFT JOIN (
-            SELECT * FROM :ORG_ABBREVGoTermList 
+            SELECT * FROM :SCHEMA.:ORG_ABBREVGoTermList_tmp 
             WHERE source = 'annotated' AND ontology = 'Biological Process'
           ) annotated_go_process ON
             gts.aa_sequence_id = annotated_go_process.aa_sequence_id
             AND 'annotated' = annotated_go_process.source
             AND 'Biological Process' = annotated_go_process.ontology
           LEFT JOIN (
-            SELECT * FROM :ORG_ABBREVGoTermList 
+            SELECT * FROM :SCHEMA.:ORG_ABBREVGoTermList_tmp 
             WHERE source = 'predicted' AND ontology = 'Cellular Component'
           ) predicted_go_component ON
             gts.aa_sequence_id = predicted_go_component.aa_sequence_id
             AND 'predicted' = predicted_go_component.source
             AND 'Cellular Component' = predicted_go_component.ontology
           LEFT JOIN (
-            SELECT * FROM :ORG_ABBREVGoTermList 
+            SELECT * FROM :SCHEMA.:ORG_ABBREVGoTermList_tmp 
             WHERE source = 'predicted' AND ontology = 'Molecular Function'
           ) predicted_go_function ON
             gts.aa_sequence_id = predicted_go_function.aa_sequence_id
             AND 'predicted' = predicted_go_function.source
             AND 'Molecular Function' = predicted_go_function.ontology
           LEFT JOIN (
-            SELECT * FROM :ORG_ABBREVGoTermList 
+            SELECT * FROM :SCHEMA.:ORG_ABBREVGoTermList_tmp 
             WHERE source = 'predicted' AND ontology = 'Biological Process'
           ) predicted_go_process ON
             gts.aa_sequence_id = predicted_go_process.aa_sequence_id
@@ -78,19 +80,21 @@
 
 
       
-        create index ProteinGoAttr_aaSequenceId  ON :ORG_ABBREVProteinGoAttributes  (aa_sequence_id)
+        create index :SCHEMA.:ORG_ABBREVProteinGoAttr_aaSequenceId  ON :SCHEMA.:ORG_ABBREVProteinGoAttributes_tmp  (aa_sequence_id)
 
       
     ;
 
 
       
-        CREATE UNLOGGED TABLE :ORG_ABBREVtProteinAttrsEc  AS
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVtProteinAttrsEc_tmp  AS
             SELECT aa_sequence_id, SUBSTR(string_agg(ec_number, ';' order by ec_number),1, 300) AS ec_numbers
             FROM (SELECT DISTINCT asec.aa_sequence_id,
                         ec.ec_number || ' (' || ec.description || ')' AS ec_number
-                 FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
+                 FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec, dots.aasequence seq
                  WHERE ec.enzyme_class_id = asec.enzyme_class_id
+                  AND seq.aa_sequence_id = asec.aa_sequence_id
+                  AND seq.taxon_id = :TAXON_ID
                   AND NOT asec.evidence_code = 'OrthoMCLDerived'
             ) t
             GROUP BY aa_sequence_id
@@ -99,23 +103,26 @@
 
 
       
-        CREATE UNLOGGED TABLE :ORG_ABBREVtProteinAttrsEcDerived  AS
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVtProteinAttrsEcDerived_tmp  AS
             SELECT aa_sequence_id, SUBSTR(string_agg(ec_number, ';' order by ec_number),1, 300) AS ec_numbers_derived
             FROM (SELECT DISTINCT asec.aa_sequence_id,
                         ec.ec_number || ' (' || ec.description || ')' AS ec_number
-                 FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
+                 FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec, dots.aasequence seq
                  WHERE ec.enzyme_class_id = asec.enzyme_class_id
+                  AND seq.aa_sequence_id = asec.aa_sequence_id
+                  AND seq.taxon_id = :TAXON_ID
                   AND asec.evidence_code = 'OrthoMCLDerived'
             ) t
             GROUP BY aa_sequence_id
       
     ;
 
-:CREATE_AND_POPULATE
 
-      
-        CREATE TABLE :ORG_ABBREVProteinAttributes  AS
-        SELECT pi.name as project_id,
+-- TODO:  Filter the subqueries or break into tmp tables for performance
+:CREATE_AND_POPULATE
+        SELECT ':PROJECT_ID' as project_id,
+        ':ORG_ABBREV' as org_abbrev,
+        current_timestamp as modification_date,
           tas.source_id, tas.aa_sequence_id,
           t.source_id as transcript_source_id,
           gf.source_id as gene_source_id,
@@ -150,18 +157,18 @@
           row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript,
           uniprot.uniprot_ids
         FROM
-          core.ProjectInfo pi
-          INNER JOIN dots.Transcript t ON t.row_project_id = pi.project_id
+          dots.Transcript t,
           INNER JOIN dots.GeneFeature gf ON gf.na_feature_id = t.parent_id
+          INNER JOIN dots.nasequence nas ON gf.na_sequence_id = nas.na_sequence_id AND nas.taxon_id = :TAXON_ID
           INNER JOIN dots.TranslatedAaFeature taf ON t.na_feature_id = taf.na_feature_id
           INNER JOIN dots.TranslatedAaSequence tas ON taf.aa_sequence_id = tas.aa_sequence_id
           LEFT JOIN dots.RnaType rt2 ON gf.na_feature_id = rt2.parent_id
           LEFT JOIN dots.RnaType rt1 ON t.na_feature_id = rt1.parent_id
           LEFT JOIN apidb.AaSequenceAttribute asa ON taf.aa_sequence_id = asa.aa_sequence_id
-          LEFT JOIN :ORG_ABBREVProteinGoAttributes  go ON tas.aa_sequence_id = go.aa_sequence_id
+          LEFT JOIN :SCHEMA.:ORG_ABBREVProteinGoAttributes_tmp  go ON tas.aa_sequence_id = go.aa_sequence_id
           LEFT JOIN (
             SELECT aa_sequence_id, string_agg(peptide_sequence, ', ') peptide_sequence
-            FROM (SELECT DISTINCT aa_sequence_id, peptide_sequence FROM :ORG_ABBREVSignalPeptideDomains) t
+            FROM (SELECT DISTINCT aa_sequence_id, peptide_sequence FROM :SCHEMA.:ORG_ABBREVSignalPeptideDomains) t
             GROUP BY aa_sequence_id
           ) sigp ON tas.aa_sequence_id = sigp.aa_sequence_id
           LEFT JOIN (
@@ -178,8 +185,8 @@
                  GROUP BY tmaf.aa_sequence_id) tms
             GROUP BY tms.aa_sequence_id
           ) transmembrane ON tas.aa_sequence_id = transmembrane.aa_sequence_id
-          LEFT JOIN :ORG_ABBREVProteinAttrsEc  ec ON tas.aa_sequence_id = ec.aa_sequence_id
-          LEFT JOIN :ORG_ABBREVProteinAttrsEcDerived  ecDerived ON tas.aa_sequence_id = ecDerived.aa_sequence_id
+          LEFT JOIN :SCHEMA.:ORG_ABBREVProteinAttrsEc_tmp  ec ON tas.aa_sequence_id = ec.aa_sequence_id
+          LEFT JOIN :SCHEMA.:ORG_ABBREVProteinAttrsEcDerived_tmp  ecDerived ON tas.aa_sequence_id = ecDerived.aa_sequence_id
           LEFT JOIN (
             SELECT af.aa_sequence_id,
                    string_agg(dbref.primary_identifier, ',' order by dbref.primary_identifier) as uniprot_ids
@@ -199,13 +206,13 @@
 
 
       
-       update :ORG_ABBREVProteinAttributes  gaup
+       update :SCHEMA.:ORG_ABBREVProteinAttributes  gaup
        set has_seqedit  = 1
        where source_id in (select source_id from apidb.seqedit)
       
     ;
 
-drop table :ORG_ABBREVGoTermList;
-drop table :ORG_ABBREVProteinGoAttributes;
-drop table :ORG_ABBREVtProteinAttrsEc;
-drop table :ORG_ABBREVtProteinAttrsEcDerived;
+drop table :SCHEMA.:ORG_ABBREVGoTermList_tmp;
+drop table :SCHEMA.:ORG_ABBREVProteinGoAttributes_tmp;
+drop table :SCHEMA.:ORG_ABBREVtProteinAttrsEc_tmp;
+drop table :SCHEMA.:ORG_ABBREVtProteinAttrsEcDerived_tmp;
