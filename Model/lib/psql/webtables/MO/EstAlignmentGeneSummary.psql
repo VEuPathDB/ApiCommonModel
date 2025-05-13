@@ -1,6 +1,6 @@
 
       
-        CREATE UNLOGGED TABLE EstAlignmentGene AS
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVEstAlignmentGeneTmp AS
         SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
                  e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
                  ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
@@ -11,21 +11,23 @@
                    AS est_gene_overlap_length,
                  ba.query_bases_aligned / (query_sequence.length)
                  * 100 AS percent_est_bases_aligned,
-                 ga.gene_source_id AS gene
+                 ga.gene_source_id AS gene,':PROJECT_ID' as project_id,
+                 ':ORG_ABBREV' as org_abbrev, current_timestamp as modification_date
         FROM dots.BlatAlignment ba, dots.Est e,
-             apidbtuning.TranscriptAttributes ga, 
+             :SCHEMA.TranscriptAttributes ga, 
              dots.NaSequence query_sequence 
         WHERE e.na_sequence_id = ba.query_na_sequence_id
           AND ga.na_sequence_id = ba.target_na_sequence_id
           AND least(ba.target_end, ga.gene_end_max) - greatest(ba.target_start, ga.gene_start_min) >= 0
           AND query_sequence.na_sequence_id = ba.query_na_sequence_id
+          AND ga.org_abbrev = ':ORG_ABBREV'
       
     ;
 
 
       
-        CREATE UNLOGGED TABLE EstAlignmentNoGene AS
-        SELECT * from EstAlignmentGene WHERE 1=0 UNION /* define datatype for null column */
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVEstAlignmentNoGeneTmp AS
+        SELECT * from :SCHEMA.:ORG_ABBREVEstAlignmentGeneTmp WHERE 1=0 UNION /* define datatype for null column */
         SELECT ba.blat_alignment_id, ba.query_na_sequence_id, e.accession,
                e.library_id, ba.query_taxon_id, ba.target_na_sequence_id,
                ba.target_taxon_id, ba.percent_identity, ba.is_consistent,
@@ -34,37 +36,39 @@
                NULL AS est_gene_overlap_length,
                ba.query_bases_aligned / (query_sequence.length)
                * 100 AS percent_est_bases_aligned,
-               NULL AS gene
+               NULL AS gene,':PROJECT_ID' as project_id,
+               ':ORG_ABBREV' as org_abbrev, current_timestamp as modification_date
         FROM dots.BlatAlignment ba, dots.Est e, dots.AssemblySequence aseq,
              dots.NaSequence sequence, dots.NaSequence query_sequence
         WHERE e.na_sequence_id = ba.query_na_sequence_id
           AND e.na_sequence_id = query_sequence.na_sequence_id
           AND aseq.na_sequence_id = ba.query_na_sequence_id
           AND ba.target_na_sequence_id = sequence.na_sequence_id
+          AND sequence.taxon_id = :TAXON_ID
           AND ba.blat_alignment_id IN
            ( /* set of blat_alignment_ids not in in first leg of UNION */
             /* (because they overlap no genes) */
             SELECT ba.blat_alignment_id
             FROM dots.BlatAlignment ba, dots.NaSequence query_sequence,
-                 sres.OntologyTerm so
+                 sres.OntologyTerm so, dots.NaSequence target_sequence,
             WHERE query_sequence.na_sequence_id = ba.query_na_sequence_id
               AND query_sequence.sequence_ontology_id = so.ontology_term_id
+              AND ba.target_na_sequence_id = target_sequence.na_sequence_id
+              AND target_sequence.taxon_id = :TAXON_ID
               AND so.name = 'EST'
             EXCEPT
-            SELECT blat_alignment_id FROM EstAlignmentGene)
+            SELECT blat_alignment_id FROM :SCHEMA.:ORG_ABBREVEstAlignmentGeneTmp)
       
     ;
 
 :CREATE_AND_POPULATE
 
-      
-        CREATE TABLE EstAlignmentGeneSummary  AS
-        SELECT * FROM EstAlignmentNoGene
+        SELECT * FROM :SCHEMA.:ORG_ABBREVEstAlignmentNoGeneTmp
         UNION
-        SELECT * FROM EstAlignmentGene
+        SELECT * FROM :SCHEMA.:ORG_ABBREVEstAlignmentGeneTmp
       
     
 :DECLARE_PARTITION;
 
-drop table EstAlignmentGene;
-drop table EstAlignmentNoGene;
+drop table :SCHEMA.:ORG_ABBREVEstAlignmentGeneTmp;
+drop table :SCHEMA.:ORG_ABBREVEstAlignmentNoGeneTmp;

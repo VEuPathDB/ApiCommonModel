@@ -1,8 +1,7 @@
 :CREATE_AND_POPULATE
-
-      
-	    CREATE TABLE :ORG_ABBREVGeneAttributes  AS
-	    SELECT DISTINCT project_id
+	    SELECT DISTINCT ':PROJECT_ID' as project_id
+        , ':ORG_ABBREV' as org_abbrev
+        , current_timestamp as modification_date
         , ta.gene_source_id AS source_id
 		, gene_na_feature_id AS na_feature_id
 		, na_sequence_id
@@ -59,11 +58,12 @@
         , gene_zoom_context_end as zoom_context_end
         , cast (null as numeric) as strain_count
         , ta.gene_locations as locations
-        FROM :ORG_ABBREVTranscriptAttributes ta
+        FROM :SCHEMA.TranscriptAttributes ta
           INNER JOIN (
             SELECT gene_source_id, MIN(is_pseudo) AS is_pseudo, MIN(gene_product) AS product,
               substr(STRING_AGG(transcript_product, ',' order by transcript_product), 1, 240) as transcript_product
-            FROM :ORG_ABBREVTranscriptAttributes
+            FROM :SCHEMA.TranscriptAttributes
+            WHERE org_abbrev = ':ORG_ABBREV'
             GROUP BY gene_source_id
           ) aggregates ON ta.gene_source_id = aggregates.gene_source_id
           LEFT JOIN (
@@ -71,11 +71,12 @@
               substr(string_agg(uniprot_id, ',' order by uniprot_id), 1, 240) as uniprot_id,
               substr(string_agg(uniprot_id, '+or+' order by uniprot_id), 1, 240) as uniprot_id_internal
             FROM (
-              SELECT distinct t.parent_id as na_feature_id, dr.primary_identifier as uniprot_id
-              FROM sres.DbRef dr, dots.DbRefNaFeature x, dots.Transcript t,
+              SELECT distinct t.gene_na_feature_id as na_feature_id, dr.primary_identifier as uniprot_id
+              FROM sres.DbRef dr, dots.DbRefNaFeature x, :SCHEMA.Transcriptattributes t,
                    sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
               WHERE dr.db_ref_id = x.DB_REF_ID
-                AND (x.na_feature_id = t.na_feature_id OR x.na_feature_id = t.parent_id)
+                AND t.org_abbrev = ':ORG_ABBREV'
+                AND (x.na_feature_id = t.na_feature_id OR x.na_feature_id = t.gene_na_feature_id)
                 AND dr.external_database_release_id = r.external_database_release_id
                 AND r.external_database_id = d.external_database_id
                 AND (d.name like '%uniprot_dbxref_RSRC'
@@ -86,28 +87,31 @@
             GROUP BY na_feature_id
           ) uniprot ON ta.gene_na_feature_id = uniprot.na_feature_id
           LEFT JOIN :ORG_ABBREVGeneProduct gp ON ta.gene_source_id = gp.source_id
+          WHERE ta.org_abbrev = ':ORG_ABBREV'
         ORDER BY ta.gene_source_id
-      
-    
 :DECLARE_PARTITION;
 
 
       
-        CREATE TABLE :ORG_ABBREVSpeciesInfo  as
+        CREATE unlogged TABLE :SCHEMA.:ORG_ABBREVSpeciesInfoTmp  as
         SELECT genus_species, count(distinct organism) as strain_count
-        FROM :ORG_ABBREVGeneAttributes 
+        FROM :SCHEMA.GeneAttributes
+        WHERE org_abbrev = ':ORG_ABBREV'
         GROUP BY genus_species
       
     ;
 
 
       
-        UPDATE :ORG_ABBREVGeneAttributes  ga
+        UPDATE :SCHEMA.GeneAttributes  ga
         SET strain_count = (
           SELECT strain_count
-          FROM :ORG_ABBREVSpeciesInfo  si
+          FROM :SCHEMA.:ORG_ABBREVSpeciesInfo  si
           WHERE si.genus_species = ga.genus_species
         )
+        WHERE org_abbrev = ':ORG_ABBREV'
       
     ;
 
+drop table :SCHEMA.:ORG_ABBREVSpeciesInfo
+;
