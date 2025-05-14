@@ -114,45 +114,47 @@
                               then p.source_id
                               else ''
                                end)) as geneArrayCount
-        FROM Profile p
-          RIGHT OUTER JOIN :SCHEMA.GeneAttributes ga ON ga.source_id = p.source_id and ga.org_abbrev = ':ORG_ABBREV'
+        FROM :SCHEMA.Profile p
+          RIGHT OUTER JOIN :SCHEMA.GeneAttributes ga ON ga.source_id = p.source_id
+        WHERE ga.org_abbrev = ':ORG_ABBREV'
+         and p.org_abbrev = ':ORG_ABBREV'
         GROUP BY ga.taxon_id
       
     ;
 
 
       
-        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVPopsetCount AS
-        SELECT count(distinct gene.source_id) as popsetCount, sim.taxon_id
-        FROM (
-          (SELECT i.source_id, nas.taxon_id, nas.source_id as sequence_source_id
-           FROM dots.similarity s, PopsetAttributes i,
-                core.tableinfo t, dots.nasequence nas
-           WHERE s.query_id = i.na_sequence_id
-             AND nas.na_sequence_id = s.subject_id
-             AND t.table_id = s.subject_table_id
-             AND t.table_id = s.query_table_id
-             AND t.name = 'ExternalNASequence'
-             AND s.pvalue_exp <= -10
-	     and nas.taxon_id = :TAXON_ID
-           ) sim LEFT JOIN
-           (SELECT i.source_id, seq.source_id as sequence_id
-            FROM  dots.similarity s, PopsetAttributes i, GeneAttributes g,
-                  core.tableinfo t, dots.nasequence seq
-            WHERE s.query_id = i.na_sequence_id
-              AND s.subject_id = g.na_sequence_id
-              AND t.table_id = s.subject_table_id
-              AND t.table_id = s.query_table_id
-              AND s.min_subject_start <=  g.end_max
-              AND s.max_subject_end >= g.start_min
-              AND g.na_sequence_id = seq.na_sequence_id
-              AND t.name = 'ExternalNASequence'
-	      and seq.taxon_id = :TAXON_ID
-            ) gene
-           ON gene.source_id = sim.source_id AND gene.sequence_id = sim.sequence_source_id)
-        GROUP BY sim.taxon_id
-      
-    ;
+    --     CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVPopsetCount AS
+    --     SELECT count(distinct gene.source_id) as popsetCount, sim.taxon_id
+    --     FROM (
+    --       (SELECT i.source_id, nas.taxon_id, nas.source_id as sequence_source_id
+    --        FROM dots.similarity s, PopsetAttributes i,
+    --             core.tableinfo t, dots.nasequence nas
+    --        WHERE s.query_id = i.na_sequence_id
+    --          AND nas.na_sequence_id = s.subject_id
+    --          AND t.table_id = s.subject_table_id
+    --          AND t.table_id = s.query_table_id
+    --          AND t.name = 'ExternalNASequence'
+    --          AND s.pvalue_exp <= -10
+	--      and nas.taxon_id = :TAXON_ID
+    --        ) sim LEFT JOIN
+    --        (SELECT i.source_id, seq.source_id as sequence_id
+    --         FROM  dots.similarity s, PopsetAttributes i, GeneAttributes g,
+    --               core.tableinfo t, dots.nasequence seq
+    --         WHERE s.query_id = i.na_sequence_id
+    --           AND s.subject_id = g.na_sequence_id
+    --           AND t.table_id = s.subject_table_id
+    --           AND t.table_id = s.query_table_id
+    --           AND s.min_subject_start <=  g.end_max
+    --           AND s.max_subject_end >= g.start_min
+    --           AND g.na_sequence_id = seq.na_sequence_id
+    --           AND t.name = 'ExternalNASequence'
+	--       and seq.taxon_id = :TAXON_ID
+    --         ) gene
+    --        ON gene.source_id = sim.source_id AND gene.sequence_id = sim.sequence_source_id)
+    --     GROUP BY sim.taxon_id
+
+    -- ;
 
 
       
@@ -195,8 +197,8 @@
                           then ga.source_id
                           else NULL
                           end)),0) ecNumberCount
-        FROM GeneAttributes ga
-          LEFT OUTER JOIN apidb.phylogeneticprofile pp on ga.source_id = pp.source_id
+        FROM :SCHEMA.GeneAttributes ga
+          LEFT OUTER JOIN apidb.phylogeneticprofile pp on ga.source_id = pp.source_id and ga.org_abbrev = ':ORG_ABBREV'
           LEFT OUTER JOIN :SCHEMA.gotermsummary gts on ga.source_id = gts.gene_source_id and gts.org_abbrev = ':ORG_ABBREV'
           LEFT OUTER JOIN :SCHEMA.TFBSGene tfbs on ga.source_id = tfbs.gene_source_id and tfbs.org_abbrev = ':ORG_ABBREV'
           LEFT OUTER JOIN :SCHEMA.TranscriptAttributes ta on ta.gene_source_id = ga.source_id and ta.org_abbrev = ':ORG_ABBREV'
@@ -293,37 +295,38 @@
                    coalesce(sc.supercont_num, 0) as supercontigCount,
                    coalesce(sc.chrom_num, 0) as chromosomeCount,
                    coalesce(cc.communityCount, 0) as communityCount,
-                   coalesce(psc.popsetCount, 0) as popsetCount,
+                   --coalesce(psc.popsetCount, 0) as popsetCount,
                    coalesce(pc.geneArrayCount, 0) as arrayGeneCount,
                    coalesce(pc.rnaSeqCount, 0) as rnaSeqCount,
                    coalesce(pc.rtPCRCount, 0) as rtPCRCount,
                    coalesce(ta.avg_transcript_length, 0) as avg_transcript_length
             FROM apidb.Organism o
-              INNER JOIN sres.TaxonName tn ON tn.taxon_id = o.taxon_id
+              INNER JOIN sres.TaxonName tn ON tn.taxon_id = o.taxon_id and o.taxon_id = :TAXON_ID
               INNER JOIN sres.Taxon t ON t.taxon_id = tn.taxon_id
               LEFT JOIN :SCHEMA.:ORG_ABBREVDataSourceCount dsc ON o.taxon_id = dsc.taxon_id
               LEFT JOIN :SCHEMA.:ORG_ABBREVOrganismCentromere oc ON o.taxon_id = oc.taxon_id
               LEFT JOIN :SCHEMA.:ORG_ABBREVSequenceCount sc ON o.taxon_id = sc.taxon_id
               LEFT JOIN :SCHEMA.:ORG_ABBREVCommunityCount cc ON o.taxon_id = cc.taxon_id
               LEFT JOIN :SCHEMA.:ORG_ABBREVGeneCount gc ON o.taxon_id = gc.taxon_id
-              LEFT JOIN :SCHEMA.:ORG_ABBREVpopsetCount psc ON o.taxon_id = psc.taxon_id
+              --LEFT JOIN :SCHEMA.:ORG_ABBREVpopsetCount psc ON o.taxon_id = psc.taxon_id
               LEFT JOIN :SCHEMA.:ORG_ABBREVprofileCount pc ON o.taxon_id = pc.taxon_id
               LEFT JOIN (
                 SELECT taxon_id, round(avg(length),1) as avg_transcript_length
-                FROM TranscriptAttributes
-		where org_abbrev = ':ORG_ABBREV'
-		GROUP by taxon_id
+                FROM :SCHEMA.TranscriptAttributes
+                where org_abbrev = ':ORG_ABBREV'
+                GROUP by taxon_id
               ) ta ON o.taxon_id = ta.taxon_id
             WHERE tn.name_class = 'scientific name'
           ) oa,
-          TaxonSpecies ts,
+          :SCHEMA.TaxonSpecies ts,
           sres.taxon t,
           sres.taxonname tn2
         WHERE oa.component_taxon_id = ts.taxon_id
           AND ts.species_taxon_id = t.taxon_id
           AND ts.species_taxon_id = tn2.taxon_id
           AND tn2.name_class = 'scientific name'
-	  and o.taxon_id = :TAXON_ID
+          AND o.taxon_id = :TAXON_ID
+          AND ts.org_abbrev = ':ORG_ABBREV'
       
     
 :DECLARE_PARTITION;
@@ -331,7 +334,7 @@
 drop table :SCHEMA.:ORG_ABBREVDataSourceCount;
 drop table :SCHEMA.:ORG_ABBREVOrganismCentromere;
 drop table :SCHEMA.:ORG_ABBREVProfileCount;
-drop table :SCHEMA.:ORG_ABBREVPopsetCount;
+--drop table :SCHEMA.:ORG_ABBREVPopsetCount;
 drop table :SCHEMA.:ORG_ABBREVGeneCount;
 drop table :SCHEMA.:ORG_ABBREVSequenceCount;
 drop table :SCHEMA.:ORG_ABBREVCommunityCount;
