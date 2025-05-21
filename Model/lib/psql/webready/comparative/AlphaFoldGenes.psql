@@ -1,6 +1,6 @@
-
-      
-        CREATE TABLE uniprotGenes  AS
+	drop table if exists :SCHEMA.uniprotgenes;
+	
+        CREATE TABLE :SCHEMA.uniprotGenes  AS
         SELECT DISTINCT ed.name
         , d.*
         , edr.version
@@ -18,7 +18,7 @@
         , sres.externaldatabaserelease edr
         , dots.dbrefaafeature db
         , dots.aafeature aa
-        , ProteinAttributes pa
+        , :SCHEMA.ProteinAttributes pa
         WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
           AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp')
           AND edr.external_database_id = ed.external_database_id
@@ -40,7 +40,7 @@
           , sres.externaldatabaserelease edr
           , dots.dbrefnafeature db
           , dots.nafeature na
-          , TranscriptAttributes ta
+          , :SCHEMA.TranscriptAttributes ta
         WHERE ed.name like '%_dbxref_%niprot_%RSRC'
           AND edr.external_database_id = ed.external_database_id
           AND d.external_database_release_id = edr.external_database_release_id
@@ -50,37 +50,34 @@
       
     ;
 
-
+    drop table if exists :SCHEMA.minrank
       
-        CREATE UNLOGGED TABLE minRank AS (
+        CREATE UNLOGGED TABLE :SCHEMA.minRank AS (
             SELECT gene_source_id
               , MIN(rank) as min_rank
-            FROM uniprotGenes  upg
+            FROM :SCHEMA.uniprotGenes  upg
             WHERE hit_length is not null
             GROUP BY gene_source_id
         )
       
     ;
 
-
+    drop table if exists :SCHEMA.alphafoldhits;
       
-        CREATE UNLOGGED TABLE alphaFoldHits AS (
+        CREATE UNLOGGED TABLE :SCHEMA.alphaFoldHits AS (
           SELECT DISTINCT gene_source_id
             , last_value(primary_identifier) over (PARTITION BY gene_source_id ORDER BY hit_length ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS uniprot_id
           FROM (
             SELECT upg.*
-            FROM uniprotGenes  upg
-              , minRank
+            FROM :SCHEMA.uniprotGenes  upg
+              , :SCHEMA.minRank
             WHERE upg.gene_source_id = minRank.gene_source_id
             AND upg.rank = minRank.min_rank
           ) t
         )
-      
     ;
 
-
-      
-        CREATE TABLE AlphaFoldGenes  AS (
+        CREATE TABLE :SCHEMA.AlphaFoldGenes  AS (
           SELECT afh.gene_source_id
             , af.uniprot_id
             , af.source_id as alphafold_id
@@ -88,16 +85,13 @@
             , af.first_residue_index
             , af.last_residue_index
           FROM apidb.alphafold af
-            , alphaFoldHits afh
+            , :SCHEMA.alphaFoldHits afh
           WHERE afh.uniprot_id = af.uniprot_id
         )
       
     ;
 
-
-      
-        CREATE index AlphaFoldGenes_idx  ON AlphaFoldGenes  (gene_source_id, uniprot_id)                                                                                                
-
-      
-    ;
+    drop table if exists :SCHEMA.uniprotgenes;
+    drop table if exists :SCHEMA.minrank
+    drop table if exists :SCHEMA.alphafoldhits;
 
