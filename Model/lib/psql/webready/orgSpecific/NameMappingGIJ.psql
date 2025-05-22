@@ -4,12 +4,14 @@
         WITH ij AS (
           SELECT pj.output_pan_id as junctions_pan_id, p.output_pan_id as expression_pan_id, avg(nafe.value) as avg_value,pan.name as exp_name,
               regexp_replace(pan.name, ' \[htseq-union.*', '') as sample_name
-          FROM :SCHEMA.:ORG_ABBREVpanio p, :SCHEMA.:ORG_ABBREVpanio pj, results.nafeatureexpression nafe, study.protocolappnode pan
+          FROM :SCHEMA.panio p, :SCHEMA.panio pj, results.nafeatureexpression nafe, study.protocolappnode pan
           WHERE pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
                   AND pj.input_pan_id = p.input_pan_id
                   AND p.output_pan_id = pan.protocol_app_node_id
                   AND pan.name like '%tpm - unique%'
                   AND p.output_pan_id = nafe.protocol_app_node_id
+		  and p.org_abbrev = ':ORG_ABBREV'
+		  and pj.org_abbrev = ':ORG_ABBREV'
           GROUP BY pj.output_pan_id, p.output_pan_id, pan.name
           ORDER BY pj.output_pan_id
         ) , stats AS (
@@ -43,7 +45,7 @@
 
 
       
-        create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id)
+        create index junexpgijtmp_ix on :SCHEMA.:ORG_ABBREVJunExpGIJtmp(junctions_pan_id,exp_pan_id)
       
     ;
 
@@ -64,13 +66,14 @@
            FROM (SELECT je.junctions_pan_id, ca.value::NUMERIC as average_read_length,
                         cb.value::NUMERIC as number_mapped_reads,
                         cc.value::NUMERIC as avg_mapping_coverage
-                 FROM junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                      :SCHEMA.:ORG_ABBREVpanio pj, results.nafeatureexpression nafe, study.protocolappnode pan
+                 FROM :SCHEMA.:ORG_ABBREVjunexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
+                      panio pj, results.nafeatureexpression nafe, study.protocolappnode pan
           WHERE pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
                   AND pj.input_pan_id = p.input_pan_id
                   AND p.output_pan_id = pan.protocol_app_node_id
                   AND pan.name like '%tpm - unique%'
                   AND p.output_pan_id = nafe.protocol_app_node_id
+		  and pj.org_abbrev = ':ORG_ABBREV'
           GROUP BY pj.output_pan_id, p.output_pan_id, pan.name
           ORDER BY pj.output_pan_id
         ) , stats AS (
@@ -102,301 +105,6 @@
       
     ;
 
-
-      
-        create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id)
-      
-    ;
-
-        drop table if exists :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp;
-      
-        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp (
-            junctions_pan_id,
-            read_length,
-            mapped_reads,
-            avg_mapping_coverage,
-            num_replicates
-        ) AS
-           SELECT junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
-                  round(avg(number_mapped_reads),1) as mapped_reads,
-                  round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
-                    as avg_mapping_coverage,
-                  count(*) as num_replicates
-           FROM (SELECT je.junctions_pan_id, ca.value::NUMERIC as average_read_length,
-                        cb.value::NUMERIC as number_mapped_reads,
-                        cc.value::NUMERIC as avg_mapping_coverage
-                 FROM junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                      :SCHEMA.:ORG_ABBREVpanio pj, results.nafeatureexpression nafe, study.protocolappnode pan
-          WHERE pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
-                  AND pj.input_pan_id = p.input_pan_id
-                  AND p.output_pan_id = pan.protocol_app_node_id
-                  AND pan.name like '%tpm - unique%'
-                  AND p.output_pan_id = nafe.protocol_app_node_id
-          GROUP BY pj.output_pan_id, p.output_pan_id, pan.name
-          ORDER BY pj.output_pan_id
-        ) , stats AS (
-          SELECT protocol_app_node_id, 'total' as type, count(*) as total_junctions,
-          sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
-          FROM apidb.IntronJunction
-          WHERE unique_reads >= 1
-          GROUP BY protocol_app_node_id
-        ), part AS (
-          SELECT
-              ij.junctions_pan_id, ij.avg_value, stats.multiplier
-              , max(ij.expression_pan_id) OVER w as max_exp_pan_id
-              , max(ij.sample_name) OVER w as max_sample_Name
-              , max(ij.exp_name) OVER w as max_exp_name
-          FROM ij, stats
-          WHERE ij.junctions_pan_id = stats.protocol_app_node_id
-          WINDOW w AS (partition by ij.junctions_pan_id, stats.multiplier, ij.avg_value)
-        )
-        SELECT DISTINCT * FROM (
-        SELECT junctions_pan_id
-               , first_value(max_exp_pan_id) OVER w1 as exp_pan_id
-               , first_value(max_sample_name) OVER w1 as sample_name
-               , CASE WHEN first_value(max_exp_name) OVER w1 LIKE  '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands
-               , multiplier
-        FROM part
-        WINDOW w1 AS (PARTITION BY junctions_pan_id, multiplier ORDER BY avg_value DESC)
-        ) t
-        ORDER BY junctions_pan_id
-      
-    ;
-
-
-      
-        create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id)
-      
-    ;
-
-        drop table if exists :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp;
-      
-        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp (
-            junctions_pan_id,
-            read_length,
-            mapped_reads,
-            avg_mapping_coverage,
-            num_replicates
-        ) AS
-           SELECT junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
-                  round(avg(number_mapped_reads),1) as mapped_reads,
-                  round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
-                    as avg_mapping_coverage,
-                  count(*) as num_replicates
-           FROM (SELECT je.junctions_pan_id, ca.value::NUMERIC as average_read_length,
-                        cb.value::NUMERIC as number_mapped_reads,
-                        cc.value::NUMERIC as avg_mapping_coverage
-                 FROM junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                      :SCHEMA.:ORG_ABBREVpanio pj, results.nafeatureexpression nafe, study.protocolappnode pan
-          WHERE pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
-                  AND pj.input_pan_id = p.input_pan_id
-                  AND p.output_pan_id = pan.protocol_app_node_id
-                  AND pan.name like '%tpm - unique%'
-                  AND p.output_pan_id = nafe.protocol_app_node_id
-          GROUP BY pj.output_pan_id, p.output_pan_id, pan.name
-          ORDER BY pj.output_pan_id
-        ) , stats AS (
-          SELECT protocol_app_node_id, 'total' as type, count(*) as total_junctions,
-          sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
-          FROM apidb.IntronJunction
-          WHERE unique_reads >= 1
-          GROUP BY protocol_app_node_id
-        ), part AS (
-          SELECT
-              ij.junctions_pan_id, ij.avg_value, stats.multiplier
-              , max(ij.expression_pan_id) OVER w as max_exp_pan_id
-              , max(ij.sample_name) OVER w as max_sample_Name
-              , max(ij.exp_name) OVER w as max_exp_name
-          FROM ij, stats
-          WHERE ij.junctions_pan_id = stats.protocol_app_node_id
-          WINDOW w AS (partition by ij.junctions_pan_id, stats.multiplier, ij.avg_value)
-        )
-        SELECT DISTINCT * FROM (
-        SELECT junctions_pan_id
-               , first_value(max_exp_pan_id) OVER w1 as exp_pan_id
-               , first_value(max_sample_name) OVER w1 as sample_name
-               , CASE WHEN first_value(max_exp_name) OVER w1 LIKE  '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands
-               , multiplier
-        FROM part
-        WINDOW w1 AS (PARTITION BY junctions_pan_id, multiplier ORDER BY avg_value DESC)
-        ) t
-        ORDER BY junctions_pan_id
-      
-    ;
-
-
-      
-        create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id)
-      
-    ;
-
-        drop table if exists :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp;
-      
-        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp (
-            junctions_pan_id,
-            read_length,
-            mapped_reads,
-            avg_mapping_coverage,
-            num_replicates
-        ) AS
-           SELECT junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
-                  round(avg(number_mapped_reads),1) as mapped_reads,
-                  round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
-                    as avg_mapping_coverage,
-                  count(*) as num_replicates
-           FROM (SELECT je.junctions_pan_id, ca.value::NUMERIC as average_read_length,
-                        cb.value::NUMERIC as number_mapped_reads,
-                        cc.value::NUMERIC as avg_mapping_coverage
-                 FROM junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                      :SCHEMA.:ORG_ABBREVpanio pj, results.nafeatureexpression nafe, study.protocolappnode pan
-          WHERE pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
-                  AND pj.input_pan_id = p.input_pan_id
-                  AND p.output_pan_id = pan.protocol_app_node_id
-                  AND pan.name like '%tpm - unique%'
-                  AND p.output_pan_id = nafe.protocol_app_node_id
-          GROUP BY pj.output_pan_id, p.output_pan_id, pan.name
-          ORDER BY pj.output_pan_id
-        ) , stats AS (
-          SELECT protocol_app_node_id, 'total' as type, count(*) as total_junctions,
-          sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
-          FROM apidb.IntronJunction
-          WHERE unique_reads >= 1
-          GROUP BY protocol_app_node_id
-        ), part AS (
-          SELECT
-              ij.junctions_pan_id, ij.avg_value, stats.multiplier
-              , max(ij.expression_pan_id) OVER w as max_exp_pan_id
-              , max(ij.sample_name) OVER w as max_sample_Name
-              , max(ij.exp_name) OVER w as max_exp_name
-          FROM ij, stats
-          WHERE ij.junctions_pan_id = stats.protocol_app_node_id
-          WINDOW w AS (partition by ij.junctions_pan_id, stats.multiplier, ij.avg_value)
-        )
-        SELECT DISTINCT * FROM (
-        SELECT junctions_pan_id
-               , first_value(max_exp_pan_id) OVER w1 as exp_pan_id
-               , first_value(max_sample_name) OVER w1 as sample_name
-               , CASE WHEN first_value(max_exp_name) OVER w1 LIKE  '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands
-               , multiplier
-        FROM part
-        WINDOW w1 AS (PARTITION BY junctions_pan_id, multiplier ORDER BY avg_value DESC)
-        ) t
-        ORDER BY junctions_pan_id
-      
-    ;
-
-
-      
-        create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id)
-      
-    ;
-
-        drop table if exists :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp;
-      
-        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp (
-            junctions_pan_id,
-            read_length,
-            mapped_reads,
-            avg_mapping_coverage,
-            num_replicates
-        ) AS
-           SELECT junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
-                  round(avg(number_mapped_reads),1) as mapped_reads,
-                  round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
-                    as avg_mapping_coverage,
-                  count(*) as num_replicates
-           FROM (SELECT je.junctions_pan_id, ca.value::NUMERIC as average_read_length,
-                        cb.value::NUMERIC as number_mapped_reads,
-                        cc.value::NUMERIC as avg_mapping_coverage
-                 FROM junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                      :SCHEMA.:ORG_ABBREVpanio pj, results.nafeatureexpression nafe, study.protocolappnode pan
-          WHERE pj.output_pan_id in (select distinct protocol_app_node_id from apidb.intronjunction)
-                  AND pj.input_pan_id = p.input_pan_id
-                  AND p.output_pan_id = pan.protocol_app_node_id
-                  AND pan.name like '%tpm - unique%'
-                  AND p.output_pan_id = nafe.protocol_app_node_id
-          GROUP BY pj.output_pan_id, p.output_pan_id, pan.name
-          ORDER BY pj.output_pan_id
-        ) , stats AS (
-          SELECT protocol_app_node_id, 'total' as type, count(*) as total_junctions,
-          sum(unique_reads) as total_reads, round(1000000/sum(unique_reads),4) as multiplier
-          FROM apidb.IntronJunction
-          WHERE unique_reads >= 1
-          GROUP BY protocol_app_node_id
-        ), part AS (
-          SELECT
-              ij.junctions_pan_id, ij.avg_value, stats.multiplier
-              , max(ij.expression_pan_id) OVER w as max_exp_pan_id
-              , max(ij.sample_name) OVER w as max_sample_Name
-              , max(ij.exp_name) OVER w as max_exp_name
-          FROM ij, stats
-          WHERE ij.junctions_pan_id = stats.protocol_app_node_id
-          WINDOW w AS (partition by ij.junctions_pan_id, stats.multiplier, ij.avg_value)
-        )
-        SELECT DISTINCT * FROM (
-        SELECT junctions_pan_id
-               , first_value(max_exp_pan_id) OVER w1 as exp_pan_id
-               , first_value(max_sample_name) OVER w1 as sample_name
-               , CASE WHEN first_value(max_exp_name) OVER w1 LIKE  '%secondstrand%' THEN 'true' ELSE 'false' END as switch_strands
-               , multiplier
-        FROM part
-        WINDOW w1 AS (PARTITION BY junctions_pan_id, multiplier ORDER BY avg_value DESC)
-        ) t
-        ORDER BY junctions_pan_id
-      
-    ;
-
-
-      
-        create index junexpgijtmp_ix on JunExpGIJtmp(junctions_pan_id,exp_pan_id)
-      
-    ;
-
-        drop table if exists :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp;
-      
-        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVMappingStatsGIJtmp (
-            junctions_pan_id,
-            read_length,
-            mapped_reads,
-            avg_mapping_coverage,
-            num_replicates
-        ) AS
-           SELECT junctions_pan_id, round(avg(average_read_length - 2),1) as read_length,
-                  round(avg(number_mapped_reads),1) as mapped_reads,
-                  round(avg(avg_mapping_coverage) * ((avg(average_read_length) - 2) / avg(average_read_length)),2)
-                    as avg_mapping_coverage,
-                  count(*) as num_replicates
-           FROM (SELECT je.junctions_pan_id, ca.value::NUMERIC as average_read_length,
-                        cb.value::NUMERIC as number_mapped_reads,
-                        cc.value::NUMERIC as avg_mapping_coverage
-                 FROM junexpgijtmp je, STUDY.CHARACTERISTIC ca, sres.ontologyterm ota,
-                      :SCHEMA.:ORG_ABBREVPANIO ioa, STUDY.CHARACTERISTIC cb, sres.ontologyterm otb,
-                      STUDY.CHARACTERISTIC cc, sres.ontologyterm otc
-                 WHERE je.junctions_pan_id = ioa.output_pan_id
-                   AND ioa.input_pan_id = ca.protocol_app_node_id
-                   AND ca.value is not null
-                   AND ca.QUALIFIER_ID = ota.ONTOLOGY_TERM_ID
-                   AND ota.source_id IN ('EuPathUserDefined_00504','EUPATH_0000457') --  '%average read length'
-                   AND ca.protocol_app_node_id = cb.protocol_app_node_id
-                   AND cb.value is not null
-                   AND cb.QUALIFIER_ID = otb.ONTOLOGY_TERM_ID
-                   AND otb.source_id IN ('EuPathUserDefined_00503','EUPATH_0000456') -- '%number mapped reads'
-                   AND ca.protocol_app_node_id = cc.protocol_app_node_id
-                   AND cc.value is not null
-                   AND cc.QUALIFIER_ID = otc.ONTOLOGY_TERM_ID
-                   AND otc.source_id IN ('EuPathUserDefined_00501','GENEPIO_0000092') -- '%average mapping coverage'
-                 ) t
-           GROUP by Junctions_Pan_Id
-      
-    ;
-
-
-      
-        CREATE INDEX mpstats_pk_ix on MappingStatsGIJtmp
-          (junctions_pan_id,read_length,mapped_reads,avg_mapping_coverage,num_replicates)
-
-      
-    ;
 
 :CREATE_AND_POPULATE
 
