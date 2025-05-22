@@ -1,9 +1,8 @@
 :CREATE_AND_POPULATE
-
-      
-        CREATE TABLE EstAttributes  AS
         SELECT
-               cast(apidb.project_id(tn.name) as varchar(20)) as project_id,
+               ':PROJECT_ID' as project_id,
+               ':ORG_ABBREV' as org_abbrev,
+               current_timestamp as modification_date,
                ens.source_id,
                e.seq_primer AS primer,
                ens.a_count,
@@ -26,13 +25,21 @@
                l.library_id, replace(l.dbest_name, '''', '-') as library_dbest_name
         FROM dots.Est e, dots.Library l, sres.Taxon, sres.OntologyTerm oterm,
              sres.TaxonName tn, sres.ExternalDatabase ed,
-             sres.ExternalDatabaseRelease edr, dots.ExternalNaSequence ens
+             sres.ExternalDatabaseRelease edr, dots.ExternalNaSequence ens,
+             apidb.datasource ds, apidb.organism o
              LEFT JOIN
              (select query_na_sequence_id,max(ct) as best_alignment_count
               from (
                     SELECT query_na_sequence_id, COUNT(*) AS ct
-                     FROM dots.BlatAlignment ba
+                     FROM dots.BlatAlignment ba, apidb.datasource, apidb.organism o,
+                     sres.externaldatabase d, sres.externaldatabaserelease r
                      WHERE is_best_alignment = 1
+                     AND ba.query_external_db_release_id = r.external_database_release_id
+                     AND r.external_database_id = d.external_database_id
+                     AND ed.name = ds.name
+                     AND ds.taxon_id = o.taxon_id
+                     AND o.is_reference = 1
+                     AND o.taxon_id = :TAXON_ID
                      GROUP BY target_external_db_release_id,query_na_sequence_id) t
               group by query_na_sequence_id
               ) best ON ens.na_sequence_id = best.query_na_sequence_id
@@ -44,8 +51,9 @@
           AND ens.external_database_release_id = edr.external_database_release_id
           AND edr.external_database_id = ed.external_database_id
           AND ens.sequence_ontology_id = oterm.ontology_term_id
+          AND ed.name = ds.name
+          and ds.taxon_id = o.taxon_id
+          and o.is_reference = 1
+          and o.taxon_id = :TAXON_ID
           AND oterm.name = 'EST'
-      
-    
 :DECLARE_PARTITION;
-
