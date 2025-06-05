@@ -3,6 +3,89 @@
 
   <import file="tuningManager.xml"/>
 
+    <tuningTable name="TranscriptProduct" prefixEnabled="false">
+    <internalDependency name="GeneProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE TranscriptProduct&1 AS
+        WITH genefeat AS (
+          SELECT DISTINCT
+            -- first the gene attributes:
+            cast(coalesce(preferred_gene_product.product, any_gene_product.product, gf.product)
+              as VARCHAR(300)) as old_gene_product, gf.na_feature_id  as gene_na_feature_id,
+            COALESCE(gp.product, 'unspecified product') as gene_product
+          FROM dots.GeneFeature gf
+            LEFT JOIN GeneProduct gp ON gf.source_id = gp.source_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.GeneFeatureProduct
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+            ) preferred_gene_product ON gf.na_feature_id = preferred_gene_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.GeneFeatureProduct
+              GROUP BY na_feature_id
+            ) any_gene_product ON gf.na_feature_id = any_gene_product.na_feature_id
+          WHERE (gf.is_predicted != 1 OR gf.is_predicted is null)
+          ),
+	  transcript AS (
+          SELECT DISTINCT
+		   t.parent_id as transcript_parent_id,
+		   t.source_id,
+		     CASE t.is_pseudo WHEN null THEN 0 ELSE t.is_pseudo END as is_pseudo,
+            CAST(coalesce(preferred_tx_product.product, any_tx_product.product, t.product)
+              AS VARCHAR(300))
+              AS transcript_product
+          FROM dots.Transcript t
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.TranscriptProduct
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+            ) preferred_tx_product ON t.na_feature_id = preferred_tx_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.TranscriptProduct
+              GROUP BY na_feature_id
+            ) any_tx_product ON t.na_feature_id = any_tx_product.na_feature_id
+        )
+        SELECT DISTINCT
+          -- first the gene attributes:
+          CAST(COALESCE(genefeat.old_gene_product, transcript.transcript_product,
+                        case when transcript.is_pseudo = 1
+                          then 'pseudogene'
+                          else 'unspecified product'
+                        end
+                ) as VARCHAR(300)
+            ) as old_gene_product,
+          genefeat.gene_product,
+          CAST(coalesce(transcript.transcript_product, genefeat.old_gene_product,
+                          case when transcript.is_pseudo = 1
+                          then 'pseudogene'
+                          else 'unspecified product'
+                        end
+                )AS VARCHAR(300)
+            ) as transcript_product,
+		transcript.source_id
+        FROM genefeat
+          INNER JOIN transcript ON genefeat.gene_na_feature_id = transcript.transcript_parent_id
+        ORDER BY source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNIQUE INDEX TranscriptAttr_sourceId&1
+          ON &prefixTranscriptAttributes&1 (source_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
   <tuningTable name="GoSubsetLeaf">
     <comment>
       Map each GO term that is assigned to at least one gene to a GoSubset term
