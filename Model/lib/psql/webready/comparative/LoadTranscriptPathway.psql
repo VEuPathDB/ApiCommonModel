@@ -7,6 +7,10 @@ DROP TABLE IF EXISTS :SCHEMA.TranscriptEcUniverse;
 DROP TABLE IF EXISTS :SCHEMA.PathwayEcUniverse;
 DROP TABLE IF EXISTS :SCHEMA.TranscriptPathwayEcMatch;
 
+-- Just to be safe add these here
+TRUNCATE TABLE :SCHEMA.TranscriptPathway;
+TRUNCATE TABLE :SCHEMA.TranscriptEC;
+
 
 /* STEP 2: Load into the TranscriptEC table. This must be done here so that we capture ortho-derived EC numbers*/
 
@@ -37,7 +41,7 @@ DO $$
                 , :SCHEMA.transcriptattributes ta
                 WHERE asec.aa_sequence_id = ta.aa_sequence_id
                 AND asec.enzyme_class_id = ec.enzyme_class_id
-                AND org.taxon_id = ta.taxon_id
+                AND ta.org_abbrev = org.abbrev
                 ):PLPGSQL_DELIM
             COMMIT:PLPGSQL_DELIM
         END LOOP:PLPGSQL_DELIM
@@ -142,19 +146,21 @@ DO $$
                 , org.abbrev AS org_abbrev
                 , current_timestamp AS modification_date
                 FROM :SCHEMA.TranscriptPathwayEcMatch tpem
-                , :SCHEMA.TranscriptEc tec
                 , :SCHEMA.PathwayEc pec
                 , :SCHEMA.PathwayAttributes pa
                 , :SCHEMA.TranscriptAttributes ta
-                WHERE tpem.ec_number_transcript = tec.ec_number
+                , :SCHEMA.TranscriptEc tec
+                 WHERE tpem.ec_number_transcript = tec.ec_number
                 AND tpem.ec_number_pathway = pec.ec_number
                 AND pa.pathway_id = pec.pathway_id
                 AND ta.source_id = tec.source_id
-                AND ta.taxon_id = org.taxon_id
-                AND (
-                    (ta.orthomcl_name IS NULL AND tec.evidence_code != 'OrthoMCLDerived')
-                    OR ta.orthomcl_name IS NOT NULL
-                )
+                AND tec.org_abbrev = org.abbrev
+                AND ta.org_abbrev = org.abbrev
+                -- JB:  It is unclear what the intention here was.  This will not remove any rows and shouldn't
+                -- AND (
+                --     (ta.orthomcl_name IS NULL AND tec.evidence_code != 'OrthoMCLDerived')
+                --     OR ta.orthomcl_name IS NOT NULL
+                -- )
                 ):PLPGSQL_DELIM
             COMMIT:PLPGSQL_DELIM
         END LOOP:PLPGSQL_DELIM
