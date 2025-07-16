@@ -1,44 +1,58 @@
-:CREATE_AND_POPULATE
-        SELECT t2.*, current_timestamp as modification_date FROM (
-          SELECT DISTINCT gene_source_id
-            , project_id
-	    , org_abbrev
-            , pathway_source_id
-            , pathway_name
-            , count(reaction_source_id) as reactions
-            , enzyme
-            , expasy_url
-            , pathway_source
-            , exact_match
-          FROM (
-              SELECT DISTINCT tp.gene_source_id
-                , tp.project_id
-                , tp.pathway_source_id
-                , tp.pathway_name
-		, tp.org_abbrev
-                , pr.reaction_source_id
-                , pr.enzyme
-                , pr.expasy_url
-                , tp.pathway_source
-                , CASE max(tp.exact_match) WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END AS exact_match
-              FROM :SCHEMA.TranscriptPathway tp
-                , :SCHEMA.PathwayAttributes pa
-                , :SCHEMA.PathwayCompounds pc
-                , :SCHEMA.PathwayReactions pr
-              WHERE tp.pathway_id = pa.pathway_id
-                AND pc.pathway_id = pa.pathway_id
-                AND pr.reaction_id = pc.reaction_id
-                AND pr.ext_db_name = pc.ext_db_name
-                AND tp.ec_number_pathway = pr.enzyme
-                AND tp.wildcard_count_gene <= tp.wildcard_count_pathway
-                AND pr.enzyme != '-.-.-.-'
-		AND tp.org_abbrev = ':ORG_ABBREV'
-            GROUP BY tp.gene_source_id, tp.project_id, tp.org_abbrev, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
-            ) t
-          GROUP BY gene_source_id, project_id, org_abbrev, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
-        ) t2
-        ORDER BY pathway_source, lower(pathway_name)
-      
-    
-:DECLARE_PARTITION;
+/* ATTENTION: This script is run using a custom workflow step class */
+/* This accommodates the required to retain an empty table on undo */
+
+TRUNCATE TABLE :SCHEMA.PathwaysGeneTable;
+
+DO $$
+    DECLARE org record:PLPGSQL_DELIM
+    BEGIN
+        FOR org IN (SELECT DISTINCT abbrev FROM apidb.organism)
+        LOOP
+            INSERT INTO :SCHEMA.PathwaysGeneTable (
+                SELECT t2.*, current_timestamp AS modification_date FROM (
+                    SELECT DISTINCT
+                    gene_source_id
+                    , pathway_source_id
+                    , pathway_name
+                    , count(reaction_source_id) AS reactions
+                    , enzyme
+                    , expasy_url
+                    , pathway_source
+                    , exact_match
+                    , project_id
+                    , org_abbrev
+                    FROM (
+                        SELECT DISTINCT
+                        tp.gene_source_id
+                        , tp.project_id
+                        , tp.pathway_source_id
+                        , tp.pathway_name
+                        , tp.org_abbrev
+                        , pr.reaction_source_id
+                        , pr.enzyme
+                        , pr.expasy_url
+                        , tp.pathway_source
+                        , CASE MAX(tp.exact_match) WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' END AS exact_match
+                        FROM :SCHEMA.TranscriptPathway tp
+                        , apidbtuning.PathwayAttributes pa
+                        , apidbtuning.PathwayCompounds pc
+                        , apidbtuning.PathwayReactions pr
+                        WHERE tp.pathway_id = pa.pathway_id
+                        AND pc.pathway_id = pa.pathway_id
+                        AND pr.reaction_id = pc.reaction_id
+                        AND pr.ext_db_name = pc.ext_db_name
+                        AND tp.ec_number_pathway = pr.enzyme
+                        AND tp.wildcard_count_gene <= tp.wildcard_count_pathway
+                        AND pr.enzyme != '-.-.-.-'
+                        AND tp.org_abbrev = org.abbrev
+                        GROUP BY tp.gene_source_id, tp.project_id, tp.org_abbrev, tp.pathway_name, tp.pathway_source_id, pr.reaction_source_id, pr.enzyme, pr.expasy_url, tp.pathway_source
+                        ) t
+                    GROUP BY gene_source_id, project_id, org_abbrev, pathway_source_id, pathway_name, enzyme, expasy_url, pathway_source, exact_match
+                    ) t2
+                ORDER BY pathway_source, lower(pathway_name)
+                ):PLPGSQL_DELIM
+            COMMIT:PLPGSQL_DELIM
+        END LOOP:PLPGSQL_DELIM
+    END:PLPGSQL_DELIM
+$$ LANGUAGE PLPGSQL;
 
