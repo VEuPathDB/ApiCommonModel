@@ -1,79 +1,40 @@
-:CREATE_AND_POPULATE
-            WITH transcript_ec AS (
-              SELECT ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
-                     regexp_count( ec.ec_number, '-') as wildcard_count
-              FROM sres.EnzymeClass ec
-              WHERE enzyme_class_id IN (SELECT aseqEc.enzyme_class_id
-                                        FROM dots.AaSequenceEnzymeClass aseqEc, dots.aasequence seq
-                                        WHERE aseqEc.aa_sequence_id = seq.aa_sequence_id
-                                        AND seq.taxon_id = :TAXON_ID)
-              GROUP BY ec.enzyme_class_id
-            ),
-            pathway_node_ec AS (
-              SELECT distinct pn.pathway_id, pn.row_id as enzyme_class_id
-              FROM sres.PathwayNode pn, sres.ontologyterm ot
-              WHERE pn.pathway_node_type_id = ot.ontology_term_id
-                AND ot.name = 'enzyme'
-                AND pn.display_label != '-.-.-.-'
-            ),
-            pathway_ec AS (
-              SELECT ec.enzyme_class_id, ec.ec_number, ec.ec_number_1, ec.ec_number_2, ec.ec_number_3, ec.ec_number_4,
-                     regexp_count( ec.ec_number, '-') as wildcard_count
-              FROM sres.EnzymeClass ec
-              WHERE enzyme_class_id IN (SELECT enzyme_class_id FROM pathway_node_ec)
-              GROUP BY ec.enzyme_class_id
-            ),
-            ec_match AS (
-              SELECT tec.enzyme_class_id as transcript_enzyme_class_id,
-                     pec.enzyme_class_id as pathway_enzyme_class_id,
-                     tec.wildcard_count as wildcard_count_transcript,
-                     pec.wildcard_count as wildcard_count_pathway,
-                     tec.ec_number as ec_number_transcript,
-                     pec.ec_number as ec_number_pathway
-              FROM transcript_ec tec, pathway_ec pec
-              WHERE (tec.ec_number_1 = pec.ec_number_1 or tec.ec_number_1 is null or pec.ec_number_1 is null)
-                AND (tec.ec_number_2 = pec.ec_number_2 or tec.ec_number_2 is null or pec.ec_number_2 is null)
-                AND (tec.ec_number_3 = pec.ec_number_3 or tec.ec_number_3 is null or pec.ec_number_3 is null)
-                AND (tec.ec_number_4 = pec.ec_number_4 or tec.ec_number_4 is null or pec.ec_number_4 is null)
-            )
-            SELECT DISTINCT
-                ':PROJECT_ID' as project_id
-	      , ':ORG_ABBREV' as org_abbrev
-	      , CURRENT_TIMESTAMP as modification_date
-	      , ga.source_id
-              , ga.gene_source_id
-              , pa.source_id as pathway_source_id
-              , pa.name as pathway_name
-              , ec_match.ec_number_transcript as ec_number_gene
-              , ec_match.wildcard_count_transcript as wildcard_count_gene
-              , ec_match.ec_number_pathway
-              , ec_match.wildcard_count_pathway
-              , CASE WHEN ec_match.ec_number_pathway = ec_match.ec_number_transcript
-                  THEN 1
-                  ELSE 0 END as exact_match
-              , CASE WHEN ec_match.wildcard_count_pathway + ec_match.wildcard_count_transcript = 0
-                  THEN 1
-                  ELSE 0  END as complete_ec
-              , pa.pathway_id
-              , pa.pathway_source
-              , p.external_database_release_id
-            FROM :SCHEMA.PathwayAttributes pa
-              , sres.pathway p
-              , pathway_node_ec pec
-              , ec_match
-              , dots.AaSequenceEnzymeClass asec
-              , :SCHEMA.TranscriptAttributes ga
-            WHERE ga.org_abbrev = ':ORG_ABBREV'
-              AND pa.pathway_id = pec.pathway_id
-              AND p.pathway_id = pa.pathway_id
-              AND pec.enzyme_class_id = ec_match.pathway_enzyme_class_id
-              AND asec.enzyme_class_id = ec_match.transcript_enzyme_class_id
-              AND ga.aa_sequence_id  = asec.aa_sequence_id
-              -- TODO:  Need new downstream table to bring in OrthoMCLDerived EC associations
-              -- AND (
-              --   (ga.orthomcl_name IS NULL AND asec.evidence_code != 'OrthoMCLDerived')
-              --   OR ga.orthomcl_name IS NOT NULL
-              -- )
-    ;
+DROP TABLE if exists :SCHEMA.:ORG_ABBREVTranscriptPathwayTmp;
+/*
 
+ATTENTION: This table is empty. We will populate it in the comparative graph so that we can include ortho-derived EC numbers. 
+We are creating it here so that it is partitioned.
+*/
+
+/* This is the final TranscriptPathway table */
+
+CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVTranscriptPathwayTmp (
+    -- transcript information
+    source_id   VARCHAR(80),
+    gene_source_id VARCHAR(80),
+
+    --pathway information
+    pathway_source_id   VARCHAR(50),
+    pathway_name    VARCHAR(150),
+    pathway_id  NUMERIC(12),
+    pathway_source  TEXT, -- TODO should this be a varchar?
+    external_database_release_id    NUMERIC(10),
+
+    --match information
+    ec_number_gene  VARCHAR(16),
+    wildcard_count_gene NUMERIC(3),
+    ec_number_pathway   VARCHAR(16),
+    wildcard_count_pathway  NUMERIC(3),
+    exact_match NUMERIC(3),
+    complete_ec NUMERIC(3),
+
+    -- fields required for partioning
+    project_id  varchar(20),
+    org_abbrev  varchar(20),
+    modification_date   timestamp
+);
+
+:CREATE_AND_POPULATE
+SELECT tpt.*  from :SCHEMA.:ORG_ABBREVTranscriptPathwayTmp tpt
 :DECLARE_PARTITION;
+
+DROP TABLE :SCHEMA.:ORG_ABBREVTranscriptPathwayTmp;
