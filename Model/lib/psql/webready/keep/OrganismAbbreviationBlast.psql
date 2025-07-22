@@ -1,0 +1,40 @@
+:CREATE_AND_POPULATE
+     select sub.*, ':PROJECT_ID' as project_id, ':ORG_ABBREV' as org_abbrev, CURRENT_TIMESTAMP as modification_date
+     from (
+       SELECT organism, parent, abbreviation
+       FROM OrganismAbbreviationWS
+       UNION
+         -- all familes for popsets
+       SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent,
+                       family_name_for_files as abbreviation
+       FROM apidb.Organism
+       WHERE family_name_for_files is not null
+         AND abbrev || '_isolates_genbank_RSRC' IN (SELECT external_db_name as db_name FROM PopsetAttributes)
+         AND family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
+       UNION
+       SELECT special.organism, special.parent, special.abbreviation
+       FROM OrganismTree ot,
+            ( -- all species and speciesAbbreviations from apidb.Organism where we have ests
+               SELECT DISTINCT
+                sp.name as organism, ot.parentTerm as parent,
+                regexp_replace(org.name_for_filenames, replace(org.strain_abbrev, '/','_'),'') as abbreviation
+               FROM sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org, OrganismTree ot
+               WHERE org.taxon_id = ts.taxon_id
+                 AND ts.species_taxon_id = sp.taxon_id
+                 AND sp.name_class = 'scientific name'
+                 AND ot.term = sp.name
+                 AND org.strain_abbrev is not null
+                 AND org.name_for_filenames is not null
+                 AND sp.taxon_id
+                     in (SELECT etn.taxon_id
+                         FROM sres.TaxonName etn
+                         WHERE etn.name in (SELECT organism FROM EstAttributes))
+             UNION
+               SELECT 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism,
+                      'Cryptosporidium' as parent, 'CryptosporidiidaeReference' as abbreviation
+            ) special
+       WHERE special.parent = ot.term
+    ) sub  
+    
+:DECLARE_PARTITION;
+

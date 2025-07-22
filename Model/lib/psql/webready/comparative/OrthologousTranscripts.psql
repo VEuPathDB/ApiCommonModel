@@ -1,0 +1,48 @@
+	drop table if exists :SCHEMA.SyntenicPairs;
+
+	create UNLOGGED table :SCHEMA.SyntenicPairs as
+         select distinct ga.na_feature_id, sg.syn_na_feature_id
+         from apidb.SyntenicGene sg, :SCHEMA.GeneAttributes ga
+         where sg.na_sequence_id = ga.na_sequence_id
+           and sg.end_max >= ga.start_min
+           and sg.start_min <= ga.end_max
+       
+    ;
+
+        create index SynPair_idx 
+          on :SCHEMA.SyntenicPairs (na_feature_id, syn_na_feature_id)
+    ;
+
+        create table :SCHEMA.OrthologousTranscripts  as
+        with all_pairs
+             as (select ga.source_id
+                      , ga.project_id
+                      , ga.na_feature_id
+                      , ota.source_id as ortho_source_id
+                      , ota.gene_source_id as ortho_gene_source_id
+                      , ota.project_id as ortho_project_id
+                      , ota.gene_na_feature_id as ortho_na_feature_id
+                      , ota.transcript_product as ortho_product
+                      , ota.protein_length
+                      , ga.name as ortho_name
+                      , ota.organism as ortho_organism
+                      , ota.taxon_id as ortho_taxon_id
+                      , o.is_reference_strain
+                 from :SCHEMA.Geneattributes ga
+                    , :SCHEMA.TranscriptAttributes ota
+                    , apidb.Organism o
+                 where ga.ORTHOMCL_NAME = ota.ORTHOMCL_NAME
+                 and ota.taxon_id = o.taxon_id
+             ),
+             syn_pairs
+             as (select na_feature_id, syn_na_feature_id, 1 as is_syntenic from :SCHEMA.SyntenicPairs
+             )
+        select all_pairs.*
+             , coalesce(syn_pairs.is_syntenic, 0) as is_syntenic
+        from all_pairs
+             left join syn_pairs
+             on all_pairs.na_feature_id = syn_pairs.na_feature_id
+                and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+    ;
+
+	drop table if exists :SCHEMA.SyntenicPairs;

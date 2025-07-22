@@ -1,0 +1,340 @@
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVDataSourceCount AS
+        SELECT
+          taxon_id,
+          max(CASE WHEN stype = 'organellar' THEN num ELSE null END) as organellar_has,
+          max(CASE WHEN stype = 'Epitope'  THEN num ELSE null END)  as Epitope_has,
+          max(CASE WHEN stype = 'Array'  THEN num ELSE null END) as Array_has,
+          max(CASE WHEN stype = 'HTSIsolate' THEN num ELSE null END) as HTSIsolate_has,
+          max(CASE WHEN stype = 'Popset' THEN num ELSE null END) as Popset_has
+        FROM (
+          SELECT DISTINCT enas.taxon_id, 'organellar' AS stype, 1 AS num
+          FROM dots.externalNAsequence enas, SRES.ontologyterm ot
+          WHERE enas.sequence_ontology_id = ot.ontology_term_id
+            AND ot.name in( 'mitochondrial_chromosome','apicoplast_chromosome')
+	    and enas.taxon_id = :TAXON_ID
+	    GROUP BY enas.taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'HTSIsolate' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.type = 'isolates' AND ds.subtype = 'HTS_SNP'
+	  AND ds.taxon_id = :TAXON_ID
+	  GROUP BY taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'Popset' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.subtype = 'sequenceing_types'
+	  AND ds.taxon_id = :TAXON_ID
+          GROUP BY taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'Epitope' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.type = 'epitope'
+	  AND ds.taxon_id = :TAXON_ID
+          GROUP BY taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'Array' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.type = 'transcript_expression'
+            AND ds.subtype = 'array'
+	  AND ds.taxon_id = :TAXON_ID
+          GROUP BY  taxon_id
+        ) t
+        GROUP BY taxon_id
+    
+   ;
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVOrganismCentromere AS
+        SELECT distinct s.taxon_id,
+               case when count(*) > 0 then 1 else 0 end as hasCentromere
+        FROM  DOTS.MISCELLANEOUS f
+            , sres.ontologyTerm ot
+            , dots.nasequence s
+        WHERE ot.ontology_term_id = f.sequence_ontology_id
+         AND ot.name='centromere'
+         AND f.na_sequence_id = s.na_sequence_id
+	 AND s.taxon_id = :TAXON_ID
+	 GROUP BY s.taxon_id
+      
+    ;
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVSequenceCount AS
+        SELECT
+          taxon_id,
+          max(CASE WHEN sequence_type = 'contig' THEN num ELSE null END) as  contig_num,
+          max(CASE WHEN sequence_type = 'supercontig' THEN num ELSE null END) as  supercont_num,
+          max(CASE WHEN sequence_type = 'chromosome' THEN num ELSE null END) as  chrom_num
+        FROM (
+         SELECT count(*) as num, sequence_type, taxon_id
+         FROM :SCHEMA.GenomicSeqAttributes
+         WHERE is_top_level =1
+	 and org_abbrev = :ORG_ABBREV
+	 GROUP BY taxon_id, sequence_type
+        ) t
+        GROUP BY taxon_id
+      
+    ;
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVCommunityCount AS
+        -- SELECT taxon_id, count(*) as communityCount
+        -- TODO:  addd this back
+        select taxon_id, 0 as communityCount
+        FROM :SCHEMA.GeneAttributes
+	where org_abbrev = ':ORG_ABBREV'
+        --WHERE
+          --(source_id, project_id) IN (
+              --SELECT distinct stable_id, project_name
+              --userlogins5.mappedComment@prodn.login_comment
+              --FROM userlogins5.mappedComment
+              --WHERE is_visible = 1
+                --AND comment_target_id = 'gene'
+          --)
+        GROUP BY taxon_id
+      
+    ;
+
+
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVProfileCount AS
+        SELECT ga.taxon_id,
+          count(distinct(case when p.dataset_type = 'transcript_expression'
+                 and p.dataset_subtype like '%rt_pcr%'
+                 and ga.is_deprecated = 0
+                then p.source_id
+                else ''
+                 end)) as rtPCRCount,
+          count(distinct(case when p.dataset_type = 'transcript_expression'
+                               and p.dataset_subtype = 'rnaseq'
+                               and ga.is_deprecated = 0
+                              then p.source_id
+                              else ''
+                               end)) as rnaSeqCount,
+          count(distinct(case when p.dataset_type = 'transcript_expression'
+                               and p.dataset_subtype = 'array'
+                               and ga.is_deprecated = 0
+                              then p.source_id
+                              else ''
+                               end)) as geneArrayCount
+        FROM :SCHEMA.Profile p
+          RIGHT OUTER JOIN :SCHEMA.GeneAttributes ga ON ga.source_id = p.source_id
+        WHERE ga.org_abbrev = ':ORG_ABBREV'
+         and p.org_abbrev = ':ORG_ABBREV'
+        GROUP BY ga.taxon_id
+      
+    ;
+
+
+      
+    --     CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVPopsetCount AS
+    --     SELECT count(distinct gene.source_id) as popsetCount, sim.taxon_id
+    --     FROM (
+    --       (SELECT i.source_id, nas.taxon_id, nas.source_id as sequence_source_id
+    --        FROM dots.similarity s, PopsetAttributes i,
+    --             core.tableinfo t, dots.nasequence nas
+    --        WHERE s.query_id = i.na_sequence_id
+    --          AND nas.na_sequence_id = s.subject_id
+    --          AND t.table_id = s.subject_table_id
+    --          AND t.table_id = s.query_table_id
+    --          AND t.name = 'ExternalNASequence'
+    --          AND s.pvalue_exp <= -10
+	--      and nas.taxon_id = :TAXON_ID
+    --        ) sim LEFT JOIN
+    --        (SELECT i.source_id, seq.source_id as sequence_id
+    --         FROM  dots.similarity s, PopsetAttributes i, GeneAttributes g,
+    --               core.tableinfo t, dots.nasequence seq
+    --         WHERE s.query_id = i.na_sequence_id
+    --           AND s.subject_id = g.na_sequence_id
+    --           AND t.table_id = s.subject_table_id
+    --           AND t.table_id = s.query_table_id
+    --           AND s.min_subject_start <=  g.end_max
+    --           AND s.max_subject_end >= g.start_min
+    --           AND g.na_sequence_id = seq.na_sequence_id
+    --           AND t.name = 'ExternalNASequence'
+	--       and seq.taxon_id = :TAXON_ID
+    --         ) gene
+    --        ON gene.source_id = sim.source_id AND gene.sequence_id = sim.sequence_source_id)
+    --     GROUP BY sim.taxon_id
+
+    -- ;
+
+
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:ORG_ABBREVGeneCount AS
+        SELECT genomestat.taxon_id,
+               genomestat.project_id,
+               genomestat.database_version,
+               genomestat.ncbi_tax_id,
+               genomestat.Megabps,
+             --  coalesce(snpCount.ct,0) as snpCount,
+               coalesce(count(distinct ga.source_id),0) as geneCount,
+               coalesce(count(distinct case when ga.is_pseudo =1  then ga.source_id else '' end),0) as pseudoGeneCount,
+               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then ga.source_id else '' end),0) as codingGeneCount,
+               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then '' else ga.source_id end),0) as otherGeneCount,
+               coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then cct.gene_source_id
+                          else NULL
+                          end)),0) ChipChipGeneCount ,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then pp.source_id
+                          else NULL
+                          end)),0) orthologCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then gts.gene_source_id
+                          else NULL
+                          end)),0) goCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then tfbs.gene_source_id
+                          else NULL
+                          end)),0) tfbsCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then mss.aa_sequence_id
+                          else NULL
+                          end)),0) proteomicsCount,
+              -- coalesce(count (distinct (case when ga.is_deprecated = 0
+              --             then est.source_id
+              --             else NULL
+              --             end)),0) estCount,
+              coalesce(count (distinct (case when (ga.is_deprecated = 0 and ta.ec_numbers is not null)
+                          then ga.source_id
+                          else NULL
+                          end)),0) ecNumberCount
+        FROM :SCHEMA.GeneAttributes ga
+          LEFT OUTER JOIN apidb.phylogeneticprofile pp on ga.source_id = pp.source_id and ga.org_abbrev = ':ORG_ABBREV'
+          LEFT OUTER JOIN :SCHEMA.gotermsummary gts on ga.source_id = gts.gene_source_id and gts.org_abbrev = ':ORG_ABBREV'
+          LEFT OUTER JOIN :SCHEMA.TFBSGene tfbs on ga.source_id = tfbs.gene_source_id and tfbs.org_abbrev = ':ORG_ABBREV'
+          LEFT OUTER JOIN :SCHEMA.TranscriptAttributes ta on ta.gene_source_id = ga.source_id and ta.org_abbrev = ':ORG_ABBREV'
+          LEFT OUTER JOIN apidb.MassSpecSummary mss on ta.aa_sequence_id = mss.aa_sequence_id
+          LEFT OUTER JOIN :SCHEMA.chipchipTranscript cct on ga.source_id = cct.gene_source_id and cct.org_abbrev = ':ORG_ABBREV'
+          -- LEFT OUTER JOIN (
+          --   SELECT distinct s.gene as source_id
+          --   FROM EstAlignmentGeneSummary s, EstAttributes e
+          --   WHERE s.est_gene_overlap_length >= 100
+          --     AND s.is_best_alignment in (1)
+          --     AND s.percent_est_bases_aligned >= 20
+          --     AND s.percent_identity >= 90
+          --     AND e.best_alignment_count <= 1
+          --     AND e.source_id = s.accession
+          --   GROUP by s.gene HAVING count(*) >= 1
+          -- ) est ON ga.source_id = est.source_id
+          RIGHT OUTER JOIN (
+            SELECT  project_id, taxon_id,
+                   max(database_version) as database_version,
+                  CASE WHEN ncbi_tax_id > 9000000000 THEN NULL
+                       ELSE ncbi_tax_id
+                  END ncbi_tax_id,
+                  to_char(sum(length)/1000000,'9999.99') as megabps
+            FROM   :SCHEMA.GenomicSeqAttributes
+            WHERE  is_top_level = 1
+	     AND   org_abbrev = ':ORG_ABBREV'
+            GROUP BY project_ID, taxon_id, ncbi_tax_id
+          ) genomestat ON genomestat.taxon_id = ga.taxon_id
+          -- LEFT OUTER JOIN (
+          --    SELECT count(distinct ga.source_id) as ct, ga.taxon_id
+          --    FROM GeneAttributes ga, SnpAttributes sf
+          --    WHERE  sf.gene_source_id = ga.source_id
+          --      AND ga.is_deprecated = 0
+          --    GROUP BY ga.taxon_id
+          -- ) snpCount ON ga.taxon_id = snpCount.taxon_id
+        GROUP BY genomestat.taxon_id,
+                 genomestat.project_id,
+                 genomestat.database_version,
+                 genomestat.ncbi_tax_id,
+                 genomestat.Megabps
+              --   snpCount.ct
+      
+    ;
+
+:CREATE_AND_POPULATE
+        SELECT ':PROJECT_ID' as project_id, ':ORG_ABBREV' as org_abbrev, current_timestamp as modification_date,
+	       oa.*, tn2.name as species, t.ncbi_tax_id as species_ncbi_tax_id
+               , CASE  WHEN ltrim(replace(oa.organism_name, tn2.name, ''))= oa.organism_name
+                       THEN strain_abbrev
+                       ELSE ltrim(replace(oa.organism_name, tn2.name, '')) END AS strain
+        FROM (
+            SELECT o.project_name as project_id,
+                   case when t.ncbi_tax_id > 10000000
+            --       then 'TMPTX_' || round(t.ncbi_tax_id / 10000000) || '_' ||
+            --            mod(t.ncbi_tax_id, 10000000) -- e.g. "TMPTX_930_1"
+            --       then 'TMPTX_' || t.ncbi_tax_id -- all the many digits
+                     then 'TMPTX_' || o.public_abbrev
+                     else 'NCBITAXON_' || t.ncbi_tax_id
+                   end as source_id,
+                   o.abbrev as internal_abbrev,
+                   o.public_abbrev,
+                   o.orthomcl_abbrev,
+                   o.family_name_for_files,
+                   tn.name as organism_name,
+                   o.genome_source,
+                   o.strain_abbrev,
+                   o.is_annotated_genome,
+                   o.is_reference_strain,
+                   o.is_family_representative,
+                   o.name_for_filenames,
+                   o.taxon_id as component_taxon_id,
+                   gc.database_version,
+                   gc.megabps as megabps,
+                   gc.ncbi_tax_id as ncbi_tax_id,
+                   gc.snpCount as snpCount,
+                   gc.geneCount as geneCount,
+                   gc.pseudoGeneCount as pseudoGeneCount,
+                   gc.codingGeneCount as codingGeneCount,
+                   gc.otherGeneCount as otherGeneCount,
+                   gc.ChipChipGeneCount as ChipChipGeneCount,
+                   gc.orthologCount as orthologCount,
+                   gc.goCount as goCount,
+                   gc.tfbsCount as tfbsCount,
+                   gc.proteomicsCount as proteomicsCount,
+                   gc.estCount as estCount,
+                   gc.ecNumberCount as ecNumberCount,
+                   cast(coalesce(dsc.Organellar_Has, 0) as NUMERIC(1)) as isOrganellar,
+                   cast(coalesce(dsc.HTSIsolate_Has, 0) as NUMERIC(1)) as hasHTSIsolate,
+                   cast(coalesce(dsc.Popset_Has, 0) as NUMERIC(1)) as hasPopset,
+                   cast(coalesce(dsc.Epitope_Has, 0) as NUMERIC(1)) as hasEpitope,
+                   cast(coalesce(dsc.Array_Has, 0) as NUMERIC(1)) as hasArray,
+                   coalesce(oc.hasCentromere, 0) as hasCentromere,
+                   coalesce(sc.contig_num, 0) as contigCount,
+                   coalesce(sc.supercont_num, 0) as supercontigCount,
+                   coalesce(sc.chrom_num, 0) as chromosomeCount,
+                   coalesce(cc.communityCount, 0) as communityCount,
+                   --coalesce(psc.popsetCount, 0) as popsetCount,
+                   coalesce(pc.geneArrayCount, 0) as arrayGeneCount,
+                   coalesce(pc.rnaSeqCount, 0) as rnaSeqCount,
+                   coalesce(pc.rtPCRCount, 0) as rtPCRCount,
+                   coalesce(ta.avg_transcript_length, 0) as avg_transcript_length
+            FROM apidb.Organism o
+              INNER JOIN sres.TaxonName tn ON tn.taxon_id = o.taxon_id and o.taxon_id = :TAXON_ID
+              INNER JOIN sres.Taxon t ON t.taxon_id = tn.taxon_id
+              LEFT JOIN :SCHEMA.:ORG_ABBREVDataSourceCount dsc ON o.taxon_id = dsc.taxon_id
+              LEFT JOIN :SCHEMA.:ORG_ABBREVOrganismCentromere oc ON o.taxon_id = oc.taxon_id
+              LEFT JOIN :SCHEMA.:ORG_ABBREVSequenceCount sc ON o.taxon_id = sc.taxon_id
+              LEFT JOIN :SCHEMA.:ORG_ABBREVCommunityCount cc ON o.taxon_id = cc.taxon_id
+              LEFT JOIN :SCHEMA.:ORG_ABBREVGeneCount gc ON o.taxon_id = gc.taxon_id
+              --LEFT JOIN :SCHEMA.:ORG_ABBREVpopsetCount psc ON o.taxon_id = psc.taxon_id
+              LEFT JOIN :SCHEMA.:ORG_ABBREVprofileCount pc ON o.taxon_id = pc.taxon_id
+              LEFT JOIN (
+                SELECT taxon_id, round(avg(length),1) as avg_transcript_length
+                FROM :SCHEMA.TranscriptAttributes
+                where org_abbrev = ':ORG_ABBREV'
+                GROUP by taxon_id
+              ) ta ON o.taxon_id = ta.taxon_id
+            WHERE tn.name_class = 'scientific name'
+          ) oa,
+          :SCHEMA.TaxonSpecies ts,
+          sres.taxon t,
+          sres.taxonname tn2
+        WHERE oa.component_taxon_id = ts.taxon_id
+          AND ts.species_taxon_id = t.taxon_id
+          AND ts.species_taxon_id = tn2.taxon_id
+          AND tn2.name_class = 'scientific name'
+          AND o.taxon_id = :TAXON_ID
+          AND ts.org_abbrev = ':ORG_ABBREV'
+      
+    
+:DECLARE_PARTITION;
+
+drop table :SCHEMA.:ORG_ABBREVDataSourceCount;
+drop table :SCHEMA.:ORG_ABBREVOrganismCentromere;
+drop table :SCHEMA.:ORG_ABBREVProfileCount;
+--drop table :SCHEMA.:ORG_ABBREVPopsetCount;
+drop table :SCHEMA.:ORG_ABBREVGeneCount;
+drop table :SCHEMA.:ORG_ABBREVSequenceCount;
+drop table :SCHEMA.:ORG_ABBREVCommunityCount;

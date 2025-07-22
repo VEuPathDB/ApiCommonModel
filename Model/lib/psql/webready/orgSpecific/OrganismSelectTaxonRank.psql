@@ -1,0 +1,49 @@
+:CREATE_AND_POPULATE
+        WITH organism_rank AS (
+          SELECT tn1.name as organism, o.public_abbrev, tn2.name as parent_organism,
+            case when tn2.name = 'Oomycetes' then 'class' else r.rank end as rank
+          FROM (
+              WITH RECURSIVE cte AS(
+                SELECT taxon_id input, taxon_id, rank, parent_id
+                FROM sres.taxon
+                WHERE taxon_id IN (SELECT taxon_id FROM apidb.organism WHERE taxon_id = :TAXON_ID and is_annotated_genome = 1)
+                UNION
+                SELECT cte.input, t.taxon_id, t.rank, t.parent_id
+                FROM sres.taxon t, cte
+                WHERE cte.parent_id = t.taxon_id
+              )
+              SELECT input, taxon_id, rank
+              FROM cte
+            ) r
+            , sres.taxonname tn1
+            , sres.taxonname tn2
+            , apidb.organism o
+          WHERE r.input = tn1.taxon_id
+            AND r.taxon_id = tn2.taxon_id
+            AND tn1.name_class = 'scientific name'
+            AND tn2.name_class = 'scientific name'
+            AND (r.rank in ('phylum', 'genus', 'species', 'kingdom', 'class') or (r.rank = 'no rank' and tn2.name = 'Oomycetes'))
+            AND tn1.taxon_id = o.taxon_id
+        )
+        SELECT
+            ':PROJECT_ID' as project_id
+	  , ':ORG_ABBREV' as org_abbrev
+	  , current_timestamp as modification_date
+          , organisms.organism
+          , organisms.public_abbrev
+          , coalesce(phylum.parent_organism, 'N/A') as phylum
+          , coalesce(genus.parent_organism, 'N/A') as genus
+          , coalesce(species.parent_organism, 'N/A') as species
+          , coalesce(kingdom.parent_organism, 'N/A') as kingdom
+          , coalesce(class.parent_organism, 'N/A') as class
+        FROM
+          (select distinct organism, public_abbrev from organism_rank) organisms
+          LEFT JOIN ( select * from organism_rank where rank= 'phylum') phylum ON organisms.organism = phylum.organism
+          LEFT JOIN ( select * from organism_rank where rank= 'genus') genus ON organisms.organism = genus.organism
+          LEFT JOIN ( select * from organism_rank where rank= 'species') species ON organisms.organism = species.organism
+          LEFT JOIN ( select * from organism_rank where rank= 'kingdom') kingdom ON organisms.organism = kingdom.organism
+          LEFT JOIN ( select * from organism_rank where rank= 'class') class ON organisms.organism = class.organism
+      
+    
+:DECLARE_PARTITION;
+

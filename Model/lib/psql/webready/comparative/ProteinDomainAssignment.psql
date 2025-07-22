@@ -1,0 +1,38 @@
+        create table :SCHEMA.ProteinDomainAssignment as
+        select sa.full_id, sa.group_name,
+               r.interpro_primary_id as accession,
+               r.interpro_desc as description,
+               CAST (NULL as NUMERIC) as domain_index,
+               sa.aa_sequence_id,
+               r.interpro_start_min as start_min,
+               r.interpro_end_min as end_max
+        from :SCHEMA.ProteinSequenceGroup sa,  apidb.interproresults r
+        where sa.full_id = r.protein_source_id
+          and upper(r.interpro_db_name) = 'PFAM'
+;
+
+         create index domain_accession_ix
+               on :SCHEMA.ProteinDomainAssignment (accession, full_id, group_name)
+ ;
+ 
+       drop table if exists :SCHEMA.domainIndex_tmp
+;
+
+       create table :SCHEMA.domainIndex_tmp as
+        select row_number() OVER () as domain_index, accession
+        from (select distinct accession
+              from :SCHEMA.ProteinDomainAssignment
+              order by accession)
+;
+
+      create index domainIdxIdx on :SCHEMA.DomainIndex_tmp(accession, domain_index)
+;
+
+        update :SCHEMA.ProteinDomainAssignment da
+        set domain_index = (select domain_index
+                            from :SCHEMA.DomainIndex_tmp
+                            where accession = da.accession)
+;
+
+      drop table :SCHEMA.domainIndex_tmp
+ ;
