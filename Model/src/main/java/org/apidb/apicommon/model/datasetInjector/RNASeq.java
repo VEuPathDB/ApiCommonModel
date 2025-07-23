@@ -55,11 +55,6 @@ public class RNASeq extends  DatasetInjector {
       //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
 
-      // TODO - remove this condition, to add templates for specific dataset(s)
-      if (!(datasetName.equals("pfal3D7_Newbold_ebi_rnaSeq_RSRC") ||
-						datasetName.equals("pfal3D7_Duffy_rnaSeq_RSRC"))) {
-					return;
-      }
       Boolean switchStrandsGBrowse = getPropValueAsBoolean("switchStrandsGBrowse");
       Boolean switchStrandsProfiles = getPropValueAsBoolean("switchStrandsProfiles");
 
