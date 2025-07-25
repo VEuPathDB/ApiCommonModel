@@ -32,29 +32,30 @@ with annotatedJunctions AS (
    group by gene_source_id
             , conf
 )
-select aj.gene_source_id
-       , CASE WHEN aj.annotated_count = ejc.intron_count
-              THEN 'All-high'
-              ELSE 'Any-high'
-         END as string_value
-       , ':PROJECT_ID' as project_id
-       , ':ORG_ABBREV' as org_abbrev
-       , current_timestamp as modification_date
-  from annotatedJunctions aj
-       left join exptJunctionCounts ejc on aj.gene_source_id = ejc.gene_source_id
- where ejc.conf = 'High'
-   AND ejc.intron_count > 0
-UNION
-select aj.gene_source_id
-       , CASE WHEN aj.annotated_count = sum(ejc.intron_count)
-              THEN 'All-low'
-              ELSE 'Any-low'
-         END as string_value
-       , ':PROJECT_ID' as project_id
-       , ':ORG_ABBREV' as org_abbrev
-       , current_timestamp as modification_date
-  from annotatedJunctions aj
-       left join exptJunctionCounts ejc on aj.gene_source_id = ejc.gene_source_id
-group by aj.gene_source_id, aj.annotated_count
-having sum(ejc.intron_count) > 0
+select distinct gene_source_id
+  , string_value
+  , ':PROJECT_ID' as project_id
+  , ':ORG_ABBREV' as org_abbrev
+  , current_timestamp as modification_date
+from (
+    select aj.gene_source_id
+           , CASE WHEN aj.annotated_count = ejc.intron_count
+             THEN 'All-high'
+             ELSE 'Mixed-high-low'
+             END as string_value
+      from annotatedJunctions aj
+           left join exptJunctionCounts ejc on aj.gene_source_id = ejc.gene_source_id
+     where ejc.conf = 'High'
+       AND ejc.intron_count > 0
+     UNION
+    select aj.gene_source_id
+           , CASE WHEN aj.annotated_count = sum(ejc.intron_count)
+             THEN 'All-low'
+             ELSE 'Mixed-high-low'
+             END as string_value
+      from annotatedJunctions aj
+           left join exptJunctionCounts ejc on aj.gene_source_id = ejc.gene_source_id
+     group by aj.gene_source_id, aj.annotated_count
+    having sum(ejc.intron_count) > 0
+)
 :DECLARE_PARTITION;
