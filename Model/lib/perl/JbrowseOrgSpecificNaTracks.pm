@@ -1033,7 +1033,7 @@ sub addLongReadRNASeq {
    my $LongReadRnaSeqDatasets = $datasetProperties->{longreadrnaseq} ? $datasetProperties->{longreadrnaseq} : {};
 
    foreach my $dataset (keys %$LongReadRnaSeqDatasets){
-    next unless($dataset =~ /nanopore_rnaSeqNextflow/);
+    next unless($dataset =~ /nanopore_longReadRnaSeq/);
 
 
     my $datasetName = $LongReadRnaSeqDatasets->{$dataset}->{datasetName};
