@@ -1093,6 +1093,7 @@ sub addLongReadRNASeq {
        my $relativePathToBamFile = "${nameForFileNames}/longReadRNASeq/bam/${datasetName}/${sampleFile}";
 
        my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig->new({	
+												skip_histograms => "true",
 												#url_template => "$bamUrl",
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
