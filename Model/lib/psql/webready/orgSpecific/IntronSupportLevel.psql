@@ -1,0 +1,61 @@
+:CREATE_AND_POPULATE
+with annotatedJunctions AS (
+  select gene_source_id
+         , count(*) as annotated_count
+    from (
+      select distinct ta.gene_source_id
+                      , il.na_sequence_id
+                      , il.start_min
+                      , il.end_max
+                      , il.is_reversed
+        from apidb.intronlocation il
+             inner join :SCHEMA.transcriptattributes ta
+                 ON il.parent_id = ta.na_feature_id
+    ) group by gene_source_id
+), exptJunctions as (
+  select gij.gene_source_id
+         , case when gij.total_unique >= stats.perc01_annot_score and gij.percent_max >= 2
+           then 'High'
+           else 'Low'
+           end as conf
+    FROM :SCHEMA.GeneIntronJunction gij
+         JOIN :SCHEMA.GenomicSeqJunctionStats stats
+             ON gij.na_sequence_id = stats.na_sequence_id
+   where gij.annotated_intron = 'Yes' -- we only care about the annotated ones
+     and gij.org_abbrev = ':ORG_ABBREV'
+     and stats.org_abbrev = ':ORG_ABBREV'
+), exptJunctionCounts as (
+  select gene_source_id
+         , conf
+         , count(*) as intron_count
+    from exptJunctions
+   group by gene_source_id
+            , conf
+)
+select distinct gene_source_id
+  , string_value
+  , ':PROJECT_ID' as project_id
+  , ':ORG_ABBREV' as org_abbrev
+  , current_timestamp as modification_date
+from (
+    select aj.gene_source_id
+           , CASE WHEN aj.annotated_count = ejc.intron_count
+             THEN 'All-high'
+             ELSE 'Mixed-high-low'
+             END as string_value
+      from annotatedJunctions aj
+           left join exptJunctionCounts ejc on aj.gene_source_id = ejc.gene_source_id
+     where ejc.conf = 'High'
+       AND ejc.intron_count > 0
+     UNION
+    select aj.gene_source_id
+           , CASE WHEN aj.annotated_count = sum(ejc.intron_count)
+             THEN 'All-low'
+             ELSE 'Mixed-high-low'
+             END as string_value
+      from annotatedJunctions aj
+           left join exptJunctionCounts ejc on aj.gene_source_id = ejc.gene_source_id
+     group by aj.gene_source_id, aj.annotated_count
+    having sum(ejc.intron_count) > 0
+)
+:DECLARE_PARTITION;

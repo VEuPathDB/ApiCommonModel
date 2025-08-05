@@ -1,0 +1,57 @@
+:CREATE_AND_POPULATE
+        SELECT ':PROJECT_ID' as project_id, ':ORG_ABBREV' as org_abbrev, current_timestamp as modification_date,
+               ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
+               ggt.taxon_id, ggt.is_not, replace(ggt.go_id, '_', ':') as go_id,
+               ggt.go_term_id, ggt.ontology,
+               replace(ggt.go_term_name, '_',' ') as go_term_name, ggt.source,
+               ggt.evidence_code,
+               CASE ggt.evidence_code WHEN 'IEA' THEN 'Computed' ELSE 'Curated' END as evidence_category,
+               ggt.reference, ggt.evidence_code_parameter,
+               ol.min_depth as depth,
+               case
+                 when gs.ontology_term_id is null then 0
+                 else 1
+               end as is_go_slim
+        FROM :SCHEMA.GeneGoTerms ggt
+          LEFT JOIN :SCHEMA.OntologyLevels ol ON ggt.go_term_id = ol.ontology_term_id
+          LEFT JOIN (
+            SELECT distinct ontology_term_id
+            FROM apidb.GoSubset
+            WHERE go_subset_term = 'goslim_generic'
+           ) gs ON ggt.go_term_id = gs.ontology_term_id
+        WHERE ggt.org_abbrev = ':ORG_ABBREV'
+        UNION
+        SELECT ':PROJECT_ID' as project_id, ':ORG_ABBREV' as org_abbrev, current_timestamp as modification_date,
+	       ggt.gene_source_id, ggt.transcript_source_id, ggt.aa_sequence_id,
+               ggt.taxon_id, ggt.is_not,
+               replace (substr(ot.source_id, 1, 25),'_',':') as go_id,
+               ot.ontology_term_id as go_term_id, ggt.ontology,
+               replace (substr(ot.name, 1,250),'_',' ') as go_term_name,
+               ggt.source, ggt.evidence_code,
+               CASE ggt.evidence_code WHEN 'IEA' THEN 'Computed' ELSE 'Curated' END as evidence_category,
+               ggt.reference,
+               ggt.evidence_code_parameter,
+               ol.min_depth as depth,
+               case
+                 when gs.ontology_term_id is null then 0
+                 else 1
+               end as is_go_slim
+        FROM :SCHEMA.GeneGoTerms ggt, sres.OntologyRelationship orel,
+             sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr,
+             sres.OntologyTerm ot
+             LEFT JOIN :SCHEMA.OntologyLevels ol ON ot.ontology_term_id = ol.ontology_term_id
+             LEFT JOIN (
+              SELECT distinct ontology_term_id
+              FROM apidb.GoSubset
+              WHERE go_subset_term = 'goslim_generic'
+             ) gs ON ot.ontology_term_id = gs.ontology_term_id
+        WHERE ggt.go_term_id = orel.subject_term_id
+          AND orel.object_term_id = ot.ontology_term_id
+          AND edr.external_database_release_id = ot.external_database_release_id
+          AND edr.external_database_id = ed.external_database_id
+          AND ed.name ='GO_RSRC'
+          AND ggt.org_abbrev = ':ORG_ABBREV'
+      
+    
+:DECLARE_PARTITION;
+
