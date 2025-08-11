@@ -1,23 +1,15 @@
-
-create unlogged table :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp as
-(select gf.na_feature_id
-      , gf.source_id
-      , gf.product
- from dots.genefeature gf
-    , dots.nasequence nas
- where gf.na_sequence_id = nas.na_sequence_id
- and nas.taxon_id = :TAXON_ID
-)
-;
-
-
 :CREATE_AND_POPULATE
   with gfp_preferred
              as (select source_id,
                    substr(STRING_AGG(product, ', ' order by product), 1, 4000) as product,
                    count(*) as value_count
                  from (select distinct gf.source_id,  gfp.product
-                       from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf, apidb.GeneFeatureProduct gfp
+                       from apidb.GeneFeatureProduct gfp, 
+                       (select gfe.na_feature_id, gfe.source_id, gfe.product
+                        from dots.genefeature gfe, dots.nasequence nas
+                        where gfe.na_sequence_id = nas.na_sequence_id
+                        and nas.taxon_id = :TAXON_ID
+                       ) gf
                        where gfp.na_feature_id = gf.na_feature_id
                          and gfp.is_preferred = 1) tmp
                  group by source_id),
@@ -26,7 +18,12 @@ create unlogged table :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp as
                    substr(STRING_AGG(product, ', ' order by product), 1, 4000) as product,
                    count(*) as value_count
                  from (select distinct gf.source_id,  gfp.product
-                       from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf, apidb.GeneFeatureProduct gfp
+                       from apidb.GeneFeatureProduct gfp,
+                       (select gfe.na_feature_id, gfe.source_id, gfe.product
+                        from dots.genefeature gfe, dots.nasequence nas
+                        where gfe.na_sequence_id = nas.na_sequence_id
+                        and nas.taxon_id = :TAXON_ID
+                       ) gf
                        where gfp.na_feature_id = gf.na_feature_id) tmp
                        group by source_id),
              tp_preferred
@@ -34,21 +31,35 @@ create unlogged table :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp as
                    substr(STRING_AGG(product, ', ' order by product), 1, 4000) as product,
                    count(*) as value_count
                  from (select distinct gf.source_id, tp.product
-                       from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf, dots.Transcript t, apidb.TranscriptProduct tp
+                       from dots.Transcript t, apidb.TranscriptProduct tp,
+                       (select gfe.na_feature_id, gfe.source_id, gfe.product
+                        from dots.genefeature gfe, dots.nasequence nas
+                        where gfe.na_sequence_id = nas.na_sequence_id
+                        and nas.taxon_id = :TAXON_ID
+                       ) gf
                        where t.parent_id = gf.na_feature_id
                          and tp.na_feature_id = t.na_feature_id
                          and tp.is_preferred = 1)  tmp
                        group by source_id),
              gf_product
              as (select source_id, product
-                 from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf
+                 from   (select gfe.na_feature_id, gfe.source_id, gfe.product
+                        from dots.genefeature gfe, dots.nasequence nas
+                        where gfe.na_sequence_id = nas.na_sequence_id
+                        and nas.taxon_id = :TAXON_ID
+                       ) gf
                  where product is not null),
              tp_any
              as (select source_id,
                    substr(STRING_AGG(product, ', ' order by product), 1, 4000) as product,
                    count(*) as value_count
                  from (select distinct gf.source_id, tp.product
-                       from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf, dots.Transcript t, apidb.TranscriptProduct tp
+                       from dots.Transcript t, apidb.TranscriptProduct tp,
+                       (select gfe.na_feature_id, gfe.source_id, gfe.product
+                        from dots.genefeature gfe, dots.nasequence nas
+                        where gfe.na_sequence_id = nas.na_sequence_id
+                        and nas.taxon_id = :TAXON_ID
+                       ) gf
                        where t.parent_id = gf.na_feature_id
                          and tp.na_feature_id = t.na_feature_id) tmp
                        group by source_id),
@@ -57,7 +68,12 @@ create unlogged table :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp as
                         substr(STRING_AGG(product, ', ' order by product), 1, 4000) as product,
                         count(*) as value_count
                  from (select gf.source_id, t.product
-                       from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf, dots.Transcript t
+                       from dots.Transcript t,
+                       (select gfe.na_feature_id, gfe.source_id, gfe.product
+                        from dots.genefeature gfe, dots.nasequence nas
+                        where gfe.na_sequence_id = nas.na_sequence_id
+                        and nas.taxon_id = :TAXON_ID
+                       ) gf
                        where t.parent_id = gf.na_feature_id
                          and t.product is not null) tmp
                        group by source_id)
@@ -100,7 +116,11 @@ create unlogged table :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp as
               ':PROJECT_ID' as project_id,
               ':ORG_ABBREV' as org_abbrev,
               current_timestamp as modification_date
-        from :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp gf
+        from (select gfe.na_feature_id, gfe.source_id, gfe.product
+              from dots.genefeature gfe, dots.nasequence nas
+              where gfe.na_sequence_id = nas.na_sequence_id
+              and nas.taxon_id = :TAXON_ID
+              ) gf
           LEFT JOIN gfp_preferred ON gf.source_id = gfp_preferred.source_id
           LEFT JOIN gfp_any ON gf.source_id = gfp_any.source_id
           LEFT JOIN tp_preferred ON gf.source_id = tp_preferred.source_id
@@ -125,6 +145,3 @@ This step will assume it has all uniprot accessions assined to the protein and u
 */
 
 delete from :SCHEMA.GeneProduct  where product is null and org_abbrev = ':ORG_ABBREV';
-
-drop table :SCHEMA.:ORG_ABBREVGeneFeatureProductTmp
-;
