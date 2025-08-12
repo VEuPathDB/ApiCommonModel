@@ -1,43 +1,78 @@
-drop table if exists :SCHEMA.taxonOfInterest_:ORG_ABBREV;
+CREATE OR REPLACE FUNCTION taxon_species(
+    schema_name text,
+    org_abbrev text,
+    taxon_id text,
+    project_id text
+) RETURNS void AS $$
+DECLARE
+    tblname text;
+BEGIN
+    tblname := 'taxonOfInterest_' || org_abbrev;
 
-create unlogged table :SCHEMA.taxonOfInterest_:ORG_ABBREV as
-select distinct ens.taxon_id
-from dots.est e,apidb.datasource ds, apidb.organism o,
-             sres.ExternalDatabaseRelease edr, dots.ExternalNaSequence ens,
-			 sres.externaldatabase ed, sres.ontologyterm oterm
-WhERE e.na_sequence_id = ens.na_sequence_id
-          AND ens.external_database_release_id = edr.external_database_release_id
-          AND edr.external_database_id = ed.external_database_id
-          AND ens.sequence_ontology_id = oterm.ontology_term_id
-          AND ed.name = ds.name
-          and ds.taxon_id = o.taxon_id
-          and o.is_reference_strain = 1
-          and o.taxon_id = :TAXON_ID
-     union
-     select :TAXON_ID
-;
+    -- Drop table
+    EXECUTE format(
+        'DROP TABLE IF EXISTS %I.%I',
+        schema_name,
+        tblname
+    );
 
--- recursively walk taxon tree to find ancestor with rank "species"
--- Update this to select max/min level with rank species if there are multiple
-:CREATE_AND_POPULATE
+    -- Create unlogged table
+    EXECUTE format(
+        $fmt$
+        CREATE UNLOGGED TABLE %I.%I AS
+        SELECT DISTINCT ens.taxon_id
+        FROM dots.est e
+        JOIN apidb.datasource ds ON ed.name = ds.name
+        JOIN apidb.organism o ON ds.taxon_id = o.taxon_id
+        JOIN sres.ExternalDatabaseRelease edr ON ens.external_database_release_id = edr.external_database_release_id
+        JOIN dots.ExternalNaSequence ens ON e.na_sequence_id = ens.na_sequence_id
+        JOIN sres.externaldatabase ed ON edr.external_database_id = ed.external_database_id
+        JOIN sres.ontologyterm oterm ON ens.sequence_ontology_id = oterm.ontology_term_id
+        WHERE o.is_reference_strain = 1
+        AND o.taxon_id = %L
+        UNION
+        SELECT %L
+        $fmt$,
+        schema_name,
+        tblname,
+        taxon_id,
+        taxon_id
+    );
+
+    -- Recursive part with placeholders kept as literals
+    EXECUTE format(
+        $fmt$
+        :CREATE_AND_POPULATE
         WITH RECURSIVE cte AS (
-            SELECT TAXON_ID, taxon_id as parent_id, 1 as lvl
+            SELECT TAXON_ID, taxon_id AS parent_id, 1 AS lvl
             FROM sres.taxon
-            WHERE taxon_id IN (SELECT taxon_id from :SCHEMA.taxonOfInterest_:ORG_ABBREV)
+            WHERE taxon_id IN (SELECT taxon_id FROM %I.%I)
             UNION ALL
             SELECT cte.taxon_id, sub.parent_id, lvl + 1
-            FROM cte, sres.taxon sub
-            WHERE cte.parent_id = sub.taxon_id
+            FROM cte
+            JOIN sres.taxon sub ON cte.parent_id = sub.taxon_id
         )
-        SELECT c.taxon_id, c.parent_id as species_taxon_id,
-	':PROJECT_ID' as project_id,
-	:ORG_ABBREV as org_abbrev,
-	current_timestamp as modification_date
-        FROM cte c, sres.taxon t
-        WHERE t.taxon_id = c.parent_id
-          AND t.rank='species'    
-:DECLARE_PARTITION;
+        SELECT c.taxon_id,
+               c.parent_id AS species_taxon_id,
+               :PROJECT_ID AS project_id,
+               :ORG_ABBREV AS org_abbrev,
+               current_timestamp AS modification_date
+        FROM cte c
+        JOIN sres.taxon t ON t.taxon_id = c.parent_id
+        WHERE t.rank = 'species'
+        :DECLARE_PARTITION
+        $fmt$,
+        schema_name,
+        tblname
+    );
+    -- Drop table
+    EXECUTE format(
+        'DROP TABLE IF EXISTS %I.%I',
+        schema_name,
+        tblname
+    );
 
-drop table if exists :SCHEMA.taxonOfInterest_:ORG_ABBREV;
+END;
+$$ LANGUAGE plpgsql;
 
-
+SELECT taxon_species(:SCHEMA, :ORG_ABBREV, :TAXON_ID, :PROJECT_ID);
