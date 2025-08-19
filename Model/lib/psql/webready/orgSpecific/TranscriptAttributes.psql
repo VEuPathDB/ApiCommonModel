@@ -157,18 +157,18 @@
               WHERE p.na_feature_id = gf.na_feature_id
             ) any_gene_product ON TRUE
             LEFT JOIN LATERAL (
-             SELECT max(name) AS name
-             FROM apidb.GeneFeatureName gfn
-             WHERE gfn.na_feature_id = gf.na_feature_id
-               AND gfn.is_preferred = 1
-              EXCEPT
-                  -- suppress gene/name associations from the *DELETED_RSRC databases
-              SELECT gfn.na_feature_id, gfn.name
-              FROM apidb.GeneFeatureName gfn,
-                   sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
-              WHERE gfn.external_database_release_id = edr.external_database_release_id
-                AND ed.external_database_id = edr.external_database_id
-                AND ed.name like '%DELETED_RSRC'
+              SELECT max(name) AS name
+              FROM apidb.GeneFeatureName gfn
+              WHERE gfn.na_feature_id = gf.na_feature_id
+                AND gfn.is_preferred = 1
+                AND NOT EXISTS (
+                  -- suppress data from the *DELETED_RSRC databases
+                  SELECT 1
+                  FROM sres.ExternalDatabase ed2, sres.ExternalDatabaseRelease edr2
+                  WHERE  ed2.external_database_id = edr2.external_database_id
+                    AND  gfn.external_database_release_id = edr2.external_database_release_id
+                    AND ed2.name LIKE '%DELETED_RSRC'
+                )
             ) preferred_name ON TRUE
             LEFT JOIN LATERAL (
               SELECT max(name) as name
@@ -231,8 +231,8 @@
             transcript_exons.exon_count,
             sns.length AS length, sns.na_sequence_id as spliced_na_sequence_id,
             rt1.anticodon rt1_anticodon,
-            utr_lengths.five_prime_utr_length,
-            utr_lengths.three_prime_utr_length
+            five_prime.utr_length  AS five_prime_utr_length,
+            three_prime.utr_length AS three_prime_utr_length
           FROM dots.Transcript t
             INNER JOIN dots.genefeature gf on t.parent_id = gf.na_feature_id
             INNER JOIN dots.nasequence nas on gf.na_sequence_id = nas.na_sequence_id and nas.taxon_id = :TAXON_ID
@@ -243,28 +243,22 @@
             LEFT JOIN LATERAL (
               SELECT count(*) as exon_count
               FROM dots.RnaFeatureExon rfe
-              WHERE rfe.rna_feature_id = = t.na_feature_id
+              WHERE rfe.rna_feature_id = t.na_feature_id
             ) transcript_exons ON TRUE
             LEFT JOIN LATERAL (
-              SELECT t.na_feature_id as transcript_na_feature_id,
-                     five_prime.utr_length as five_prime_utr_length,
-                     three_prime.utr_length as three_prime_utr_length
-              FROM transcript t_prime
-              LEFT JOIN LATERAL (
-                  SELECT sum(end_max-start_min + 1) as utr_length
-                  FROM apidb.UtrLocation
-                  WHERE parent_id = t_prime.na_feature_id
-                    AND direction = 5
-                    AND is_top_level = 1
-              ) five_prime ON TRUE
-              LEFT JOIN LATERAL (
-                  SELECT sum(end_max-start_min + 1) as utr_length
-                  FROM apidb.UtrLocation
-                  WHERE parent_id = t_prime.na_feature_id
-                    AND direction = 3
-                    AND is_top_level = 1
-              ) three_prime ON TRUE
-            ) utr_lengths ON t.na_feature_id = utr_lengths.transcript_na_feature_id
+              SELECT sum(end_max-start_min + 1) as utr_length
+              FROM apidb.UtrLocation
+              WHERE direction = 5 AND is_top_level = 1
+                AND t.na_feature_id = parent_id
+              GROUP BY parent_id
+             ) five_prime ON TRUE
+            LEFT JOIN LATERAL(
+              SELECT sum(end_max-start_min + 1) as utr_length
+              FROM apidb.UtrLocation
+              WHERE direction = 3 AND is_top_level = 1
+                AND t.na_feature_id = parent_id
+              GROUP BY parent_id
+            ) three_prime ON TRUE
             LEFT JOIN :SCHEMA.:REF_ORG_ABBREVTranscriptUniprot_tmp  transcript_uniprot ON t.na_feature_id = transcript_uniprot.na_feature_id
             LEFT JOIN LATERAL (
               SELECT max(product)
