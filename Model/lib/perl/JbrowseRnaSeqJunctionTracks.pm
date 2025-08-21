@@ -50,7 +50,7 @@ sub processOrganism {
 
   my $sql = "select count(*)
 from apidbtuning.datasetproperty p
-   , apidbtuning.datasetnametaxon d
+   , apidbtuning.datasetdatasource d
    , apidb.organism o
 where d.DATASET_PRESENTER_ID = p.DATASET_PRESENTER_ID
 and o.taxon_id = d.taxon_id
