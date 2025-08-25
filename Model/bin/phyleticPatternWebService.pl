@@ -113,7 +113,7 @@ sub cleanUrl {
 sub getSourceIdsAndGroups {
     my ($taxonIds,$dbh) = @_;
     my $sql = "SELECT source_id, orthomcl_name
-               FROM ApidbTuning.TranscriptAttributes
+               FROM webready.TranscriptAttributes
                WHERE taxon_id IN (".$taxonIds.")";
     my $sh = $dbh->prepare($sql);
     $sh->execute();
@@ -163,7 +163,7 @@ sub createTable {
 sub finalSearchQuery {
     my ($tableName,$outputFile,$dbh) = @_;
     my $sql = "SELECT DISTINCT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id, ta.taxon_id 
-               FROM ApidbTuning.TranscriptAttributes ta, $tableName pp
+               FROM webready.TranscriptAttributes ta, $tableName pp
                WHERE pp.source_id = ta.source_id";
     my $sh = $dbh->prepare($sql);
     $sh->execute();
