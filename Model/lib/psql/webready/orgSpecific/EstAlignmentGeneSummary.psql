@@ -18,7 +18,8 @@
              dots.NaSequence query_sequence 
         WHERE e.na_sequence_id = ba.query_na_sequence_id
           AND ga.na_sequence_id = ba.target_na_sequence_id
-          AND least(ba.target_end, ga.gene_end_max) - greatest(ba.target_start, ga.gene_start_min) >= 0
+          AND ba.target_end >= ga.gene_start_min
+          AND ga.gene_end_max >= ba.target_start
           AND query_sequence.na_sequence_id = ba.query_na_sequence_id
           AND ga.org_abbrev = ':ORG_ABBREV'
       
@@ -50,11 +51,15 @@
             /* (because they overlap no genes) */
             SELECT ba.blat_alignment_id
             FROM dots.BlatAlignment ba, dots.NaSequence query_sequence,
-                 sres.OntologyTerm so, dots.NaSequence target_sequence
+                 sres.OntologyTerm so, dots.NaSequence target_sequence,
+                :SCHEMA.taxonspecies tsq, :SCHEMA.taxonspecies tst
             WHERE query_sequence.na_sequence_id = ba.query_na_sequence_id
               AND query_sequence.sequence_ontology_id = so.ontology_term_id
               AND ba.target_na_sequence_id = target_sequence.na_sequence_id
-              AND target_sequence.taxon_id = :TAXON_ID
+              /* we filter the query sequence (at the species level) because doing so provides a dramatic performance boost */
+              AND query_sequence.taxon_id = tsq.taxon_id
+              AND tst.species_taxon_id = tsq.species_taxon_id
+              AND tst.taxon_id = :TAXON_ID
               AND so.name = 'EST'
             EXCEPT
             SELECT blat_alignment_id FROM :SCHEMA.:CLEAN_ORG_ABBREVEstAlignmentGeneTmp)

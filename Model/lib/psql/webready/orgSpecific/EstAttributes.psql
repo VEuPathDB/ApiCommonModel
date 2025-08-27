@@ -21,28 +21,13 @@
                       END, 1, 100) AS organism,
                taxon.ncbi_tax_id,
                ed.name AS external_db_name,
-               coalesce(best.best_alignment_count, 0) AS best_alignment_count,
                l.library_id, replace(l.dbest_name, '''', '-') as library_dbest_name
         FROM dots.Est e, dots.Library l, sres.Taxon, sres.OntologyTerm oterm,
              sres.TaxonName tn, sres.ExternalDatabase ed,
              apidb.datasource ds, apidb.organism o,
+             :SCHEMA.taxonspecies ts_r,  -- ref organism
+             :SCHEMA.taxonspecies ts_e,  -- est organism
              sres.ExternalDatabaseRelease edr, dots.ExternalNaSequence ens
-             LEFT JOIN
-             (select query_na_sequence_id,max(ct) as best_alignment_count
-              from (
-                    SELECT query_na_sequence_id, COUNT(*) AS ct
-                     FROM dots.BlatAlignment ba, apidb.datasource ds, apidb.organism o,
-                     sres.externaldatabase d, sres.externaldatabaserelease r
-                     WHERE is_best_alignment = 1
-                     AND ba.query_external_db_release_id = r.external_database_release_id
-                     AND r.external_database_id = d.external_database_id
-                     AND d.name = ds.name
-                     AND ds.taxon_id = o.taxon_id
-                     AND o.is_reference_strain = 1
-                     AND o.taxon_id = :TAXON_ID
-                     GROUP BY target_external_db_release_id,query_na_sequence_id) t
-              group by query_na_sequence_id
-              ) best ON ens.na_sequence_id = best.query_na_sequence_id
         WHERE e.na_sequence_id = ens.na_sequence_id
           AND e.library_id = l.library_id
           AND ens.taxon_id = tn.taxon_id
@@ -52,8 +37,11 @@
           AND edr.external_database_id = ed.external_database_id
           AND ens.sequence_ontology_id = oterm.ontology_term_id
           AND ed.name = ds.name
+          AND ens.taxon_id = ts_e.taxon_id
+          AND o.taxon_id = ts_r.taxon_id
+          AND ts_e.species_taxon_id = ts_r.species_taxon_id
           and ds.taxon_id = o.taxon_id
-          and o.is_reference_strain = 1
+          and o.is_reference_strain = 1 -- We want ESTs for the species of the reference strain 
           and o.taxon_id = :TAXON_ID
           AND oterm.name = 'EST';
 :DECLARE_PARTITION;
