@@ -1,0 +1,220 @@
+	DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp;
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp  AS
+        SELECT aa_sequence_id, ontology, source,
+             string_agg(go_term_name, ';' ORDER BY go_term_name) AS go_terms,
+             string_agg(go_id, ';' ORDER BY go_term_name) AS go_ids
+        FROM (
+          SELECT aa_sequence_id, ontology,
+                 CASE evidence_code WHEN 'IEA' THEN 'predicted' ELSE 'annotated' END AS source, go_term_name, go_id
+          FROM  :SCHEMA.GeneGoTerms
+          WHERE org_abbrev = ':ORG_ABBREV'
+          
+        ) t
+        GROUP BY aa_sequence_id, ontology, source
+      
+    ;
+
+        DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREVProteinGoAttributes_tmp;
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:CLEAN_ORG_ABBREVProteinGoAttributes_tmp AS
+        SELECT DISTINCT gts.aa_sequence_id,
+               substr(annotated_go_component.go_terms, 1, 300) AS annotated_go_component,
+               substr(annotated_go_function.go_terms, 1, 300) AS annotated_go_function,
+               substr(annotated_go_process.go_terms, 1, 300) AS annotated_go_process,
+               substr(predicted_go_component.go_terms, 1, 300) AS predicted_go_component,
+               substr(predicted_go_function.go_terms, 1, 300) AS predicted_go_function,
+               substr(predicted_go_process.go_terms, 1, 300) AS predicted_go_process,
+               substr(annotated_go_component.go_ids, 1, 300) AS annotated_go_id_component,
+               substr(annotated_go_function.go_ids, 1, 300) AS annotated_go_id_function,
+               substr(annotated_go_process.go_ids, 1, 300) AS annotated_go_id_process,
+               substr(predicted_go_component.go_ids, 1, 300) AS predicted_go_id_component,
+               substr(predicted_go_function.go_ids, 1, 300) AS predicted_go_id_function,
+               substr(predicted_go_process.go_ids, 1, 300) AS predicted_go_id_process
+        FROM
+          (SELECT DISTINCT aa_sequence_id FROM :SCHEMA.GoTermSummary where org_abbrev = ':ORG_ABBREV') gts
+          LEFT JOIN (
+            SELECT * FROM :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp 
+            WHERE source = 'annotated' AND ontology = 'Cellular Component'
+          ) annotated_go_component ON
+            gts.aa_sequence_id = annotated_go_component.aa_sequence_id
+            AND 'annotated' = annotated_go_component.source
+            AND 'Cellular Component' = annotated_go_component.ontology
+          LEFT JOIN (
+            SELECT * FROM :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp 
+            WHERE source = 'annotated' AND ontology = 'Molecular Function'
+          ) annotated_go_function ON
+            gts.aa_sequence_id = annotated_go_function.aa_sequence_id
+            AND 'annotated' = annotated_go_function.source
+            AND 'Molecular Function' = annotated_go_function.ontology
+          LEFT JOIN (
+            SELECT * FROM :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp 
+            WHERE source = 'annotated' AND ontology = 'Biological Process'
+          ) annotated_go_process ON
+            gts.aa_sequence_id = annotated_go_process.aa_sequence_id
+            AND 'annotated' = annotated_go_process.source
+            AND 'Biological Process' = annotated_go_process.ontology
+          LEFT JOIN (
+            SELECT * FROM :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp 
+            WHERE source = 'predicted' AND ontology = 'Cellular Component'
+          ) predicted_go_component ON
+            gts.aa_sequence_id = predicted_go_component.aa_sequence_id
+            AND 'predicted' = predicted_go_component.source
+            AND 'Cellular Component' = predicted_go_component.ontology
+          LEFT JOIN (
+            SELECT * FROM :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp 
+            WHERE source = 'predicted' AND ontology = 'Molecular Function'
+          ) predicted_go_function ON
+            gts.aa_sequence_id = predicted_go_function.aa_sequence_id
+            AND 'predicted' = predicted_go_function.source
+            AND 'Molecular Function' = predicted_go_function.ontology
+          LEFT JOIN (
+            SELECT * FROM :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp 
+            WHERE source = 'predicted' AND ontology = 'Biological Process'
+          ) predicted_go_process ON
+            gts.aa_sequence_id = predicted_go_process.aa_sequence_id
+            AND 'predicted' = predicted_go_process.source
+            AND 'Biological Process' = predicted_go_process.ontology
+      
+    ;
+
+
+      
+        create index ProteinGoAttr_aaSequenceId_:CLEAN_ORG_ABBREV  ON :SCHEMA.:CLEAN_ORG_ABBREVProteinGoAttributes_tmp  (aa_sequence_id)
+
+      
+    ;
+
+        DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEc_tmp;
+      
+        CREATE UNLOGGED TABLE :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEc_tmp  AS
+            SELECT aa_sequence_id, SUBSTR(string_agg(ec_number, ';' order by ec_number),1, 300) AS ec_numbers
+            FROM (SELECT DISTINCT asec.aa_sequence_id,
+                        ec.ec_number || ' (' || ec.description || ')' AS ec_number
+                 FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec, dots.aasequence seq
+                 WHERE ec.enzyme_class_id = asec.enzyme_class_id
+                  AND seq.aa_sequence_id = asec.aa_sequence_id
+                  AND seq.taxon_id = :TAXON_ID
+                  AND NOT asec.evidence_code = 'OrthoMCLDerived'
+            ) t
+            GROUP BY aa_sequence_id
+      
+    ;
+
+           DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEcDerived_tmp;
+
+      --TODO:  these rows will not exist in org specific land
+    --     CREATE UNLOGGED TABLE :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEcDerived_tmp  AS
+    --         SELECT aa_sequence_id, SUBSTR(string_agg(ec_number, ';' order by ec_number),1, 300) AS ec_numbers_derived
+    --         FROM (SELECT DISTINCT asec.aa_sequence_id,
+    --                     ec.ec_number || ' (' || ec.description || ')' AS ec_number
+    --              FROM dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec, dots.aasequence seq
+    --              WHERE ec.enzyme_class_id = asec.enzyme_class_id
+    --               AND seq.aa_sequence_id = asec.aa_sequence_id
+    --               AND seq.taxon_id = :TAXON_ID
+    --               AND asec.evidence_code = 'OrthoMCLDerived'
+    --         ) t
+    --         GROUP BY aa_sequence_id
+
+    -- ;
+
+
+-- TODO:  Filter the subqueries or break into tmp tables for performance
+:CREATE_AND_POPULATE
+        SELECT ':PROJECT_ID' as project_id,
+        ':ORG_ABBREV' as org_abbrev,
+        current_timestamp as modification_date,
+          tas.source_id, tas.aa_sequence_id,
+          t.source_id as transcript_source_id,
+          gf.source_id as gene_source_id,
+          cdsl.na_sequence_id as na_sequence_id,
+          cdsl.is_reversed,
+          cdsl.start_min as cds_start,
+          cdsl.end_max as cds_end,
+          (taf.translation_stop - taf.translation_start) + 1 AS cds_length,
+             length(tas.sequence) AS protein_length,
+             coalesce(transmembrane.tm_domains, 0) AS tm_count,
+          tas.molecular_weight,
+          asa.min_molecular_weight, asa.max_molecular_weight,
+          asa.isoelectric_point, asa.hydropathicity_gravy_score,
+          asa.aromaticity_score,
+          SUBSTR(sigp.peptide_sequence, 1, 200) as signalp_peptide,
+          ec_numbers,
+          --ec_numbers_derived,
+          go.annotated_go_component,
+          go.annotated_go_function,
+          go.annotated_go_process,
+          go.predicted_go_component,
+          go.predicted_go_function,
+          go.predicted_go_process,
+          go.annotated_go_id_component,
+          go.annotated_go_id_function,
+          go.annotated_go_id_process,
+          go.predicted_go_id_component,
+          go.predicted_go_id_function,
+          go.predicted_go_id_process,
+          SUBSTR(coalesce(rt1.anticodon, rt2.anticodon), 1, 3) AS anticodon,
+          0 AS has_seqedit,
+          row_number() over (partition by t.source_id order by tas.length desc) as rank_in_transcript,
+          uniprot.uniprot_ids
+        FROM
+          dots.Transcript t
+          INNER JOIN dots.GeneFeature gf ON gf.na_feature_id = t.parent_id
+          INNER JOIN dots.nasequence nas ON gf.na_sequence_id = nas.na_sequence_id AND nas.taxon_id = :TAXON_ID
+          INNER JOIN dots.TranslatedAaFeature taf ON t.na_feature_id = taf.na_feature_id
+          INNER JOIN dots.TranslatedAaSequence tas ON taf.aa_sequence_id = tas.aa_sequence_id
+          LEFT JOIN dots.RnaType rt2 ON gf.na_feature_id = rt2.parent_id
+          LEFT JOIN dots.RnaType rt1 ON t.na_feature_id = rt1.parent_id
+          LEFT JOIN apidb.AaSequenceAttribute asa ON taf.aa_sequence_id = asa.aa_sequence_id
+          LEFT JOIN :SCHEMA.:CLEAN_ORG_ABBREVProteinGoAttributes_tmp  go ON tas.aa_sequence_id = go.aa_sequence_id
+          LEFT JOIN (
+            SELECT aa_sequence_id, string_agg(peptide_sequence, ', ') peptide_sequence
+            FROM (SELECT DISTINCT aa_sequence_id, peptide_sequence FROM :SCHEMA.SignalPeptideDomains where org_abbrev = ':ORG_ABBREV') t
+            GROUP BY aa_sequence_id
+          ) sigp ON tas.aa_sequence_id = sigp.aa_sequence_id
+          LEFT JOIN (
+            SELECT protein_source_id, na_sequence_id, is_reversed,
+               MIN(start_min) AS start_min, MAX(end_max) AS end_max
+            FROM apidb.CdsLocation WHERE is_top_level=1
+            GROUP BY protein_source_id, na_sequence_id, is_reversed
+          ) cdsl ON tas.source_id = cdsl.protein_source_id
+          LEFT JOIN (
+            SELECT aa_sequence_id, max(tm_domains) AS tm_domains
+            FROM (SELECT tmaf.aa_sequence_id, COUNT(*) AS tm_domains
+                 FROM dots.TransmembraneAaFeature tmaf, dots.AaLocation al
+                 WHERE tmaf.aa_feature_id = al.aa_feature_id
+                 GROUP BY tmaf.aa_sequence_id) tms
+            GROUP BY tms.aa_sequence_id
+          ) transmembrane ON tas.aa_sequence_id = transmembrane.aa_sequence_id
+          LEFT JOIN :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEc_tmp  ec ON tas.aa_sequence_id = ec.aa_sequence_id
+          --LEFT JOIN :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEcDerived_tmp  ecDerived ON tas.aa_sequence_id = ecDerived.aa_sequence_id
+          LEFT JOIN (
+            SELECT af.aa_sequence_id,
+                   string_agg(dbref.primary_identifier, ',' order by dbref.primary_identifier) as uniprot_ids
+            FROM sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
+                sres.DbRef, dots.DbRefAaFeature daf, dots.AaFeature af
+            WHERE d.name like 'Uniprot%'
+              AND d.external_database_id = r.external_database_id
+              AND r.external_database_release_id = dbref.external_database_release_id
+              AND dbref.db_ref_id = daf.db_ref_id
+              AND daf.aa_feature_id = af.aa_feature_id
+            GROUP BY af.aa_sequence_id
+          ) uniprot ON tas.aa_sequence_id = uniprot.aa_sequence_id
+        ORDER BY tas.source_id;
+      
+    
+:DECLARE_PARTITION;
+
+
+      
+       update :SCHEMA.ProteinAttributes  gaup
+       set has_seqedit  = 1
+       where source_id in (select source_id from apidb.seqedit)
+       and org_abbrev = ':ORG_ABBREV'
+      
+    ;
+
+drop table :SCHEMA.:CLEAN_ORG_ABBREVGoTermList_tmp;
+drop table :SCHEMA.:CLEAN_ORG_ABBREVProteinGoAttributes_tmp;
+drop table :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEc_tmp;
+--drop table :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEcDerived_tmp;

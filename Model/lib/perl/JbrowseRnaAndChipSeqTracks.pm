@@ -47,7 +47,7 @@ sub processOrganism {
     # EXAMPLE:
     #/var/www/Common/apiSiteFilesMirror/webServices/PlasmoDB/build-42/Pfalciparum3D7/bigwig/pfal3D7_Caro_ribosome_profiling_rnaSeq_RSRC/metadata_unlogged
 
-    my $bigWigRelativePath = "$projectName/build-$buildNumber/$nameForFileNames/bigwig/$datasetName";
+    my $bigWigRelativePath = "$projectName/build-$buildNumber/${nameForFileNames}/bulkrnaseq/bigwig/$datasetName";
     #print $bigWigRelativePath."\n";
     my $metadataFile = "$webservicesDir/$bigWigRelativePath/$metadataBase";
     #print $metadataFile."\n";
@@ -213,7 +213,7 @@ sub addConfiguration {
   
   my $displayNameSuffix = "Coverage";
 
-  my $relativePathToFile = "$nameForFileNames/bigwig/$datasetName/$file";
+  my $relativePathToFile = "${nameForFileNames}/bulkrnaseq/bigwig/$datasetName/$file";
 
   my $coverageObj = ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig->new({ dataset_config => $datasetConfig,
                                                                                                 project_name => $projectName,

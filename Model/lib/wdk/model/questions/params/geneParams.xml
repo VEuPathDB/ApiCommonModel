@@ -6424,7 +6424,7 @@ products of your selected type (or types).<br><br>
             'string' as type, 0 as is_range, cast(null as varchar(1)) as precision, 7 as display_order
             from apidbtuning.datasetnametaxon dnt
             where '$$gene_or_transcript$$' = 'gene_source_id'
-              and dnt.name like '%nanopore_rnaSeqNextflow_RSRC'
+              and dnt.name like '%nanopore_longReadRnaSeq_RSRC'
               and dnt.taxon_id in ($$organism_select_all$$)
               and '@PROJECT_ID@' != 'EuPathDB'
             UNION
@@ -7421,7 +7421,7 @@ products of your selected type (or types).<br><br>
               SELECT
                 r.value || ' Hour' as display
                 , r.value || ' Hour' as term
-                , string_agg(ps.protocol_app_node_id, ',' order by ps.protocol_app_node_id) as internal
+                , string_agg(ps.protocol_app_node_id::text, ',' order by ps.protocol_app_node_id) as internal
                 , CASE WHEN r.value > 0 AND r.value <= 8 THEN 'Early Ring'
                        WHEN r.value > 8 AND r.value <= 16 THEN 'Late Ring'
                        WHEN r.value > 16 AND r.value <= 23 THEN 'Early Trophozoite'
@@ -7492,7 +7492,7 @@ products of your selected type (or types).<br><br>
           FROM (
               SELECT r.value || ' Hour' as display
                 , r.value || ' Hour' as term
-                , string_agg(ps.protocol_app_node_id, ',' ORDER BY ps.protocol_app_node_id) as internal
+                , string_agg(ps.protocol_app_node_id::text, ',' ORDER BY ps.protocol_app_node_id) as internal
                 , CASE WHEN r.value > 0 AND r.value <= 8 THEN 'Early Ring'
                        WHEN r.value > 8 AND r.value <= 16 THEN 'Late Ring'
                        WHEN r.value > 16 AND r.value <= 23 THEN 'Early Trophozoite'
@@ -8074,10 +8074,10 @@ products of your selected type (or types).<br><br>
       <column name="internal" />
       <column name="term" />
       <sql>
-        SELECT name as term, string_agg(PROTOCOL_APP_NODE_ID, ',' ORDER BY name) as internal
+        SELECT name as term, string_agg(protocol_app_node_id::text, ',' ORDER BY name) as internal
         FROM (
           SELECT profile_set_suffix || ' ' || protocol_app_node_name as name
-            , PROTOCOL_APP_NODE_ID
+            , protocol_app_node_id
           FROM apidbtuning.profilesamples
           where dataset_name like '%rnaSeq_RSRC%'
             AND profile_type = 'values'
@@ -8097,10 +8097,10 @@ products of your selected type (or types).<br><br>
       <column name="internal" />
       <column name="term" />
       <sql>
-        SELECT name as term, string_agg(PROTOCOL_APP_NODE_ID, ',' ORDER BY name) as internal
+        SELECT name as term, string_agg(protocol_app_node_id::text, ',' ORDER BY name) as internal
         FROM (
           SELECT profile_set_suffix || ' ' || protocol_app_node_name as name
-            , PROTOCOL_APP_NODE_ID
+            , protocol_app_node_id
           FROM apidbtuning.profilesamples
           WHERE dataset_name = 'pcynM_Galinski_infected_Mmulatta_rnaSeq_RSRC'
             AND profile_type = 'values'
@@ -8274,16 +8274,16 @@ products of your selected type (or types).<br><br>
       <sql>
         <![CDATA[
           WITH RECURSIVE cte AS (
-            SELECT depth_first_index, orthomcl_taxon_id, 0 AS level, three_letter_abbrev
-            FROM apidb.orthomcltaxon
-            WHERE orthomcl_taxon_id = (
-              SELECT min(orthomcl_taxon_id)
-              FROM apidb.orthomclTaxon
+            SELECT depth_first_index, orthomcl_clade_id, 0 AS level, three_letter_abbrev
+            FROM apidb.orthomclClade
+            WHERE orthomcl_clade_id = (
+              SELECT min(orthomcl_clade_id)
+              FROM apidb.orthomclClade
             )
             UNION
-            SELECT sub.depth_first_index, sub.orthomcl_taxon_id, cte.level + 1, sub.three_letter_abbrev
-            FROM apidb.orthomcltaxon sub, cte
-            WHERE sub.parent_id = cte.orthomcl_taxon_id
+            SELECT sub.depth_first_index, sub.orthomcl_clade_id, cte.level + 1, sub.three_letter_abbrev
+            FROM apidb.orthomclclade sub, cte
+            WHERE sub.parent_id = cte.orthomcl_clade_id
           )
           SELECT level AS internal, level AS display, three_letter_abbrev AS term
           FROM cte
@@ -8325,7 +8325,7 @@ products of your selected type (or types).<br><br>
       <column name="display" />
       <sql>
         SELECT three_letter_abbrev as term, name as internal, name as display
-        FROM apidb.orthomcltaxon
+        FROM apidb.orthomclclade
         WHERE three_letter_abbrev not in ('BACI')
         ORDER BY depth_first_index  ASC, three_letter_abbrev ASC
       </sql>
@@ -8798,7 +8798,7 @@ end as term
       <sql>
         SELECT gt.go_id AS internal,
           gt.go_id AS term,
-          gt.go_id || ' : ' || gt.go_term_name || ' : ' || min(gt.depth)AS display,
+          gt.go_id || ' : ' || gt.go_term_name || ' : ' || max(CASE WHEN gt.depth is NULL THEN 0 ELSE gt.depth END) AS display,
           count(*) as ct
         FROM   ApidbTuning.GoTermSummary gt
         WHERE ($$go_term_slim$$ = 'No' or gt.IS_GO_SLIM = 1)
@@ -8828,7 +8828,7 @@ end as term
       <sql>
         SELECT gt.go_id AS internal,
           gt.go_id AS term,
-          gt.go_id || ' : ' || gt.go_term_name || ' : ' || min(gt.depth)AS display,
+          gt.go_id || ' : ' || gt.go_term_name || ' : ' || max(CASE WHEN gt.depth is NULL THEN 0 ELSE gt.depth END) AS display,
           count(*) as ct
         FROM   ApidbTuning.GoTermSummary gt
         WHERE gt.source in ('DawsonLab', 'TrypTag')
@@ -9731,7 +9731,7 @@ end as term
       <column name="term"/>
       <sql>
         SELECT name as term,
-        string_agg(protocol_app_node_id, ',' ORDER BY name) as internal
+        string_agg(protocol_app_node_id::text, ',' ORDER BY name) as internal
         FROM (
           SELECT pan.protocol_app_node_id, pan.node_order_num,
             regexp_replace(regexp_replace(pan.name, '-forward$', ''), '-reverse$', '') as name

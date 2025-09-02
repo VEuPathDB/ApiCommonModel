@@ -486,6 +486,8 @@ sub addGenes {
 	       category => "Gene Models",
 	       unsafePopup => JSON::true,
 	       glyph => "NeatCanvasFeatures/View/FeatureGlyph/Gene",
+               noncodingType => ["nc_transcript"],
+               transcriptType => "{geneTranscriptType}",
 	       urlTemplate => $urlTemplate,
 	       maxheight => 4000,
 	       style => {
@@ -1031,7 +1033,7 @@ sub addLongReadRNASeq {
    my $LongReadRnaSeqDatasets = $datasetProperties->{longreadrnaseq} ? $datasetProperties->{longreadrnaseq} : {};
 
    foreach my $dataset (keys %$LongReadRnaSeqDatasets){
-    next unless($dataset =~ /nanopore_rnaSeqNextflow/);
+    next unless($dataset =~ /nanopore_longReadRnaSeq/);
 
 
     my $datasetName = $LongReadRnaSeqDatasets->{$dataset}->{datasetName};
@@ -1091,6 +1093,7 @@ sub addLongReadRNASeq {
        my $relativePathToBamFile = "${nameForFileNames}/longReadRNASeq/bam/${datasetName}/${sampleFile}";
 
        my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig->new({	
+												skip_histograms => "true",
 												#url_template => "$bamUrl",
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
