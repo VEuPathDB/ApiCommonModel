@@ -173,36 +173,49 @@
             GROUP BY aa_sequence_id
           ) sigp ON tas.aa_sequence_id = sigp.aa_sequence_id
           LEFT JOIN (
-            SELECT protein_source_id, na_sequence_id, is_reversed,
-               MIN(start_min) AS start_min, MAX(end_max) AS end_max
-            FROM apidb.CdsLocation WHERE is_top_level=1
-            GROUP BY protein_source_id, na_sequence_id, is_reversed
+            SELECT l.protein_source_id 
+                   , l.na_sequence_id
+                   , l.is_reversed
+                   , MIN(l.start_min) AS start_min
+                   , MAX(l.end_max) AS end_max
+              FROM apidb.CdsLocation l
+                   , dots.nasequence s
+             WHERE l.is_top_level=1
+               and l.na_sequence_id = s.na_sequence_id
+               and s.taxon_id = :TAXON_ID
+             GROUP BY l.protein_source_id, l.na_sequence_id, l.is_reversed
           ) cdsl ON tas.source_id = cdsl.protein_source_id
           LEFT JOIN (
-            SELECT aa_sequence_id, max(tm_domains) AS tm_domains
-            FROM (SELECT tmaf.aa_sequence_id, COUNT(*) AS tm_domains
-                 FROM dots.TransmembraneAaFeature tmaf, dots.AaLocation al
-                 WHERE tmaf.aa_feature_id = al.aa_feature_id
-                 GROUP BY tmaf.aa_sequence_id) tms
-            GROUP BY tms.aa_sequence_id
+            SELECT tmaf.aa_sequence_id
+                   , COUNT(*) AS tm_domains
+              FROM dots.aasequence s
+                   ,dots.TransmembraneAaFeature tmaf
+                   , dots.AaLocation al
+             WHERE tmaf.aa_feature_id = al.aa_feature_id
+               AND tmaf.aa_sequence_id = s.aa_sequence_id
+               AND s.taxon_id = :TAXON_ID
+             GROUP BY tmaf.aa_sequence_id
           ) transmembrane ON tas.aa_sequence_id = transmembrane.aa_sequence_id
           LEFT JOIN :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEc_tmp  ec ON tas.aa_sequence_id = ec.aa_sequence_id
           --LEFT JOIN :SCHEMA.:CLEAN_ORG_ABBREVProteinAttrsEcDerived_tmp  ecDerived ON tas.aa_sequence_id = ecDerived.aa_sequence_id
           LEFT JOIN (
-            SELECT af.aa_sequence_id,
-                   string_agg(dbref.primary_identifier, ',' order by dbref.primary_identifier) as uniprot_ids
-            FROM sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
-                sres.DbRef, dots.DbRefAaFeature daf, dots.AaFeature af
-            WHERE d.name like 'Uniprot%'
-              AND d.external_database_id = r.external_database_id
-              AND r.external_database_release_id = dbref.external_database_release_id
-              AND dbref.db_ref_id = daf.db_ref_id
-              AND daf.aa_feature_id = af.aa_feature_id
-            GROUP BY af.aa_sequence_id
-          ) uniprot ON tas.aa_sequence_id = uniprot.aa_sequence_id
-        ORDER BY tas.source_id;
-      
-    
+            SELECT af.aa_sequence_id
+                   , string_agg(dbref.primary_identifier, ',' order by dbref.primary_identifier) as uniprot_ids
+              FROM sres.ExternalDatabase d
+                   , sres.ExternalDatabaseRelease r
+                   , sres.DbRef
+                   , dots.DbRefAaFeature daf
+                   , dots.AaFeature af
+                   , dots.aasequence s
+             WHERE d.name like 'Uniprot%'
+               AND d.external_database_id = r.external_database_id
+               AND r.external_database_release_id = dbref.external_database_release_id
+               AND dbref.db_ref_id = daf.db_ref_id
+               AND daf.aa_feature_id = af.aa_feature_id
+               AND af.aa_sequence_id = s.aa_sequence_id
+               AND s.taxon_id = :TAXON_ID
+             GROUP BY af.aa_sequence_id
+          ) uniprot ON tas.aa_sequence_id = uniprot.aa_sequence_id;
 :DECLARE_PARTITION;
 
 
