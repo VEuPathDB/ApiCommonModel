@@ -18,12 +18,19 @@ my ($help, $outputDir, $buildNumber);
 my $destRootDir = '/eupath/data/apiSiteFiles/webServices/UniDB/';
 $destRootDir = $outputDir if ($outputDir);
 
-# Using Sufen's staging dir for now - Dec 2024
-my $stagingDirRoot = "/eupath/data/apiSiteFilesStaging/UniDB/shu_m/real/webServices/";
+# full ReflowPlus  - Apr 2025
+my $stagingDirRoot = "/veupath/data/websiteFilesStaging/GenomicsDB/ReflowPlus/real/webServices/"; # if ($buildNumber eq "70");
 
-# Projects so far included in UniDB - Dec 2024
-my @projects  = qw/PlasmoDB TriTrypDB VectorBase/;
+# Sufen's staging dirs  - Dec 2024
+$stagingDirRoot = "/eupath/data/apiSiteFilesStaging/UniDB/shu_A/real/webServices/" if ($buildNumber eq "999.1");
+$stagingDirRoot = "/eupath/data/apiSiteFilesStaging/UniDB/shu_B/real/webServices/" if ($buildNumber eq "999.2");
 
+my @projects;
+if ($buildNumber eq "70"){
+    @projects  = qw/AmoebaDB CryptoDB FungiDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TrichDB TriTrypDB/;
+} else {
+    @projects  = qw/PlasmoDB ToxoDB TriTrypDB VectorBase/;
+}
 
 print  "Number of projects to handle = " . ($#projects + 1) . "\n\n";
 
@@ -37,7 +44,8 @@ foreach my $p (@projects) {
 
   print "destDir = $destDir AND stagingDir = $stagingDir\n";
 
-  opendir my $dir, $stagingDir or die "Cannot open directory: $!";
+  #opendir my $dir, $stagingDir or die "Cannot open directory: $!";
+  opendir my $dir, $stagingDir or die "Cannot open directory: $!" .  "AND destDir = $destDir AND stagingDir = $stagingDir";
   my @files = grep { $_ ne '.' && $_ ne '..' } readdir $dir;
   #system ("mkdir $destDir");
 
