@@ -14,6 +14,9 @@ sub setUrl {$_[0]->{url} = $_[1]}
 sub getSummary {$_[0]->{summary} }
 sub setSummary {$_[0]->{summary} = $_[1]}
 
+sub getDisplayName {$_[0]->{type} }
+sub setDisplayName {$_[0]->{type} = $_[1]}
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -26,12 +29,12 @@ sub new {
     $self->setUrl($args->{url});
     $self->setSummary($args->{summary});
     $self->setLabel($args->{label});
+    $self->setDisplayType($args->{type});
 
     my $store;
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
 
-        $self->setDisplayType("NeatCanvasFeatures/View/Track/NeatFeatures");
         $self->setTrackTypeDisplay("All Gene Models");
         $self->setGlyph("JBrowse/View/FeatureGlyph/ProcessedTranscript");
 

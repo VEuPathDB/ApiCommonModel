@@ -1,0 +1,3046 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tuningConfig>
+
+  <import file="tuningManager.xml"/>
+
+    <tuningTable name="TranscriptProduct" prefixEnabled="false">
+    <internalDependency name="GeneProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE TranscriptProduct&1 AS
+        WITH genefeat AS (
+          SELECT DISTINCT
+            -- first the gene attributes:
+            cast(coalesce(preferred_gene_product.product, any_gene_product.product, gf.product)
+              as VARCHAR(300)) as old_gene_product, gf.na_feature_id  as gene_na_feature_id,
+            COALESCE(gp.product, 'unspecified product') as gene_product
+          FROM dots.GeneFeature gf
+            LEFT JOIN GeneProduct gp ON gf.source_id = gp.source_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.GeneFeatureProduct
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+            ) preferred_gene_product ON gf.na_feature_id = preferred_gene_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.GeneFeatureProduct
+              GROUP BY na_feature_id
+            ) any_gene_product ON gf.na_feature_id = any_gene_product.na_feature_id
+          WHERE (gf.is_predicted != 1 OR gf.is_predicted is null)
+          ),
+	  transcript AS (
+          SELECT DISTINCT
+		   t.parent_id as transcript_parent_id,
+		   t.source_id,
+		     CASE t.is_pseudo WHEN null THEN 0 ELSE t.is_pseudo END as is_pseudo,
+            CAST(coalesce(preferred_tx_product.product, any_tx_product.product, t.product)
+              AS VARCHAR(300))
+              AS transcript_product
+          FROM dots.Transcript t
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.TranscriptProduct
+              WHERE is_preferred = 1
+              GROUP BY na_feature_id
+            ) preferred_tx_product ON t.na_feature_id = preferred_tx_product.na_feature_id
+            LEFT JOIN (
+              SELECT na_feature_id, max(product) as product
+              FROM apidb.TranscriptProduct
+              GROUP BY na_feature_id
+            ) any_tx_product ON t.na_feature_id = any_tx_product.na_feature_id
+        )
+        SELECT DISTINCT
+          -- first the gene attributes:
+          CAST(COALESCE(genefeat.old_gene_product, transcript.transcript_product,
+                        case when transcript.is_pseudo = 1
+                          then 'pseudogene'
+                          else 'unspecified product'
+                        end
+                ) as VARCHAR(300)
+            ) as old_gene_product,
+          genefeat.gene_product,
+          CAST(coalesce(transcript.transcript_product, genefeat.old_gene_product,
+                          case when transcript.is_pseudo = 1
+                          then 'pseudogene'
+                          else 'unspecified product'
+                        end
+                )AS VARCHAR(300)
+            ) as transcript_product,
+		transcript.source_id
+        FROM genefeat
+          INNER JOIN transcript ON genefeat.gene_na_feature_id = transcript.transcript_parent_id
+        ORDER BY source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNIQUE INDEX TranscriptAttr_sourceId&1
+          ON &prefixTranscriptAttributes&1 (source_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="GoSubsetLeaf">
+    <comment>
+      Map each GO term that is assigned to at least one gene to a GoSubset term
+      that is either itself or an immediate ancestor. By "immediate ancestor"
+      we mean an ancestor such that there isn't an intermediate ancestor also
+      in the subset. (Note that there can be multiple links as long as none is
+      in the subset.) This is currently restricted to 'goslim_generic', solely
+      by the condition in the SUBSET_TERM subquery.
+    </comment>
+    <externalDependency name="apidb.GoSubset"/>
+    <externalDependency name="sres.OntologyRelationship"/>
+    <internalDependency name="GeneGoTerms"/>
+    <sql>
+      <![CDATA[
+        create table GoSubsetLeaf&1 as
+        with leaf_term -- GO terms assigned to at least one gene
+             as (select distinct go_term_id
+                 from GeneGoTerms),
+             subset_term -- (term ID, subset name) pairs
+             as (select distinct -- "distinct" is probably unneeded
+                        ontology_term_id, go_subset_term
+                 from apidb.GoSubset
+                 -- where go_subset_term != 'gosubset_prok' -- unrelated and huge
+                 where go_subset_term = 'goslim_generic' -- all we currently need
+                ),
+             subset -- the 17 or so distinct subset names, e.g. "goslim_generic"
+             as (select distinct go_subset_term
+                 from subset_term),
+             leaf_in_subset -- leaf (i.e. assigned) terms that are in a subset
+             as (select leaf_term.go_term_id, subset_term.go_subset_term
+                 from leaf_term, subset_term
+                 where leaf_term.go_term_id = subset_term.ontology_term_id),
+             leaf_not_in_subset -- (go_term_id, subset) pairs such that the GO
+             as (               -- term is assigned, but not in the given subset
+                   select leaf_term.go_term_id, subset.go_subset_term
+                   from leaf_term, subset -- cartesian join
+                   EXCEPT
+                   select go_term_id, go_subset_term
+                   from leaf_in_subset),
+             leaf_ancestor -- a leaf not in a subset, with an ancestor that is in the subset
+             as (select lnis.go_subset_term, lnis.go_term_id, gs.ontology_term_id as ancestor_term_id
+                 from leaf_not_in_subset lnis, sres.OntologyRelationship orel, apidb.GoSubset gs
+                 where orel.subject_term_id = lnis.go_term_id -- "subject" = "child"
+                   and orel.object_term_id = gs.ontology_term_id
+                   and orel.subject_term_id != orel.object_term_id
+                   and lnis.go_subset_term = gs.go_subset_term),
+             leaf_nonimmediate_ancestor
+             as (select distinct upper.go_subset_term, upper.go_term_id, upper.ancestor_term_id
+                 from leaf_ancestor upper, leaf_ancestor lower, sres.OntologyRelationship orel
+                 where upper.go_subset_term = lower.go_subset_term
+                   and upper.go_term_id = lower.go_term_id
+                   and upper.ancestor_term_id = orel.object_term_id
+                   and lower.ancestor_term_id = orel.subject_term_id
+                   and orel.subject_term_id != orel.object_term_id),
+             leaf_immediate_ancestor
+             as (  select go_subset_term, go_term_id, ancestor_term_id
+                   from leaf_ancestor
+                   EXCEPT
+                   select go_subset_term, go_term_id, ancestor_term_id
+                   from leaf_nonimmediate_ancestor)
+          select -- leaf terms that are in a subset
+                 cast (go_subset_term as varchar(50)) as go_subset_term, go_term_id, go_term_id as subset_leaf_term_id
+          from leaf_in_subset
+        union
+          select -- leaf terms not in subset with their subset immediate ancestors
+                 cast (go_subset_term as varchar(50)) as go_subset_term, go_term_id, ancestor_term_id as subset_leaf_term_id
+          from leaf_immediate_ancestor
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index gsl_ix&1 ON GoSubsetLeaf&1 (go_term_id, go_subset_term, subset_leaf_term_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="DatasetExampleSourceId">
+    <comment> Each row maps a dataset onto an ID for which the dataset contains data;
+      each dataset gets one such row.
+      Used in dataset record queries.
+    </comment>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="Profile"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE DatasetExampleSourceId&1 AS
+        WITH profiles AS (
+          SELECT p.source_id,
+                 ga.project_id,
+                 ga.sequence_id,
+                 d.name,
+                 row_number() over(partition by d.name
+                                   order by ga.chromosome_order_num, p.profile_as_string desc) as rn
+          FROM Profile p
+            INNER JOIN sres.ExternalDatabase d ON p.dataset_name = d.name
+            LEFT JOIN GeneAttributes ga ON p.source_id = ga.source_id
+          WHERE p.profile_as_string is not null
+        )
+        SELECT p.source_id as example_source_id, p.project_id, p.sequence_id, p.name as dataset
+        FROM profiles p
+        WHERE p.rn = 1
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="OrganismAttributes">
+    <comment> Stores per-organism information. Used by the organism record, as well
+      as by project_id(), the function that maps an organism to a project.
+    </comment>
+    <internalDependency name="TaxonSpecies"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="PopsetAttributes"/>
+    <internalDependency name="GoTermSummary"/>
+    <internalDependency name="ChIPchipTranscript"/>
+    <internalDependency name="TFBSGene"/>
+    <internalDependency name="EstAlignmentGeneSummary"/>
+    <internalDependency name="EstAttributes"/>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <internalDependency name="Profile"/>
+    <internalDependency name="SnpAttributes"/>
+    <externalDependency name="apidb.Datasource"/>
+    <externalDependency name="dots.Similarity"/>
+    <externalDependency name="dots.NaSequence"/>
+    <externalDependency name="dots.NaFeature"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="core.TableInfo"/>
+    <externalDependency name="apidb.PhylogeneticProfile"/>
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="apidb.MassSpecSummary"/>
+    <intermediateTable name="DataSourceCount"/>
+    <intermediateTable name="OrganismCentromere"/>
+    <intermediateTable name="SequenceCount"/>
+    <intermediateTable name="CommunityCount"/>
+    <intermediateTable name="ProfileCount"/>
+    <intermediateTable name="PopsetCount"/>
+    <intermediateTable name="GeneCount"/>
+
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE DataSourceCount AS
+        SELECT
+          taxon_id,
+          max(CASE WHEN stype = 'organellar' THEN num ELSE null END) as organellar_has,
+          max(CASE WHEN stype = 'Epitope'  THEN num ELSE null END)  as Epitope_has,
+          max(CASE WHEN stype = 'Array'  THEN num ELSE null END) as Array_has,
+          max(CASE WHEN stype = 'HTSIsolate' THEN num ELSE null END) as HTSIsolate_has,
+          max(CASE WHEN stype = 'Popset' THEN num ELSE null END) as Popset_has
+        FROM (
+          SELECT DISTINCT enas.taxon_id, 'organellar' AS stype, 1 AS num
+          FROM dots.externalNAsequence enas, SRES.ontologyterm ot
+          WHERE enas.sequence_ontology_id = ot.ontology_term_id
+            AND ot.name in( 'mitochondrial_chromosome','apicoplast_chromosome')
+          GROUP BY enas.taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'HTSIsolate' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.type = 'isolates' AND ds.subtype = 'HTS_SNP'
+          GROUP BY taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'Popset' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.subtype = 'sequenceing_types'
+          GROUP BY taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'Epitope' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.type = 'epitope'
+          GROUP BY taxon_id
+          UNION
+          SELECT distinct ds.taxon_id, 'Array' AS stype, 1 AS num
+          FROM   apidb.DataSource ds
+          WHERE ds.type = 'transcript_expression'
+            AND ds.subtype = 'array'
+          GROUP BY  taxon_id
+        ) t
+        GROUP BY taxon_id
+    ]]>
+   </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE OrganismCentromere AS
+        SELECT distinct s.taxon_id,
+               case when count(*) > 0 then 1 else 0 end as hasCentromere
+        FROM  DOTS.MISCELLANEOUS f
+            , sres.ontologyTerm ot
+            , dots.nasequence s
+        WHERE ot.ontology_term_id = f.sequence_ontology_id
+         AND ot.name='centromere'
+         AND f.na_sequence_id = s.na_sequence_id
+        GROUP BY s.taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE SequenceCount AS
+        SELECT
+          taxon_id,
+          max(CASE WHEN sequence_type = 'contig' THEN num ELSE null END) as  contig_num,
+          max(CASE WHEN sequence_type = 'supercontig' THEN num ELSE null END) as  supercont_num,
+          max(CASE WHEN sequence_type = 'chromosome' THEN num ELSE null END) as  chrom_num
+        FROM (
+         SELECT count(*) as num, sequence_type, taxon_id
+         FROM GenomicSeqAttributes
+         WHERE is_top_level =1
+         GROUP BY taxon_id, sequence_type
+        ) t
+        GROUP BY taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE CommunityCount AS
+        SELECT taxon_id, count(*) as communityCount
+        WHERE
+          (source_id, project_id) IN (
+              SELECT distinct stable_id, project_name
+              FROM &remote_comment_schema.mappedComment
+              WHERE is_visible = 1
+                AND comment_target_id = 'gene'
+          )
+        GROUP BY taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE ProfileCount AS
+        SELECT ga.taxon_id,
+          count(distinct(case when p.dataset_type = 'transcript_expression'
+                 and p.dataset_subtype like '%rt_pcr%'
+                 and ga.is_deprecated = 0
+                then p.source_id
+                else ''
+                 end)) as rtPCRCount,
+          count(distinct(case when p.dataset_type = 'transcript_expression'
+                               and p.dataset_subtype = 'rnaseq'
+                               and ga.is_deprecated = 0
+                              then p.source_id
+                              else ''
+                               end)) as rnaSeqCount,
+          count(distinct(case when p.dataset_type = 'transcript_expression'
+                               and p.dataset_subtype = 'array'
+                               and ga.is_deprecated = 0
+                              then p.source_id
+                              else ''
+                               end)) as geneArrayCount
+        FROM Profile p
+          RIGHT OUTER JOIN GeneAttributes ga ON ga.source_id = p.source_id
+        GROUP BY ga.taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE PopsetCount AS
+        SELECT count(distinct gene.source_id) as popsetCount, sim.taxon_id
+        FROM (
+          (SELECT i.source_id, nas.taxon_id, nas.source_id as sequence_source_id
+           FROM dots.similarity s, PopsetAttributes i,
+                core.tableinfo t, dots.nasequence nas
+           WHERE s.query_id = i.na_sequence_id
+             AND nas.na_sequence_id = s.subject_id
+             AND t.table_id = s.subject_table_id
+             AND t.table_id = s.query_table_id
+             AND t.name = 'ExternalNASequence'
+             AND s.pvalue_exp <= -10
+           ) sim LEFT JOIN
+           (SELECT i.source_id, seq.source_id as sequence_id
+            FROM  dots.similarity s, PopsetAttributes i, GeneAttributes g,
+                  core.tableinfo t, dots.nasequence seq
+            WHERE s.query_id = i.na_sequence_id
+              AND s.subject_id = g.na_sequence_id
+              AND t.table_id = s.subject_table_id
+              AND t.table_id = s.query_table_id
+              AND s.min_subject_start <=  g.end_max
+              AND s.max_subject_end >= g.start_min
+              AND g.na_sequence_id = seq.na_sequence_id
+              AND t.name = 'ExternalNASequence'
+            ) gene
+           ON gene.source_id = sim.source_id AND gene.sequence_id = sim.sequence_source_id)
+        GROUP BY sim.taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE GeneCount AS
+        SELECT genomestat.taxon_id,
+               genomestat.project_id,
+               genomestat.database_version,
+               genomestat.ncbi_tax_id,
+               genomestat.Megabps,
+               coalesce(snpCount.ct,0) as snpCount,
+               coalesce(count(distinct ga.source_id),0) as geneCount,
+               coalesce(count(distinct case when ga.is_pseudo =1  then ga.source_id else '' end),0) as pseudoGeneCount,
+               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then ga.source_id else '' end),0) as codingGeneCount,
+               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then '' else ga.source_id end),0) as otherGeneCount,
+               coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then cct.gene_source_id
+                          else NULL
+                          end)),0) ChipChipGeneCount ,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then pp.source_id
+                          else NULL
+                          end)),0) orthologCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then gts.gene_source_id
+                          else NULL
+                          end)),0) goCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then tfbs.gene_source_id
+                          else NULL
+                          end)),0) tfbsCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then mss.aa_sequence_id
+                          else NULL
+                          end)),0) proteomicsCount,
+              coalesce(count (distinct (case when ga.is_deprecated = 0
+                          then est.source_id
+                          else NULL
+                          end)),0) estCount,
+              coalesce(count (distinct (case when (ga.is_deprecated = 0 and ta.ec_numbers is not null)
+                          then ga.source_id
+                          else NULL
+                          end)),0) ecNumberCount
+        FROM GeneAttributes ga
+          LEFT OUTER JOIN apidb.phylogeneticprofile pp on ga.source_id = pp.source_id
+          LEFT OUTER JOIN gotermsummary gts on ga.source_id = gts.gene_source_id
+          LEFT OUTER JOIN TFBSGene tfbs on ga.source_id = tfbs.gene_source_id
+          LEFT OUTER JOIN TranscriptAttributes ta on ta.gene_source_id = ga.source_id
+          LEFT OUTER JOIN apidb.MassSpecSummary mss on ta.aa_sequence_id = mss.aa_sequence_id
+          LEFT OUTER JOIN chipchipTranscript cct on ga.source_id = cct.gene_source_id
+          LEFT OUTER JOIN (
+            SELECT distinct s.gene as source_id
+            FROM EstAlignmentGeneSummary s, EstAttributes e
+            WHERE s.est_gene_overlap_length >= 100
+              AND s.is_best_alignment in (1)
+              AND s.percent_est_bases_aligned >= 20
+              AND s.percent_identity >= 90
+              AND e.best_alignment_count <= 1
+              AND e.source_id = s.accession
+            GROUP by s.gene HAVING count(*) >= 1
+          ) est ON ga.source_id = est.source_id
+          RIGHT OUTER JOIN (
+            SELECT  project_id, taxon_id,
+                   max(database_version) as database_version,
+                  CASE WHEN ncbi_tax_id > 9000000000 THEN NULL
+                       ELSE ncbi_tax_id
+                  END ncbi_tax_id,
+                  to_char(sum(length)/1000000,'9999.99') as megabps
+            FROM   GenomicSeqAttributes
+            WHERE  is_top_level = 1
+            GROUP BY project_ID, taxon_id, ncbi_tax_id
+          ) genomestat ON genomestat.taxon_id = ga.taxon_id
+          LEFT OUTER JOIN (
+             SELECT count(distinct ga.source_id) as ct, ga.taxon_id
+             FROM GeneAttributes ga, SnpAttributes sf
+             WHERE  sf.gene_source_id = ga.source_id
+               AND ga.is_deprecated = 0
+             GROUP BY ga.taxon_id
+          ) snpCount ON ga.taxon_id = snpCount.taxon_id
+        GROUP BY genomestat.taxon_id,
+                 genomestat.project_id,
+                 genomestat.database_version,
+                 genomestat.ncbi_tax_id,
+                 genomestat.Megabps,
+                 snpCount.ct
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE TABLE OrganismAttributes&1 AS
+        SELECT oa.*, tn2.name as species, t.ncbi_tax_id as species_ncbi_tax_id
+               , CASE  WHEN ltrim(replace(oa.organism_name, tn2.name, ''))= oa.organism_name
+                       THEN strain_abbrev
+                       ELSE ltrim(replace(oa.organism_name, tn2.name, '')) END AS strain
+        FROM (
+            SELECT o.project_name as project_id,
+                   case when t.ncbi_tax_id > 10000000
+            --       then 'TMPTX_' || round(t.ncbi_tax_id / 10000000) || '_' ||
+            --            mod(t.ncbi_tax_id, 10000000) -- e.g. "TMPTX_930_1"
+            --       then 'TMPTX_' || t.ncbi_tax_id -- all the many digits
+                     then 'TMPTX_' || o.public_abbrev
+                     else 'NCBITAXON_' || t.ncbi_tax_id
+                   end as source_id,
+                   o.abbrev as internal_abbrev,
+                   o.public_abbrev,
+                   o.orthomcl_abbrev,
+                   o.family_name_for_files,
+                   tn.name as organism_name,
+                   o.genome_source,
+                   o.strain_abbrev,
+                   o.is_annotated_genome,
+                   o.is_reference_strain,
+                   o.is_family_representative,
+                   o.name_for_filenames,
+                   o.taxon_id as component_taxon_id,
+                   gc.database_version,
+                   gc.megabps as megabps,
+                   gc.ncbi_tax_id as ncbi_tax_id,
+                   gc.snpCount as snpCount,
+                   gc.geneCount as geneCount,
+                   gc.pseudoGeneCount as pseudoGeneCount,
+                   gc.codingGeneCount as codingGeneCount,
+                   gc.otherGeneCount as otherGeneCount,
+                   gc.ChipChipGeneCount as ChipChipGeneCount,
+                   gc.orthologCount as orthologCount,
+                   gc.goCount as goCount,
+                   gc.tfbsCount as tfbsCount,
+                   gc.proteomicsCount as proteomicsCount,
+                   gc.estCount as estCount,
+                   gc.ecNumberCount as ecNumberCount,
+                   cast(coalesce(dsc.Organellar_Has, 0) as NUMERIC(1)) as isOrganellar,
+                   cast(coalesce(dsc.HTSIsolate_Has, 0) as NUMERIC(1)) as hasHTSIsolate,
+                   cast(coalesce(dsc.Popset_Has, 0) as NUMERIC(1)) as hasPopset,
+                   cast(coalesce(dsc.Epitope_Has, 0) as NUMERIC(1)) as hasEpitope,
+                   cast(coalesce(dsc.Array_Has, 0) as NUMERIC(1)) as hasArray,
+                   coalesce(oc.hasCentromere, 0) as hasCentromere,
+                   coalesce(sc.contig_num, 0) as contigCount,
+                   coalesce(sc.supercont_num, 0) as supercontigCount,
+                   coalesce(sc.chrom_num, 0) as chromosomeCount,
+                   coalesce(cc.communityCount, 0) as communityCount,
+                   coalesce(psc.popsetCount, 0) as popsetCount,
+                   coalesce(pc.geneArrayCount, 0) as arrayGeneCount,
+                   coalesce(pc.rnaSeqCount, 0) as rnaSeqCount,
+                   coalesce(pc.rtPCRCount, 0) as rtPCRCount,
+                   coalesce(ta.avg_transcript_length, 0) as avg_transcript_length
+            FROM apidb.Organism o
+              INNER JOIN sres.TaxonName tn ON tn.taxon_id = o.taxon_id
+              INNER JOIN sres.Taxon t ON t.taxon_id = tn.taxon_id
+              LEFT JOIN DataSourceCount dsc ON o.taxon_id = dsc.taxon_id
+              LEFT JOIN OrganismCentromere oc ON o.taxon_id = oc.taxon_id
+              LEFT JOIN SequenceCount sc ON o.taxon_id = sc.taxon_id
+              LEFT JOIN CommunityCount cc ON o.taxon_id = cc.taxon_id
+              LEFT JOIN GeneCount gc ON o.taxon_id = gc.taxon_id
+              LEFT JOIN popsetCount psc ON o.taxon_id = psc.taxon_id
+              LEFT JOIN profileCount pc ON o.taxon_id = pc.taxon_id
+              LEFT JOIN (
+                SELECT taxon_id, round(avg(length),1) as avg_transcript_length
+                FROM TranscriptAttributes
+                GROUP by taxon_id
+              ) ta ON o.taxon_id = ta.taxon_id
+            WHERE tn.name_class = 'scientific name'
+          ) oa,
+          TaxonSpecies ts,
+          sres.taxon t,
+          sres.taxonname tn2
+        WHERE oa.component_taxon_id = ts.taxon_id
+          AND ts.species_taxon_id = t.taxon_id
+          AND ts.species_taxon_id = tn2.taxon_id
+          AND tn2.name_class = 'scientific name'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+create unique index Organism_sourceId_idx&1 ON OrganismAttributes&1 (source_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+ 
+  <tuningTable name="IntronUtrCoords">
+    <comment>
+      Stores, for each transcript, a string containing the gene-relative coordinates
+      of all its introns and UTRs.
+    </comment>
+    <externalDependency name="apidb.FeatureLocation"/>
+    <externalDependency name="apidb.TranscriptLocation"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE IntronUtrCoords&1 AS
+        SELECT na_feature_id, source_id,
+              '[' || regexp_replace(string_agg(text,',' ORDER BY start_min), '.quot;', '"' ) || ']' AS gen_rel_intron_utr_coords
+        FROM (
+          SELECT na_feature_id, source_id, start_min,
+                 '["' || feature_type || '",' || start_min || ',' || end_max || ']' AS text
+          FROM (
+            SELECT fl.feature_type, tl.na_feature_id, tl.feature_source_id AS source_id,
+              CASE
+                WHEN tl.is_reversed = 1
+                THEN tl.end_max - fl.end_max + 1
+                ELSE fl.start_min - tl.start_min + 1
+              END AS start_min,
+              CASE
+                WHEN tl.is_reversed = 1
+                THEN tl.end_max - fl.start_min + 1
+                ELSE fl.end_max - tl.start_min + 1
+              END AS end_max
+            FROM
+             apidb.TranscriptLocation tl, apidb.FeatureLocation fl
+            WHERE
+              tl.na_feature_id = fl.parent_id
+              AND fl.feature_type in('UTR', 'Intron')
+              AND tl.is_top_level = 1
+              AND fl.is_top_level = 1
+          ) t1
+        ) t2
+        GROUP BY na_feature_id, source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX iuc_srcid_ix&1
+          ON IntronUtrCoords&1 (source_id, na_feature_id)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX iuc_nfid_ix&1
+          ON IntronUtrCoords&1 (na_feature_id, source_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+<!-- COMMENT FOR NOW, as no InferredParam table; FIX later
+  <tuningTable name="ChipSeqTranscript">
+    <comment> Used by the GenesByChipSeq query
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="InferredParams"/>
+    <internalDependency name="DefaultChars"/>
+    <externalDependency name="results.SegmentResult"/>
+    <sql>
+      <![CDATA[
+      CREATE TABLE ChipSeqTranscript&1 AS
+      SELECT DISTINCT ta.source_id, ta.gene_source_id, sr.protocol_app_node_id,
+        CASE
+          WHEN ta.is_reversed = 0
+          THEN round(abs(ta.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0)
+          ELSE round(abs(ta.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)),0)
+        END as distance,
+        CASE
+          WHEN /* distance > 0 */
+            CASE WHEN ta.is_reversed = 0
+              THEN ta.start_min - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+              ELSE ta.end_max - (((sr.segment_end - sr.segment_start) / 2) + sr.segment_start)
+            END > 0
+          THEN
+            CASE
+              WHEN ta.is_reversed = 0
+              THEN '-'
+              ELSE '+'
+            END
+          ELSE
+            CASE
+              WHEN ta.is_reversed = 1
+              THEN '-'
+              ELSE '+'
+            END
+          END as direction,
+        sr.score1 as score
+      FROM  TranscriptAttributes ta,
+            results.SegmentResult sr
+      WHERE sr.na_sequence_id = ta.na_sequence_id
+        AND sr.protocol_app_node_id
+                IN (      select protocol_app_node_id from DefaultChars where dataset_subtype = 'chipseq'
+                    union select protocol_app_node_id from InferredParams where dataset_subtype = 'chipseq'
+                    union select protocol_app_node_id from InferredChars where dataset_subtype = 'chipseq')
+        AND ( (ta.is_reversed = 0 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.start_min) <= 3000)
+                        or (ta.is_reversed = 1 and abs((((sr.segment_end - sr.segment_start) / 2) + sr.segment_start) - ta.end_max) <= 3000) )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index chpsq_id_idx&1 ON ChipSeqTranscript&1 (protocol_app_node_id, source_id, gene_source_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+-->
+
+
+
+  <tuningTable name="OrganismAbbreviationWS">
+    <comment> Stores special webservice abbreviations which are not standard organism
+      names. Each record maps an organism name onto this abbreviation, as
+      well as the species name and project ID. Used by the model and as an
+      input in the creation of the OrganismAbbreviationBlast tuning table.
+      Propagated to portal instances.
+    </comment>
+    <internalDependency name="OrganismAbbreviation"/>
+    <internalDependency name="OrganismTree"/>
+    <sql>
+      <![CDATA[
+       CREATE TABLE OrganismAbbreviationWS&1 as
+       SELECT oa.organism, ot.parentTerm as parent, oa.abbreviation, ot.project_id
+       FROM OrganismAbbreviation oa, OrganismTree ot
+       WHERE ot.term = oa.organism
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+
+  <tuningTable name="OrganismTree">
+    <comment>
+      Group species by higher level taxonomy. Each row associates a taxon of
+      interest with one of its ancestors in the taxon tree. Used in parameter
+      queries that have to know about the taxon tree. Propagated to portal
+      instances.
+    </comment>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <externalDependency name="sres.TaxonName"/>
+    <externalDependency name="sres.Taxon"/>
+    <ancillaryTable name="DistinctTaxonLink"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE DistinctTaxonLink&1 as
+        SELECT taxon_id, max(rank) as rank, max(parent_id) AS parent_id,
+               max(tree_level) as tree_level,
+               max(display_reason) as display_reason
+        FROM (
+          WITH RECURSIVE cte AS (
+            SELECT taxon_id, rank, parent_id, 1 as tree_level
+            FROM sres.taxon
+            WHERE taxon_id IN (select taxon_id from GenomicSeqAttributes)
+            UNION ALL
+            SELECT t.taxon_id, t.rank, t.parent_id, cte.tree_level + 1 as tree_level
+            FROM sres.taxon t, cte
+            WHERE cte.parent_id = t.taxon_id
+          )
+          SELECT taxon_id, rank, parent_id, tree_level,
+            CASE
+              WHEN taxon_id in (select taxon_id from GenomicSeqAttributes) THEN 'has data'
+              WHEN rank in ('kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species') THEN 'major rank'
+              WHEN taxon_id in (
+                SELECT taxon_id
+                FROM sres.taxon
+                WHERE ncbi_tax_id in (44542 -- gambiae species complex
+                     , 554915 -- Amoebozoa
+                     , 5796 -- Coccidia
+                     , 1280412 -- Conoidasida
+              )) THEN 'hardwired'
+              ELSE 'none'
+            END as display_reason
+          FROM cte
+        ) t
+        GROUP BY taxon_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create unique index dtl_ix&1
+          ON DistinctTaxonLink&1 (taxon_id)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        DO $$
+        DECLARE
+          skiplist RECORD;
+        BEGIN
+          FOR skiplist
+              IN (SELECT taxon_id, max(parent_id) as parent_id, max(tree_level)
+                  FROM DistinctTaxonLink&1
+                  WHERE display_reason in ('none', 'has data')
+                  GROUP by taxon_id
+                  ORDER by max(tree_level) desc
+                 )
+          LOOP
+            UPDATE DistinctTaxonLink&1
+            SET parent_id
+                = (SELECT max(parent_id)
+                   FROM DistinctTaxonLink&1
+                   WHERE taxon_id = skiplist.taxon_id)
+            WHERE parent_id = skiplist.taxon_id;
+          END LOOP;
+          commit;
+        END;
+        $$ LANGUAGE PLPGSQL;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        DELETE FROM DistinctTaxonLink&1 WHERE display_reason = 'none'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE TABLE OrganismTree&1 AS
+        WITH dtl AS (
+          WITH RECURSIVE cte AS (
+            SELECT taxon_id as leaf_taxon_id, taxon_id,
+                parent_id, rank, tree_level
+            FROM DistinctTaxonLink&1
+            WHERE display_reason = 'has data' OR rank = 'species'
+            UNION
+            SELECT cte.leaf_taxon_id, dtl.taxon_id, dtl.parent_id, dtl.rank, dtl.tree_level
+            FROM  DistinctTaxonLink&1 dtl, cte
+            WHERE cte.parent_id = dtl.taxon_id
+          )
+          SELECT *
+          FROM cte
+        ) , parent_name AS (
+          SELECT taxon_id, name
+          FROM sres.TaxonName
+          WHERE name_class = 'scientific name'
+        )
+        SELECT leaf_name.name as organism,
+               tn.name as term, parent_name.name parentterm,
+               dtl.taxon_id as internal,
+               apidb.project_id(leaf_name.name) as project_id,
+               dtl.tree_level, dtl.rank
+        FROM
+           sres.TaxonName leaf_name, sres.TaxonName tn,
+           dtl LEFT JOIN parent_name ON dtl.parent_id = parent_name.taxon_id
+        WHERE dtl.leaf_taxon_id = leaf_name.taxon_id
+          AND leaf_name.name_class = 'scientific name'
+          AND dtl.taxon_id = tn.taxon_id
+          AND tn.name_class = 'scientific name'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index OrgTree_term_pterm_ix&1 on OrganismTree&1(TERM, PARENTTERM)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="OrganismAbbreviationBlast">
+    <comment> Each record maps an organism to its BLAST abbreviation. Used by
+      BLAST-query parameters. Propagated to portal instances.
+    </comment>
+    <internalDependency name="OrganismAbbreviationWS"/>
+    <internalDependency name="OrganismTree"/>
+    <internalDependency name="EstAttributes"/>
+    <internalDependency name="PopsetAttributes"/>
+    <sql>
+      <![CDATA[
+       CREATE TABLE OrganismAbbreviationBlast&1 as
+       SELECT organism, parent, abbreviation, substr(project_id, 1, 20) as project_id
+       FROM OrganismAbbreviationWS
+       UNION
+         -- all familes for popsets
+       SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent,
+                       family_name_for_files as abbreviation, substr(project_name, 1, 20) as project_id
+       FROM apidb.Organism
+       WHERE family_name_for_files is not null
+         AND abbrev || '_isolates_genbank_RSRC' IN (SELECT external_db_name as db_name FROM PopsetAttributes)
+         AND family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
+       UNION
+       SELECT special.organism, special.parent, special.abbreviation,
+              substr(ot.project_id, 1, 20) as project_id
+       FROM OrganismTree ot,
+            ( -- all species and speciesAbbreviations from apidb.Organism where we have ests
+               SELECT DISTINCT
+                sp.name as organism, ot.parentTerm as parent,
+                regexp_replace(org.name_for_filenames, replace(org.strain_abbrev, '/','_'),'') as abbreviation
+               FROM sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org, OrganismTree ot
+               WHERE org.taxon_id = ts.taxon_id
+                 AND ts.species_taxon_id = sp.taxon_id
+                 AND sp.name_class = 'scientific name'
+                 AND ot.term = sp.name
+                 AND org.strain_abbrev is not null
+                 AND org.name_for_filenames is not null
+                 AND sp.taxon_id
+                     in (SELECT etn.taxon_id
+                         FROM sres.TaxonName etn
+                         WHERE etn.name in (SELECT organism FROM EstAttributes))
+             UNION
+               SELECT 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism,
+                      'Cryptosporidium' as parent, 'CryptosporidiidaeReference' as abbreviation
+            ) special
+       WHERE special.parent = ot.term
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="BlastTypes">
+    <comment> For each project, show which BLAST databases are available for which
+      species. Used in BLAST param queries. Propagated to portal instances.
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <internalDependency name="EstAttributes"/>
+    <internalDependency name="PopsetAttributes"/>
+    <internalDependency name="TaxonSpecies"/>
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="sres.TaxonName"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE BlastTypes&1 as
+        /* Standard GENES */
+        SELECT distinct organism, project_id, type
+        FROM TranscriptAttributes,
+             (SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
+        WHERE organism not in ('Toxoplasma gondii RH') and (gene_type = 'protein coding' or gene_type = 'protein coding gene')
+        UNION
+        /* GiardiaDB Deprecated Genes */
+        SELECT 'Giardia Assemblage A isolate WB (deprecated)' as organism, 'GiardiaDB' as project_id, type
+        FROM (SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
+        UNION
+        /* GiardiaDB Scaffolds */
+        SELECT 'Giardia Assemblage A isolate WB (scaffolds)' as organism, 'GiardiaDB' as project_id, 'Genome' as type
+        UNION
+        /* Standard GENOME */
+        SELECT distinct organism, project_id, 'Genome' as type
+        FROM GenomicSeqAttributes
+        UNION
+        /* Mitochondrial GENES and GENOME */
+        SELECT DISTINCT organism || ' mitochondrial', project_id, type
+        FROM GenomicSeqAttributes,
+          (SELECT 'Genome' as type UNION SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
+        WHERE so_id = 'SO:0000819'
+          AND NOT project_id='PlasmoDB'
+        UNION
+        /* Plastid GENES and GENOME */
+        SELECT DISTINCT organism || ' plastid' as organism, project_id, type
+        FROM GenomicSeqAttributes,
+          (SELECT 'Genome' as type UNION SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
+        WHERE so_id = 'SO:0001259'
+          AND NOT project_id='PlasmoDB'
+        UNION
+        /* Regular ESTs (all species from estattributes) */
+        SELECT DISTINCT sp.name as organism, ea.project_id, 'ESTs' as type
+        FROM EstAttributes ea, sres.TaxonName tn, taxonspecies ts, sres.TaxonName sp
+        WHERE ea.organism = tn.name
+          AND (tn.taxon_id = ts.taxon_id or tn.taxon_id = ts.species_taxon_id)
+          AND ts.species_taxon_id = sp.taxon_id
+          AND sp.name_class = 'scientific name'
+        UNION
+        /* regular Isolates */
+        SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, project_name as project_id, 'PopSet'
+        FROM apidb.Organism
+        WHERE family_name_for_files is not null
+          AND abbrev || '_isolates_genbank_RSRC' in (SELECT DISTINCT external_db_name  AS db_name FROM PopsetAttributes)
+        UNION
+        /* isolates are hard coded */
+        SELECT 'P. falciparum Barcode Isolates' as organism, 'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. berghei Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. chabaudi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. falciparum Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. knowlesi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. reichenowi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. vivax Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'P. yoelii Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'All Giardia Isolates' as organism, 'GiardiaDB' as project_id, 'PopSet' as type
+        UNION
+        SELECT 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism, 'CryptoDB' as project_id, 'PopSet' as type
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="MSPeptideSummary">
+    <comment> Each row stores mass-spec. based expression evidence for one sample of
+      one experiment for one gene. Used for mass spec queries in the model,
+      GBrowse, and PBrowse, and also in the creation of the MSTranscriptSummary
+      tuning table.
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="SampleDisplayInfo"/>
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="apidb.MassSpecPeptide"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE MSPeptideSummary&1 as
+        SELECT pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER
+        FROM (
+                SELECT msp.peptide_sequence,
+                       ga.source_id,
+                       ga.gene_source_id,
+                       ga.project_id,
+                       dsp.display_name as experiment,
+                       d.name as external_database_name,
+                       sum(msp.spectrum_count) as spectrum_count,
+                       ga.aa_sequence_id,
+                       msp.peptide_start as aa_start_min,
+                       msp.peptide_end  as aa_end_max,
+                       msp.sample
+                FROM apidb.massspecpeptide msp
+                  INNER JOIN sres.externaldatabaserelease r ON msp.external_database_release_id = r.external_database_release_id
+                  INNER JOIN sres.externaldatabase d ON r.external_database_id = d.external_database_id
+                  LEFT JOIN transcriptattributes ga ON msp.protein_source_id = ga.protein_source_id
+                  LEFT JOIN datasetnametaxon dsnt ON d.name = dsnt.name
+                  LEFT JOIN datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, dsp.display_name,
+                         msp.protein_source_id, ga.aa_sequence_id, msp.peptide_sequence,
+                         msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, msp.sample
+          ) pep
+          ,sampledisplayinfo sdi
+        WHERE sdi.dataset_name = pep.external_database_name 
+         AND pep.sample = replace (sdi.sample ,'.tab', '')
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index sample_ix&1 on MSPeptideSummary&1 (sample)
+
+      ]]>
+    </sql>
+<!--    <sql>-->
+<!--      <![CDATA[-->
+<!--        create index mspep_ix&1-->
+<!--          on MSPeptideSummary&1-->
+<!--               (aa_sequence_id, external_database_name, peptide_aa_feature_id,-->
+<!--                aa_start_min, aa_end_max, sample, source_id, spectrum_count, experiment,-->
+<!--                sample_display_name, html_color, peptide_sequence)-->
+<!--        -->
+<!--      ]]>-->
+<!--    </sql>-->
+  </tuningTable>
+
+
+  <tuningTable name="AnnotatedGenomeSummary">
+    <comment> Stores summary information from annotated genomes to facilitate overview section of gene page
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE AnnotatedGenomeSummary&1 AS
+        SELECT ga.external_db_name as external_db_name, ga.organism, ga.taxon_id,
+               o.is_reference_strain,
+               (SELECT value
+                FROM DatasetProperty
+                WHERE dataset_presenter_id = dsp.dataset_presenter_id
+                  AND property = 'isCurated') as is_curated_genome,
+               (SELECT value
+                FROM DatasetProperty
+                WHERE dataset_presenter_id = dsp.dataset_presenter_id
+                  AND property = 'updatedAnnotationText') as updated_link_text,
+               (SELECT value
+                FROM DatasetProperty
+                WHERE dataset_presenter_id = dsp.dataset_presenter_id
+                  AND property = 'specialLinkDisplayText') as special_link_text,
+               (SELECT rel.id_url
+                FROM DatasetProperty p,  sres.ExternalDatabase db, sres.ExternalDatabaseRelease rel
+                WHERE p.dataset_presenter_id = dsp.dataset_presenter_id
+                  AND db.name = cast(substr(p.value, 1, 4000) as varchar(4000))
+                  AND db.external_database_id = rel.external_database_id
+                  AND p.property = 'specialLinkExternalDbName') as link_url,
+               dsp.release_policy
+        FROM apidb.Organism o,
+             (SELECT distinct external_db_name, taxon_id, organism FROM GeneAttributes) ga
+             LEFT JOIN DatasetPresenter dsp ON dsp.name = ga.external_db_name
+        WHERE ga.external_db_name like '%_primary_genome_RSRC'
+          AND o.taxon_id = ga.taxon_id
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+
+  <tuningTable name="MSModifiedPeptideSummary">
+    <comment> Mass-spec experiment results for a peptide. Used by the model, GBrowse,
+      and PBrowse.
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="SampleDisplayInfo"/>
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="apidb.ModifiedMassSpecPeptide"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE MSModifiedPeptideSummary&1 as
+        SELECT pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER
+        FROM (
+                SELECT ga.source_id,
+                       ga.gene_source_id,
+                       ga.project_id,
+                       ga.aa_sequence_id,
+                       dsp.display_name as experiment,
+                       d.name as external_database_name,
+                       msp.sample,
+                       sum(msp.spectrum_count) as spectrum_count,
+                       msp.residue,
+                       msp.residue_protein_loc  AS residue_location,
+                       msp.modification_type,
+                       msp.peptide_sequence,
+                       msp.peptide_start as aa_start_min,
+                       msp.peptide_end  as aa_end_max
+                FROM apidb.ModifiedMassSpecPeptide msp
+                  INNER JOIN sres.externaldatabaserelease r ON msp.external_database_release_id = r.external_database_release_id
+                  INNER JOIN sres.externaldatabase d ON r.external_database_id = d.external_database_id
+                  LEFT JOIN transcriptattributes ga ON msp.protein_source_id = ga.protein_source_id
+                  LEFT JOIN datasetnametaxon dsnt ON d.name = dsnt.name
+                  LEFT JOIN datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, dsp.display_name,
+                         msp.protein_source_id, ga.aa_sequence_id, msp.peptide_sequence,
+                         msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, 
+                         msp.sample, msp.modification_type, msp.residue, msp.residue_protein_loc
+          ) pep
+          ,sampledisplayinfo sdi
+        WHERE sdi.dataset_name = pep.external_database_name 
+         AND pep.sample = replace (sdi.sample ,'.tab', '')
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        ALTER TABLE MSModifiedPeptideSummary&1 ALTER COLUMN modification_type DROP NOT null
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index msmodps_tx_ix&1 on MSModifiedPeptideSummary&1 (source_id, gene_source_id)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index msmodps_gn_ix&1 on MSModifiedPeptideSummary&1 (gene_source_id, source_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+<!--  <tuningTable name="Ssgcid" alwaysUpdate="true">-->
+  <tuningTable name="Ssgcid">
+    <comment> Data from the Seattle Structural Genomics Center for Infectious Disease,
+      populated from their web service. Used in the gene record.
+    </comment>
+    <program commandLine="buildSsgcidTT"/>
+  </tuningTable>
+
+
+<!--  <tuningTable name="SampleDisplayInfo" alwaysUpdate="true">-->
+  <tuningTable name="SampleDisplayInfo" >
+    <comment> Used by the model and GBrowse, as well as an input in the creation of
+      the tuning tables like MSModifiedPeptideSummary and MSPeptideSummary.
+    </comment>
+    <program commandLine="buildSampleDisplayInfoTT"/>
+  </tuningTable>
+
+
+<!--  <tuningTable name="ProfileSetDisplayInfo" alwaysUpdate="true">-->
+  <tuningTable name="ProfileSetDisplayInfo">
+    <comment> Used by the model when writing profile data
+    </comment>
+    <program commandLine="buildProfileSetDisplayInfoTT"/>
+  </tuningTable>
+
+
+<!--  <tuningTable name="GbrowseTracksOrganism" alwaysUpdate="true">-->
+  <tuningTable name="GbrowseTracksOrganism">
+    <comment> Associates an organism with the GBrowse and PBrowse tracks available
+      for it. Used by the gene record.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <externalDependency name="apidb.Organism"/>
+    <program commandLine="buildGbrowseImageUrlTT"/>
+  </tuningTable>
+
+
+
+  <tuningTable name="GenomicsInternalHyperlink" alwaysUpdate="true">
+    <comment> Each row maps a dataset onto an ID for which the dataset contains data;
+      each dataset gets one such row.
+      Used in dataset record queries.
+    </comment>
+    <internalDependency name="Profile"/>
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="OrganismAttributes"/>
+    <externalDependency name="apidb.MassSpecSummary"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE GenomicsInternalHyperlink&1 AS
+        WITH rnaseqgenes AS (
+          SELECT p.DATASET_NAME
+                , p.source_id as gene_source_id
+                , ga.sequence_id as sequence_id
+                , row_number() over (partition by p.dataset_name
+                                    order by p.max_value, p.source_id, ga.sequence_id) as rn
+          FROM profile p, geneattributes ga
+          WHERE dataset_type = 'transcript_expression' and dataset_subtype =  'rnaseq'
+            AND p.source_id = ga.source_id
+        ), proteomicsgenes as (
+          SELECT ga.gene_source_id,
+                 ga.SEQUENCE_ID,
+                 ga.protein_source_id,
+                 d.name,
+                 row_number() over(partition by d.name
+                                   order by mss.aa_seq_percent_covered desc, ga.gene_source_id) as rn
+          FROM apidb.MassSpecSummary mss, TranscriptAttributes ga,
+               sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
+          WHERE mss.external_database_release_id = r.external_database_release_id
+          AND r.external_database_id = d.external_database_id
+          AND mss.aa_sequence_id = ga.aa_sequence_id
+        ), sequences as (
+          select sa.source_id
+               , sa.taxon_id
+               , row_number() over(partition by sa.taxon_id
+                                   order by sa.chromosome_order_num, sa.length desc) as rn
+          from GenomicSeqAttributes sa
+          where sa.is_top_level = 1
+        ), macros as (
+          SELECT dnt.dataset_presenter_id
+               , o.name_for_filenames
+               , o.project_id
+               , o.public_abbrev as org_abbrev
+               , o.source_id as org_pk
+               , dnt.name
+               , dsp.name as dataset_presenter_name
+               , sa.source_id as sequence_source_id
+               , pg.sequence_id as p_sequence_source_id
+               , pg.gene_source_id as p_gene_id
+               , pg.protein_source_id as p_protein_id
+               , rg.sequence_id as r_sequence_source_id
+               , rg.gene_source_id as r_gene_id
+          FROM organismattributes o
+             INNER JOIN datasetnametaxon dnt ON o.component_taxon_id = dnt.taxon_id
+             INNER JOIN datasetpresenter dsp ON dnt.dataset_presenter_id = dsp.dataset_presenter_id
+             INNER JOIN sequences sa ON dnt.taxon_id = sa.taxon_id
+             LEFT JOIN (select * from proteomicsgenes where rn = 1) pg ON dnt.name = pg.name
+             LEFT JOIN (select * from rnaseqgenes where rn = 1) rg ON dnt.name = rg.dataset_name
+          WHERE sa.rn = 1
+        )
+        SELECT DISTINCT
+             h.dataset_link_id, h.dataset_presenter_id, h.description
+             , replace(h.text, 'DEFAULT_PROJECT', macros.project_id) as text
+             , replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(h.url
+                                                    , 'DEFAULT_PROJECT', macros.project_id)
+                                                    , 'ORGANISM_FILE_NAME', macros.name_for_filenames)
+                                                    , 'DEFAULT_SEQUENCE', macros.sequence_source_id)
+                                                    , 'DEFAULT_ORG_ABBREV', macros.org_abbrev)
+                                                    , 'DEFAULT_PROTEOMICS_SEQUENCE', macros.p_sequence_source_id)
+                                                    , 'DEFAULT_PROTEOMICS_GENE', macros.p_gene_id)
+                                                    , 'DEFAULT_PROTEOMICS_PROTEIN', macros.p_protein_id)
+                                                    , 'DEFAULT_RNASEQ_GENE', macros.r_gene_id)
+                                                    , 'DEFAULT_RNASEQ_SEQUENCE', macros.r_sequence_source_id)
+                                                    , 'DEFAULT_DATASET_NAME', macros.name)
+                                                    , 'DEFAULT_DATASET_PRESENTER_NAME', macros.dataset_presenter_name)
+                                                    , 'DEFAULT_ORGANISM_PK', macros.org_pk) as url
+             , h.isPublication
+        FROM datasetpresenter dsp, macros, datasethyperlink h
+        WHERE macros.dataset_presenter_id = dsp.dataset_presenter_id
+          AND h.dataset_presenter_id = macros.dataset_presenter_id
+          AND h.url like '/%'
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="ProteomicsCitation">
+    <comment> Citation info for proteomics datasets, used by GBrowse </comment>
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="MSPeptideSummary"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE ProteomicsCitation&1 AS
+        WITH pubs AS (
+          SELECT name, id, contact_email,
+                string_agg(publication, ',' order by publication) as pmids
+          FROM (
+            SELECT ds.name as name, ds.dataset_presenter_id as id,
+                   c.email as contact_email, p.pmid as publication
+            FROM DatasetPresenter ds, DatasetContact c, DatasetPublication p
+            WHERE ds.dataset_presenter_id = c.dataset_presenter_id
+              AND ds.dataset_presenter_id = p.dataset_presenter_id
+              AND c.is_primary_contact = true
+              AND ds.type = 'protein_expression'
+              AND ds.subtype is null
+          ) t
+          GROUP BY name, id, contact_email
+        ),
+        samples AS (
+          SELECT name, id, string_agg(sample_i, chr(10) order by sample) as sample_table
+          FROM (
+            SELECT distinct ds.name as name,
+                             ds.dataset_presenter_id as id, sample,
+                             '<p style="color:' || html_color || '">' || sample || '</p>' as sample_i
+            FROM MSPeptideSummary mps, DatasetPresenter ds
+            -- consider using the tuning table ExternalDbDatasetPresenter instead of the LIKE below, if its performance is a problem
+            WHERE (ds.name = mps.external_database_name or mps.external_database_name like ds.dataset_name_pattern)
+          ) t
+          group by name, id
+        )
+        SELECT name,
+               substr(description, 4000, 1) || ' Primary Contact Email: '|| coalesce(email, 'unavailable')
+               || ' PMID: ' || publications || '<p style="color:black">Samples:</p>'
+               || sample_table || chr(10) ||
+               ' Please note that subtrack labels will disappear if the selected subtracks number is over 15!' as citation
+        FROM (
+          SELECT ds.name as name, ds.summary as description, pubs.contact_email as email,
+                 pubs.pmids as publications, samples.sample_table as sample_table
+          FROM DatasetPresenter ds, pubs, samples
+          WHERE ds.dataset_presenter_id = pubs.id
+            AND ds.dataset_presenter_id = samples.id
+        ) t
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+
+<!--  <tuningTable name="Pubmed" alwaysUpdate="true">-->
+  <tuningTable name="Pubmed">
+    <!-- PubMed info
+      -->
+    <internalDependency name="ExternalDbDatasetPresenter"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <program commandLine="buildPubmedTT"/>
+  </tuningTable>
+
+
+  <tuningTable name="GenePubmed">
+    <!-- PubMed records mapped to genes
+      -->
+    <internalDependency name="ExternalDbDatasetPresenter"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="Pubmed"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="sres.DbRef"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE GenePubmed&1 AS
+        WITH feat_pm as (
+          SELECT dbref_subset.na_feature_id,
+                 pm.pubmed_id, pm.doi, pm.title,
+                 substr(pm.authors, 2000, 1) authors
+          FROM Pubmed pm,
+               (SELECT dbna.na_feature_id, db.primary_identifier
+                FROM dots.DbRefNaFeature dbna,
+                     sres.DbRef db
+                WHERE db.db_ref_id = dbna.db_ref_id
+                 and db.external_database_release_id
+                     in (  SELECT external_database_release_id
+                           FROM ExternalDbDatasetPresenter
+                           WHERE lower(dataset_presenter_display_name) like '%pubmed%'
+                         UNION
+                           SELECT edr.external_database_release_id
+                           FROM sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+                           WHERE ed.external_database_id = edr.external_database_id
+                             AND lower(ed.name) like '%pubmed%'
+                        )
+               ) dbref_subset
+          WHERE dbref_subset.primary_identifier = pm.pubmed_id::varchar
+        )
+        SELECT ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors
+        FROM TranscriptAttributes ta, feat_pm
+        WHERE ta.na_feature_id = feat_pm.na_feature_id
+        UNION
+        SELECT ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors
+        FROM TranscriptAttributes ta, feat_pm
+        WHERE ta.gene_na_feature_id = feat_pm.na_feature_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index gpm_gene_idx&1
+          on GenePubmed&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index gpm_tx_idx&1
+          on GenePubmed&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="Profile">
+    <!-- One profile per gene per dataset. Used for graphs -->
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="CompoundAttributes"/>
+    <externalDependency name="apidb.OntologyTermResult"/>
+    <externalDependency name="apidb.Datasource"/>
+    <externalDependency name="apidb.NaFeatureMetacycle"/>
+    <externalDependency name="apidb.LopitResults"/>
+    <externalDependency name="apidb.EigenGeneWgcnaResults"/>
+    <externalDependency name="results.CompoundMassSpec"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <externalDependency name="results.NaFeatureHostResponse"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.NodeSet"/>
+    <externalDependency name="study.NodeNodeSet"/>
+    <sql>
+      <![CDATA[
+       CREATE TABLE Profile&1 (
+         DATASET_NAME	    VARCHAR(200),
+         DATASET_TYPE	    VARCHAR(50),
+         DATASET_SUBTYPE    VARCHAR(50),
+         PROFILE_TYPE	    VARCHAR(30),
+         NODE_TYPE	    VARCHAR(100),
+         SOURCE_ID	        VARCHAR(500),
+         PROFILE_STUDY_ID	NUMERIC(7),
+         PROFILE_SET_NAME	VARCHAR(400),
+         PROFILE_SET_SUFFIX	VARCHAR(50),
+         PROFILE_AS_STRING	VARCHAR(4000),
+         MAX_VALUE	        NUMERIC,
+         MIN_VALUE	        NUMERIC,
+         MAX_TIMEPOINT	    VARCHAR(200),
+         MIN_TIMEPOINT	    VARCHAR(200)
+       )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        DO $$
+        DECLARE
+          ctrows NUMERIC := 0;
+          commit_after NUMERIC := 10000;
+          pf_rows record;
+        BEGIN
+          FOR pf_rows IN (
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type,
+               ds.subtype as dataset_subtype, profile.profile_type, profile.node_type,
+               profile.source_id, profile.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               cast(case
+                      when regexp_replace(ps.name, '\[.+\]', '') like '% - %'
+                        then regexp_replace(regexp_replace(ps.name, ' *\[.+\]', ''), '.+ - ', '')
+                      -- special cases for legacy datasets
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%'
+                        then regexp_replace(
+                                 regexp_replace(
+                                     regexp_replace(
+                                         regexp_replace(
+                                             regexp_replace(ps.name, '\[.+ nonunique\]', ''),
+                                                        '\[.+ unique\]', ' - unique'),
+                                                    '\[.+\]', ''),
+                                                'aligned with cds coordinates ', 'cds coordinates'),
+                                            'T.brucei paired end RNA-Seqdata from Horn ', '')
+                      else null
+                    end as varchar(50)
+                   ) as profile_set_suffix,
+               CASE WHEN replace(profile.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string END as profile_as_string,
+               profile.max_value, profile.min_value,
+               profile.max_timepoint, profile.min_timepoint
+            FROM apidb.DataSource ds, sres.ExternalDatabase d,
+              sres.ExternalDatabaseRelease r, study.NodeSet ps,
+              (
+                  -- gene profiles
+                  SELECT gene_profile.node_set_id, ga.source_id, gene_profile.profile_type, gene_profile.node_type,
+                         gene_profile.profile_as_string, gene_profile.max_value, gene_profile.min_value,
+                         gene_profile.max_timepoint, gene_profile.min_timepoint
+                  FROM GeneAttributes ga,
+                    (
+                        SELECT * FROM (
+                          WITH result AS (
+                            SELECT na_feature_id, protocol_app_node_id, max(value) as value
+                            FROM results.NAFEATUREHOSTRESPONSE
+                            GROUP BY na_feature_id, protocol_app_node_id
+                          ), min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.value) over w1 as max_value,
+                                first_value(result.value) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            from study.protocolappnode pan, study.NodeNodeSet sl, study.NodeSet s, result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.value ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.PROTOCOLAPPNODE pan, study.NodeNodeSet sl, study.NodeSet s, min_max, result
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t1
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                              last_value(result.mean_phenotype) over w1 as max_value,
+                              first_value(result.mean_phenotype) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.PROTOCOLAPPNODE pan, study.NodeNodeSet sl, study.NodeSet s, apidb.CrisprPhenotype result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                                PARTITION BY sl.node_set_id, result.na_feature_id
+                                ORDER BY result.mean_phenotype ASC
+                                ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.mean_phenotype::numeric, 2)::varchar,'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.CrisprPhenotype result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND result.na_feature_id = min_max.na_feature_id
+                            AND sl.node_set_id = min_max.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t2
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                              last_value(result.score) over w1 as max_value,
+                              first_value(result.score) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.PROTOCOLAPPNODE pan, study.NodeNodeSet sl, study.NodeSet s, apidb.PhenotypeScore result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.score ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+                            string_agg(coalesce(round(result.score::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                            min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.PhenotypeScore result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t3
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                              last_value(result.relative_growth_rate) over w1 as max_value,
+                              first_value(result.relative_growth_rate) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.PhenotypeGrowthRate result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.relative_growth_rate ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.relative_growth_rate::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.PhenotypeGrowthRate result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t4
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                              last_value(result.value) over w1 as max_value,
+                              first_value(result.value) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.value ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t5
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                              last_value(result.percentile_channel1) over w1 as max_value,
+                              first_value(result.percentile_channel1) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.percentile_channel1 ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'channel1_percentiles' as profile_type, s.node_type,
+                                string_agg(coalesce(round(result.percentile_channel1::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                                min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t6
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                              last_value(result.percentile_channel2) over w1 as max_value,
+                              first_value(result.percentile_channel2) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.percentile_channel2 ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'channel2_percentiles' as profile_type, s.node_type,
+                                string_agg(coalesce(round(result.percentile_channel2::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                                min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t7
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.standard_error) over w1 as max_value,
+                                first_value(result.standard_error) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.standard_error ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'standard_error' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.standard_error::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t8
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.pvalue) over w1 as max_value,
+                                first_value(result.pvalue) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.pvalue ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'pvalue' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.pvalue::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t9
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.amplitude) over w1 as max_value,
+                                first_value(result.amplitude) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.PROTOCOLAPPNODE pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.amplitude ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'amplitude' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.amplitude::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t10
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.period) over w1 as max_value,
+                                first_value(result.period) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.period ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'period' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.period::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t11
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.probability_mean) over w1 as max_value,
+                                first_value(result.probability_mean) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.probability_mean ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'probability_mean' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.probability_mean::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t12
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.sd) over w1 as max_value,
+                                first_value(result.sd) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.sd ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'sd' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.sd::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t13
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.lower_CI) over w1 as max_value,
+                                first_value(result.lower_CI) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.lower_CI ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'lower_CI' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.lower_CI::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t14
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+                                last_value(result.upper_CI) over w1 as max_value,
+                                first_value(result.upper_CI) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.na_feature_id
+                              ORDER BY result.upper_CI ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.na_feature_id, 'upper_CI' as profile_type, s.node_type,
+                              string_agg(coalesce(round(result.upper_CI::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.na_feature_id = result.na_feature_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t15
+-- TO FIX
+--                      UNION ALL
+--                        SELECT * FROM (
+--                          WITH min_max AS (
+--                              SELECT DISTINCT sl.node_set_id, result.na_feature_id,
+--                                  null as max_value,
+--                                  null as min_value,
+--                                  last_value(pan.name) over w1 as max_timepoint,
+--                                  first_value(pan.name) over w1 as min_timepoint
+--                              FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result
+--                              WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+--                                AND result.protocol_app_node_id = pan.protocol_app_node_id
+--                                AND sl.node_set_id = s.node_set_id
+--                              WINDOW w1 AS (
+--                                PARTITION BY sl.node_set_id, result.na_feature_id
+--                                ORDER BY result.value ASC
+--                                ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+--                              )
+--                          )
+--                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
+--                              string_agg(coalesce(result.value, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+--                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+--                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result, min_max
+--                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+--                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+--                            AND sl.node_set_id = s.node_set_id
+--                            AND min_max.na_feature_id = result.na_feature_id
+--                            AND min_max.node_set_id = sl.node_set_id
+--                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+--                        ) t16
+                    ) gene_profile
+                  WHERE ga.na_feature_id = gene_profile.na_feature_id
+                UNION ALL
+                  -- compound profiles
+                  SELECT compound_profile.node_set_id,
+                     case
+                       WHEN compound_profile.isotopomer IS NOT NULL
+                          THEN ca.source_id || '|' || compound_profile.isotopomer
+                       WHEN compound_profile.mass IS NOT NULL
+                          THEN ca.source_id || '|' || compound_profile.mass || '|' || compound_profile.retention_time
+                       ELSE ca.source_id
+                     END as source_id,
+                     compound_profile.profile_type, compound_profile.node_type,
+                     compound_profile.profile_as_string, compound_profile.max_value, compound_profile.min_value,
+                     compound_profile.max_timepoint, compound_profile.min_timepoint
+                  FROM CompoundAttributes ca,
+                    (
+                        SELECT * FROM (
+                          WITH result AS (
+                            SELECT max(value) as value, compound_id, protocol_app_node_id, isotopomer
+                            FROM results.CompoundMassSpec
+                            GROUP BY compound_id, protocol_app_node_id, isotopomer
+                          ) , min_max AS (
+                            SELECT DISTINCT sl.node_set_id, result.compound_id, result.isotopomer,
+                                last_value(result.value) over w1 as max_value,
+                                first_value(result.value) over w1 as min_value,
+                                last_value(pan.name) over w1 as max_timepoint,
+                                first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, result
+                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                              AND result.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, result.compound_id, result.isotopomer
+                              ORDER BY result.value ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, result.compound_id, result.isotopomer, 'values' as profile_type, s.node_type,
+                              NULL::numeric as compound_peaks_id, NULL::numeric as mass, NULL::numeric as retention_time,
+                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, result, min_max
+                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                            AND result.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND min_max.compound_id = result.compound_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, result.compound_id, result.isotopomer, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t1
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, cpc.compound_id,
+                              last_value(cmsr.value) over w1 as max_value,
+                              first_value(cmsr.value) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
+                              apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
+                              apidb.CompoundPeaksChebi cpc
+                            WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                              AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                              AND cp.compound_peaks_id = cmsr.compound_peaks_id
+                              AND cpc.compound_peaks_id = cp.compound_peaks_id
+                              AND pan.name like '%mean%'
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
+                              ORDER BY cmsr.value ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, cpc.compound_id, cpc.isotopomer, 'values' as profile_type, s.node_type,
+                            cpc.compound_peaks_id, cp.mass, cp.retention_time,
+                            string_agg(coalesce(round(cmsr.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                            min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
+                            apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
+                            apidb.CompoundPeaksChebi cpc, min_max
+                          WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                            AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND cp.compound_peaks_id = cmsr.compound_peaks_id
+                            AND cpc.compound_peaks_id = cp.compound_peaks_id
+                            AND pan.name like '%mean%'
+                            AND min_max.compound_id = cpc.compound_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t2
+                      UNION ALL
+                        SELECT * FROM (
+                          WITH min_max AS (
+                            SELECT DISTINCT sl.node_set_id, cpc.compound_id,
+                              last_value(cmsr.percentile) over w1 as max_value,
+                              first_value(cmsr.percentile) over w1 as min_value,
+                              last_value(pan.name) over w1 as max_timepoint,
+                              first_value(pan.name) over w1 as min_timepoint
+                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
+                              apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
+                              apidb.CompoundPeaksChebi cpc
+                            WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                              AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                              AND sl.node_set_id = s.node_set_id
+                              AND cp.compound_peaks_id = cmsr.compound_peaks_id
+                              AND cpc.compound_peaks_id = cp.compound_peaks_id
+                              AND pan.name like '%mean%'
+                            WINDOW w1 AS (
+                              PARTITION BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
+                              ORDER BY cmsr.percentile ASC
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            )
+                          )
+                          SELECT sl.node_set_id, cpc.compound_id, cpc.isotopomer, 'percentiles' as profile_type, s.node_type,
+                            cpc.compound_peaks_id, cp.mass, cp.retention_time,
+                            string_agg(coalesce(round(cmsr.percentile::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                            min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
+                            apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
+                            apidb.CompoundPeaksChebi cpc, min_max
+                          WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                            AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                            AND sl.node_set_id = s.node_set_id
+                            AND cp.compound_peaks_id = cmsr.compound_peaks_id
+                            AND cpc.compound_peaks_id = cp.compound_peaks_id
+                            AND pan.name like '%mean%'
+                            AND min_max.compound_id = cpc.compound_id
+                            AND min_max.node_set_id = sl.node_set_id
+                          GROUP BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                        ) t3
+                    ) compound_profile
+                  WHERE ca.id = compound_profile.compound_id
+                UNION ALL
+                  -- OntologyTermResult
+                  SELECT * FROM (
+                    WITH min_max AS (
+                      SELECT DISTINCT sl.node_set_id, ot.name,
+                        last_value(otr.value) over w1 as max_value,
+                        first_value(otr.value) over w1 as min_value,
+                        last_value(pan.name) over w1 as max_timepoint,
+                        first_value(pan.name) over w1 as min_timepoint
+                      FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
+                        apidb.OntologyTermResult otr, sres.OntologyTerm ot
+                      WHERE ot.ontology_term_id = otr.ontology_term_id
+                        AND otr.protocol_app_node_id = sl.protocol_app_node_id
+                        AND otr.protocol_app_node_id = pan.protocol_app_node_id
+                        AND sl.node_set_id = s.node_set_id
+                      WINDOW w1 AS (
+                        PARTITION BY sl.node_set_id, ot.name
+                        ORDER BY otr.value ASC
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                      )
+                    )
+                    SELECT sl.node_set_id, ot.name as source_id, 'value' as profile_type, s.node_type,
+                      string_agg(coalesce(round(otr.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                      min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                    FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
+                      apidb.OntologyTermResult otr, sres.OntologyTerm ot, min_max
+                    WHERE ot.ontology_term_id = otr.ontology_term_id
+                      AND otr.protocol_app_node_id = sl.protocol_app_node_id
+                      AND otr.protocol_app_node_id = pan.protocol_app_node_id
+                      AND sl.node_set_id = s.node_set_id
+                      AND min_max.name = ot.name
+                      AND min_max.node_set_id = sl.node_set_id
+                    GROUP BY sl.node_set_id, ot.name, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                  ) t1
+                UNION ALL
+                  -- SubjectResult
+                  SELECT * FROM (
+                    WITH min_max AS (
+                      SELECT DISTINCT sl.node_set_id, result.subject,
+                        last_value(result.value) over w1 as max_value,
+                        first_value(result.value) over w1 as min_value,
+                        last_value(pan.name) over w1 as max_timepoint,
+                        first_value(pan.name) over w1 as min_timepoint
+                      FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.SubjectResult result
+                      WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                        AND result.protocol_app_node_id = pan.protocol_app_node_id
+                        AND sl.node_set_id = s.node_set_id
+                      WINDOW w1 AS (
+                        PARTITION BY sl.node_set_id, result.subject
+                        ORDER BY result.value ASC
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                      )
+                    )
+                    SELECT sl.node_set_id, result.subject as source_id, 'values' as profile_type, s.node_type,
+                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                      min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                    FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, min_max, apidb.SubjectResult result
+                    WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                      AND result.protocol_app_node_id = pan.protocol_app_node_id
+                      AND sl.node_set_id = s.node_set_id
+                      AND min_max.subject = result.subject
+                      AND min_max.node_set_id = sl.node_set_id
+                    GROUP BY sl.node_set_id, result.subject, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                  ) t2
+                UNION ALL
+                  -- wgcna eigengene results
+                  SELECT * FROM (
+                    WITH min_max AS (
+                      SELECT DISTINCT sl.node_set_id, result.module_name,
+                        last_value(result.value) over w1 as max_value,
+                        first_value(result.value) over w1 as min_value,
+                        last_value(pan.name) over w1 as max_timepoint,
+                        first_value(pan.name) over w1 as min_timepoint
+                      FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.EigenGeneWgcnaResults result
+                      WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                        AND result.protocol_app_node_id = pan.protocol_app_node_id
+                        AND sl.node_set_id = s.node_set_id
+                      WINDOW w1 AS (
+                        PARTITION BY sl.node_set_id, result.module_name
+                        ORDER BY result.value ASC
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                      )
+                    )
+                    SELECT sl.node_set_id, result.module_name as source_id, 'values' as profile_type, s.node_type,
+                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
+                      min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
+                    FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, min_max, apidb.EigenGeneWgcnaResults result
+                    WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                      AND result.protocol_app_node_id = pan.protocol_app_node_id
+                      AND sl.node_set_id = s.node_set_id
+                      AND min_max.module_name = result.module_name
+                      AND min_max.node_set_id = sl.node_set_id
+                    GROUP BY sl.node_set_id, result.module_name, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
+                  ) t3
+              ) profile
+            WHERE ds.name = d.name
+              AND ds.version = r.version
+              AND d.external_database_id = r.external_database_id
+              AND profile.node_set_id = ps.node_set_id
+              AND ps.external_database_release_id = r.external_database_release_id
+          )
+          LOOP
+            ctrows := ctrows + 1;
+            INSERT INTO Profile&1
+                (DATASET_NAME, DATASET_TYPE, DATASET_SUBTYPE, PROFILE_TYPE, NODE_TYPE, SOURCE_ID, PROFILE_STUDY_ID, PROFILE_SET_NAME,
+                PROFILE_SET_SUFFIX, PROFILE_AS_STRING, MAX_VALUE, MIN_VALUE, MAX_TIMEPOINT, MIN_TIMEPOINT)
+                VALUES
+                (pf_rows.DATASET_NAME, pf_rows.DATASET_TYPE, pf_rows.DATASET_SUBTYPE, pf_rows.PROFILE_TYPE, pf_rows.NODE_TYPE, pf_rows.SOURCE_ID, pf_rows.PROFILE_STUDY_ID, pf_rows.PROFILE_SET_NAME,
+                pf_rows.PROFILE_SET_SUFFIX, pf_rows.PROFILE_AS_STRING, pf_rows.MAX_VALUE, pf_rows.MIN_VALUE, pf_rows.MAX_TIMEPOINT, pf_rows.MIN_TIMEPOINT);
+            IF ctrows >= commit_after THEN
+              COMMIT;
+              ctrows := 0;
+            END IF;
+          END LOOP;
+        commit;
+        END;
+        $$ LANGUAGE PLPGSQL;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index exprof_idx&1
+          on Profile&1 (source_id, profile_type, profile_set_name)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index profset_idx&1
+          on Profile&1 (profile_set_name, profile_type)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index srcdset_idx&1
+          on Profile&1 (source_id, dataset_subtype, dataset_type)
+
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        UPDATE Profile&1
+        SET dataset_name = 'tbruTREU927_Rijo_Circadian_Regulation_rnaSeq_RSRC'
+        WHERE dataset_name= 'tbruTREU927_RNASeq_Rijo_Circadian_Regulation_RSRC'
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="ProfileType">
+    <internalDependency name="Profile"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE ProfileType&1 AS
+        SELECT DISTINCT dataset_name, profile_study_id, profile_set_name, profile_set_suffix, node_type, profile_type,
+               dataset_type, dataset_subtype
+        FROM profile
+        WHERE profile_as_string IS NOT NULL
+        ORDER BY  dataset_name, profile_set_name,  profile_type
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="ProfileSamples">
+    <internalDependency name="ProfileType"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <externalDependency name="results.CompoundMassSpec"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.NodeSet"/>
+    <externalDependency name="study.NodeNodeSet"/>
+    <sql>
+      <![CDATA[
+      CREATE TABLE ProfileSamples&1 AS
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id as study_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, results.nafeatureexpression r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+      AND pt.profile_type not in ('pvalue', 'period', 'amplitude', 'probability_mean','sd','lower_CI','upper_CI','correlation_coefficient')
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+            REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+            pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+            pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+            study.protocolAppNode pan, apidb.NAFeatureMetacycle r
+          WHERE pt.profile_study_id = s.node_set_id
+          AND sl.node_set_id = s.node_set_id
+          AND sl.protocol_app_node_id = pan.protocol_app_node_id
+          AND  pan.protocol_app_node_id =r.protocol_app_node_id
+          AND pt.profile_type not in ('values', 'channel1_percentiles', 'channel2_percentiles', 'standard_error')
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+            REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+            pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+            pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+            study.protocolAppNode pan, apidb.LopitResults r
+          WHERE pt.profile_study_id = s.node_set_id
+          AND sl.node_set_id = s.node_set_id
+          AND sl.protocol_app_node_id = pan.protocol_app_node_id
+          AND  pan.protocol_app_node_id =r.protocol_app_node_id
+          AND pt.profile_type not in ('values', 'channel1_percentiles', 'channel2_percentiles', 'standard_error')
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, results.compoundMassSpec r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+            REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+            pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+            pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+            study.protocolAppNode pan, APIDB.compoundmassspecresult r
+          WHERE pt.profile_study_id = s.node_set_id
+          AND sl.node_set_id = s.node_set_id
+          AND sl.protocol_app_node_id = pan.protocol_app_node_id
+          AND  pan.protocol_app_node_id =r.protocol_app_node_id
+          and pan.name like '%mean%'
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, apidb.ontologytermresult r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, results.nafeaturehostresponse r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, apidb.crisprphenotype r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, apidb.phenotypescore r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+      SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+        REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+        pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+        pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+        study.protocolAppNode pan, apidb.phenotypegrowthrate r
+      WHERE pt.profile_study_id = s.node_set_id
+      AND sl.node_set_id = s.node_set_id
+      AND sl.protocol_app_node_id = pan.protocol_app_node_id
+      AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+          SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+            REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+            pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+            pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+            study.protocolAppNode pan, apidb.subjectresult r
+          WHERE pt.profile_study_id = s.node_set_id
+          AND sl.node_set_id = s.node_set_id
+          AND sl.protocol_app_node_id = pan.protocol_app_node_id
+          AND  pan.protocol_app_node_id =r.protocol_app_node_id
+        UNION
+          SELECT DISTINCT s.name AS study_name, pt.node_type, s.node_set_id,
+            REGEXP_REPLACE(REGEXP_REPLACE (pan.name, ' \[.+\] \(.+\)', ''),
+                           ' \(.+\)', '')AS protocol_app_node_name,
+            pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
+            pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
+            pt.profile_set_suffix
+          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+            study.protocolAppNode pan, apidb.EigenGeneWgcnaResults r
+          WHERE pt.profile_study_id = s.node_set_id
+          AND sl.node_set_id = s.node_set_id
+          AND sl.protocol_app_node_id = pan.protocol_app_node_id
+          AND  pan.protocol_app_node_id =r.protocol_app_node_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index psamp_ix&1
+          on ProfileSamples&1
+            (dataset_name, profile_type, study_id, node_order_num,
+             protocol_app_node_id, profile_set_suffix, study_name,
+             node_type, protocol_app_node_name)
+
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index psampstdy_ix&1
+          on ProfileSamples&1
+            (study_name, node_type, profile_type, node_order_num,
+             protocol_app_node_id, profile_set_suffix, study_id,
+             protocol_app_node_name, dataset_name)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="GeneGroupProfile">
+    <comment> For all datasets, list all genes (source_id) of a gene_group where one of them (profile_graph_id)
+      has data for a profile_set.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="Profile"/>
+    <internalDependency name="OrthologousTranscripts"/>
+    <sql>
+      <![CDATA[
+        create table GeneGroupProfile&1 as
+          select distinct other_gene.source_id, p.dataset_name,
+               this_gene.source_id as profile_graph_id
+          from OrthologousTranscripts ot
+             , Profile p
+             , GeneAttributes this_gene
+             , GeneAttributes other_gene
+          where p.source_id = ot.source_id
+            and ot.source_id = this_gene.source_id
+            and ot.ortho_gene_source_id = other_gene.source_id
+            and this_gene.species = other_gene.species
+            and ot.is_syntenic = 1
+        union
+          select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
+          from Profile p, GeneAttributes ga
+          where p.source_id = ga.source_id
+    ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+          create index ggp_ix&1
+            on GeneGroupProfile&1
+              (source_id, dataset_name, profile_graph_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="ExpressionGraphsData">
+    <comment>
+      for gene-page expression graphs
+    </comment>
+    <internalDependency name="DatasetPresenter"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ProfileSamples"/>
+    <externalDependency name="results.NaFeatureExpression"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="study.NodeSet"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE ExpressionGraphsData&1  as
+          -- RNASeq
+          SELECT distinct ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                 cast(case when ps.profile_set_suffix is null then ps.protocol_app_node_name
+                          when ps.protocol_app_node_name ='value' then ps.profile_set_suffix 
+                          else ps.protocol_app_node_name || ' - ' || ps.profile_set_suffix end ||
+                      case when substr(dp.value, 1, 10) in ('0', 'false') and pan.name like '% firststrand %' then '- sense'
+                           when substr(dp.value, 1, 10) in ('0', 'false') and pan.name like '% secondstrand %' then '- antisense'
+                           when substr(dp.value, 1, 10) in ('1', 'true') and pan.name like '% firststrand %' then '- antisense'
+                           when substr(dp.value, 1, 10) in ('1', 'true') and pan.name like '% secondstrand %' then '- sense'
+                           else '' end ||
+                      case when pan.name like '% unique%' then ' - unique' 
+                           else '' end
+                       as varchar(300)) AS sample_name,
+                 round(nfe.value::numeric, 2) as value,
+                 round(nfe.standard_error::numeric, 2) as standard_error,
+                 round(nfe.percentile_channel1::numeric, 2) as percentile_channel1,
+                 round(nfe.percentile_channel2::numeric, 2) as percentile_channel2,
+                 ps.node_order_num, 
+                 ps.protocol_app_node_id
+          FROM results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
+               ProfileSamples ps, study.nodeSet s,
+               sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+               DatasetPresenter dnt, DatasetProperty dp
+          WHERE ga.na_feature_id = nfe.na_feature_id
+            AND nfe.protocol_app_node_id = pan.protocol_app_node_id
+            AND pan.protocol_app_node_id = ps.protocol_app_node_id
+            AND ps.study_id = s.node_set_id
+            AND s.external_database_release_id = r.external_database_release_id
+            AND r.external_database_id = d.external_database_id
+            AND ps.dataset_name = dnt.name
+            AND dnt.dataset_presenter_id = dp.dataset_presenter_id
+            AND dp.property = 'switchStrandsProfiles'
+            AND ps.study_name not like '%cuff%'
+            AND ps.study_name not like '%htseq-intersection-nonempty%'
+            AND ps.study_name not like '%htseq-intersection-strict%'
+        UNION
+          -- Splice Site data
+          SELECT ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                 cast (case when ps.profile_set_suffix is null
+                              then ps.protocol_app_node_name
+                            else ps.protocol_app_node_name || ' ' || ps.profile_set_suffix
+                        end as varchar(300)) AS sample_name,
+                 round(nfe.value::numeric, 2) as value,
+                 round(nfe.standard_error::numeric, 2) as standard_error,
+                 round(nfe.percentile_channel1::numeric, 2) as percentile_channel1,
+                 round(nfe.percentile_channel2::numeric, 2) as percentile_channel2,
+                 ps.node_order_num, 
+                 ps.protocol_app_node_id
+          FROM results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
+               ProfileSamples ps, study.nodeSet s,
+               sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+               DatasetNameTaxon dnt,DatasetProperty dp
+          WHERE ga.na_feature_id = nfe.na_feature_id
+            AND nfe.protocol_app_node_id = pan.protocol_app_node_id
+            AND pan.protocol_app_node_id = ps.protocol_app_node_id
+            AND ps.study_id = s.node_set_id
+            AND s.external_database_release_id = r.external_database_release_id
+            AND r.external_database_id = d.external_database_id
+            AND d.name = dnt.name
+            AND dnt.dataset_presenter_id = dp.dataset_presenter_id
+            AND dp.property = 'type' and substr(dp.value, 1, 10) = 'Splice Site'
+        UNION
+          -- microarray expression, quantitative proteomics, and eQTL
+          SELECT ga.source_id, dnt.dataset_presenter_id as dataset_id,
+                 cast (case when ps.profile_set_suffix is null
+                              then ps.protocol_app_node_name
+                             else ps.protocol_app_node_name || ' ' || ps.profile_set_suffix
+                       end as varchar(300)) AS sample_name,
+                 CASE WHEN (d.NAME ='pfal3D7_quantitativeMassSpec_Apicoplast_ER_RSRC')
+                   THEN round(nfe.VALUE::numeric, 6)
+                   ELSE round(nfe.value::numeric, 2) END as value,
+                 round(nfe.standard_error::numeric, 2) as standard_error,
+                 round(nfe.percentile_channel1::numeric, 2) as percentile_channel1,
+                 round(nfe.percentile_channel2::numeric, 2) as percentile_channel2,
+                 ps.node_order_num, 
+                 ps.protocol_app_node_id
+          FROM results.NaFeatureExpression nfe, GeneAttributes ga, study.ProtocolAppNode pan,
+               ProfileSamples ps, study.nodeSet s,
+               sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+               DatasetNameTaxon dnt, DatasetPresenter dsp
+          WHERE ga.na_feature_id = nfe.na_feature_id
+            AND nfe.protocol_app_node_id = pan.protocol_app_node_id
+            AND pan.protocol_app_node_id = ps.protocol_app_node_id
+            AND ps.study_id = s.node_set_id
+            AND s.external_database_release_id = r.external_database_release_id
+            AND r.external_database_id = d.external_database_id
+            AND d.name = dnt.name
+            AND dnt.dataset_presenter_id = dsp.dataset_presenter_id
+            AND dsp.subtype != 'rnaseq'
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index edg_ix&1
+          on ExpressionGraphsData&1
+            (source_id, dataset_id, sample_name, value, standard_error, percentile_channel1, percentile_channel2)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+<!--  <tuningTable name="Stringdb" alwaysUpdate="true">-->
+  <tuningTable name="Stringdb" >
+    <comment> Data from STRING-DB.org, populated from their web service.
+      Used in the gene record.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TaxonSpecies"/>
+    <program commandLine="buildStringdbTT"/>
+  </tuningTable>
+
+
+  <tuningTable name="ApolloUpdate" alwaysUpdate="true">
+    <comment>annotation updates from Apollo</comment>
+    <ancillaryTable name="ApolloID"/>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <externalDependency name="dots.NaSequence"/>
+    <program commandLine="loadGffApolloTT"/>
+  </tuningTable>
+
+
+
+  <tuningTable name="DatabaseTaxonUrl">
+    <comment>
+      Stores a mapping between external databases, taxon IDs, and URLs
+    </comment>
+    <externalDependency name="apidb.ExternalResourceUrl"/>
+    <externalDependency name="dots.AaFeature"/>
+    <externalDependency name="dots.DbRefAaFeature"/>
+    <externalDependency name="dots.DbRefNaFeature"/>
+    <externalDependency name="sres.DbRef"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <internalDependency name="ExternalDbDatasetPresenter"/>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <sql>
+      <![CDATA[
+        create table DatabaseTaxonUrl&1 as
+        select edd.dataset_presenter_display_name AS dataset, ga.taxon_id, edr.id_url
+        from sres.DbRef db, dots.DbRefNaFeature dbna,
+             ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
+             GeneAttributes ga
+        where db.external_database_release_id = edd.external_database_release_id
+          and edr.external_database_release_id = edd.external_database_release_id
+         and dbna.db_ref_id = db.db_ref_id
+         and ga.na_feature_id = dbna.na_feature_id
+         and id_url not like 'http://chemlims.com/%'
+      union
+        select edd.dataset_presenter_display_name AS dataset, ta.taxon_id, edr.id_url
+        from sres.dbref db, dots.DbRefNaFeature dbna,
+             ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
+             TranscriptAttributes ta
+        where db.external_database_release_id = edd.external_database_release_id
+          and edr.external_database_release_id = edd.external_database_release_id
+          and dbna.db_ref_id = db.db_ref_id
+          and ta.na_feature_id = dbna.na_feature_id
+      union
+        select d.name as dataset, ga.taxon_id, eru.id_url
+        from sres.DbRef dbr, dots.DbRefNaFeature dbrf, sres.ExternalDatabaseRelease r,
+             sres.ExternalDatabase d, GeneAttributes ga,
+             apidb.ExternalResourceUrl eru
+        where dbr.external_database_release_id = r.external_database_release_id
+          and r.external_database_id = d.external_database_id
+          and dbr.db_ref_id = dbrf.db_ref_id
+          and dbrf.na_feature_id = ga.na_feature_id
+          and upper(d.name) = eru.database_name
+      union
+        select distinct
+               d.name as dataset, ta.taxon_id, eru.id_url
+        from sres.DbRef dbr, dots.DbRefAaFeature dbrf, dots.AaFeature aaf,
+             sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
+             TranscriptAttributes ta, apidb.ExternalResourceUrl eru
+        where dbr.external_database_release_id = r.external_database_release_id
+          and r.external_database_id = d.external_database_id
+          and dbr.db_ref_id = dbrf.db_ref_id
+          and dbrf.aa_feature_id = aaf.aa_feature_id
+          and aaf.aa_sequence_id = ta.aa_sequence_id
+          and upper(d.name) = eru.database_name
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index dtaxu_ix&1
+          on DatabaseTaxonUrl&1 (taxon_id, dataset, id_url)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+
+
+<!--
+  <tuningTable name="TranscriptGenomicSequence">
+    <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
+    </comment>
+   - COMMENTING OUT DEPENDENCIES FOR NOW 
+    <externalDependency name="apidb.TranscriptLocation"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.NaSequence"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.TaxonName"/>
+
+    <sql>
+      <![CDATA[
+        create table TranscriptGenomicSequence&1 as
+        select gf.source_id as gene_source_id, t.source_id,
+               cast (null as varchar(80)) as project_id,
+               nas.sequence as genomic_sequence,
+               length(nas.sequence) as genomic_sequence_length
+        from dots.NaSequence nas, dots.GeneFeature gf, dots.Transcript t
+        where 1 = 0
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create unique index txgseq_idx&1
+          on TranscriptGenomicSequence&1(source_id, gene_source_id, project_id)
+
+      ]]>
+    </sql>
+
+    <perl>
+      <![CDATA[
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use DBD::Pg;
+
+use CBIL::Bio::SequenceUtils; #reverseComplementSequence
+
+use Getopt::Long qw(GetOptions);
+
+use Data::Dumper;
+
+use EbrcModelCommon::Model::tmUtils;
+
+
+my $insertSql = "INSERT INTO TranscriptGenomicSequence&1
+    (gene_source_id, source_id, project_id,
+     genomic_sequence, genomic_sequence_length)
+ VALUES (?,?,?,?,?)";
+my $insertSh = $dbh->prepare($insertSql);
+
+my $sql = "SELECT ga.source_id AS gene_source_id
+     , ga.project_id AS project_id
+     , t.source_id
+     , tl.start_min
+     , tl.end_max
+     , tl.is_reversed
+     , gss.source_id
+     , gss.sequence
+FROM apidb.transcriptlocation tl
+   , apidbtuning.geneattributes ga
+   , dots.transcript t
+   , apidbtuning.genomicsequencesequence gss
+WHERE t.na_feature_id  = tl.na_feature_id
+AND t.parent_id = ga.na_feature_id
+AND tl.sequence_source_id = gss.source_id
+ORDER BY gss.source_id";
+
+
+my $sh = $dbh->prepare($sql)
+     or die "Can't prepare SQL statement: " . $dbh->errstr();
+$sh->execute();
+
+my ($prevSequenceSourceId, $sequence, $count);
+while(my ($geneSourceId, $projectId, $sourceId, $start, $end, $isReversed, $sequenceSourceId, $sequenceLobLocator) = $sh->fetchrow_array()) {
+
+  if($prevSequenceSourceId ne $sequenceSourceId) {
+    # print STDERR "Processing Transcripts for sequence $sequenceSourceId\n";
+    $sequence = &readClob($dbh, $sequenceLobLocator);
+  }
+
+  my $substrStart = $start - 1;
+  my $substrLength = $end - $start + 1;
+
+  my $transcriptGenomicSequence = substr($sequence, $substrStart, $substrLength);
+
+  if($isReversed) {
+    $transcriptGenomicSequence = CBIL::Bio::SequenceUtils::reverseComplementSequence($transcriptGenomicSequence);
+  }
+
+  $insertSh->execute($geneSourceId, $sourceId, $projectId, $transcriptGenomicSequence, $substrLength);
+
+  if($count++ % 200000 == 0) {
+    print STDERR "Commit point; count = $count\n";
+    $dbh->commit();
+  }
+
+  $prevSequenceSourceId = $sequenceSourceId;
+}
+
+$dbh->commit();
+
+
+sub readClob {
+  my ($dbh, $lobLocator) = @_;
+
+  my $chunkSize = $dbh->ora_lob_chunk_size($lobLocator);
+  my $offset = 1;   # Offsets start at 1, not 0
+
+  my $output;
+  while(1) {
+    my $data = $dbh->ora_lob_read($lobLocator, $offset, $chunkSize );
+    last unless length $data;
+    $output .= $data;
+    $offset += $chunkSize;
+  }
+  return $output;
+}
+
+
+1;
+      ]]>
+    </perl>
+
+  </tuningTable>
+-->
+
+
+  <tuningTable name="ApolloUpdateGene">
+    <comment>
+      Text from ApolloUpdate that can be used in site search to find genes
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="ApolloUpdate"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE ApolloUpdateGene&1 AS
+        SELECT ga.source_id
+          , ga.project_id
+          , au.id_attr
+          , ta.gene_source_id
+          , 'Y' as matched_result
+          -- TODO, cast(utl_url.unescape(replace( replace(regexp_substr(au.attr, 'Name=[^;]*;'), 'Name=', ''), ';', '')) as varchar(400)) as apollo_transcript_id
+          , 'TODO' as apollo_transcript_id
+          , au.creationdate as comment_date
+          , au.apolloproduct || au.apollosymbol || au.apolloowner || au.apollogoterm || au.apollopmid as attr
+          , au.apolloproduct as apollo_description
+          , au.apolloowner as apollo_owner
+          , au.apollopmid as apollo_dbxref
+          , au.apollosymbol as apollo_symbol
+          , au.apollogoterm as apollo_go_term
+          , au.creationdate as creation_date
+          , au.apolloevidencecode as evidence_code
+          , au.apolloevidencecodeassignment as evidence_code_parameter
+          , (select firstname.value || ' ' ||  lastname.value || ', ' || address.value from
+              (select uap.value
+                  from &remote_useraccounts_schema.accounts.profile uaa,  &remote_useraccounts_schema.account_properties.profile uap
+                  where uaa.user_id = uap.user_id
+                  and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+                  and uap.key = 'first_name') firstname,
+              (select uap.value
+                  from &remote_useraccounts_schema.accounts.profile uaa,  &remote_useraccounts_schema.account_properties.profile uap
+                  where uaa.user_id = uap.user_id
+                  and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+                  and uap.key = 'last_name') lastname,
+              (select uap.value
+                  from &remote_useraccounts_schema.accounts.profile uaa,  &remote_useraccounts_schema.account_properties.profile uap
+                  where uaa.user_id = uap.user_id
+                  and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
+                  and uap.key = 'organization') address) as apollo_owner_details
+        FROM ApolloUpdate au, GeneAttributes ga, TranscriptAttributes ta
+        WHERE au.type = 'gene'
+          AND (au.attr like '%gene_product=%'
+              OR au.attr like '%description=%')
+          AND ga.na_sequence_id = au.na_sequence_id
+          AND ga.start_min <= au.mapping_end AND ga.end_max >= au.mapping_start
+          AND ta.source_id = au.apolloTranscript
+          AND ga.strand_plus_minus = au.strand
+          AND ta.gene_source_id = ga.source_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index aug_ix&1
+          on ApolloUpdateGene&1 (source_id, project_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="PreferredProductsGene">
+    <comment>
+      Text for PreferredProduct table on gene record page.
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <sql>
+      <![CDATA[
+        -- PreferredProductsGene: check apidb.TranscriptProduct and
+        -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
+        -- (and only if) that turns up nothing, check the PRODUCT column of
+        -- dots.GeneFeature and dots.Transcript
+        create table PreferredProductsGene&1 as
+        with evids
+          as (select distinct gaiec.go_evidence_code_id, ot.name
+              from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+              where ot.ontology_term_id = gaiec.go_evidence_code_id)
+        -- end of WITH clause
+        select ta.gene_source_id as source_id, tp.product, ta.project_id,
+          string_agg(source_id, ', ' order by source_id) as transcript_ids,
+          string_agg(publication, ', ' order by source_id) as reference,
+          e.name as evidence_code,
+          tp.with_from AS evidence_code_parameter,
+          cast (max(tp.assigned_by) as varchar(20)) as assigned_by,
+          'apidb.TranscriptProduct' as row_source
+        from apidb.TranscriptProduct tp
+          INNER JOIN TranscriptAttributes ta ON ta.na_feature_id = tp.na_feature_id
+          LEFT JOIN evids e ON tp.evidence_code = e.go_evidence_code_id
+        where tp.is_preferred = 1
+        group by gene_source_id, ta.project_id, tp.product,
+          e.name, tp.with_from
+        union
+        select ga.source_id, gfp.product, ga.project_id,
+          null::varchar as transcript_ids,
+          null::varchar as reference,
+          null::varchar as evidence_code,
+          null::varchar as evidence_code_parameter,
+          null::varchar as  assigned_by,
+          'apidb.GeneFeatureProduct' as row_source
+        from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+        where ga.na_feature_id = gfp.na_feature_id
+          and gfp.is_preferred = 1
+        group by source_id, ga.project_id, gfp.product
+        union
+        select *
+        from (select ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
+                string_agg(source_id, ', ' order by source_id) as transcript_ids,
+                null::varchar as reference,
+                null::varchar as evidence_code,
+                null::varchar as evidence_code_parameter,
+                null::varchar as  assigned_by,
+                'TranscriptAttributes/GeneAttributes' as row_source
+              from TranscriptAttributes ta
+              where ta.transcript_product is not null
+              group by ta.gene_source_id, ta.transcript_product, ta.project_id
+             ) t
+        where source_id
+          in (  select *
+                from (  select source_id
+                        from dots.GeneFeature
+                        where product is not null
+                        union
+                        select ga.source_id
+                        from dots.Transcript t, GeneAttributes ga
+                        where t.product is not null
+                          and t.parent_id = ga.na_feature_id
+                     ) t
+                EXCEPT
+                select *
+                from (  select ta.gene_source_id
+                        from apidb.TranscriptProduct tp, TranscriptAttributes ta
+                        where tp.na_feature_id = ta.na_feature_id
+                        union
+                        select ga.source_id
+                        from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+                        where gfp.na_feature_id = ga.na_feature_id
+                     ) t2
+             )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ppg_ix&1
+          on PreferredProductsGene&1 (source_id, project_id)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+
+  <tuningTable name="AllGeneProducts" prefixEnabled="true">
+    <comment>
+      all products for each gene
+    </comment>
+    <internalDependency name="GeneAttributes"/>
+    <internalDependency name="GeneProduct"/>
+    <internalDependency name="TranscriptAttributes"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.GoAssocInstEvidCode"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="sres.OntologyTerm"/>
+
+    <sql>
+     <![CDATA[
+       create table &prefixAllGeneProducts&1 as
+         with evids
+            as (select distinct gaiec.go_evidence_code_id, ot.name
+                from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                where ot.ontology_term_id = gaiec.go_evidence_code_id)
+         select ta.gene_source_id AS source_id, tp.product, ta.project_id,
+                CASE tp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
+                string_agg(source_id, ', ' order by source_id) as transcript_ids,
+                string_agg(publication, ', ' order by source_id) as reference,
+                e.name as evidence_code, tp.with_from as evidence_code_parameter,
+                tp.assigned_by, 'apidb.TranscriptProduct' as source
+         from TranscriptAttributes ta
+            INNER JOIN apidb.TranscriptProduct tp ON ta.na_feature_id = tp.na_feature_id
+            LEFT JOIN evids e ON tp.evidence_code = e.go_evidence_code_id
+         group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
+               tp.with_from, tp.assigned_by
+       union
+         select ga.source_id as source_id, gfp.product, ga.project_id,
+                CASE gfp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, --gfp.assigned_by,
+                -- CHECK AND FIX: OK that apidb.GeneFeatureProduct has NO assigned_by column?
+                NULL as assigned_by,
+                'apidb.GeneFeatureProduct' as source
+         from apidb.GeneFeatureProduct gfp, GeneAttributes ga
+         where ga.na_feature_id = gfp.na_feature_id
+       union
+         select ga.source_id as source_id, gf.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'dots.GeneFeature' as source
+         from dots.GeneFeature gf, GeneAttributes ga, GeneProduct gp
+         where ga.na_feature_id = gf.na_feature_id
+           and gf.product is not null
+           and ga.source_id = gp.source_id
+           and gp.source_rule >= 3 -- no product in apidb.GeneFeatureProduct
+       union
+         select ta.gene_source_id AS source_id, t.product, ta.project_id,
+                null as is_alternate,
+                string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
+                null as reference, null as evidence_code, null as evidence_code_parameter,
+                null as assigned_by, 'dots.Transcript' as source
+         from TranscriptAttributes ta, dots.Transcript t
+         where ta.na_feature_id = t.na_feature_id
+           and t.product is not null
+           and ta.gene_source_id
+               not in (select source_id
+                   from GeneProduct
+                   where source_rule < 6) -- product only in dots.Transcript
+         group by ta.gene_source_id, ta.project_id, t.product
+       union
+         select gp.source_id as source_id, gp.product, ga.project_id,
+                null as  is_alternate,
+                null as transcript_ids, null as reference, null as evidence_code,
+                null as evidence_code_parameter, null as assigned_by,
+                'unspecified product' as source
+         from GeneProduct gp, GeneAttributes ga
+         where gp.source_rule = 7
+           and gp.source_id = ga.source_id
+       order by is_alternate desc, transcript_ids
+       ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create index allGeneProds_idx&1
+        on &prefixAllGeneProducts&1 (source_id, product)
+
+      ]]>
+    </sql>
+  </tuningTable>
+
+</tuningConfig>

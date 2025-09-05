@@ -1,0 +1,43 @@
+drop table if exists :SCHEMA.taxonOfInterest_:CLEAN_ORG_ABBREV;
+
+create unlogged table :SCHEMA.taxonOfInterest_:CLEAN_ORG_ABBREV as
+select distinct ens.taxon_id
+from dots.est e,apidb.datasource ds, apidb.organism o,
+             sres.ExternalDatabaseRelease edr, dots.ExternalNaSequence ens,
+			 sres.externaldatabase ed, sres.ontologyterm oterm
+WhERE e.na_sequence_id = ens.na_sequence_id
+          AND ens.external_database_release_id = edr.external_database_release_id
+          AND edr.external_database_id = ed.external_database_id
+          AND ens.sequence_ontology_id = oterm.ontology_term_id
+          AND ed.name = ds.name
+          and ds.taxon_id = o.taxon_id
+          and o.is_reference_strain = 1
+          and o.taxon_id = :TAXON_ID
+     union
+     select :TAXON_ID
+;
+
+-- recursively walk taxon tree to find ancestor with rank "species"
+-- Update this to select max/min level with rank species if there are multiple
+:CREATE_AND_POPULATE
+        WITH RECURSIVE cte AS (
+            SELECT TAXON_ID, taxon_id as parent_id, 1 as lvl
+            FROM sres.taxon
+            WHERE taxon_id IN (SELECT taxon_id from :SCHEMA.taxonOfInterest_:CLEAN_ORG_ABBREV)
+            UNION ALL
+            SELECT cte.taxon_id, sub.parent_id, lvl + 1
+            FROM cte, sres.taxon sub
+            WHERE cte.parent_id = sub.taxon_id
+        )
+        SELECT c.taxon_id, c.parent_id as species_taxon_id,
+	':PROJECT_ID' as project_id,
+	':ORG_ABBREV' as org_abbrev,
+	current_timestamp as modification_date
+        FROM cte c, sres.taxon t
+        WHERE t.taxon_id = c.parent_id
+          AND t.rank='species'    ;
+:DECLARE_PARTITION;
+
+drop table if exists :SCHEMA.taxonOfInterest_:CLEAN_ORG_ABBREV;
+
+

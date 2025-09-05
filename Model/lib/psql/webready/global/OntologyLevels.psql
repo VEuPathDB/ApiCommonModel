@@ -1,0 +1,38 @@
+	DROP TABLE IF EXISTS :SCHEMA.Is_a_links;
+
+	CREATE UNLOGGED TABLE :SCHEMA.Is_a_links AS
+        SELECT subject_term_id, object_term_id
+        FROM sres.OntologyRelationship rel, sres.OntologyTerm pred
+        WHERE rel.predicate_term_id = pred.ontology_term_id
+          AND pred.name = 'is_a'
+    ;
+
+        DROP TABLE IF EXISTS :SCHEMA.Roots;
+	
+        CREATE UNLOGGED TABLE :SCHEMA.Roots AS
+        SELECT object_term_id FROM :SCHEMA.is_a_links
+        EXCEPT
+        SELECT subject_term_id FROM :SCHEMA.is_a_links
+    ;
+
+        CREATE TABLE :SCHEMA.OntologyLevels  as
+        WITH RECURSIVE levels(ontology_term_id, depth) AS (
+          SELECT object_term_id, 1 as depth FROM :SCHEMA.Roots
+          UNION
+          SELECT :SCHEMA.is_a_links.subject_term_id, levels.depth + 1 as depth
+          FROM :SCHEMA.Is_a_links, levels
+          WHERE :SCHEMA.is_a_links.object_term_id = levels.ontology_term_id
+      )
+      SELECT ontology_term_id, min(depth) as min_depth, max(depth) as max_depth
+      FROM (
+          SELECT ontology_term_id, depth
+          FROM levels
+          WHERE ontology_term_id NOT IN (SELECT object_term_id FROM :SCHEMA.Roots)
+          UNION
+          SELECT object_term_id, 0 FROM :SCHEMA.Roots
+      ) t
+      GROUP BY ontology_term_id
+    ;
+
+drop table :SCHEMA.Is_a_links;
+drop table :SCHEMA.Roots;
