@@ -3599,6 +3599,69 @@ GROUP BY
          </sql>
        </sqlQuery>
 
+       <sqlQuery name="PubMedForAI" isCacheable="false">
+         <testParamValues includeProjects="PlasmoDB">
+           <paramValue name="source_id">PF3D7_0523000</paramValue>
+         </testParamValues>
+         <testParamValues includeProjects="ToxoDB">
+           <paramValue name="source_id">TGME49_220400</paramValue>
+         </testParamValues>
+         <testParamValues includeProjects="CryptoDB">
+           <paramValue name="source_id">cgd3_1400</paramValue>
+         </testParamValues>
+         <testParamValues includeProjects="GiardiaDB">
+           <paramValue name="source_id">GL50803_112048</paramValue>
+         </testParamValues>
+         <testParamValues includeProjects="TrichDB">
+           <paramValue name="source_id">TVAG_386080</paramValue>
+         </testParamValues>
+         <testParamValues includeProjects="TriTrypDB">
+           <paramValue name="source_id">Tb927.8.4640</paramValue>
+         </testParamValues>
+
+         <column name="source_id"/>
+         <column name="project_id"/>
+         <column name="pubmed_id"/>
+         <column name="pubmed_source"/>
+         <sql>
+           <![CDATA[
+           SELECT source_id, 
+                  project_id,
+                  pubmed_id, 
+                  CASE WHEN pubmed_source_list = 'Curated,User comments' 
+                       THEN 'Curated & User comments'
+                       ELSE pubmed_source_list 
+                  END as pubmed_source
+           FROM (
+             SELECT source_id, 
+                    project_id,
+                    pubmed_id,
+                    listagg(pubmed_source, ',') within group (order by pubmed_source) as pubmed_source_list
+             FROM (
+               -- Curated PubMed references
+               SELECT gene_source_id as source_id, project_id, pubmed_id, 'Curated' as pubmed_source
+               FROM ApidbTuning.GenePubmed
+               
+               UNION
+               
+               -- User comment PubMed references  
+               SELECT c.stable_id as source_id, c.project_name as project_id, cr.source_id as pubmed_id, 'User comments' as pubmed_source
+               FROM @COMMENT_SCHEMA@MappedComment@COMMENT_DBLINK@ c,
+                    @COMMENT_SCHEMA@CommentReference@COMMENT_DBLINK@ cr
+               WHERE c.comment_id = cr.comment_id
+                 AND cr.database_name = 'pubmed'
+                 AND c.comment_target_id = 'gene'
+                 AND c.review_status_id not in ('rejected', 'task')
+                 AND c.is_visible = 1
+                 AND c.stable_id IN (SELECT source_id FROM apidbTuning.GeneAttributes)
+             )
+             GROUP BY source_id, project_id, pubmed_id
+           )
+           ORDER BY source_id, pubmed_id
+           ]]>
+         </sql>
+       </sqlQuery>
+
   <!--===========================================================================-->
   <!--======================Metabolic Pathways - Enzymes Compounds Table=================-->
   <!--===========================================================================-->
