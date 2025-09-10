@@ -3623,29 +3623,36 @@ GROUP BY
          <column name="project_id"/>
          <column name="pubmed_id"/>
          <column name="pubmed_source"/>
+         <column name="title_headline"/>
          <sql>
            <![CDATA[
            SELECT source_id, 
                   project_id,
-                  pubmed_id, 
-                  CASE WHEN pubmed_source_list = 'Curated,User comments' 
-                       THEN 'Curated & User comments'
-                       ELSE pubmed_source_list 
-                  END as pubmed_source
+                  pubmed_id,
+                  CASE WHEN has_curated = 1 THEN 'Curated'
+                       WHEN has_user_comments = 1 THEN 'User comments'
+                       ELSE 'Unknown'
+                  END as pubmed_source,
+                  CASE WHEN curated_title IS NOT NULL THEN curated_title
+                       ELSE user_headline
+                  END as title_headline
            FROM (
              SELECT source_id, 
                     project_id,
                     pubmed_id,
-                    listagg(pubmed_source, ',') within group (order by pubmed_source) as pubmed_source_list
+                    MAX(CASE WHEN pubmed_source = 'Curated' THEN 1 ELSE 0 END) as has_curated,
+                    MAX(CASE WHEN pubmed_source = 'User comments' THEN 1 ELSE 0 END) as has_user_comments,
+                    MAX(CASE WHEN pubmed_source = 'Curated' THEN title_headline END) as curated_title,
+                    MAX(CASE WHEN pubmed_source = 'User comments' THEN title_headline END) as user_headline
              FROM (
                -- Curated PubMed references
-               SELECT gene_source_id as source_id, project_id, TO_CHAR(pubmed_id) as pubmed_id, 'Curated' as pubmed_source
+               SELECT gene_source_id as source_id, project_id, TO_CHAR(pubmed_id) as pubmed_id, 'Curated' as pubmed_source, title as title_headline
                FROM ApidbTuning.GenePubmed
                
                UNION
                
                -- User comment PubMed references  
-               SELECT c.stable_id as source_id, c.project_name as project_id, TO_CHAR(cr.source_id) as pubmed_id, 'User comments' as pubmed_source
+               SELECT c.stable_id as source_id, c.project_name as project_id, TO_CHAR(cr.source_id) as pubmed_id, 'User comments' as pubmed_source, c.headline as title_headline
                FROM @COMMENT_SCHEMA@MappedComment@COMMENT_DBLINK@ c,
                     @COMMENT_SCHEMA@CommentReference@COMMENT_DBLINK@ cr
                WHERE c.comment_id = cr.comment_id
