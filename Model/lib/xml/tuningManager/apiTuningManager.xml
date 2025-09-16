@@ -961,24 +961,24 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         SELECT pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER
         FROM (
                 SELECT msp.peptide_sequence,
-                       ga.source_id,
-                       ga.gene_source_id,
-                       ga.project_id,
+                       ta.source_id,
+                       ta.gene_source_id,
+                       ta.project_id,
                        dsp.display_name as experiment,
                        d.name as external_database_name,
                        sum(msp.spectrum_count) as spectrum_count,
-                       ga.aa_sequence_id,
+                       ta.aa_sequence_id,
                        msp.peptide_start as aa_start_min,
                        msp.peptide_end  as aa_end_max,
                        msp.sample
                 FROM apidb.massspecpeptide msp
                   INNER JOIN sres.externaldatabaserelease r ON msp.external_database_release_id = r.external_database_release_id
                   INNER JOIN sres.externaldatabase d ON r.external_database_id = d.external_database_id
-                  LEFT JOIN webready.TranscriptAttributes ga ON msp.protein_source_id = ga.protein_source_id
+                  LEFT JOIN webready.TranscriptAttributes ta ON msp.protein_source_id = ta.protein_source_id
                   LEFT JOIN datasetnametaxon dsnt ON d.name = dsnt.name
                   LEFT JOIN datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
-                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, dsp.display_name,
-                         msp.protein_source_id, ga.aa_sequence_id, msp.peptide_sequence,
+                GROUP BY d.name, ta.source_id, ta.gene_source_id, ta.project_id, dsp.display_name,
+                         msp.protein_source_id, ta.aa_sequence_id, msp.peptide_sequence,
                          msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, msp.sample
           ) pep
           ,sampledisplayinfo sdi
@@ -1059,10 +1059,10 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         CREATE TABLE MSModifiedPeptideSummary&1 as
         SELECT pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER
         FROM (
-                SELECT ga.source_id,
-                       ga.gene_source_id,
-                       ga.project_id,
-                       ga.aa_sequence_id,
+                SELECT ta.source_id,
+                       ta.gene_source_id,
+                       ta.project_id,
+                       ta.aa_sequence_id,
                        dsp.display_name as experiment,
                        d.name as external_database_name,
                        msp.sample,
@@ -1076,11 +1076,11 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                 FROM apidb.ModifiedMassSpecPeptide msp
                   INNER JOIN sres.externaldatabaserelease r ON msp.external_database_release_id = r.external_database_release_id
                   INNER JOIN sres.externaldatabase d ON r.external_database_id = d.external_database_id
-                  LEFT JOIN webready.TranscriptAttributes ga ON msp.protein_source_id = ga.protein_source_id
+                  LEFT JOIN webready.TranscriptAttributes ta ON msp.protein_source_id = ta.protein_source_id
                   LEFT JOIN datasetnametaxon dsnt ON d.name = dsnt.name
                   LEFT JOIN datasetpresenter dsp ON dsnt.dataset_presenter_id = dsp.dataset_presenter_id
-                GROUP BY d.name, ga.source_id, ga.gene_source_id, ga.project_id, dsp.display_name,
-                         msp.protein_source_id, ga.aa_sequence_id, msp.peptide_sequence,
+                GROUP BY d.name, ta.source_id, ta.gene_source_id, ta.project_id, dsp.display_name,
+                         msp.protein_source_id, ta.aa_sequence_id, msp.peptide_sequence,
                          msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, 
                          msp.sample, msp.modification_type, msp.residue, msp.residue_protein_loc
           ) pep
@@ -1187,12 +1187,12 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           from webready.GenomicSeqAttributes sa
           where sa.is_top_level = 1
         ), macros as (
-          SELECT dnt.dataset_presenter_id
+          SELECT dd.dataset_presenter_id
                , o.name_for_filenames
                , o.project_id
                , o.public_abbrev as org_abbrev
                , o.source_id as org_pk
-               , dnt.name
+               , dd.name
                , dsp.name as dataset_presenter_name
                , sa.source_id as sequence_source_id
                , pg.sequence_id as p_sequence_source_id
@@ -1201,11 +1201,11 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                , rg.sequence_id as r_sequence_source_id
                , rg.gene_source_id as r_gene_id
           FROM organismattributes o
-             INNER JOIN datasetnametaxon dnt ON o.component_taxon_id = dnt.taxon_id
-             INNER JOIN datasetpresenter dsp ON dnt.dataset_presenter_id = dsp.dataset_presenter_id
-             INNER JOIN sequences sa ON dnt.taxon_id = sa.taxon_id
-             LEFT JOIN (select * from proteomicsgenes where rn = 1) pg ON dnt.name = pg.name
-             LEFT JOIN (select * from rnaseqgenes where rn = 1) rg ON dnt.name = rg.dataset_name
+             INNER JOIN datasetdatasource dd ON o.component_taxon_id = dd.taxon_id
+             INNER JOIN datasetpresenter dsp ON dd.dataset_presenter_id = dsp.dataset_presenter_id
+             INNER JOIN sequences sa ON dd.taxon_id = sa.taxon_id
+             LEFT JOIN (select * from proteomicsgenes where rn = 1) pg ON dd.name = pg.name
+             LEFT JOIN (select * from rnaseqgenes where rn = 1) rg ON dd.name = rg.dataset_name
           WHERE sa.rn = 1
         )
         SELECT DISTINCT
@@ -2487,7 +2487,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
             AND ps.study_name not like '%htseq-intersection-strict%'
         UNION
           -- Splice Site data
-          SELECT ga.source_id, dnt.dataset_presenter_id as dataset_id,
+          SELECT ga.source_id, dd.dataset_presenter_id as dataset_id,
                  cast (case when ps.profile_set_suffix is null
                               then ps.protocol_app_node_name
                             else ps.protocol_app_node_name || ' ' || ps.profile_set_suffix
@@ -2501,19 +2501,19 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           FROM results.NaFeatureExpression nfe, webready.GeneAttributes ga, study.ProtocolAppNode pan,
                ProfileSamples ps, study.nodeSet s,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-               DatasetNameTaxon dnt,DatasetProperty dp
+               DatasetDatasource dd, DatasetProperty dp
           WHERE ga.na_feature_id = nfe.na_feature_id
             AND nfe.protocol_app_node_id = pan.protocol_app_node_id
             AND pan.protocol_app_node_id = ps.protocol_app_node_id
             AND ps.study_id = s.node_set_id
             AND s.external_database_release_id = r.external_database_release_id
             AND r.external_database_id = d.external_database_id
-            AND d.name = dnt.name
-            AND dnt.dataset_presenter_id = dp.dataset_presenter_id
+            AND d.name = dd.name
+            AND dd.dataset_presenter_id = dp.dataset_presenter_id
             AND dp.property = 'type' and substr(dp.value, 1, 10) = 'Splice Site'
         UNION
           -- microarray expression, quantitative proteomics, and eQTL
-          SELECT ga.source_id, dnt.dataset_presenter_id as dataset_id,
+          SELECT ga.source_id, dd.dataset_presenter_id as dataset_id,
                  cast (case when ps.profile_set_suffix is null
                               then ps.protocol_app_node_name
                              else ps.protocol_app_node_name || ' ' || ps.profile_set_suffix
@@ -2529,15 +2529,15 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           FROM results.NaFeatureExpression nfe, webready.GeneAttributes ga, study.ProtocolAppNode pan,
                ProfileSamples ps, study.nodeSet s,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-               DatasetNameTaxon dnt, DatasetPresenter dsp
+               DatasetDatasource dd, DatasetPresenter dsp
           WHERE ga.na_feature_id = nfe.na_feature_id
             AND nfe.protocol_app_node_id = pan.protocol_app_node_id
             AND pan.protocol_app_node_id = ps.protocol_app_node_id
             AND ps.study_id = s.node_set_id
             AND s.external_database_release_id = r.external_database_release_id
             AND r.external_database_id = d.external_database_id
-            AND d.name = dnt.name
-            AND dnt.dataset_presenter_id = dsp.dataset_presenter_id
+            AND d.name = dd.name
+            AND dd.dataset_presenter_id = dsp.dataset_presenter_id
             AND dsp.subtype != 'rnaseq'
       ]]>
     </sql>
