@@ -149,7 +149,7 @@
       as by project_id(), the function that maps an organism to a project.
     </comment>
     <internalDependency name="TaxonSpecies"/>
-    <internalDependency name="webready.TranscriptAttributes"/>
+    <!-- internalDependency name="webready.TranscriptAttributes"/-->
     <internalDependency name="PopsetAttributes"/>
     <internalDependency name="Profile"/>
     <internalDependency name="SnpAttributes"/>
@@ -2405,13 +2405,13 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
       has data for a profile_set.
     </comment>
     <internalDependency name="Profile"/>
-    <internalDependency name="OrthologousTranscripts"/>
+    <!-- internalDependency name="OrthologousTranscripts"/-->
     <sql>
       <![CDATA[
         create table GeneGroupProfile&1 as
           select distinct other_gene.source_id, p.dataset_name,
                this_gene.source_id as profile_graph_id
-          from OrthologousTranscripts ot
+          from webready.OrthologousTranscripts ot
              , Profile p
              , webready.GeneAttributes this_gene
              , webready.GeneAttributes other_gene
@@ -2552,6 +2552,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
+<!--
   <tuningTable name="OrthologousTranscripts">
     <comment>
       Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
@@ -2629,6 +2630,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
       ]]>
     </sql>
   </tuningTable>
+-->
 
 <!--  <tuningTable name="Stringdb" alwaysUpdate="true">-->
   <tuningTable name="Stringdb" >
@@ -3021,124 +3023,6 @@ sub readClob {
       <![CDATA[
         create index ppg_ix&1
           on PreferredProductsGene&1 (source_id, project_id)
-
-      ]]>
-    </sql>
-  </tuningTable>
-
-
-  <tuningTable name="AlphaFoldGenes">
-    <comment>
-      Links AlphaFold entries to gene ids where Uniprot ids are directly assigned
-    </comment>
-
-    <externalDependency name="sres.externaldatabase"/>
-    <externalDependency name="sres.externaldatabaserelease"/>
-    <externalDependency name="sres.dbref"/>
-    <externalDependency name="dots.dbrefaafeature"/>
-    <externalDependency name="dots.aafeature"/>
-    <externalDependency name="dots.dbrefnafeature"/>
-    <externalDependency name="dots.nafeature"/>
-    <externalDependency name="apidb.alphafold"/>
-    <ancillaryTable name="uniprotGenes"/>
-    <intermediateTable name="minRank"/>
-    <intermediateTable name="alphaFoldHits"/>
-
-    <sql>
-      <![CDATA[
-        CREATE TABLE uniprotGenes&1 AS
-        SELECT DISTINCT ed.name
-        , d.*
-        , edr.version
-        , aa.source_id
-        , pa.gene_source_id
-        , CASE WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xrefuniparc') THEN 1
-            WHEN (ed.name like '%SPTREMBL%' AND edr.version = 'xrefuniparc') THEN 2
-            WHEN (ed.name like '%SWISSPROT%' AND edr.version = 'xref_sprot_blastp') THEN 4
-            WHEN (ed.name like '%SPTREMBL%' and edr.version = 'xref_trembl_blastp') THEN 5
-            ELSE 6 END as rank
-        , (af.last_residue_index - af.first_residue_index + 1) as hit_length
-        FROM sres.dbref d
-        LEFT JOIN apidb.AlphaFold af ON d.primary_identifier = af.uniprot_id
-        , sres.externaldatabase ed
-        , sres.externaldatabaserelease edr
-        , dots.dbrefaafeature db
-        , dots.aafeature aa
-        , webready.ProteinAttributes pa
-        WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
-          AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp')
-          AND edr.external_database_id = ed.external_database_id
-          AND d.external_database_release_id = edr.external_database_release_id
-          AND db.db_ref_id = d.db_ref_id
-          AND aa.aa_feature_id = db.aa_feature_id
-          AND pa.source_id = aa.source_id
-        UNION
-        SELECT DISTINCT ed.name
-          , d.*
-          , edr.version
-          , na.source_id
-          , ta.gene_source_id
-          , 3 as rank
-          , (af.last_residue_index - af.first_residue_index + 1) as hit_length
-        FROM sres.dbref d
-          LEFT JOIN apidb.AlphaFold af ON d.primary_identifier = af.uniprot_id
-          , sres.externaldatabase ed
-          , sres.externaldatabaserelease edr
-          , dots.dbrefnafeature db
-          , dots.nafeature na
-          , webready.TranscriptAttributes ta
-        WHERE ed.name like '%_dbxref_%niprot_%RSRC'
-          AND edr.external_database_id = ed.external_database_id
-          AND d.external_database_release_id = edr.external_database_release_id
-          AND db.db_ref_id = d.db_ref_id
-          AND na.na_feature_id = db.na_feature_id
-          AND (ta.transcript_source_id = na.source_id OR ta.gene_source_id = na.source_id)
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE UNLOGGED TABLE minRank AS (
-            SELECT gene_source_id
-              , MIN(rank) as min_rank
-            FROM uniprotGenes&1 upg
-            WHERE hit_length is not null
-            GROUP BY gene_source_id
-        )
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE UNLOGGED TABLE alphaFoldHits AS (
-          SELECT DISTINCT gene_source_id
-            , last_value(primary_identifier) over (PARTITION BY gene_source_id ORDER BY hit_length ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS uniprot_id
-          FROM (
-            SELECT upg.*
-            FROM uniprotGenes&1 upg
-              , minRank
-            WHERE upg.gene_source_id = minRank.gene_source_id
-            AND upg.rank = minRank.min_rank
-          ) t
-        )
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE TABLE AlphaFoldGenes&1 AS (
-          SELECT afh.gene_source_id
-            , af.uniprot_id
-            , af.source_id as alphafold_id
-            , af.alphafold_version
-            , af.first_residue_index
-            , af.last_residue_index
-          FROM apidb.alphafold af
-            , alphaFoldHits afh
-          WHERE afh.uniprot_id = af.uniprot_id
-        )
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        CREATE index AlphaFoldGenes_idx&1 ON AlphaFoldGenes&1 (gene_source_id, uniprot_id)                                                                                                
 
       ]]>
     </sql>
