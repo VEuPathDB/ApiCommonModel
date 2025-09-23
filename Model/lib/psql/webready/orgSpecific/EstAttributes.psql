@@ -1,0 +1,47 @@
+:CREATE_AND_POPULATE
+        SELECT
+               ':PROJECT_ID' as project_id,
+               ':ORG_ABBREV' as org_abbrev,
+               current_timestamp as modification_date,
+               ens.source_id,
+               e.seq_primer AS primer,
+               ens.a_count,
+               ens.c_count,
+               ens.g_count,
+               ens.t_count,
+               (ens.length - (ens.a_count + ens.c_count + ens.g_count + ens.t_count))
+                 AS other_count,
+               ens.length,
+               replace(l.dbest_name, '''', '-') as dbest_name,
+               coalesce(regexp_replace(l.vector, '^\s+$', null), 'unknown') AS vector,
+               coalesce(regexp_replace(l.stage, '^\s+$', null), 'unknown') AS stage,
+               SUBSTR(CASE
+                        WHEN tn.name = 'Giardia lamblia' THEN 'Giardia Assemblage A isolate WB'
+                        ELSE tn.name
+                      END, 1, 100) AS organism,
+               taxon.ncbi_tax_id,
+               ed.name AS external_db_name,
+               l.library_id, replace(l.dbest_name, '''', '-') as library_dbest_name
+        FROM dots.Est e, dots.Library l, sres.Taxon, sres.OntologyTerm oterm,
+             sres.TaxonName tn, sres.ExternalDatabase ed,
+             apidb.datasource ds, apidb.organism o,
+             :SCHEMA.taxonspecies ts_r,  -- ref organism
+             :SCHEMA.taxonspecies ts_e,  -- est organism
+             sres.ExternalDatabaseRelease edr, dots.ExternalNaSequence ens
+        WHERE e.na_sequence_id = ens.na_sequence_id
+          AND e.library_id = l.library_id
+          AND ens.taxon_id = tn.taxon_id
+          AND ens.taxon_id = taxon.taxon_id
+          AND tn.name_class='scientific name'
+          AND ens.external_database_release_id = edr.external_database_release_id
+          AND edr.external_database_id = ed.external_database_id
+          AND ens.sequence_ontology_id = oterm.ontology_term_id
+          AND ed.name = ds.name
+          AND ens.taxon_id = ts_e.taxon_id
+          AND o.taxon_id = ts_r.taxon_id
+          AND ts_e.species_taxon_id = ts_r.species_taxon_id
+          and ds.taxon_id = o.taxon_id
+          and o.is_reference_strain = 1 -- We want ESTs for the species of the reference strain 
+          and o.taxon_id = :TAXON_ID
+          AND oterm.name = 'EST';
+:DECLARE_PARTITION;

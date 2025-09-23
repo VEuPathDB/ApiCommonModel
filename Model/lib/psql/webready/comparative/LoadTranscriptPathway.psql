@@ -1,0 +1,174 @@
+/* ATTENTION: This script is run using a custom workflow step class */
+/* This accommodates the requirement to retain empty TranscriptEC and TranscriptPathway tables on undo */
+
+/* STEP 1: Make sure temp tables have been dropped before starting */
+
+DROP TABLE IF EXISTS :SCHEMA.TranscriptEcUniverse;
+DROP TABLE IF EXISTS :SCHEMA.PathwayEcUniverse;
+DROP TABLE IF EXISTS :SCHEMA.TranscriptPathwayEcMatch;
+
+-- Just to be safe add these here
+TRUNCATE TABLE :SCHEMA.TranscriptPathway;
+TRUNCATE TABLE :SCHEMA.TranscriptEC;
+
+
+/* STEP 2: Load into the TranscriptEC table. This must be done here so that we capture ortho-derived EC numbers*/
+
+/* ATTENTION: this step loads into an empty partitioned table created in the orgSpecific graph */
+
+DO $$
+    DECLARE org RECORD:PLPGSQL_DELIM
+    BEGIN
+        FOR org IN (SELECT DISTINCT taxon_id, abbrev from apidb.organism)
+        LOOP
+            INSERT INTO :SCHEMA.TranscriptEc (
+                SELECT DISTINCT
+                ta.source_id
+                , ta.gene_source_id
+                , ec.enzyme_class_id
+                , ec.ec_number
+                , ec.ec_number_1
+                , ec.ec_number_2
+                , ec.ec_number_3
+                , ec.ec_number_4
+                , regexp_count(ec.ec_number, '-') as wildcard_count
+                , asec.evidence_code
+                , ta.project_id
+                , org.abbrev as org_abbrev
+                , current_timestamp as modification_date
+                FROM sres.EnzymeClass ec
+                , dots.AaSequenceEnzymeClass asec
+                , :SCHEMA.transcriptattributes ta
+                WHERE asec.aa_sequence_id = ta.aa_sequence_id
+                AND asec.enzyme_class_id = ec.enzyme_class_id
+                AND ta.org_abbrev = org.abbrev
+                ):PLPGSQL_DELIM
+            COMMIT:PLPGSQL_DELIM
+        END LOOP:PLPGSQL_DELIM
+    END:PLPGSQL_DELIM
+$$ LANGUAGE PLPGSQL;
+
+
+/* STEP 3: Extracts the distinct EC numbers from TranscriptEC */
+/* This represents the "universe" of EC numbers associated to transcripts */
+/* Temp table, will be dropped */
+
+CREATE TABLE :SCHEMA.TranscriptEcUniverse as (
+    SELECT DISTINCT
+    enzyme_class_id
+    , ec_number
+    , ec_number_1
+    , ec_number_2
+    , ec_number_3
+    , ec_number_4
+    , wildcard_count
+    FROM :SCHEMA.TranscriptEc
+);
+
+/* STEP 4: Extract the distinct EC number from PathwayEC */
+/* This represents the "universe" of EC numbers associated to pathways */
+/* Temp table, will be dropped */
+
+CREATE TABLE :SCHEMA.PathwayEcUniverse as (
+    SELECT DISTINCT
+    enzyme_class_id
+    , ec_number
+    , ec_number_1
+    , ec_number_2
+    , ec_number_3
+    , ec_number_4
+    , wildcard_count
+    FROM :SCHEMA.PathwayEc
+);
+
+
+/* STEP 5: Match EC numbers from the transcript universe and EC numbers from the pathway universe */
+/* Use the universe tables to avoid redundancy */
+/* Temp table, will be dropped */
+
+CREATE TABLE :SCHEMA.TranscriptPathwayEcMatch as (
+    SELECT DISTINCT
+    teu.enzyme_class_id AS transcript_enzyme_class_id
+    , peu.enzyme_class_id AS pathway_enzyme_class_id
+    , teu.wildcard_count AS wildcard_count_transcript
+    , peu.wildcard_count AS wildcard_count_pathway
+    , teu.ec_number AS ec_number_transcript
+    , peu.ec_number AS ec_number_pathway
+    FROM :SCHEMA.TranscriptEcUniverse teu
+    , :SCHEMA.PathwayEc peu
+
+    -- this part does ec number expansion using the individual digits to avoid slow like syntax
+    WHERE (teu.ec_number_1 = peu.ec_number_1 or teu.ec_number_1 is null or peu.ec_number_1 is null)
+    AND (teu.ec_number_2 = peu.ec_number_2 or teu.ec_number_2 is null or peu.ec_number_2 is null)
+    AND (teu.ec_number_3 = peu.ec_number_3 or teu.ec_number_3 is null or peu.ec_number_3 is null)
+    AND (teu.ec_number_4 = peu.ec_number_4 or teu.ec_number_4 is null or peu.ec_number_4 is null)
+);
+
+
+/* STEP 6: Map the matched EC numbers to map back to both pathways and transcripts */
+/* ATTENTION: this step loads into an empty partitioned table created in the orgSpecific graph */
+
+/* This is the equivalent of the old TranscriptPathway tuning table */
+
+DO $$
+    DECLARE org RECORD:PLPGSQL_DELIM
+    BEGIN
+        FOR org IN (SELECT DISTINCT taxon_id, abbrev FROM apidb.organism)
+        LOOP
+            INSERT INTO :SCHEMA.transcriptpathway (
+                SELECT DISTINCT
+
+                -- gene info
+                ta.source_id
+                , ta.gene_source_id
+
+                -- pathway info
+                , pa.source_id AS pathway_source_id
+                , pa.name AS pathway_name
+                , pa.pathway_id
+                , pa.pathway_source
+                , pec.external_database_release_id
+
+                -- info about match
+                , tpem.ec_number_transcript AS ec_number_gene
+                , tpem.wildcard_count_transcript AS wildcard_count_gene
+                , tpem.ec_number_pathway
+                , tpem.wildcard_count_pathway
+                , CASE WHEN tpem.ec_number_pathway = tpem.ec_number_transcript
+                    THEN 1
+                    ELSE 0 END AS exact_match
+                , CASE WHEN tpem.wildcard_count_pathway + tpem.wildcard_count_transcript = 0
+                    THEN 1
+                    ELSE 0 END AS complete_ec
+
+                -- for partitioning
+                , ta.project_id
+                , org.abbrev AS org_abbrev
+                , current_timestamp AS modification_date
+                FROM :SCHEMA.TranscriptPathwayEcMatch tpem
+                , :SCHEMA.PathwayEc pec
+                , :SCHEMA.PathwayAttributes pa
+                , :SCHEMA.TranscriptAttributes ta
+                , :SCHEMA.TranscriptEc tec
+                 WHERE tpem.ec_number_transcript = tec.ec_number
+                AND tpem.ec_number_pathway = pec.ec_number
+                AND pa.pathway_id = pec.pathway_id
+                AND ta.source_id = tec.source_id
+                AND tec.org_abbrev = org.abbrev
+                AND ta.org_abbrev = org.abbrev
+                -- JB:  It is unclear what the intention here was.  This will not remove any rows and shouldn't
+                -- AND (
+                --     (ta.orthomcl_name IS NULL AND tec.evidence_code != 'OrthoMCLDerived')
+                --     OR ta.orthomcl_name IS NOT NULL
+                -- )
+                ):PLPGSQL_DELIM
+            COMMIT:PLPGSQL_DELIM
+        END LOOP:PLPGSQL_DELIM
+    END:PLPGSQL_DELIM
+$$ LANGUAGE PLPGSQL;
+
+
+/* STEP 7: Delete temp tables */
+DROP TABLE :SCHEMA.TranscriptEcUniverse;
+DROP TABLE :SCHEMA.PathwayEcUniverse;
+DROP TABLE :SCHEMA.TranscriptPathwayEcMatch;

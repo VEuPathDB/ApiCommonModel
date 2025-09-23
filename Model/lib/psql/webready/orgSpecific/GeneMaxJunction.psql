@@ -1,0 +1,69 @@
+drop table if exists :SCHEMA.:CLEAN_ORG_ABBREVGeneMaxIntronGIJTmp
+  ;
+
+create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneMaxIntronGIJTmp (
+            protocol_app_node_id    NUMERIC(10),
+            gene_source_id          VARCHAR(200),
+            max_unique              NUMERIC,
+            max_isrpm               NUMERIC,
+            sum_unique              NUMERIC,
+            sum_isrpm               NUMERIC,
+            avg_unique              NUMERIC,
+            avg_isrpm               NUMERIC,
+            project_id              VARCHAR(20),
+            org_abbrev              VARCHAR(30),
+            modification_date       TIMESTAMP
+        )
+;
+
+
+DO $$
+  DECLARE
+    idlist RECORD :PLPGSQL_DELIM
+  BEGIN
+    FOR idlist IN (
+      SELECT DISTINCT na_sequence_id
+        FROM :SCHEMA.JunctionGeneLocation
+        WHERE org_abbrev = ':ORG_ABBREV'
+    )
+    LOOP
+      INSERT INTO :SCHEMA.:CLEAN_ORG_ABBREVGeneMaxIntronGIJTmp  (
+        SELECT j.protocol_app_node_id
+               , ga.source_id
+               , max(unique_reads) as max_unique
+               , max(round(j.unique_reads * mult.multiplier,2)) as max_isrpm
+               , sum(unique_reads) as sum_unique
+               , sum(round(j.unique_reads * mult.multiplier,2)) as sum_isrpm
+               , avg(unique_reads) as avg_unique
+               , avg(round(j.unique_reads * mult.multiplier,2)) as avg_isrpm
+               , ':PROJECT_ID' as project_id
+               , ':ORG_ABBREV' as org_abbrev
+               , current_timestamp as modification_date
+          FROM apidb.intronjunction j
+               , :SCHEMA.JunctionGeneLocation ga
+               , :SCHEMA.JunctionToCoverageProfileMapping mult
+         WHERE ga.na_sequence_id = idlist.na_sequence_id
+           AND ga.na_sequence_id = j.na_sequence_id
+           AND ga.start_min <= j.segment_start
+           AND ga.end_max >= j.segment_end
+           AND ga.is_reversed = j.is_reversed
+           AND j.protocol_app_node_id = mult.junctions_pan_id
+           AND ga.org_abbrev = ':ORG_ABBREV'
+           AND mult.org_abbrev = ':ORG_ABBREV'
+         GROUP BY j.protocol_app_node_id, ga.source_id
+      ) :PLPGSQL_DELIM
+      commit :PLPGSQL_DELIM
+    END LOOP :PLPGSQL_DELIM
+  END :PLPGSQL_DELIM
+$$ LANGUAGE PLPGSQL :PLPGSQL_DELIM
+    ;
+
+
+
+:CREATE_AND_POPULATE
+select * from :SCHEMA.:CLEAN_ORG_ABBREVGeneMaxIntronGIJTmp;
+:DECLARE_PARTITION;
+
+
+drop table :SCHEMA.:CLEAN_ORG_ABBREVGeneMaxIntronGIJTmp
+  ;

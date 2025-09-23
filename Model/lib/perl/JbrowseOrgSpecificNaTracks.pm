@@ -529,7 +529,7 @@ sub addSynteny {
   return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
   my $sql = "select otr.organism, oa.internal_abbrev as public_abbrev, otr.phylum, otr.genus, otr.species, otr.kingdom, otr.class, gt.gtracks
-            from APIDBTUNING.ORGANISMSELECTTAXONRANK otr
+            from webready.OrganismSelectTaxonRank otr
                , APIDBTUNING.ORGANISMATTRIBUTES oa
                RIGHT JOIN (select * from APIDBTUNING.GBROWSETRACKSORGANISM where type = 'synteny' ) gt
                 ON oa.ORGANISM_NAME = gt.organism
@@ -1033,7 +1033,7 @@ sub addLongReadRNASeq {
    my $LongReadRnaSeqDatasets = $datasetProperties->{longreadrnaseq} ? $datasetProperties->{longreadrnaseq} : {};
 
    foreach my $dataset (keys %$LongReadRnaSeqDatasets){
-    next unless($dataset =~ /nanopore_rnaSeqNextflow/);
+    next unless($dataset =~ /nanopore_longReadRnaSeq/);
 
 
     my $datasetName = $LongReadRnaSeqDatasets->{$dataset}->{datasetName};
@@ -1093,6 +1093,7 @@ sub addLongReadRNASeq {
        my $relativePathToBamFile = "${nameForFileNames}/longReadRNASeq/bam/${datasetName}/${sampleFile}";
 
        my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::AlignmentsTrackConfig->new({	
+												skip_histograms => "true",
 												#url_template => "$bamUrl",
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
