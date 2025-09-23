@@ -14,13 +14,13 @@
     </comment>
     <externalDependency name="apidb.GoSubset"/>
     <externalDependency name="sres.OntologyRelationship"/>
-    <internalDependency name="GeneGoTerms"/>
+    <externalDependency name="webready.GeneGoTerms"/>
     <sql>
       <![CDATA[
         create table GoSubsetLeaf&1 as
         with leaf_term -- GO terms assigned to at least one gene
              as (select distinct go_term_id
-                 from GeneGoTerms),
+                 from webready.GeneGoTerms),
              subset_term -- (term ID, subset name) pairs
              as (select distinct -- "distinct" is probably unneeded
                         ontology_term_id, go_subset_term
@@ -148,9 +148,7 @@
     <comment> Stores per-organism information. Used by the organism record, as well
       as by project_id(), the function that maps an organism to a project.
     </comment>
-    <internalDependency name="TaxonSpecies"/>
-    <!-- internalDependency name="webready.TranscriptAttributes"/-->
-    <internalDependency name="PopsetAttributes"/>
+    <externalDependency name="webready.TaxonSpecies"/>
     <internalDependency name="Profile"/>
     <internalDependency name="SnpAttributes"/>
     <externalDependency name="apidb.Datasource"/>
@@ -167,7 +165,7 @@
     <intermediateTable name="SequenceCount"/>
     <intermediateTable name="CommunityCount"/>
     <intermediateTable name="ProfileCount"/>
-    <intermediateTable name="PopsetCount"/>
+    <!-- <intermediateTable name="PopsetCount"/> -->
     <intermediateTable name="GeneCount"/>
 
     <sql>
@@ -287,6 +285,8 @@
         GROUP BY ga.taxon_id
       ]]>
     </sql>
+
+<!--
     <sql>
       <![CDATA[
         CREATE UNLOGGED TABLE PopsetCount AS
@@ -318,6 +318,7 @@
         GROUP BY sim.taxon_id
       ]]>
     </sql>
+    -->
     <sql>
       <![CDATA[
         CREATE UNLOGGED TABLE GeneCount AS
@@ -456,7 +457,7 @@
                    coalesce(sc.supercont_num, 0) as supercontigCount,
                    coalesce(sc.chrom_num, 0) as chromosomeCount,
                    coalesce(cc.communityCount, 0) as communityCount,
-                   coalesce(psc.popsetCount, 0) as popsetCount,
+                   --coalesce(psc.popsetCount, 0) as popsetCount,
                    coalesce(pc.geneArrayCount, 0) as arrayGeneCount,
                    coalesce(pc.rnaSeqCount, 0) as rnaSeqCount,
                    coalesce(pc.rtPCRCount, 0) as rtPCRCount,
@@ -469,7 +470,7 @@
               LEFT JOIN SequenceCount sc ON o.taxon_id = sc.taxon_id
               LEFT JOIN CommunityCount cc ON o.taxon_id = cc.taxon_id
               LEFT JOIN GeneCount gc ON o.taxon_id = gc.taxon_id
-              LEFT JOIN popsetCount psc ON o.taxon_id = psc.taxon_id
+              --LEFT JOIN popsetCount psc ON o.taxon_id = psc.taxon_id
               LEFT JOIN profileCount pc ON o.taxon_id = pc.taxon_id
               LEFT JOIN (
                 SELECT taxon_id, round(avg(length),1) as avg_transcript_length
@@ -478,7 +479,7 @@
               ) ta ON o.taxon_id = ta.taxon_id
             WHERE tn.name_class = 'scientific name'
           ) oa,
-          TaxonSpecies ts,
+          webready.TaxonSpecies ts,
           sres.taxon t,
           sres.taxonname tn2
         WHERE oa.component_taxon_id = ts.taxon_id
@@ -821,7 +822,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     </comment>
     <internalDependency name="OrganismAbbreviationWS"/>
     <internalDependency name="OrganismTree"/>
-    <internalDependency name="PopsetAttributes"/>
+<!--    <internalDependency name="PopsetAttributes"/> -->
+    <externalDependency name="webready.TaxonSpecies"/>
     <sql>
       <![CDATA[
        CREATE TABLE OrganismAbbreviationBlast&1 as
@@ -829,13 +831,13 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
        FROM OrganismAbbreviationWS
        UNION
          -- all familes for popsets
-       SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent,
-                       family_name_for_files as abbreviation, substr(project_name, 1, 20) as project_id
-       FROM apidb.Organism
-       WHERE family_name_for_files is not null
-         AND abbrev || '_isolates_genbank_RSRC' IN (SELECT external_db_name as db_name FROM PopsetAttributes)
-         AND family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
-       UNION
+       --SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, '' as parent,
+       --                family_name_for_files as abbreviation, substr(project_name, 1, 20) as project_id
+       --FROM apidb.Organism
+       --WHERE family_name_for_files is not null
+       --  AND abbrev || '_isolates_genbank_RSRC' IN (SELECT external_db_name as db_name FROM PopsetAttributes)
+       --  AND family_name_for_files NOT IN ('Culicosporidae', 'Dubosqiidae', 'Ordosporidae')
+       --UNION
        SELECT special.organism, special.parent, special.abbreviation,
               substr(ot.project_id, 1, 20) as project_id
        FROM OrganismTree ot,
@@ -843,7 +845,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                SELECT DISTINCT
                 sp.name as organism, ot.parentTerm as parent,
                 regexp_replace(org.name_for_filenames, replace(org.strain_abbrev, '/','_'),'') as abbreviation
-               FROM sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org, OrganismTree ot
+               FROM sres.TaxonName sp, webready.TaxonSpecies ts, apidb.Organism org, OrganismTree ot
                WHERE org.taxon_id = ts.taxon_id
                  AND ts.species_taxon_id = sp.taxon_id
                  AND sp.name_class = 'scientific name'
@@ -868,7 +870,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <comment> For each project, show which BLAST databases are available for which
       species. Used in BLAST param queries. Propagated to portal instances.
     </comment>
-    <internalDependency name="PopsetAttributes"/>
+<!--     <internalDependency name="PopsetAttributes"/> -->
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.TaxonName"/>
     <sql>
@@ -914,31 +916,31 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           AND sp.name_class = 'scientific name'
         UNION
         /* regular Isolates */
-        SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, project_name as project_id, 'PopSet'
-        FROM apidb.Organism
-        WHERE family_name_for_files is not null
-          AND abbrev || '_isolates_genbank_RSRC' in (SELECT DISTINCT external_db_name  AS db_name FROM PopsetAttributes)
-        UNION
+        --SELECT DISTINCT family_name_for_files || ' Popset/Genbank Isolates' as organism, project_name as project_id, 'PopSet'
+        --FROM apidb.Organism
+        --WHERE family_name_for_files is not null
+        --  AND abbrev || '_isolates_genbank_RSRC' in (SELECT DISTINCT external_db_name  AS db_name FROM PopsetAttributes)
+        --UNION
         /* isolates are hard coded */
-        SELECT 'P. falciparum Barcode Isolates' as organism, 'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. berghei Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. chabaudi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. falciparum Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. knowlesi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. reichenowi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. vivax Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'P. yoelii Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'All Giardia Isolates' as organism, 'GiardiaDB' as project_id, 'PopSet' as type
-        UNION
-        SELECT 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism, 'CryptoDB' as project_id, 'PopSet' as type
+        --SELECT 'P. falciparum Barcode Isolates' as organism, 'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. berghei Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. chabaudi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. falciparum Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. knowlesi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. reichenowi Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. vivax Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'P. yoelii Popset/Genbank Isolates' as organism,'PlasmoDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'All Giardia Isolates' as organism, 'GiardiaDB' as project_id, 'PopSet' as type
+        --UNION
+        --SELECT 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism, 'CryptoDB' as project_id, 'PopSet' as type
       ]]>
     </sql>
   </tuningTable>
