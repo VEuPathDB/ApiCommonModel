@@ -452,7 +452,8 @@
             , CASE WHEN g.pmids IS NULL THEN dpr.short_attribution ELSE
                     '<a href="http://www.ncbi.nlm.nih.gov/pubmed/' || g.pmids || '">'|| dpr.short_attribution ||'</a>'
               END AS short_attribution
-          FROM apidbtuning.datasetpresenter dpr,
+          FROM apidbtuning.datasetPresenter dpr,
+            apidbtuning.datasetDataSource dds,
             ( SELECT ga.source_id, ga.project_id, ga.organism as gene_organism, ga.genus_species,
                 graph_descrip.dataset as dataset_name,
                 string_agg(psgene.profile_graph_id, ',' ORDER BY ga.source_id) AS graph_ids,
@@ -460,11 +461,11 @@
                 'FALSE' has_meta_data, '' as meta_data_categories,
                 graph_descrip.*, dp.dataset_presenter_id as dataset_id,
                 string_agg(pub.pmid, ',') AS pmids,
-                CASE lower(dp.subtype)
-                  WHEN'rnaseq' THEN 'RNA-Seq'
-                  WHEN'array' THEN 'array'
-                  WHEN'sage' THEN 'SAGE'
-                  WHEN'rtpcr' THEN 'RT-PCR'
+                CASE dds.category
+                  WHEN 'RNASeq' THEN 'RNA-Seq'
+                  WHEN 'DNA Microarray Assay' THEN 'array'
+                  WHEN 'SAGE' THEN 'SAGE'
+                  WHEN 'RT PCR' THEN 'RT-PCR'
                   ELSE '' END as assay_type,
                 ga.paralog_number
               from webready.GeneAttributes ga,
@@ -492,10 +493,10 @@
                 AND ts.species_taxon_id = sn.taxon_id
                 AND sn.name_class = 'scientific name'
                 AND ga.genus_species = sn.name
-                AND (dp.type = 'transcript_expression' or lower(dp.subtype) in ('array','rnaseq','rtpcr'))
+                AND dds.category in ('RNASeq','DNA Microarray Assay', 'SAGE', 'RT PCR')
               GROUP BY ga.source_id, ga.project_id, ga.organism, ga.genus_species, graph_descrip.dataset,
                 tn.name, dp.dataset_presenter_id, module,x_axis,y_axis, is_graph_custom,order_num,
-                dp.subtype,ga.paralog_number,dp.short_attribution
+                dds.category,ga.paralog_number,dp.short_attribution
             ) g
           WHERE g.dataset = dpr.name
           ORDER BY g.order_num
@@ -557,16 +558,17 @@
                 , 'FALSE' has_meta_data
                 , '' AS meta_data_categories
                 , graph_descrip.*
-                , dp.summary
-                , dp.short_attribution
-                , dp.display_name
-                , dp.description
+                , dsp.summary
+                , dsp.short_attribution
+                , dsp.display_name
+                , dsp.description
                 , 'quantitative proteomics' AS assay_type
-                , dp.dataset_presenter_id AS dataset_id
+                , dsp.dataset_presenter_id AS dataset_id
               FROM
                 webready.GeneAttributes ga
                 , APIDBTUNING.datasetnametaxon dsnt
-                , apidbtuning.datasetPresenter dp
+                , apidbtuning.datasetPresenter dsp
+                , apidbtuning.datasetDataSource dds
                 , sres.taxonname tn
                 , webready.TaxonSpecies ts
                 , sres.taxonname sn
@@ -589,7 +591,8 @@
               ) graph_descrip
               WHERE ga.source_id = psgene.source_id
                 AND psgene.dataset_name = dsnt.name
-                AND dsnt.dataset_presenter_id = dp.dataset_presenter_id
+                AND dsnt.dataset_presenter_id = dsp.dataset_presenter_id
+                AND dds.dataset_presenter_id = dp.dataset_presenter_id
                 AND graph_descrip.dataset = dp.name
                 AND dsnt.taxon_id = tn.taxon_id
                 AND tn.name_class = 'scientific name'
@@ -597,8 +600,7 @@
                 AND ts.species_taxon_id = sn.taxon_id
                 AND sn.name_class = 'scientific name'
                 AND ga.genus_species = sn.name
-                AND coalesce(dp.category) = 'Protein expression'
-                AND dp.subtype LIKE 'quantitative%'
+                AND dp.category = 'Protein expression (quantitative)'
             ) g
         ]]>
       </sql>
@@ -876,6 +878,7 @@
                     webready.GeneAttributes ga
                     , APIDBTUNING.datasetnametaxon dsnt
                     , apidbtuning.datasetPresenter dp
+                    , apidbtuning.datasetDataSource dds
                     , sres.taxonname tn
                     , webready.TaxonSpecies ts
                     , sres.taxonname sn
@@ -892,6 +895,7 @@
                   WHERE ga.source_id = psgene.source_id
                     AND psgene.dataset_name = dsnt.name
                     AND dsnt.dataset_presenter_id = dp.dataset_presenter_id
+                    AND dds.dataset_presenter_id = dp.dataset_presenter_id
                     AND graph_descrip.dataset = dp.name
                     AND dsnt.taxon_id = tn.taxon_id
                     AND tn.name_class = 'scientific name'
@@ -899,7 +903,7 @@
                     AND ts.species_taxon_id = sn.taxon_id
                     AND sn.name_class = 'scientific name'
                     AND ga.genus_species = sn.name
-                    AND lower(dp.subtype) = 'immune_response'
+                    AND dds.category = 'Immunology'
                 ) g
             ) h
             , apidbtuning.datasetpresenter datapres
@@ -1067,6 +1071,7 @@ from (
                 webready.GeneAttributes ga
                 , APIDBTUNING.datasetnametaxon dsnt
                 , apidbtuning.datasetPresenter dp
+                , apidbtuning.datasetDataSource dds
                 , sres.taxonname tn
                 , webready.TaxonSpecies ts
                 , sres.taxonname sn
@@ -1107,6 +1112,7 @@ from (
               WHERE ga.source_id = psgene.source_id
                 AND psgene.dataset_name = dsnt.name
                 AND dsnt.dataset_presenter_id = dp.dataset_presenter_id
+                AND dds.dataset_presenter_id = dp.dataset_presenter_id
                 AND graph_descrip.dataset = dp.name
                 AND dsnt.taxon_id = tn.taxon_id
                 AND tn.name_class = 'scientific name'
@@ -1114,7 +1120,7 @@ from (
                 AND ts.species_taxon_id = sn.taxon_id
                 AND sn.name_class = 'scientific name'
                 AND ga.genus_species = sn.name
-                AND dp.subtype = 'phenotype'
+                AND dds.category = 'Phenotype'
             ) g
         ]]>
       </sql>
@@ -4303,12 +4309,13 @@ from apidbTuning.AllGeneProducts
             , webready.GeneAttributes ga
             , apidbtuning.datasetmodelref dmr
             , apidbtuning.datasetpresenter dp
-          WHERE p.dataset_type = 'transcript_expression'
-            AND p.dataset_subtype = 'rnaseq'
+            , apidbtuning.datasetDataSource dds
+          WHERE dds.category = 'RNASeq'
             AND p.source_id = ga.source_id
             AND p.profile_set_name = ps.study_name
             AND p.dataset_name = dp.name
-            AND dp.DATASET_PRESENTER_ID = dmr.DATASET_PRESENTER_ID
+            AND dp.dataset_presenter_id = dmr.dataset_presenter_id
+            AND dp.dataset_presenter_id = dds.dataset_presenter_id
         ]]>
       </sql>
     </sqlQuery>
