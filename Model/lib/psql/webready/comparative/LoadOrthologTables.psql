@@ -13,31 +13,80 @@ AND asec.evidence_code = 'OrthoMCLDerived'
 ) t
 GROUP BY aa_sequence_id;
 
-insert into :SCHEMA.GeneOrthologGroup (gene_id, group_id, project_id, org_abbrev, ec_numbers_derived, modification_date)
-SELECT ga.gene_source_id AS gene_id,
+insert into :SCHEMA.GeneOrthologGroup (gene_id, group_id, project_id, org_abbrev, ec_numbers_derived, gene_paralog_number, gene_ortholog_number, modification_date)
+SELECT pa.gene_source_id AS gene_id,
     ogas.group_id,
-    ga.project_id,
-    ga.org_abbrev,
+    pa.project_id,
+    pa.org_abbrev,
     ecDerived.ec_numbers_derived,
+    0 as gene_paralog_number, 
+    0 as gene_ortholog_number,
     current_timestamp as modification_date
-FROM :SCHEMA.proteinattributes ga
+FROM :SCHEMA.proteinattributes pa
 JOIN apidb.orthologgroupaasequence ogas
-    ON ga.aa_sequence_id = ogas.aa_sequence_id
+    ON pa.aa_sequence_id = ogas.aa_sequence_id
 LEFT JOIN :SCHEMA.ProteinAttrsEcDerived_tmp ecDerived 
-    ON ogas.aa_sequence_id = ecDerived.aa_sequence_id;
+    ON ogas.aa_sequence_id = ecDerived.aa_sequence_id
 
-insert into :SCHEMA.TranscriptOrthologGroup (source_id, gene_id, group_id, project_id, org_abbrev, ec_numbers_derived, modification_date)
+insert into :SCHEMA.TranscriptOrthologGroup (source_id, gene_id, group_id, project_id, org_abbrev, ec_numbers_derived, gene_paralog_number, gene_ortholog_number, modification_date)
 SELECT ta.source_id AS source_id,
-       ta.gene_source_id as gene_id,
-       ogas.group_id,
-       ta.project_id,
-       ta.org_abbrev,
-       ecDerived.ec_numbers_derived,
-       current_timestamp as modification_date
+    ta.gene_source_id as gene_id,
+    ogas.group_id,
+    ta.project_id,
+    ta.org_abbrev,
+    ecDerived.ec_numbers_derived,
+    0 as gene_paralog_number, 
+    0 as gene_ortholog_number,
+    current_timestamp as modification_date
 FROM :SCHEMA.transcriptattributes ta
 JOIN apidb.orthologgroupaasequence ogas
     ON ta.aa_sequence_id = ogas.aa_sequence_id
 LEFT JOIN :SCHEMA.ProteinAttrsEcDerived_tmp ecDerived 
     ON ogas.aa_sequence_id = ecDerived.aa_sequence_id;
+
+UPDATE :SCHEMA.GeneOrthologGroup gog
+SET gene_paralog_number = (
+    SELECT count(distinct gene_id)
+    FROM :SCHEMA.GeneOrthologGroup g1
+    JOIN :SCHEMA.GeneAttributes ga
+        ON ga.gene_source_id = g1.gene_id
+    WHERE gog.org_abbrev = g1.org_abbrev
+    AND gog.group_id = g1.group_id
+    AND gog.gene_id != g1.gene_id
+    AND ga.gene_type = 'protein coding' or ga.gene_type = 'protein coding gene')
+),
+gene_ortholog_number = (
+    SELECT count(distinct gene_source_id)
+    FROM :SCHEMA.GeneOrthologGroup g1
+    JOIN :SCHEMA.GeneAttributes ga
+        ON ga.gene_source_id = g1.gene_id
+    WHERE gog.org_abbrev != g1.org_abbrev
+    AND gog.group_id = g1.group_id
+    AND gog.gene_id != g1.gene_id
+    AND ga.gene_type = 'protein coding' or ga.gene_type = 'protein coding gene')
+);
+
+UPDATE :SCHEMA.TranscriptOrthologGroup tog
+SET gene_paralog_number = (
+    SELECT count(distinct gene_source_id)
+    FROM :SCHEMA.TranscriptOrthologGroup t1
+    JOIN :SCHEMA.TranscriptAttributes ta
+        ON ta.gene_source_id = t1.gene_id
+    WHERE tog.org_abbrev = t1.org_abbrev
+    AND tog.group_id = t1.group_id
+    AND tog.gene_id != t1.gene_id
+    AND ta.gene_type = 'protein coding' or ta.gene_type = 'protein coding gene')
+),
+gene_ortholog_number = (
+    SELECT count(distinct gene_source_id)
+    FROM :SCHEMA.TranscriptOrthologGroup t1
+    JOIN :SCHEMA.TranscriptAttributes ta
+        ON ta.gene_source_id = t1.gene_id
+    WHERE tog.org_abbrev != t1.org_abbrev
+    AND tog.group_id = t1.group_id
+    AND tog.gene_id != t1.gene_id
+    AND ta.gene_type = 'protein coding' or ta.gene_type = 'protein coding gene'
+)
+;
 
 drop table :SCHEMA.ProteinAttrsEcDerived_tmp;
