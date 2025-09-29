@@ -1374,81 +1374,21 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.NodeSet"/>
     <externalDependency name="study.NodeNodeSet"/>
+    <intermediateTable name="geneData"/>
+    <intermediateTable name="otherData"/>
     <sql>
       <![CDATA[
-       CREATE TABLE Profile&1 (
-       DATASET_NAME       VARCHAR(200),
-       DATASET_TYPE       VARCHAR(50),
-       DATASET_SUBTYPE    VARCHAR(50),
-       PROFILE_TYPE       VARCHAR(30),
-       NODE_TYPE          VARCHAR(100),
-       SOURCE_ID          VARCHAR(500),
-       PROFILE_STUDY_ID   NUMERIC(7),
-       PROFILE_SET_NAME   VARCHAR(400),
-       PROFILE_SET_SUFFIX VARCHAR(50),
-       PROFILE_AS_STRING  VARCHAR(4000),
-       MAX_VALUE          NUMERIC,
-       MIN_VALUE          NUMERIC,
-       MAX_TIMEPOINT      VARCHAR(200),
-       MIN_TIMEPOINT      VARCHAR(200)
-       )
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        DO $$
-        DECLARE
-          ctrows NUMERIC := 0;
-          commit_after NUMERIC := 10000;
-          pf_rows record;
-        BEGIN
-          FOR pf_rows IN (
-            SELECT
-               ds.name as dataset_name, ds.type as dataset_type,
-               ds.subtype as dataset_subtype, profile.profile_type, profile.node_type,
-               profile.source_id, profile.node_set_id as profile_study_id,
-               ps.name as profile_set_name,
-               cast(case
-                      when regexp_replace(ps.name, '\[.+\]', '') like '% - %'
-                        then regexp_replace(regexp_replace(ps.name, ' *\[.+\]', ''), '.+ - ', '')
-                      -- special cases for legacy datasets
-                      when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%'
-                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
-                      when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%'
-                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
-                      when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %'
-                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
-                      when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%'
-                        then regexp_replace(
-                                 regexp_replace(
-                                     regexp_replace(
-                                         regexp_replace(
-                                             regexp_replace(ps.name, '\[.+ nonunique\]', ''),
-                                                        '\[.+ unique\]', ' - unique'),
-                                                    '\[.+\]', ''),
-                                                'aligned with cds coordinates ', 'cds coordinates'),
-                                            'T.brucei paired end RNA-Seqdata from Horn ', '')
-                      else null
-                    end as varchar(50)
-                   ) as profile_set_suffix,
-               CASE WHEN replace(profile.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string END as profile_as_string,
-               profile.max_value, profile.min_value,
-               profile.max_timepoint, profile.min_timepoint
-            FROM apidb.DataSource ds, sres.ExternalDatabase d,
-              sres.ExternalDatabaseRelease r, study.NodeSet ps,
-              (
-                  -- gene profiles
-                  SELECT gene_profile.node_set_id, ga.source_id, gene_profile.profile_type, gene_profile.node_type,
-                         gene_profile.profile_as_string, gene_profile.max_value, gene_profile.min_value,
-                         gene_profile.max_timepoint, gene_profile.min_timepoint
-                  FROM webready.GeneAttributes ga,
-                    (
-                        SELECT * FROM (
-                          WITH result AS (
-                            SELECT na_feature_id, protocol_app_node_id, max(value) as value
-                            FROM results.NAFEATUREHOSTRESPONSE
-                            GROUP BY na_feature_id, protocol_app_node_id
-                          ), min_max AS (
+        CREATE UNLOGGED TABLE geneData AS
+        SELECT gene_profile.node_set_id, ga.source_id, gene_profile.profile_type, gene_profile.node_type,
+               gene_profile.profile_as_string, gene_profile.max_value, gene_profile.min_value,
+               gene_profile.max_timepoint, gene_profile.min_timepoint
+        FROM webready.GeneAttributes ga,
+				     ( SELECT * FROM (
+                    WITH result AS (
+                        SELECT na_feature_id, protocol_app_node_id, max(value) as value
+                        FROM results.NAFEATUREHOSTRESPONSE
+                        GROUP BY na_feature_id, protocol_app_node_id
+                      ), min_max AS (
                             SELECT DISTINCT sl.node_set_id, result.na_feature_id,
                                 last_value(result.value) over w1 as max_value,
                                 first_value(result.value) over w1 as min_value,
@@ -1911,9 +1851,13 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 --                            AND min_max.node_set_id = sl.node_set_id
 --                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
 --                        ) t16
-                    ) gene_profile
-                  WHERE ga.na_feature_id = gene_profile.na_feature_id
-                UNION ALL
+                   ) gene_profile
+               WHERE ga.na_feature_id = gene_profile.na_feature_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNLOGGED TABLE otherData AS
                   -- compound profiles
                   SELECT compound_profile.node_set_id,
                      case
@@ -2137,29 +2081,52 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                       AND min_max.node_set_id = sl.node_set_id
                     GROUP BY sl.node_set_id, result.module_name, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
                   ) t3
-              ) profile
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE TABLE Profile&1 AS
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type,
+               ds.subtype as dataset_subtype, profile.profile_type, profile.node_type,
+               profile.source_id, profile.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               cast(case
+                      when regexp_replace(ps.name, '\[.+\]', '') like '% - %'
+                        then regexp_replace(regexp_replace(ps.name, ' *\[.+\]', ''), '.+ - ', '')
+                      -- special cases for legacy datasets
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%'
+                        then regexp_replace(
+                                 regexp_replace(
+                                     regexp_replace(
+                                         regexp_replace(
+                                             regexp_replace(ps.name, '\[.+ nonunique\]', ''),
+                                                        '\[.+ unique\]', ' - unique'),
+                                                    '\[.+\]', ''),
+                                                'aligned with cds coordinates ', 'cds coordinates'),
+                                            'T.brucei paired end RNA-Seqdata from Horn ', '')
+                      else null
+                    end as varchar(50)
+                   ) as profile_set_suffix,
+               CASE WHEN replace(profile.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string END as profile_as_string,
+               profile.max_value, profile.min_value,
+               profile.max_timepoint, profile.min_timepoint
+            FROM apidb.DataSource ds, sres.ExternalDatabase d,
+              sres.ExternalDatabaseRelease r, study.NodeSet ps,
+              (SELECT * from genedata 
+               UNION 
+               SELECT * from otherdata) profile
             WHERE ds.name = d.name
               AND ds.version = r.version
               AND d.external_database_id = r.external_database_id
               AND profile.node_set_id = ps.node_set_id
               AND ps.external_database_release_id = r.external_database_release_id
-          )
-          LOOP
-            ctrows := ctrows + 1;
-            INSERT INTO Profile&1
-                (DATASET_NAME, DATASET_TYPE, DATASET_SUBTYPE, PROFILE_TYPE, NODE_TYPE, SOURCE_ID, PROFILE_STUDY_ID, PROFILE_SET_NAME,
-                PROFILE_SET_SUFFIX, PROFILE_AS_STRING, MAX_VALUE, MIN_VALUE, MAX_TIMEPOINT, MIN_TIMEPOINT)
-                VALUES
-                (pf_rows.DATASET_NAME, pf_rows.DATASET_TYPE, pf_rows.DATASET_SUBTYPE, pf_rows.PROFILE_TYPE, pf_rows.NODE_TYPE, pf_rows.SOURCE_ID, pf_rows.PROFILE_STUDY_ID, pf_rows.PROFILE_SET_NAME,
-                pf_rows.PROFILE_SET_SUFFIX, pf_rows.PROFILE_AS_STRING, pf_rows.MAX_VALUE, pf_rows.MIN_VALUE, pf_rows.MAX_TIMEPOINT, pf_rows.MIN_TIMEPOINT);
-            IF ctrows >= commit_after THEN
-              COMMIT;
-              ctrows := 0;
-            END IF;
-          END LOOP;
-        commit;
-        END;
-        $$ LANGUAGE PLPGSQL;
       ]]>
     </sql>
     <sql>
