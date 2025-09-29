@@ -40,7 +40,6 @@
             COALESCE(gp.product, 'unspecified product') as gene_product,
             REPLACE(so.name, '_', ' ') AS gene_type,
             gf.name as gene_ebi_biotype,
-            gi.gene_id,
             transcripts.gene_transcript_count,
             exons.gene_exon_count,
             olds.old_ids AS gene_previous_ids,
@@ -49,7 +48,6 @@
             LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 15000) AS gene_context_end,
             GREATEST(1, least(nl.start_min, nl.end_max) - 1500) AS gene_zoom_context_start,
             LEAST(gsa.length, greatest(nl.start_min, nl.end_max) + 1500) AS gene_zoom_context_end,
-            CAST(orthologs.name AS VARCHAR(60)) AS orthomcl_name,
             -- coalesce(tothtssnps.total_hts_snps,0) AS gene_total_hts_snps,
             -- coalesce(tothtssnps.hts_nonsynonymous_snps,0) AS gene_hts_nonsynonymous_snps,
             -- coalesce(tothtssnps.hts_stop_codon_snps,0) AS gene_hts_stop_codon_snps,
@@ -92,7 +90,7 @@
             ) gene ON gf.source_id = gene.source_id
             LEFT JOIN dots.RnaType rt2 ON gf.na_feature_id = rt2.parent_id
             LEFT JOIN :SCHEMA.TaxonSpecies ts ON gsa.taxon_id = ts.taxon_id and ts.org_abbrev = ':ORG_ABBREV'
-            LEFT JOIN dots.geneinstance gi ON gf.na_feature_id = gi.na_feature_id
+            --LEFT JOIN dots.geneinstance gi ON gf.na_feature_id = gi.na_feature_id
             INNER JOIN sres.TaxonName species_name ON ts.species_taxon_id = species_name.taxon_id
             LEFT JOIN LATERAL(
               SELECT count(*) AS gene_transcript_count
@@ -137,14 +135,14 @@
             --     GROUP by gene_source_id
             --   ) t
             -- ) tothtssnps ON gf.source_id = tothtssnps.gene_source_id
-            LEFT JOIN LATERAL (
-              SELECT sg.name
-              FROM dots.SequenceSequenceGroup ssg
-              JOIN dots.sequencegroup sg ON ssg.sequence_group_id = sg.sequence_group_id
-              JOIN core.tableinfo ti ON ssg.source_table_id = ti.table_id
-              WHERE ssg.sequence_id = gf.na_feature_id
-                AND ti.name = 'GeneFeature'
-            ) orthologs ON TRUE
+            --LEFT JOIN LATERAL (
+            --  SELECT sg.name
+            --  FROM dots.SequenceSequenceGroup ssg
+            --  JOIN dots.sequencegroup sg ON ssg.sequence_group_id = sg.sequence_group_id
+            --  JOIN core.tableinfo ti ON ssg.source_table_id = ti.table_id
+            --  WHERE ssg.sequence_id = gf.na_feature_id
+            --    AND ti.name = 'GeneFeature'
+            --) orthologs ON TRUE
             LEFT JOIN LATERAL (
               SELECT max(product) as product
               FROM apidb.GeneFeatureProduct p
@@ -215,7 +213,6 @@
             t.parent_id as transcript_parent_id,
             -- first the gene attributes:
             cast(null as varchar(80)) as representative_transcript,
-            0 as gene_paralog_number, 0 as gene_ortholog_number,
             transcript_uniprot.uniprot_id, transcript_uniprot.uniprot_id_internal,
             -- next the transcript attributes:
             t.source_id AS transcript_source_id,
@@ -295,18 +292,17 @@
           genefeat.gene_product,
           genefeat.gene_type,
           genefeat.gene_ebi_biotype,
-          genefeat.gene_id,
+          --genefeat.gene_id,
           genefeat.gene_transcript_count,
           genefeat.gene_exon_count,
           cast(null as varchar(80)) as representative_transcript,
           genefeat.gene_previous_ids,
           genefeat.is_deprecated,
-          0 as gene_paralog_number, 0 as gene_ortholog_number,
           genefeat.gene_context_start,
           genefeat.gene_context_end,
           genefeat.gene_zoom_context_start,
           genefeat.gene_zoom_context_end,
-          genefeat.orthomcl_name,
+          --genefeat.orthomcl_name,
           -- genefeat.gene_total_hts_snps,
           -- genefeat.gene_hts_nonsynonymous_snps,
           -- genefeat.gene_hts_stop_codon_snps,
@@ -395,38 +391,14 @@
         AND ta.org_abbrev = ':ORG_ABBREV'
       
     ;
-
-
-      
-        UPDATE :SCHEMA.TranscriptAttributes  gaup
-        SET gene_paralog_number = (
-          SELECT count(distinct gene_source_id)
-          FROM :SCHEMA.TranscriptAttributes  g1
-          WHERE g1.orthomcl_name = gaup.orthomcl_name
-          AND g1.organism = gaup.organism
-          AND gaup.gene_source_id != g1.gene_source_id
-          AND g1.org_abbrev = ':ORG_ABBREV'
-        ),
-        gene_ortholog_number = (
-          SELECT count(distinct gene_source_id)
-          FROM :SCHEMA.TranscriptAttributes  g1
-          WHERE g1.orthomcl_name = gaup.orthomcl_name
-          AND g1.organism != gaup.organism
-          AND g1.org_abbrev = ':ORG_ABBREV'
-        )
-        WHERE (gaup.gene_type = 'protein coding' or gaup.gene_type = 'protein coding gene')
-         and gaup.org_abbrev = ':ORG_ABBREV'
-      
-    ;
-
-
+   
 -- TODO:  test this
-        UPDATE :SCHEMA.TranscriptAttributes 
-        SET gene_id = gene_na_feature_id + (select nextval('dots.gene_sq'))
-        WHERE gene_id is null
-        and org_abbrev = ':ORG_ABBREV'
-      
-    ;
+    --     UPDATE :SCHEMA.TranscriptAttributes 
+    --     SET gene_id = gene_na_feature_id + (select nextval('dots.gene_sq'))
+    --     WHERE gene_id is null
+    --     and org_abbrev = ':ORG_ABBREV'
+
+    -- ;
 
 
         UPDATE :SCHEMA.TranscriptAttributes 
@@ -437,7 +409,7 @@
 	  and org_abbrev = ':ORG_ABBREV'
         )
         WHERE representative_transcript is null
-          AND gene_id is not null
+          --AND gene_id is not null
 	  and org_abbrev = ':ORG_ABBREV'      
     ;
 
