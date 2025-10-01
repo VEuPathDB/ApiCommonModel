@@ -70,9 +70,9 @@ public class BigwigFilesTypeHandler extends UserDatasetTypeHandler {
    */
   private static final String SELECT_SEQUENCE_SQL =
       "SELECT gsa.source_id AS seq_id, gsa.length AS length " +
-      " FROM apidbtuning.genomicseqattributes gsa, apidb.organism o, " +
+      " FROM webready.GenomicSeqAttributes gsa, apidb.organism o, " +
       "  (SELECT MAX(length) AS ML, taxon_id " +
-      "    FROM apidbtuning.genomicseqattributes " +
+      "    FROM webready.GenomicSeqAttributes " +
       "    GROUP BY taxon_id ) info" +
       " WHERE info.taxon_id = gsa.taxon_id " +
       "  AND info.ml = gsa.length " +
