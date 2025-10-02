@@ -339,90 +339,82 @@
       ]]>
     </sql>
     -->
+
     <sql>
       <![CDATA[
         CREATE UNLOGGED TABLE GeneCount AS
-        SELECT genomestat.taxon_id,
-               genomestat.project_id,
-               genomestat.database_version,
-               genomestat.ncbi_tax_id,
-               genomestat.Megabps,
-               --coalesce(snpCount.ct,0) as snpCount,
-               coalesce(count(distinct ga.source_id),0) as geneCount,
-               coalesce(count(distinct case when ga.is_pseudo =1  then ga.source_id else '' end),0) as pseudoGeneCount,
-               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then ga.source_id else '' end),0) as codingGeneCount,
-               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then '' else ga.source_id end),0) as otherGeneCount,
-               coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then cct.gene_source_id
-                          else NULL
-                          end)),0) ChipChipGeneCount ,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then pp.source_id
-                          else NULL
-                          end)),0) orthologCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then gts.gene_source_id
-                          else NULL
-                          end)),0) goCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then tfbs.gene_source_id
-                          else NULL
-                          end)),0) tfbsCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then mss.aa_sequence_id
-                          else NULL
-                          end)),0) proteomicsCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then est.source_id
-                          else NULL
-                          end)),0) estCount,
-              coalesce(count (distinct (case when (ga.is_deprecated = 0 and ta.ec_numbers is not null)
-                          then ga.source_id
-                          else NULL
-                          end)),0) ecNumberCount
-        FROM webready.GeneAttributes ga
-          LEFT OUTER JOIN apidb.phylogeneticprofile pp on ga.source_id = pp.source_id
-          LEFT OUTER JOIN webready.gotermsummary gts on ga.source_id = gts.gene_source_id
-          LEFT OUTER JOIN webready.TFBSGene tfbs on ga.source_id = tfbs.gene_source_id
-          LEFT OUTER JOIN webready.TranscriptAttributes ta on ta.gene_source_id = ga.source_id
-          LEFT OUTER JOIN apidb.MassSpecSummary mss on ta.aa_sequence_id = mss.aa_sequence_id
-          LEFT OUTER JOIN webready.chipchipTranscript cct on ga.source_id = cct.gene_source_id
-          LEFT OUTER JOIN (
-            SELECT distinct s.gene as source_id
-            FROM webready.EstAlignmentGeneSummary s, webready.EstAttributes e
-            WHERE s.est_gene_overlap_length >= 100
-              AND s.is_best_alignment in (1)
-              AND s.percent_est_bases_aligned >= 20
-              AND s.percent_identity >= 90
-              AND e.source_id = s.accession
-            GROUP by s.gene HAVING count(*) >= 1
-          ) est ON ga.source_id = est.source_id
-          RIGHT OUTER JOIN (
-            SELECT  project_id, taxon_id,
-                   max(database_version) as database_version,
-                  CASE WHEN ncbi_tax_id > 9000000000 THEN NULL
-                       ELSE ncbi_tax_id
-                  END ncbi_tax_id,
-                  to_char(sum(length)/1000000,'9999.99') as megabps
-            FROM   webready.GenomicSeqAttributes
-            WHERE  is_top_level = 1
-            GROUP BY project_ID, taxon_id, ncbi_tax_id
-          ) genomestat ON genomestat.taxon_id = ga.taxon_id
-          --LEFT OUTER JOIN (
-          --   SELECT count(distinct ga.source_id) as ct, ga.taxon_id
-          --   FROM webready.GeneAttributes ga, SnpAttributes sf
-          --   WHERE  sf.gene_source_id = ga.source_id
-          --     AND ga.is_deprecated = 0
-          --   GROUP BY ga.taxon_id
-          --) snpCount ON ga.taxon_id = snpCount.taxon_id
-        GROUP BY genomestat.taxon_id,
-                 genomestat.project_id,
-                 genomestat.database_version,
-                 genomestat.ncbi_tax_id,
-                 genomestat.Megabps
-                 --snpCount.ct
+        WITH genomestat AS (
+          SELECT  
+              project_id,
+              taxon_id,
+              org_abbrev,
+              max(database_version) AS database_version,
+              CASE WHEN ncbi_tax_id > 9000000000 THEN NULL ELSE ncbi_tax_id END AS ncbi_tax_id,
+              (sum(length)/1000000.0)::numeric AS megabps
+          FROM webready.GenomicSeqAttributes
+          WHERE is_top_level = 1
+          GROUP BY project_id, taxon_id, ncbi_tax_id, org_abbrev
+        ),
+        est AS (
+          SELECT DISTINCT s.gene AS source_id, s.org_abbrev
+          FROM webready.EstAlignmentGeneSummary s
+          JOIN webready.EstAttributes e 
+            ON e.source_id = s.accession AND e.org_abbrev = s.org_abbrev
+          WHERE s.est_gene_overlap_length >= 100
+            AND s.is_best_alignment = 1
+            AND s.percent_est_bases_aligned >= 20
+            AND s.percent_identity >= 90
+        ),
+        snpCount AS (
+          SELECT ga.taxon_id, ga.org_abbrev, COUNT(DISTINCT ga.source_id) AS ct
+          FROM webready.GeneAttributes ga
+          JOIN webready.SnpAttributes sf
+            ON sf.gene_source_id = ga.source_id
+          WHERE ga.is_deprecated = 0
+          GROUP BY ga.taxon_id, ga.org_abbrev
+        )
+        SELECT 
+            g.taxon_id,
+            g.project_id,
+            g.database_version,
+            g.ncbi_tax_id,
+            g.megabps,
+         -- COALESCE(snpCount.ct,0) AS snpCount
+            COUNT(DISTINCT ga.source_id) AS geneCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_pseudo = 1) AS pseudoGeneCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type IN ('protein coding','protein coding gene')) AS codingGeneCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type NOT IN ('protein coding','protein coding gene')) AS otherGeneCount,
+            COUNT(DISTINCT cct.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS chipChipGeneCount,
+            COUNT(DISTINCT pp.source_id) FILTER (WHERE ga.is_deprecated = 0) AS orthologCount,
+            COUNT(DISTINCT gts.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS goCount,
+            COUNT(DISTINCT tfbs.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS tfbsCount,
+            COUNT(DISTINCT mss.aa_sequence_id) FILTER (WHERE ga.is_deprecated = 0) AS proteomicsCount,
+            COUNT(DISTINCT est.source_id) FILTER (WHERE ga.is_deprecated = 0) AS estCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_deprecated = 0 AND ta.ec_numbers IS NOT NULL) AS ecNumberCount
+        FROM genomestat g
+        LEFT JOIN webready.GeneAttributes ga
+          ON ga.taxon_id = g.taxon_id AND ga.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.gotermsummary gts 
+          ON ga.source_id = gts.gene_source_id AND gts.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.TFBSGene tfbs 
+          ON ga.source_id = tfbs.gene_source_id AND tfbs.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.TranscriptAttributes ta 
+          ON ta.gene_source_id = ga.source_id AND ta.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.chipchipTranscript cct 
+          ON ga.source_id = cct.gene_source_id AND cct.org_abbrev = g.org_abbrev
+ --       LEFT JOIN snpCount
+ --         ON g.taxon_id = snpCount.taxon_id AND g.org_abbrev = snpCount.org_abbrev
+        LEFT JOIN est 
+          ON ga.source_id = est.source_id AND est.org_abbrev = g.org_abbrev
+        LEFT JOIN apidb.phylogeneticprofile pp 
+          ON ga.source_id = pp.source_id
+        LEFT JOIN apidb.MassSpecSummary mss 
+          ON ta.aa_sequence_id = mss.aa_sequence_id
+        GROUP BY g.taxon_id, g.project_id, g.database_version, g.ncbi_tax_id, g.megabps
+--, snpCount
       ]]>
-</sql>
+    </sql>
+
     <sql>
       <![CDATA[
         CREATE TABLE OrganismAttributes&1 AS
