@@ -339,90 +339,82 @@
       ]]>
     </sql>
     -->
+
     <sql>
       <![CDATA[
         CREATE UNLOGGED TABLE GeneCount AS
-        SELECT genomestat.taxon_id,
-               genomestat.project_id,
-               genomestat.database_version,
-               genomestat.ncbi_tax_id,
-               genomestat.Megabps,
-               --coalesce(snpCount.ct,0) as snpCount,
-               coalesce(count(distinct ga.source_id),0) as geneCount,
-               coalesce(count(distinct case when ga.is_pseudo =1  then ga.source_id else '' end),0) as pseudoGeneCount,
-               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then ga.source_id else '' end),0) as codingGeneCount,
-               coalesce(count(distinct case when (ga.gene_type ='protein coding' or ga.gene_type ='protein coding gene') then '' else ga.source_id end),0) as otherGeneCount,
-               coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then cct.gene_source_id
-                          else NULL
-                          end)),0) ChipChipGeneCount ,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then pp.source_id
-                          else NULL
-                          end)),0) orthologCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then gts.gene_source_id
-                          else NULL
-                          end)),0) goCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then tfbs.gene_source_id
-                          else NULL
-                          end)),0) tfbsCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then mss.aa_sequence_id
-                          else NULL
-                          end)),0) proteomicsCount,
-              coalesce(count (distinct (case when ga.is_deprecated = 0
-                          then est.source_id
-                          else NULL
-                          end)),0) estCount,
-              coalesce(count (distinct (case when (ga.is_deprecated = 0 and ta.ec_numbers is not null)
-                          then ga.source_id
-                          else NULL
-                          end)),0) ecNumberCount
-        FROM webready.GeneAttributes ga
-          LEFT OUTER JOIN apidb.phylogeneticprofile pp on ga.source_id = pp.source_id
-          LEFT OUTER JOIN webready.gotermsummary gts on ga.source_id = gts.gene_source_id
-          LEFT OUTER JOIN webready.TFBSGene tfbs on ga.source_id = tfbs.gene_source_id
-          LEFT OUTER JOIN webready.TranscriptAttributes ta on ta.gene_source_id = ga.source_id
-          LEFT OUTER JOIN apidb.MassSpecSummary mss on ta.aa_sequence_id = mss.aa_sequence_id
-          LEFT OUTER JOIN webready.chipchipTranscript cct on ga.source_id = cct.gene_source_id
-          LEFT OUTER JOIN (
-            SELECT distinct s.gene as source_id
-            FROM webready.EstAlignmentGeneSummary s, webready.EstAttributes e
-            WHERE s.est_gene_overlap_length >= 100
-              AND s.is_best_alignment in (1)
-              AND s.percent_est_bases_aligned >= 20
-              AND s.percent_identity >= 90
-              AND e.source_id = s.accession
-            GROUP by s.gene HAVING count(*) >= 1
-          ) est ON ga.source_id = est.source_id
-          RIGHT OUTER JOIN (
-            SELECT  project_id, taxon_id,
-                   max(database_version) as database_version,
-                  CASE WHEN ncbi_tax_id > 9000000000 THEN NULL
-                       ELSE ncbi_tax_id
-                  END ncbi_tax_id,
-                  to_char(sum(length)/1000000,'9999.99') as megabps
-            FROM   webready.GenomicSeqAttributes
-            WHERE  is_top_level = 1
-            GROUP BY project_ID, taxon_id, ncbi_tax_id
-          ) genomestat ON genomestat.taxon_id = ga.taxon_id
-          --LEFT OUTER JOIN (
-          --   SELECT count(distinct ga.source_id) as ct, ga.taxon_id
-          --   FROM webready.GeneAttributes ga, SnpAttributes sf
-          --   WHERE  sf.gene_source_id = ga.source_id
-          --     AND ga.is_deprecated = 0
-          --   GROUP BY ga.taxon_id
-          --) snpCount ON ga.taxon_id = snpCount.taxon_id
-        GROUP BY genomestat.taxon_id,
-                 genomestat.project_id,
-                 genomestat.database_version,
-                 genomestat.ncbi_tax_id,
-                 genomestat.Megabps
-                 --snpCount.ct
+        WITH genomestat AS (
+          SELECT  
+              project_id,
+              taxon_id,
+              org_abbrev,
+              max(database_version) AS database_version,
+              CASE WHEN ncbi_tax_id > 9000000000 THEN NULL ELSE ncbi_tax_id END AS ncbi_tax_id,
+              (sum(length)/1000000.0)::numeric AS megabps
+          FROM webready.GenomicSeqAttributes
+          WHERE is_top_level = 1
+          GROUP BY project_id, taxon_id, ncbi_tax_id, org_abbrev
+        ),
+        est AS (
+          SELECT DISTINCT s.gene AS source_id, s.org_abbrev
+          FROM webready.EstAlignmentGeneSummary s
+          JOIN webready.EstAttributes e 
+            ON e.source_id = s.accession AND e.org_abbrev = s.org_abbrev
+          WHERE s.est_gene_overlap_length >= 100
+            AND s.is_best_alignment = 1
+            AND s.percent_est_bases_aligned >= 20
+            AND s.percent_identity >= 90
+        ),
+        snpCount AS (
+          SELECT ga.taxon_id, ga.org_abbrev, COUNT(DISTINCT ga.source_id) AS ct
+          FROM webready.GeneAttributes ga
+          JOIN webready.SnpAttributes sf
+            ON sf.gene_source_id = ga.source_id
+          WHERE ga.is_deprecated = 0
+          GROUP BY ga.taxon_id, ga.org_abbrev
+        )
+        SELECT 
+            g.taxon_id,
+            g.project_id,
+            g.database_version,
+            g.ncbi_tax_id,
+            g.megabps,
+         -- COALESCE(snpCount.ct,0) AS snpCount
+            COUNT(DISTINCT ga.source_id) AS geneCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_pseudo = 1) AS pseudoGeneCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type IN ('protein coding','protein coding gene')) AS codingGeneCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type NOT IN ('protein coding','protein coding gene')) AS otherGeneCount,
+            COUNT(DISTINCT cct.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS chipChipGeneCount,
+            COUNT(DISTINCT pp.source_id) FILTER (WHERE ga.is_deprecated = 0) AS orthologCount,
+            COUNT(DISTINCT gts.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS goCount,
+            COUNT(DISTINCT tfbs.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS tfbsCount,
+            COUNT(DISTINCT mss.aa_sequence_id) FILTER (WHERE ga.is_deprecated = 0) AS proteomicsCount,
+            COUNT(DISTINCT est.source_id) FILTER (WHERE ga.is_deprecated = 0) AS estCount,
+            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_deprecated = 0 AND ta.ec_numbers IS NOT NULL) AS ecNumberCount
+        FROM genomestat g
+        LEFT JOIN webready.GeneAttributes ga
+          ON ga.taxon_id = g.taxon_id AND ga.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.gotermsummary gts 
+          ON ga.source_id = gts.gene_source_id AND gts.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.TFBSGene tfbs 
+          ON ga.source_id = tfbs.gene_source_id AND tfbs.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.TranscriptAttributes ta 
+          ON ta.gene_source_id = ga.source_id AND ta.org_abbrev = g.org_abbrev
+        LEFT JOIN webready.chipchipTranscript cct 
+          ON ga.source_id = cct.gene_source_id AND cct.org_abbrev = g.org_abbrev
+ --       LEFT JOIN snpCount
+ --         ON g.taxon_id = snpCount.taxon_id AND g.org_abbrev = snpCount.org_abbrev
+        LEFT JOIN est 
+          ON ga.source_id = est.source_id AND est.org_abbrev = g.org_abbrev
+        LEFT JOIN apidb.phylogeneticprofile pp 
+          ON ga.source_id = pp.source_id
+        LEFT JOIN apidb.MassSpecSummary mss 
+          ON ta.aa_sequence_id = mss.aa_sequence_id
+        GROUP BY g.taxon_id, g.project_id, g.database_version, g.ncbi_tax_id, g.megabps
+--, snpCount
       ]]>
-</sql>
+    </sql>
+
     <sql>
       <![CDATA[
         CREATE TABLE OrganismAttributes&1 AS
@@ -1381,652 +1373,89 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 
   <tuningTable name="Profile">
     <comment> One profile per gene per dataset. Used for graphs.</comment>
-    <externalDependency name="apidb.OntologyTermResult"/>
     <externalDependency name="apidb.Datasource"/>
+<!--
+    <externalDependency name="apidb.OntologyTermResult"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
     <externalDependency name="apidb.EigenGeneWgcnaResults"/>
     <externalDependency name="results.CompoundMassSpec"/>
-    <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="results.NaFeatureHostResponse"/>
+-->
+    <externalDependency name="results.NaFeatureExpression"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.NodeSet"/>
     <externalDependency name="study.NodeNodeSet"/>
-    <intermediateTable name="geneDataPre"/>
-    <intermediateTable name="geneData"/>
-    <intermediateTable name="otherData"/>
+    <intermediateTable name="profile_nafeatureexp_summary"/>
+    <intermediateTable name="gene_nafeatureexp"/>
     <sql>
       <![CDATA[
-        CREATE UNLOGGED TABLE geneDataPre AS
-                SELECT * FROM (
-                    WITH result AS (
-                        SELECT na_feature_id, protocol_app_node_id, max(value) as value
-                        FROM results.NAFEATUREHOSTRESPONSE
-                        GROUP BY na_feature_id, protocol_app_node_id
-                      ), min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.value) over w1 as max_value,
-                                first_value(result.value) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            from study.protocolappnode pan, study.NodeNodeSet sl, study.NodeSet s, result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.value ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.PROTOCOLAPPNODE pan, study.NodeNodeSet sl, study.NodeSet s, min_max, result
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t1
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                              last_value(result.value) over w1 as max_value,
-                              first_value(result.value) over w1 as min_value,
-                              last_value(pan.name) over w1 as max_timepoint,
-                              first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.value ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t5
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                              last_value(result.percentile_channel1) over w1 as max_value,
-                              first_value(result.percentile_channel1) over w1 as min_value,
-                              last_value(pan.name) over w1 as max_timepoint,
-                              first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.percentile_channel1 ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'channel1_percentiles' as profile_type, s.node_type,
-                                string_agg(coalesce(round(result.percentile_channel1::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                                min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t6
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                              last_value(result.percentile_channel2) over w1 as max_value,
-                              first_value(result.percentile_channel2) over w1 as min_value,
-                              last_value(pan.name) over w1 as max_timepoint,
-                              first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.percentile_channel2 ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'channel2_percentiles' as profile_type, s.node_type,
-                                string_agg(coalesce(round(result.percentile_channel2::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                                min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t7
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.standard_error) over w1 as max_value,
-                                first_value(result.standard_error) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.standard_error ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'standard_error' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.standard_error::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, results.NaFeatureExpression result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t8
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.pvalue) over w1 as max_value,
-                                first_value(result.pvalue) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.pvalue ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'pvalue' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.pvalue::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t9
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.amplitude) over w1 as max_value,
-                                first_value(result.amplitude) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.PROTOCOLAPPNODE pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.amplitude ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'amplitude' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.amplitude::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t10
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.period) over w1 as max_value,
-                                first_value(result.period) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.period ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'period' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.period::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.NaFeatureMetacycle result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t11
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.probability_mean) over w1 as max_value,
-                                first_value(result.probability_mean) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.probability_mean ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'probability_mean' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.probability_mean::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t12
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.sd) over w1 as max_value,
-                                first_value(result.sd) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.sd ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'sd' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.sd::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t13
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.lower_CI) over w1 as max_value,
-                                first_value(result.lower_CI) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.lower_CI ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'lower_CI' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.lower_CI::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t14
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.na_feature_id,
-                                last_value(result.upper_CI) over w1 as max_value,
-                                first_value(result.upper_CI) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.na_feature_id
-                              ORDER BY result.upper_CI ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.na_feature_id, 'upper_CI' as profile_type, s.node_type,
-                              string_agg(coalesce(round(result.upper_CI::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.LopitResults result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.na_feature_id = result.na_feature_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t15
--- TO FIX
---                      UNION ALL
---                        SELECT * FROM (
---                          WITH min_max AS (
---                              SELECT DISTINCT sl.node_set_id, result.na_feature_id,
---                                  null as max_value,
---                                  null as min_value,
---                                  last_value(pan.name) over w1 as max_timepoint,
---                                  first_value(pan.name) over w1 as min_timepoint
---                              FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result
---                              WHERE result.protocol_app_node_id = sl.protocol_app_node_id
---                                AND result.protocol_app_node_id = pan.protocol_app_node_id
---                                AND sl.node_set_id = s.node_set_id
---                              WINDOW w1 AS (
---                                PARTITION BY sl.node_set_id, result.na_feature_id
---                                ORDER BY result.value ASC
---                                ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
---                              )
---                          )
---                          SELECT sl.node_set_id, result.na_feature_id, 'values' as profile_type, s.node_type,
---                              string_agg(coalesce(result.value, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
---                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
---                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.HaplotypeResult result, min_max
---                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
---                            AND result.protocol_app_node_id = pan.protocol_app_node_id
---                            AND sl.node_set_id = s.node_set_id
---                            AND min_max.na_feature_id = result.na_feature_id
---                            AND min_max.node_set_id = sl.node_set_id
---                          GROUP BY sl.node_set_id, result.na_feature_id, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
---                        ) t16
+        CREATE UNLOGGED TABLE profile_nafeatureexp_summary (
+          node_set_id numeric(12,0),
+          na_feature_id numeric(10,0),
+          node_type character varying(200),
+          profile_as_string_value text,
+          profile_as_string_percentile1 text,
+          profile_as_string_percentile2 text,
+          profile_as_string_stderr text
+       )
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE UNLOGGED TABLE geneData AS
-        SELECT gene_profile.node_set_id, ga.source_id, gene_profile.profile_type, gene_profile.node_type,
-               gene_profile.profile_as_string, gene_profile.max_value, gene_profile.min_value,
-               gene_profile.max_timepoint, gene_profile.min_timepoint
-        FROM webready.GeneAttributes ga, geneDataPre gene_profile
-               WHERE ga.na_feature_id = gene_profile.na_feature_id 
+        DO $$
+        DECLARE
+          -- Declare a record variable to hold each nodeset record
+          nodeset RECORD;
+          rows INTEGER := 0;
+          start_time timestamptz;
+          end_time timestamptz;
+        BEGIN
+          -- Loop through each dataset/experiment and compute & insert results into the temp table
+          FOR nodeset IN SELECT node_set_id, node_type FROM study.nodeset LOOP
+            start_time := clock_timestamp();
+              INSERT INTO profile_nafeatureexp_summary
+              SELECT sl.node_set_id, result.na_feature_id, nodeset.node_type,
+                string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_value,
+                string_agg(coalesce(round(result.standard_error::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_stderr,
+                string_agg(coalesce(round(result.percentile_channel1::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_percentile1,
+                string_agg(coalesce(round(result.percentile_channel2::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_percentile2
+              FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, results.NaFeatureExpression result
+              WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                AND result.protocol_app_node_id = pan.protocol_app_node_id
+                AND sl.node_set_id = nodeset.node_set_id
+              GROUP BY sl.node_set_id, result.na_feature_id, nodeset.node_type
+            ;
+            end_time := clock_timestamp();
+            rows := rows +1;
+            raise notice '% inserted nodeset % in % ms', rows, nodeset.node_set_id, EXTRACT(EPOCH FROM (end_time - start_time)) * 1000;
+          END LOOP;
+        END $$;
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        CREATE UNLOGGED TABLE otherData AS
-                  -- compound profiles
-                  SELECT compound_profile.node_set_id,
-                     case
-                       WHEN compound_profile.isotopomer IS NOT NULL
-                          THEN ca.source_id || '|' || compound_profile.isotopomer
-                       WHEN compound_profile.mass IS NOT NULL
-                          THEN ca.source_id || '|' || compound_profile.mass || '|' || compound_profile.retention_time
-                       ELSE ca.source_id
-                     END as source_id,
-                     compound_profile.profile_type, compound_profile.node_type,
-                     compound_profile.profile_as_string, compound_profile.max_value, compound_profile.min_value,
-                     compound_profile.max_timepoint, compound_profile.min_timepoint
-                  FROM webready.CompoundAttributes ca,
-                    (
-                        SELECT * FROM (
-                          WITH result AS (
-                            SELECT max(value) as value, compound_id, protocol_app_node_id, isotopomer
-                            FROM results.CompoundMassSpec
-                            GROUP BY compound_id, protocol_app_node_id, isotopomer
-                          ) , min_max AS (
-                            SELECT DISTINCT sl.node_set_id, result.compound_id, result.isotopomer,
-                                last_value(result.value) over w1 as max_value,
-                                first_value(result.value) over w1 as min_value,
-                                last_value(pan.name) over w1 as max_timepoint,
-                                first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, result
-                            WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                              AND result.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, result.compound_id, result.isotopomer
-                              ORDER BY result.value ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, result.compound_id, result.isotopomer, 'values' as profile_type, s.node_type,
-                              NULL::numeric as compound_peaks_id, NULL::numeric as mass, NULL::numeric as retention_time,
-                              string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                              min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, result, min_max
-                          WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                            AND result.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND min_max.compound_id = result.compound_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, result.compound_id, result.isotopomer, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t1
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, cpc.compound_id,
-                              last_value(cmsr.value) over w1 as max_value,
-                              first_value(cmsr.value) over w1 as min_value,
-                              last_value(pan.name) over w1 as max_timepoint,
-                              first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
-                              apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
-                              apidb.CompoundPeaksChebi cpc
-                            WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
-                              AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                              AND cp.compound_peaks_id = cmsr.compound_peaks_id
-                              AND cpc.compound_peaks_id = cp.compound_peaks_id
-                              AND pan.name like '%mean%'
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
-                              ORDER BY cmsr.value ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, cpc.compound_id, cpc.isotopomer, 'values' as profile_type, s.node_type,
-                            cpc.compound_peaks_id, cp.mass, cp.retention_time,
-                            string_agg(coalesce(round(cmsr.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                            min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
-                            apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
-                            apidb.CompoundPeaksChebi cpc, min_max
-                          WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
-                            AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND cp.compound_peaks_id = cmsr.compound_peaks_id
-                            AND cpc.compound_peaks_id = cp.compound_peaks_id
-                            AND pan.name like '%mean%'
-                            AND min_max.compound_id = cpc.compound_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t2
-                      UNION ALL
-                        SELECT * FROM (
-                          WITH min_max AS (
-                            SELECT DISTINCT sl.node_set_id, cpc.compound_id,
-                              last_value(cmsr.percentile) over w1 as max_value,
-                              first_value(cmsr.percentile) over w1 as min_value,
-                              last_value(pan.name) over w1 as max_timepoint,
-                              first_value(pan.name) over w1 as min_timepoint
-                            FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
-                              apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
-                              apidb.CompoundPeaksChebi cpc
-                            WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
-                              AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
-                              AND sl.node_set_id = s.node_set_id
-                              AND cp.compound_peaks_id = cmsr.compound_peaks_id
-                              AND cpc.compound_peaks_id = cp.compound_peaks_id
-                              AND pan.name like '%mean%'
-                            WINDOW w1 AS (
-                              PARTITION BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time
-                              ORDER BY cmsr.percentile ASC
-                              ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                            )
-                          )
-                          SELECT sl.node_set_id, cpc.compound_id, cpc.isotopomer, 'percentiles' as profile_type, s.node_type,
-                            cpc.compound_peaks_id, cp.mass, cp.retention_time,
-                            string_agg(coalesce(round(cmsr.percentile::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                            min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                          FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
-                            apidb.CompoundMassSpecResult cmsr, apidb.Compoundpeaks cp,
-                            apidb.CompoundPeaksChebi cpc, min_max
-                          WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
-                            AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
-                            AND sl.node_set_id = s.node_set_id
-                            AND cp.compound_peaks_id = cmsr.compound_peaks_id
-                            AND cpc.compound_peaks_id = cp.compound_peaks_id
-                            AND pan.name like '%mean%'
-                            AND min_max.compound_id = cpc.compound_id
-                            AND min_max.node_set_id = sl.node_set_id
-                          GROUP BY sl.node_set_id, cpc.compound_id, cpc.isotopomer, cpc.compound_peaks_id, cp.mass, cp.retention_time, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                        ) t3
-                    ) compound_profile
-                  WHERE ca.id = compound_profile.compound_id
-                UNION ALL
-                  -- OntologyTermResult
-                  SELECT * FROM (
-                    WITH min_max AS (
-                      SELECT DISTINCT sl.node_set_id, ot.name,
-                        last_value(otr.value) over w1 as max_value,
-                        first_value(otr.value) over w1 as min_value,
-                        last_value(pan.name) over w1 as max_timepoint,
-                        first_value(pan.name) over w1 as min_timepoint
-                      FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
-                        apidb.OntologyTermResult otr, sres.OntologyTerm ot
-                      WHERE ot.ontology_term_id = otr.ontology_term_id
-                        AND otr.protocol_app_node_id = sl.protocol_app_node_id
-                        AND otr.protocol_app_node_id = pan.protocol_app_node_id
-                        AND sl.node_set_id = s.node_set_id
-                      WINDOW w1 AS (
-                        PARTITION BY sl.node_set_id, ot.name
-                        ORDER BY otr.value ASC
-                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                      )
-                    )
-                    SELECT sl.node_set_id, ot.name as source_id, 'value' as profile_type, s.node_type,
-                      string_agg(coalesce(round(otr.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                      min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                    FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s,
-                      apidb.OntologyTermResult otr, sres.OntologyTerm ot, min_max
-                    WHERE ot.ontology_term_id = otr.ontology_term_id
-                      AND otr.protocol_app_node_id = sl.protocol_app_node_id
-                      AND otr.protocol_app_node_id = pan.protocol_app_node_id
-                      AND sl.node_set_id = s.node_set_id
-                      AND min_max.name = ot.name
-                      AND min_max.node_set_id = sl.node_set_id
-                    GROUP BY sl.node_set_id, ot.name, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                  ) t1
-                UNION ALL
-                  -- SubjectResult
-                  SELECT * FROM (
-                    WITH min_max AS (
-                      SELECT DISTINCT sl.node_set_id, result.subject,
-                        last_value(result.value) over w1 as max_value,
-                        first_value(result.value) over w1 as min_value,
-                        last_value(pan.name) over w1 as max_timepoint,
-                        first_value(pan.name) over w1 as min_timepoint
-                      FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.SubjectResult result
-                      WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                        AND result.protocol_app_node_id = pan.protocol_app_node_id
-                        AND sl.node_set_id = s.node_set_id
-                      WINDOW w1 AS (
-                        PARTITION BY sl.node_set_id, result.subject
-                        ORDER BY result.value ASC
-                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                      )
-                    )
-                    SELECT sl.node_set_id, result.subject as source_id, 'values' as profile_type, s.node_type,
-                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                      min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                    FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, min_max, apidb.SubjectResult result
-                    WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                      AND result.protocol_app_node_id = pan.protocol_app_node_id
-                      AND sl.node_set_id = s.node_set_id
-                      AND min_max.subject = result.subject
-                      AND min_max.node_set_id = sl.node_set_id
-                    GROUP BY sl.node_set_id, result.subject, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                  ) t2
-                UNION ALL
-                  -- wgcna eigengene results
-                  SELECT * FROM (
-                    WITH min_max AS (
-                      SELECT DISTINCT sl.node_set_id, result.module_name,
-                        last_value(result.value) over w1 as max_value,
-                        first_value(result.value) over w1 as min_value,
-                        last_value(pan.name) over w1 as max_timepoint,
-                        first_value(pan.name) over w1 as min_timepoint
-                      FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, apidb.EigenGeneWgcnaResults result
-                      WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                        AND result.protocol_app_node_id = pan.protocol_app_node_id
-                        AND sl.node_set_id = s.node_set_id
-                      WINDOW w1 AS (
-                        PARTITION BY sl.node_set_id, result.module_name
-                        ORDER BY result.value ASC
-                        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                      )
-                    )
-                    SELECT sl.node_set_id, result.module_name as source_id, 'values' as profile_type, s.node_type,
-                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string,
-                      min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint
-                    FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, study.NodeSet s, min_max, apidb.EigenGeneWgcnaResults result
-                    WHERE result.protocol_app_node_id = sl.protocol_app_node_id
-                      AND result.protocol_app_node_id = pan.protocol_app_node_id
-                      AND sl.node_set_id = s.node_set_id
-                      AND min_max.module_name = result.module_name
-                      AND min_max.node_set_id = sl.node_set_id
-                    GROUP BY sl.node_set_id, result.module_name, min_max.max_value, min_max.min_value, min_max.max_timepoint, min_max.min_timepoint, s.node_type
-                  ) t3
+        CREATE UNLOGGED TABLE gene_nafeatureexp AS
+        SELECT summ.node_set_id, ga.source_id, summ.node_type,
+               profile_as_string_value, profile_as_string_stderr,
+               profile_as_string_percentile1, profile_as_string_percentile2
+        FROM webready.GeneAttributes ga, GeneOrgAbbrev goa, profile_nafeatureexp_summary summ
+               WHERE ga.source_id = goa.source_id
+               AND ga.org_abbrev = goa.org_abbrev
+               AND ga.na_feature_id = summ.na_feature_id
       ]]>
     </sql>
+
     <sql>
       <![CDATA[
         CREATE TABLE Profile&1 AS
+            WITH gene_prof AS
+             (SELECT * from gene_nafeatureexp)
             SELECT
                ds.name as dataset_name, ds.type as dataset_type,
-               ds.subtype as dataset_subtype, profile.profile_type, profile.node_type,
+               ds.subtype as dataset_subtype, 'values' AS profile_type, profile.node_type,
                profile.source_id, profile.node_set_id as profile_study_id,
                ps.name as profile_set_name,
                cast(case
@@ -2052,20 +1481,135 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                       else null
                     end as varchar(50)
                    ) as profile_set_suffix,
-               CASE WHEN replace(profile.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string END as profile_as_string,
-               profile.max_value, profile.min_value,
-               profile.max_timepoint, profile.min_timepoint
+               CASE WHEN replace(profile.profile_as_string_value, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string_value END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
             FROM apidb.DataSource ds, sres.ExternalDatabase d,
               sres.ExternalDatabaseRelease r, study.NodeSet ps,
-              (SELECT * from genedata 
-               UNION 
-               SELECT * from otherdata) profile
+              gene_prof profile
             WHERE ds.name = d.name
               AND ds.version = r.version
               AND d.external_database_id = r.external_database_id
               AND profile.node_set_id = ps.node_set_id
               AND ps.external_database_release_id = r.external_database_release_id
-      ]]>
+            UNION ALL
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type,
+               ds.subtype as dataset_subtype, 'standard_error' AS profile_type, profile.node_type,
+               profile.source_id, profile.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               cast(case
+                      when regexp_replace(ps.name, '\[.+\]', '') like '% - %'
+                        then regexp_replace(regexp_replace(ps.name, ' *\[.+\]', ''), '.+ - ', '')
+                      -- special cases for legacy datasets
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%'
+                        then regexp_replace(
+                                 regexp_replace(
+                                     regexp_replace(
+                                         regexp_replace(
+                                             regexp_replace(ps.name, '\[.+ nonunique\]', ''),
+                                                        '\[.+ unique\]', ' - unique'),
+                                                    '\[.+\]', ''),
+                                                'aligned with cds coordinates ', 'cds coordinates'),
+                                            'T.brucei paired end RNA-Seqdata from Horn ', '')
+                      else null
+                    end as varchar(50)
+                   ) as profile_set_suffix,
+               CASE WHEN replace(profile.profile_as_string_stderr, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string_stderr END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds, sres.ExternalDatabase d,
+              sres.ExternalDatabaseRelease r, study.NodeSet ps,
+              gene_prof profile
+            WHERE ds.name = d.name
+              AND ds.version = r.version
+              AND d.external_database_id = r.external_database_id
+              AND profile.node_set_id = ps.node_set_id
+              AND ps.external_database_release_id = r.external_database_release_id
+            UNION ALL
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type,
+               ds.subtype as dataset_subtype, 'channel1_percentiles' AS profile_type, profile.node_type,
+               profile.source_id, profile.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               cast(case
+                      when regexp_replace(ps.name, '\[.+\]', '') like '% - %'
+                        then regexp_replace(regexp_replace(ps.name, ' *\[.+\]', ''), '.+ - ', '')
+                      -- special cases for legacy datasets
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%'
+                        then regexp_replace(
+                                 regexp_replace(
+                                     regexp_replace(
+                                         regexp_replace(
+                                             regexp_replace(ps.name, '\[.+ nonunique\]', ''),
+                                                        '\[.+ unique\]', ' - unique'),
+                                                    '\[.+\]', ''),
+                                                'aligned with cds coordinates ', 'cds coordinates'),
+                                            'T.brucei paired end RNA-Seqdata from Horn ', '')
+                      else null
+                    end as varchar(50)
+                   ) as profile_set_suffix,
+               CASE WHEN replace(profile.profile_as_string_percentile1, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string_percentile1 END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds, sres.ExternalDatabase d,
+              sres.ExternalDatabaseRelease r, study.NodeSet ps,
+              gene_prof profile
+            WHERE ds.name = d.name
+              AND ds.version = r.version
+              AND d.external_database_id = r.external_database_id
+              AND profile.node_set_id = ps.node_set_id
+              AND ps.external_database_release_id = r.external_database_release_id
+            UNION ALL
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type,
+               ds.subtype as dataset_subtype, 'channel2_percentiles' AS profile_type, profile.node_type,
+               profile.source_id, profile.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               cast(case
+                      when regexp_replace(ps.name, '\[.+\]', '') like '% - %'
+                        then regexp_replace(regexp_replace(ps.name, ' *\[.+\]', ''), '.+ - ', '')
+                      -- special cases for legacy datasets
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'DeRisi%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'DeRisi ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'winzeler_cc_%'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'winzeler_cc_', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'Llinas RT transcription and decay %'
+                        then regexp_replace(regexp_replace(ps.name, '\[.+\]', ''), 'Llinas RT transcription and decay ', '')
+                      when regexp_replace(ps.name, '\[.+\]', '') like 'T.brucei paired end RNA-Seqdata from Horn%'
+                        then regexp_replace(
+                                 regexp_replace(
+                                     regexp_replace(
+                                         regexp_replace(
+                                             regexp_replace(ps.name, '\[.+ nonunique\]', ''),
+                                                        '\[.+ unique\]', ' - unique'),
+                                                    '\[.+\]', ''),
+                                                'aligned with cds coordinates ', 'cds coordinates'),
+                                            'T.brucei paired end RNA-Seqdata from Horn ', '')
+                      else null
+                    end as varchar(50)
+                   ) as profile_set_suffix,
+               CASE WHEN replace(profile.profile_as_string_percentile2, 'NA' || CHR(9), '') = 'NA' THEN null ELSE profile.profile_as_string_percentile2 END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds, sres.ExternalDatabase d,
+              sres.ExternalDatabaseRelease r, study.NodeSet ps,
+              gene_prof profile
+            WHERE ds.name = d.name
+              AND ds.version = r.version
+              AND d.external_database_id = r.external_database_id
+              AND profile.node_set_id = ps.node_set_id
+              AND ps.external_database_release_id = r.external_database_release_id
+
+     ]]>
     </sql>
     <sql>
       <![CDATA[
