@@ -114,7 +114,7 @@ public class Gff3Dumper {
     // prepare the organism ps
     String sql = "SELECT DISTINCT o.name_for_filenames "
         + " FROM apidb.organism o, dots.NaSequence ns, dots.GeneFeature gf,"
-        + "      ApidbTuning.geneattributes ga " + " WHERE gf.na_sequence_id = ns.na_sequence_id"
+        + "      webready.GeneAttributes ga " + " WHERE gf.na_sequence_id = ns.na_sequence_id"
         + "   AND ga.source_id = gf.source_id " + "   AND ns.taxon_id = o.taxon_id "
         + "   AND ga.project_id = ? AND ga.organism = ?";
     DataSource dataSource = wdkModel.getAppDb().getDataSource();

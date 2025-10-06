@@ -6422,10 +6422,11 @@ products of your selected type (or types).<br><br>
             select distinct 'long_transcript_novelty' as ontology_term_name, cast(null as varchar(1)) as parent_ontology_term_name,
             'Support From Long Read Evidence' as display_name, 'Find genes based on overlapping models from long read RNA sequencing, for example from Oxford Nanopore or PacBio sequencing platforms. To be considered in this query, a model must have at least 5 supporting reads and be at least 20 bases long. Categories as follows: Novel in Collection (NIC): Prediction uses known splice donors and acceptors but reveals new connections (e.g., skipped exon isoforms); Incomplete Splice Match (ISM): Prediction matches subsection of a known transcript model, but has a novel putative start or end point; Novel Not In Collection (NNC): Prediction has at least one novel splice donor or acceptor; Genomic: Prediction has no overlapping splice junctions compared to known transcripts; Genomic: Prediction has no overlapping splice junctions compared to known transcripts; Known: Prediction exactly matches a known model.  NOTE: The percentage add up to more than 100% because one existing gene model can have more than associated TALON model.' as description, cast(null as varchar(1)) as units,
             'string' as type, 0 as is_range, cast(null as varchar(1)) as precision, 7 as display_order
-            from apidbtuning.datasetdatasource dd
+            from apidbtuning.datasetdatasource dd, apidb.organism o
             where '$$gene_or_transcript$$' = 'gene_source_id'
               and dd.name like '%nanopore_longReadRnaSeq_RSRC'
-              and dd.taxon_id in ($$organism_select_all$$)
+              and o.abbrev in ($$organism_select_all$$)
+              and dd.taxon_id = o.taxon_id
               and '@PROJECT_ID@' != 'EuPathDB'
             UNION
             select 'intron_junction' as ontology_term_name, cast(null as varchar(1)) as parent_ontology_term_name,
@@ -6467,8 +6468,9 @@ products of your selected type (or types).<br><br>
                 when string_value in ('ISM') then 'Incomplete Splice Match'
                 else string_value
                 end as string_value
-            from apidbTuning.GeneModelCharOrgMD
-            where taxon_id in ($$organism_select_all$$)
+            from apidbTuning.GeneModelCharOrgMD gm, apidb.organism o
+            where o.abbrev in ($$organism_select_all$$)
+	    and o.taxon_id = gm.taxon_id
             and (('$$gene_or_transcript$$' = 'gene_source_id') OR ('$$gene_or_transcript$$' = 'source_id' and ontology_term_name not in ('intron_junction', 'unique_reads','long_transcript_novelty')))
       ) o
           ]]>
@@ -6493,8 +6495,9 @@ products of your selected type (or types).<br><br>
             cast(null as timestamp) as date_value
           FROM (
             SELECT *
-            FROM apidbTuning.GeneModelCharOrgMD
-            WHERE taxon_name in ($$organism_select_all$$)
+            FROM apidbTuning.GeneModelCharOrgMD gm, apidb.organism o
+            WHERE o.abbrev in ($$organism_select_all$$)
+            and gm.taxon_id = o.taxon_id
 		  ) t
         ]]>
       </sql>
@@ -6609,7 +6612,9 @@ products of your selected type (or types).<br><br>
             , sres.externaldatabase ed
             , apidbtuning.datasetpresenter dsp
             , apidbtuning.datasetdatasource dd
-          WHERE dd.taxon_id = $$organismsWithSingleCell$$
+	    , apidb.organism o
+          WHERE o.abbrev = $$organismsWithSingleCell$$
+          WHERE dd.taxon_id = o.taxon_id
             AND dsp.name like '%cellxgene%'
             AND dsp.name = dnt.name
             AND ed.name = dnt.name
@@ -6800,7 +6805,7 @@ products of your selected type (or types).<br><br>
               CASE WHEN pan.name ='outlier (lopit)' THEN  '- ' || upper(substr(replace(pan.name,' (lopit)','') || ' probability',1,1)) || substr(replace(pan.name,' (lopit)','') || ' probability',2,9999)
               ELSE upper(substr(replace(pan.name,' (lopit)','') || ' probability',1,1)) || substr(replace(pan.name,' (lopit)','') || ' probability',2,9999) END as display_name
               , cast(null as varchar(1)) as description, cast(null as varchar(1)) as units, 'number' as type,1 as is_range,1 as precision, cast(null as varchar(1)) as display_order
-            FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbtuning.geneattributes ga
+            FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, webready.GeneAttributes ga
             WHERE s.name = $$lopit_method$$
               AND s.study_id = sl.study_id
               AND sl.protocol_app_node_id = pan.protocol_app_node_id
@@ -6821,7 +6826,7 @@ products of your selected type (or types).<br><br>
       <sql>
         <![CDATA[
             SELECT ga.source_id as internal, pan.name as ontology_term_name, round(lr.probability_mean,2) as number_value, round(to_char(lr.probability_mean),2) as string_value, null::timestamp as date_value
-            FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbtuning.geneattributes ga
+            FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, webready.GeneAttributes ga
             WHERE s.name in ($$lopit_method$$)
               AND s.study_id = sl.study_id
               AND sl.protocol_app_node_id = pan.protocol_app_node_id
@@ -6829,7 +6834,7 @@ products of your selected type (or types).<br><br>
               AND ga.na_feature_id = lr.na_feature_id
           UNION
             SELECT ga.source_id as internal, 'Any compartments (lopit)' as ontology_term_name, round(lr.probability_mean,2) as number_value, round(to_char(lr.probability_mean),2) as string_value, null::timestamp as date_value
-            FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, apidbtuning.geneattributes ga
+            FROM study.study s , study.studyLink sl, study.ProtocolAppNode pan, apidb.LopitResults lr, webready.GeneAttributes ga
             WHERE s.name in ($$lopit_method$$)
               AND s.study_id = sl.study_id
               AND sl.protocol_app_node_id = pan.protocol_app_node_id
@@ -7580,11 +7585,11 @@ products of your selected type (or types).<br><br>
       <sql>
         <![CDATA[
           SELECT sa.source_id as internal, sa.source_id as term, sa.source_id || ' - ' || ot.name as display
-          FROM  ApidbTuning.GenomicSeqAttributes sa, SRes.ontologyTerm ot
+          FROM  webready.GenomicSeqAttributes sa, SRes.ontologyTerm ot
           WHERE sa.so_id = ot.source_id
             AND ot.name in  ('mitochondrial_chromosome', 'apicoplast_chromosome')
-            AND sa.organism = $$org_with_nonnuclear_genes$$
-            AND sa.source_id IN (SELECT sequence_id FROM ApidbTuning.TranscriptAttributes)
+            AND sa.org_abbrev = $$org_with_nonnuclear_genes$$
+            AND sa.source_id IN (SELECT sequence_id FROM webready.TranscriptAttributes where org_abbrev = $$org_with_nonnuclear_genes$$)
           ORDER BY display
 	    ]]>
       </sql>
@@ -7988,7 +7993,7 @@ products of your selected type (or types).<br><br>
             study.nodeset s,
              ( select oa.avg_transcript_length, rs.avg_unique_reads, rs.study_id
                from apidbTuning.OrganismAttributes oa
-               , apidbTuning.RnaSeqStats rs
+               , webready.RnaSeqStats rs
                where rs.taxon_id = oa.component_taxon_id
             ) stats
          WHERE s.node_set_id= stats.study_id
@@ -8033,7 +8038,7 @@ products of your selected type (or types).<br><br>
           FROM (
             SELECT min(rs.avg_unique_reads) as num_reads, min(oa.avg_transcript_length) as tx_length
             FROM apidbTuning.ProfileSamples ps
-              , apidbTuning.RnaSeqStats rs
+              , webready.RnaSeqStats rs
               , apidbTuning.OrganismAttributes oa
             WHERE ps.study_id = rs.study_id
               AND rs.taxon_id = oa.component_taxon_id
@@ -8304,7 +8309,7 @@ products of your selected type (or types).<br><br>
       <column name="term" />
       <sql>
         SELECT DISTINCT bg.name as term, bg.name as internal
-        FROM ApidbTuning.TFBSGene bg,
+        FROM webready.TFBSGene bg,
           sres.externaldatabase d, sres.externaldatabaserelease rel
         WHERE d.name = 'pfal3D7_genomeFeature_Llinas_TransFactorBindingSites_GFF2_RSRC'
           AND d.external_database_id  = rel.external_database_id
@@ -8650,7 +8655,7 @@ products of your selected type (or types).<br><br>
                 ,lrt.* from apidb.longreadtranscript lrt
                 ,sres.externaldatabaserelease edr
                 ,sres.externaldatabase ed
-                ,apidbtuning.transcriptattributes ta
+                ,webready.TranscriptAttributes ta
                 ,apidbtuning.datasetPresenter dp
                 where edr.external_database_release_id = lrt.external_database_release_id
                 and ed.external_database_id = edr.external_database_id
@@ -8707,7 +8712,7 @@ CASE when transcript_novelty in ('Genomic') then 'Genomic'
  when transcript_novelty in ('ISM') then 'Incomplete Splice Match'
 end as term
                 from apidb.longreadtranscript lrt
-                ,apidbtuning.transcriptattributes ta
+                ,webready.TranscriptAttributes ta
                 ,sres.externaldatabaserelease edr
                 ,sres.externaldatabase ed
                 ,apidbtuning.datasetPresenter dp
@@ -8800,7 +8805,7 @@ end as term
           gt.go_id AS term,
           gt.go_id || ' : ' || gt.go_term_name || ' : ' || max(CASE WHEN gt.depth is NULL THEN 0 ELSE gt.depth END) AS display,
           count(*) as ct
-        FROM   ApidbTuning.GoTermSummary gt
+        FROM   webready.GoTermSummary gt
         WHERE ($$go_term_slim$$ = 'No' or gt.IS_GO_SLIM = 1)
         GROUP BY gt.go_id,gt.go_id || ' : ' || gt.go_term_name
         UNION
@@ -8830,7 +8835,7 @@ end as term
           gt.go_id AS term,
           gt.go_id || ' : ' || gt.go_term_name || ' : ' || max(CASE WHEN gt.depth is NULL THEN 0 ELSE gt.depth END) AS display,
           count(*) as ct
-        FROM   ApidbTuning.GoTermSummary gt
+        FROM   webready.GoTermSummary gt
         WHERE gt.source in ('DawsonLab', 'TrypTag')
         GROUP BY gt.go_id,gt.go_id || ' : ' || gt.go_term_name
         UNION
@@ -8872,7 +8877,7 @@ end as term
                   apidbTuning.datasetdatasource dd,
                   apidbTuning.datasetContact dsc,
                   (SELECT DISTINCT ta.organism,ta.taxon_id,ta.project_id
-                    FROM apidbtuning.transcriptattributes ta, apidb.massspecpeptide msf
+                    FROM webready.TranscriptAttributes ta, apidb.massspecpeptide msf
                     WHERE msf.protein_source_id = ta.protein_source_id
                    and (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
                   ) org
@@ -8983,7 +8988,7 @@ end as term
                    ELSE dp.display_Name || ' (' ||  dp.short_attribution || ')'
                 END AS experiment_name
             FROM apidbtuning.msmodifiedpeptidesummary ms
-            , apidbtuning.transcriptattributes ta
+            , webready.TranscriptAttributes ta
             , apidbtuning.datasetpresenter dp
             WHERE ms.source_id = ta.source_id
               AND (ms.modification_type in ( $$ptm_type$$ ) OR $$ptm_type$$ = 'any')
@@ -9106,7 +9111,7 @@ end as term
             , '_', ' '
           ) AS term
           , ga.gene_type as internal
-        FROM ApidbTuning.TranscriptAttributes ga
+        FROM webready.TranscriptAttributes ga
       </sql>
     </sqlQuery>
 
@@ -9211,14 +9216,14 @@ end as term
           ) AS display,
           replace(dr.lowercase_secondary_identifier, ',', '-')  AS term
         FROM sres.DbRef dr, sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed,
-          dots.DbRefNaFeature drnf, ApidbTuning.GeneAttributes gf
+          dots.DbRefNaFeature drnf, webready.GeneAttributes gf
         WHERE dr.external_database_release_id = edr.external_database_release_id
           AND edr.external_database_id = ed.external_database_id
           AND ed.name in ('pfal3D7_dbxref_simple_gene2HagaiPathway_RSRC','tgonME49_dbxref_protein2Pathways_Feng_RSRC')
           AND dr.primary_identifier != 'qualityControl'
           AND drnf.db_ref_id = dr.db_ref_id
           AND gf.na_feature_id = drnf.na_feature_id
-          AND gf.organism = $$org_with_Hagai_pathways$$
+          AND gf.org_abbrev = $$org_with_Hagai_pathways$$
         ORDER BY display
       </sql>
 
@@ -9245,7 +9250,7 @@ end as term
               ,case  when opq.name is null then 'HAS' else opq.name end as internal
               ,count(distinct pm.na_feature_id) as order_num
             FROM
-              , ApidbTuning.TranscriptAttributes ta
+              , webready.TranscriptAttributes ta
               , apidb.phenotypemodel pm
               , APIDB.NAFEATUREPHENOTYPEMODEL na
               , APIDB.PHENOTYPERESULT pr
@@ -9253,7 +9258,7 @@ end as term
             WHERE ta.gene_na_feature_id = na.na_feature_id
               AND pm.PHENOTYPE_MODEL_ID = na.PHENOTYPE_MODEL_ID
               AND pm.PHENOTYPE_MODEL_ID = pr.PHENOTYPE_MODEL_ID
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
               AND pr.phenotype_entity_term_id is not null
             GROUP BY opq.name
           ) t
@@ -9284,7 +9289,7 @@ end as term
               , replace(oen.name,Chr(39), Chr(39)||Chr(39)) as internal
               , count(distinct pm.na_feature_id) as order_num
             FROM
-              ApidbTuning.TranscriptAttributes ta
+              webready.TranscriptAttributes ta
               INNER JOIN APIDB.NAFEATUREPHENOTYPEMODEL na ON ta.gene_na_feature_id = na.na_feature_id
               INNER JOIN apidb.PhenotypeModel pm ON pm.phenotype_model_id = na.phenotype_model_id
               INNER JOIN apidb.PhenotypeResult pr ON pm.phenotype_model_id = pr.phenotype_model_id
@@ -9293,7 +9298,7 @@ end as term
             WHERE
               AND oen.name is not null
               AND (opq.name = '$$phenotypeQualifier$$' or (opq.name is null and 'HAS' = '$$phenotypeQualifier$$'))
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
             GROUP BY oen.name
           ) t
           ORDER BY order_num desc
@@ -9327,7 +9332,7 @@ end as term
               , opq.name as internal
               , count(distinct pm.na_feature_id) as order_num
             FROM
-               ApidbTuning.TranscriptAttributes ta
+               webready.TranscriptAttributes ta
               , apidb.phenotypemodel pm
               , APIDB.NAFeaturePhenotypeModel na
               , sres.externalDatabase ed
@@ -9340,7 +9345,7 @@ end as term
               AND ed.name = 'mory70-15_phenotype_Magnaporthe_Pheno_RSRC'
               AND pm.phenotype_model_id = na.phenotype_model_id
               AND pm.phenotype_model_id = pr.phenotype_model_id
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
               AND pr.phenotype_entity_term_id is not null
             GROUP BY opq.name
           ) t
@@ -9373,7 +9378,7 @@ end as term
               , oen.name as internal
               , count(distinct pm.na_feature_id) as order_num
             FROM
-              ApidbTuning.TranscriptAttributes ta
+              webready.TranscriptAttributes ta
               INNER JOIN Apidb.NAFeaturePhenotypeModel na ON ta.gene_na_feature_id = na.na_feature_id
               INNER JOIN apidb.PhenotypeModel pm ON pm.phenotype_model_id = na.phenotype_model_id
               INNER JOIN sres.externalDatabase ed ON edr.external_database_id = ed.external_database_id
@@ -9385,7 +9390,7 @@ end as term
               ed.name = 'mory70-15_phenotype_Magnaporthe_Pheno_RSRC'
               AND oen.name is not null
               AND (opq.name = '$$phenotypeQualifier$$')
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
             GROUP BY oen.name
           ) t
           ORDER BY order_num desc
@@ -9612,7 +9617,7 @@ end as term
         FROM study.studylink sl
           , study.protocolappnode pan
           , RESULTS.NAFEATUREDIFFRESULT dr
-          , apidbtuning.PANIO io
+          , webready.PANIO io
           , study.protocolappnode pan2
         WHERE sl.study_id = '$$profileset_generic$$'
           AND sl.PROTOCOL_APP_NODE_ID = pan.PROTOCOL_APP_NODE_ID
@@ -9933,9 +9938,9 @@ end as term
         SELECT DISTINCT
           o.name AS term, o.protocol_app_node_id AS internal,
           replace (o.name, ' [feature_loc](SpliceSites)', '') AS display
-        FROM apidbtuning.PANIO ioo
+        FROM webready.PANIO ioo
           , study.protocolappnode i
-          , apidbtuning.PANIO ioi
+          , webready.PANIO ioi
           , study.protocolappnode o
           , apidbtuning.profilesamples ps
         WHERE ioo.output_pan_id = ps.protocol_app_node_id

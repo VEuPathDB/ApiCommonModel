@@ -58,7 +58,7 @@
           SELECT ids.source_id,gsa.project_id
           FROM ( SELECT DISTINCT ds.source_id, ds.project_id, regexp_substr(ds.source_id, '[^:]+', 1, 1) as seq_source_id
                  FROM ($$span_id$$) ds
-            ) ids, apidbtuning.genomicseqattributes gsa
+            ) ids, webready.GenomicSeqAttributes gsa
           WHERE gsa.source_id = ids.seq_source_id
         ]]>
       </sql>
@@ -69,7 +69,7 @@
           FROM (
               SELECT distinct ds.source_id, regexp_substr(ds.source_id, '[^:]+', 1, 1) as seq_source_id
               FROM ($$span_id$$) ds
-            ) ids, apidbtuning.genomicseqattributes gsa
+            ) ids, webready.GenomicSeqAttributes gsa
           WHERE gsa.source_id = ids.seq_source_id
         ]]>
       </sql>
@@ -150,7 +150,7 @@
                 , lrt.transcript_novelty
                 FROM apidb.longreadtranscript lrt
                 , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) count_table
-                , apidbtuning.genomicseqattributes gsa
+                , webready.GenomicSeqAttributes gsa
                 , sres.externaldatabase ed
                 , sres.externaldatabaserelease edr
                 , apidbtuning.organismattributes oa
@@ -230,12 +230,13 @@ select INTRON_FEATURE_ID as feature_id,
                      gsa.project_id,
 		     ab.internal_abbrev,
 		     gij.sequence_source_id || ':' || gij.segment_start || '-' ||  gij.segment_end || CASE gij.is_reversed WHEN 0 THEN ':f' WHEN 1 THEN ':r' END as source_id
-                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats ,sres.taxonname tn ,apidbtuning.genomicseqattributes gsa ,apidbtuning.organismattributes ab
+                from ApidbTuning.GeneIntronJunction gij, webready.GenomicSeqJunctionStats stats ,sres.taxonname tn ,webready.GenomicSeqAttributes gsa ,apidbtuning.organismattributes ab
                 WHERE gij.na_sequence_id = stats.na_sequence_id
                 and gsa.taxon_id = tn.taxon_id
                 and gsa.na_sequence_ID = gij.na_sequence_id
 		and ab.organism_name = gsa.organism
-                and gsa.taxon_id in ($$organism_span$$)
+                and gsa.org_abbrev in ($$organism_span$$)
+                and stats.org_abbrev in ($$organism_span$$)
                 AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
                 --AND gij.annotated_intron = 'No'
                 AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
@@ -259,18 +260,19 @@ select INTRON_FEATURE_ID as feature_id,
 		     gsa.project_id,
                      ab.internal_abbrev,
 		     gij.sequence_source_id || ':' || gij.segment_start || '-' ||  gij.segment_end || CASE gij.is_reversed WHEN 0 THEN ':f' WHEN 1 THEN ':r' as source_id
-                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats, sres.taxonname tn ,apidbtuning.genomicseqattributes gsa ,apidbtuning.organismattributes ab
+                from ApidbTuning.GeneIntronJunction gij, webready.GenomicSeqJunctionStats stats, sres.taxonname tn ,webready.GenomicSeqAttributes gsa ,apidbtuning.organismattributes ab
                 WHERE gij.na_sequence_id = stats.na_sequence_id
                 and gsa.taxon_id = tn.taxon_id
                 and gsa.na_sequence_ID = gij.na_sequence_id
 		and ab.organism_name = gsa.organism
-                and gsa.taxon_id in ($$organism_span$$)
+                and gsa.org_abbrev in ($$organism_span$$)
+                and stats.org_abbrev in ($$organism_span$$)
                 AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 4
                 AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.min_annot_score ELSE 5*stats.min_annot_score END
                 AND (gij.contained = 0 or gij.percent_max >= stats.min_annot_percent_max)
                 AND gij.intron_feature_id not in (
                 select gij.intron_feature_id
-                from ApidbTuning.GeneIntronJunction gij, ApidbTuning.GeneIntJuncStats stats
+                from ApidbTuning.GeneIntronJunction gij, webready.GenomicSeqJunctionStats stats
                 WHERE gij.na_sequence_id = stats.na_sequence_id
                 AND gij.segment_end - gij.segment_start <= stats.max_intron_length * 2
                 AND gij.total_unique >=  CASE WHEN contained = 1 THEN stats.perc01_annot_score ELSE 5*stats.perc01_annot_score END
@@ -469,7 +471,7 @@ and annotated_intron in ($$Intron_junction_novelty$$)
                              ELSE to_char(gls.LOD_SCORE_MANT * power(10::double precision, gls.LOD_SCORE_EXP),'99.99EEEE')
                         END as lod_score
                  FROM dots.chromosomeelementfeature  cef, apidb.nafeaturehaploblock gls,
-                      dots.externalnasequence ens, dots.nalocation nl, apidbTuning.geneattributes ga, apidbtuning.GeneId gi, ($$ds_gene_ids$$) ds
+                      dots.externalnasequence ens, dots.nalocation nl, webready.GeneAttributes ga, webready.GeneId gi, ($$ds_gene_ids$$) ds
                  WHERE lower(gi.id) = lower(ds.gene_source_id)
                   AND ga.source_ID = gi.gene
                   AND gls.na_feature_id = ga.na_feature_id
@@ -479,7 +481,7 @@ and annotated_intron in ($$Intron_junction_novelty$$)
                   AND gls.LOD_SCORE_MANT * power(10::double precision, gls.LOD_SCORE_EXP) >= $$lod_score$$
           ) t
           GROUP BY sequence_id, start_loc, end_loc
-          HAVING '$$any_or_all_DynSeg$$' = 'any' or count(*) = (select count(*) from apidbtuning.GeneId gi,($$ds_gene_ids$$) ds  where  lower(gi.id) = lower(ds.gene_source_id))
+          HAVING '$$any_or_all_DynSeg$$' = 'any' or count(*) = (select count(*) from webready.GeneId gi,($$ds_gene_ids$$) ds  where  lower(gi.id) = lower(ds.gene_source_id))
         ]]>
       </sql>
 

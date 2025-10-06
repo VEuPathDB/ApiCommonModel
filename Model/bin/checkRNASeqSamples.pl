@@ -443,7 +443,7 @@ sub printData {
   my ($studyId, $fh, $dbh) = @_;
 
   my $sql = "select ga.source_id, p.profile_as_string 
-from apidbtuning.profile  p, apidbtuning.geneattributes ga
+from apidbtuning.profile  p, webready.GeneAttributes ga
 where p.profile_study_id = $studyId 
 and profile_type = 'values' 
 and ga.source_id = p.source_id (+)
