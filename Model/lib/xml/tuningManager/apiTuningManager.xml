@@ -170,9 +170,9 @@
     </comment>
     <externalDependency name="webready.TaxonSpecies"/>
     <internalDependency name="Profile"/>
-    <!--  <internalDependency name="SnpAttributes"/> -->
+    <!--  <internalDependency name="webready.SnpAttributes"/> -->
     <externalDependency name="apidb.Datasource"/>
-    <externalDependency name="dots.Similarity"/>
+    <!--externalDependency name="dots.Similarity"/ -->
     <externalDependency name="dots.NaSequence"/>
     <externalDependency name="dots.NaFeature"/>
     <externalDependency name="sres.TaxonName"/>
@@ -183,7 +183,7 @@
     <intermediateTable name="DataSourceCount"/>
     <intermediateTable name="OrganismCentromere"/>
     <intermediateTable name="SequenceCount"/>
-    <intermediateTable name="CommunityCount"/>
+    <!--intermediateTable name="CommunityCount"/-->
     <intermediateTable name="ProfileCount"/>
     <!-- <intermediateTable name="PopsetCount"/> -->
     <intermediateTable name="GeneCount"/>
@@ -260,24 +260,27 @@
         GROUP BY taxon_id
       ]]>
     </sql>
+
+<!-- 
     <sql>
       <![CDATA[
         CREATE UNLOGGED TABLE CommunityCount AS
-        -- SELECT taxon_id, count(*) as communityCount
-        -- TODO:  addd this back
+        ## SELECT taxon_id, count(*) as communityCount
+        ## TODO:  addd this back
         select taxon_id, 0 as communityCount
         FROM webready.GeneAttributes
-        --WHERE
-          --(source_id, project_id) IN (
-              --SELECT distinct stable_id, project_name
-              --userlogins5.mappedComment@prodn.login_comment
-              --FROM userlogins5.mappedComment
-              --WHERE is_visible = 1
-                --AND comment_target_id = 'gene'
-          --)
+        ##WHERE
+          ##(source_id, project_id) IN (
+             ##-SELECT distinct stable_id, project_name
+              ##userlogins5.mappedComment@prodn.login_comment
+              ##FROM userlogins5.mappedComment
+              ##WHERE is_visible = 1
+                ##AND comment_target_id = 'gene'
+          ##)
         GROUP BY taxon_id
       ]]>
     </sql>
+-->
     <sql>
       <![CDATA[
         CREATE UNLOGGED TABLE ProfileCount AS
@@ -364,14 +367,14 @@
             AND s.is_best_alignment = 1
             AND s.percent_est_bases_aligned >= 20
             AND s.percent_identity >= 90
-        ),
-        snpCount AS (
-          SELECT ga.taxon_id, ga.org_abbrev, COUNT(DISTINCT ga.source_id) AS ct
-          FROM webready.GeneAttributes ga
-          JOIN webready.SnpAttributes sf
-            ON sf.gene_source_id = ga.source_id
-          WHERE ga.is_deprecated = 0
-          GROUP BY ga.taxon_id, ga.org_abbrev
+--        ),
+--        snpCount AS (
+--          SELECT ga.taxon_id, ga.org_abbrev, COUNT(DISTINCT ga.source_id) AS ct
+--          FROM webready.GeneAttributes ga
+--          JOIN webready.SnpAttributes sf
+--            ON sf.gene_source_id = ga.source_id
+--          WHERE ga.is_deprecated = 0
+--          GROUP BY ga.taxon_id, ga.org_abbrev
         )
         SELECT 
             g.taxon_id,
@@ -467,7 +470,7 @@
                    coalesce(sc.contig_num, 0) as contigCount,
                    coalesce(sc.supercont_num, 0) as supercontigCount,
                    coalesce(sc.chrom_num, 0) as chromosomeCount,
-                   coalesce(cc.communityCount, 0) as communityCount,
+                   --coalesce(cc.communityCount, 0) as communityCount,
                    --coalesce(psc.popsetCount, 0) as popsetCount,
                    coalesce(pc.geneArrayCount, 0) as arrayGeneCount,
                    coalesce(pc.rnaSeqCount, 0) as rnaSeqCount,
@@ -479,7 +482,7 @@
               LEFT JOIN DataSourceCount dsc ON o.taxon_id = dsc.taxon_id
               LEFT JOIN OrganismCentromere oc ON o.taxon_id = oc.taxon_id
               LEFT JOIN SequenceCount sc ON o.taxon_id = sc.taxon_id
-              LEFT JOIN CommunityCount cc ON o.taxon_id = cc.taxon_id
+              --LEFT JOIN CommunityCount cc ON o.taxon_id = cc.taxon_id
               LEFT JOIN GeneCount gc ON o.taxon_id = gc.taxon_id
               --LEFT JOIN popsetCount psc ON o.taxon_id = psc.taxon_id
               LEFT JOIN profileCount pc ON o.taxon_id = pc.taxon_id
@@ -1965,85 +1968,6 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
-<!--
-  <tuningTable name="OrthologousTranscripts">
-    <comment>
-      Materialization of the orthology transform. Also useful for GeneTables.Orthologs.
-    </comment>
-    <externalDependency name="apidb.Synteny"/>
-    <externalDependency name="apidb.SyntenicGene"/>
-    <externalDependency name="apidb.Organism"/>
-    <intermediateTable name="SyntenicPairs"/>
-    <sql>
-      <![CDATA[
-         create UNLOGGED table SyntenicPairs as
-         select distinct ga.na_feature_id, sg.syn_na_feature_id
-         from apidb.SyntenicGene sg, webready.GeneAttributes ga
-         where sg.na_sequence_id = ga.na_sequence_id
-           and sg.end_max >= ga.start_min
-           and sg.start_min <= ga.end_max
-       ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        create index SynPair_idx&1
-          on SyntenicPairs (na_feature_id, syn_na_feature_id)
-
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        create table OrthologousTranscripts&1 as
-        with all_pairs
-             as (select ga.source_id
-                      , ga.project_id
-                      , ga.na_feature_id
-                      , ota.source_id as ortho_source_id
-                      , ota.gene_source_id as ortho_gene_source_id
-                      , ota.project_id as ortho_project_id
-                      , ota.gene_na_feature_id as ortho_na_feature_id
-                      , ota.transcript_product as ortho_product
-                      , ota.protein_length
-                      , ga.name as ortho_name
-                      , ota.organism as ortho_organism
-                      , ota.taxon_id as ortho_taxon_id
-                      , o.is_reference_strain
-                 from webready.GeneAttributes ga
-                    , webready.TranscriptAttributes ota
-                    , apidb.Organism o
-                 where ga.ORTHOMCL_NAME = ota.ORTHOMCL_NAME
-                 and ota.taxon_id = o.taxon_id
-             ),
-             syn_pairs
-             as (select na_feature_id, syn_na_feature_id, 1 as is_syntenic from SyntenicPairs
-             )
-        select all_pairs.*
-             , coalesce(syn_pairs.is_syntenic, 0) as is_syntenic
-        from all_pairs
-             left join syn_pairs
-             on all_pairs.na_feature_id = syn_pairs.na_feature_id
-                and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
-       ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        create index ot_idx&1
-          on OrthologousTranscripts&1 (source_id, project_id, is_syntenic desc, ortho_source_id,
-                                       ortho_project_id, ortho_gene_source_id, ortho_product,
-                                       ortho_name, ortho_organism, ortho_taxon_id, is_reference_strain)
-
-      ]]>
-    </sql>
-    <sql>
-      <![CDATA[
-        create index ot_smol_idx&1
-          on OrthologousTranscripts&1 (is_syntenic, ortho_taxon_id, source_id, ortho_source_id,
-                                       ortho_project_id, ortho_gene_source_id)
-
-      ]]>
-    </sql>
-  </tuningTable>
--->
 
 <!--  <tuningTable name="Stringdb" alwaysUpdate="true">-->
   <tuningTable name="Stringdb" >
@@ -2129,133 +2053,6 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
-  <tuningTable name="TranscriptGenomicSequence">
-    <comment>The genomic sequence of each transcript. Used in the transcript record / gene record page.
-    </comment>
-    <externalDependency name="apidb.TranscriptLocation"/>
-    <externalDependency name="dots.GeneFeature"/>
-    <externalDependency name="dots.NaSequence"/>
-    <externalDependency name="dots.Transcript"/>
-
-    <sql>
-      <![CDATA[
-        create table TranscriptGenomicSequence&1 as
-        select gf.source_id as gene_source_id, t.source_id,
-               cast (null as varchar(80)) as project_id,
-               nas.sequence as genomic_sequence,
-               length(nas.sequence) as genomic_sequence_length
-        from dots.NaSequence nas, dots.GeneFeature gf, dots.Transcript t
-        where 1 = 0
-      ]]>
-    </sql>
-
-    <sql>
-      <![CDATA[
-        create unique index txgseq_idx&1
-          on TranscriptGenomicSequence&1(source_id, gene_source_id, project_id)
-
-      ]]>
-    </sql>
-
-    <perl>
-      <![CDATA[
-use strict;
-
-use lib "$ENV{GUS_HOME}/lib/perl";
-
-use DBI;
-use DBD::Oracle;
-
-use CBIL::Bio::SequenceUtils; #reverseComplementSequence
-
-use Getopt::Long qw(GetOptions);
-
-use Data::Dumper;
-
-use EbrcModelCommon::Model::tmUtils;
-
-
-my $insertSql = "INSERT INTO TranscriptGenomicSequence&1
-    (gene_source_id, source_id, project_id,
-     genomic_sequence, genomic_sequence_length)
- VALUES (?,?,?,?,?)";
-my $insertSh = $dbh->prepare($insertSql);
-
-my $sql = "SELECT ga.source_id AS gene_source_id
-     , ga.project_id AS project_id
-     , t.source_id
-     , tl.start_min
-     , tl.end_max
-     , tl.is_reversed
-     , gss.source_id
-     , gss.sequence
-FROM apidb.transcriptlocation tl
-   , webready.webready.GeneAttributes ga
-   , dots.transcript t
-   , webready.GenomicSequenceSequence gss
-WHERE t.na_feature_id  = tl.na_feature_id
-AND t.parent_id = ga.na_feature_id
-AND tl.sequence_source_id = gss.source_id
-ORDER BY gss.source_id";
-
-
-# get the lob locator object here
-my $sh = $dbh->prepare($sql, { ora_auto_lob => 0 } )
-     or die "Can't prepare SQL statement: " . $dbh->errstr();
-$sh->execute();
-
-my ($prevSequenceSourceId, $sequence, $count);
-while(my ($geneSourceId, $projectId, $sourceId, $start, $end, $isReversed, $sequenceSourceId, $sequenceLobLocator) = $sh->fetchrow_array()) {
-
-  if($prevSequenceSourceId ne $sequenceSourceId) {
-    # print STDERR "Processing Transcripts for sequence $sequenceSourceId\n";
-    $sequence = &readClob($dbh, $sequenceLobLocator);
-  }
-
-  my $substrStart = $start - 1;
-  my $substrLength = $end - $start + 1;
-
-  my $transcriptGenomicSequence = substr($sequence, $substrStart, $substrLength);
-
-  if($isReversed) {
-    $transcriptGenomicSequence = CBIL::Bio::SequenceUtils::reverseComplementSequence($transcriptGenomicSequence);
-  }
-
-  $insertSh->execute($geneSourceId, $sourceId, $projectId, $transcriptGenomicSequence, $substrLength);
-
-  if($count++ % 200000 == 0) {
-    print STDERR "Commit point; count = $count\n";
-    $dbh->commit();
-  }
-
-  $prevSequenceSourceId = $sequenceSourceId;
-}
-
-$dbh->commit();
-
-
-sub readClob {
-  my ($dbh, $lobLocator) = @_;
-
-  my $chunkSize = $dbh->ora_lob_chunk_size($lobLocator);
-  my $offset = 1;   # Offsets start at 1, not 0
-
-  my $output;
-  while(1) {
-    my $data = $dbh->ora_lob_read($lobLocator, $offset, $chunkSize );
-    last unless length $data;
-    $output .= $data;
-    $offset += $chunkSize;
-  }
-  return $output;
-}
-
-
-1;
-      ]]>
-    </perl>
-
-  </tuningTable>
 
 
 
@@ -2515,6 +2312,7 @@ sub readClob {
          from webready.GeneProduct gp, webready.GeneAttributes ga
          where gp.source_rule = 7
            and gp.source_id = ga.source_id
+           and gp.org_abbrev = ga.org_abbrev
        order by is_alternate desc, transcript_ids
        ]]>
     </sql>
