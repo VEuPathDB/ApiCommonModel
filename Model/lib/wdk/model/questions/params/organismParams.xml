@@ -43,7 +43,7 @@
                     displayType="treeBox"
                     multiPick="true"
                     suppressNode="false"
-                    quote="false">
+                    quote="true">
       <help>
         Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
       </help>
@@ -56,7 +56,7 @@
                      displayType="treeBox"
                      multiPick="true"
                      suppressNode="true"
-                     quote="false">
+                     quote="true">
 
          <suggest selectMode="none"/>
           <help>
@@ -77,7 +77,7 @@
                      displayType="treeBox"
                      multiPick="true"
                      suppressNode="true"
-                     quote="false">
+                     quote="true">
 
          <suggest selectMode="none"/>
           <help>
@@ -100,7 +100,7 @@
                      multiPick="true"
                      suppressNode="true"
                      excludeProjects="EuPathDB"
-                     quote="false">
+                     quote="true">
 
          <suggest selectMode="all"/>
           <help>
@@ -145,7 +145,7 @@
                      multiPick="true"
                      suppressNode="true"
                      excludeProjects="EuPathDB"
-                     quote="false">
+                     quote="true">
          <suggest selectMode="all"/>
           <help>
                Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
@@ -203,7 +203,7 @@
                     queryRef="organismVQ.CNV"
                     prompt="Organism"
                     multiPick="false"
-                    quote="false"
+                    quote="true"
                     includeProjects="AmoebaDB,CryptoDB,PlasmoDB,ToxoDB,TriTrypDB,FungiDB,UniDB">
       <noTranslation value="true"/>
       <help>
@@ -224,7 +224,7 @@
                       displayType="treeBox"
                       maxSelectedCount="1"
                       multiPick="true"
-                      quote="false"
+                      quote="true"
                      suppressNode="false">
            <suggest default="%%primaryOrthoOrganism%%"/>
            <help>
@@ -241,7 +241,7 @@
                     queryRef="organismVQ.withGenesGFF"
                     prompt="Organism"
                     multiPick="true"
-                    quote="false">
+                    quote="true">
     </flatVocabParam>
 
     <flatVocabParam name="gff_organism_name"
@@ -256,7 +256,7 @@
                     prompt="Organism"
                     displayType="treeBox"
                     multiPick="true"
-                    quote="false"
+                    quote="true"
                     includeProjects="CryptoDB,ToxoDB,PlasmoDB,GiardiaDB,TriTrypDB,VectorBase,MicrosporidiaDB,UniDB">
       <suggest selectMode="none"/>
       <help>
@@ -346,7 +346,7 @@
                     queryRef="organismVQ.withCellularLocImages"
                     prompt="Organism"
                     multiPick="false"
-                    quote="false"
+                    quote="true"
                     includeProjects="TriTrypDB,GiardiaDB,EuPathDB,UniDB">
       <help>
         Select organisms you wish to query against.
@@ -359,7 +359,7 @@
                     multiPick="true"
                     suppressNode="true"
                     displayType="treeBox"
-                    quote="false">
+                    quote="true">
 
       <suggest selectMode="none"/>
 
@@ -376,7 +376,7 @@
         queryRef="organismVQ.WithSingleCell"
         prompt="Organism"
         multiPick="false"
-        quote="false">
+        quote="true">
 
       <help>
         Select the organism you wish to query against.
@@ -572,12 +572,12 @@
       <column name="parentTerm"/>
       <sql>
         WITH FilterQuery AS (
-          SELECT DISTINCT ga.organism
+          SELECT DISTINCT ga.organism, ga.org_abbrev
           FROM apidbtuning.geneintronjunction gij, webready.GeneAttributes ga
           WHERE ga.source_id = gij.gene_source_id
         )
         /* end filter query */
-        SELECT DISTINCT term, parentTerm, string_agg(trim(internal::varchar), ', ') AS internal
+        SELECT DISTINCT term, parentTerm, string_agg(trim(fq.org_abbrev), ', ') AS internal
         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
         WHERE ot.organism = fq.organism
         GROUP BY term, parentTerm
@@ -602,7 +602,7 @@
       <column name="internal"/>
       <column name="term"/>
       <sql>
-        SELECT DISTINCT ta.organism AS term, ta.organism AS internal
+        SELECT DISTINCT ta.organism AS term, ta.org_abbrev AS internal
         FROM webready.TranscriptAttributes ta, apidb.organism o
         WHERE ta.chromosome IS NOT NULL
           AND (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
@@ -625,14 +625,16 @@
       <sql>
         SELECT DISTINCT tn.NAME as term
           --, listagg(tn.taxon_id, ',') within group (order by tn.taxon_id) over (partition by tn.name) as internal
-          , tn.NAME as internal
+          , o.abbrev as internal
         FROM APIDB.DATASOURCE d
           , SRES.TAXONNAME tn
           , SRES.EXTERNALDATABASE ed
           , SRES.EXTERNALDATABASERELEASE edr
           , STUDY.STUDY s1
+	  , apidb.organism o
         WHERE lower(d.NAME) like '%copynumbervariations_%'
           AND tn.TAXON_ID = d.TAXON_ID
+	  AND tn.taxon_id = o.taxon_id
           AND tn.NAME_CLASS = 'scientific name'
           AND ed.name = d.name
           AND edr.VERSION = d.VERSION
@@ -752,7 +754,7 @@
       <column name="parentTerm"/>
         <sql>
          WITH FilterQuery as (
-             select distinct ta.organism, ta.project_id
+             select distinct ta.organism, ta.project_id, ta.org_abbrev
              from apidbtuning.snpstrains ss, webready.TranscriptAttributes ta, apidb.organism o
              where ta.taxon_id = o.taxon_id
              and ss.organism = ta.organism
@@ -949,14 +951,14 @@
         <![CDATA[
           /* WithGenes filter query*/
           WITH FilterQuery as (
-            SELECT distinct tn.name as organism
+            SELECT distinct tn.name as organism, o.abbrev
             FROM sres.taxonname tn, apidb.organism o
             WHERE o.is_annotated_genome = 1
-              AND (o.project_name = '@project_id@' or 'unidb' = '@project_id@')
+              AND (o.project_name = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID@')
               AND o.taxon_id = tn.taxon_id
               AND tn.name_class = 'scientific name')
           /* end filter query */
-          SELECT DISTINCT term, parentTerm, string_agg(trim(internal::varchar), ', ') AS internal
+          SELECT DISTINCT term, parentTerm, string_agg(fq.abbrev, ', ') AS internal
           FROM ApidbTuning.OrganismTree ot, FilterQuery fq
           WHERE ot.organism = fq.organism
           GROUP BY term, parentTerm
@@ -980,7 +982,7 @@
         <![CDATA[
           /* WithGenes filter query*/
           WITH FilterQuery as (
-            SELECT distinct tn.name as organism
+            SELECT distinct tn.name as organism, o.abbrev
             FROM sres.taxonName tn, apidb.organism o
             WHERE o.is_annotated_genome = 1
               AND (o.project_name = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
@@ -988,7 +990,7 @@
               AND tn.name_class = 'scientific name'
           )
           /* end filter query */
-          SELECT DISTINCT term, parentTerm, string_agg(trim(internal::varchar), ', ') AS internal
+          SELECT DISTINCT term, parentTerm, string_agg(fq.abbrev, ', ') AS internal
           FROM ApidbTuning.OrganismTree ot, FilterQuery fq
           WHERE ot.organism = fq.organism
           GROUP BY term, parentTerm
@@ -1151,14 +1153,14 @@
       <sql>
         <![CDATA[
 	WITH FilterQuery AS (
-            SELECT DISTINCT ta.organism
+            SELECT DISTINCT ta.organism, ta.org_abbrev
               FROM webready.TranscriptAttributes ta, apidb.aasequenceepitope ae
               WHERE ta.aa_sequence_id = ae.aa_sequence_id
               AND (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
           )
           /* end filter query */
           SELECT DISTINCT term, parentTerm
-          , string_agg(trim(internal::varchar), ', ') AS internal
+          , string_agg(fq.org_abbrev, ', ') AS internal
           FROM ApidbTuning.OrganismTree ot, FilterQuery fq
           WHERE ot.organism = fq.organism
           GROUP BY term, parentTerm
@@ -1189,14 +1191,14 @@
         <![CDATA[
           /* withSequenceStrains filter query */
           WITH FilterQuery AS (
-            SELECT DISTINCT sa.organism
+            SELECT DISTINCT sa.organism, o.abbrev
             FROM dots.NaSequence ns, webready.GenomicSeqAttributes sa, apidb.organism o
             WHERE ns.na_sequence_id = sa.na_sequence_id
               AND sa.taxon_id = o.taxon_id
               AND (sa.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
           )
           /* end filter query */
-          SELECT DISTINCT term, parentTerm, string_agg(trim(internal::varchar), ', ')
+          SELECT DISTINCT term, parentTerm, string_agg(fq.abbrev, ', ')
               AS internal
           FROM ApidbTuning.OrganismTree ot, FilterQuery fq
           WHERE ot.organism = fq.organism
@@ -1225,7 +1227,7 @@
       <column name="term"/>
       <sql>
         <![CDATA[
-          SELECT distinct sa.organism as term, sa.organism as internal
+          SELECT distinct sa.organism as term, sa.org_abbrev as internal
           FROM webready.GenomicSeqAttributes sa, apidb.organism o
           WHERE sa.chromosome IS NOT NULL
             AND (sa.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
@@ -1475,11 +1477,9 @@
 
       <sql>
         <![CDATA[
-          SELECT distinct ga.organism as term,ns.taxon_id as internal
-          FROM dots.NaSequence ns, dots.GeneFeature gf,webready.GeneAttributes ga
-          WHERE gf.na_sequence_id = ns.na_sequence_id
-            AND ga.source_id = gf.source_id
-            AND (ga.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
+          SELECT distinct ga.organism as term, ga.org_abbrev as internal
+          FROM webready.GeneAttributes ga
+          WHERE (ga.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
           ORDER BY organism asc
         ]]>
       </sql>
@@ -1667,13 +1667,13 @@
         <![CDATA[
           /* tfBindingSite filter query */
           WITH FilterQuery AS (
-            SELECT DISTINCT ga.organism
+            SELECT DISTINCT ga.organism, ga.org_abbrev
             FROM webready.GeneAttributes ga, webready.TFBSGene tg
             WHERE tg.gene_source_id = ga.source_id
               AND (ga.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
           )
           SELECT DISTINCT term, parentTerm
-            , string_agg(tn.name, ', ') AS internal
+            , string_agg(fq.org_abbrev, ', ') AS internal
           FROM ApidbTuning.OrganismTree ot, FilterQuery fq, Sres.TaxonName tn
           WHERE ot.organism = fq.organism
             AND tn.taxon_id = ot.internal
@@ -1776,7 +1776,7 @@
         <![CDATA[
           --alphafold filter query
           WITH FilterQuery AS (
-            SELECT DISTINCT ga.organism
+            SELECT DISTINCT ga.organism, ga.org_abbrev
             FROM webready.GeneAttributes ga
               , webready.alphafoldgenes afg
             WHERE ga.source_id = afg.gene_source_id
@@ -1785,7 +1785,7 @@
           -- end filter query
           SELECT DISTINCT term
             , parentTerm
-            , string_agg(internal, ', ') AS internal
+            , string_agg(org_abbrev, ', ') AS internal
           FROM apidbtuning.organismtree ot
             , FilterQuery fq
           WHERE ot.organism = fq.organism
@@ -1809,7 +1809,7 @@
       <sql>
         <![CDATA[
         SELECT DISTINCT ga.organism as term
-          , ga.taxon_id as internal
+          , ga.org_abbrev as internal
         FROM webready.GeneAttributes ga
           , apidb.cellxgene cxg
         WHERE cxg.na_feature_id = ga.na_feature_id
@@ -1830,7 +1830,7 @@
       <column name="term"/>
       <sql>
         <![CDATA[
-        SELECT distinct ta.organism as term, ta.taxon_id as internal
+        SELECT distinct ta.organism as term, ta.org_abbrev as internal
         FROM webready.TranscriptAttributes ta, webready.GoTermSummary gs
         WHERE gs.source in ('TrypTag', 'DawsonLab')
           AND ta.aa_sequence_id = gs.aa_sequence_id
@@ -1870,7 +1870,7 @@
       <column name="term"/>
       <sql>
         <![CDATA[
-          SELECT distinct ga.organism as term, ga.organism as internal
+          SELECT distinct ga.organism as term, ga.org_abbrev as internal
           FROM  webready.GeneAttributes ga, webready.GenomicSeqAttributes sa, SRes.ontologyTerm ot
           WHERE ga.na_sequence_id = sa.na_sequence_id
             AND sa.so_id = ot.source_id
@@ -1892,7 +1892,7 @@
       <column name="term"/>
       <sql>
         <![CDATA[
-          SELECT distinct ta.organism  as term, ta.organism as internal
+          SELECT distinct ta.organism  as term, ta.org_abbrev as internal
           FROM webready.TranscriptCenDistance tcd, webready.TranscriptAttributes ta
           WHERE tcd.transcript = ta.source_id
             AND (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
@@ -1912,11 +1912,12 @@
       <column name="term"/>
       <sql>
         <![CDATA[
-          SELECT DISTINCT tn.name  as term, tn.name  as internal
-          FROM apidb.dataSource ds, sres.taxonName tn
+          SELECT DISTINCT tn.name  as term, o.abbrev  as internal
+          FROM apidb.dataSource ds, sres.taxonName tn, apidb.organism o
           WHERE ds.name IN ('pfal3D7_dbxref_simple_gene2HagaiPathway_RSRC','tgonME49_dbxref_protein2Pathways_Feng_RSRC')
             AND ds.taxon_id = tn.taxon_id
             AND tn.name_class = 'scientific name'
+	    and o.taxon_id = tn.taxon_id
         ]]>
       </sql>
     </sqlQuery>

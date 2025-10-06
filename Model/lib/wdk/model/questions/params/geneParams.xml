@@ -6422,10 +6422,11 @@ products of your selected type (or types).<br><br>
             select distinct 'long_transcript_novelty' as ontology_term_name, cast(null as varchar(1)) as parent_ontology_term_name,
             'Support From Long Read Evidence' as display_name, 'Find genes based on overlapping models from long read RNA sequencing, for example from Oxford Nanopore or PacBio sequencing platforms. To be considered in this query, a model must have at least 5 supporting reads and be at least 20 bases long. Categories as follows: Novel in Collection (NIC): Prediction uses known splice donors and acceptors but reveals new connections (e.g., skipped exon isoforms); Incomplete Splice Match (ISM): Prediction matches subsection of a known transcript model, but has a novel putative start or end point; Novel Not In Collection (NNC): Prediction has at least one novel splice donor or acceptor; Genomic: Prediction has no overlapping splice junctions compared to known transcripts; Genomic: Prediction has no overlapping splice junctions compared to known transcripts; Known: Prediction exactly matches a known model.  NOTE: The percentage add up to more than 100% because one existing gene model can have more than associated TALON model.' as description, cast(null as varchar(1)) as units,
             'string' as type, 0 as is_range, cast(null as varchar(1)) as precision, 7 as display_order
-            from apidbtuning.datasetdatasource dd
+            from apidbtuning.datasetdatasource dd, apidb.organism o
             where '$$gene_or_transcript$$' = 'gene_source_id'
               and dd.name like '%nanopore_longReadRnaSeq_RSRC'
-              and dd.taxon_id in ($$organism_select_all$$)
+              and o.abbrev in ($$organism_select_all$$)
+              and dd.taxon_id = o.taxon_id
               and '@PROJECT_ID@' != 'EuPathDB'
             UNION
             select 'intron_junction' as ontology_term_name, cast(null as varchar(1)) as parent_ontology_term_name,
@@ -6467,8 +6468,9 @@ products of your selected type (or types).<br><br>
                 when string_value in ('ISM') then 'Incomplete Splice Match'
                 else string_value
                 end as string_value
-            from apidbTuning.GeneModelCharOrgMD
-            where taxon_id in ($$organism_select_all$$)
+            from apidbTuning.GeneModelCharOrgMD gm, apidb.organism o
+            where o.abbrev in ($$organism_select_all$$)
+	    and o.taxon_id = gm.taxon_id
             and (('$$gene_or_transcript$$' = 'gene_source_id') OR ('$$gene_or_transcript$$' = 'source_id' and ontology_term_name not in ('intron_junction', 'unique_reads','long_transcript_novelty')))
       ) o
           ]]>
@@ -6493,8 +6495,9 @@ products of your selected type (or types).<br><br>
             cast(null as timestamp) as date_value
           FROM (
             SELECT *
-            FROM apidbTuning.GeneModelCharOrgMD
-            WHERE taxon_name in ($$organism_select_all$$)
+            FROM apidbTuning.GeneModelCharOrgMD gm, apidb.organism o
+            WHERE o.abbrev in ($$organism_select_all$$)
+            and gm.taxon_id = o.taxon_id
 		  ) t
         ]]>
       </sql>
@@ -6609,7 +6612,9 @@ products of your selected type (or types).<br><br>
             , sres.externaldatabase ed
             , apidbtuning.datasetpresenter dsp
             , apidbtuning.datasetdatasource dd
-          WHERE dd.taxon_id = $$organismsWithSingleCell$$
+	    , apidb.organism o
+          WHERE o.abbrev = $$organismsWithSingleCell$$
+          WHERE dd.taxon_id = o.taxon_id
             AND dsp.name like '%cellxgene%'
             AND dsp.name = dnt.name
             AND ed.name = dnt.name
@@ -7583,8 +7588,8 @@ products of your selected type (or types).<br><br>
           FROM  webready.GenomicSeqAttributes sa, SRes.ontologyTerm ot
           WHERE sa.so_id = ot.source_id
             AND ot.name in  ('mitochondrial_chromosome', 'apicoplast_chromosome')
-            AND sa.organism = $$org_with_nonnuclear_genes$$
-            AND sa.source_id IN (SELECT sequence_id FROM webready.TranscriptAttributes)
+            AND sa.org_abbrev = $$org_with_nonnuclear_genes$$
+            AND sa.source_id IN (SELECT sequence_id FROM webready.TranscriptAttributes where org_abbrev = $$org_with_nonnuclear_genes$$)
           ORDER BY display
 	    ]]>
       </sql>
@@ -9218,7 +9223,7 @@ end as term
           AND dr.primary_identifier != 'qualityControl'
           AND drnf.db_ref_id = dr.db_ref_id
           AND gf.na_feature_id = drnf.na_feature_id
-          AND gf.organism = $$org_with_Hagai_pathways$$
+          AND gf.org_abbrev = $$org_with_Hagai_pathways$$
         ORDER BY display
       </sql>
 
@@ -9253,7 +9258,7 @@ end as term
             WHERE ta.gene_na_feature_id = na.na_feature_id
               AND pm.PHENOTYPE_MODEL_ID = na.PHENOTYPE_MODEL_ID
               AND pm.PHENOTYPE_MODEL_ID = pr.PHENOTYPE_MODEL_ID
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
               AND pr.phenotype_entity_term_id is not null
             GROUP BY opq.name
           ) t
@@ -9293,7 +9298,7 @@ end as term
             WHERE
               AND oen.name is not null
               AND (opq.name = '$$phenotypeQualifier$$' or (opq.name is null and 'HAS' = '$$phenotypeQualifier$$'))
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
             GROUP BY oen.name
           ) t
           ORDER BY order_num desc
@@ -9340,7 +9345,7 @@ end as term
               AND ed.name = 'mory70-15_phenotype_Magnaporthe_Pheno_RSRC'
               AND pm.phenotype_model_id = na.phenotype_model_id
               AND pm.phenotype_model_id = pr.phenotype_model_id
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
               AND pr.phenotype_entity_term_id is not null
             GROUP BY opq.name
           ) t
@@ -9385,7 +9390,7 @@ end as term
               ed.name = 'mory70-15_phenotype_Magnaporthe_Pheno_RSRC'
               AND oen.name is not null
               AND (opq.name = '$$phenotypeQualifier$$')
-              AND ta.organism = '$$organismwithPhenotype$$'
+              AND ta.org_abbrev = '$$organismwithPhenotype$$'
             GROUP BY oen.name
           ) t
           ORDER BY order_num desc

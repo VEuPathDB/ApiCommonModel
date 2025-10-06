@@ -775,7 +775,8 @@
                  count(*) as tfbs_count, org.public_abbrev as organismAbbrev
           FROM  webready.TFBSGene bg, webready.TranscriptAttributes ta, apidb.organism org
           WHERE bg.distance <= $$tfbs_distance$$
-            AND bg.organism in ($$organism$$)
+            AND bg.org_abbrev in ($$organism$$)
+            AND ta.org_abbrev in ($$organism$$)
             AND bg.direction = '-'
             AND exp(bg.primary_score) <= $$tfbs_pvalue$$
             AND bg.name = $$tfbs_name$$
@@ -1037,7 +1038,7 @@
                   , ', '
                 ) AS source
               FROM dots.aaSequenceEnzymeClass asec, sres.enzymeClass ec, webready.TranscriptAttributes ta
-              WHERE ta.taxon_id IN ($$organism$$)
+              WHERE ta.org_abbrev IN ($$organism$$)
                 AND ta.aa_sequence_id = asec.aa_sequence_id
                 AND asec.enzyme_class_id = ec.enzyme_class_id
                 AND (
@@ -1263,7 +1264,7 @@
           FROM webready.TranscriptAttributes
           WHERE tm_count >= $$min_tm$$
             AND tm_count <= $$max_tm$$
-            AND taxon_id IN ($$organism$$)
+            AND org_abbrev IN ($$organism$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -1314,7 +1315,7 @@
           FROM webready.TranscriptAttributes
           WHERE gene_type IN ($$geneType$$)
             AND is_pseudo in ($$includePseudogenes$$)
-            AND taxon_id IN ($$organism$$)
+            AND org_abbrev IN ($$organism$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -1989,10 +1990,11 @@
                  max(otx.ortho_project_id) as project_id,
                  substr(string_agg(otx.source_id, ','  ORDER BY otx.source_id) , 1, 4000) AS orthologs,
                  max(inputs.wdk_weight) AS wdk_weight
-          from inputs, apidbTuning.OrthologousTranscripts otx
+          from inputs, apidbTuning.OrthologousTranscripts otx, apidb.organism o
           where inputs.gene_source_id = otx.source_id
              and (otx.is_syntenic = 1 OR $$isSyntenic$$ = 'no')
-             and otx.ortho_taxon_id IN ($$organism$$)
+             and o.abbrev IN ($$organism$$)
+	     and otx.ortho_taxon_id = o.taxon_id
           group by otx.ortho_source_id, otx.ortho_gene_source_id
 
         ]]>
@@ -2049,7 +2051,8 @@
             -- listagg(gs.is_go_slim, ',')WITHIN GROUP (ORDER BY gs.is_go_slim) as is_go_slim
             string_agg(distinct gs.is_go_slim::varchar, ', ')  as is_go_slim
           FROM webready.TranscriptAttributes ta, webready.GoTermSummary gs
-          WHERE ta.taxon_id IN ($$organism$$)
+          WHERE ta.org_abbrev IN ($$organism$$)
+            AND gs.org_abbrev IN ($$organism$$)
             AND ta.aa_sequence_id = gs.aa_sequence_id
             AND CASE WHEN gs.evidence_code = 'IEA' THEN 'Computed' ELSE 'Curated' END in ($$go_term_evidence$$)
             --   and case when $$go_term_slim$$ = 'Yes' and gs.is_go_slim = '1' then 1
@@ -2152,7 +2155,8 @@
             , string_agg(regexp_replace(fi.note, ' <a href.+$', NULL), '; ') AS note
             , max(fi.image_uri) AS image
           FROM webready.TranscriptAttributes ta, webready.GoTermSummary gs, apidb.nafeatureimage fi
-          WHERE ta.taxon_id IN ($$organismWithCellularLocImages$$)
+          WHERE ta.org_abbrev IN ($$organismWithCellularLocImages$$)
+            AND gs.org_abbrev IN ($$organismWithCellularLocImages$$)
             -- Cellular loc datasets
             AND gs.source IN ('TrypTag', 'DawsonLab')
             AND ta.aa_sequence_id = gs.aa_sequence_id
@@ -2249,7 +2253,8 @@
             , string_agg(regexp_replace(fi.note, ' <a href.+$', NULL), '; ') AS note
             , fi.image_uri AS image
           FROM webready.TranscriptAttributes ta, webready.GoTermSummary gs, apidb.nafeatureimage fi
-          WHERE ta.taxon_id IN ($$organismWithCellularLocImages$$)
+          WHERE ta.org_abbrev IN ($$organismWithCellularLocImages$$)
+            AND gs.org_abbrev IN ($$organismWithCellularLocImages$$)
             -- Cellular loc datasets
             AND gs.source IN ('TrypTag', 'DawsonLab')
             AND ta.aa_sequence_id = gs.aa_sequence_id
@@ -2308,7 +2313,8 @@
             , -1 as nn_d_score
             , -1 as  hmm_signal_probability
           FROM webready.TranscriptAttributes ta, webready.SignalPeptideDomains spd
-          WHERE ta.taxon_id in ($$organism$$)
+          WHERE ta.org_abbrev in ($$organism$$)
+            AND spd.org_abbrev in ($$organism$$)
             AND ta.aa_sequence_id = spd.aa_sequence_id
             AND spd.algorithm_name = $$signalp_version$$
         ]]>
@@ -2347,7 +2353,7 @@
           FROM webready.TranscriptAttributes
           WHERE isoelectric_point BETWEEN $$min_isoelectric_point$$
             AND $$max_isoelectric_point$$
-            AND taxon_id in ($$organism$$)
+            AND org_abbrev in ($$organism$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -2383,7 +2389,7 @@
           FROM webready.TranscriptAttributes
           WHERE molecular_weight <= $$max_molecular_weight$$
             AND molecular_weight >= $$min_molecular_weight$$
-            AND taxon_id in ($$organism$$)
+            AND org_abbrev in ($$organism$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -2438,7 +2444,8 @@
               )
               AND gij.is_reversed = ga.is_reversed
               AND gij.total_unique >= $$min_total_unique$$
-              AND gij.taxon_id IN ($$organism$$)
+              AND gij.taxon_id = ga.taxon_id
+              AND ga.org_abbrev IN ($$organism$$)
           ) , gmi AS (
             SELECT gene_source_id, source_id, max(total_unique) AS max_unique, max(total_isrpm) AS max_isrpm
             FROM core
@@ -2468,7 +2475,8 @@
             AND gij.total_isrpm >= $$min_total_unique$$
             AND gij.annotated_intron = 'No'
             AND gij.percent_max between $$percent_max.min$$ and $$percent_max.max$$
-            AND gij.taxon_id in ($$organism$$)
+            AND ga.org_abbrev in ($$organism$$)
+            AND gij.taxon_id = ga.taxon_id
           GROUP BY ga.gene_source_id, ga.source_id, ga.project_id
         ]]>
       </sql>
@@ -2491,7 +2499,7 @@
         <![CDATA[
            SELECT distinct source_id, gene_source_id, 'Y' as matched_result, project_id
            FROM webready.TranscriptAttributes
-           WHERE taxon_id IN ($$organism$$)
+           WHERE org_abbrev IN ($$organism$$)
              AND $$scope$$  >= $$num_exons_gte$$
              AND $$scope$$ <= $$num_exons_lte$$
         ]]>
@@ -2528,7 +2536,7 @@
         <![CDATA[
           SELECT distinct source_id, gene_source_id, 'Y' as matched_result, project_id
           FROM webready.TranscriptAttributes
-          WHERE taxon_id IN ($$organism$$)
+          WHERE org_abbrev IN ($$organism$$)
            AND gene_paralog_number >= $$num_paralogs.min$$
            AND gene_paralog_number <= $$num_paralogs.max$$
         ]]>
@@ -2649,7 +2657,7 @@
               FROM webready.TranscriptAttributes ta
               WHERE ta.orthomcl_name IS NULL
                 AND (ta.gene_type = 'protein coding' OR ta.gene_type = 'protein coding gene')
-                AND ta.taxon_id in ($$organism$$)
+                AND ta.org_abbrev in ($$organism$$)
                 AND $$profile_pattern$$ not like '%:Y%'
              UNION
               SELECT DISTINCT ta.source_id, ta.gene_source_id, 'Y' as matched_result,
@@ -2657,7 +2665,7 @@
               FROM apidbTuning.GroupPhylogeneticProfile gpp, webready.TranscriptAttributes ta
               WHERE gpp.profile_string LIKE $$profile_pattern$$
                 AND gpp.orthomcl_name = ta.orthomcl_name
-                AND ta.taxon_id in ($$organism$$)
+                AND ta.org_abbrev in ($$organism$$)
           ) t
           ORDER BY taxon_id,source_id
         ]]>
@@ -2715,7 +2723,7 @@
           WHERE internal.na_feature_id = drnf.na_feature_id
             AND ta.gene_na_feature_id = drnf.na_feature_id
             AND drnf.db_ref_id = dr.db_ref_id
-	        AND ta.organism = $$org_with_Hagai_pathways$$
+	        AND ta.org_abbrev = $$org_with_Hagai_pathways$$
           GROUP BY ta.project_id,ta.source_id,ta.gene_source_id
         ]]>
       </sql>
@@ -2747,7 +2755,7 @@
         <![CDATA[
           SELECT ta.source_id, ta.gene_source_id, 'Y' as matched_result, ta.project_id
           FROM webready.TranscriptAttributes ta
-          WHERE ta.taxon_id in ($$organism$$)
+          WHERE ta.org_abbrev in ($$organism$$)
           ORDER BY ta.source_id
         ]]>
       </sql>
@@ -2864,7 +2872,7 @@
 	FROM    webready.TranscriptAttributes ta
 		, apidb.aasequenceepitope ae
 	WHERE ae.aa_sequence_id = ta.aa_sequence_id
-	AND ta.taxon_id in ($$organism$$)
+	AND ta.org_abbrev in ($$organism$$)
 	AND ae.taxon_match <= $$taxon_match$$
         AND ae.mismatches <= $$peptide_mismatch$$
         AND ae.protein_match <= $$protein_match$$
@@ -3063,7 +3071,7 @@
               WHERE  lower(gi.id) = lower($$single_gene_id$$)
               AND    ga.source_id = gi.gene
             )
-            AND gattr.taxon_id IN ($$organism$$)
+            AND gattr.org_abbrev IN ($$organism$$)
           ORDER BY project_id, source_id
         ]]>
       </sql>
@@ -3115,7 +3123,7 @@
             , gatr.project_id, gatr.gene_source_id
             , gatr.sequence_id || ': ' || trim(to_char(gatr.start_min,'999,999,999')) || ' - ' || trim(to_char(gatr.end_max,'999,999,999')) || CASE WHEN gatr.is_reversed = 1 THEN ' (-)' ELSE' (+)' END as dynamic_location
           FROM  webready.TranscriptAttributes gatr
-          WHERE ((gatr.organism = $$organismSinglePick$$ AND gatr.chromosome = $$chromosomeOptional$$)
+          WHERE ((gatr.org_abbrev = $$organismSinglePick$$ AND gatr.chromosome = $$chromosomeOptional$$)
                  OR lower(gatr.sequence_id) = lower($$sequenceId$$))
             AND gatr.end_max >= REGEXP_REPLACE('$$start_point$$', ',| ','')::numeric
             AND (gatr.start_min <= REGEXP_REPLACE('$$end_point$$', ',| ','')::numeric OR REGEXP_REPLACE('$$end_point$$', ',| ','')::numeric = 0)
@@ -3529,7 +3537,7 @@
             AND c.percentage between $$min_coil$$ and $$max_coil$$
             AND e.percentage between $$min_strand$$ and $$max_strand$$
             AND h.percentage between $$min_helix$$ and $$max_helix$$
-            AND ta.taxon_id IN ($$organism$$)
+            AND ta.org_abbrev IN ($$organism$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -3601,7 +3609,7 @@
                    OR lower(interpro_desc)         LIKE  lower(REPLACE($$domain_accession$$, '*', '%'))
                 )
             AND ta.transcript_source_id = ir.transcript_source_id
-            AND ta.organism IN ($$organism$$)
+            AND ta.org_abbrev IN ($$organism$$)
           GROUP BY ir.transcript_source_id,ir.gene_source_id
         ]]>
       </sql>
@@ -3654,7 +3662,7 @@
           SELECT source_id AS source_id, 'Y' as matched_result,
                  project_id
           FROM webready.GeneAttributes
-          WHERE taxon_id IN ($$gff_organism$$)
+          WHERE org_abbrev IN ($$gff_organism$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -6037,7 +6045,7 @@
           SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
               max(df.score) as exportpred_score
           FROM dots.DomainFeature df, webready.TranscriptAttributes ta
-          WHERE  ta.taxon_id in ($$organism$$)
+          WHERE  ta.org_abbrev in ($$organism$$)
             AND ta.aa_sequence_id = df.aa_sequence_id
             AND df.algorithm_name = 'exportpred'
             AND df.score >= $$min_exportpred_score$$
@@ -6076,7 +6084,8 @@
           SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
           TRIM(TO_CHAR(tcd.centromere_distance,'9,999,999')) as dist_centromere
           FROM webready.TranscriptCenDistance tcd, webready.TranscriptAttributes ta
-          WHERE ta.organism = $$org_with_centromere_genes$$
+          WHERE ta.org_abbrev = $$org_with_centromere_genes$$
+            AND tcd.org_abbrev = $$org_with_centromere_genes$$
             AND tcd.transcript = ta.source_id
             AND tcd.centromere_distance <= $$max_centromere_distance$$
             AND tcd.genomic_sequence in ($$centromere_chromosome$$)
@@ -6120,7 +6129,7 @@
           SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
             trim(to_char(LEAST(s.length - l.end_max,l.start_min),'999,999')) as dist_telomere
           FROM webready.TranscriptAttributes ta, apidb.FeatureLocation l, dots.NaSequence s
-          WHERE ta.organism = $$organismSinglePick$$
+          WHERE ta.org_abbrev = $$organismSinglePick$$
            AND ta.na_sequence_id = s.na_sequence_id
            AND l.na_feature_id = ta.na_feature_id
            AND l.sequence_source_id = s.source_id
@@ -6166,10 +6175,10 @@
           SELECT distinct gf.source_id, gf.gene_source_id, gf.project_id, 'Y' as matched_result
           FROM webready.TranscriptAttributes gf, dots.NaSequence ens
           WHERE ens.source_id IN ($$nonnuclear_sequence$$)
-            AND gf.organism = $$org_with_nonnuclear_genes$$
+            AND gf.org_abbrev = $$org_with_nonnuclear_genes$$
             AND gf.na_sequence_id = ens.na_sequence_id
-            AND gene_end_max >= REGEXP_REPLACE('$$start_point$$', ',| ','')
-            AND (gene_start_min <= REGEXP_REPLACE('$$end_point$$', ',| ','') OR REGEXP_REPLACE('$$end_point$$', ',| ','') = 0)
+            AND gene_end_max >= $$start_point$$
+            AND (gene_start_min <= $$end_point$$ OR $$end_point$$ = 0)
         ]]>
       </sql>
     </sqlQuery>
@@ -6246,7 +6255,8 @@
                     SELECT t2.taxon_id FROM sres.taxon t2
                     JOIN cbp_name on cbp_name.taxon_id = t2.parent_id)
                    SELECT taxon_id from cbp_name)
-            AND ps.gene_taxon_id IN ($$organism$$)
+            AND ps.org_abbrev IN ($$organism$$)
+            AND ta.org_abbrev IN ($$organism$$)
             AND ps.evalue_exp < $$pvalue_cutoff$$
             AND ps.source_id = ta.source_id
           GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
@@ -6443,7 +6453,7 @@ select distinct ta.gene_source_id
                ) comm,
                webready.TranscriptAttributes ta
           WHERE comm.stable_id = ta.gene_source_id
-            AND ta.taxon_id in ($$organism_select_all$$)
+            AND ta.org_abbrev in ($$organism_select_all$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -6579,8 +6589,8 @@ select distinct ta.gene_source_id
               AND ta.gene_source_id = tp.gene_source_id
               AND tp.complete_ec >= $$exclude_incomplete_ec$$
               AND tp.exact_match >= $$exact_match_only$$
-              AND ta.taxon_id in ($$organism$$)
-          )
+              AND ta.org_abbrev in ($$organism$$)
+              AND tp.org_abbrev in ($$organism$$)
             )
           , pathwayAgg AS (
               SELECT DISTINCT gene_source_id
@@ -6590,7 +6600,6 @@ select distinct ta.gene_source_id
               , string_agg(ec_pathway, ', ' order by ec_pathway) as ec_pathway
               FROM transform
               GROUP BY gene_source_id, source_id, ec_gene, project_id
-          )
             )
           , geneAgg AS (
               SELECT DISTINCT gene_source_id
@@ -6600,7 +6609,6 @@ select distinct ta.gene_source_id
               , string_agg(ec_gene, ', ' order by ec_gene) as ec_gene
               FROM pathwayAgg
               GROUP BY gene_source_id, source_id, ec_pathway, project_id
-          )
             )
           SELECT DISTINCT project_id
           , gene_source_id
@@ -6609,7 +6617,7 @@ select distinct ta.gene_source_id
           , string_agg(ec_pathway, ', ' order by ec_pathway) as ec_pathway
           , string_agg(ec_gene, ', ' order by ec_pathway) as ec_gene
           FROM geneAgg
-          GROUP BY project_id, gene_source_id, source_id, 'Y'
+          GROUP BY project_id, gene_source_id, source_id, matched_result
         ]]>
       </sql>
     </sqlQuery>
@@ -6648,7 +6656,8 @@ select distinct ta.gene_source_id
             AND tp.exact_match >= $$exact_match_only$$
             AND tp.ec_number_pathway = pr.enzyme
             AND ta.gene_source_id = tp.gene_source_id
-            AND ta.taxon_id in ($$organism$$)
+            AND ta.org_abbrev in ($$organism$$)
+            AND tp.org_abbrev in ($$organism$$)
             AND (tp.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$ = 1)
         ]]>
       </sql>
@@ -6684,7 +6693,8 @@ select distinct ta.gene_source_id
             AND tp.exact_match >= $$exact_match_only$$
             AND tp.ec_number_pathway = pr.enzyme
             AND ta.gene_source_id = tp.gene_source_id
-            AND ta.taxon_id in ($$organism$$)
+            AND ta.org_abbrev in ($$organism$$)
+            AND tp.org_abbrev in ($$organism$$)
           GROUP BY ta.source_id, ta.gene_source_id, ta.project_id
         ]]>
       </sql>
@@ -6725,7 +6735,8 @@ select distinct ta.gene_source_id
             AND tp.complete_ec >= $$exclude_incomplete_ec$$
             AND tp.exact_match >= $$exact_match_only$$
             AND ta.gene_source_id = tp.gene_source_id
-            AND ta.taxon_id in ($$organism$$)
+            AND ta.org_abbrev in ($$organism$$)
+            AND tp.org_abbrev in ($$organism$$)
           GROUP BY ta.gene_source_id, ta.source_id, ta.project_id
         ]]>
       </sql>
@@ -7021,7 +7032,7 @@ select distinct ta.gene_source_id
           FROM webready.TranscriptAttributes ta
             , webready.alphafoldgenes afg
           WHERE ta.gene_source_id = afg.gene_source_id
-            AND ta.taxon_id IN ($$organismsWithAlphafold$$)
+            AND ta.org_abbrev IN ($$organismsWithAlphafold$$)
         ]]>
       </sql>
     </sqlQuery>
@@ -7269,7 +7280,7 @@ select distinct ta.gene_source_id
         <![CDATA[
           SELECT ga.source_id, ga.project_id
           FROM webready.GeneAttributes ga
-          WHERE ga.taxon_id in ($$organism$$)
+          WHERE ga.org_abbrev in ($$organism$$)
           ORDER BY ga.source_id
         ]]>
       </sql>
