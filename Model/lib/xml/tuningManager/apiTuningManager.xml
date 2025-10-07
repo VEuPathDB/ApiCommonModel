@@ -2245,78 +2245,166 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     </comment>
     <externalDependency name="apidb.GeneFeatureProduct"/>
     <externalDependency name="apidb.TranscriptProduct"/>
-    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="webready.GeneAttributes"/>
+    <externalDependency name="webready.TranscriptAttributes"/>
+    <externalDependency name="webready.GeneProduct"/>
     <externalDependency name="dots.GoAssocInstEvidCode"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.OntologyTerm"/>
+    <externalDependency name="apidb.Organism"/>
 
+    <!-- Create empty table structure -->
     <sql>
      <![CDATA[
-       create table &prefixAllGeneProducts&1 as
-         with evids
-            as (select distinct gaiec.go_evidence_code_id, ot.name
-                from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
-                where ot.ontology_term_id = gaiec.go_evidence_code_id)
-         select ta.gene_source_id AS source_id, tp.product, ta.project_id,
-                CASE tp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
-                string_agg(source_id, ', ' order by source_id) as transcript_ids,
-                string_agg(publication, ', ' order by source_id) as reference,
-                e.name as evidence_code, tp.with_from as evidence_code_parameter,
-                tp.assigned_by, 'apidb.TranscriptProduct' as source
-         from webready.TranscriptAttributes ta
-            INNER JOIN apidb.TranscriptProduct tp ON ta.na_feature_id = tp.na_feature_id
-            LEFT JOIN evids e ON tp.evidence_code = e.go_evidence_code_id
-         group by gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
-               tp.with_from, tp.assigned_by
-       union
-         select ga.source_id as source_id, gfp.product, ga.project_id,
-                CASE gfp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
-                null as transcript_ids, null as reference, null as evidence_code,
-                null as evidence_code_parameter, --gfp.assigned_by,
-                -- CHECK AND FIX: OK that apidb.GeneFeatureProduct has NO assigned_by column?
-                NULL as assigned_by,
-                'apidb.GeneFeatureProduct' as source
-         from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
-         where ga.na_feature_id = gfp.na_feature_id
-       union
-         select ga.source_id as source_id, gf.product, ga.project_id,
-                null as  is_alternate,
-                null as transcript_ids, null as reference, null as evidence_code,
-                null as evidence_code_parameter, null as assigned_by,
-                'dots.GeneFeature' as source
-         from dots.GeneFeature gf, webready.GeneAttributes ga, webready.GeneProduct gp
-         where ga.na_feature_id = gf.na_feature_id
-           and gf.product is not null
-           and ga.source_id = gp.source_id
-           and gp.source_rule >= 3 -- no product in apidb.GeneFeatureProduct
-       union
-         select ta.gene_source_id AS source_id, t.product, ta.project_id,
-                null as is_alternate,
-                string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
-                null as reference, null as evidence_code, null as evidence_code_parameter,
-                null as assigned_by, 'dots.Transcript' as source
-         from webready.TranscriptAttributes ta, dots.Transcript t
-         where ta.na_feature_id = t.na_feature_id
-           and t.product is not null
-           and ta.gene_source_id
-               not in (select source_id
-                   from webready.GeneProduct
-                   where source_rule < 6) -- product only in dots.Transcript
-         group by ta.gene_source_id, ta.project_id, t.product
-       union
-         select gp.source_id as source_id, gp.product, ga.project_id,
-                null as  is_alternate,
-                null as transcript_ids, null as reference, null as evidence_code,
-                null as evidence_code_parameter, null as assigned_by,
-                'unspecified product' as source
-         from webready.GeneProduct gp, webready.GeneAttributes ga
-         where gp.source_rule = 7
-           and gp.source_id = ga.source_id
-           and gp.org_abbrev = ga.org_abbrev
-       order by is_alternate desc, transcript_ids
+       create table &prefixAllGeneProducts&1 (
+         source_id varchar(80),
+         product varchar(4000),
+         project_id varchar(10),
+         is_alternate varchar(3),
+         transcript_ids text,
+         reference text,
+         evidence_code varchar(100),
+         evidence_code_parameter varchar(4000),
+         assigned_by varchar(100),
+         source varchar(50)
+       )
        ]]>
     </sql>
 
+    <!-- Subquery 1: apidb.TranscriptProduct -->
+    <sql>
+     <![CDATA[
+       do $$
+       declare
+         v_org_abbrev varchar(20);
+       begin
+         for v_org_abbrev in select abbrev from apidb.organism loop
+           insert into &prefixAllGeneProducts&1
+           with evids
+              as (select distinct gaiec.go_evidence_code_id, ot.name
+                  from  dots.GoAssocInstEvidCode gaiec, sres.OntologyTerm ot
+                  where ot.ontology_term_id = gaiec.go_evidence_code_id)
+           select ta.gene_source_id AS source_id, tp.product, ta.project_id,
+                  CASE tp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
+                  string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
+                  string_agg(ta.publication, ', ' order by ta.source_id) as reference,
+                  e.name as evidence_code, tp.with_from as evidence_code_parameter,
+                  tp.assigned_by, 'apidb.TranscriptProduct' as source
+           from webready.TranscriptAttributes ta
+              INNER JOIN apidb.TranscriptProduct tp ON ta.na_feature_id = tp.na_feature_id
+              LEFT JOIN evids e ON tp.evidence_code = e.go_evidence_code_id
+           where ta.org_abbrev = v_org_abbrev
+           group by ta.gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
+                 tp.with_from, tp.assigned_by;
+         end loop;
+       end $$;
+       ]]>
+    </sql>
+
+    <!-- Subquery 2: apidb.GeneFeatureProduct -->
+    <sql>
+     <![CDATA[
+       do $$
+       declare
+         v_org_abbrev varchar(20);
+       begin
+         for v_org_abbrev in select abbrev from apidb.organism loop
+           insert into &prefixAllGeneProducts&1
+           select ga.source_id as source_id, gfp.product, ga.project_id,
+                  CASE gfp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
+                  null as transcript_ids, null as reference, null as evidence_code,
+                  null as evidence_code_parameter,
+                  -- CHECK AND FIX: OK that apidb.GeneFeatureProduct has NO assigned_by column?
+                  NULL as assigned_by,
+                  'apidb.GeneFeatureProduct' as source
+           from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
+           where ga.na_feature_id = gfp.na_feature_id
+             and ga.org_abbrev = v_org_abbrev;
+         end loop;
+       end $$;
+       ]]>
+    </sql>
+
+    <!-- Subquery 3: dots.GeneFeature -->
+    <sql>
+     <![CDATA[
+       do $$
+       declare
+         v_org_abbrev varchar(20);
+       begin
+         for v_org_abbrev in select abbrev from apidb.organism loop
+           insert into &prefixAllGeneProducts&1
+           select ga.source_id as source_id, gf.product, ga.project_id,
+                  null as  is_alternate,
+                  null as transcript_ids, null as reference, null as evidence_code,
+                  null as evidence_code_parameter, null as assigned_by,
+                  'dots.GeneFeature' as source
+           from dots.GeneFeature gf, webready.GeneAttributes ga, webready.GeneProduct gp
+           where ga.na_feature_id = gf.na_feature_id
+             and gf.product is not null
+             and ga.source_id = gp.source_id
+             and gp.org_abbrev = v_org_abbrev
+             and ga.org_abbrev = v_org_abbrev
+             and gp.source_rule >= 3; -- no product in apidb.GeneFeatureProduct
+         end loop;
+       end $$;
+       ]]>
+    </sql>
+
+    <!-- Subquery 4: dots.Transcript -->
+    <sql>
+     <![CDATA[
+       do $$
+       declare
+         v_org_abbrev varchar(20);
+       begin
+         for v_org_abbrev in select abbrev from apidb.organism loop
+           insert into &prefixAllGeneProducts&1
+           select ta.gene_source_id AS source_id, t.product, ta.project_id,
+                  null as is_alternate,
+                  string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
+                  null as reference, null as evidence_code, null as evidence_code_parameter,
+                  null as assigned_by, 'dots.Transcript' as source
+           from webready.TranscriptAttributes ta, dots.Transcript t
+           where ta.na_feature_id = t.na_feature_id
+             and t.product is not null
+             and ta.org_abbrev = v_org_abbrev
+             and ta.gene_source_id
+                 not in (select source_id
+                     from webready.GeneProduct
+                     where source_rule < 6
+                       and org_abbrev = v_org_abbrev) -- product only in dots.Transcript
+           group by ta.gene_source_id, ta.project_id, t.product;
+         end loop;
+       end $$;
+       ]]>
+    </sql>
+
+    <!-- Subquery 5: unspecified product -->
+    <sql>
+     <![CDATA[
+       do $$
+       declare
+         v_org_abbrev varchar(20);
+       begin
+         for v_org_abbrev in select abbrev from apidb.organism loop
+           insert into &prefixAllGeneProducts&1
+           select gp.source_id as source_id, gp.product, ga.project_id,
+                  null as  is_alternate,
+                  null as transcript_ids, null as reference, null as evidence_code,
+                  null as evidence_code_parameter, null as assigned_by,
+                  'unspecified product' as source
+           from webready.GeneProduct gp, webready.GeneAttributes ga
+           where gp.source_rule = 7
+             and gp.source_id = ga.source_id
+             and ga.org_abbrev = v_org_abbrev
+             and gp.org_abbrev = v_org_abbrev;
+         end loop;
+       end $$;
+       ]]>
+    </sql>
+
+    <!-- Create index -->
     <sql>
       <![CDATA[
         create index allGeneProds_idx&1
