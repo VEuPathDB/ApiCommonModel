@@ -1,36 +1,6 @@
-drop table :SCHEMA.GeneOrthologGroup CASCADE;
-drop table :SCHEMA.TranscriptOrthologGroup CASCADE;
+Truncate table :SCHEMA.GeneOrthologGroup;
+Truncate table :SCHEMA.TranscriptOrthologGroup;
 DROP TABLE IF EXISTS :SCHEMA.ProteinAttrsEcDerived_tmp;
-
-
-CREATE UNLOGGED TABLE :SCHEMA.GeneOrthologGroup (
-    gene_id   VARCHAR(80),
-    group_id   VARCHAR(16),
-    project_id  varchar(20),
-    org_abbrev  varchar(30),
-    ec_numbers_derived varchar(400),
-    gene_paralog_number numeric(10),
-    gene_ortholog_number numeric(10),
-    modification_date   timestamp
-);
-
--- temp index
-CREATE INDEX GOG_neededForUpdate ON :SCHEMA.GeneOrthologGroup (org_abbrev, group_id, gene_id);
-
-CREATE UNLOGGED TABLE :SCHEMA.TranscriptOrthologGroup (
-    source_id   VARCHAR(80),
-    gene_id   VARCHAR(80),
-    group_id   VARCHAR(16),
-    project_id  varchar(20),
-    org_abbrev  varchar(30),
-    ec_numbers_derived varchar(400),
-    gene_paralog_number numeric(10),
-    gene_ortholog_number numeric(10),
-    modification_date   timestamp
-);
-
--- temp index
-CREATE INDEX transcriptog_neededForUpdate ON :SCHEMA.TranscriptOrthologGroup  (org_abbrev, source_id, group_id);
 
 CREATE UNLOGGED TABLE :SCHEMA.ProteinAttrsEcDerived_tmp  AS
 SELECT aa_sequence_id, SUBSTR(string_agg(ec_number, ';' order by ec_number),1, 300) AS ec_numbers_derived
@@ -46,7 +16,7 @@ GROUP BY aa_sequence_id;
 CREATE INDEX PAED_aaSequenceId ON :SCHEMA.ProteinAttrsEcDerived_tmp (aa_sequence_id);
 
 insert into :SCHEMA.GeneOrthologGroup (gene_id, group_id, project_id, org_abbrev, ec_numbers_derived, gene_paralog_number, gene_ortholog_number, modification_date)
-SELECT DISTINCT pa.gene_source_id AS gene_id, -- NEED DISTICT HERE because we are getting gene level info from proteins
+SELECT pa.gene_source_id AS gene_id,
     ogas.group_id,
     pa.project_id,
     pa.org_abbrev,
@@ -58,10 +28,10 @@ FROM :SCHEMA.proteinattributes pa
 JOIN apidb.orthologgroupaasequence ogas
     ON pa.aa_sequence_id = ogas.aa_sequence_id
 LEFT JOIN :SCHEMA.ProteinAttrsEcDerived_tmp ecDerived 
-    ON pa.aa_sequence_id = ecDerived.aa_sequence_id;
+    ON ogas.aa_sequence_id = ecDerived.aa_sequence_id;
 
 insert into :SCHEMA.TranscriptOrthologGroup (source_id, gene_id, group_id, project_id, org_abbrev, ec_numbers_derived, gene_paralog_number, gene_ortholog_number, modification_date)
-SELECT ta.source_id AS source_id, -- There is exactly one protein per transcript so no distinct needed here
+SELECT ta.source_id AS source_id,
     ta.gene_source_id as gene_id,
     ogas.group_id,
     ta.project_id,
@@ -74,46 +44,52 @@ FROM :SCHEMA.transcriptattributes ta
 JOIN apidb.orthologgroupaasequence ogas
     ON ta.aa_sequence_id = ogas.aa_sequence_id
 LEFT JOIN :SCHEMA.ProteinAttrsEcDerived_tmp ecDerived 
-    ON ta.aa_sequence_id = ecDerived.aa_sequence_id;
+    ON ogas.aa_sequence_id = ecDerived.aa_sequence_id;
 
 UPDATE :SCHEMA.GeneOrthologGroup gog
 SET gene_paralog_number = (
     SELECT count(distinct gene_id)
     FROM :SCHEMA.GeneOrthologGroup g1
+    JOIN :SCHEMA.GeneAttributes ga
+        ON ga.gene_source_id = g1.gene_id
     WHERE gog.org_abbrev = g1.org_abbrev
     AND gog.group_id = g1.group_id
     AND gog.gene_id != g1.gene_id
+    AND ga.gene_type = 'protein coding' or ga.gene_type = 'protein coding gene')
 ),
 gene_ortholog_number = (
-    SELECT count(distinct gene_id)
+    SELECT count(distinct gene_source_id)
     FROM :SCHEMA.GeneOrthologGroup g1
+    JOIN :SCHEMA.GeneAttributes ga
+        ON ga.gene_source_id = g1.gene_id
     WHERE gog.org_abbrev != g1.org_abbrev
     AND gog.group_id = g1.group_id
     AND gog.gene_id != g1.gene_id
+    AND ga.gene_type = 'protein coding' or ga.gene_type = 'protein coding gene')
 );
 
 UPDATE :SCHEMA.TranscriptOrthologGroup tog
 SET gene_paralog_number = (
-  select MAX(gog.gene_paralog_number)
-    FROM :SCHEMA.GeneOrthologGroup gog
+    SELECT count(distinct gene_source_id)
+    FROM :SCHEMA.TranscriptOrthologGroup t1
     JOIN :SCHEMA.TranscriptAttributes ta
-      ON ta.source_id = tog.source_id
-    WHERE tog.gene_id = gog.gene_id
-    AND ta.so_term_name = 'protein_coding_gene'
+        ON ta.gene_source_id = t1.gene_id
+    WHERE tog.org_abbrev = t1.org_abbrev
+    AND tog.group_id = t1.group_id
+    AND tog.gene_id != t1.gene_id
+    AND ta.gene_type = 'protein coding' or ta.gene_type = 'protein coding gene')
 ),
 gene_ortholog_number = (
-  select MAX(gog.gene_ortholog_number)
-    FROM :SCHEMA.GeneOrthologGroup gog
+    SELECT count(distinct gene_source_id)
+    FROM :SCHEMA.TranscriptOrthologGroup t1
     JOIN :SCHEMA.TranscriptAttributes ta
-      ON ta.source_id = tog.source_id
-    WHERE tog.gene_id = gog.gene_id
-    AND ta.so_term_name = 'protein_coding_gene'
+        ON ta.gene_source_id = t1.gene_id
+    WHERE tog.org_abbrev != t1.org_abbrev
+    AND tog.group_id = t1.group_id
+    AND tog.gene_id != t1.gene_id
+    AND ta.gene_type = 'protein coding' or ta.gene_type = 'protein coding gene'
 )
 ;
 
 drop table :SCHEMA.ProteinAttrsEcDerived_tmp;
---drop index PAED_aaSequenceId;
-
--- don't leave these hanging around .. if needed, should add to the file which makes the "official" indexs.
---drop index transcriptog_neededForUpdate;
---drop index GOG_neededForUpdate;
+drop index PAED_aaSequenceId;
