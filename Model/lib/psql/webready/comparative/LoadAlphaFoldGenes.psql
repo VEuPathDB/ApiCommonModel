@@ -1,10 +1,13 @@
 DO $$
-    DECLARE org record:PLPGSQL_DELIM
+    DECLARE orgrecord record:PLPGSQL_DELIM
     BEGIN
-        FOR org IN (SELECT DISTINCT abbrev, taxon_id FROM apidb.organism)
+        FOR orgrecord IN (
+	   SELECT DISTINCT o.org_abbrev, sanitized_org_abbrev, taxon_id
+	   FROM apidb.organism o, :SCHEMA.OrganismAbbreviation oa
+	   where o.abbrev = oa.org_abbrev)
         LOOP
 
-          EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.MinRanks_%L', org_rec.abbrev):PLPGSQL_DELIM
+          EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.MinRanks_%L', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
 		      
 
           EXECUTE format('CREATE UNLOGGED TABLE :SCHEMA.MinRank_%L  AS
@@ -12,10 +15,10 @@ DO $$
               , MIN(rank) as min_rank
             FROM :SCHEMA.uniprotGenes  upg
             WHERE hit_length is not null
-	    and upg.org_abbrev = org.abbrev
-            GROUP BY gene_source_id', org.abbrev):PLPGSQL_DELIM
+	    and upg.org_abbrev = orgrecord.org_abbrev
+            GROUP BY gene_source_id', orgrecord.org_abbrev):PLPGSQL_DELIM
 
-          EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.AlphaFoldHits_%L', org_rec.abbrev):PLPGSQL_DELIM
+          EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.AlphaFoldHits_%L', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
 		      
 
           EXECUTE format('CREATE UNLOGGED TABLE :SCHEMA.AlphaFoldHits_%L  AS
@@ -27,8 +30,8 @@ DO $$
               , :SCHEMA.minRank_%L
             WHERE upg.gene_source_id = minRank.gene_source_id
             AND upg.rank = minRank.min_rank
-	    and upg.org_abbrev = org.abbrev
-          ) t', org.abbrev):PLPGSQL_DELIM
+	    and upg.org_abbrev = orgrecord.org_abbrev
+          ) t', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
 
           EXECUTE format('
           INSERT INTO :SCHEMA.AlphaFoldGenes (gene_source_id, uniprot_id, alphafold_id, alphafold_version, first_residue_index
@@ -40,16 +43,16 @@ DO $$
             , af.first_residue_index
             , af.last_residue_index
 	    , (af.last_residue_index - af.first_residue_index + 1) as hit_length
-	    , org.abbrev
+	    , orgrecord.org_abbrev
 	    , :PROJECT_ID
 	    , current_timestamp
           FROM apidb.alphafold af
             , :SCHEMA.alphaFoldHits_%L afh
-          WHERE afh.uniprot_id = af.uniprot_id', org.abbrev):PLPGSQL_DELIM
+          WHERE afh.uniprot_id = af.uniprot_id', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
 
 
-      EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.MinRank_%L', org_rec.abbrev):PLPGSQL_DELIM
-      EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.AlphaFoldHits_%L', org_rec.abbrev):PLPGSQL_DELIM
+      EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.MinRank_%L', orgrecord.sanitized_org_abbrev)):PLPGSQL_DELIM
+      EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.AlphaFoldHits_%L', orgrecord.sanitized_org_abbrev)):PLPGSQL_DELIM
 
   END LOOP:PLPGSQL_DELIM
 END $$;
