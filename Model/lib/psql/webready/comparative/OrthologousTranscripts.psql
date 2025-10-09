@@ -64,39 +64,37 @@ DECLARE
 BEGIN
     FOR orgrecord IN
         SELECT DISTINCT org_abbrev, sanitized_org_abbrev
-        FROM webready.OrganismAbbreviation
+        FROM :SCHEMA.OrganismAbbreviation
     LOOP
         RAISE NOTICE 'Processing SyntenicPairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
 
         -- Create partition for this organism
         partition_name := 'SyntenicPairs_' || orgrecord.sanitized_org_abbrev:PLPGSQL_DELIM
-        EXECUTE format('CREATE TABLE webready.%I PARTITION OF webready.SyntenicPairs FOR VALUES IN (%L)',
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.SyntenicPairs FOR VALUES IN (%L)',
                       partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert SyntenicPairs for this organism
-        EXECUTE format('
-            INSERT INTO webready.SyntenicPairs (na_feature_id, syn_na_feature_id, org_abbrev)
-            SELECT DISTINCT ga.na_feature_id, sg.syn_na_feature_id, %L
+            INSERT INTO :SCHEMA.SyntenicPairs (na_feature_id, syn_na_feature_id, org_abbrev)
+            SELECT DISTINCT ga.na_feature_id, sg.syn_na_feature_id, orgrecord.org_abbrev
             FROM apidb.SyntenicGene sg
-            JOIN webready.GeneAttributes ga
+            JOIN :SCHEMA.GeneAttributes ga
                 ON sg.na_sequence_id = ga.na_sequence_id
                 AND ga.org_abbrev = orgrecord.org_abbrev
             WHERE sg.end_max >= ga.start_min
-              AND sg.start_min <= ga.end_max',
-            orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
+              AND sg.start_min <= ga.end_max:PLPGSQL_DELIM
 
 
         RAISE NOTICE 'Processing syn_pairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
 
         -- Create partition for this organism
         partition_name := 'syn_pairs_' || orgrecord.org_abbrev:PLPGSQL_DELIM
-        EXECUTE format('CREATE TABLE webready.%I PARTITION OF webready.syn_pairs FOR VALUES IN (%L)',
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.syn_pairs FOR VALUES IN (%L)',
                       partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert syn_pairs for this organism
-       INSERT INTO webready.syn_pairs (na_feature_id, syn_na_feature_id, is_syntenic, org_abbrev)
+       INSERT INTO :SCHEMA.syn_pairs (na_feature_id, syn_na_feature_id, is_syntenic, org_abbrev)
                 SELECT na_feature_id, syn_na_feature_id, 1 AS is_syntenic, org_abbrev
-                FROM webready.SyntenicPairs
+                FROM :SCHEMA.SyntenicPairs
                 WHERE org_abbrev = orgrecord.org_abbrev:PLPGSQL_DELIM
 
 
@@ -104,11 +102,11 @@ BEGIN
 
         -- Create partition for this organism
         partition_name := 'all_pairs_' || orgrecord.org_abbrev:PLPGSQL_DELIM
-        EXECUTE format('CREATE TABLE webready.%I PARTITION OF webready.all_pairs FOR VALUES IN (%L)',
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.all_pairs FOR VALUES IN (%L)',
                       partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert all_pairs for this organism
-       INSERT INTO webready.all_pairs (source_id, project_id, na_feature_id, ortho_source_id, ortho_gene_source_id, ortho_project_id,
+       INSERT INTO :SCHEMA.all_pairs (source_id, project_id, na_feature_id, ortho_source_id, ortho_gene_source_id, ortho_project_id,
                                    ortho_na_feature_id, ortho_product, protein_length, ortho_name, ortho_organism, ortho_taxon_id,
                                    is_reference_strain, org_abbrev)
                 SELECT ga.source_id
@@ -125,12 +123,12 @@ BEGIN
                      , ota.taxon_id AS ortho_taxon_id
                      , o.is_reference_strain
                      , orgrecord.org_abbrev AS org_abbrev
-                FROM webready.GeneOrthologGroup gog
-                JOIN webready.TranscriptOrthologGroup tog
+                FROM :SCHEMA.GeneOrthologGroup gog
+                JOIN :SCHEMA.TranscriptOrthologGroup tog
                     ON gog.group_id = tog.group_id
-                JOIN webready.GeneAttributes ga
+                JOIN :SCHEMA.GeneAttributes ga
                     ON gog.gene_id = ga.source_id
-                JOIN webready.TranscriptAttributes ota
+                JOIN :SCHEMA.TranscriptAttributes ota
                     ON tog.source_id = ota.source_id
                 JOIN apidb.Organism o
                     ON ota.taxon_id = o.taxon_id
@@ -145,11 +143,11 @@ BEGIN
 
         -- Create partition for this organism
         partition_name := 'OrthologousTranscripts_' || orgrecord.org_abbrev:PLPGSQL_DELIM
-        EXECUTE format('CREATE TABLE webready.%I PARTITION OF webready.OrthologousTranscripts FOR VALUES IN (%L)',
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.OrthologousTranscripts FOR VALUES IN (%L)',
                       partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert orthologous transcripts for this organism
-        INSERT INTO webready.OrthologousTranscripts (
+        INSERT INTO :SCHEMA.OrthologousTranscripts (
                 source_id,
                 project_id,
                 na_feature_id,
@@ -183,8 +181,8 @@ BEGIN
                  , all_pairs.org_abbrev
                  , COALESCE(syn_pairs.is_syntenic, 0) AS is_syntenic
                  , current_timestamp AS modification_date
-            FROM webready.all_pairs
-            LEFT JOIN webready.syn_pairs
+            FROM :SCHEMA.all_pairs
+            LEFT JOIN :SCHEMA.syn_pairs
                 ON all_pairs.na_feature_id = syn_pairs.na_feature_id
                 AND all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
                 AND all_pairs.org_abbrev = syn_pairs.org_abbrev:PLPGSQL_DELIM
@@ -192,6 +190,6 @@ BEGIN
 END $$:PLPGSQL_DELIM
 
 -- Clean up temporary tables
-DROP TABLE IF EXISTS webready.SyntenicPairs CASCADE;
-DROP TABLE IF EXISTS webready.syn_pairs CASCADE;
-DROP TABLE IF EXISTS webready.all_pairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.SyntenicPairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.syn_pairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.all_pairs CASCADE;
