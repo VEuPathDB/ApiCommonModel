@@ -1,0 +1,46 @@
+DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREV_UniprotDbrefs;
+
+CREATE UNLOGGED TABLE :SCHEMA.:CLEAN_ORG_ABBREV_UniprotDbrefs AS
+SELECT DISTINCT ed.name
+        , d.db_ref_id
+	, d.primary_identifier
+        , edr.version
+        , CASE WHEN (ed.name LIKE '%SWISSPROT%' AND edr.version = 'xrefuniparc') THEN 1
+            WHEN (ed.name LIKE '%SPTREMBL%' AND edr.version = 'xrefuniparc') THEN 2
+            WHEN (ed.name LIKE '%SWISSPROT%' AND edr.version = 'xref_sprot_blastp') THEN 4
+            WHEN (ed.name LIKE '%SPTREMBL%' AND edr.version = 'xref_trembl_blastp') THEN 5
+            ELSE 6 END AS rank
+FROM :SCHEMA.DbRefAaFeature df
+     , sres.dbref d
+JOIN sres.externaldatabaserelease edr ON d.external_database_release_id = edr.external_database_release_id
+JOIN sres.externaldatabase ed ON edr.external_database_id = ed.external_database_id
+        WHERE (ed.name = 'Uniprot/SWISSPROT' OR ed.name = 'Uniprot/SPTREMBL')
+          AND (edr.version = 'xrefuniparc' OR edr.version = 'xref_sprot_blastp' OR edr.version = 'xref_trembl_blastp')
+          AND edr.external_database_id = ed.external_database_id
+          AND d.external_database_release_id = edr.external_database_release_id
+	  and d.db_ref_id = df.db_ref_id
+	  and df.org_abbrev = ':ORG_ABBREV';
+
+CREATE INDEX happy2 on :SCHEMA.:CLEAN_ORG_ABBREV_UniprotDbrefs(db_ref_id);
+
+:CREATE_AND_POPULATE
+   SELECT DISTINCT u.*  
+        , aa.source_id
+        , pa.gene_source_id
+        , ':PROJECT_ID' as project_id
+        , ':ORG_ABBREV' as org_abbrev
+        , current_timestamp as modification_date
+     FROM :SCHEMA.:CLEAN_ORG_ABBREV_uniprotDbRefs u
+        , :SCHEMA.DbRefAaFeature db
+        , dots.aafeature aa
+        , :SCHEMA.ProteinAttributes pa
+        WHERE  db.db_ref_id = u.db_ref_id
+          AND aa.aa_feature_id = db.aa_feature_id
+          AND pa.source_id = aa.source_id
+	  and db.org_abbrev = ':ORG_ABBREV'
+	  and pa.org_abbrev = ':ORG_ABBREV';
+
+:DECLARE_PARTITION;
+
+DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREV_UniprotDbrefs;
+
