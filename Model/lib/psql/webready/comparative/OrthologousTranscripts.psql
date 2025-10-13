@@ -59,61 +59,53 @@ CREATE TABLE :SCHEMA.OrthologousTranscripts (
 -- Loop over each organism and create partitions, then populate
 DO $$
 DECLARE
-    org_rec RECORD:PLPGSQL_DELIM
+    orgrecord RECORD:PLPGSQL_DELIM
     partition_name TEXT:PLPGSQL_DELIM
 BEGIN
-    FOR org_rec IN
-        SELECT DISTINCT abbrev
-        FROM apidb.Organism
-        WHERE abbrev IS NOT NULL
-        ORDER BY abbrev
+    FOR orgrecord IN
+        SELECT DISTINCT org_abbrev, sanitized_org_abbrev
+        FROM :SCHEMA.OrganismAbbreviation
     LOOP
-        RAISE NOTICE 'Processing SyntenicPairs for org_abbrev: %', org_rec.abbrev:PLPGSQL_DELIM
+        RAISE NOTICE 'Processing SyntenicPairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
 
         -- Create partition for this organism
-        partition_name := 'SyntenicPairs_' || org_rec.abbrev:PLPGSQL_DELIM
+        partition_name := 'SyntenicPairs_' || orgrecord.sanitized_org_abbrev:PLPGSQL_DELIM
         EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.SyntenicPairs FOR VALUES IN (%L)',
-                      partition_name, org_rec.abbrev):PLPGSQL_DELIM
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert SyntenicPairs for this organism
-        EXECUTE format('
             INSERT INTO :SCHEMA.SyntenicPairs (na_feature_id, syn_na_feature_id, org_abbrev)
-            SELECT DISTINCT ga.na_feature_id, sg.syn_na_feature_id, %L
+            SELECT DISTINCT ga.na_feature_id, sg.syn_na_feature_id, orgrecord.org_abbrev
             FROM apidb.SyntenicGene sg
             JOIN :SCHEMA.GeneAttributes ga
                 ON sg.na_sequence_id = ga.na_sequence_id
-                AND ga.org_abbrev = %L
+                AND ga.org_abbrev = orgrecord.org_abbrev
             WHERE sg.end_max >= ga.start_min
-              AND sg.start_min <= ga.end_max',
-            org_rec.abbrev, org_rec.abbrev):PLPGSQL_DELIM
+              AND sg.start_min <= ga.end_max:PLPGSQL_DELIM
 
 
-        RAISE NOTICE 'Processing syn_pairs for org_abbrev: %', org_rec.abbrev:PLPGSQL_DELIM
+        RAISE NOTICE 'Processing syn_pairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
 
         -- Create partition for this organism
-        partition_name := 'syn_pairs_' || org_rec.abbrev:PLPGSQL_DELIM
+        partition_name := 'syn_pairs_' || orgrecord.org_abbrev:PLPGSQL_DELIM
         EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.syn_pairs FOR VALUES IN (%L)',
-                      partition_name, org_rec.abbrev):PLPGSQL_DELIM
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert syn_pairs for this organism
-        EXECUTE format('
-            INSERT INTO :SCHEMA.syn_pairs (na_feature_id, syn_na_feature_id, is_syntenic, org_abbrev)
+       INSERT INTO :SCHEMA.syn_pairs (na_feature_id, syn_na_feature_id, is_syntenic, org_abbrev)
                 SELECT na_feature_id, syn_na_feature_id, 1 AS is_syntenic, org_abbrev
                 FROM :SCHEMA.SyntenicPairs
-                WHERE org_abbrev = %L',
-		org_rec.abbrev):PLPGSQL_DELIM
+                WHERE org_abbrev = orgrecord.org_abbrev:PLPGSQL_DELIM
 
-
-        RAISE NOTICE 'Processing all_pairs for org_abbrev: %', org_rec.abbrev:PLPGSQL_DELIM
+        RAISE NOTICE 'Processing all_pairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
 
         -- Create partition for this organism
-        partition_name := 'all_pairs_' || org_rec.abbrev:PLPGSQL_DELIM
+        partition_name := 'all_pairs_' || orgrecord.org_abbrev:PLPGSQL_DELIM
         EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.all_pairs FOR VALUES IN (%L)',
-                      partition_name, org_rec.abbrev):PLPGSQL_DELIM
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert all_pairs for this organism
-        EXECUTE format('
-            INSERT INTO :SCHEMA.all_pairs (source_id, project_id, na_feature_id, ortho_source_id, ortho_gene_source_id, ortho_project_id,
+       INSERT INTO :SCHEMA.all_pairs (source_id, project_id, na_feature_id, ortho_source_id, ortho_gene_source_id, ortho_project_id,
                                    ortho_na_feature_id, ortho_product, protein_length, ortho_name, ortho_organism, ortho_taxon_id,
                                    is_reference_strain, org_abbrev)
                 SELECT ga.source_id
@@ -129,7 +121,7 @@ BEGIN
                      , ota.organism AS ortho_organism
                      , ota.taxon_id AS ortho_taxon_id
                      , o.is_reference_strain
-                     , %L AS org_abbrev
+                     , orgrecord.org_abbrev AS org_abbrev
                 FROM :SCHEMA.GeneOrthologGroup gog
                 JOIN :SCHEMA.TranscriptOrthologGroup tog
                     ON gog.group_id = tog.group_id
@@ -139,24 +131,22 @@ BEGIN
                     ON tog.source_id = ota.source_id
                 JOIN apidb.Organism o
                     ON ota.taxon_id = o.taxon_id
-                WHERE ga.org_abbrev = %L
-                 AND gog.org_abbrev = %L
-                 AND tog.org_abbrev = %L
-                 AND ota.org_abbrev = %L',
-		 org_rec.abbrev, org_rec.abbrev, org_rec.abbrev, org_rec.abbrev, org_rec.abbrev):PLPGSQL_DELIM
+                WHERE ga.org_abbrev = orgrecord.org_abbrev
+                 AND gog.org_abbrev = orgrecord.org_abbrev
+                 AND tog.org_abbrev = orgrecord.org_abbrev
+                 AND ota.org_abbrev = orgrecord.org_abbrev:PLPGSQL_DELIM
 
 
 
-        RAISE NOTICE 'Processing OrthologousTranscripts for org_abbrev: %', org_rec.abbrev:PLPGSQL_DELIM
+        RAISE NOTICE 'Processing OrthologousTranscripts for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
 
         -- Create partition for this organism
-        partition_name := 'OrthologousTranscripts_' || org_rec.abbrev:PLPGSQL_DELIM
+        partition_name := 'OrthologousTranscripts_' || orgrecord.org_abbrev:PLPGSQL_DELIM
         EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.OrthologousTranscripts FOR VALUES IN (%L)',
-                      partition_name, org_rec.abbrev):PLPGSQL_DELIM
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
 
         -- Insert orthologous transcripts for this organism
-        EXECUTE format('
-            INSERT INTO :SCHEMA.OrthologousTranscripts (
+        INSERT INTO :SCHEMA.OrthologousTranscripts (
                 source_id,
                 project_id,
                 na_feature_id,
@@ -194,7 +184,7 @@ BEGIN
             LEFT JOIN :SCHEMA.syn_pairs
                 ON all_pairs.na_feature_id = syn_pairs.na_feature_id
                 AND all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
-                AND all_pairs.org_abbrev = syn_pairs.org_abbrev'):PLPGSQL_DELIM
+                AND all_pairs.org_abbrev = syn_pairs.org_abbrev:PLPGSQL_DELIM
     END LOOP:PLPGSQL_DELIM
 END $$:PLPGSQL_DELIM
 
