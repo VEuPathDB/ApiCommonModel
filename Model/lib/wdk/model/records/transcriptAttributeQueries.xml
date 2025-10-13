@@ -69,7 +69,7 @@
     <sqlQuery name="PartitionKeys">
       <column name="source_id"/>
       <column name="gene_source_id"/>
-      <column name="project_id"/>
+      <column name="project_id" excludeProjects="UniDB"/>
       <column name="partition_key"/>
       <sql>
 		<!-- will use table apidbtuning.TranscriptOrgAbbrev when it becomes available -->
@@ -126,8 +126,18 @@
         <![CDATA[
           SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
           FROM webready.TranscriptAttributes ta
-              , (select * from table (apidb.pivot('SELect * from (SELECT ga.source_id as profile_source_id, ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node, to_number(round(nfe.value, 2)) as value FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes ga WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID and ps.DATASET_NAME = ''cparIowaII_rtpcr_Kissinger_RtPcr_RSRC'' and ps.profile_type = ''values'' and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
+          , (select * from table (apidb.pivot('SELect * from (
+	    SELECT ga.source_id as profile_source_id,
+	    ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node,
+	    to_number(round(nfe.value, 2)) as value
+	    FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes ga
+	    WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID
+  	     AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+	     and ps.DATASET_NAME = ''cparIowaII_rtpcr_Kissinger_RtPcr_RSRC''
+	     and ps.profile_type = ''values''
+	     and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
           WHERE ta.gene_source_id = p.profile_source_id (+)
+	    AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -214,6 +224,7 @@
           WHERE idsql_1.gene_source_id = cnt.gene_source_id
             AND idsql_1.source_id        = index1.source_id
             AND idsql_1.source_id      = ta.source_id
+	    AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -489,6 +500,7 @@
               and ta.source_id = au.apolloTranscript
               and ta.gene_source_id = ga.source_id
             ) ap ON ta.gene_source_id = ap.source_id
+	    WHERE ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -513,6 +525,7 @@ ELSE 'N/A' end as apollo_link_out
                     FROM webready.TranscriptAttributes ta
                     LEFT JOIN apidbtuning.apolloid aid
                     ON ta.organism = aid.organism
+		    where ta.org_abbrev IN (%%PARTITION_KEYS%%)
 ]]>
        </sql>
    </sqlQuery>
@@ -538,7 +551,7 @@ ELSE 'N/A' end as apollo_link_out
                 SELECT pa.transcript_source_id as source_id,
                  string_agg(dbref.primary_identifier, ',' ORDER BY dbref.primary_identifier) AS uniprot_ids
                 FROM sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
-                    sres.DbRef, dots.DbRefAaFeature daf, dots.AaFeature af,
+                    sres.DbRef, webready.DbRefAaFeature daf, dots.AaFeature af,
                     webready.ProteinAttributes pa
                 WHERE d.name like 'Uniprot%'
                   AND d.external_database_id = r.external_database_id
@@ -835,7 +848,7 @@ ELSE 'N/A' end as apollo_link_out
                 SELECT distinct gf.source_id, '@PROJECT_ID@' as project_id, xx.pdb_id
                 FROM webready.GeneAttributes gf,
                  (SELECT drnf.na_feature_id, dr.primary_identifier AS pdb_id
-                  FROM dots.DbRefNaFeature drnf,
+                  FROM webready.DbRefNaFeature drnf,
                      sres.DbRef dr, sres.ExternalDatabaseRelease edr,
                      sres.ExternalDatabase ed
                   WHERE drnf.db_ref_id = dr.db_ref_id
