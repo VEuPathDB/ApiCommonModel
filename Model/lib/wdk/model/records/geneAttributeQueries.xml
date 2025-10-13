@@ -8,7 +8,7 @@
     -->
 
 
-    <defaultTestParamValues includeProjects="PlasmoDB,EuPathDB,UniDB">
+    <defaultTestParamValues includeProjects="PlasmoDB,UniDB">
       <paramValue name="source_id">%%defaultGene%%</paramValue>
       <paramValue name="project_id">PlasmoDB</paramValue>
     </defaultTestParamValues>
@@ -97,6 +97,7 @@
                    least(ga.start_min, ga.end_max) as gff_fstart,
                    greatest(ga.start_min, ga.end_max) as gff_fend
             FROM webready.GeneAttributes ga
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
           ]]>
       </sql>
     </sqlQuery>
@@ -135,6 +136,7 @@ WHERE dataset_type = 'transcript_expression'
 AND dataset_subtype = 'array'
 GROUP BY source_id
 ) microarray ON ga.source_id = microarray.source_id
+WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
           ]]>
         </sql>
       </sqlQuery>
@@ -185,7 +187,7 @@ GROUP BY source_id
       <column name="gene_type" ignoreCase="true"/>
       <column name="gene_ebi_biotype" ignoreCase="true"/>
       <column name="exon_count"/>
-      <!-- TODO <column name="representative_transcript" includeProjects="ToxoDB,EuPathDB"/> -->
+      <!-- TODO <column name="representative_transcript" includeProjects="ToxoDB"/> -->
       <column name="is_deprecated"/>
       <column name="context_start"/>
       <column name="context_end"/>
@@ -232,7 +234,7 @@ GROUP BY source_id
       <column name="show_strains"/>
 
       <!-- TODO UniDB Problem -->
-      <sqlParamValue name="cyc_db" includeProjects="PlasmoDB,EuPathDB">
+      <sqlParamValue name="cyc_db" includeProjects="PlasmoDB">
         <![CDATA[
                    CASE bfmv.organism WHEN 'Plasmodium falciparum 3D7' THEN 'PLASMO' ELSE null END
                 ]]>
@@ -339,6 +341,7 @@ GROUP BY source_id
                 as user_comment_link_url
              , CASE WHEN (bfmv.strain_count > 1) THEN 'Yes' ELSE 'No' END AS show_strains
           FROM webready.GeneAttributes bfmv
+          WHERE bfmv.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -414,6 +417,7 @@ GROUP BY source_id
             --   WHERE is_visible = 1
             --   GROUP BY stable_id, project_name
             -- ) comm ON ga.source_id = comm.gene_id AND ga.project_id = comm.project_name
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -433,6 +437,7 @@ GROUP BY source_id
                      ga.gene_source_id as source_id
                      from APIDB.massspecsummary mss, webready.TranscriptAttributes ga
                     where ga.aa_sequence_id =mss.aa_sequence_id
+                    and ga.org_abbrev IN (%%PARTITION_KEYS%%)
                    ))
         select ga.source_id as source_id, ga.project_id,
                gto.gtracks||'%1EUnifiedMassSpecPeptides' as  dna_gtracks
@@ -440,19 +445,22 @@ GROUP BY source_id
         where ga.organism = gto.organism
           and ga.source_id = has_proteomic_data.source_id
           and gto.type = 'dna'
-        union
+          and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+      union
         select ga.source_id as source_id, ga.project_id,
                gto.gtracks as  dna_gtracks
         from apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
         where ga.organism = gto.organism
           and ga.source_id not in (select source_id from has_proteomic_data)
           and gto.type = 'dna'
+          and ga.org_abbrev IN (%%PARTITION_KEYS%%)
         union
         select ga.source_id as source_id, ga.project_id,
                '' as dna_gtracks
         from apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
         where ga.organism = gto.organism(+)
         and ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto where gto.type = 'dna')
+        and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           ]]>
         </sql>
     </sqlQuery>
@@ -469,13 +477,15 @@ GROUP BY source_id
           FROM apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
           WHERE ga.organism = gto.organism
             AND gto.type = 'synteny'
+            and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           UNION
           SELECT ga.source_id as source_id, ga.project_id,
                  '' as synteny_gtracks
           FROM apidbtuning.gbrowsetracksorganism gto
             RIGHT JOIN webready.GeneAttributes ga ON ga.organism = gto.organism
           WHERE ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto where gto.type = 'synteny')
-        ]]>
+            and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+    ]]>
       </sql>
     </sqlQuery>
 
@@ -491,6 +501,7 @@ GROUP BY source_id
           FROM apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
           WHERE ga.organism = gto.organism
             AND gto.type = 'gene_model'
+            and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           UNION
           SELECT ta.gene_source_id as source_id, ta.project_id,
              'Gene%1EGSNAPUnifiedIntronJunctionRefined%1EGSNAPUnifiedIntronJunctionInclusive' as gene_model_gtracks,
@@ -499,7 +510,8 @@ GROUP BY source_id
             RIGHT JOIN webready.TranscriptAttributes ta ON ta.organism = gto.organism
           WHERE ta.organism not in (SELECT DISTINCT organism FROM apidbtuning.gbrowsetracksorganism gto WHERE gto.type = 'gene_model')
           GROUP BY ta.gene_source_id, ta.project_id
-        ]]>
+            and ta.org_abbrev IN (%%PARTITION_KEYS%%)
+    ]]>
       </sql>
     </sqlQuery>
 
@@ -546,6 +558,8 @@ GROUP BY source_id
                 APIDBTUNING.MSModifiedPeptideSummary
             ) tracks
             RIGHT JOIN webready.GeneAttributes ta ON ta.source_id = tracks.gene_source_id
+            where ta.org_abbrev IN (%%PARTITION_KEYS%%)
+              and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           GROUP BY
             ta.source_id
             , ta.project_id
@@ -570,6 +584,7 @@ GROUP BY source_id
           FROM apidbtuning.organismAttributes o
             INNER JOIN webready.GeneAttributes ga ON ga.taxon_id = o.component_taxon_id
             LEFT JOIN apidbtuning.ApolloID aid ON ga.organism = aid.organism
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -588,6 +603,8 @@ GROUP BY source_id
           FROM webready.GeneAttributes ga, webready.TranscriptAttributes ta, apidb.organism o
           WHERE ga.taxon_id = o.taxon_id
           AND ga.representative_transcript = ta.source_id
+          AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+          AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -617,7 +634,9 @@ GROUP BY source_id
                 AND dd.dataset_presenter_id = dsp.dataset_presenter_id
                 AND dsh.dataset_presenter_id = dd.dataset_presenter_id
                 AND dd.taxon_id = ga.taxon_id
+                AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
             ) v ON  ga.source_id = v.source_id AND ga.project_id = v.project_id
+          WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -638,6 +657,8 @@ GROUP BY source_id
             , afg.alphafold_version
           FROM webready.alphafoldgenes afg
             RIGHT JOIN webready.GeneAttributes ga ON ga.source_id = afg.gene_source_id
+          WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
+            AND afg.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
