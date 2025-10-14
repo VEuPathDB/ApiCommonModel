@@ -1,48 +1,194 @@
-	drop table if exists :SCHEMA.SyntenicPairs;
+-- Drop temporary and final tables if they exist
+DROP TABLE IF EXISTS :SCHEMA.SyntenicPairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.syn_pairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.all_pairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.OrthologousTranscripts CASCADE;
 
-	create UNLOGGED table :SCHEMA.SyntenicPairs as
-         select distinct ga.na_feature_id, sg.syn_na_feature_id
-         from apidb.SyntenicGene sg, :SCHEMA.GeneAttributes ga
-         where sg.na_sequence_id = ga.na_sequence_id
-           and sg.end_max >= ga.start_min
-           and sg.start_min <= ga.end_max
-       
-    ;
+-- Create partitioned SyntenicPairs table
+CREATE TABLE :SCHEMA.SyntenicPairs (
+    na_feature_id       BIGINT,
+    syn_na_feature_id   BIGINT,
+    org_abbrev          VARCHAR(30) NOT NULL
+) PARTITION BY LIST (org_abbrev);
 
-        create index SynPair_idx 
-          on :SCHEMA.SyntenicPairs (na_feature_id, syn_na_feature_id)
-    ;
+CREATE TABLE :SCHEMA.syn_pairs (
+    na_feature_id       bigint,
+    syn_na_feature_id   bigint,
+    is_syntenic         integer,
+    org_abbrev          VARCHAR(30) NOT NULL
+) PARTITION BY LIST (org_abbrev);
 
-        create table :SCHEMA.OrthologousTranscripts  as
-        with all_pairs
-             as (select ga.source_id
-                      , ga.project_id
-                      , ga.na_feature_id
-                      , ota.source_id as ortho_source_id
-                      , ota.gene_source_id as ortho_gene_source_id
-                      , ota.project_id as ortho_project_id
-                      , ota.gene_na_feature_id as ortho_na_feature_id
-                      , ota.transcript_product as ortho_product
-                      , ota.protein_length
-                      , ga.name as ortho_name
-                      , ota.organism as ortho_organism
-                      , ota.taxon_id as ortho_taxon_id
-                      , o.is_reference_strain
-                 from :SCHEMA.Geneattributes ga
-                    , :SCHEMA.TranscriptAttributes ota
-                    , apidb.Organism o
-                 where ga.ORTHOMCL_NAME = ota.ORTHOMCL_NAME
-                 and ota.taxon_id = o.taxon_id
-             ),
-             syn_pairs
-             as (select na_feature_id, syn_na_feature_id, 1 as is_syntenic from :SCHEMA.SyntenicPairs
-             )
-        select all_pairs.*
-             , coalesce(syn_pairs.is_syntenic, 0) as is_syntenic
-        from all_pairs
-             left join syn_pairs
-             on all_pairs.na_feature_id = syn_pairs.na_feature_id
-                and all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
-    ;
+CREATE TABLE :SCHEMA.all_pairs
+(
+    source_id           varchar(80) ,
+    project_id          text ,
+    na_feature_id       numeric(10,0),
+    ortho_source_id     varchar(80) ,
+    ortho_gene_source_id varchar(80) ,
+    ortho_project_id    text ,
+    ortho_na_feature_id numeric(10,0),
+    ortho_product       varchar(300) ,
+    protein_length      integer,
+    ortho_name          text ,
+    ortho_organism      varchar(80) ,
+    ortho_taxon_id      numeric(10,0),
+    is_reference_strain numeric(1,0),
+    org_abbrev          VARCHAR(30) NOT NULL
+) PARTITION BY LIST (org_abbrev);
 
-	drop table if exists :SCHEMA.SyntenicPairs;
+-- Create partitioned OrthologousTranscripts table
+CREATE TABLE :SCHEMA.OrthologousTranscripts (
+    source_id                VARCHAR(80),
+    project_id               VARCHAR(20),
+    na_feature_id            BIGINT,
+    ortho_source_id          VARCHAR(80),
+    ortho_gene_source_id     VARCHAR(80),
+    ortho_project_id         VARCHAR(20),
+    ortho_na_feature_id      BIGINT,
+    ortho_product            VARCHAR(1000),
+    protein_length           INTEGER,
+    ortho_name               VARCHAR(200),
+    ortho_organism           VARCHAR(200),
+    ortho_taxon_id           INTEGER,
+    is_reference_strain      INTEGER,
+    is_syntenic              INTEGER,
+    org_abbrev               VARCHAR(30) NOT NULL,
+    modification_date        TIMESTAMP
+) PARTITION BY LIST (org_abbrev);
+
+-- Loop over each organism and create partitions, then populate
+DO $$
+DECLARE
+    orgrecord RECORD:PLPGSQL_DELIM
+    partition_name TEXT:PLPGSQL_DELIM
+BEGIN
+    FOR orgrecord IN
+        SELECT DISTINCT org_abbrev, sanitized_org_abbrev
+        FROM :SCHEMA.OrganismAbbreviation
+    LOOP
+        RAISE NOTICE 'Processing SyntenicPairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
+
+        -- Create partition for this organism
+        partition_name := 'SyntenicPairs_' || orgrecord.sanitized_org_abbrev:PLPGSQL_DELIM
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.SyntenicPairs FOR VALUES IN (%L)',
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
+
+        -- Insert SyntenicPairs for this organism
+            INSERT INTO :SCHEMA.SyntenicPairs (na_feature_id, syn_na_feature_id, org_abbrev)
+            SELECT DISTINCT ga.na_feature_id, sg.syn_na_feature_id, orgrecord.org_abbrev
+            FROM apidb.SyntenicGene sg
+            JOIN :SCHEMA.GeneAttributes ga
+                ON sg.na_sequence_id = ga.na_sequence_id
+                AND ga.org_abbrev = orgrecord.org_abbrev
+            WHERE sg.end_max >= ga.start_min
+              AND sg.start_min <= ga.end_max:PLPGSQL_DELIM
+
+
+        RAISE NOTICE 'Processing syn_pairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
+
+        -- Create partition for this organism
+        partition_name := 'syn_pairs_' || orgrecord.org_abbrev:PLPGSQL_DELIM
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.syn_pairs FOR VALUES IN (%L)',
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
+
+        -- Insert syn_pairs for this organism
+       INSERT INTO :SCHEMA.syn_pairs (na_feature_id, syn_na_feature_id, is_syntenic, org_abbrev)
+                SELECT na_feature_id, syn_na_feature_id, 1 AS is_syntenic, org_abbrev
+                FROM :SCHEMA.SyntenicPairs
+                WHERE org_abbrev = orgrecord.org_abbrev:PLPGSQL_DELIM
+
+        RAISE NOTICE 'Processing all_pairs for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
+
+        -- Create partition for this organism
+        partition_name := 'all_pairs_' || orgrecord.org_abbrev:PLPGSQL_DELIM
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.all_pairs FOR VALUES IN (%L)',
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
+
+        -- Insert all_pairs for this organism
+       INSERT INTO :SCHEMA.all_pairs (source_id, project_id, na_feature_id, ortho_source_id, ortho_gene_source_id, ortho_project_id,
+                                   ortho_na_feature_id, ortho_product, protein_length, ortho_name, ortho_organism, ortho_taxon_id,
+                                   is_reference_strain, org_abbrev)
+                SELECT ga.source_id
+                     , ga.project_id
+                     , ga.na_feature_id
+                     , ota.source_id AS ortho_source_id
+                     , ota.gene_source_id AS ortho_gene_source_id
+                     , ota.project_id AS ortho_project_id
+                     , ota.gene_na_feature_id AS ortho_na_feature_id
+                     , ota.transcript_product AS ortho_product
+                     , ota.protein_length
+                     , ota.gene_name AS ortho_name
+                     , ota.organism AS ortho_organism
+                     , ota.taxon_id AS ortho_taxon_id
+                     , o.is_reference_strain
+                     , orgrecord.org_abbrev AS org_abbrev
+                FROM :SCHEMA.GeneOrthologGroup gog
+                JOIN :SCHEMA.TranscriptOrthologGroup tog
+                    ON gog.group_id = tog.group_id
+                JOIN :SCHEMA.GeneAttributes ga
+                    ON gog.gene_id = ga.source_id
+                JOIN :SCHEMA.TranscriptAttributes ota
+                    ON tog.source_id = ota.source_id
+                JOIN apidb.Organism o
+                    ON ota.taxon_id = o.taxon_id
+                WHERE ga.org_abbrev = orgrecord.org_abbrev
+                 AND gog.org_abbrev = orgrecord.org_abbrev
+                 AND tog.org_abbrev = orgrecord.org_abbrev
+                 AND ota.org_abbrev = orgrecord.org_abbrev:PLPGSQL_DELIM
+
+
+
+        RAISE NOTICE 'Processing OrthologousTranscripts for org_abbrev: %', orgrecord.org_abbrev:PLPGSQL_DELIM
+
+        -- Create partition for this organism
+        partition_name := 'OrthologousTranscripts_' || orgrecord.org_abbrev:PLPGSQL_DELIM
+        EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.OrthologousTranscripts FOR VALUES IN (%L)',
+                      partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
+
+        -- Insert orthologous transcripts for this organism
+        INSERT INTO :SCHEMA.OrthologousTranscripts (
+                source_id,
+                project_id,
+                na_feature_id,
+                ortho_source_id,
+                ortho_gene_source_id,
+                ortho_project_id,
+                ortho_na_feature_id,
+                ortho_product,
+                protein_length,
+                ortho_name,
+                ortho_organism,
+                ortho_taxon_id,
+                is_reference_strain,
+                org_abbrev,
+                is_syntenic,
+                modification_date
+            )
+            SELECT all_pairs.source_id
+                 , all_pairs.project_id
+                 , all_pairs.na_feature_id
+                 , all_pairs.ortho_source_id
+                 , all_pairs.ortho_gene_source_id
+                 , all_pairs.ortho_project_id
+                 , all_pairs.ortho_na_feature_id
+                 , all_pairs.ortho_product
+                 , all_pairs.protein_length
+                 , all_pairs.ortho_name
+                 , all_pairs.ortho_organism
+                 , all_pairs.ortho_taxon_id
+                 , all_pairs.is_reference_strain
+                 , all_pairs.org_abbrev
+                 , COALESCE(syn_pairs.is_syntenic, 0) AS is_syntenic
+                 , current_timestamp AS modification_date
+            FROM :SCHEMA.all_pairs
+            LEFT JOIN :SCHEMA.syn_pairs
+                ON all_pairs.na_feature_id = syn_pairs.na_feature_id
+                AND all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+                AND all_pairs.org_abbrev = syn_pairs.org_abbrev:PLPGSQL_DELIM
+    END LOOP:PLPGSQL_DELIM
+END $$:PLPGSQL_DELIM
+
+-- Clean up temporary tables
+DROP TABLE IF EXISTS :SCHEMA.SyntenicPairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.syn_pairs CASCADE;
+DROP TABLE IF EXISTS :SCHEMA.all_pairs CASCADE;
