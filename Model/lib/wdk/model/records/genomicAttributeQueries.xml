@@ -16,7 +16,7 @@
       <paramValue name="project_id">PlasmoDB</paramValue>
     </defaultTestParamValues>
 
-    <defaultTestParamValues includeProjects="ToxoDB,EuPathDB">
+    <defaultTestParamValues includeProjects="ToxoDB">
       <paramValue name="source_id">TGME49_chrIII</paramValue>
       <paramValue name="project_id">ToxoDB</paramValue>
     </defaultTestParamValues>
@@ -77,6 +77,19 @@
     <testRowCountSql>
       SELECT count(*) FROM webready.GenomicSeqAttributes
     </testRowCountSql>
+
+    <!-- Used by WDK to replace %%PARTITION_KEYS%% macro with the keys for a result set -->
+    <sqlQuery name="PartitionKeys">
+      <column name="source_id"/>
+      <column name="project_id" excludeProjects="UniDB"/>
+      <column name="partition_id"/>
+      <sql>
+        <!-- will use table apidbtuning.GenomicSeqOrgAbbrev when it becomes available -->
+        <![CDATA[
+         select source_id, '@PROJECT_ID@' as project_id, org_abbrev as partition_key from webready.genomicseqattributes
+        ]]>
+      </sql>  
+    </sqlQuery>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Genomic Sequence ID alias -->
@@ -172,30 +185,7 @@
                ||'&externalDbVersion='||bfmv.database_version
               as user_comment_link_url
           FROM webready.GenomicSeqAttributes bfmv
-        ]]>
-      </sql>
-      <sql includeProjects="EuPathDB">
-        <![CDATA[
-          SELECT bfmv.source_id, bfmv.project_id, lower(bfmv.project_id) as lc_project_id,
-              bfmv.a_count, bfmv.c_count,
-              bfmv.g_count, bfmv.t_count, bfmv.other_count,
-              bfmv.length, bfmv.at_percent, bfmv.organism as organism_full, bfmv.is_top_level,
-              trim(to_char(bfmv.length,'999,999,999')) as formatted_length,
-              '<i>' || SUBSTR(bfmv.organism, 1, 1) || '.' ||
-              REGEXP_REPLACE(SUBSTR(bfmv.organism, strpos(bfmv.organism, ' ')), '[[:space:]]+',
-                             chr(38) || 'nbsp;') || '</i>'
-                AS formatted_organism,
-              bfmv.ncbi_tax_id,
-              CASE WHEN (bfmv.sequence_description) IS NOT NULL
-                  THEN bfmv.sequence_description
-                WHEN (chromosome IS NOT NULL)
-                  THEN organism||' - Chromosome '||chromosome_order_num
-              ELSE organism END AS description,
-              bfmv.genbank_accession, bfmv.database_name,
-              bfmv.database_version as externalDbVersion, database_name as externalDbName,
-              bfmv.chromosome, bfmv.chromosome_order_num,
-             bfmv.sequence_type, '' as user_comment_link_url
-          FROM webready.GenomicSeqAttributes bfmv
+          WHERE bfmv.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -214,6 +204,7 @@
           WHERE ga.organism = gto.organism
             AND gto.type = 'genomic'
             AND ga.taxon_id = o.taxon_id
+            AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
           UNION
           SELECT ga.source_id as source_id, ga.project_id, o.public_abbrev as organismAbbrev,
             CASE WHEN (ga.length>300000 and o.is_annotated_genome=1) THEN 'GeneDensity'
@@ -223,6 +214,7 @@
             INNER JOIN apidb.organism o ON ga.taxon_id = o.taxon_id
             LEFT JOIN apidbtuning.gbrowsetracksorganism gto ON ga.organism = gto.organism
           WHERE ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto where gto.type = 'genomic')
+            AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -240,6 +232,7 @@
               FROM webready.GeneAttributes ga
               GROUP BY sequence_id
             ) gc ON sa.source_id = gc.source_id
+          WHERE sa.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -263,6 +256,7 @@
             AND dd.name       = ds.name
             AND ds.type       = 'genome'
             AND dd.dataset_presenter_id = p.dataset_presenter_id
+          WHERE bfmv.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -286,6 +280,7 @@
           WHERE gs.taxon_id = dd.taxon_id
             and dd.name like '%_primary_genome_RSRC'
             and dd.dataset_presenter_id = dp.dataset_presenter_id
+            and gs.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -303,6 +298,7 @@
         SELECT gss.source_id, gss.project_id,
           gss.sequence as gff_sequence
         FROM webready.genomicsequencesequence gss
+        WHERE gss.org_abbrev IN (%%PARTITION_KEYS%%)
       </sql>
     </sqlQuery>
 
@@ -376,6 +372,7 @@
             OR
             (t.mitochondrial_genetic_code_id = g.genetic_code_id AND s.name in ('mitochondrial_chromosome', 'apicoplast_chromosome'))
           )
+          and gs.org_abbrev IN (%%PARTITION_KEYS%%)
       </sql>
     </sqlQuery>
   </querySet>
