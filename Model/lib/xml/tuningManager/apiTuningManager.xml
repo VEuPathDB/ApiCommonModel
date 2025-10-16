@@ -186,9 +186,9 @@
       <![CDATA[
         do $$
         declare
-          v_org_abbrev varchar(20);
+          v_org_abbrev TEXT;
         begin
-          for v_org_abbrev in select abbrev from apidb.organism loop
+          for v_org_abbrev in select org_abbrev from webready.organismabbreviation loop
             insert into GeneWord&1
             select source_id, taxon_id,
                    -- for each rn (1 - max_words_in_any_product),
@@ -395,76 +395,135 @@
 
     <sql>
       <![CDATA[
-        CREATE UNLOGGED TABLE GeneCount AS
-        WITH genomestat AS (
-          SELECT  
-              project_id,
-              taxon_id,
-              org_abbrev,
-              max(database_version) AS database_version,
-              CASE WHEN ncbi_tax_id > 9000000000 THEN NULL ELSE ncbi_tax_id END AS ncbi_tax_id,
-              (sum(length)/1000000.0)::numeric AS megabps
-          FROM webready.GenomicSeqAttributes
-          WHERE is_top_level = 1
-          GROUP BY project_id, taxon_id, ncbi_tax_id, org_abbrev
-        ),
-        est AS (
-          SELECT DISTINCT s.gene AS source_id, s.org_abbrev
-          FROM webready.EstAlignmentGeneSummary s
-          JOIN webready.EstAttributes e 
-            ON e.source_id = s.accession AND e.org_abbrev = s.org_abbrev
-          WHERE s.est_gene_overlap_length >= 100
+       CREATE UNLOGGED TABLE genecount
+        (
+         taxon_id numeric(10,0),
+         project_id text,
+         database_version text, 
+         ncbi_tax_id numeric,
+         megabps numeric,
+         genecount bigint,
+         pseudogenecount bigint,
+         codinggenecount bigint,
+         othergenecount bigint,
+         chipchipgenecount bigint,
+         orthologcount bigint,
+         gocount bigint,
+         tfbscount bigint,
+         estcount bigint,
+         proteomicscount bigint,
+         ecnumbercount bigint
+      );
+
+     DO $$
+     DECLARE
+      v_org_abbrev TEXT;
+     BEGIN
+     FOR v_org_abbrev IN SELECT org_abbrev from webready.organismabbreviation LOOP
+	INSERT INTO genecount
+	WITH genomestat AS (
+	  SELECT  
+		  project_id,
+		  taxon_id,
+		  org_abbrev,
+		  max(database_version) AS database_version,
+		  CASE WHEN ncbi_tax_id > 9000000000 THEN NULL ELSE ncbi_tax_id END AS ncbi_tax_id,
+		  (sum(length)/1000000.0)::numeric AS megabps
+	  FROM webready.GenomicSeqAttributes
+	  WHERE is_top_level = 1 and org_abbrev = v_org_abbrev
+	  GROUP BY project_id, taxon_id, ncbi_tax_id, org_abbrev
+	), cct AS (
+	  select
+		COUNT(DISTINCT cct.gene_source_id) as chipchipGeneCount
+	  from webready.geneattributes ga ,webready.chipchiptranscript cct
+	   	WHERE ga.is_deprecated = 0
+		  	and cct.gene_source_id = ga.source_id
+		  	AND ga.org_abbrev = cct.org_abbrev
+	   and ga.org_abbrev = v_org_abbrev
+	   and cct.org_abbrev = v_org_abbrev
+	), gene as (
+	  select 
+	  	COUNT(DISTINCT ga.source_id) AS geneCount,
+		COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_pseudo = 1) AS pseudoGeneCount,
+		COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type IN ('protein coding','protein coding gene')) AS codingGeneCount,
+		COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type NOT IN ('protein coding','protein coding gene')) AS otherGeneCount
+	  from webready.geneattributes ga
+	  where org_abbrev = v_org_abbrev
+	), ortholog AS (
+		SELECT
+			COUNT(DISTINCT pp.source_id) FILTER (WHERE ga.is_deprecated = 0) AS orthologCount
+		FROM webready.geneattributes ga, apidb.phylogeneticprofile pp 
+		WHERE ga.source_id = pp.source_id 
+			and ga.org_abbrev = v_org_abbrev
+	), go AS (
+		SELECT
+			COUNT(DISTINCT gts.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS goCount
+		FROM webready.geneattributes ga, webready.gotermsummary gts 
+		WHERE ga.source_id = gts.gene_source_id 
+			AND ga.org_abbrev = gts.org_abbrev
+			AND gts.org_abbrev = v_org_abbrev and ga.org_abbrev =v_org_abbrev
+	), tfbs AS (
+		SELECT
+			COUNT(DISTINCT tfbs.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS tfbsCount
+		FROM webready.geneattributes ga, webready.TFBSGene tfbs 
+		WHERE ga.source_id = tfbs.gene_source_id 
+			AND ga.org_abbrev = tfbs.org_abbrev
+			AND tfbs.org_abbrev = v_org_abbrev and ga.org_abbrev = v_org_abbrev
+	), mss AS (
+		SELECT
+			COUNT(DISTINCT mss.aa_sequence_id) FILTER (WHERE ga.is_deprecated = 0) AS proteomicsCount
+		FROM webready.geneattributes ga, webready.transcriptattributes ta 
+			,apidb.MassSpecSummary mss 
+		WHERE ta.gene_source_id = ga.source_id 
+			AND ta.aa_sequence_id = mss.aa_sequence_id
+			-- AND ga.org_abbrev = ta.org_abbrev
+			AND ta.org_abbrev = v_org_abbrev
+			AND ga.org_abbrev = v_org_abbrev
+	), est AS (
+		SELECT 
+			COUNT(DISTINCT s.gene) FILTER (WHERE ga.is_deprecated = 0) AS estCount
+		FROM webready.geneattributes ga, webready.EstAlignmentGeneSummary s,
+           webready.EstAttributes e
+		WHERE 
+			e.source_id = s.accession 
+			AND ga.source_id = s.gene
+			AND s.est_gene_overlap_length >= 100
             AND s.is_best_alignment = 1
             AND s.percent_est_bases_aligned >= 20
             AND s.percent_identity >= 90
---        ),
---        snpCount AS (
---          SELECT ga.taxon_id, ga.org_abbrev, COUNT(DISTINCT ga.source_id) AS ct
---          FROM webready.GeneAttributes ga
---          JOIN webready.SnpAttributes sf
---            ON sf.gene_source_id = ga.source_id
---          WHERE ga.is_deprecated = 0
---          GROUP BY ga.taxon_id, ga.org_abbrev
-        )
-        SELECT 
-            g.taxon_id,
-            g.project_id,
-            g.database_version,
-            g.ncbi_tax_id,
-            g.megabps,
-         -- COALESCE(snpCount.ct,0) AS snpCount
-            COUNT(DISTINCT ga.source_id) AS geneCount,
-            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_pseudo = 1) AS pseudoGeneCount,
-            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type IN ('protein coding','protein coding gene')) AS codingGeneCount,
-            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type NOT IN ('protein coding','protein coding gene')) AS otherGeneCount,
-            COUNT(DISTINCT cct.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS chipChipGeneCount,
-            COUNT(DISTINCT pp.source_id) FILTER (WHERE ga.is_deprecated = 0) AS orthologCount,
-            COUNT(DISTINCT gts.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS goCount,
-            COUNT(DISTINCT tfbs.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS tfbsCount,
-            COUNT(DISTINCT mss.aa_sequence_id) FILTER (WHERE ga.is_deprecated = 0) AS proteomicsCount,
-            COUNT(DISTINCT est.source_id) FILTER (WHERE ga.is_deprecated = 0) AS estCount,
-            COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_deprecated = 0 AND ta.ec_numbers IS NOT NULL) AS ecNumberCount
-        FROM genomestat g
-        LEFT JOIN webready.GeneAttributes ga
-          ON ga.taxon_id = g.taxon_id AND ga.org_abbrev = g.org_abbrev
-        LEFT JOIN webready.gotermsummary gts 
-          ON ga.source_id = gts.gene_source_id AND gts.org_abbrev = g.org_abbrev
-        LEFT JOIN webready.TFBSGene tfbs 
-          ON ga.source_id = tfbs.gene_source_id AND tfbs.org_abbrev = g.org_abbrev
-        LEFT JOIN webready.TranscriptAttributes ta 
-          ON ta.gene_source_id = ga.source_id AND ta.org_abbrev = g.org_abbrev
-        LEFT JOIN webready.chipchipTranscript cct 
-          ON ga.source_id = cct.gene_source_id AND cct.org_abbrev = g.org_abbrev
- --       LEFT JOIN snpCount
- --         ON g.taxon_id = snpCount.taxon_id AND g.org_abbrev = snpCount.org_abbrev
-        LEFT JOIN est 
-          ON ga.source_id = est.source_id AND est.org_abbrev = g.org_abbrev
-        LEFT JOIN apidb.phylogeneticprofile pp 
-          ON ga.source_id = pp.source_id
-        LEFT JOIN apidb.MassSpecSummary mss 
-          ON ta.aa_sequence_id = mss.aa_sequence_id
-        GROUP BY g.taxon_id, g.project_id, g.database_version, g.ncbi_tax_id, g.megabps
---, snpCount
+			AND e.org_abbrev = v_org_abbrev
+			AND s.org_abbrev = v_org_abbrev
+			AND ga.org_abbrev = v_org_abbrev
+	), ec AS (
+		SELECT 
+			COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_deprecated = 0 AND ta.ec_numbers IS NOT NULL) AS ecNumberCount
+		FROM webready.geneattributes ga, webready.transcriptattributes ta
+		WHERE ta.gene_source_id = ga.source_id
+			-- AND ga.org_abbrev = ta.org_abbrev
+			AND ta.org_abbrev =v_org_abbrev
+			AND ga.org_abbrev = v_org_abbrev
+	)
+	SELECT 
+		g.taxon_id,
+		g.project_id,
+		g.database_version,
+		g.ncbi_tax_id,
+		g.megabps,
+		gene.geneCount,
+		gene.pseudoGeneCount,
+		gene.codingGeneCount,
+		gene.otherGeneCount,
+		cct.chipchipGeneCount,
+		ortholog.orthologCount,
+		go.goCount,
+		tfbs.tfbsCount,
+		est.estCount,
+		mss.proteomicsCount,
+		ec.ecNumberCount
+	FROM genomestat g, gene, cct, ortholog, go, tfbs, est, mss, ec
+	;
+     END LOOP;
+     end $$;
       ]]>
     </sql>
 
@@ -1050,7 +1109,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           sample_display_name varchar(200),
           html_color varchar(20),
           sort_order numeric,
-          org_abbrev varchar(20)
+          org_abbrev text
         ) PARTITION BY LIST (org_abbrev)
       ]]>
     </sql>
@@ -1058,13 +1117,17 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Loop over organisms and insert data -->
     <sql>
       <![CDATA[
-        do $$
-        declare
-          v_org_abbrev varchar(20);
-        begin
-          for v_org_abbrev in select abbrev from apidb.organism loop
-            insert into MSPeptideSummary&1
-            select pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER, v_org_abbrev
+        DO $$
+        DECLARE
+          orgrecord RECORD;
+          partition_name TEXT;
+        BEGIN
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
+            partition_name := 'MSPeptideSummary&1_' || orgrecord.sanitized_org_abbrev;
+            EXECUTE format('CREATE TABLE %I PARTITION OF MSPeptideSummary&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
+            INSERT INTO MSPeptideSummary&1
+            select pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER, orgrecord.org_abbrev
             from (
                     select msp.peptide_sequence,
                            ta.source_id,
@@ -1083,7 +1146,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                       inner join webready.TranscriptAttributes ta on msp.protein_source_id = ta.protein_source_id
                       LEFT JOIN DatasetDatasource dd ON d.name = dd.name
                       left join datasetpresenter dsp on dd.dataset_presenter_id = dsp.dataset_presenter_id
-                    where ta.org_abbrev = v_org_abbrev
+                    where ta.org_abbrev = orgrecord.org_abbrev
                     group by d.name, ta.source_id, ta.gene_source_id, ta.project_id, dsp.display_name,
                              msp.protein_source_id, ta.aa_sequence_id, msp.peptide_sequence,
                              msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id, msp.sample
@@ -1190,7 +1253,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           sample_display_name varchar(200),
           html_color varchar(20),
           sort_order numeric,
-          org_abbrev varchar(20)
+          org_abbrev text
         ) PARTITION BY LIST (org_abbrev)
       ]]>
     </sql>
@@ -1198,13 +1261,17 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Loop over organisms and insert data -->
     <sql>
       <![CDATA[
-        do $$
-        declare
-          v_org_abbrev varchar(20);
-        begin
-          for v_org_abbrev in select abbrev from apidb.organism loop
-            insert into MSModifiedPeptideSummary&1
-            select pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER, v_org_abbrev
+        DO $$
+        DECLARE
+          orgrecord RECORD;
+          partition_name TEXT;
+        BEGIN
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
+            partition_name := 'MSModifiedPeptideSummary&1_' || orgrecord.sanitized_org_abbrev;
+            EXECUTE format('CREATE TABLE %I PARTITION OF MSModifiedPeptideSummary&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
+            INSERT INTO MSModifiedPeptideSummary&1
+            select pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER, orgrecord.org_abbrev
             from (
                     select ta.source_id,
                            ta.gene_source_id,
@@ -1226,13 +1293,13 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                       inner join webready.TranscriptAttributes ta on msp.protein_source_id = ta.protein_source_id
                       LEFT JOIN DatasetDatasource dd ON d.name = dd.name
                       left join datasetpresenter dsp on dd.dataset_presenter_id = dsp.dataset_presenter_id
-                    where ta.org_abbrev = v_org_abbrev
+                    where ta.org_abbrev = orgrecord.org_abbrev
                     group by d.name, ta.source_id, ta.gene_source_id, ta.project_id, dsp.display_name,
                              msp.protein_source_id, ta.aa_sequence_id, msp.peptide_sequence,
                              msp.spectrum_count, msp.peptide_start, msp.peptide_end, msp.external_database_release_id,
                              msp.sample, msp.modification_type, msp.residue, msp.residue_protein_loc
               ) pep
-              ,sampledisplayinfo sdi
+              , sampledisplayinfo sdi
             where sdi.dataset_name = pep.external_database_name
              and pep.sample = replace (sdi.sample ,'.tab', '');
           end loop;
@@ -1264,7 +1331,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 
 
 <!--  <tuningTable name="Ssgcid" alwaysUpdate="true">-->
-  <tuningTable name="Ssgcid">
+  <tuningTable name="Ssgcid" alwaysUpdate="true" >
     <comment> Data from the Seattle Structural Genomics Center for Infectious Disease,
       populated from their web service. Used in the gene record.
     </comment>
@@ -1273,7 +1340,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 
 
 <!--  <tuningTable name="SampleDisplayInfo" alwaysUpdate="true">-->
-  <tuningTable name="SampleDisplayInfo" >
+  <tuningTable name="SampleDisplayInfo" alwaysUpdate="true" >
     <comment> Used by the model and GBrowse, as well as an input in the creation of
       the tuning tables like MSModifiedPeptideSummary and MSPeptideSummary.
     </comment>
@@ -1282,7 +1349,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 
 
 <!--  <tuningTable name="ProfileSetDisplayInfo" alwaysUpdate="true">-->
-  <tuningTable name="ProfileSetDisplayInfo">
+  <tuningTable name="ProfileSetDisplayInfo" alwaysUpdate="true" >
     <comment> Used by the model when writing profile data
     </comment>
     <program commandLine="buildProfileSetDisplayInfoTT"/>
@@ -1290,7 +1357,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 
 
 <!--  <tuningTable name="GbrowseTracksOrganism" alwaysUpdate="true">-->
-  <tuningTable name="GbrowseTracksOrganism">
+  <tuningTable name="GbrowseTracksOrganism" alwaysUpdate="true" >
     <comment> Associates an organism with the GBrowse and PBrowse tracks available
       for it. Used by the gene record.
     </comment>
@@ -1445,7 +1512,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 
 
 <!--  <tuningTable name="Pubmed" alwaysUpdate="true">-->
-  <tuningTable name="Pubmed">
+  <tuningTable name="Pubmed"  alwaysUpdate="true" >
     <!-- PubMed info
       -->
     <internalDependency name="ExternalDbDatasetPresenter"/>
@@ -1478,7 +1545,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           doi varchar(200),
           title varchar(2000),
           authors varchar(2000),
-          org_abbrev varchar(20)
+          org_abbrev text
         ) PARTITION BY LIST (org_abbrev)
       ]]>
     </sql>
@@ -1486,12 +1553,16 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Loop over organisms and insert data -->
     <sql>
       <![CDATA[
-        do $$
-        declare
-          v_org_abbrev varchar(20);
-        begin
-          for v_org_abbrev in select abbrev from apidb.organism loop
-            insert into GenePubmed&1
+        DO $$
+        DECLARE
+          orgrecord RECORD;
+          partition_name TEXT;
+        BEGIN
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
+            partition_name := 'GenePubmed&1_' || orgrecord.sanitized_org_abbrev;
+            EXECUTE format('CREATE TABLE %I PARTITION OF GenePubmed&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
+            INSERT INTO GenePubmed&1
             with feat_pm as (
               select dbref_subset.na_feature_id,
                      pm.pubmed_id, pm.doi, pm.title,
@@ -1514,15 +1585,15 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                    ) dbref_subset
               where dbref_subset.primary_identifier = pm.pubmed_id::varchar
             )
-            select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, v_org_abbrev
+            select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, orgrecord.org_abbrev
             from webready.TranscriptAttributes ta, feat_pm
             where ta.na_feature_id = feat_pm.na_feature_id
-              and ta.org_abbrev = v_org_abbrev
+              and ta.org_abbrev = orgrecord.org_abbrev
             union
-            select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, v_org_abbrev
+            select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, orgrecord.org_abbrev
             from webready.TranscriptAttributes ta, feat_pm
             where ta.gene_na_feature_id = feat_pm.na_feature_id
-              and ta.org_abbrev = v_org_abbrev;
+              and ta.org_abbrev = orgrecord.org_abbrev;
           end loop;
         end $$;
       ]]>
@@ -2140,9 +2211,9 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
-
+<!-- TODO:  Turn back on always update -->
 <!--  <tuningTable name="Stringdb" alwaysUpdate="true">-->
-  <tuningTable name="Stringdb" >
+  <tuningTable name="Stringdb"  alwaysUpdate="true" >
     <comment> Data from STRING-DB.org, populated from their web service.
       Used in the gene record.
     </comment>
@@ -2345,16 +2416,16 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <sql>
       <![CDATA[
         CREATE TABLE PreferredProductsGene&1 (
-          source_id varchar(80),
-          product varchar(2000),
+          source_id text,
+          product test,
           project_id text,
           transcript_ids varchar,
           reference varchar,
           evidence_code varchar,
           evidence_code_parameter varchar,
-          assigned_by varchar(20),
+          assigned_by text,
           row_source varchar,
-          org_abbrev varchar(20)
+          org_abbrev text
         ) PARTITION BY LIST (org_abbrev)
       ]]>
     </sql>
@@ -2362,84 +2433,88 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Loop over organisms and insert data -->
     <sql>
       <![CDATA[
-        do $$
-        declare
-          v_org_abbrev varchar(20);
-        begin
-          for v_org_abbrev in select abbrev from apidb.organism loop
-            insert into PreferredProductsGene&1
-        -- PreferredProductsGene: check apidb.TranscriptProduct and
-        -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
-        -- (and only if) that turns up nothing, check the PRODUCT column of
-        -- dots.GeneFeature and dots.Transcript
-        with fromDots
-          as ( select gf.source_id
+        DO $$
+        DECLARE
+          orgrecord RECORD;
+          partition_name TEXT;
+        BEGIN
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
+            partition_name := 'PreferredProductsGene&1_' || orgrecord.sanitized_org_abbrev;
+            EXECUTE format('CREATE TABLE %I PARTITION OF PreferredProductsGene&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
+            INSERT INTO PreferredProductsGene&1
+            -- PreferredProductsGene: check apidb.TranscriptProduct and
+            -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
+            -- (and only if) that turns up nothing, check the PRODUCT column of
+            -- dots.GeneFeature and dots.Transcript
+            with fromDots
+            as ( select gf.source_id
                         from dots.GeneFeature gf, webready.GeneAttributes ga
                         where gf.product is not null
                         and gf.na_feature_id = ga.na_feature_id
-                        and ga.org_abbrev = v_org_abbrev
+                        and ga.org_abbrev = orgrecord.org_abbrev
                         union
                         select ga.source_id
                         from dots.Transcript t, webready.GeneAttributes ga
                         where t.product is not null
                           and t.parent_id = ga.na_feature_id
-                          and ga.org_abbrev = v_org_abbrev
+                          and ga.org_abbrev = orgrecord.org_abbrev
                EXCEPT
                select ta.gene_source_id
                         from apidb.TranscriptProduct tp, webready.TranscriptAttributes ta
                         where tp.na_feature_id = ta.na_feature_id
-                        and ta.org_abbrev = v_org_abbrev
+                        and ta.org_abbrev = orgrecord.org_abbrev
                         union
                         select ga.source_id
                         from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
                         where gfp.na_feature_id = ga.na_feature_id
-                        and ga.org_abbrev = v_org_abbrev)
-        select ta.gene_source_id as source_id, tp.product, ta.project_id,
-          string_agg(source_id, ', ' order by source_id) as transcript_ids,
-          string_agg(publication, ', ' order by source_id) as reference,
-          e.name as evidence_code,
-          tp.with_from AS evidence_code_parameter,
-          cast (max(tp.assigned_by) as varchar(20)) as assigned_by,
-          'apidb.TranscriptProduct' as row_source,
-          v_org_abbrev as org_abbrev
-        from apidb.TranscriptProduct tp
-          INNER JOIN webready.TranscriptAttributes ta ON ta.na_feature_id = tp.na_feature_id
-          LEFT JOIN preferred_product_evids e ON tp.evidence_code = e.go_evidence_code_id
-        where tp.is_preferred = 1
-          and ta.org_abbrev = v_org_abbrev
-        group by gene_source_id, ta.project_id, tp.product,
-          e.name, tp.with_from
-        union
-        select ga.source_id, gfp.product, ga.project_id,
-          null::varchar as transcript_ids,
-          null::varchar as reference,
-          null::varchar as evidence_code,
-          null::varchar as evidence_code_parameter,
-          null::varchar as  assigned_by,
-          'apidb.GeneFeatureProduct' as row_source,
-          v_org_abbrev as org_abbrev
-        from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
-        where ga.na_feature_id = gfp.na_feature_id
-          and gfp.is_preferred = 1
-          and ga.org_abbrev = v_org_abbrev
-        group by source_id, ga.project_id, gfp.product
-        union
-        select t.*, v_org_abbrev as org_abbrev
-        from (select ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
-                string_agg(source_id, ', ' order by source_id) as transcript_ids,
-                null::varchar as reference,
-                null::varchar as evidence_code,
-                null::varchar as evidence_code_parameter,
-                null::varchar as  assigned_by,
-                'webready.TranscriptAttributes/GeneAttributes' as row_source
-              from webready.TranscriptAttributes ta
-              where ta.transcript_product is not null
-                and ta.org_abbrev = v_org_abbrev
-              group by ta.gene_source_id, ta.transcript_product, ta.project_id
-             ) t, fromDots
-        where t.source_id = fromDots.source_id;
-          end loop;
-        end $$;
+                        and ga.org_abbrev = orgrecord.org_abbrev)
+            select ta.gene_source_id as source_id, tp.product, ta.project_id,
+              string_agg(source_id, ', ' order by source_id) as transcript_ids,
+              string_agg(publication, ', ' order by source_id) as reference,
+              e.name as evidence_code,
+              tp.with_from AS evidence_code_parameter,
+              cast (max(tp.assigned_by) as varchar(20)) as assigned_by,
+              'apidb.TranscriptProduct' as row_source,
+              orgrecord.org_abbrev as org_abbrev
+            from apidb.TranscriptProduct tp
+              INNER JOIN webready.TranscriptAttributes ta ON ta.na_feature_id = tp.na_feature_id
+              LEFT JOIN preferred_product_evids e ON tp.evidence_code = e.go_evidence_code_id
+            where tp.is_preferred = 1
+              and ta.org_abbrev = orgrecord.org_abbrev
+            group by gene_source_id, ta.project_id, tp.product,
+              e.name, tp.with_from
+            union
+            select ga.source_id, gfp.product, ga.project_id,
+              null::varchar as transcript_ids,
+              null::varchar as reference,
+              null::varchar as evidence_code,
+              null::varchar as evidence_code_parameter,
+              null::varchar as  assigned_by,
+              'apidb.GeneFeatureProduct' as row_source,
+              orgrecord.org_abbrev as org_abbrev
+            from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
+            where ga.na_feature_id = gfp.na_feature_id
+              and gfp.is_preferred = 1
+              and ga.org_abbrev = orgrecord.org_abbrev
+            group by source_id, ga.project_id, gfp.product
+            union
+            select t.*, orgrecord.org_abbrev as org_abbrev
+            from (select ta.gene_source_id as source_id, ta.transcript_product, ta.project_id,
+                    string_agg(source_id, ', ' order by source_id) as transcript_ids,
+                    null::varchar as reference,
+                    null::varchar as evidence_code,
+                    null::varchar as evidence_code_parameter,
+                    null::varchar as  assigned_by,
+                    'webready.TranscriptAttributes/GeneAttributes' as row_source
+                  from webready.TranscriptAttributes ta
+                  where ta.transcript_product is not null
+                    and ta.org_abbrev = orgrecord.org_abbrev
+                  group by ta.gene_source_id, ta.transcript_product, ta.project_id
+                 ) t, fromDots
+            where t.source_id = fromDots.source_id;
+          END LOOP;
+        END $$;
       ]]>
     </sql>
     <sql>
@@ -2470,20 +2545,21 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <sql>
      <![CDATA[
        create table &prefixAllGeneProducts&1 (
-         source_id varchar(80),
-         product varchar(4000),
-         project_id varchar(10),
+         source_id text,
+         product text,
+         project_id text,
          is_alternate varchar(3),
          transcript_ids text,
          reference text,
-         evidence_code varchar(100),
-         evidence_code_parameter varchar(4000),
-         assigned_by varchar(100),
-         source varchar(50),
-         org_abbrev varchar(20)
+         evidence_code text,
+         evidence_code_parameter text,
+         assigned_by text,
+         source text,
+         org_abbrev text
        ) PARTITION BY LIST (org_abbrev)
        ]]>
     </sql>
+
 
      <sql>
         <![CDATA[
@@ -2494,40 +2570,34 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
        ]]>
     </sql>
 
-    <!-- Subquery 1: apidb.TranscriptProduct -->
     <sql>
      <![CDATA[
        do $$
        declare
-         v_org_abbrev varchar(20);
+          orgrecord RECORD;
+          partition_name TEXT;
        begin
-         for v_org_abbrev in select abbrev from apidb.organism loop
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
+
+           partition_name := '&prefixAllGeneProducts&1_' || orgrecord.sanitized_org_abbrev;
+           EXECUTE format('CREATE TABLE %I PARTITION OF &prefixAllGeneProducts&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
            insert into &prefixAllGeneProducts&1
            select ta.gene_source_id AS source_id, tp.product, ta.project_id,
                   CASE tp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
+                -- TODO: fix me.  ta has no publication column
                 --  string_agg(ta.publication, ', ' order by ta.source_id) as reference,
+                  null as reference,
                   e.name as evidence_code, tp.with_from as evidence_code_parameter,
-                  tp.assigned_by, 'apidb.TranscriptProduct' as source, v_org_abbrev
+                  tp.assigned_by, 'apidb.TranscriptProduct' as source, orgrecord.org_abbrev
            from webready.TranscriptAttributes ta
               INNER JOIN apidb.TranscriptProduct tp ON ta.na_feature_id = tp.na_feature_id
               LEFT JOIN all_gene_product_evids e ON tp.evidence_code = e.go_evidence_code_id
-           where ta.org_abbrev = v_org_abbrev
+           where ta.org_abbrev = orgrecord.org_abbrev
            group by ta.gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
                  tp.with_from, tp.assigned_by;
-         end loop;
-       end $$;
-       ]]>
-    </sql>
 
-    <!-- Subquery 2: apidb.GeneFeatureProduct -->
-    <sql>
-     <![CDATA[
-       do $$
-       declare
-         v_org_abbrev varchar(20);
-       begin
-         for v_org_abbrev in select abbrev from apidb.organism loop
            insert into &prefixAllGeneProducts&1
            select ga.source_id as source_id, gfp.product, ga.project_id,
                   CASE gfp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
@@ -2535,89 +2605,53 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   null as evidence_code_parameter,
                   -- CHECK AND FIX: OK that apidb.GeneFeatureProduct has NO assigned_by column?
                   NULL as assigned_by,
-                  'apidb.GeneFeatureProduct' as source, v_org_abbrev
+                  'apidb.GeneFeatureProduct' as source, orgrecord.org_abbrev
            from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
            where ga.na_feature_id = gfp.na_feature_id
-             and ga.org_abbrev = v_org_abbrev;
-         end loop;
-       end $$;
-       ]]>
-    </sql>
+             and ga.org_abbrev = orgrecord.org_abbrev;
 
-    <!-- Subquery 3: dots.GeneFeature -->
-    <sql>
-     <![CDATA[
-       do $$
-       declare
-         v_org_abbrev varchar(20);
-       begin
-         for v_org_abbrev in select abbrev from apidb.organism loop
            insert into &prefixAllGeneProducts&1
            select ga.source_id as source_id, gf.product, ga.project_id,
                   null as  is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
                   null as evidence_code_parameter, null as assigned_by,
-                  'dots.GeneFeature' as source, v_org_abbrev
+                  'dots.GeneFeature' as source, orgrecord.org_abbrev
            from dots.GeneFeature gf, webready.GeneAttributes ga, webready.GeneProduct gp
            where ga.na_feature_id = gf.na_feature_id
              and gf.product is not null
              and ga.source_id = gp.source_id
-             and gp.org_abbrev = v_org_abbrev
-             and ga.org_abbrev = v_org_abbrev
+             and gp.org_abbrev = orgrecord.org_abbrev
+             and ga.org_abbrev = orgrecord.org_abbrev
              and gp.source_rule >= 3; -- no product in apidb.GeneFeatureProduct
-         end loop;
-       end $$;
-       ]]>
-    </sql>
 
-    <!-- Subquery 4: dots.Transcript -->
-    <sql>
-     <![CDATA[
-       do $$
-       declare
-         v_org_abbrev varchar(20);
-       begin
-         for v_org_abbrev in select abbrev from apidb.organism loop
            insert into &prefixAllGeneProducts&1
            select ta.gene_source_id AS source_id, t.product, ta.project_id,
                   null as is_alternate,
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
                   null as reference, null as evidence_code, null as evidence_code_parameter,
-                  null as assigned_by, 'dots.Transcript' as source, v_org_abbrev
+                  null as assigned_by, 'dots.Transcript' as source, orgrecord.org_abbrev
            from webready.TranscriptAttributes ta, dots.Transcript t
            where ta.na_feature_id = t.na_feature_id
              and t.product is not null
-             and ta.org_abbrev = v_org_abbrev
+             and ta.org_abbrev = orgrecord.org_abbrev
              and ta.gene_source_id
                  not in (select source_id
                      from webready.GeneProduct
                      where source_rule < 6
-                       and org_abbrev = v_org_abbrev) -- product only in dots.Transcript
+                       and org_abbrev = orgrecord.org_abbrev) -- product only in dots.Transcript
            group by ta.gene_source_id, ta.project_id, t.product;
-         end loop;
-       end $$;
-       ]]>
-    </sql>
 
-    <!-- Subquery 5: unspecified product -->
-    <sql>
-     <![CDATA[
-       do $$
-       declare
-         v_org_abbrev varchar(20);
-       begin
-         for v_org_abbrev in select abbrev from apidb.organism loop
            insert into &prefixAllGeneProducts&1
            select gp.source_id as source_id, gp.product, ga.project_id,
                   null as  is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
                   null as evidence_code_parameter, null as assigned_by,
-                  'unspecified product' as source, v_org_abbrev
+                  'unspecified product' as source, orgrecord.org_abbrev
            from webready.GeneProduct gp, webready.GeneAttributes ga
            where gp.source_rule = 7
              and gp.source_id = ga.source_id
-             and ga.org_abbrev = v_org_abbrev
-             and gp.org_abbrev = v_org_abbrev;
+             and ga.org_abbrev = orgrecord.org_abbrev
+             and gp.org_abbrev = orgrecord.org_abbrev;
          end loop;
        end $$;
        ]]>
