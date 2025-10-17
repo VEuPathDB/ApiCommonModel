@@ -1537,81 +1537,86 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Create empty table structure -->
     <sql>
       <![CDATA[
-        CREATE TABLE GenePubmed&1 (
-          source_id varchar(80),
-          gene_source_id varchar(80),
-          project_id text,
-          pubmed_id varchar(20),
-          doi varchar(200),
-          title varchar(2000),
-          authors varchar(2000),
-          org_abbrev text
-        ) PARTITION BY LIST (org_abbrev)
+	       CREATE TABLE GenePubmed_1 (
+	       source_id varchar(80),
+	       gene_source_id varchar(80),
+	       project_id text,
+	       pubmed_id varchar(20),
+	       doi varchar(200),
+	       title varchar(2000),
+	       authors varchar(2000),
+	       org_abbrev text
+	       ) PARTITION BY LIST (org_abbrev)
       ]]>
     </sql>
 
     <!-- Loop over organisms and insert data -->
     <sql>
       <![CDATA[
-        DO $$
-        DECLARE
-          orgrecord RECORD;
-          partition_name TEXT;
-        BEGIN
-          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
-            partition_name := 'GenePubmed&1_' || orgrecord.sanitized_org_abbrev;
-            EXECUTE format('CREATE TABLE %I PARTITION OF GenePubmed&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+	       DO $$
+	       DECLARE
+	       orgrecord RECORD;
+	       partition_name TEXT;
+	       BEGIN
+	       FOR orgrecord IN
+	       SELECT org_abbrev, sanitized_org_abbrev FROM webready.organismabbreviation
+	       LOOP
+	       partition_name := 'GenePubmed_1_' || orgrecord.sanitized_org_abbrev;
+	       EXECUTE format(
+	       'CREATE TABLE %I PARTITION OF GenePubmed_1 FOR VALUES IN (%L)',
+	       partition_name,
+	       orgrecord.org_abbrev
+	       );
 
-            INSERT INTO GenePubmed&1
-            with feat_pm as (
-              select dbref_subset.na_feature_id,
-                     pm.pubmed_id, pm.doi, pm.title,
-                     substr(pm.authors, 2000, 1) authors
-              from Pubmed pm,
-                   (select dbna.na_feature_id, db.primary_identifier
-                    from dots.DbRefNaFeature dbna,
-                         sres.DbRef db
-                    where db.db_ref_id = dbna.db_ref_id
-                     and db.external_database_release_id
-                         in (  select external_database_release_id
-                               from ExternalDbDatasetPresenter
-                               where lower(dataset_presenter_display_name) like '%pubmed%'
-                             union
-                               select edr.external_database_release_id
-                               from sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
-                               where ed.external_database_id = edr.external_database_id
-                                 and lower(ed.name) like '%pubmed%'
-                            )
-                   ) dbref_subset
-              where dbref_subset.primary_identifier = pm.pubmed_id::varchar
-            )
-            select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, orgrecord.org_abbrev
-            from webready.TranscriptAttributes ta, feat_pm
-            where ta.na_feature_id = feat_pm.na_feature_id
-              and ta.org_abbrev = orgrecord.org_abbrev
-            union
-            select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, orgrecord.org_abbrev
-            from webready.TranscriptAttributes ta, feat_pm
-            where ta.gene_na_feature_id = feat_pm.na_feature_id
-              and ta.org_abbrev = orgrecord.org_abbrev;
-          end loop;
-        end $$;
+EXECUTE format($sql$
+INSERT INTO GenePubmed_1
+WITH feat_pm AS (
+SELECT dbref_subset.na_feature_id,
+pm.pubmed_id, pm.doi, pm.title,
+substr(pm.authors, 1, 2000) AS authors
+FROM Pubmed pm
+JOIN (
+SELECT dbna.na_feature_id, db.primary_identifier
+FROM dots.DbRefNaFeature dbna
+JOIN sres.DbRef db ON db.db_ref_id = dbna.db_ref_id
+WHERE db.external_database_release_id IN (
+SELECT external_database_release_id
+FROM ExternalDbDatasetPresenter
+WHERE lower(dataset_presenter_display_name) LIKE '%%pubmed%%'
+UNION
+SELECT edr.external_database_release_id
+FROM sres.ExternalDatabaseRelease edr
+JOIN sres.ExternalDatabase ed ON ed.external_database_id = edr.external_database_id
+WHERE lower(ed.name) LIKE '%%pubmed%%'
+)
+) dbref_subset ON dbref_subset.primary_identifier = pm.pubmed_id::varchar
+)
+SELECT ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, %L
+FROM webready.TranscriptAttributes ta
+JOIN feat_pm ON ta.na_feature_id = feat_pm.na_feature_id
+WHERE ta.org_abbrev = %L
+UNION
+SELECT ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, %L
+FROM webready.TranscriptAttributes ta
+JOIN feat_pm ON ta.gene_na_feature_id = feat_pm.na_feature_id
+WHERE ta.org_abbrev = %L;
+$sql$, orgrecord.org_abbrev, orgrecord.org_abbrev, orgrecord.org_abbrev, orgrecord.org_abbrev);
+END LOOP;
+END $$;
       ]]>
     </sql>
 
     <!-- Create indexes -->
     <sql>
       <![CDATA[
-        create index gpm_gene_idx&1
-          on GenePubmed&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
-
+          CREATE INDEX gpm_gene_idx_1
+          ON GenePubmed_1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index gpm_tx_idx&1
-          on GenePubmed&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
-
+          CREATE INDEX gpm_tx_idx_1
+          ON GenePubmed_1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors);
       ]]>
     </sql>
   </tuningTable>
