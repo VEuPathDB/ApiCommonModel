@@ -97,8 +97,7 @@ sub processOrganism {
 
   &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
 
-## UNCOMMENT after longReadRNASeq data is available in webServices
-#  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
+  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
 
 
   # TODO:  need to set isReference 
