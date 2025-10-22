@@ -64,7 +64,7 @@ sub queryForGenes {
 
   my $sql = "
 SELECT gene_source_id, sequence_id, gene_start_min, gene_end_max, strand
-FROM webready.TranscriptAttributes
+FROM webready.TranscriptAttributes_p
 WHERE organism = '$organism'";
   
   my $sh = $dbh->prepare($sql);

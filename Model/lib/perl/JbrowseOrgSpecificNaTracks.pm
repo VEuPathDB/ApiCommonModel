@@ -529,7 +529,7 @@ sub addSynteny {
   return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
   my $sql = "select otr.organism, oa.internal_abbrev as public_abbrev, otr.phylum, otr.genus, otr.species, otr.kingdom, otr.class, gt.gtracks
-            from webready.OrganismSelectTaxonRank otr
+            from webready.OrganismSelectTaxonRank_p otr
                , APIDBTUNING.ORGANISMATTRIBUTES oa
                RIGHT JOIN (select * from APIDBTUNING.GBROWSETRACKSORGANISM where type = 'synteny' ) gt
                 ON oa.ORGANISM_NAME = gt.organism
