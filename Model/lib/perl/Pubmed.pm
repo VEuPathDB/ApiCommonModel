@@ -20,7 +20,7 @@ sub new {
   push(@formdata, "email", "help\@eupathdb.org");
   push(@formdata, "db", "pubmed");
   push(@formdata, "id", join(',', @$pmidList));
-  push(@formdata, "api_key", $apiKey);
+  # push(@formdata, "api_key", $apiKey);
   my $response = $ua->post($pubmedUrl, \@formdata);
   if (!($response->is_success)) {
     die $response->status_line;

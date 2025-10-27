@@ -6,7 +6,7 @@
       - all projects need a gene alias query (or, we have to break that out of the
         <recordClass> element
     -->
-    <defaultTestParamValues includeProjects="PlasmoDB,EuPathDB">
+    <defaultTestParamValues includeProjects="PlasmoDB">
       <paramValue name="source_id">%%defaultGene%%</paramValue>
       <paramValue name="project_id">PlasmoDB</paramValue>
     </defaultTestParamValues>
@@ -62,22 +62,23 @@
       <paramValue name="project_id"></paramValue>
     </defaultTestParamValues>
 
-    <testRowCountSql excludeProjects="EuPathDB">
-      SELECT count(na_feature_id)
-      FROM dots.Transcript
-      WHERE external_database_release_id IN (
-        SELECT distinct(dbr.external_database_release_id)
-        FROM webready.TranscriptAttributes ga, sres.ExternalDatabase db,
-          sres.ExternalDatabaseRelease dbr
-        WHERE db.name = ga.external_db_name
-          AND dbr.version = ga.external_db_version
-          AND dbr.external_database_id = db.external_database_id
-      )
-    </testRowCountSql>
-
-    <testRowCountSql includeProjects="EuPathDB">
+    <testRowCountSql>
       SELECT count(*) FROM webready.TranscriptAttributes
     </testRowCountSql>
+
+    <!-- Used by WDK to replace %%PARTITION_KEYS%% macro with the keys for a result set -->
+    <sqlQuery name="PartitionKeys">
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id" excludeProjects="UniDB"/>
+      <column name="partition_key"/>
+      <sql>
+		<!-- will use table apidbtuning.TranscriptOrgAbbrev when it becomes available -->
+        <![CDATA[
+         select source_id, gene_source_id, '@PROJECT_ID@' as project_id, org_abbrev as partition_key from webready.transcriptattributes
+        ]]>
+      </sql>  
+    </sqlQuery>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Gene alias -->
@@ -126,8 +127,18 @@
         <![CDATA[
           SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
           FROM webready.TranscriptAttributes ta
-              , (select * from table (apidb.pivot('SELect * from (SELECT ga.source_id as profile_source_id, ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node, to_number(round(nfe.value, 2)) as value FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes ga WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID and ps.DATASET_NAME = ''cparIowaII_rtpcr_Kissinger_RtPcr_RSRC'' and ps.profile_type = ''values'' and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
+          , (select * from table (apidb.pivot('SELect * from (
+	    SELECT ga.source_id as profile_source_id,
+	    ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node,
+	    to_number(round(nfe.value, 2)) as value
+	    FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes ga
+	    WHERE nfe.PROTOCOL_APP_NODE_ID = ps.PROTOCOL_APP_NODE_ID
+  	     AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+	     and ps.DATASET_NAME = ''cparIowaII_rtpcr_Kissinger_RtPcr_RSRC''
+	     and ps.profile_type = ''values''
+	     and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
           WHERE ta.gene_source_id = p.profile_source_id (+)
+	    AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -142,7 +153,7 @@
       <column name="reporter_implementation" />
       <column name="reporter_properties" />
 
-      <sql excludeProjects="EuPathDB">
+      <sql >
         <![CDATA[
           SELECT 'pan_' || ps.PROTOCOL_APP_NODE_ID as name
                 , CASE WHEN ct.ct > 1
@@ -162,11 +173,6 @@
           WHERE ps.DATASET_NAME = 'cparIowaII_rtpcr_Kissinger_RtPcr_RSRC'
             AND ps.profile_type = 'values'
             AND ps.dataset_name = ct.dataset_name
-        ]]>
-      </sql>
-      <sql includeProjects="EuPathDB">
-        <![CDATA[
-          SELECT 'cparIowaII_rtpcr_Kissinger_RtPcr_RSRC' as name, 'cparIowaII_rtpcr_Kissinger_RtPcr_RSRC'
         ]]>
       </sql>
     </sqlQuery>
@@ -214,6 +220,7 @@
           WHERE idsql_1.gene_source_id = cnt.gene_source_id
             AND idsql_1.source_id        = index1.source_id
             AND idsql_1.source_id      = ta.source_id
+	    AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -234,15 +241,15 @@
       <column name="gene_name" ignoreCase="true"/>
       <column name="gene_type" ignoreCase="true"/>
       <column name="gene_exon_count"/>
-      <column name="representative_transcript" includeProjects="ToxoDB,EuPathDB,UniDB"/>
+      <column name="representative_transcript" includeProjects="ToxoDB,UniDB"/>
       <column name="is_deprecated"/>
       <column name="gene_context_start"/>
       <column name="gene_context_end"/>
-      <column name="gene_orthomcl_name"/>
-      <column name="gene_ortholog_number"/>
-      <column name="gene_paralog_number"/>
+<!--      <column name="gene_orthomcl_name"/>  -->
+<!--      <column name="gene_ortholog_number"/> -->
+<!--      <column name="gene_paralog_number"/> -->
       <column name="gene_transcript_count"/>
-      <column name="orthomcl_link"/>
+<!--      <column name="orthomcl_link"/> -->
       <column name="cyc_gene_id" sortingColumn="gene_source_id"/>
       <column name="cyc_db" sortingColumn="organism_full"
               excludeProjects="AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,UniDB,VectorBase,InitDB,PiroplasmaDB"/>
@@ -286,11 +293,7 @@
       <column name="external_db_version"/>
       <column name="chromosome" sortingColumn="chromosome_order_num"/>
       <column name="chromosome_order_num"/>
-
-      <column name="formatted_gene_id"
-              sortingColumn="gene_id" includeProjects="ToxoDB,EuPathDB,UniDB"/>
-      <column name="gene_id" includeProjects="ToxoDB,EuPathDB,UniDB"/>
-      <column name="previous_ids" excludeProjects="EuPathDB"/>
+      <column name="previous_ids" />
 
       <!-- PROTEIN specific -->
       <column name="protein_source_id"/>
@@ -326,19 +329,9 @@
             || SUBSTR(bfmv.organism, strpos(bfmv.organism, ' ') +1 ) as organism_text,
         ]]>
       </sqlParamValue>
-      <sqlParamValue name="toxo_expression" includeProjects="ToxoDB,EuPathDB">
-        <![CDATA[
-          gene_id,
-          CASE WHEN bfmv.organism like 'Toxo%' THEN 'TG_' || bfmv.gene_id::varchar
-               ELSE bfmv.gene_id::varchar
-          END as formatted_gene_id,
-        ]]>
-      </sqlParamValue>
-      <sqlParamValue name="toxo_expression" excludeProjects="ToxoDB,EuPathDB">
-        <![CDATA[]]>
-      </sqlParamValue>
+
       <!-- TODO UniDB Problem -->
-      <sqlParamValue name="cyc_db" includeProjects="PlasmoDB,EuPathDB">
+      <sqlParamValue name="cyc_db" includeProjects="PlasmoDB">
         <![CDATA[
           CASE bfmv.organism WHEN 'Plasmodium falciparum 3D7' THEN 'PLASMO' ELSE null END
         ]]>
@@ -371,24 +364,24 @@
                representative_transcript,
                CASE bfmv.is_deprecated WHEN 0 THEN 'No' WHEN 1 THEN 'Yes' END AS is_deprecated,
                bfmv.gene_context_start, bfmv.gene_context_end,
-               gene_ortholog_number, gene_paralog_number,
-               CASE WHEN (bfmv.transcript_type LIKE 'pseudogen%' OR bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
-               THEN 'N/A (orthology not determined for pseudogenes)'
-               WHEN bfmv.orthomcl_name LIKE 'OG6%'
-               THEN bfmv.orthomcl_name
-               WHEN bfmv.gene_type LIKE 'protein%'
-               THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
-               ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
-               END AS gene_orthomcl_name,
-               CASE WHEN (bfmv.transcript_type LIKE 'pseudogen%' OR bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
-               THEN 'N/A (orthology not determined for pseudogenes)'
-               WHEN bfmv.orthomcl_name LIKE 'OG6%'
-               THEN '<a href="https://orthomcl.org/orthomcl/app/record/group/'
-                 || orthomcl_name || '" target="_blank">' || orthomcl_name || '</a>'
-               WHEN bfmv.gene_type LIKE 'protein%'
-               THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
-               ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
-               END AS orthomcl_link,
+--               gene_ortholog_number, gene_paralog_number,
+--               CASE WHEN (bfmv.transcript_type LIKE 'pseudogen%' OR bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
+--               THEN 'N/A (orthology not determined for pseudogenes)'
+--               WHEN bfmv.orthomcl_name LIKE 'OG6%'
+--               THEN bfmv.orthomcl_name
+--               WHEN bfmv.gene_type LIKE 'protein%'
+--               THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
+--               ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
+--               END AS gene_orthomcl_name,
+--               CASE WHEN (bfmv.transcript_type LIKE 'pseudogen%' OR bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
+--               THEN 'N/A (orthology not determined for pseudogenes)'
+--               WHEN bfmv.orthomcl_name LIKE 'OG6%'
+--               THEN '<a href="https://orthomcl.org/orthomcl/app/record/group/'
+--                 || orthomcl_name || '" target="_blank">' || orthomcl_name || '</a>'
+--               WHEN bfmv.gene_type LIKE 'protein%'
+--               THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
+--               ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
+--               END AS orthomcl_link,
                UPPER(bfmv.gene_source_id) AS cyc_gene_id,
                &&cyc_db&& AS cyc_db,
                -- bfmv.gene_total_hts_snps,
@@ -414,7 +407,6 @@
                bfmv.anticodon, -- CHECK
                bfmv.external_db_name, bfmv.external_db_version,
                &&organismTexts&&
-               &&toxo_expression&&
                CASE WHEN chromosome_order_num is null THEN 'Not Assigned'
                     ELSE chromosome
                END as chromosome,
@@ -453,6 +445,7 @@
                replace(bfmv.predicted_go_id_function, 'GO_', 'GO:') as predicted_go_id_function,
                replace(bfmv.predicted_go_id_process, 'GO_', 'GO:') as predicted_go_id_process
           FROM webready.TranscriptAttributes bfmv
+          WHERE bfmv.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -460,7 +453,7 @@
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Apollo product  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="ApolloTranscriptProduct" excludeProjects="EuPathDB">
+    <sqlQuery name="ApolloTranscriptProduct" >
       <column name="source_id" />
       <column name="project_id" />
       <column name="gene_source_id"/>
@@ -487,7 +480,10 @@
               and ga.strand_plus_minus = au.strand
               and ta.source_id = au.apolloTranscript
               and ta.gene_source_id = ga.source_id
+	      AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+	      AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
             ) ap ON ta.gene_source_id = ap.source_id
+	    WHERE ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -495,7 +491,7 @@
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
        <!-- Apollo Link Out  -->
        <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <sqlQuery name="ApolloLinkOut" excludeProjects="EuPathDB">
+       <sqlQuery name="ApolloLinkOut" >
             <column name="source_id" />
             <column name="project_id" />
             <column name="gene_source_id"/>
@@ -512,6 +508,7 @@ ELSE 'N/A' end as apollo_link_out
                     FROM webready.TranscriptAttributes ta
                     LEFT JOIN apidbtuning.apolloid aid
                     ON ta.organism = aid.organism
+		    where ta.org_abbrev IN (%%PARTITION_KEYS%%)
 ]]>
        </sql>
    </sqlQuery>
@@ -519,7 +516,7 @@ ELSE 'N/A' end as apollo_link_out
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- UniProt  -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="UniProt" displayName="UniProt ID" excludeProjects="EuPathDB">
+    <sqlQuery name="UniProt" displayName="UniProt ID" >
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -535,19 +532,16 @@ ELSE 'N/A' end as apollo_link_out
               SELECT source_id, uniprot_ids
               FROM (
                 SELECT pa.transcript_source_id as source_id,
-                 string_agg(dbref.primary_identifier, ',' ORDER BY dbref.primary_identifier) AS uniprot_ids
-                FROM sres.ExternalDatabase d, sres.ExternalDatabaseRelease r,
-                    sres.DbRef, dots.DbRefAaFeature daf, dots.AaFeature af,
+                 string_agg(u.primary_identifier, ',' ORDER BY u.primary_identifier) AS uniprot_ids
+                FROM webready.UniprotGenes u,
                     webready.ProteinAttributes pa
-                WHERE d.name like 'Uniprot%'
-                  AND d.external_database_id = r.external_database_id
-                  AND r.external_database_release_id = dbref.external_database_release_id
-                  AND dbref.db_ref_id = daf.db_ref_id
-                  AND daf.aa_feature_id = af.aa_feature_id
-                  AND pa.aa_sequence_id = af.aa_sequence_id
+                WHERE u.source_id = pa.source_id
+                 AND u.org_abbrev in (%%PARTITION_KEYS%%)
+                 AND pa.org_abbrev in (%%PARTITION_KEYS%%)
                 GROUP BY pa.transcript_source_id
               ) t
             ) u ON ta.source_id = u.source_id
+          AND ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -565,11 +559,12 @@ ELSE 'N/A' end as apollo_link_out
                      THEN '( ' || ta.chromosome || ' )'
                      ELSE '' END AS chromosomemappingtext
               FROM webready.TranscriptAttributes ta
+               WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
             ]]>
             </sql>
         </sqlQuery>
 
-        <sqlQuery name="GenomicSequenceLength" excludeProjects="EuPathDB">
+        <sqlQuery name="GenomicSequenceLength" >
             <column name="source_id"/>
             <column name="gene_source_id"/>
             <column name="project_id"/>
@@ -578,8 +573,10 @@ ELSE 'N/A' end as apollo_link_out
             <![CDATA[
                SELECT ta.source_id,ta.project_id as project_id, ta.gene_source_id,
                       genomic_sequence_length
-               FROM webready.TranscriptAttributes ta, ApidbTuning.TranscriptGenomicSequence tgs
+               FROM webready.TranscriptAttributes ta, webready.TranscriptGenomicSequence tgs
                WHERE ta.source_id = tgs.source_id
+                 AND ta.org_abbrev in (%%PARTITION_KEYS%%)
+                 AND tgs.org_abbrev in (%%PARTITION_KEYS%%)
             ]]>
             </sql>
         </sqlQuery>
@@ -597,13 +594,15 @@ ELSE 'N/A' end as apollo_link_out
           SELECT ta.source_id, ta.gene_source_id, ta.project_id,
                  s.sequence AS protein_sequence
           FROM  webready.TranscriptAttributes ta
-            LEFT JOIN webready.ProteinSequence s ON ta.protein_source_id = s.source_id
+            LEFT JOIN webready.ProteinSequence s ON ta.org_abbrev = s.org_abbrev and ta.protein_source_id = s.source_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
+            AND s.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="NaSequenceDatabaseName" excludeProjects="EuPathDB">
+    <sqlQuery name="NaSequenceDatabaseName" >
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -612,6 +611,7 @@ ELSE 'N/A' end as apollo_link_out
         <![CDATA[
           SELECT source_id, external_db_name AS sequence_database_name, project_id AS project_id, gene_source_id
           FROM webready.TranscriptAttributes
+          WHERE org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -652,6 +652,8 @@ ELSE 'N/A' end as apollo_link_out
             s.sequence AS transcript_sequence
           FROM webready.TranscriptAttributes ta
             LEFT JOIN webready.TranscriptSequence s ON s.source_id = ta.source_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
+            AND s.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -699,6 +701,8 @@ ELSE 'N/A' end as apollo_link_out
                  s.sequence AS cds
           FROM  webready.TranscriptAttributes ta
             LEFT JOIN webready.CodingSequence s ON ta.source_id = s.source_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
+            AND s.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -709,7 +713,7 @@ ELSE 'N/A' end as apollo_link_out
     <!-- GFF sequence -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GeneGffSequence" excludeProjects="EuPathDB">
+    <sqlQuery name="GeneGffSequence" >
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -719,7 +723,9 @@ ELSE 'N/A' end as apollo_link_out
           SELECT ta.source_id, ta.gene_source_id, ta.project_id as project_id,
                  s.sequence as gff_transcript_sequence
           FROM webready.TranscriptSequence s, webready.TranscriptAttributes ta
-          WHERE s.source_id = ta.source_id
+          WHERE ta.org_abbrev = s.org_abbrev and s.source_id = ta.source_id
+           AND ta.org_abbrev in (%%PARTITION_KEYS%%)
+           AND s.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -769,6 +775,7 @@ ELSE 'N/A' end as apollo_link_out
                  (greatest(ta.gene_start_min, ta.gene_end_max)
                  - least(ta.gene_start_min, ta.gene_end_max) + 1) as gff_attr_size
           FROM webready.TranscriptAttributes ta
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -778,7 +785,7 @@ ELSE 'N/A' end as apollo_link_out
     <!-- Entrez link -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="EntrezLink" excludeProjects="EuPathDB">
+    <sqlQuery name="EntrezLink" >
       <column name="project_id"/>
       <column name="source_id"/>
       <column name="gene_source_id"/>
@@ -786,6 +793,7 @@ ELSE 'N/A' end as apollo_link_out
       <sql>
         SELECT  source_id, gene_source_id, project_id, gene_entrez_id
         FROM webready.TranscriptAttributes
+        WHERE org_abbrev in (%%PARTITION_KEYS%%)
       </sql>
     </sqlQuery>
 
@@ -793,6 +801,7 @@ ELSE 'N/A' end as apollo_link_out
     <!-- Protein Id's and Linkouts -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- This query does not return transcript source_id: TODO CHECK
+          TODO: use transcriptattributes instead of dots.transcript
         <sqlQuery name="Protein_Linkout" includeProjects="CryptoDB">
                 <column name="source_id"/>
           <column name="gene_source_id"/>
@@ -821,7 +830,7 @@ ELSE 'N/A' end as apollo_link_out
                 ]]>
                 </sql>
             </sqlQuery>
-    -->
+   -->
     <!--
             <sqlQuery name="SGC_3D_Struct" includeProjects="CryptoDB">
                 <column name="source_id"/>
@@ -833,7 +842,7 @@ ELSE 'N/A' end as apollo_link_out
                 SELECT distinct gf.source_id, '@PROJECT_ID@' as project_id, xx.pdb_id
                 FROM webready.GeneAttributes gf,
                  (SELECT drnf.na_feature_id, dr.primary_identifier AS pdb_id
-                  FROM dots.DbRefNaFeature drnf,
+                  FROM webready.DbRefNaFeature drnf,
                      sres.DbRef dr, sres.ExternalDatabaseRelease edr,
                      sres.ExternalDatabase ed
                   WHERE drnf.db_ref_id = dr.db_ref_id
@@ -861,7 +870,10 @@ ELSE 'N/A' end as apollo_link_out
          (UPPER removed until new sql munger updated to handle it) -->
     <!-- The sql weirdness is to force a single row result set of null
          values when there is no translation (as is the case for
-         non-protein coding genes) - the WDK doesn't allow an empty result.    -->
+         non-protein coding genes) - the WDK doesn't allow an empty result.
+
+	 TODO: use transcriptattributes instead of dots.transcript
+    -->
     <!--
                 <![CDATA[
                   SELECT g.source_id, '@PROJECT_ID@' as project_id,
@@ -878,7 +890,7 @@ ELSE 'N/A' end as apollo_link_out
                 </sql>
             </sqlQuery>
     -->
-    <sqlQuery name="GeneticCode" excludeProjects="EuPathDB">
+    <sqlQuery name="GeneticCode" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -897,11 +909,14 @@ ELSE 'N/A' end as apollo_link_out
             sres.taxon t,
             sres.geneticcode gc,
             sres.geneticcode mgc
-          WHERE sa.na_sequence_id = g.na_sequence_id
+          WHERE g.org_abbrev = sa.org_abbrev
+            AND sa.na_sequence_id = g.na_sequence_id
             AND so.source_id = sa.so_id
             AND t.taxon_id = g.taxon_id
             AND gc.genetic_code_id = t.genetic_code_id
             AND mgc.genetic_code_id = t.mitochondrial_genetic_code_id
+            AND sa.org_abbrev in (%%PARTITION_KEYS%%)
+            AND g.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -912,7 +927,7 @@ ELSE 'N/A' end as apollo_link_out
     <!-- example of row returned for PBANKA_021400:	PlasmoDB Alias, CompoundsMetabolicPathways, EcNumber, Epitopes, GeneLinkouts -->
     <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="TablesForOrganism" excludeProjects="EuPathDB">
+    <sqlQuery name="TablesForOrganism" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -932,14 +947,14 @@ ELSE 'N/A' end as apollo_link_out
                 AND (tn.name_class is null OR tn.name_class = 'scientific name')
             ) ta,
             webready.TranscriptAttributes ta
-          WHERE ta.organism = ta.name
-             OR ta.name is null
+          WHERE (ta.organism = ta.name OR ta.name is null)
+            AND ta.org_abbrev in (%%PARTITION_KEYS%%)
           GROUP by ta.source_id, ta.project_id
         ]]>
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="HasProteomics" excludeProjects="EuPathDB">
+    <sqlQuery name="HasProteomics" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -959,14 +974,16 @@ ELSE 'N/A' end as apollo_link_out
                 AND edr.external_database_id = ed.external_database_id
                 AND ed.name = ds.name
                 AND ga.aa_sequence_id =mss.aa_sequence_id
+		AND ga.org_abbrev in (%%PARTITION_KEYS%%)
             ) d RIGHT JOIN webready.GeneAttributes ga ON  ga.source_id = d.source_id
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
 
-    <sqlQuery name="HasQuantitativeProteomics" excludeProjects="EuPathDB">
+    <sqlQuery name="HasQuantitativeProteomics" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -978,12 +995,13 @@ ELSE 'N/A' end as apollo_link_out
           LEFT JOIN apidb.datasource ds ON ga.taxon_id = ds.taxon_id
           WHERE ds.type = 'protein_expression'
             AND ds.subtype = 'quantitative'
+            AND ga.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="HasPostTransMod" excludeProjects="EuPathDB">
+    <sqlQuery name="HasPostTransMod" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -996,11 +1014,12 @@ ELSE 'N/A' end as apollo_link_out
             FROM apidbtuning.MSModifiedPeptideSummary
           ) msps
           RIGHT JOIN webready.GeneAttributes ga ON msps.source_id = ga.source_id
+          WHERE ga.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="HasHtsSnpsSection" excludeProjects="EuPathDB">
+    <sqlQuery name="HasHtsSnpsSection" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1016,12 +1035,13 @@ ELSE 'N/A' end as apollo_link_out
               AND ds.subtype in ('HTS_SNP')
               AND ds.taxon_id = tn.taxon_id
           ) d RIGHT JOIN webready.GeneAttributes ga ON ga.organism = d.species
+          WHERE ga.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="HasPhenotypeSection" excludeProjects="EuPathDB">
+    <sqlQuery name="HasPhenotypeSection" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1043,12 +1063,13 @@ ELSE 'N/A' end as apollo_link_out
               AND ds.taxon_id = ts.taxon_id
               AND ts.species_taxon_id = tn.taxon_id
           ) d RIGHT JOIN webready.GeneAttributes ga ON ga.species = d.species
+          WHERE ga.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="HasPdbSimilarity" excludeProjects="EuPathDB">
+    <sqlQuery name="HasPdbSimilarity" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1063,13 +1084,15 @@ ELSE 'N/A' end as apollo_link_out
               SELECT *
               FROM webready.PdbSimilarity
               WHERE (pvalue_mant * power(10::double precision,pvalue_exp)) < power(10::double precision,-20)
+                 AND org_abbrev in (%%PARTITION_KEYS%%)
             ) pdb ON ta.source_id = pdb.source_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="HasSsgcid" excludeProjects="EuPathDB">
+    <sqlQuery name="HasSsgcid" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1093,11 +1116,12 @@ ELSE 'N/A' end as apollo_link_out
           SELECT ga.source_id, ga.project_id, coalesce(sg.hasSsgcid, 0) as hasSsgcid
           FROM webready.GeneAttributes ga
             LEFT JOIN sbri_genes sg ON ga.source_id = sg.source_id AND ga.project_id = sg.project_id
+          WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="IsUnassignedTCruzi" excludeProjects="EuPathDB">
+    <sqlQuery name="IsUnassignedTCruzi" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1108,12 +1132,13 @@ ELSE 'N/A' end as apollo_link_out
             CASE WHEN organism like 'Trypanosoma cruzi %' AND organism NOT like '%Esmeraldo%'
             THEN 1 ELSE 0 END as is_unassigned_tcruzi
           FROM webready.GeneAttributes
+          WHERE org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="IsAnnotated" excludeProjects="EuPathDB">
+    <sqlQuery name="IsAnnotated" >
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1126,20 +1151,21 @@ ELSE 'N/A' end as apollo_link_out
                   SELECT dataset_presenter_id FROM apidbtuning.datasetpublication WHERE pmid IS NOT NULL
                 )
               ) THEN 1 ELSE 0 END AS is_annotated
-          FROM APIDBTUNING.datasetnametaxon dt,
+          FROM APIDBTUNING.datasetdatasource dd,
             webready.GeneAttributes ga,
             apidb.datasource ds,
             apidbtuning.datasetpresenter p
-          WHERE ga.taxon_id  = dt.taxon_id
-            AND dt.name       = ds.name
+          WHERE ga.taxon_id  = dd.taxon_id
+            AND dd.name       = ds.name
             AND ds.type       = 'genome'
-            AND dt.dataset_presenter_id = p.dataset_presenter_id
+            AND dd.dataset_presenter_id = p.dataset_presenter_id
+            AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="ReleasePolicy" excludeProjects="EuPathDB">
+    <sqlQuery name="ReleasePolicy" >
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1147,132 +1173,21 @@ ELSE 'N/A' end as apollo_link_out
       <sql>
         <![CDATA[
           SELECT ta.source_id, ta.project_id, p.release_policy
-          FROM APIDBTUNING.datasetnametaxon dt,
+          FROM APIDBTUNING.datasetdatasource dd,
               webready.TranscriptAttributes ta,
               apidb.datasource ds,
               apidbtuning.datasetpresenter p
-          WHERE ta.taxon_id  = dt.taxon_id
-            AND dt.name       = ds.name
+          WHERE ta.taxon_id  = dd.taxon_id
+            AND dd.name       = ds.name
             AND ds.type       = 'genome'
-            AND dt.dataset_presenter_id = p.dataset_presenter_id
+            AND dd.dataset_presenter_id = p.dataset_presenter_id
+            AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="DnaGTracks" excludeProjects="EuPathDB">
-      <column name="source_id" />
-      <column name="gene_source_id"/>
-      <column name="project_id"/>
-      <column name="dna_gtracks" />
-      <sql excludeProjects="TrichDB">
-        <![CDATA[
-          WITH has_proteomic_data AS (
-            SELECT source_id
-            FROM (
-              SELECT ga.source_id
-              FROM APIDB.massspecsummary mss, webready.TranscriptAttributes ga
-              WHERE ga.aa_sequence_id =mss.aa_sequence_id
-            ) t
-          )
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                 gto.gtracks||'%1EUnifiedMassSpecPeptides' as  dna_gtracks
-          FROM apidbtuning.gbrowsetracksorganism gto, webready.TranscriptAttributes ga,has_proteomic_data
-          WHERE ga.organism = gto.organism
-            AND ga.source_id = has_proteomic_data.source_id
-          UNION
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                 gto.gtracks as  dna_gtracks
-          FROM apidbtuning.gbrowsetracksorganism gto, webready.TranscriptAttributes ga
-          WHERE ga.organism = gto.organism
-            AND ga.source_id not in (SELECT source_id FROM has_proteomic_data)
-          union
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                 '' as dna_gtracks
-          FROM apidbtuning.gbrowsetracksorganism gto
-            RIGHT JOIN webready.TranscriptAttributes ga ON ga.organism = gto.organism
-          WHERE ga.organism not in (SELECT DISTINCT organism FROM apidbtuning.gbrowsetracksorganism gto)
-        ]]>
-      </sql>
-      <sql includeProjects="TrichDB">
-        <![CDATA[
-          WITH has_proteomic_data AS (
-            SELECT source_id
-            FROM (
-              SELECT ga.source_id
-              FROM APIDB.massspecsummary mss, webready.TranscriptAttributes ga
-              WHERE ga.aa_sequence_id =mss.aa_sequence_id
-            ) t
-          )
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                 gto.gtracks||'%1EMassSpecPeptides_tvagG3_massSpec_Johnson_FullPeptideData_RSRC' as  dna_gtracks
-          FROM apidbtuning.gbrowsetracksorganism gto, webready.TranscriptAttributes ga,has_proteomic_data
-          WHERE ga.organism = gto.organism
-            AND ga.source_id = has_proteomic_data.source_id
-          UNION
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                 gto.gtracks as  dna_gtracks
-          FROM apidbtuning.gbrowsetracksorganism gto, webready.TranscriptAttributes ga
-          WHERE ga.organism = gto.organism
-            AND ga.source_id not in (SELECT source_id FROM has_proteomic_data)
-          UNION
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                 '' as dna_gtracks
-          FROM apidbtuning.gbrowsetracksorganism gto
-            RIGHT JOIN webready.TranscriptAttributes ga ON ga.organism = gto.organism
-          WHERE ga.organism not in (SELECT DISTINCT organism FROM apidbtuning.gbrowsetracksorganism gto)
-        ]]>
-      </sql>
-    </sqlQuery>
-
-    <sqlQuery name="ProteinGTracks" excludeProjects="EuPathDB">
-      <column name="source_id" />
-      <column name="gene_source_id"/>
-      <column name="project_id"/>
-      <column name="protein_gtracks" />
-      <sql>
-        <![CDATA[
-          SELECT ga.source_id, ga.gene_source_id, ga.project_id,
-                string_agg(track_names, '%1E' order by order_num,track_names) as protein_gtracks
-          FROM (
-            SELECT
-                     'MassSpecPeptides_'||dsp.name as track_names,
-                      ga.source_id,
-                      '1' as order_num
-            FROM  apidb.datasource ds, apidbtuning.datasetpresenter dsp, APIDB.massspecsummary mss,
-                    SRES.externaldatabase ed, sres.externaldatabaserelease edr, webready.TranscriptAttributes ga
-            WHERE (ds.name like dsp.dataset_name_pattern or ds.name = dsp.name)
-                and ds.name like '%_massSpec_%'
-                and ds.type = 'protein_expression'
-                and mss.external_database_release_id = edr.external_database_release_id
-                and edr.external_database_id = ed.external_database_id
-                and ed.name =ds.name
-                and ga.aa_sequence_id = mss.aa_sequence_id
-            UNION
-            SELECT DISTINCT 'SecondaryStructure' as track_name,
-                              ga.source_id,
-                              '3' as order_num
-            FROM dots.SecondaryStructure ss, webready.TranscriptAttributes ga
-            WHERE ga.aa_sequence_id = ss.aa_sequence_id
-            UNION
-            SELECT 'UnifiedPostTraslationalMod%1E' as track_names,
-                  source_id,
-                  '2' as order_num
-            FROM APIDBTUNING.MSModifiedPeptideSummary
-            UNION
-            SELECT 'InterproDomains%1ESignalP%1ETMHMM%1EExportPred%1EHydropathyPlot%1EBLASTP%1ELowComplexity' as track_names,
-                  source_id,
-                  '3' as order_num
-            FROM webready.TranscriptAttributes
-          ) tracks
-            LEFT JOIN webready.TranscriptAttributes ga ON tracks.source_id = ga.source_id
-          GROUP BY ga.source_id, ga.gene_source_id, ga.project_id
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
-    <sqlQuery name="GeneDBOrganism" excludeProjects="EuPathDB">
+    <sqlQuery name="GeneDBOrganism" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1287,6 +1202,7 @@ ELSE 'N/A' end as apollo_link_out
           FROM apidb.organism o
               ,webready.TranscriptAttributes ga
           WHERE ta.taxon_id = o.taxon_id
+            AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1296,7 +1212,7 @@ ELSE 'N/A' end as apollo_link_out
          (as opposed to top-level) location of a gene. John B. says this was
          formerly used for SNPs, and now not at all, so I'm commenting it out. If
          we actually still need it, we should include it in GeneAttributes
-            <sqlQuery name="PrimarySequence" excludeProjects="EuPathDB">
+            <sqlQuery name="PrimarySequence" >
                 <column name="source_id" />
                 <column name="project_id"/>
                 <column name="primary_seq_id" />
@@ -1347,6 +1263,7 @@ ELSE 'N/A' end as apollo_link_out
                    FROM (SELECT na_feature_id, image_uri, image_type, replace(note, 'GO term: ', '') as note
                          FROM apidb.nafeatureimage) img,webready.TranscriptAttributes ta
                    WHERE ta.gene_na_feature_id = img.na_feature_id
+                     AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
                    GROUP BY ta.project_id, ta.source_id, ta.gene_source_id, img.image_uri, image_type, ta.organism
                  ) t1
                  GROUP BY project_id, gene_source_id, source_id, note, is_visible, organism
@@ -1385,6 +1302,7 @@ ELSE 'N/A' end as apollo_link_out
                   SELECT na_feature_id, image_uri, display_order FROM apidb.nafeatureimage
                 ) img, webready.TranscriptAttributes ta
               WHERE ta.gene_na_feature_id = img.na_feature_id
+                AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
             ) t1
             GROUP BY project_id, gene_source_id, source_id, organism
           ) t
@@ -1470,6 +1388,7 @@ ELSE 'N/A' end as apollo_link_out
             round(random() * 100) as random_int
           FROM
             webready.TranscriptAttributes
+          WHERE org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1550,6 +1469,7 @@ WHERE ta.gene_source_id = pe.gene (+)
 AND ta.gene_source_id = liver.gene (+)
 AND ta.gene_source_id = spleen.gene (+)
 AND ta.gene_source_id = lung.gene (+)
+AND ta.org_abbrev in (%%PARTITION_KEYS%%)
               ]]>
             </sql>
           </sqlQuery>
@@ -1582,6 +1502,7 @@ AND ta.gene_source_id = lung.gene (+)
               FROM apidb.phenotypescore ps
               WHERE score_type = 'mutagenesis index score'
             ) mis ON ta.gene_na_feature_id = mis.na_feature_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1610,6 +1531,7 @@ AND ta.gene_source_id = lung.gene (+)
                 from apidb.phenotypescore ps
                 where score_type = 'Occupancy index score'
                 ) ois ON ta.gene_na_feature_id = ois.na_feature_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1655,6 +1577,7 @@ AND ta.gene_source_id = lung.gene (+)
                 from apidb.phenotypescore ps
                 where score_type = 'mutability in CDS'
                 ) mut ON ta.gene_na_feature_id = mut.na_feature_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1755,8 +1678,10 @@ AND ta.gene_source_id = lung.gene (+)
     -- SUPERFAMILY
     string_agg(DISTINCT interpro_primary_id, ', ') FILTER (WHERE interpro_db_name = 'SUPERFAMILY') AS superfamily_id,
     max(interpro_desc) FILTER (WHERE interpro_db_name = 'SUPERFAMILY') AS superfamily_description
-  FROM apidb.interproresults i
+  FROM webready.interproresults i
   RIGHT JOIN webready.TranscriptAttributes ta ON ta.source_id = i.transcript_source_id 
+  WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
+    AND i.org_abbrev in (%%PARTITION_KEYS%%)
   GROUP BY ta.source_id, ta.gene_source_id
         ]]>
       </sql>
@@ -1799,11 +1724,13 @@ AND ta.gene_source_id = lung.gene (+)
           and ps.profile_type='values'
           and ps.protocol_app_node_id = nfe.protocol_app_node_id
           and ta.gene_na_feature_id = nfe.na_feature_id(+)
+          AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
           ) pivot (
               max(value) as cds
               for protocol_app_node_name in ('No_Tet' no_tet,  'BFD3' bfd3, 'BFD6' bfd6, 'PF' pf, 'DIF' dif)
           ) res
           WHERE ta.gene_source_id = res.gene_id (+)
+            AND ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1844,17 +1771,19 @@ AND ta.gene_source_id = lung.gene (+)
           and ps.profile_type='values'
           and ps.protocol_app_node_id = nfe.protocol_app_node_id
           and ta.gene_na_feature_id = nfe.na_feature_id(+)
+          AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
           ) pivot (
               max(value) as model
               for protocol_app_node_name in ('No_Tet' no_tet, 'BFD3' bfd3, 'BFD6' bfd6, 'PF' pf, 'DIF' dif)
           ) res
           WHERE ta.gene_source_id = res.gene_id (+)
-        ]]>
+            AND ta.org_abbrev in (%%PARTITION_KEYS%%)
+       ]]>
       </sql>
     </sqlQuery>
 
 
-    <sqlQuery name="orgAbbrev" excludeProjects="EuPathDB">
+    <sqlQuery name="orgAbbrev" >
       <column name="source_id" />
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1864,7 +1793,8 @@ AND ta.gene_source_id = lung.gene (+)
           SELECT ta.source_id, ta.gene_source_id,ta.project_id, o.public_abbrev AS organismabbrev
           FROM webready.TranscriptAttributes ta, apidb.organism o
           WHERE ta.taxon_id = o.taxon_id
-        ]]>
+          AND ta.org_abbrev in (%%PARTITION_KEYS%%)
+       ]]>
       </sql>
     </sqlQuery>
 
@@ -1897,6 +1827,7 @@ AND ta.gene_source_id = lung.gene (+)
           FROM webready.TranscriptAttributes ta
             LEFT JOIN mapD m1 ON ta.gene_source_id = m1.source_id
             LEFT JOIN mcmcD m2 ON m1.source_id = m2.source_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1926,11 +1857,12 @@ AND ta.gene_source_id = lung.gene (+)
            and p.profile_type ='probability_mean'
           )
           select ta.source_id, ta.gene_source_id, ta.project_id,
-           ROUND(m1.prob_map_tryp,3) as prob_map, m1.map_location_tryp,
-           ROUND(m2.prob_mcmc_tryp,3) as prob_mcmc, m2.mcmc_location_tryp
+           ROUND(m1.prob_map_tryp::numeric,3) as prob_map, m1.map_location_tryp,
+           ROUND(m2.prob_mcmc_tryp::numeric,3) as prob_mcmc, m2.mcmc_location_tryp
           FROM webready.TranscriptAttributes ta
             LEFT JOIN mapD m1 ON ta.gene_source_id = m1.source_id
             LEFT JOIN mcmcD m2 ON m1.source_id = m2.source_id
+          WHERE ta.org_abbrev in (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>

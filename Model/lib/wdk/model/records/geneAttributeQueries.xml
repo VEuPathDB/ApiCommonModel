@@ -8,7 +8,7 @@
     -->
 
 
-    <defaultTestParamValues includeProjects="PlasmoDB,EuPathDB,UniDB">
+    <defaultTestParamValues includeProjects="PlasmoDB,UniDB">
       <paramValue name="source_id">%%defaultGene%%</paramValue>
       <paramValue name="project_id">PlasmoDB</paramValue>
     </defaultTestParamValues>
@@ -64,23 +64,22 @@
       <paramValue name="project_id"></paramValue>
     </defaultTestParamValues>
 
-    <testRowCountSql includeProjects="EuPathDB">
+    <testRowCountSql>
       SELECT count(*) FROM webready.GeneAttributes
     </testRowCountSql>
-    <testRowCountSql excludeProjects="EuPathDB">
-      select count(na_feature_id)
-      from dots.GeneFeature
-      where external_database_release_id in (
-      select distinct(dbr.external_database_release_id)
-      from webready.GeneAttributes ga, sres.ExternalDatabase db,
-      sres.ExternalDatabaseRelease dbr
-      where db.name = ga.external_db_name
-      and dbr.version = ga.external_db_version
-      and dbr.external_database_id = db.external_database_id
-      )
-    </testRowCountSql>
 
 
+    <!-- Used by WDK to replace %%PARTITION_KEYS%% macro with the keys for a result set -->
+    <sqlQuery name="PartitionKeys">
+      <column name="source_id"/>
+      <column name="project_id" excludeProjects="UniDB"/>
+      <column name="partition_id"/>
+      <sql>
+        <![CDATA[
+         select source_id, '@PROJECT_ID@' as project_id, org_abbrev as partition_key from apidbtuning.GeneOrgAbbrev
+        ]]>
+      </sql>  
+    </sqlQuery>
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Gene GFF -->
@@ -99,6 +98,7 @@
                    least(ga.start_min, ga.end_max) as gff_fstart,
                    greatest(ga.start_min, ga.end_max) as gff_fend
             FROM webready.GeneAttributes ga
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
           ]]>
       </sql>
     </sqlQuery>
@@ -137,6 +137,7 @@ WHERE dataset_type = 'transcript_expression'
 AND dataset_subtype = 'array'
 GROUP BY source_id
 ) microarray ON ga.source_id = microarray.source_id
+WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
           ]]>
         </sql>
       </sqlQuery>
@@ -187,7 +188,7 @@ GROUP BY source_id
       <column name="gene_type" ignoreCase="true"/>
       <column name="gene_ebi_biotype" ignoreCase="true"/>
       <column name="exon_count"/>
-      <!-- TODO <column name="representative_transcript" includeProjects="ToxoDB,EuPathDB"/> -->
+      <!-- TODO <column name="representative_transcript" includeProjects="ToxoDB"/> -->
       <column name="is_deprecated"/>
       <column name="context_start"/>
       <column name="context_end"/>
@@ -195,12 +196,12 @@ GROUP BY source_id
       <column name="zoom_context_end"/>
       <column name="tight_zoom_context_start"/>
       <column name="tight_zoom_context_end"/>
-      <column name="orthomcl_name"/>
-      <column name="ortholog_number"/>
-      <column name="paralog_number"/>
+<!--      <column name="orthomcl_name"/> -->
+<!--      <column name="ortholog_number"/> -->
+<!--      <column name="paralog_number"/> -->
       <column name="transcript_count"/>
       <column name="representative_transcript"/>
-      <column name="orthomcl_link"/>
+<!--      <column name="orthomcl_link"/> -->
       <column name="cyc_gene_id" sortingColumn="source_id"/>
       <column name="cyc_db" sortingColumn="organism_full"
               excludeProjects="AmoebaDB,MicrosporidiaDB,FungiDB,HostDB,UniDB,VectorBase,InitDB,PiroplasmaDB"/>
@@ -229,12 +230,12 @@ GROUP BY source_id
       <column name="external_db_version"/>
       <column name="chromosome" sortingColumn="chromosome_order_num"/>
       <column name="chromosome_order_num"/>
-      <column name="previous_ids" excludeProjects="EuPathDB"/>
+      <column name="previous_ids" />
       <column name="user_comment_link_url" ignoreCase="false"/>
       <column name="show_strains"/>
 
       <!-- TODO UniDB Problem -->
-      <sqlParamValue name="cyc_db" includeProjects="PlasmoDB,EuPathDB">
+      <sqlParamValue name="cyc_db" includeProjects="PlasmoDB">
         <![CDATA[
                    CASE bfmv.organism WHEN 'Plasmodium falciparum 3D7' THEN 'PLASMO' ELSE null END
                 ]]>
@@ -278,25 +279,25 @@ GROUP BY source_id
              , bfmv.zoom_context_end
              , bfmv.start_min - greatest(200, round((end_max - start_min) / 2)) as tight_zoom_context_start
              , bfmv.end_max + greatest(200, round((end_max - start_min) / 2)) as tight_zoom_context_end
-             , ortholog_number
-             , paralog_number
-             , CASE WHEN (bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
-                THEN 'N/A (orthology not determined for pseudogenes)'
-                WHEN bfmv.orthomcl_name LIKE 'OG6%'
-                THEN bfmv.orthomcl_name
-                WHEN bfmv.gene_type LIKE 'protein%'
-                THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
-                ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
-               END AS orthomcl_name
-             , CASE WHEN (bfmv.gene_type LIKE 'pseudogen%' OR  bfmv.so_term_name LIKE 'pseudogen%')
-                THEN 'N/A (orthology not determined for pseudogenes)'
-                WHEN bfmv.orthomcl_name LIKE 'OG6%'
-                        THEN '<a href="https://orthomcl.org/orthomcl/app/record/group/'
-                  || orthomcl_name || '" target="_blank">' || orthomcl_name || '</a>'
-                WHEN bfmv.gene_type LIKE 'protein%'
-                THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
-                ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
-              END AS orthomcl_link
+--             , ortholog_number
+--             , paralog_number
+--             , CASE WHEN (bfmv.gene_type LIKE 'pseudogen%' OR bfmv.so_term_name LIKE 'pseudogen%')
+--                THEN 'N/A (orthology not determined for pseudogenes)'
+--                WHEN bfmv.orthomcl_name LIKE 'OG6%'
+--                THEN bfmv.orthomcl_name
+--                WHEN bfmv.gene_type LIKE 'protein%'
+--                THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
+--                ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
+--               END AS orthomcl_name
+--             , CASE WHEN (bfmv.gene_type LIKE 'pseudogen%' OR  bfmv.so_term_name LIKE 'pseudogen%')
+--                THEN 'N/A (orthology not determined for pseudogenes)'
+--                WHEN bfmv.orthomcl_name LIKE 'OG6%'
+--                        THEN '<a href="https://orthomcl.org/orthomcl/app/record/group/'
+--                  || orthomcl_name || '" target="_blank">' || orthomcl_name || '</a>'
+--                WHEN bfmv.gene_type LIKE 'protein%'
+--                THEN 'N/A (orthology not determined because protein is too short or has too many stop codons)'
+--                ELSE 'N/A (orthology not determined for transcripts that are not protein-coding)'
+--              END AS orthomcl_link
              , UPPER(bfmv.source_id) AS cyc_gene_id
              , &&cyc_db&& AS cyc_db
              -- , bfmv.total_hts_snps
@@ -341,6 +342,7 @@ GROUP BY source_id
                 as user_comment_link_url
              , CASE WHEN (bfmv.strain_count > 1) THEN 'Yes' ELSE 'No' END AS show_strains
           FROM webready.GeneAttributes bfmv
+          WHERE bfmv.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -405,13 +407,14 @@ GROUP BY source_id
              WHERE is_visible = true
              GROUP BY stable_id, project_name
             ) comm ON ga.source_id = comm.gene_id AND ga.project_id = comm.project_name
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
 
     <!--
-    <sqlQuery name="DnaGTracks" excludeProjects="EuPathDB">
+    <sqlQuery name="DnaGTracks" >
         <column name="source_id" />
         <column name="project_id"/>
         <column name="dna_gtracks" />
@@ -424,6 +427,7 @@ GROUP BY source_id
                      ga.gene_source_id as source_id
                      from APIDB.massspecsummary mss, webready.TranscriptAttributes ga
                     where ga.aa_sequence_id =mss.aa_sequence_id
+                    and ga.org_abbrev IN (%%PARTITION_KEYS%%)
                    ))
         select ga.source_id as source_id, ga.project_id,
                gto.gtracks||'%1EUnifiedMassSpecPeptides' as  dna_gtracks
@@ -431,25 +435,28 @@ GROUP BY source_id
         where ga.organism = gto.organism
           and ga.source_id = has_proteomic_data.source_id
           and gto.type = 'dna'
-        union
+          and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+      union
         select ga.source_id as source_id, ga.project_id,
                gto.gtracks as  dna_gtracks
         from apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
         where ga.organism = gto.organism
           and ga.source_id not in (select source_id from has_proteomic_data)
           and gto.type = 'dna'
+          and ga.org_abbrev IN (%%PARTITION_KEYS%%)
         union
         select ga.source_id as source_id, ga.project_id,
                '' as dna_gtracks
         from apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
         where ga.organism = gto.organism(+)
         and ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto where gto.type = 'dna')
+        and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           ]]>
         </sql>
     </sqlQuery>
     -->
 
-    <sqlQuery name="SyntenyGTracks" excludeProjects="EuPathDB">
+    <sqlQuery name="SyntenyGTracks" >
       <column name="source_id" />
       <column name="project_id"/>
       <column name="synteny_gtracks" />
@@ -460,17 +467,19 @@ GROUP BY source_id
           FROM apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
           WHERE ga.organism = gto.organism
             AND gto.type = 'synteny'
+            and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           UNION
           SELECT ga.source_id as source_id, ga.project_id,
                  '' as synteny_gtracks
           FROM apidbtuning.gbrowsetracksorganism gto
             RIGHT JOIN webready.GeneAttributes ga ON ga.organism = gto.organism
           WHERE ga.organism not in (select distinct organism from apidbtuning.gbrowsetracksorganism gto where gto.type = 'synteny')
-        ]]>
+            and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+    ]]>
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="GeneModelGTracks" excludeProjects="EuPathDB">
+    <sqlQuery name="GeneModelGTracks" >
       <column name="source_id" />
       <column name="project_id"/>
       <column name="gene_model_gtracks" />
@@ -482,6 +491,7 @@ GROUP BY source_id
           FROM apidbtuning.gbrowsetracksorganism gto, webready.GeneAttributes ga
           WHERE ga.organism = gto.organism
             AND gto.type = 'gene_model'
+            and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           UNION
           SELECT ta.gene_source_id as source_id, ta.project_id,
              'Gene%1EGSNAPUnifiedIntronJunctionRefined%1EGSNAPUnifiedIntronJunctionInclusive' as gene_model_gtracks,
@@ -489,12 +499,13 @@ GROUP BY source_id
           FROM apidbtuning.gbrowsetracksorganism gto
             RIGHT JOIN webready.TranscriptAttributes ta ON ta.organism = gto.organism
           WHERE ta.organism not in (SELECT DISTINCT organism FROM apidbtuning.gbrowsetracksorganism gto WHERE gto.type = 'gene_model')
+            and ta.org_abbrev IN (%%PARTITION_KEYS%%)
           GROUP BY ta.gene_source_id, ta.project_id
-        ]]>
+    ]]>
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="ProteinExpressionPtracks" isCacheable="false" excludeProjects="EuPathDB">
+    <sqlQuery name="ProteinExpressionPtracks" isCacheable="false" >
       <column name="source_id"/>
       <column name="project_id"/>
       <column name="protein_expression_gtracks"/>
@@ -537,6 +548,8 @@ GROUP BY source_id
                 APIDBTUNING.MSModifiedPeptideSummary
             ) tracks
             RIGHT JOIN webready.GeneAttributes ta ON ta.source_id = tracks.gene_source_id
+            where ta.org_abbrev IN (%%PARTITION_KEYS%%)
+              and ga.org_abbrev IN (%%PARTITION_KEYS%%)
           GROUP BY
             ta.source_id
             , ta.project_id
@@ -556,10 +569,12 @@ GROUP BY source_id
       <column name="apollo_identifier"/>
       <sql>
         <![CDATA[
-          SELECT aid.apolloid AS apollo_identifier, ga.source_id, ga.project_id, o.name_for_filenames as organism_filename, o.PUBLIC_ABBREV as organismAbbrev, ga.sequence_id as j_sequence_id, ga.context_start as j_context_start, ga.context_end as j_context_end
-          FROM apidb.organism o
-            INNER JOIN webready.GeneAttributes ga ON ga.taxon_id = o.taxon_id
+          SELECT aid.apolloid AS apollo_identifier, ga.source_id, ga.project_id, o.name_for_filenames as organism_filename, o.public_abbrev as organismAbbrev, 
+                 ga.sequence_id as j_sequence_id, ga.context_start as j_context_start, ga.context_end as j_context_end
+          FROM apidbtuning.organismAttributes o
+            INNER JOIN webready.GeneAttributes ga ON ga.taxon_id = o.component_taxon_id
             LEFT JOIN apidbtuning.ApolloID aid ON ga.organism = aid.organism
+            WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -578,6 +593,8 @@ GROUP BY source_id
           FROM webready.GeneAttributes ga, webready.TranscriptAttributes ta, apidb.organism o
           WHERE ga.taxon_id = o.taxon_id
           AND ga.representative_transcript = ta.source_id
+          AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+          AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -593,21 +610,23 @@ GROUP BY source_id
           SELECT ga.source_id, ga.project_id, v.annotation_version as ds_annotation_version, v.dataset_presenter_id as dataset_id, v.description as attribution_partial
           FROM webready.GeneAttributes ga
             LEFT JOIN (
-              SELECT ga.source_id, ga.project_id,dsh.annotation_version,dsh.annotation_source, dnt.dataset_presenter_id, dsp.description
+              SELECT ga.source_id, ga.project_id,dsh.annotation_version,dsh.annotation_source, dd.dataset_presenter_id, dsp.description
               FROM (
                 SELECT max(dsh.build_number) bld, dsh.dataset_presenter_id
                 FROM apidbtuning.datasethistory dsh
                 WHERE dsh.annotation_version is not null
                 GROUP BY dsh.dataset_presenter_id
                 ) dpb
-                , apidbtuning.datasethistory dsh, apidbtuning.datasetnametaxon dnt
+                , apidbtuning.datasethistory dsh, apidbtuning.datasetdatasource dd
                 , webready.GeneAttributes ga, apidbtuning.datasetpresenter dsp
               WHERE dpb.bld = dsh.BUILD_NUMBER
                 AND dpb.dataset_presenter_id = dsh.DATASET_PRESENTER_ID
-                AND dnt.dataset_presenter_id = dsp.dataset_presenter_id
-                AND dsh.dataset_presenter_id = dnt.dataset_presenter_id
-                AND dnt.taxon_id = ga.taxon_id
+                AND dd.dataset_presenter_id = dsp.dataset_presenter_id
+                AND dsh.dataset_presenter_id = dd.dataset_presenter_id
+                AND dd.taxon_id = ga.taxon_id
+                AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
             ) v ON  ga.source_id = v.source_id AND ga.project_id = v.project_id
+          WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -626,8 +645,10 @@ GROUP BY source_id
                 ELSE 1 END as has_alphafold
             , afg.alphafold_id
             , afg.alphafold_version
-          FROM apidbtuning.alphafoldgenes afg
+          FROM webready.alphafoldgenes afg
             RIGHT JOIN webready.GeneAttributes ga ON ga.source_id = afg.gene_source_id
+          WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
+            AND afg.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
