@@ -1,0 +1,44 @@
+create table :SCHEMA.RefSynOrthologousGenes_p (
+  source_id text,
+  ref_source_id text,
+  org_abbrev text
+) partition by list (org_abbrev);
+
+
+DO $$
+DECLARE
+  orgrecord RECORD;
+  partition_name TEXT;
+BEGIN
+  FOR orgrecord IN
+        SELECT org_abbrev, sanitized_org_abbrev, ref_strain_abbrev as ref_org_abbrev
+	FROM :SCHEMA.organismabbreviation oa, apidb.organism o
+	WHERE oa.org_abbrev = o.abbrev
+  LOOP
+    partition_name := lower('RefSynOrthologousGenes_p_' || orgrecord.sanitized_org_abbrev);
+    EXECUTE format('CREATE TABLE %I PARTITION OF RefSynOrthologTranscripts_p_ FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
+      WITH syn_pairs AS (
+			SELECT DISTINCT ga.source_id, sg.syn_na_feature_id as ref_na_feature_id
+			FROM :SCHEMA.SyntenicGene_p sg, :SCHEMA.GeneAttributes_p ga
+			WHERE sg.na_sequence_id = ga.na_sequence_id
+				AND ga.org_abbrev = orgrecord.org_abbrev
+				and sg.syn_organism_abbrev = orgrecord.ref_org_abbrev
+				AND sg.end_max >= ga.start_min
+				AND sg.start_min <= ga.end_max
+		),
+           ortholog_pairs AS (SELECT gog.gene_id as source_id, ga_ref.na_feature_id as ref_na_feature_id, gog_ref.gene_id as ref_source_id
+			FROM :SCHEMA.GeneOrthologGroup gog
+			JOIN :SCHEMA.GeneOrthologGroup gog_ref ON gog.group_id = gog_ref.group_id
+			JOIN :SCHEMA.GeneAttributes_p ga_ref on gog_ref.gene_id = ga_ref.source_id
+			WHERE gog.org_abbrev =  orgrecord.org_abbrev
+			  AND gog_ref.org_abbrev = orgrecord.ref_org_abbrev
+			  and ga_ref.org_abbrev = orgrecord.ref_org_abbrev
+                )
+     SELECT ortholog_pairs.source_id, ortholog_pairs.ref_source_id, orgrecord.org_abbrev
+     FROM ortholog_pairs
+     LEFT JOIN syn_pairs ON ortholog_pairs.source_id = syn_pairs.source_id AND ortholog_pairs.ref_na_feature_id = syn_pairs.ref_na_feature_id;
+
+  END LOOP;
+END $$;
+
