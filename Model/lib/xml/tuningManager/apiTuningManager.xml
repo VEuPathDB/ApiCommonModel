@@ -5,12 +5,12 @@
 
 
  <tuningTable name="GeneOrgAbbrev">
-    <externalDependency name="webready.GeneAttributes"/>
+    <externalDependency name="webready.GeneAttributes_p"/>
     <sql>
       <![CDATA[
          CREATE TABLE GeneOrgAbbrev&1 AS
           SELECT source_id, org_abbrev
-          FROM webready.geneattributes
+          FROM webready.GeneAttributes_p
       ]]>
     </sql>
     <sql>
@@ -21,12 +21,12 @@
   </tuningTable>
 
  <tuningTable name="TranscriptOrgAbbrev">
-    <externalDependency name="webready.TranscriptAttributes"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
     <sql>
       <![CDATA[
          CREATE TABLE TranscriptOrgAbbrev&1 AS
           SELECT source_id, gene_source_id, org_abbrev
-          FROM webready.transcriptattributes
+          FROM webready.TranscriptAttributes_p
       ]]>
     </sql>
     <sql>
@@ -37,12 +37,12 @@
   </tuningTable>
 
  <tuningTable name="GenomicSeqOrgAbbrev">
-    <externalDependency name="webready.GenomicSeqAttributes"/>
+    <externalDependency name="webready.GenomicSeqAttributes_p"/>
     <sql>
       <![CDATA[
          CREATE TABLE GenomicSeqOrgAbbrev&1 AS
           SELECT source_id, org_abbrev
-          FROM webready.geneattributes
+          FROM webready.GeneAttributes_p
       ]]>
     </sql>
     <sql>
@@ -150,7 +150,7 @@
                                    order by ga.chromosome_order_num, p.profile_as_string desc) as rn
           FROM Profile p
             INNER JOIN sres.ExternalDatabase d ON p.dataset_name = d.name
-            LEFT JOIN webready.GeneAttributes ga ON p.source_id = ga.source_id
+            LEFT JOIN webready.GeneAttributes_p ga ON p.source_id = ga.source_id
           WHERE p.profile_as_string is not null
         )
         SELECT p.source_id as example_source_id, p.project_id, p.sequence_id, p.name as dataset
@@ -167,7 +167,7 @@
          Used in the word enrichment analysis plugin
          The trick sql was cribbed and modified from: nuijten.blogspot.com/2011/08/splitting-comma-delimited-string-regexp.html
       -->
-    <externalDependency name="webready.GeneAttributes"/>
+    <externalDependency name="webready.GeneAttributes_p"/>
     <externalDependency name="apidb.Organism"/>
 
     <!-- Create empty table structure -->
@@ -188,17 +188,17 @@
         declare
           v_org_abbrev TEXT;
         begin
-          for v_org_abbrev in select org_abbrev from webready.organismabbreviation loop
+          for v_org_abbrev in select org_abbrev from webready.OrganismAbbreviation_p loop
             insert into GeneWord&1
             select source_id, taxon_id,
                    -- for each rn (1 - max_words_in_any_product),
                    --    print the rn-th word.
                    --    replace leading and trailing parens with empty string, eg (RIFN) becomes RIFN
                    substr(regexp_replace(regexp_substr (product, '[^ ,]+', 1, rn), '[\)\(]', ''), 1, 200) word
-            from webready.GeneAttributes
+            from webready.GeneAttributes_p
             cross join (
               -- create a table of integers 1 - n where n is the max number of words in any product
-              select generate_series(1,(select max (regexp_count (product, '[ ,]')) + 1 mx from webready.GeneAttributes where org_abbrev = v_org_abbrev)) as rn
+              select generate_series(1,(select max (regexp_count (product, '[ ,]')) + 1 mx from webready.GeneAttributes_p where org_abbrev = v_org_abbrev)) as rn
             ) t
             where org_abbrev = v_org_abbrev
               and regexp_substr (product, '[^, ]+', 1, rn) is not null
@@ -222,7 +222,7 @@
     <comment> Stores per-organism information. Used by the organism record, as well
       as by project_id(), the function that maps an organism to a project.
     </comment>
-    <externalDependency name="webready.TaxonSpecies"/>
+    <externalDependency name="webready.TaxonSpecies_p"/>
     <internalDependency name="Profile"/>
     <!--  <internalDependency name="webready.SnpAttributes"/> -->
     <externalDependency name="apidb.Datasource"/>
@@ -307,7 +307,7 @@
           max(CASE WHEN sequence_type = 'chromosome' THEN num ELSE null END) as  chrom_num
         FROM (
          SELECT count(*) as num, sequence_type, taxon_id
-         FROM webready.GenomicSeqAttributes
+         FROM webready.GenomicSeqAttributes_p
          WHERE is_top_level =1
          GROUP BY taxon_id, sequence_type
         ) t
@@ -320,7 +320,7 @@
       <![CDATA[
         CREATE UNLOGGED TABLE CommunityCount AS
         SELECT taxon_id, count(*) as communityCount
-        FROM webready.GeneAttributes
+        FROM webready.GeneAttributes_p
         WHERE (source_id, project_id) IN (
               SELECT distinct stable_id, project_name
               FROM userlogins5.mappedComment
@@ -354,7 +354,7 @@
                               else ''
                                end)) as geneArrayCount
         FROM Profile p
-          RIGHT OUTER JOIN webready.GeneAttributes ga ON ga.source_id = p.source_id
+          RIGHT OUTER JOIN webready.GeneAttributes_p ga ON ga.source_id = p.source_id
         GROUP BY ga.taxon_id
       ]]>
     </sql>
@@ -376,7 +376,7 @@
              AND s.pvalue_exp <= -10
            ) sim LEFT JOIN
            (SELECT i.source_id, seq.source_id as sequence_id
-            FROM  dots.similarity s, PopsetAttributes i, webready.GeneAttributes g,
+            FROM  dots.similarity s, PopsetAttributes i, webready.GeneAttributes_p g,
                   core.tableinfo t, dots.nasequence seq
             WHERE s.query_id = i.na_sequence_id
               AND s.subject_id = g.na_sequence_id
@@ -419,7 +419,7 @@
      DECLARE
       v_org_abbrev TEXT;
      BEGIN
-     FOR v_org_abbrev IN SELECT org_abbrev from webready.organismabbreviation LOOP
+     FOR v_org_abbrev IN SELECT org_abbrev from webready.OrganismAbbreviation_p LOOP
 	INSERT INTO genecount
 	WITH genomestat AS (
 	  SELECT  
@@ -429,13 +429,13 @@
 		  max(database_version) AS database_version,
 		  CASE WHEN ncbi_tax_id > 9000000000 THEN NULL ELSE ncbi_tax_id END AS ncbi_tax_id,
 		  (sum(length)/1000000.0)::numeric AS megabps
-	  FROM webready.GenomicSeqAttributes
+	  FROM webready.GenomicSeqAttributes_p
 	  WHERE is_top_level = 1 and org_abbrev = v_org_abbrev
 	  GROUP BY project_id, taxon_id, ncbi_tax_id, org_abbrev
 	), cct AS (
 	  select
 		COUNT(DISTINCT cct.gene_source_id) as chipchipGeneCount
-	  from webready.geneattributes ga ,webready.chipchiptranscript cct
+	  from webready.GeneAttributes_p ga ,webready.ChIPchipTranscript_p cct
 	   	WHERE ga.is_deprecated = 0
 		  	and cct.gene_source_id = ga.source_id
 		  	AND ga.org_abbrev = cct.org_abbrev
@@ -447,32 +447,32 @@
 		COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_pseudo = 1) AS pseudoGeneCount,
 		COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type IN ('protein coding','protein coding gene')) AS codingGeneCount,
 		COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.gene_type NOT IN ('protein coding','protein coding gene')) AS otherGeneCount
-	  from webready.geneattributes ga
+	  from webready.GeneAttributes_p ga
 	  where org_abbrev = v_org_abbrev
 	), ortholog AS (
 		SELECT
 			COUNT(DISTINCT pp.source_id) FILTER (WHERE ga.is_deprecated = 0) AS orthologCount
-		FROM webready.geneattributes ga, apidb.phylogeneticprofile pp 
+		FROM webready.GeneAttributes_p ga, apidb.phylogeneticprofile pp 
 		WHERE ga.source_id = pp.source_id 
 			and ga.org_abbrev = v_org_abbrev
 	), go AS (
 		SELECT
 			COUNT(DISTINCT gts.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS goCount
-		FROM webready.geneattributes ga, webready.gotermsummary gts 
+		FROM webready.GeneAttributes_p ga, webready.GoTermSummary_p gts 
 		WHERE ga.source_id = gts.gene_source_id 
 			AND ga.org_abbrev = gts.org_abbrev
 			AND gts.org_abbrev = v_org_abbrev and ga.org_abbrev =v_org_abbrev
 	), tfbs AS (
 		SELECT
 			COUNT(DISTINCT tfbs.gene_source_id) FILTER (WHERE ga.is_deprecated = 0) AS tfbsCount
-		FROM webready.geneattributes ga, webready.TFBSGene tfbs 
+		FROM webready.GeneAttributes_p ga, webready.TFBSGene_p tfbs 
 		WHERE ga.source_id = tfbs.gene_source_id 
 			AND ga.org_abbrev = tfbs.org_abbrev
 			AND tfbs.org_abbrev = v_org_abbrev and ga.org_abbrev = v_org_abbrev
 	), mss AS (
 		SELECT
 			COUNT(DISTINCT mss.aa_sequence_id) FILTER (WHERE ga.is_deprecated = 0) AS proteomicsCount
-		FROM webready.geneattributes ga, webready.transcriptattributes ta 
+		FROM webready.GeneAttributes_p ga, webready.TranscriptAttributes_p ta 
 			,apidb.MassSpecSummary mss 
 		WHERE ta.gene_source_id = ga.source_id 
 			AND ta.aa_sequence_id = mss.aa_sequence_id
@@ -482,8 +482,8 @@
 	), est AS (
 		SELECT 
 			COUNT(DISTINCT s.gene) FILTER (WHERE ga.is_deprecated = 0) AS estCount
-		FROM webready.geneattributes ga, webready.EstAlignmentGeneSummary s,
-           webready.EstAttributes e
+		FROM webready.GeneAttributes_p ga, webready.EstAlignmentGeneSummary_p s,
+           webready.EstAttributes_p e
 		WHERE 
 			e.source_id = s.accession 
 			AND ga.source_id = s.gene
@@ -497,7 +497,7 @@
 	), ec AS (
 		SELECT 
 			COUNT(DISTINCT ga.source_id) FILTER (WHERE ga.is_deprecated = 0 AND ta.ec_numbers IS NOT NULL) AS ecNumberCount
-		FROM webready.geneattributes ga, webready.transcriptattributes ta
+		FROM webready.GeneAttributes_p ga, webready.TranscriptAttributes_p ta
 		WHERE ta.gene_source_id = ga.source_id
 			-- AND ga.org_abbrev = ta.org_abbrev
 			AND ta.org_abbrev =v_org_abbrev
@@ -597,12 +597,12 @@
               LEFT JOIN profileCount pc ON o.taxon_id = pc.taxon_id
               LEFT JOIN (
                 SELECT taxon_id, round(avg(length),1) as avg_transcript_length
-                FROM webready.TranscriptAttributes
+                FROM webready.TranscriptAttributes_p
                 GROUP by taxon_id
               ) ta ON o.taxon_id = ta.taxon_id
             WHERE tn.name_class = 'scientific name'
           ) oa,
-          webready.TaxonSpecies ts,
+          webready.TaxonSpecies_p ts,
           sres.taxon t,
           sres.taxonname tn2
         WHERE oa.component_taxon_id = ts.taxon_id
@@ -649,46 +649,46 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
        from (  select gene_source_id, source_id, taxon_id, organism,
                'transcript_count' as ontology_term_name,
                null as string_value, gene_transcript_count as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'transcript_exon_count' as ontology_term_name, null as string_value,
                exon_count as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'gene_exon_count' as ontology_term_name, null as string_value,
                gene_exon_count as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'is_pseudo' as ontology_term_name, decode(is_pseudo,1,'Yes',0,'No') as string_value,
                null as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'is_deprecated' as ontology_term_name, decode(is_deprecated,1,'Yes',0,'No') as string_value,
                null as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
 
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
      UNION
         select gene_source_id, source_id, taxon_id, organism,
                'transcript_type' as ontology_term_name, transcript_type as string_value,
                null as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
       UNION
         select gene_source_id, source_id, taxon_id, organism,
                'organism' as ontology_term_name, organism as string_value,
                null as number_value
-        from webready.TranscriptAttributes
+        from webready.TranscriptAttributes_p
 
     UNION
         SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
@@ -697,7 +697,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
             select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
                 'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
                  null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
-            from webready.TranscriptAttributes atr
+            from webready.TranscriptAttributes_p atr
             , apidb.longreadtranscript ltr
             , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
             where ltr.gene_source_id = atr.gene_source_id
@@ -711,8 +711,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         'intron_junction' as ontology_term_name, it.string_value string_value,
             null as number_value
         from
-        webready.IntronSupportLevel it
-        ,webready.TranscriptAttributes atr
+        webready.IntronSupportLevel_p it
+        ,webready.TranscriptAttributes_p atr
         where it.gene_source_id =  atr.gene_source_id
 
 
@@ -720,8 +720,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
         'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
         from
-        webready.GeneIntronJunction gj
-        ,webready.TranscriptAttributes atr
+        webready.GeneIntronJunction_p gj
+        ,webready.TranscriptAttributes_p atr
         where gj.gene_source_id =  atr.gene_source_id
      )
       ]]>
@@ -769,7 +769,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
             END
           END as direction,
         sr.score1 as score
-      FROM  webready.TranscriptAttributes ta,
+      FROM  webready.TranscriptAttributes_p ta,
             results.SegmentResult sr
       WHERE sr.na_sequence_id = ta.na_sequence_id
         AND sr.protocol_app_node_id
@@ -801,12 +801,12 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
       Propagated to portal instances.
     </comment>
     <internalDependency name="OrganismTree"/>
-    <externalDependency name="webready.OrganismAbbreviation"/>
+    <externalDependency name="webready.OrganismAbbreviation_p"/>
     <sql>
       <![CDATA[
        CREATE TABLE OrganismAbbreviationWS&1 as
        SELECT oa.organism, ot.parentTerm as parent, oa.org_abbrev as abbreviation, ot.project_id
-       FROM webready.OrganismAbbreviation oa, OrganismTree ot
+       FROM webready.OrganismAbbreviation_p oa, OrganismTree ot
        WHERE ot.term = oa.organism
       ]]>
     </sql>
@@ -822,7 +822,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     </comment>
     <externalDependency name="sres.TaxonName"/>
     <externalDependency name="sres.Taxon"/>
-    <externalDependency name="webready.GenomicSeqAttributes"/>
+    <externalDependency name="webready.GenomicSeqAttributes_p"/>
     <internalDependency name="ProjectTaxon"/>
     <ancillaryTable name="DistinctTaxonLink"/>
     <sql>
@@ -835,7 +835,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           WITH RECURSIVE cte AS (
             SELECT taxon_id, rank, parent_id, 1 as tree_level
             FROM sres.taxon
-            WHERE taxon_id IN (select taxon_id from webready.GenomicSeqAttributes)
+            WHERE taxon_id IN (select taxon_id from webready.GenomicSeqAttributes_p)
             UNION ALL
             SELECT t.taxon_id, t.rank, t.parent_id, cte.tree_level + 1 as tree_level
             FROM sres.taxon t, cte
@@ -843,7 +843,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           )
           SELECT taxon_id, rank, parent_id, tree_level,
             CASE
-              WHEN taxon_id in (select taxon_id from webready.GenomicSeqAttributes) THEN 'has data'
+              WHEN taxon_id in (select taxon_id from webready.GenomicSeqAttributes_p) THEN 'has data'
               WHEN rank in ('kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species') THEN 'major rank'
               WHEN taxon_id in (
                 SELECT taxon_id
@@ -949,8 +949,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <internalDependency name="OrganismAbbreviationWS"/>
     <internalDependency name="OrganismTree"/>
 <!--    <internalDependency name="PopsetAttributes"/> -->
-    <externalDependency name="webready.TaxonSpecies"/>
-    <externalDependency name="webready.EstAttributes"/>
+    <externalDependency name="webready.TaxonSpecies_p"/>
+    <externalDependency name="webready.EstAttributes_p"/>
     <sql>
       <![CDATA[
        CREATE TABLE OrganismAbbreviationBlast&1 as
@@ -972,7 +972,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                SELECT DISTINCT
                 sp.name as organism, ot.parentTerm as parent,
                 regexp_replace(org.name_for_filenames, replace(org.strain_abbrev, '/','_'),'') as abbreviation
-               FROM sres.TaxonName sp, webready.TaxonSpecies ts, apidb.Organism org, OrganismTree ot
+               FROM sres.TaxonName sp, webready.TaxonSpecies_p ts, apidb.Organism org, OrganismTree ot
                WHERE org.taxon_id = ts.taxon_id
                  AND ts.species_taxon_id = sp.taxon_id
                  AND sp.name_class = 'scientific name'
@@ -982,7 +982,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  AND sp.taxon_id
                      in (SELECT etn.taxon_id
                          FROM sres.TaxonName etn
-                         WHERE etn.name in (SELECT organism FROM webready.EstAttributes))
+                         WHERE etn.name in (SELECT organism FROM webready.EstAttributes_p))
              UNION
                SELECT 'Cryptosporidiidae SSU_18srRNA Reference Isolates' as organism,
                       'Cryptosporidium' as parent, 'CryptosporidiidaeReference' as abbreviation
@@ -1000,16 +1000,16 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
 <!--     <internalDependency name="PopsetAttributes"/> -->
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.TaxonName"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
-    <externalDependency name="webready.GenomicSeqAttributes"/>
-    <externalDependency name="webready.TaxonSpecies"/>
-    <externalDependency name="webready.EstAttributes"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
+    <externalDependency name="webready.GenomicSeqAttributes_p"/>
+    <externalDependency name="webready.TaxonSpecies_p"/>
+    <externalDependency name="webready.EstAttributes_p"/>
     <sql>
       <![CDATA[
         CREATE TABLE BlastTypes&1 as
         /* Standard GENES */
         SELECT distinct organism, project_id, type
-        FROM webready.TranscriptAttributes,
+        FROM webready.TranscriptAttributes_p,
              (SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
         WHERE organism not in ('Toxoplasma gondii RH') and (gene_type = 'protein coding' or gene_type = 'protein coding gene')
         UNION
@@ -1022,25 +1022,25 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         UNION
         /* Standard GENOME */
         SELECT distinct organism, project_id, 'Genome' as type
-        FROM webready.GenomicSeqAttributes
+        FROM webready.GenomicSeqAttributes_p
         UNION
         /* Mitochondrial GENES and GENOME */
         SELECT DISTINCT organism || ' mitochondrial', project_id, type
-        FROM webready.GenomicSeqAttributes,
+        FROM webready.GenomicSeqAttributes_p,
           (SELECT 'Genome' as type UNION SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
         WHERE so_id = 'SO:0000819'
           AND NOT project_id='PlasmoDB'
         UNION
         /* Plastid GENES and GENOME */
         SELECT DISTINCT organism || ' plastid' as organism, project_id, type
-        FROM webready.GenomicSeqAttributes,
+        FROM webready.GenomicSeqAttributes_p,
           (SELECT 'Genome' as type UNION SELECT 'AnnotatedTranscripts' as type UNION SELECT 'AnnotatedProteins' as type) t
         WHERE so_id = 'SO:0001259'
           AND NOT project_id='PlasmoDB'
         UNION
-        /* Regular ESTs (all species from webready.estattributes) */
+        /* Regular ESTs (all species from webready.EstAttributes_p) */
         SELECT DISTINCT sp.name as organism, ea.project_id, 'ESTs' as type
-        FROM webready.EstAttributes ea, sres.TaxonName tn, webready.taxonspecies ts, sres.TaxonName sp
+        FROM webready.EstAttributes_p ea, sres.TaxonName tn, webready.TaxonSpecies_p ts, sres.TaxonName sp
         WHERE ea.organism = tn.name
           AND (tn.taxon_id = ts.taxon_id or tn.taxon_id = ts.species_taxon_id)
           AND ts.species_taxon_id = sp.taxon_id
@@ -1088,7 +1088,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <externalDependency name="apidb.MassSpecPeptide"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
     <externalDependency name="apidb.Organism"/>
 
     <!-- Create empty table structure -->
@@ -1123,8 +1123,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           orgrecord RECORD;
           partition_name TEXT;
         BEGIN
-          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
-            partition_name := 'MSPeptideSummary&1_' || orgrecord.sanitized_org_abbrev;
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
+            partition_name := lower('MSPeptideSummary&1_' || orgrecord.sanitized_org_abbrev);
             EXECUTE format('CREATE TABLE %I PARTITION OF MSPeptideSummary&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
             INSERT INTO MSPeptideSummary&1
@@ -1144,7 +1144,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                     from apidb.massspecpeptide msp
                       inner join sres.externaldatabaserelease r on msp.external_database_release_id = r.external_database_release_id
                       inner join sres.externaldatabase d on r.external_database_id = d.external_database_id
-                      inner join webready.TranscriptAttributes ta on msp.protein_source_id = ta.protein_source_id
+                      inner join webready.TranscriptAttributes_p ta on msp.protein_source_id = ta.protein_source_id
                       LEFT JOIN DatasetDatasource dd ON d.name = dd.name
                       left join datasetpresenter dsp on dd.dataset_presenter_id = dsp.dataset_presenter_id
                     where ta.org_abbrev = orgrecord.org_abbrev
@@ -1187,7 +1187,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <externalDependency name="apidb.Organism"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="webready.GeneAttributes"/>
+    <externalDependency name="webready.GeneAttributes_p"/>
     <sql>
       <![CDATA[
         CREATE TABLE AnnotatedGenomeSummary&1 AS
@@ -1213,7 +1213,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   AND p.property = 'specialLinkExternalDbName') as link_url,
                dsp.release_policy
         FROM apidb.Organism o,
-             (SELECT distinct external_db_name, taxon_id, organism FROM webready.GeneAttributes) ga
+             (SELECT distinct external_db_name, taxon_id, organism FROM webready.GeneAttributes_p) ga
              LEFT JOIN DatasetPresenter dsp ON dsp.name = ga.external_db_name
         WHERE ga.external_db_name like '%_primary_genome_RSRC'
           AND o.taxon_id = ga.taxon_id
@@ -1230,7 +1230,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="apidb.ModifiedMassSpecPeptide"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
     <externalDependency name="apidb.Organism"/>
 
     <!-- Create empty table structure -->
@@ -1267,8 +1267,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           orgrecord RECORD;
           partition_name TEXT;
         BEGIN
-          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
-            partition_name := 'MSModifiedPeptideSummary&1_' || orgrecord.sanitized_org_abbrev;
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
+            partition_name := lower('MSModifiedPeptideSummary&1_' || orgrecord.sanitized_org_abbrev);
             EXECUTE format('CREATE TABLE %I PARTITION OF MSModifiedPeptideSummary&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
             INSERT INTO MSModifiedPeptideSummary&1
@@ -1291,7 +1291,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                     from apidb.ModifiedMassSpecPeptide msp
                       inner join sres.externaldatabaserelease r on msp.external_database_release_id = r.external_database_release_id
                       inner join sres.externaldatabase d on r.external_database_id = d.external_database_id
-                      inner join webready.TranscriptAttributes ta on msp.protein_source_id = ta.protein_source_id
+                      inner join webready.TranscriptAttributes_p ta on msp.protein_source_id = ta.protein_source_id
                       LEFT JOIN DatasetDatasource dd ON d.name = dd.name
                       left join datasetpresenter dsp on dd.dataset_presenter_id = dsp.dataset_presenter_id
                     where ta.org_abbrev = orgrecord.org_abbrev
@@ -1377,9 +1377,9 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <externalDependency name="apidb.MassSpecSummary"/>
     <externalDependency name="sres.ExternalDatabase"/>
     <externalDependency name="sres.ExternalDatabaseRelease"/>
-    <externalDependency name="webready.geneattributes"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
-    <externalDependency name="webready.GenomicSeqAttributes"/>
+    <externalDependency name="webready.GeneAttributes_p"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
+    <externalDependency name="webready.GenomicSeqAttributes_p"/>
     <sql>
       <![CDATA[
         CREATE TABLE GenomicsInternalHyperlink&1 AS
@@ -1389,7 +1389,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                 , ga.sequence_id as sequence_id
                 , row_number() over (partition by p.dataset_name
                                     order by p.max_value, p.source_id, ga.sequence_id) as rn
-          FROM profile p, webready.geneattributes ga
+          FROM profile p, webready.GeneAttributes_p ga
           WHERE dataset_type = 'transcript_expression' and dataset_subtype =  'rnaseq'
             AND p.source_id = ga.source_id
         ), proteomicsgenes as (
@@ -1399,7 +1399,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  d.name,
                  row_number() over(partition by d.name
                                    order by mss.aa_seq_percent_covered desc, ga.gene_source_id) as rn
-          FROM apidb.MassSpecSummary mss, webready.TranscriptAttributes ga,
+          FROM apidb.MassSpecSummary mss, webready.TranscriptAttributes_p ga,
                sres.ExternalDatabase d, sres.ExternalDatabaseRelease r
           WHERE mss.external_database_release_id = r.external_database_release_id
           AND r.external_database_id = d.external_database_id
@@ -1409,7 +1409,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                , sa.taxon_id
                , row_number() over(partition by sa.taxon_id
                                    order by sa.chromosome_order_num, sa.length desc) as rn
-          from webready.GenomicSeqAttributes sa
+          from webready.GenomicSeqAttributes_p sa
           where sa.is_top_level = 1
         ), macros as (
           SELECT dd.dataset_presenter_id
@@ -1530,9 +1530,9 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
       -->
     <internalDependency name="ExternalDbDatasetPresenter"/>
     <internalDependency name="Pubmed"/>
-    <externalDependency name="webready.DbRefNaFeature"/>
+    <externalDependency name="webready.DbRefNaFeature_p"/>
     <externalDependency name="sres.DbRef"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
     <externalDependency name="apidb.Organism"/>
 
     <!-- Create empty table structure -->
@@ -1559,8 +1559,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           orgrecord RECORD;
           partition_name TEXT;
         BEGIN
-          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
-            partition_name := 'GenePubmed&1_' || orgrecord.sanitized_org_abbrev;
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
+            partition_name := lower('GenePubmed&1_' || orgrecord.sanitized_org_abbrev);
             EXECUTE format('CREATE TABLE %I PARTITION OF GenePubmed&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
             INSERT INTO GenePubmed&1
@@ -1570,7 +1570,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                      substr(pm.authors, 1, 2000) authors
               from Pubmed pm,
                    (select dbna.na_feature_id, db.primary_identifier
-                    from webready.DbRefNaFeature dbna,
+                    from webready.DbRefNaFeature_p dbna,
                          sres.DbRef db
 	             where db.db_ref_id = dbna.db_ref_id
 		     and dbna.org_abbrev = orgrecord.org_abbrev	 
@@ -1588,12 +1588,12 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
               where dbref_subset.primary_identifier = pm.pubmed_id::varchar
             )
             select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, orgrecord.org_abbrev
-            from webready.TranscriptAttributes ta, feat_pm
+            from webready.TranscriptAttributes_p ta, feat_pm
             where ta.na_feature_id = feat_pm.na_feature_id
               and ta.org_abbrev = orgrecord.org_abbrev
             union
             select ta.source_id, ta.gene_source_id, ta.project_id, pubmed_id, doi, title, authors, orgrecord.org_abbrev
-            from webready.TranscriptAttributes ta, feat_pm
+            from webready.TranscriptAttributes_p ta, feat_pm
             where ta.gene_na_feature_id = feat_pm.na_feature_id
               and ta.org_abbrev = orgrecord.org_abbrev;
           end loop;
@@ -1689,7 +1689,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         SELECT summ.node_set_id, ga.source_id, summ.node_type,
                profile_as_string_value, profile_as_string_stderr,
                profile_as_string_percentile1, profile_as_string_percentile2
-        FROM webready.GeneAttributes ga, GeneOrgAbbrev goa, profile_nafeatureexp_summary summ
+        FROM webready.GeneAttributes_p ga, GeneOrgAbbrev goa, profile_nafeatureexp_summary summ
                WHERE ga.source_id = goa.source_id
                AND ga.org_abbrev = goa.org_abbrev
                AND ga.na_feature_id = summ.na_feature_id
@@ -2074,8 +2074,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                this_gene.source_id as profile_graph_id
           from webready.OrthologousTranscripts ot
              , Profile p
-             , webready.GeneAttributes this_gene
-             , webready.GeneAttributes other_gene
+             , webready.GeneAttributes_p this_gene
+             , webready.GeneAttributes_p other_gene
           where p.source_id = ot.source_id
             and ot.source_id = this_gene.source_id
             and ot.ortho_gene_source_id = other_gene.source_id
@@ -2083,7 +2083,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
             and ot.is_syntenic = 1
         union
           select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
-          from Profile p, webready.GeneAttributes ga
+          from Profile p, webready.GeneAttributes_p ga
           where p.source_id = ga.source_id
     ]]>
     </sql>
@@ -2130,7 +2130,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  round(nfe.percentile_channel2::numeric, 2) as percentile_channel2,
                  ps.node_order_num, 
                  ps.protocol_app_node_id
-          FROM results.NaFeatureExpression nfe, webready.GeneAttributes ga, study.ProtocolAppNode pan,
+          FROM results.NaFeatureExpression nfe, webready.GeneAttributes_p ga, study.ProtocolAppNode pan,
                ProfileSamples ps, study.nodeSet s,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
                DatasetPresenter dnt, DatasetProperty dp
@@ -2159,7 +2159,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  round(nfe.percentile_channel2::numeric, 2) as percentile_channel2,
                  ps.node_order_num, 
                  ps.protocol_app_node_id
-          FROM results.NaFeatureExpression nfe, webready.GeneAttributes ga, study.ProtocolAppNode pan,
+          FROM results.NaFeatureExpression nfe, webready.GeneAttributes_p ga, study.ProtocolAppNode pan,
                ProfileSamples ps, study.nodeSet s,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
                DatasetDatasource dd, DatasetProperty dp
@@ -2187,7 +2187,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                  round(nfe.percentile_channel2::numeric, 2) as percentile_channel2,
                  ps.node_order_num, 
                  ps.protocol_app_node_id
-          FROM results.NaFeatureExpression nfe, webready.GeneAttributes ga, study.ProtocolAppNode pan,
+          FROM results.NaFeatureExpression nfe, webready.GeneAttributes_p ga, study.ProtocolAppNode pan,
                ProfileSamples ps, study.nodeSet s,
                sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
                DatasetDatasource dd, DatasetPresenter dsp
@@ -2249,7 +2249,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         select edd.dataset_presenter_display_name AS dataset, ga.taxon_id, edr.id_url
         from sres.DbRef db, dots.DbRefNaFeature dbna,
              ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
-             webready.GeneAttributes ga
+             webready.GeneAttributes_p ga
         where db.external_database_release_id = edd.external_database_release_id
           and edr.external_database_release_id = edd.external_database_release_id
          and dbna.db_ref_id = db.db_ref_id
@@ -2259,7 +2259,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
         select edd.dataset_presenter_display_name AS dataset, ta.taxon_id, edr.id_url
         from sres.dbref db, dots.DbRefNaFeature dbna,
              ExternalDbDatasetPresenter edd, sres.ExternalDatabaseRelease edr,
-             webready.TranscriptAttributes ta
+             webready.TranscriptAttributes_p ta
         where db.external_database_release_id = edd.external_database_release_id
           and edr.external_database_release_id = edd.external_database_release_id
           and dbna.db_ref_id = db.db_ref_id
@@ -2267,7 +2267,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
       union
         select d.name as dataset, ga.taxon_id, eru.id_url
         from sres.DbRef dbr, dots.DbRefNaFeature dbrf, sres.ExternalDatabaseRelease r,
-             sres.ExternalDatabase d, webready.GeneAttributes ga,
+             sres.ExternalDatabase d, webready.GeneAttributes_p ga,
              apidb.ExternalResourceUrl eru
         where dbr.external_database_release_id = r.external_database_release_id
           and r.external_database_id = d.external_database_id
@@ -2279,7 +2279,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                d.name as dataset, ta.taxon_id, eru.id_url
         from sres.DbRef dbr, dots.DbRefAaFeature dbrf, dots.AaFeature aaf,
              sres.ExternalDatabaseRelease r, sres.ExternalDatabase d,
-             webready.TranscriptAttributes ta, apidb.ExternalResourceUrl eru
+             webready.TranscriptAttributes_p ta, apidb.ExternalResourceUrl eru
         where dbr.external_database_release_id = r.external_database_release_id
           and r.external_database_id = d.external_database_id
           and dbr.db_ref_id = dbrf.db_ref_id
@@ -2339,7 +2339,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           --        where uaa.user_id = uap.user_id
           --        and uaa.stable_id = REGEXP_SUBSTR(apolloowner,'[^,]+',1,1)
           --        and uap.key = 'organization') address) as apollo_owner_details
-        FROM ApolloUpdate au, webready.GeneAttributes ga, webready.TranscriptAttributes ta
+        FROM ApolloUpdate au, webready.GeneAttributes_p ga, webready.TranscriptAttributes_p ta
         WHERE au.type = 'gene'
           AND (au.attr like '%gene_product=%'
               OR au.attr like '%description=%')
@@ -2370,8 +2370,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <externalDependency name="dots.GoAssocInstEvidCode"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.OntologyTerm"/>
-    <externalDependency name="webready.geneattributes"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
+    <externalDependency name="webready.GeneAttributes_p"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
     <externalDependency name="apidb.Organism"/>
     <intermediateTable name="preferred_product_evids"/>
 
@@ -2410,8 +2410,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           orgrecord RECORD;
           partition_name TEXT;
         BEGIN
-          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
-            partition_name := 'PreferredProductsGene&1_' || orgrecord.sanitized_org_abbrev;
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
+            partition_name := lower('preferredproductsgene&1_' || orgrecord.sanitized_org_abbrev);
             EXECUTE format('CREATE TABLE %I PARTITION OF PreferredProductsGene&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
             INSERT INTO PreferredProductsGene&1
@@ -2421,24 +2421,24 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
             -- dots.GeneFeature and dots.Transcript
             with fromDots
             as ( select gf.source_id
-                        from dots.GeneFeature gf, webready.GeneAttributes ga
+                        from dots.GeneFeature gf, webready.GeneAttributes_p ga
                         where gf.product is not null
                         and gf.na_feature_id = ga.na_feature_id
                         and ga.org_abbrev = orgrecord.org_abbrev
                         union
                         select ga.source_id
-                        from dots.Transcript t, webready.GeneAttributes ga
+                        from dots.Transcript t, webready.GeneAttributes_p ga
                         where t.product is not null
                           and t.parent_id = ga.na_feature_id
                           and ga.org_abbrev = orgrecord.org_abbrev
                EXCEPT
                select ta.gene_source_id
-                        from apidb.TranscriptProduct tp, webready.TranscriptAttributes ta
+                        from apidb.TranscriptProduct tp, webready.TranscriptAttributes_p ta
                         where tp.na_feature_id = ta.na_feature_id
                         and ta.org_abbrev = orgrecord.org_abbrev
                         union
                         select ga.source_id
-                        from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
+                        from apidb.GeneFeatureProduct gfp, webready.GeneAttributes_p ga
                         where gfp.na_feature_id = ga.na_feature_id
                         and ga.org_abbrev = orgrecord.org_abbrev)
             select ta.gene_source_id as source_id, tp.product, ta.project_id,
@@ -2450,7 +2450,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
               'apidb.TranscriptProduct' as row_source,
               orgrecord.org_abbrev as org_abbrev
             from apidb.TranscriptProduct tp
-              INNER JOIN webready.TranscriptAttributes ta ON ta.na_feature_id = tp.na_feature_id
+              INNER JOIN webready.TranscriptAttributes_p ta ON ta.na_feature_id = tp.na_feature_id
               LEFT JOIN preferred_product_evids e ON tp.evidence_code = e.go_evidence_code_id
             where tp.is_preferred = 1
               and ta.org_abbrev = orgrecord.org_abbrev
@@ -2465,7 +2465,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
               null::varchar as  assigned_by,
               'apidb.GeneFeatureProduct' as row_source,
               orgrecord.org_abbrev as org_abbrev
-            from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
+            from apidb.GeneFeatureProduct gfp, webready.GeneAttributes_p ga
             where ga.na_feature_id = gfp.na_feature_id
               and gfp.is_preferred = 1
               and ga.org_abbrev = orgrecord.org_abbrev
@@ -2478,8 +2478,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                     null::varchar as evidence_code,
                     null::varchar as evidence_code_parameter,
                     null::varchar as  assigned_by,
-                    'webready.TranscriptAttributes/GeneAttributes' as row_source
-                  from webready.TranscriptAttributes ta
+                    'webready.TranscriptAttributes_p/GeneAttributes' as row_source
+                  from webready.TranscriptAttributes_p ta
                   where ta.transcript_product is not null
                     and ta.org_abbrev = orgrecord.org_abbrev
                   group by ta.gene_source_id, ta.transcript_product, ta.project_id
@@ -2505,9 +2505,9 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     </comment>
     <externalDependency name="apidb.GeneFeatureProduct"/>
     <externalDependency name="apidb.TranscriptProduct"/>
-    <externalDependency name="webready.GeneAttributes"/>
-    <externalDependency name="webready.TranscriptAttributes"/>
-    <externalDependency name="webready.GeneProduct"/>
+    <externalDependency name="webready.GeneAttributes_p"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
+    <externalDependency name="webready.GeneProduct_p"/>
     <externalDependency name="dots.GoAssocInstEvidCode"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.OntologyTerm"/>
@@ -2549,9 +2549,9 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           orgrecord RECORD;
           partition_name TEXT;
        begin
-          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.organismabbreviation LOOP
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
 
-           partition_name := '&prefixAllGeneProducts&1_' || orgrecord.sanitized_org_abbrev;
+           partition_name := lower('&prefixallgeneproducts&1_' || orgrecord.sanitized_org_abbrev);
            EXECUTE format('CREATE TABLE %I PARTITION OF &prefixAllGeneProducts&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
            insert into &prefixAllGeneProducts&1
@@ -2563,7 +2563,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   null as reference,
                   e.name as evidence_code, tp.with_from as evidence_code_parameter,
                   tp.assigned_by, 'apidb.TranscriptProduct' as source, orgrecord.org_abbrev
-           from webready.TranscriptAttributes ta
+           from webready.TranscriptAttributes_p ta
               INNER JOIN apidb.TranscriptProduct tp ON ta.na_feature_id = tp.na_feature_id
               LEFT JOIN all_gene_product_evids e ON tp.evidence_code = e.go_evidence_code_id
            where ta.org_abbrev = orgrecord.org_abbrev
@@ -2578,7 +2578,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   -- CHECK AND FIX: OK that apidb.GeneFeatureProduct has NO assigned_by column?
                   NULL as assigned_by,
                   'apidb.GeneFeatureProduct' as source, orgrecord.org_abbrev
-           from apidb.GeneFeatureProduct gfp, webready.GeneAttributes ga
+           from apidb.GeneFeatureProduct gfp, webready.GeneAttributes_p ga
            where ga.na_feature_id = gfp.na_feature_id
              and ga.org_abbrev = orgrecord.org_abbrev;
 
@@ -2588,7 +2588,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   null as transcript_ids, null as reference, null as evidence_code,
                   null as evidence_code_parameter, null as assigned_by,
                   'dots.GeneFeature' as source, orgrecord.org_abbrev
-           from dots.GeneFeature gf, webready.GeneAttributes ga, webready.GeneProduct gp
+           from dots.GeneFeature gf, webready.GeneAttributes_p ga, webready.GeneProduct_p gp
            where ga.na_feature_id = gf.na_feature_id
              and gf.product is not null
              and ga.source_id = gp.source_id
@@ -2602,13 +2602,13 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
                   null as reference, null as evidence_code, null as evidence_code_parameter,
                   null as assigned_by, 'dots.Transcript' as source, orgrecord.org_abbrev
-           from webready.TranscriptAttributes ta, dots.Transcript t
+           from webready.TranscriptAttributes_p ta, dots.Transcript t
            where ta.na_feature_id = t.na_feature_id
              and t.product is not null
              and ta.org_abbrev = orgrecord.org_abbrev
              and ta.gene_source_id
                  not in (select source_id
-                     from webready.GeneProduct
+                     from webready.GeneProduct_p
                      where source_rule < 6
                        and org_abbrev = orgrecord.org_abbrev) -- product only in dots.Transcript
            group by ta.gene_source_id, ta.project_id, t.product;
@@ -2619,7 +2619,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                   null as transcript_ids, null as reference, null as evidence_code,
                   null as evidence_code_parameter, null as assigned_by,
                   'unspecified product' as source, orgrecord.org_abbrev
-           from webready.GeneProduct gp, webready.GeneAttributes ga
+           from webready.GeneProduct_p gp, webready.GeneAttributes_p ga
            where gp.source_rule = 7
              and gp.source_id = ga.source_id
              and ga.org_abbrev = orgrecord.org_abbrev

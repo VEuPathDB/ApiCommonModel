@@ -41,7 +41,7 @@ my $pw = $gusconfig->{props}->{databasePassword};
 my $dbh = DBI->connect("dbi:Oracle:$dbname", $u, $pw) ||  die "Couldn't connect to database: " . DBI->errstr;
 
 ## my $sql = "select source_id, regexp_substr ( genus_species, '[A-z]*' ) as genus
-## from webready.GeneAttributes";
+## from webready.GeneAttributes_p";
 my $sql = "select ga.source_id, 
 regexp_substr ( ga.genus_species, '[A-z]*' ) as genus, 
 ga.strain,
@@ -55,7 +55,7 @@ CASE WHEN ta.ec_numbers is not null THEN 1 WHEN ta.ec_numbers_derived is not nul
 CASE WHEN ta.annotated_go_function is not null THEN 1 WHEN ta.predicted_go_function is not null THEN 1 ELSE 0 END as gofunction,
 CASE WHEN ta.orthomcl_name is not null THEN 1 ELSE 0 END as has_orthology,
 CASE WHEN (ta.tm_count >= 1 or ta.signalp_peptide is not null) THEN 1 ELSE 0 END as subcellularlocation
-from webready.GeneAttributes ga, apidbtuning.organismattributes oa, webready.TranscriptAttributes ta
+from webready.GeneAttributes_p ga, apidbtuning.organismattributes oa, webready.TranscriptAttributes_p ta
 where ga.organism = oa.organism_name
 and ta.source_id = ga.representative_transcript";
 

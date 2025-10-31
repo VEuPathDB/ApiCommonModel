@@ -70,9 +70,9 @@ public class VCFFilesTypeHandler extends UserDatasetTypeHandler {
    */
   private static final String SELECT_SEQUENCE_SQL =
       "SELECT gsa.source_id AS seq_id, gsa.length AS length " +
-      " FROM webready.GenomicSeqAttributes gsa, apidb.organism o, " +
+      " FROM webready.GenomicSeqAttributes_p gsa, apidb.organism o, " +
       "  (SELECT MAX(length) AS ML, taxon_id " +
-      "    FROM webready.GenomicSeqAttributes " +
+      "    FROM webready.GenomicSeqAttributes_p " +
       "    GROUP BY taxon_id ) info" +
       " WHERE info.taxon_id = gsa.taxon_id " +
       "  AND info.ml = gsa.length " +

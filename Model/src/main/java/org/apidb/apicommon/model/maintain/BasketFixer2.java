@@ -95,9 +95,9 @@ public class BasketFixer2 extends BaseCLI {
     for (String projectId : projects) {
       logger.info("Fixing basket for project " + projectId);
       try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
-        fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "webready.GeneId",  "gene");
+        fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "webready.GeneId_p",  "gene");
         updateTranscripts(wdkModel, projectId);
-        fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "webready.GenomicSequenceId",  "sequence");
+        fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "webready.GenomicSequenceId_p",  "sequence");
         logger.info("=========================== done ============================");
       }
     }
@@ -347,7 +347,7 @@ public class BasketFixer2 extends BaseCLI {
       + "     WHERE geneAndMaxTrans.pk_column_1 = tmp.pk_column_1"
       + "       AND geneAndMaxTrans.pk_column_2 = tmp.pk_column_2"
       + "   ) b," // one row per gene, all basket columns, but excludes pk_column_2, ie, the trans id
-      + "   webready.TranscriptAttributes t"
+      + "   webready.TranscriptAttributes_p t"
       + " WHERE b.pk_column_1 = t.gene_source_id";
 
 
