@@ -39,7 +39,7 @@ sub new {
     
     $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
 
-    my $detailsFunction = "{lowcomplexitySegTitleFxn}";
+    my $detailsFunction = "{lowComplexityDetailsFxn}";
 
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
