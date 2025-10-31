@@ -1750,18 +1750,46 @@
             SELECT gene_source_id, max(wdk_weight) AS wdk_weight
             FROM $$gene_result$$
             GROUP BY gene_source_id
-          )
+          ),
+          syn_pairs AS (
+	    SELECT DISTINCT ga.source_id, sg.syn_na_feature_id, 1 AS is_syntenic
+	    FROM webready.syntenicgene_p sg, webready.GeneAttributes_p ga
+            WHERE sg.na_sequence_id = ga.na_sequence_id
+	      AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+	      AND sg.syn_organism_abbrev IN ($$organism$$)
+	      AND sg.end_max >= ga.start_min
+	      AND sg.start_min <= ga.end_max
+          ), all_pairs AS (
+	    SELECT gog.gene_id as source_id
+	    	 , gog.project_id
+		 , ota.gene_source_id AS ortho_gene_source_id
+		 , ota.source_id AS ortho_source_id
+		 , ota.transcript_product AS ortho_product
+		 , ota.org_abbrev AS ortho_org_abbrev
+	     FROM webready.GeneOrthologGroup gog
+	     JOIN webready.TranscriptOrthologGroup tog ON gog.group_id = tog.group_id
+	     JOIN webready.TranscriptAttributes_p ota ON tog.source_id = ota.source_id
+	     JOIN apidb.Organism o ON ota.taxon_id = o.taxon_id
+	     WHERE gog.org_abbrev IN ($$organism$$)
+	      AND ota.org_abbrev IN (%%PARTITION_KEYS%%)
+	 ), OrthologousTranscripts as (
+            SELECT distinct all_pairs.*
+                 , COALESCE(syn_pairs.is_syntenic, 0) AS is_syntenic
+            FROM all_pairs
+            LEFT JOIN syn_pairs
+    		  ON all_pairs.source_id = syn_pairs.source_id
+                  AND all_pairs.ortho_na_feature_id = syn_pairs.syn_na_feature_id
+	  ),
           select otx.ortho_gene_source_id as gene_source_id,
                  otx.ortho_source_id as source_id,
                  'Y' AS matched_result,
                  max(otx.ortho_project_id) as project_id,
                  substr(string_agg(otx.source_id, ','  ORDER BY otx.source_id) , 1, 4000) AS orthologs,
                  max(inputs.wdk_weight) AS wdk_weight
-          from inputs, apidbTuning.OrthologousTranscripts otx, apidb.organism o
+          from inputs, apidbTuning.OrthologousTranscripts otx
           where inputs.gene_source_id = otx.source_id
              and (otx.is_syntenic = 1 OR $$isSyntenic$$ = 'no')
-             and o.abbrev IN ($$organism$$)
-	     and otx.ortho_taxon_id = o.taxon_id
+             and otx.ortho_org_abbrev IN ($$organism$$)
           group by otx.ortho_source_id, otx.ortho_gene_source_id
 
         ]]>
