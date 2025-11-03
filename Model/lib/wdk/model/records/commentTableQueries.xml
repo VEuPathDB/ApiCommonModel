@@ -113,13 +113,13 @@
             LEFT JOIN (
               SELECT comment_id, COUNT(DISTINCT stable_id) AS geneCount
               FROM @REMOTE_COMMENT_SCHEMA@MappedComment
-              WHERE stable_id IN (SELECT source_id FROM webready.GeneAttributes_p)
+              WHERE stable_id IN (SELECT source_id FROM webready.GeneAttributes_p where org_abbrev IN (%%PARTITION_KEYS%%))
               GROUP BY comment_id
             ) gene_counts ON c.comment_id = gene_counts.comment_id
             LEFT JOIN (
               SELECT dr.primary_identifier AS comment_id , ta.gene_source_id
               FROM sres.dbref dr
-                , dots.DbRefNaFeature drnf
+                , webready.DbRefNaFeature_p drnf
                 , webready.TranscriptAttributes_p ta
                 , sres.externaldatabase ed
                 , sres.externaldatabaserelease edr
@@ -128,12 +128,14 @@
                 AND ed.external_database_id = edr.external_database_id
                 AND edr.external_database_release_id = dr.external_database_release_id
                 AND ed.name like '%_dbxref_EuPathDB_comment_RSRC'
+                AND drnf.org_abbrev IN (%%PARTITION_KEYS%%)
+                AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
             ) integrated_comments
                 ON c.comment_id::varchar = integrated_comments.comment_id AND c.stable_id = integrated_comments.gene_source_id
             LEFT JOIN (
               SELECT dr.primary_identifier AS comment_id , ta.gene_source_id
               FROM sres.dbref dr
-              , dots.DbRefNaFeature drnf
+              , webready.DbRefNaFeature_p drnf
               , webready.TranscriptAttributes_p ta
               , sres.externaldatabase ed
               , sres.externaldatabaserelease edr
@@ -142,6 +144,8 @@
                 AND ed.external_database_id = edr.external_database_id
                 AND edr.external_database_release_id = dr.external_database_release_id
                 AND ed.name like '%_dbxref_EuPathDB_comment_na_RSRC'
+                AND drnf.org_abbrev IN (%%PARTITION_KEYS%%)
+                AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
             ) reviewed_comments
                 ON c.comment_id::varchar = reviewed_comments.comment_id AND c.stable_id = reviewed_comments.gene_source_id
           WHERE
@@ -150,6 +154,7 @@
             -- no need for separate sql for toxo .. just want to exclude expert/community comments here
             AND ((c.project_name = 'GiardiaDB' AND c.review_status_id != 'community') OR c.project_name != 'GiardiaDB')
             AND c.is_visible = true
+            AND ga.org_abbrev in (%%PARTITION_KEYS%%)
           ORDER BY c.comment_id DESC
         ]]>
       </sql>
