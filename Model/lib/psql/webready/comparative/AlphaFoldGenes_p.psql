@@ -1,4 +1,4 @@
-CREATE TABLE :SCHEMA.:CLEAN_ORG_ABBREVAlphaFoldGenes_p (
+CREATE TABLE :SCHEMA.AlphaFoldGenes_p (
     gene_source_id   VARCHAR(80),
     uniprot_id   VARCHAR(80),
     alphafold_id   VARCHAR(80),
@@ -13,7 +13,9 @@ CREATE TABLE :SCHEMA.:CLEAN_ORG_ABBREVAlphaFoldGenes_p (
 
 
 DO $$
-    DECLARE orgrecord record:PLPGSQL_DELIM
+    DECLARE
+      orgrecord record:PLPGSQL_DELIM
+      partition_name text:PLPGSQL_DELIM
     BEGIN
         FOR orgrecord IN (
 	   SELECT DISTINCT oa.org_abbrev, oa.sanitized_org_abbrev, o.taxon_id
@@ -21,9 +23,8 @@ DO $$
 	   where o.abbrev = oa.org_abbrev)
         LOOP
 
-          partition_name := lower('alphafoldgenes_p_' || orgrecord.sanitized_org_abbrev);
-          EXECUTE format('CREATE TABLE %I PARTITION OF SyntenicGene_p_ FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
-
+          partition_name := lower('alphafoldgenes_p_' || orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
+          EXECUTE format('CREATE TABLE :SCHEMA.%I PARTITION OF :SCHEMA.AlphaFoldGenes_p FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev):PLPGSQL_DELIM
           EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.MinRanks_%s', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
 		      
 
@@ -63,11 +64,11 @@ DO $$
             , af.last_residue_index
 	    , (af.last_residue_index - af.first_residue_index + 1) as hit_length
 	    , %L
-	    , %L 
+	    , '':PROJECT_ID'' 
 	    , current_timestamp
           FROM apidb.alphafold af
             , :SCHEMA.alphaFoldHits_%s afh
-          WHERE afh.uniprot_id = af.uniprot_id', orgrecord.org_abbrev, ':PROJECT_ID', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
+          WHERE afh.uniprot_id = af.uniprot_id', orgrecord.org_abbrev, orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
 
 
       EXECUTE format('DROP TABLE IF EXISTS :SCHEMA.MinRank_%s', orgrecord.sanitized_org_abbrev):PLPGSQL_DELIM
