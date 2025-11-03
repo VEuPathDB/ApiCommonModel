@@ -435,9 +435,9 @@ sub addESTs {
 
   my $track;
 
-  my $estFilename = "${organismAbbrev}_ESTs.gff.gz";
+  my $estFilename = "ESTs.gff.gz";
  
-  my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/${estFilename}";
+  my $relativePathToGffFile = "${nameForFileNames}/alignedTranscripts/gff/${estFilename}";
 
   $track = ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig->
     new({
