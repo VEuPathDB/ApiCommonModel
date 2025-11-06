@@ -1039,7 +1039,7 @@
         , max(max_end) as max_end
 	    , max(max_end) + 1000 contextEnd
         , project_id
-	    , string_agg(distinct dataset_name || '_high_confidence_models',',') as all_datasets
+	    , string_agg(distinct CONCAT(dataset_name, '_high_confidence_models'),',') as all_datasets
 	    , na_seq_source_id
 	    , internal_abbrev
         , 'Y' as matched_result
@@ -1927,7 +1927,7 @@
               OR (
                 gs.go_term_name LIKE REPLACE($$go_term$$, '*', '%')
                 OR gs.go_id LIKE REPLACE($$go_term$$, '*', '%')
-                OR gs.go_id || ' : ' || gs.go_term_name LIKE REPLACE($$go_term$$, '*', '%')
+                OR CONCAT(gs.go_id, ' : ', gs.go_term_name) LIKE REPLACE($$go_term$$, '*', '%')
               )
             )
             AND ((fi.image_type = 'GFP' AND ta.project_id = 'GiardiaDB') OR
@@ -2013,7 +2013,7 @@
               OR (
                 gs.go_term_name LIKE REPLACE($$go_term$$, '*', '%')
                 OR gs.go_id LIKE REPLACE($$go_term$$, '*', '%')
-                OR gs.go_id || ' : ' || gs.go_term_name LIKE REPLACE($$go_term$$, '*', '%')
+                OR CONCAT(gs.go_id, ' : ', gs.go_term_name) LIKE REPLACE($$go_term$$, '*', '%')
               )
             )
             AND fi.image_type = $$tagType$$
@@ -2600,7 +2600,7 @@
               SELECT ptm.source_id
               , ptm.project_id
               , ptm.gene_source_id
-              , string_agg(ptm.residue || ':' || ptm.residue_location, ', ' ORDER BY ptm.residue_location) AS residues
+              , string_agg(CONCAT(ptm.residue, ':', ptm.residue_location), ', ' ORDER BY ptm.residue_location) AS residues
               , COUNT(ptm.residue) AS count
               FROM PTM
               GROUP BY ptm.project_id, ptm.source_id, ptm.gene_source_id
@@ -2609,7 +2609,7 @@
           SELECT results.*
             , 10 AS wdk_weight
             , 'Y' AS matched_result
-            , string_agg (replace(replace(replace(mc.modification_type, '-', ' '), '_', ' '), 'binding site', 'ubiquitin binding site') || ':' || mc.count, ', ' ORDER BY mc.modification_type) AS modCounts
+            , string_agg (CONCAT(replace(replace(replace(mc.modification_type, '-', ' '), '_', ' '), 'binding site', 'ubiquitin binding site'), ':', mc.count), ', ' ORDER BY mc.modification_type) AS modCounts
           FROM results
             , mod_counts mc
           WHERE mc.source_id = results.source_id
@@ -2693,7 +2693,7 @@
         <![CDATA[
           SELECT gatr.source_id as source_id, 'Y' as matched_result
             , gatr.project_id, gatr.gene_source_id
-            , gatr.sequence_id || ': ' || trim(to_char(gatr.start_min,'999,999,999')) || ' - ' || trim(to_char(gatr.end_max,'999,999,999')) || CASE WHEN gatr.is_reversed = 1 THEN ' (-)' ELSE' (+)' END as dynamic_location
+            , CONCAT(gatr.sequence_id, ': ', trim(to_char(gatr.start_min,'999,999,999')), ' - ', trim(to_char(gatr.end_max,'999,999,999')), CASE WHEN gatr.is_reversed = 1 THEN ' (-)' ELSE' (+)' END) as dynamic_location
           FROM  webready.TranscriptAttributes_p gatr
           WHERE ((gatr.org_abbrev = $$organismSinglePick$$ AND gatr.chromosome = $$chromosomeOptional$$)
                  OR lower(gatr.sequence_id) = lower($$sequenceId$$))
@@ -2704,7 +2704,7 @@
       <sql includeProjects="TrichDB,AmoebaDB,SchistoDB,InitDB">
         <![CDATA[
             SELECT DISTINCT gatr.source_id, gatr.gene_source_id, gatr.project_id, 'Y' as matched_result,
-              fl.sequence_source_id || ': ' || trim(to_char(fl.start_min,'999,999,999')) || ' - ' || trim(to_char(fl.end_max,'999,999,999')) || CASE WHEN fl.is_reversed = 1 THEN ' (-)' ELSE ' (+)' END as dynamic_location
+              CONCAT(fl.sequence_source_id, ': ', trim(to_char(fl.start_min,'999,999,999')), ' - ', trim(to_char(fl.end_max,'999,999,999')), CASE WHEN fl.is_reversed = 1 THEN ' (-)' ELSE ' (+)' END) as dynamic_location
             FROM webready.FeatureLocation_p fl, webready.TranscriptAttributes_p gatr
             WHERE lower(gatr.sequence_id) = lower($$sequenceId$$)
               AND fl.na_sequence_id = gatr.na_sequence_id
@@ -3537,11 +3537,11 @@
                            THEN greatest($$hard_floor$$, one.chosen::numeric) / greatest($$hard_floor$$, two.chosen::numeric)
                          ELSE -1 * greatest($$hard_floor$$, two.chosen::numeric) / greatest($$hard_floor$$, one.chosen::numeric)
                     END, 1) AS fold_change_chosen
-            , CASE WHEN greatest($$hard_floor$$, one.chosen) / greatest($$hard_floor$$, two.chosen) >= 1
+            , CONCAT(CASE WHEN greatest($$hard_floor$$, one.chosen) / greatest($$hard_floor$$, two.chosen) >= 1
                      THEN round(greatest($$hard_floor$$, one.chosen::numeric) / greatest($$hard_floor$$, two.chosen::numeric), 1)
                    ELSE round(-1 * greatest($$hard_floor$$, two.chosen::numeric) / greatest($$hard_floor$$, one.chosen::numeric), 1)
-              END
-              || CASE WHEN (one.chosen < $$hard_floor$$ OR two.chosen < $$hard_floor$$) THEN '*' ELSE '' END
+              END,
+              CASE WHEN (one.chosen < $$hard_floor$$ OR two.chosen < $$hard_floor$$) THEN '*' ELSE '' END)
             AS fold_change_chosen_display
             , CASE WHEN &&isLogged&& = 1
                      THEN round(CASE one.average WHEN 0 THEN 0 ELSE log(2, one.average::numeric) END, 2)
@@ -3714,18 +3714,18 @@
                               greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, one.chosen)
                     end as numeric), 1
               ) AS fold_change_chosen
-            , CASE WHEN greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, one.chosen) /
+            , CONCAT(CASE WHEN greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, one.chosen) /
                         greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, two.chosen) >= 1
                    THEN round(cast(greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, one.chosen) /
                                 greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, two.chosen) as numeric), 1)
                    ELSE round(-1 * cast(greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, two.chosen) /
                               greatest(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, one.chosen) as numeric), 1)
               END
-              || CASE WHEN (one.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END OR
+              , CASE WHEN (one.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END OR
                           two.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END)
                   THEN '*'
                   ELSE ''
-              END AS fold_change_chosen_display
+              END) AS fold_change_chosen_display
             , CASE WHEN &&isLogged&& = 1
                      THEN round(CASE one.average WHEN 0 THEN 0 ELSE log(2, cast(one.average as numeric)) END, 2)
                    ELSE round(cast(one.average as numeric), 2)
@@ -3760,23 +3760,23 @@
               END AS median_group_two
             , CASE WHEN &&isLogged&& = 1
                    THEN rtrim(to_char(round(CASE one.chosen WHEN 0 THEN 0 ELSE log(2, cast(one.chosen as numeric)) end, 2), 'FM99990.99'), '.')
-                   ELSE rtrim(to_char(round(cast(one.chosen as numeric), 2), 'FM99990.99'), '.')
-                        || CASE WHEN one.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END
-                                THEN ' ('
-                                     || rtrim( to_char(round(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, 2), 'FM99990.99'), '.')
-                                     || ')'
+                   ELSE CONCAT(rtrim(to_char(round(cast(one.chosen as numeric), 2), 'FM99990.99'), '.')
+                        , CASE WHEN one.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END
+                                THEN CONCAT(' ('
+                                     , rtrim( to_char(round(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, 2), 'FM99990.99'), '.')
+                                     , ')')
                                 ELSE ''
-                           END
+                           END)
               END AS chose_group_one
             , CASE WHEN &&isLogged&& = 1
                    THEN rtrim(to_char(round( CASE two.chosen WHEN 0 THEN 0 ELSE log(2, cast(two.chosen as numeric)) end, 2), 'FM99990.99'), '.')
-                   ELSE rtrim(to_char(round( cast(two.chosen as numeric), 2), 'FM99990.00'), '.')
-                     || CASE WHEN two.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END
-                             THEN ' ('
-                                  || rtrim(to_char(round(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, 2), 'FM99990.99'), '.')
-                                  || ')'
+                   ELSE CONCAT(rtrim(to_char(round( cast(two.chosen as numeric), 2), 'FM99990.00'), '.')
+                     , CASE WHEN two.chosen < CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END
+                             THEN CONCAT(' ('
+                                  , rtrim(to_char(round(CASE $$hard_floor$$ WHEN 0 THEN 1 ELSE $$hard_floor$$ / ga.length END, 2), 'FM99990.99'), '.')
+                                  , ')')
                              ELSE ''
-                        END
+                        END)
               END AS chose_group_two
           FROM
             webready.TranscriptAttributes_p ga
@@ -3894,12 +3894,12 @@
             FROM (
                 SELECT *
                 FROM ref
-                WHERE study_name LIKE '%' || '&&sense&&' || '%'
+                WHERE study_name LIKE CONCAT('%', '&&sense&&', '%')
               ) s
               , (
                 SELECT *
                 FROM ref
-                WHERE study_name LIKE '%' || '&&antisense&&' || '%'
+                WHERE study_name LIKE CONCAT('%', '&&antisense&&', '%')
               ) a
             WHERE s.sample = a.sample
               AND s.NA_FEATURE_ID = a.NA_FEATURE_ID
@@ -3908,12 +3908,12 @@
             FROM (
                 SELECT *
                 FROM comp
-                WHERE study_name LIKE '%' || '&&sense&&' || '%'
+                WHERE study_name LIKE CONCAT('%', '&&sense&&', '%')
               ) s
               , (
                 SELECT *
                 FROM comp
-                WHERE study_name LIKE '%' || '&&antisense&&' || '%'
+                WHERE study_name LIKE CONCAT('%', '&&antisense&&', '%')
               ) a
             WHERE s.sample = a.sample
               AND s.NA_FEATURE_ID = a.NA_FEATURE_ID
@@ -3935,7 +3935,7 @@
                   , MAX(FC_product) AS max_FC_product
                 FROM (
                     SELECT ref1.NA_FEATURE_ID
-                      , ref1.sample || '->' || comp1.sample AS sample_pair
+                      , CONCAT(ref1.sample , '->' , comp1.sample ) as sample_pair
                       , round(CASE WHEN comp1.sense_value / greatest($$antisense_floor$$, ref1.sense_value) > 1
                                      THEN comp1.sense_value / greatest($$antisense_floor$$, ref1.sense_value)
                                    ELSE ref1.sense_value / greatest($$antisense_floor$$, comp1.sense_value)
@@ -4027,10 +4027,10 @@
                           ELSE -1 * (two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END)
                      END), 1) AS fold_change_chosen
             , CASE WHEN one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END >= 1
-                     THEN round(one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END, 1)
-              || CASE WHEN two.chosen < &&shift&& THEN '*' ELSE '' END
-                   ELSE round(-1 * two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END, 1)
-                     || CASE WHEN one.chosen < &&shift&& THEN '*' ELSE '' END
+                     THEN CONCAT(round(one.chosen / CASE WHEN two.chosen < &&shift&& THEN &&shift&& ELSE two.chosen END, 1)
+              , CASE WHEN two.chosen < &&shift&& THEN '*' ELSE '' END)
+                   ELSE CONCAT(round(-1 * two.chosen / CASE WHEN one.chosen < &&shift&& THEN &&shift&& ELSE one.chosen END, 1)
+                     , CASE WHEN one.chosen < &&shift&& THEN '*' ELSE '' END)
               END
             AS fold_change_chosen_display
             , CASE WHEN &&isLogged&& = 1
@@ -4204,7 +4204,7 @@
             webready.TranscriptAttributes_p ga
             , (
                 SELECT ref_sense_result.na_feature_id
-                  , string_agg(ref_sense_pan.sample || '->' || comp_sense_pan.sample, ', '
+                  , string_agg(CONCAT(ref_sense_pan.sample, '->', comp_sense_pan.sample), ', '
                                ORDER BY ref_sense_result.na_feature_id) AS sample_pairs
                   , max(
                       round(CASE
