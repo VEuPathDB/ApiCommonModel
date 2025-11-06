@@ -326,10 +326,6 @@ sub addIedb {
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/iedb.gff.gz";
     my $summary = "Immune Epitope Database (IEDB) predictions";
 
-    my $queryParams = {
-                           'seqType' => "protein",
-                           'feature' => "domain:IEDB",
-                                           };
 
     $iedbTrack = ApiCommonModel::Model::JBrowseTrackConfig::IedbTrackConfig->new({
                                                                                                 project_name => $projectName,
@@ -339,7 +335,6 @@ sub addIedb {
                                                                                                 summary => $summary,
                                                                                                 key => "IEDB predictions",
                                                                                                 label => "IEDB predictions",
-                                                                                                query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $iedbTrack if($iedbTrack);
