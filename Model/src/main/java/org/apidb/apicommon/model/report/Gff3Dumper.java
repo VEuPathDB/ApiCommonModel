@@ -120,7 +120,7 @@ public class Gff3Dumper {
     DataSource dataSource = wdkModel.getAppDb().getDataSource();
     PreparedStatement psOrganism = null;
     try {
-      psOrganism = SqlUtils.getPreparedStatement(dataSource, sql);
+      psOrganism = SqlUtils.getPreparedStatement(dataSource, sql, SqlUtils.Autocommit.OFF);
       for (String organism : organisms) {
         dumpOrganism(psOrganism, organism.trim(), config);
       }

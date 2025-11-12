@@ -128,7 +128,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
       }
       DataSource dataSource = _wdkModel.getAppDb().getDataSource();
       try {
-        psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString());
+        psQuery = SqlUtils.getPreparedStatement(dataSource, sqlQuery.toString(), SqlUtils.Autocommit.OFF);
       }
       catch (SQLException e) {
         throw new WdkModelException("Unable to initialize reporter.", e);
@@ -267,7 +267,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
     try (RecordStream records = getRecords()) {
       // want to cache the table content
       DataSource dataSource = appDb.getDataSource();
-      psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString());
+      psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString(), SqlUtils.Autocommit.ON);
 
       for (RecordInstance record : records) {
 
@@ -481,7 +481,7 @@ public class Gff3Reporter extends PagedAnswerReporter {
     try (RecordStream records = getRecords()) {
       // want to cache the table content
       DataSource dataSource = appDb.getDataSource();
-      psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString());
+      psInsert = SqlUtils.getPreparedStatement(dataSource, sqlInsert.toString(), SqlUtils.Autocommit.ON);
 
       for (RecordInstance record : records) {
         Map<String, String> pkValues = record.getPrimaryKey().getValues();
