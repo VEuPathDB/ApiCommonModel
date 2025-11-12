@@ -9,68 +9,68 @@ sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
 
 sub new {
-    my ($class, $args) = @_;
-    my $self = $class->SUPER::new($args);
+	my ($class, $args) = @_;
+	my $self = $class->SUPER::new($args);
 
-    my $datasetConfig = $self->getDatasetConfigObj();
-    $datasetConfig->setCategory("Proteomics");
-    $datasetConfig->setSubcategory("Protein Expression");
+	my $datasetConfig = $self->getDatasetConfigObj();
+	$datasetConfig->setCategory("Proteomics");
+	$datasetConfig->setSubcategory("Protein Expression");
 
-    $self->setId($args->{key});
-    $self->setLabel($args->{label});
-    $self->setGlyph($args->{glyph});
+	$self->setId($args->{key});
+	$self->setLabel($args->{label});
+	$self->setGlyph($args->{glyph});
 
-    my $store;
+	my $store;
 
-    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-    }
-    else {
-        # TODO
-	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-    }
+	if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+		$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	}	else {
+		# TODO
+		$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	}
 
-    $self->setStore($store);
-    $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
+	$self->setStore($store);
+	$self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
 
-    my $detailsFunction = "{massSpecDetails}";
-    $self->setOnClickContent($detailsFunction);
-    $self->setViewDetailsContent($detailsFunction);
-    $self->setDisplayMode("compact");
-    $self->setBorderColor("black");
+	my $detailsFunction = "{massSpecDetails}";
+	$self->setOnClickContent($detailsFunction);
+	$self->setViewDetailsContent($detailsFunction);
+	$self->setDisplayMode("compact");
+	$self->setBorderColor("black");
 
-    return $self;
+	return $self;
 }
 
+
 sub getJBrowseStyle {
-    my $self = shift;
+	my $self = shift;
 
-    my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+	my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
-    $jbrowseStyle->{color} = "{massSpecColor}";
-    $jbrowseStyle->{label} = "Sample,sample,name";
-    return $jbrowseStyle;
+	# 'massSpecColor' function does NOT work as we are not running SQL
+	# $jbrowseStyle->{color} = "{massSpecColor}";
+	$jbrowseStyle->{label} = "Sample,sample,name";
+	return $jbrowseStyle;
 }
 
 
 sub getJBrowseObject{
-    my $self = shift;
+	my $self = shift;
 
-    my $jbrowseObject = $self->SUPER::getJBrowseObject();
-    $jbrowseObject->{subParts} = "Peptide"; 
+	my $jbrowseObject = $self->SUPER::getJBrowseObject();
+	$jbrowseObject->{subParts} = "Peptide"; 
 
-
-    return $jbrowseObject;
-  }
+	return $jbrowseObject;
+}
 
 # TODO:
 sub getJBrowse2Object{
-        my $self = shift;
+	my $self = shift;
 
-        my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
 
-        return $jbrowse2Object;
+	return $jbrowse2Object;
 }
 
 

@@ -298,25 +298,21 @@ sub addProteinExpressionMassSpec {
 
     my $relativePathToGffFile = "${nameForFileNames}/massSpec/gff/${datasetExtdbName}/ms_peptides_genome_align.gff.gz";
 
-    my $queryParams = {
-                            'edName' => "like '${datasetExtdbName}'",
-                            'feature' => "domain:MassSpecPeptide",
-                                           };
-    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({  
-                                                                                                project_name => $projectName,
-                                                                                                build_number => $buildNumber,
-                                                                                                relative_path_to_file => $relativePathToGffFile,
-                                                                                                application_type => $applicationType,
-                                                                                                key => "${datasetDisplayName}  MS/MS Peptides  $shortAttribution",
-                                                                                                label => "${dataset}",
-                                                                                                dataset_name => $dataset,
-                                                                                                attribution => $shortAttribution,
-                                                                                                study_display_name => $datasetDisplayName,
-                                                                                                summary => $summary,
-                                                                                                application_type => $applicationType,
-                                                                                                query_params => $queryParams,
-                                                                                                dataset_presenter_id => $datasetPresenterId,
-                                                                                              })->getConfigurationObject();
+    my $massSpec =
+			ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
+																																								 project_name => $projectName,
+																																								 build_number => $buildNumber,
+																																								 relative_path_to_file => $relativePathToGffFile,
+																																								 application_type => $applicationType,
+																																								 key => "${datasetDisplayName}  MS/MS Peptides  $shortAttribution",
+																																								 label => "${dataset}",
+																																								 dataset_name => $dataset,
+																																								 attribution => $shortAttribution,
+																																								 study_display_name => $datasetDisplayName,
+																																								 summary => $summary,
+																																								 application_type => $applicationType,
+																																								 dataset_presenter_id => $datasetPresenterId,
+																																								})->getConfigurationObject();
 
     push @{$result->{tracks}}, $massSpec;
   }
