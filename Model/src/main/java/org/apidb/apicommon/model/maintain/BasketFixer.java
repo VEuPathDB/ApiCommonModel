@@ -123,8 +123,7 @@ public class BasketFixer extends BaseCLI {
     PreparedStatement ps = null;
     try {
       logger.debug("executing sql to find invalid basket ids...\n" + sql);
-      ps = SqlUtils.getPreparedStatement(dataSource,
-                                                           sql);
+      ps = SqlUtils.getPreparedStatement(dataSource, sql, SqlUtils.Autocommit.OFF);
       ps.setFetchSize(5000);
       ps.setString(1, wdkModel.getProjectId());
       ps.setString(2, type);
@@ -216,9 +215,11 @@ public class BasketFixer extends BaseCLI {
     PreparedStatement psUpdate = null, psDelete = null;
     try {
       psUpdate = SqlUtils.getPreparedStatement(dataSource,
-                                               sqlUpdate.toString());
+                                               sqlUpdate.toString(),
+                                               SqlUtils.Autocommit.ON);
       psDelete = SqlUtils.getPreparedStatement(dataSource,
-                                               sqlDelete.toString());
+                                               sqlDelete.toString(),
+                                               SqlUtils.Autocommit.ON);
 
       int count = 0;  // <ADD-AG 050111>
 
