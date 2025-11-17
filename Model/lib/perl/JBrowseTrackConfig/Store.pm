@@ -55,7 +55,13 @@ sub makeUrlTemplate {
   my $urlTemplate;
 
   if($applicationType eq 'jbrowse') {
+
+    if ($relativePathToFile =~ /antismash/i) {
+    $urlTemplate = "/a/service/jbrowse/auxiliary?data=" . uri_escape_utf8($relativePathToFile);    
+    } 
+    else {
     $urlTemplate = $JBROWSE_STORE_ENDPOINT . uri_escape_utf8($relativePathToFile);
+    }
   }
   elsif($applicationType eq 'apollo') {
     # TODO:  replace "/a" with https://lc(${projectName}).org 
