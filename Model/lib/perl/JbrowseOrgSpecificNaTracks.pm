@@ -728,38 +728,31 @@ sub addUnifiedMassSpec {
 sub addChipChipTracks {
   my ($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType) = @_;
 
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
-
- my $sql = "select d.name, s.name, pan.name, pan.protocol_app_node_id
-from study.study s
-   , SRES.EXTERNALDATABASERELEASE r
-   , SRES.EXTERNALDATABASE d
-   , study.protocolappnode pan
-   , study.studylink sl
-where d.name like '${organismAbbrev}%_chipChipExper_%'
-and s.EXTERNAL_DATABASE_RELEASE_ID = r.EXTERNAL_DATABASE_RELEASE_ID
-and r.EXTERNAL_DATABASE_ID = d.EXTERNAL_DATABASE_ID
-and s.study_id = sl.study_id
-and sl.protocol_app_node_id = pan.PROTOCOL_APP_NODE_ID
-and s.investigation_id is null";
+	my $chipchipDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
+	foreach my $dataset (keys %$chipchipDatasets) {
+		next unless($dataset =~ /chipChip/);
+		my $displayName = $datasetProperties->{chipchip}->{$dataset}->{datasetDisplayName};
+		my $summary = $datasetProperties->{chipchip}->{$dataset}->{summary};
+		my $dsp = $datasetProperties->{chipchip}->{$dataset}->{presenterId};
 
 
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
+ 		print STDERR "$dataset --AND-- $displayName --AND-- $summary --AND-- $dsp IS THE ANSWER\n";
+	}
 
-  while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
 
-    if($panName =~ /_peaks \(ChIP-chip\)/) {
-        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
-        push @{$result->{tracks}}, $peakTrack;
-    }
-    if($panName =~ /_smoothed \(ChIP-chip\)/) {
-      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
-      push @{$result->{tracks}}, $track;
-    }
-  }
- 
-  $sh->finish();
+#  my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};	
+#  while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
+#	while (0){
+#    if($panName =~ /_peaks \(ChIP-chip\)/) {
+#        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
+#        push @{$result->{tracks}}, $peakTrack;
+#    }
+#    if($panName =~ /_smoothed \(ChIP-chip\)/) {
+#      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
+#      push @{$result->{tracks}}, $track;
+#    }
+#  }
+#  $sh->finish();
 }
 
 
