@@ -1,0 +1,92 @@
+:CREATE_AND_POPULATE
+
+select ':ORG_ABBREV' as org_abbrev, ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as varchar2(53)),
+       cast(nvl(string_value,'NA') as varchar2(100)), nvl(number_value,-1)
+       from (  select gene_source_id, source_id, taxon_id, organism,
+               'transcript_count' as ontology_term_name,
+               null as string_value, gene_transcript_count as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'transcript_exon_count' as ontology_term_name, null as string_value,
+               exon_count as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'gene_exon_count' as ontology_term_name, null as string_value,
+               gene_exon_count as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'is_pseudo' as ontology_term_name, decode(is_pseudo,1,'Yes',0,'No') as string_value,
+               null as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'is_deprecated' as ontology_term_name, decode(is_deprecated,1,'Yes',0,'No') as string_value,
+               null as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+     UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'transcript_type' as ontology_term_name, transcript_type as string_value,
+               null as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+      UNION
+        select ':ORG_ABBREV' as org_abbrev, gene_source_id, source_id, taxon_id, organism,
+               'organism' as ontology_term_name, organism as string_value,
+               null as number_value
+        from :SCHEMA.TranscriptAttributes_p
+	where org_abbrev = ':ORG_ABBREV'
+    UNION
+        SELECT ':ORG_ABBREV' AS ORG_ABBREV, gene_source_id, source_id, taxon_id, organism, ontology_term_name
+        , string_value, number_value
+        FROM (
+            select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+                'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
+                 null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
+            from :SCHEMA.TranscriptAttributes_p atr
+            , apidb.longreadtranscript ltr
+            , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
+            where ltr.gene_source_id = atr.gene_source_id
+            AND ltr.transcript_length >= 20
+            AND atr.org_abbrev = ':ORG_ABBREV'
+            GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
+        )
+        WHERE total_reads >= 5
+    UNION
+        select ':ORG_ABBREV' as org_abbrev, atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'intron_junction' as ontology_term_name, it.string_value string_value,
+            null as number_value
+        from
+        :SCHEMA.IntronSupportLevel_p it
+        ,:SCHEMA.TranscriptAttributes_p atr
+        where it.gene_source_id =  atr.gene_source_id
+          AND atr.org_abbrev = ':ORG_ABBREV'
+          AND it.org_abbrev = ':ORG_ABBREV'
+     UNION
+        select ':ORG_ABBREV' as org_abbrev, atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
+        'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
+        from
+        :SCHEMA.GeneIntronJunction_p gj
+        ,:SCHEMA.TranscriptAttributes_p atr
+        where gj.gene_source_id =  atr.gene_source_id
+          AND atr.org_abbrev = ':ORG_ABBREV'
+          AND gj.org_abbrev = ':ORG_ABBREV'
+:DECLARE_PARTITION;
+
