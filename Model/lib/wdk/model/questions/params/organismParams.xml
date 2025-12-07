@@ -37,19 +37,6 @@
       </enumParam>
 -->
 
-    <flatVocabParam name="no_ref_organism"
-                    queryRef="organismVQ.no_ref_withGenes"
-                    prompt="Organism"
-                    displayType="treeBox"
-                    multiPick="true"
-                    suppressNode="false"
-                    quote="true">
-      <help>
-        Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
-      </help>
-      <suggest selectMode="none"/>
-    </flatVocabParam>
-
         <flatVocabParam name="organism"
                      queryRef="organismVQ.withGenes"
                      prompt="Organism"
@@ -244,27 +231,6 @@
                     quote="true">
     </flatVocabParam>
 
-    <flatVocabParam name="gff_organism_name"
-                    queryRef="organismVQ.nameWithGenesGFF"
-                    prompt="Organism"
-                    multiPick="true"
-                    quote="false">
-    </flatVocabParam>
-
-    <flatVocabParam name="organism_with_epitopes"
-                    queryRef="organismVQ.withEpitopes"
-                    prompt="Organism"
-                    displayType="treeBox"
-                    multiPick="true"
-                    quote="true"
-                    includeProjects="CryptoDB,ToxoDB,PlasmoDB,GiardiaDB,TriTrypDB,VectorBase,MicrosporidiaDB,UniDB">
-      <suggest selectMode="none"/>
-      <help>
-        Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
-      </help>
-    </flatVocabParam>
-
-
     <!-- same query as withSequenceStrains but internal is term -->
     <flatVocabParam name="text_search_organism"
                     queryRef="organismVQ.forTextSearch"
@@ -283,27 +249,6 @@
         <value>highlightReferenceOrganisms</value>
       </propertyList>
     </flatVocabParam>
-
-
-        <flatVocabParam name="ngs_snps_organism"
-                     queryRef="organismVQ.withNgsSNPsTree"
-                     prompt="Organism"
-                     displayType="treeBox"
-                     maxSelectedCount="1"
-                     multiPick="true"
-                     quote="false"
-                     suppressNode="false">
-           <suggest default="%%primaryOrthoOrganism%%"/>
-          <help>
-             Select the organism(s) you wish to query against. Click the [+] to expand taxon groupings.
-          </help>
-          <propertyList name="organismProperties">
-              <value>pruneNodesWithSingleExtendingChild</value>
-              <value>showOnlyPreferredOrganisms</value>
-              <value>highlightReferenceOrganisms</value>
-          </propertyList>
-        </flatVocabParam>
-
 
         <flatVocabParam name="org_with_nonnuclear_genes" includeProjects="AmoebaDB,PlasmoDB,ToxoDB,EuPathDB,FungiDB,HostDB,PiroplasmaDB,VectorBase,UniDB"
 			queryRef="organismVQ.OrgsWithNonNuclearGenes"
@@ -635,76 +580,6 @@
 
 
     <!--===================================================================-->
-    <!-- with genomic seq
-
-         only include a species if one of the species' taxon_ids is
-         associated with a sequence whose sequence_ontology_id maps to
-         'contig', 'supercontig' or 'chromosome'.
-                                                                           -->
-    <!--===================================================================-->
-
-    <sqlQuery name="withGenomicSeq" >
-      <column name="internal"/>
-      <column name="term"/>
-      <column name="parentTerm"/>
-      <sql excludeProjects="ToxoDB,MicrosporidiaDB">
-        <![CDATA[
-          /* withGenomicSeq filter query (excluding Toxo and Micro) */
-          WITH FilterQuery as (
-            SELECT DISTINCT sa.organism
-            FROM dots.NaSequence ns, apidbtuning.GenomicSeqAttributes sa, sres.SequenceOntology so
-            WHERE ns.na_sequence_id = sa.na_sequence_id
-            AND so.sequence_ontology_id = ns.sequence_ontology_id
-            AND so.term_name IN ('contig', 'supercontig', 'chromosome',
-                                       'mitochondrial_chromosome','plastid_sequence')
-            AND (sa.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-          )
-          /* end filter query */
-          SELECT DISTINCT term, parentTerm, internal
-          FROM (
-            SELECT term, parentTerm, string_agg(trim(internal::varchar), ', ') AS internal
-            FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-            WHERE ot.organism = fq.organism
-            GROUP BY term, parentTerm
-          )
-          UNION
-          SELECT term, parentTerm, internal
-          FROM (
-            SELECT
-                'Leishmania braziliensis annotated' as term,
-                'Leishmania braziliensis' as parentTerm,
-                 string_agg(trim(ot.internal::varchar), ', ') AS internal
-            FROM ApidbTuning.OrganismTree ot
-            WHERE ot.organism = 'Leishmania braziliensis'
-              AND ot.term = 'Leishmania braziliensis'
-          ) t
-          WHERE ('@PROJECT_ID@' = 'TriTrypDB' OR 'UniDB' = '@PROJECT_ID@')
-          ORDER BY parentTerm,term
-        ]]>
-      </sql>
-
-      <sql includeProjects="ToxoDB,MicrosporidiaDB">
-        <![CDATA[
-          /* withGenomicSeq filter query (for Toxo and Micro) */
-          WITH FilterQuery AS (
-            SELECT DISTINCT sa.organism
-            FROM dots.NaSequence ns, apidbtuning.GenomicSeqAttributes sa
-            WHERE ns.na_sequence_id = sa.na_sequence_id
-            AND (sa.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-            )
-          /* end filter query */
-          SELECT DISTINCT term, parentTerm, string_agg(trim(internal::varchar), ', ') AS internal
-          FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-          WHERE ot.organism = fq.organism
-          GROUP BY term, parentTerm
-          ORDER BY parentTerm,term
-        ]]>
-      </sql>
-
-    </sqlQuery>
-
-
-    <!--===================================================================-->
     <!-- with genes
 
          Each row returned represents a species.  Species are only included if
@@ -714,32 +589,6 @@
          them.
                                                                            -->
     <!--===================================================================-->
-    <sqlQuery name="no_ref_withGenes" isCacheable="true" >
-      <column name="internal"/>
-      <column name="term"/>
-      <column name="parentTerm"/>
-      <sql>
-        <![CDATA[
-          /* WithGenes filter query*/
-          WITH FilterQuery as (
-            SELECT distinct tn.name as organism, o.abbrev
-            FROM sres.taxonname tn, apidb.organism o
-            WHERE o.is_annotated_genome = 1
-              AND (o.project_name = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID@')
-              AND o.taxon_id = tn.taxon_id
-              AND tn.name_class = 'scientific name')
-          /* end filter query */
-          SELECT DISTINCT term, parentTerm, string_agg(fq.abbrev, ', ') AS internal
-          FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-          WHERE ot.organism = fq.organism
-          GROUP BY term, parentTerm
-          ORDER BY parentTerm,term
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
-
     <sqlQuery name="withGenes" isCacheable="true" >
       <column name="internal"/>
       <column name="term"/>
@@ -849,39 +698,6 @@
       </sql>
     </sqlQuery>
 
-
-
-    <!--===================================================================-->
-    <!-- with genes Plasmo, TriTryp and Crypto,  used in genes by protein PDB similarity,
-        copy from withGenes -->
-    <!--===================================================================-->
-
-
-    <sqlQuery name="withPdbSimilarity" excludeProjects="EuPathDB,TrichDB" isCacheable="true">
-      <column name="internal"/>
-      <column name="term"/>
-      <column name="parentTerm"/>
-
-      <sql>
-        <![CDATA[
-         /* withPdbSimilarity filter query */
-          WITH FilterQuery AS (
-            SELECT DISTINCT ta.organism
-            FROM apidbtuning.TranscriptAttributes ta, webready.PdbSimilarity_p s, Apidb.organism o
-            WHERE s.source_id = ta.source_id
-              AND (ta.project_id='@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-              AND ta.taxon_id = o.taxon_id
-          )
-          /* end filter query */
-          SELECT DISTINCT term, parentTerm
-              , string_agg(trim(internal::varchar), ', ') AS internal
-          FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-          WHERE ot.organism = fq.organism
-          GROUP BY term, parentTerm
-          ORDER BY parentTerm,term
-        ]]>
-      </sql>
-    </sqlQuery>
 
 
     <!--===================================================================-->
@@ -1169,53 +985,6 @@
 
 
     <!--===================================================================-->
-    <!-- used in gene query for dumping    -->
-    <!--===================================================================-->
-
-
-    <sqlQuery name="nameWithGenesGFF" >
-      <column name="internal"/>
-      <column name="term"/>
-      <sql excludeProjects="ToxoDB,CryptoDB,TriTrypDB">
-        <![CDATA[
-          SELECT geneOrgs.organism as term, geneOrgs.organism as internal
-          FROM (
-              SELECT DISTINCT organism FROM apidbtuning.GeneAttributes
-            ) geneOrgs LEFT JOIN (
-              SELECT 'Cryptosporidium parvum' AS name, 1 AS rank
-               UNION
-              SELECT 'Cryptosporidium hominis' as name, 2 as rank
-               UNION
-              SELECT 'Cryptosporidium muris' as name, 2 as rank
-               UNION
-              SELECT 'Plasmodium falciparum' as name, 4 as rank
-               UNION
-              SELECT 'Plasmodium vivax' as name, 4 as rank
-               UNION
-              SELECT 'Plasmodium yoelii' as name, 5 as rank
-               UNION
-              SELECT 'Toxoplasma gondii' as name, 6 as rank
-               UNION
-              SELECT 'Neospora caninum' as name, 7 as rank
-            ) partial_ordering ON geneOrgs.organism = partial_ordering.name
-          ORDER BY coalesce(partial_ordering.rank, 9999), geneOrgs.organism
-        ]]>
-      </sql>
-      <sql includeProjects="ToxoDB,CryptoDB,TriTrypDB">
-        <![CDATA[
-           SELECT distinct ga.organism as term,ns.taxon_id as internal
-           FROM dots.NaSequence ns, dots.GeneFeature gf,apidbtuning.GeneAttributes ga
-           WHERE gf.na_sequence_id = ns.na_sequence_id
-             AND ga.source_id = gf.source_id
-             --AND (ga.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-           ORDER BY organism asc
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
-
-    <!--===================================================================-->
     <!-- with ESTs - doesnt look like it is use! -->
     <!--===================================================================-->
     <!--
@@ -1286,34 +1055,6 @@
 
 
     <!--===================================================================-->
-    <!-- all (organisms) with an EC number -->
-    <!-- used to provide quick link to get ALL genes with an EC number -->
-    <!--===================================================================-->
-
-
-    <sqlQuery name="allWithEC"  isCacheable="true">
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        <![CDATA[
-          WITH FilterQuery AS (
-            SELECT DISTINCT ta.organism
-            FROM apidbtuning.TranscriptAttributes ta,apidb.organism o
-            WHERE (ta.ec_numbers IS NOT NULL OR ta.ec_numbers_derived IS NOT NULL)
-              AND (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-              AND ta.taxon_id = o.taxon_id
-          )
-          SELECT 'all' as term,
-              string_agg(internal::varchar, ', ') AS internal
-          FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-          WHERE ot.organism = fq.organism
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
-
-    <!--===================================================================-->
     <!-- with tfBindingSite -->
     <!--===================================================================-->
 
@@ -1374,41 +1115,6 @@
           </sql>
         </sqlQuery>
     -->
-
-    <!--====================================================================-->
-    <!-- withPlamsoTrichGiardiaGenes used in genes by secondary structure   ,
-               now includes crypto  and tritryp
-
-    -->
-    <!--====================================================================-->
-
-
-    <sqlQuery name="withSecondaryStructure" includeProjects="CryptoDB,PlasmoDB,GiardiaDB,TrichDB,TriTrypDB,ToxoDB,UniDB" isCacheable="true">
-
-      <testParamValues excludeProjects="GiardiaDB,TrichDB,PlasmoDB" minRows="0"/>
-      <column name="internal"/>
-      <column name="term"/>
-      <column name="parentTerm"/>
-      <sql>
-        <![CDATA[
-          /* withSecondaryStructure filter query */
-          WITH FilterQuery AS (
-            SELECT DISTINCT ta.organism
-            FROM dots.SecondaryStructure ss, apidbtuning.TranscriptAttributes ta
-            WHERE ta.aa_sequence_id = ss.aa_sequence_id
-              AND (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-          )
-          -- end filter query
-          SELECT DISTINCT term, parentTerm
-            , string_agg(internal, ', ') AS internal
-          FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-          WHERE ot.organism = fq.organism
-          GROUP BY term, parentTerm
-          ORDER BY parentTerm,term
-        ]]>
-      </sql>
-    </sqlQuery>
-
 
     <sqlQuery name="WithAlphaFold"  isCacheable="true">
       <column name="internal"/>
@@ -1472,25 +1178,6 @@
       </sql>
     </sqlQuery>
 
-    <!--===================================================================-->
-    <!-- strain flatvocab query -->
-    <!--===================================================================-->
-
-    <sqlQuery name="withStrains" includeProjects="ToxoDB,UniDB">
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        <![CDATA[
-          SELECT distinct organism AS term, ncbi_tax_id AS internal
-          FROM apidbtuning.GeneAttributes
-          WHERE (project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-          ORDER BY organism asc
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
-
     <sqlQuery name="OrgsWithNonNuclearGenes" includeProjects="AmoebaDB,PlasmoDB,ToxoDB,FungiDB,HostDB,PiroplasmaDB,VectorBase,UniDB">
       <column name="internal"/>
       <column name="term"/>
@@ -1537,50 +1224,6 @@
             AND tn.name_class = 'scientific name'
 	    and o.taxon_id = tn.taxon_id
         ]]>
-      </sql>
-    </sqlQuery>
-
-
-
-    <sqlQuery name="fromDataset" >
-      <paramRef ref="sharedParams.metadata_datasets"/>
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        <![CDATA[
-          SELECT DISTINCT organism AS term, organism AS internal
-          FROM apidbTuning.Ontology
-          WHERE dataset_name = '$$metadata_datasets$$'
-	    ]]>
-      </sql>
-    </sqlQuery>
-
-
-
-    <!-- Appears Unused -->
-     <sqlQuery name="withFileAttrs" isCacheable="true" >
-      <column name="term"/>
-      <column name="internal"/>
-      <sql>
-     select distinct term, internal
-     from (
-         WITH FilterQuery as (
-              select distinct tn.name as organism
-              from sres.taxonName tn, apidb.organism o
-              where o.is_annotated_genome = 1
-                and (o.project_name = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-                and o.taxon_id = tn.taxon_id
-                and tn.name_class = 'scientific name')
-         /* end filter query */
-         SELECT DISTINCT term, parentTerm, apidb.tab_to_string(set
-              (cast(collect(trim(to_char(internal)))as apidb.varchartab)), ', ')
-              AS internal
-         FROM ApidbTuning.OrganismTree ot, FilterQuery fq
-         WHERE ot.organism = fq.organism
-         GROUP BY term, parentTerm
-         ORDER BY parentTerm,term
-       ) taxa, apidb.fileattributes fa
-     where fa.organism  = taxa.term
       </sql>
     </sqlQuery>
 
