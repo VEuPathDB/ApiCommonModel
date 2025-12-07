@@ -265,18 +265,6 @@
     </flatVocabParam>
 
 
-    <!-- cannot reuse "organism" param above because apidb needs to use the internal value in the local ortholog question -->
-    <flatVocabParam name="localorganism"
-                    queryRef="organismVQ.LocalOrganisms"
-                    prompt="Organism"
-                    multiPick="true"
-                    quote="true">
-      <suggest selectMode="none" />
-      <help>
-        Select organism(s) you wish to query against. Click the [+] to expand taxon groupings.
-      </help>
-    </flatVocabParam>
-
     <!-- same query as withSequenceStrains but internal is term -->
     <flatVocabParam name="text_search_organism"
                     queryRef="organismVQ.forTextSearch"
@@ -458,105 +446,6 @@
 
   <querySet name="organismVQ" queryType="vocab" isCacheable="true">
 
-    <!--===================================================================-->
-    <!-- localorganism to apidb  -->
-    <!--===================================================================-->
-
-    <sqlQuery name="LocalOrganisms">
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        SELECT DISTINCT gattr.organism AS internal,
-          CASE when gattr.organism  = 'Trypanosoma cruzi'
-          THEN 'Trypanosoma cruzi (unassigned)'
-          ELSE gattr.organism end AS term, 2 AS idx
-        FROM   apidbtuning.TranscriptAttributes gattr
-        WHERE  gattr.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-        ORDER BY gattr.organism
-      </sql>
-    </sqlQuery>
-
-
-    <!--===================================================================-->
-    <!-- all -->
-    <!--===================================================================-->
-
-    <sqlQuery name="all" >
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        <![CDATA[
-          SELECT organisms.name AS term,
-                 (WITH RECURSIVE cbp_name AS
-                   (SELECT t1.taxon_id FROM sres.taxon t1 WHERE taxon_id = organisms.internal_taxon
-                    UNION ALL
-                    SELECT t2.taxon_id FROM sres.taxon t2
-                    JOIN cbp_name on cbp_name.taxon_id = t2.parent_id) t3
-                  SELECT taxon_id FROM cbp_name) AS internal
-          FROM (SELECT distinct tn.name, ts.species_taxon_id AS internal_taxon
-                FROM sres.TaxonName tn, webready.TaxonSpecies_p ts
-                WHERE tn.name_class='scientific name'
-                  AND tn.taxon_id = ts.species_taxon_id
-                  AND ts.taxon_id IN
-                             (  SELECT ga.taxon_id
-                                FROM apidbtuning.GeneAttributes ga
-                               -- WHERE (ga.project_id = '@PROJECT_ID@'  OR 'UniDB' = '@PROJECT_ID@')
-                              UNION
-                                SELECT ns.taxon_id
-                                FROM dots.NaSequence ns, sres.SequenceOntology so,apidbtuning.GenomicSeqAttributes ga
-                                WHERE so.sequence_ontology_id = ns.sequence_ontology_id
-                                AND so.term_name IN ('contig', 'supercontig', 'chromosome','mitochondrial_chromosome','plastid_sequence')
-                                AND ga.source_id = ns.source_id
-                                -- AND (ga.project_id = '@PROJECT_ID@'  OR 'UniDB' = '@PROJECT_ID@')
-                                  )) organisms,
-               (SELECT 'Cryptosporidium parvum' AS name, 1 AS rank FROM dual
-                 UNION
-                SELECT 'Cryptosporidium hominis' AS name, 2 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium falciparum' AS name, 3 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium vivax' AS name, 4 AS rank FROM dual
-                 UNION
-                SELECT 'Plasmodium yoelii' AS name, 5 AS rank FROM dual
-                ) partial_ordering
-          WHERE organisms.name = partial_ordering.name(+)
-          ORDER BY partial_ordering.rank, organisms.name
-        ]]>
-      </sql>
-    </sqlQuery>
-
-    <!--===================================================================-->
-    <!-- for tree test -->
-    <!--===================================================================-->
-
-    <sqlQuery name="toxoForTreeTest" includeProjects="ToxoDB,UniDB">
-      <column name="internal"/>
-      <column name="term"/>
-      <column name="parentTerm"/>
-      <sql>
-        <![CDATA[
-          SELECT n.name as term,n.taxon_id as internal, tn.name as parentTerm
-          FROM sres.TAXONNAME n,sres.taxon t,sres.taxonname tn
-          WHERE t.taxon_id in (
-            WITH RECURSIVE cte AS (
-                SELECT TAXON_ID, parent_id as parent_id
-                FROM sres.taxon
-                WHERE taxon_id IN (14104,14204)
-              UNION ALL
-                SELECT sub.taxon_id, sub.parent_id
-                FROM cte, sres.taxon sub
-                WHERE cte.taxon_id = sub.parent_id
-            )
-            SELECT taxon_id
-            FROM cte c
-          )
-            AND t.taxon_id = n.taxon_id
-            AND n.name_class='scientific name'
-            AND tn.taxon_id = t.parent_id
-            AND tn.name_class = 'scientific name'
-        ]]>
-      </sql>
-    </sqlQuery>
 
 
     <!--===================================================================-->
@@ -632,78 +521,6 @@
       </sql>
     </sqlQuery>
 
-
-    <!--===================================================================-->
-    <!-- with chromosomes and ORFs, added for orfs by location -->
-    <!--===================================================================-->
-    <sqlQuery name="withChromosomesORFs" includeProjects="CryptoDB,ToxoDB,PlasmoDB,TriTrypDB,MicrosporidiaDB,PiroplasmaDB,GiardiaDB,FungiDB,UniDB">
-      <column name="internal"/>
-      <column name="term"/>
-
-      <sql>
-        SELECT distinct  sa.organism as term, sa.organism as internal
-        FROM ApidbTuning.orfattributes o, apidbtuning.GenomicSeqAttributes sa, dots.nasequence s, webready.TaxonSpecies_p ts, sres.taxonname tn, apidb.organism org
-        WHERE sa.na_sequence_id = o.na_sequence_id
-          AND sa.chromosome is not null
-          AND (sa.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
-          AND sa.taxon_id = org.taxon_id
-          AND sa.na_sequence_id = s.na_sequence_id
-          AND s.taxon_id = ts.taxon_id
-          AND ts.species_taxon_id = tn.taxon_id
-          AND tn.name_class = 'scientific name'
-        ORDER BY term
-      </sql>
-    </sqlQuery>
-
-
-
-    <!--===================================================================-->
-    <!-- with chromosomes and ORFs, used in orfs by location for PORTAL VALIDATION 
-         internal values NOT USED, only term values     
-         (1) consistent with term values provided by orgVQ used in location.js...
-                which we try to be the param used above by the component sites.
-         (2) consistent with term values harcoded in ApiDB_...js 
-                (used to access all sites when sequenceID is used)             -->
-    <!--===================================================================-->
-
-
-    <sqlQuery name="withChromosomesORFsValid" includeProjects="EuPathDB">
-      <column name="internal"/>
-      <column name="term"/>
-      <sql>
-        SELECT * FROM (
-          SELECT 'Giardia lamblia' as term,
-            '''' ||'Giardia lamblia'|| '''' as internal
-          UNION
-          SELECT 'Trichomonas vaginalis' as term,
-            '''' ||'Trichomonas vaginalis'|| '''' as internal
-          UNION
-          SELECT 'Cryptosporidium parvum Iowa II' as term,
-            '''' ||'Cryptosporidium parvum'|| '''' as internal
-          UNION
-          SELECT 'Toxoplasma gondii ME49' as term,
-            '''' ||'Toxoplasma gondii ME49'|| '''' as internal
-          UNION
-          SELECT 'Toxoplasma gondii GT1' as term,
-            '''' ||'Toxoplasma gondii GT1'|| '''' as internal
-          UNION
-          SELECT 'Toxoplasma gondii VEG' as term,
-            '''' ||'Toxoplasma gondii VEG'|| '''' as internal
-          UNION
-          SELECT 'Neospora caninum' as term,
-            '''' ||'Neospora caninum'|| '''' as internal
-          UNION
-          SELECT 'Plasmodium falciparum' as term,
-            '''' ||'Plasmodium falciparum 3D7'|| '''' as internal
-          UNION
-          SELECT 'Plasmodium knowlesi' as term,
-            '108360, 108361, 108362'   as internal
-          UNION
-          SELECT 'Plasmodium vivax' as term,
-            '108360, 108361, 108362'   as internal
-        ) t
-      </sql>
-    </sqlQuery>
 
     <!--===================================================================-->
     <!-- with chromosomes and SNPs -->
