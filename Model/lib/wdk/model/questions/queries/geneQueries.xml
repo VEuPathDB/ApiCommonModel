@@ -531,7 +531,7 @@
                 INNER JOIN APIDB.PHENOTYPERESULT pr ON pm.phenotype_model_id = pr.phenotype_model_id
                 LEFT JOIN sres.ontologyterm oen ON pr.PHENOTYPE_ENTITY_TERM_ID = oen.ontology_term_id
                 LEFT JOIN sres.ontologyterm oqn ON pr.phenotype_quality_term_id = oqn.ontology_term_id
-              WHERE ta.organism = '$$organismwithPhenotype$$'
+              WHERE ta.org_abbrev = '$$organismwithPhenotype$$'
             ) t
             WHERE e_name = '$$phenotype$$'
               AND q_name = '$$phenotypeQualifier$$'
@@ -976,8 +976,10 @@
                     ApidbTuning.OrganismTree ot
                     , (
                        SELECT DISTINCT ta.organism
-                       FROM webready.TranscriptAttributes_p ta, apidb.organism o
-                       WHERE (ta.ec_numbers IS NOT NULL OR ta.ec_numbers_derived IS NOT NULL)
+                       FROM apidb.organism o, 
+                            webready.TranscriptAttributes_p ta
+                       LEFT JOIN webready.TranscriptOrthologGroup tog on tog.source_id = ta.source_id
+                       WHERE (ta.ec_numbers IS NOT NULL OR tog.ec_numbers_derived IS NOT NULL)
                          AND (ta.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
                          AND ta.taxon_id = o.taxon_id
                     ) fq
@@ -2174,7 +2176,7 @@
             , gij.total_unique
             , gij.total_isrpm
             , gij.annotated_intron
-            FROM apidbtuning.geneintronjunction gij, webready.TranscriptAttributes_p ga
+            FROM webready.geneintronjunction_p gij, webready.TranscriptAttributes_p ga
             WHERE ga.na_sequence_id = gij.na_sequence_id
               AND (
                 gij.segment_end BETWEEN ga.start_min - $$max_flanking_bp$$ AND ga.end_max + $$max_flanking_bp$$
@@ -2184,6 +2186,7 @@
               AND gij.total_unique >= $$min_total_unique$$
               AND gij.taxon_id = ga.taxon_id
               AND ga.org_abbrev IN ($$organism$$)
+              AND gij.org_abbrev IN ($$organism$$)
           ) , gmi AS (
             SELECT gene_source_id, source_id, max(total_unique) AS max_unique, max(total_isrpm) AS max_isrpm
             FROM core
@@ -2208,12 +2211,13 @@
         <![CDATA[
           SELECT ga.gene_source_id, ga.source_id, ga.project_id, 'Y' as matched_result, max(gij.total_unique) as max_total_unique,
               max(gij.total_isrpm) as max_total_isrpm, max(gij.percent_max) as max_percent_max, count(*) as num_novel
-          FROM apidbtuning.geneintronjunction gij, webready.TranscriptAttributes_p ga
+          FROM apidbtuning.geneintronjunction_p gij, webready.TranscriptAttributes_p ga
           where ga.gene_source_id = gij.gene_source_id
             AND gij.total_isrpm >= $$min_total_unique$$
             AND gij.annotated_intron = 'No'
             AND gij.percent_max between $$percent_max.min$$ and $$percent_max.max$$
             AND ga.org_abbrev in ($$organism$$)
+            AND gij.org_abbrev in ($$organism$$)
             AND gij.taxon_id = ga.taxon_id
           GROUP BY ga.gene_source_id, ga.source_id, ga.project_id
         ]]>
@@ -2546,6 +2550,7 @@
     <!-- Mass Spec -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
+    <!--this query is using partitioned MSPeptideSummary_p without a partition key.  to speed this, add an org param -->
     <sqlQuery name="GenesByMassSpec" >
 
       <paramRef ref="geneParams.ms_assay"/>
@@ -2568,7 +2573,7 @@
                      as (select source_id,gene_source_id, project_id, aa_sequence_id,
                                 count(*) as peptide_count, count(distinct peptide_sequence) as unique_peptide_count,
                                 sum(Spectrum_Count) as spectrum_count
-                         from apidbTuning.MsPeptideSummary
+                         from apidbTuning.MsPeptideSummary_p  
                          where sample in ( $$ms_assay$$ )
                          group by source_id,gene_source_id, project_id, aa_sequence_id
                          having sum(spectrum_count) >= $$min_spectrum_count$$
@@ -2579,7 +2584,7 @@
                        count(distinct mps.peptide_sequence) as unique_sequence_count,
                        sum(mps.spectrum_count) as sum_spectrum_count,
                        count(distinct mps.sample) as sample_count
-                from genesample gs, apidbTuning.MsPeptideSummary mps
+                from genesample gs, apidbTuning.MsPeptideSummary_p mps
                 where mps.aa_sequence_id = gs.aa_sequence_id
                 and mps.source_id = gs.source_id
                 group by gs.source_id,gs.gene_source_id, gs.project_id
@@ -2589,7 +2594,7 @@
       </sql>
     </sqlQuery>
 
-
+   <!--this query uses partitioned tables w/o partition key.  to speed up, add org param -->
     <sqlQuery name="GenesByPTM" includeProjects="PlasmoDB,ToxoDB,TriTrypDB,FungiDB,HostDB,UniDB,PiroplasmaDB">
       <paramRef ref="geneParams.ptm_type"/>
       <paramRef ref="geneParams.ptm_assay"/>
@@ -2612,8 +2617,8 @@
               , ms.modification_type
               , ms.residue
               , 1 + ms.residue_location AS residue_location
-              FROM apidbtuning.msmodifiedpeptidesummary ms
-              , webready.TranscriptAttributes_p ta
+              FROM apidbtuning.msmodifiedpeptidesummary_p ms
+              , webready.TranscriptAttributes ta
               WHERE ta.source_id = ms.source_id
               AND ms.sample_display_name in ($$ptm_assay$$)
               AND (ms.modification_type in ($$ptm_type$$) OR $$ptm_type$$ = 'any')
@@ -2628,7 +2633,7 @@
                     , ms.modification_type
                     , ms.residue
                     , ms.residue_location
-                  FROM apidbtuning.msmodifiedpeptidesummary ms
+                  FROM apidbtuning.msmodifiedpeptidesummary_p ms
                   WHERE (ms.modification_type in ($$ptm_type$$) OR $$ptm_type$$ = 'any')
                   GROUP BY source_id, modification_type, residue, residue_location
               ) t
@@ -3184,6 +3189,7 @@
     <!-- Y2H Protein protein interaction -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
+    <!-- this query might benefit from an organism param and partitioning -->
     <sqlQuery name="GenesByProteinProteinInteraction" includeProjects="PlasmoDB,FungiDB,UniDB">
       <paramRef ref="geneParams.single_gene_id" default="PF3D7_1205500" includeProjects="PlasmoDB,UniDB"/>
       <paramRef ref="geneParams.single_gene_id" default="YGR120C" includeProjects="FungiDB"/>
@@ -3215,8 +3221,8 @@
               WHERE igi.bait_gene_feature_id = pf.gene_na_feature_id
             ) AS prey_number_of_baits, bait_number_of_preys, 'bait' AS bait_or_prey
             FROM webready.GeneId_p ga
-               , webready.TranscriptAttributes_p bf
-               , webready.TranscriptAttributes_p pf
+               , apidbtuning.TranscriptAttributes bf
+               , apidbtuning.TranscriptAttributes pf
                , apidb.GeneInteraction gi
             WHERE lower($$single_gene_id$$) = lower(ga.id) AND ga.gene = bf.gene_source_id AND
               gi.number_of_searches >= $$min_searches$$ AND gi.times_observed >= $$min_observed$$ AND
@@ -3229,8 +3235,8 @@
               WHERE igi.prey_gene_feature_id = bf.gene_na_feature_id
             ) AS bait_number_of_preys, 'prey' AS bait_or_prey
             FROM webready.GeneId_p ga
-               , webready.TranscriptAttributes_p bf
-               , webready.TranscriptAttributes_p pf
+               , apidbtuning.TranscriptAttributes bf
+               , apidbtuning.TranscriptAttributes pf
                , apidb.GeneInteraction gi
             WHERE lower($$single_gene_id$$) = lower(ga.id) AND ga.gene = pf.gene_source_id AND
               gi.number_of_searches >= $$min_searches$$ AND gi.times_observed >= $$min_observed$$ AND
@@ -5190,9 +5196,10 @@
         <![CDATA[
           SELECT ta.source_id, ta.gene_source_id, ta.project_id, 'Y' as matched_result,
             trim(to_char(LEAST(s.length - l.end_max,l.start_min),'999,999')) as dist_telomere
-          FROM webready.TranscriptAttributes_p ta, webready.FeatureLocation_p l, dots.NaSequence s
+          FROM webready.TranscriptAttributes_p ta, webready.FeatureLocation_p l, webready.genomicseqattributes_p s
           WHERE ta.org_abbrev = $$organismSinglePick$$
            AND l.org_abbrev = $$organismSinglePick$$
+           AND s.org_abbrev = $$organismSinglePick$$
            AND ta.na_sequence_id = s.na_sequence_id
            AND l.na_feature_id = ta.na_feature_id
            AND l.sequence_source_id = s.source_id
@@ -5221,9 +5228,10 @@
       <sql>
         <![CDATA[
           SELECT distinct gf.source_id, gf.gene_source_id, gf.project_id, 'Y' as matched_result
-          FROM webready.TranscriptAttributes_p gf, dots.NaSequence ens
+          FROM webready.TranscriptAttributes_p gf, webready.genomicseqattributes_p ens
           WHERE ens.source_id IN ($$nonnuclear_sequence$$)
             AND gf.org_abbrev = $$org_with_nonnuclear_genes$$
+            AND ens.org_abbrev = $$org_with_nonnuclear_genes$$
             AND gf.na_sequence_id = ens.na_sequence_id
             AND gene_end_max >= $$start_point$$
             AND (gene_start_min <= $$end_point$$ OR $$end_point$$ = 0)

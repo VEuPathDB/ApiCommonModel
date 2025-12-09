@@ -713,119 +713,6 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
   </tuningTable>
 
 
-<!-- TODO: add back after LongRead table added to schema.  also fix oracle syntax
-
-  <tuningTable name="GeneModelCharOrgMD" prefixEnabled="true">
-    <comment>
-      Stores tuned data for the genemodelchar filter search. Portal-specific version including taxon names.
-    </comment>
-    <externalDependency name="apidb.LongReadTranscript"/>
-    <sql>
-      <![CDATA[
-create table &prefixGeneModelCharOrgMD&1
- (
-  ontology_term_name,
-  gene_source_id,
-  source_id,
-  taxon_id,
-  taxon_name,
-  string_value,
-  number_value,
-  CONSTRAINT &prefixGeneModelCharOrgMD_pk&1 PRIMARY KEY
-        (ontology_term_name, gene_source_id, source_id, taxon_id, taxon_name, string_value, number_value)
- )
-organization index
-nologging
-as
-select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as varchar2(53)),
-       cast(nvl(string_value,'NA') as varchar2(100)), nvl(number_value,-1)
-       from (  select gene_source_id, source_id, taxon_id, organism,
-               'transcript_count' as ontology_term_name,
-               null as string_value, gene_transcript_count as number_value
-        from webready.TranscriptAttributes_p
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'transcript_exon_count' as ontology_term_name, null as string_value,
-               exon_count as number_value
-        from webready.TranscriptAttributes_p
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'gene_exon_count' as ontology_term_name, null as string_value,
-               gene_exon_count as number_value
-        from webready.TranscriptAttributes_p
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'is_pseudo' as ontology_term_name, decode(is_pseudo,1,'Yes',0,'No') as string_value,
-               null as number_value
-        from webready.TranscriptAttributes_p
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'is_deprecated' as ontology_term_name, decode(is_deprecated,1,'Yes',0,'No') as string_value,
-               null as number_value
-        from webready.TranscriptAttributes_p
-
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'gene_type' as ontology_term_name, gene_type as string_value, null as number_value
-        from webready.TranscriptAttributes_p
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'gene_type_ebi' as ontology_term_name, gene_ebi_biotype as string_value, null as number_value
-        from webready.TranscriptAttributes_p
-     UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'transcript_type' as ontology_term_name, transcript_type as string_value,
-               null as number_value
-        from webready.TranscriptAttributes_p
-      UNION
-        select gene_source_id, source_id, taxon_id, organism,
-               'organism' as ontology_term_name, organism as string_value,
-               null as number_value
-        from webready.TranscriptAttributes_p
-
-    UNION
-        SELECT gene_source_id, source_id, taxon_id, organism, ontology_term_name
-        , string_value, number_value
-        FROM (
-            select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
-                'long_transcript_novelty' as ontology_term_name, ltr.transcript_novelty string_value,
-                 null as number_value, sum(counts.reads) as total_reads, ltr.transcript_length
-            from webready.TranscriptAttributes_p atr
-            , apidb.longreadtranscript ltr
-            , JSON_TABLE(count_data, '$.*' COLUMNS (reads INTEGER PATH '$')) counts
-            where ltr.gene_source_id = atr.gene_source_id
-            AND ltr.transcript_length >= 20
-            GROUP BY atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism, ltr.transcript_novelty, ltr.transcript_length
-        )
-        WHERE total_reads >= 5
-
-    UNION
-        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
-        'intron_junction' as ontology_term_name, it.string_value string_value,
-            null as number_value
-        from
-        webready.IntronSupportLevel_p it
-        ,webready.TranscriptAttributes_p atr
-        where it.gene_source_id =  atr.gene_source_id
-
-
-     UNION
-        select atr.gene_source_id, atr.source_id, atr.taxon_id, atr.organism,
-        'unique_reads' as ontology_term_name, null as string_value , gj.total_unique number_value
-        from
-        webready.GeneIntronJunction_p gj
-        ,webready.TranscriptAttributes_p atr
-        where gj.gene_source_id =  atr.gene_source_id
-     )
-      ]]>
-    </sql>
-  </tuningTable>
-
--->
-
-
-
-
 <!-- COMMENT FOR NOW, as no InferredParam table; FIX later
   <tuningTable name="ChipSeqTranscript">
     <comment> Used by the GenesByChipSeq query
@@ -1170,7 +1057,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
-  <tuningTable name="MSPeptideSummary">
+  <tuningTable name="MSPeptideSummary_p">
     <comment> Each row stores mass-spec. based expression evidence for one sample of
       one experiment for one gene. Used for mass spec queries in the model,
       GBrowse, and PBrowse, and also in the creation of the MSTranscriptSummary
@@ -1189,7 +1076,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <sql>
       <![CDATA[
 
-        CREATE TABLE MSPeptideSummary&1 (
+        CREATE TABLE MSPeptideSummary_p&1 (
           peptide_sequence text,
           source_id varchar(80),
           gene_source_id varchar(80),
@@ -1218,10 +1105,10 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           partition_name TEXT;
         BEGIN
           FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
-            partition_name := lower('MSPeptideSummary&1_' || orgrecord.sanitized_org_abbrev);
-            EXECUTE format('CREATE TABLE %I PARTITION OF MSPeptideSummary&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+            partition_name := lower('Mspeptidesummary_p&1_' || orgrecord.sanitized_org_abbrev);
+            EXECUTE format('CREATE TABLE %I PARTITION OF MSPeptideSummary_p&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
-            INSERT INTO MSPeptideSummary&1
+            INSERT INTO MSPeptideSummary_p&1
             select pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER, orgrecord.org_abbrev
             from (
                     select msp.peptide_sequence,
@@ -1257,14 +1144,14 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Create index -->
     <sql>
       <![CDATA[
-        create index sample_ix&1 on MSPeptideSummary&1 (sample)
+        create index sample_ix&1 on Mspeptidesummary_p&1 (sample)
 
       ]]>
     </sql>
 <!--    <sql>-->
 <!--      <![CDATA[-->
 <!--        create index mspep_ix&1-->
-<!--          on MSPeptideSummary&1-->
+<!--          on Mspeptidesummary_p&1-->
 <!--               (aa_sequence_id, external_database_name, peptide_aa_feature_id,-->
 <!--                aa_start_min, aa_end_max, sample, source_id, spectrum_count, experiment,-->
 <!--                sample_display_name, html_color, peptide_sequence)-->
@@ -1315,7 +1202,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     </sql>
   </tuningTable>
 
-  <tuningTable name="MSModifiedPeptideSummary">
+  <tuningTable name="MSModifiedPeptideSummary_p">
     <comment> Mass-spec experiment results for a peptide. Used by the model, GBrowse,
       and PBrowse.
     </comment>
@@ -1331,7 +1218,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Create empty table structure -->
     <sql>
       <![CDATA[
-        CREATE TABLE MSModifiedPeptideSummary&1 (
+        CREATE TABLE MSModifiedPeptideSummary_p&1 (
           source_id varchar(80),
           gene_source_id varchar(80),
           project_id text,
@@ -1363,10 +1250,10 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           partition_name TEXT;
         BEGIN
           FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
-            partition_name := lower('MSModifiedPeptideSummary&1_' || orgrecord.sanitized_org_abbrev);
-            EXECUTE format('CREATE TABLE %I PARTITION OF MSModifiedPeptideSummary&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+            partition_name := lower('MSModifiedPeptideSummary_p&1_' || orgrecord.sanitized_org_abbrev);
+            EXECUTE format('CREATE TABLE %I PARTITION OF MSModifiedPeptideSummary_p&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
-            INSERT INTO MSModifiedPeptideSummary&1
+            INSERT INTO MSModifiedPeptideSummary_p&1
             select pep.*, sdi.sample_display_name, sdi.HTML_COLOR, sdi.SORT_ORDER, orgrecord.org_abbrev
             from (
                     select ta.source_id,
@@ -1406,20 +1293,20 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Alter column constraint -->
     <sql>
       <![CDATA[
-        ALTER TABLE MSModifiedPeptideSummary&1 ALTER COLUMN modification_type DROP NOT null
+        ALTER TABLE MSModifiedPeptideSummary_p&1 ALTER COLUMN modification_type DROP NOT null
       ]]>
     </sql>
 
     <!-- Create indexes -->
     <sql>
       <![CDATA[
-        create index msmodps_tx_ix&1 on MSModifiedPeptideSummary&1 (source_id, gene_source_id)
+        create index msmodps_tx_ix&1 on MSModifiedPeptideSummary_p&1 (source_id, gene_source_id)
 
       ]]>
     </sql>
     <sql>
       <![CDATA[
-        create index msmodps_gn_ix&1 on MSModifiedPeptideSummary&1 (gene_source_id, source_id)
+        create index msmodps_gn_ix&1 on MSModifiedPeptideSummary_p&1 (gene_source_id, source_id)
 
       ]]>
     </sql>
@@ -1558,7 +1445,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   <tuningTable name="ProteomicsCitation">
     <comment> Citation info for proteomics datasets, used by GBrowse </comment>
     <internalDependency name="DatasetPresenter"/>
-    <internalDependency name="MSPeptideSummary"/>
+    <internalDependency name="Mspeptidesummary_P"/>
     <sql>
       <![CDATA[
         CREATE TABLE ProteomicsCitation&1 AS
@@ -1583,7 +1470,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
             SELECT distinct ds.name as name,
                              ds.dataset_presenter_id as id, sample,
                              '<p style="color:' || html_color || '">' || sample || '</p>' as sample_i
-            FROM MSPeptideSummary mps, DatasetPresenter ds
+            FROM Mspeptidesummary_P mps, DatasetPresenter ds
       ## consider using the tuning table ExternalDbDatasetPresenter instead of the LIKE below, if its performance is a problem
             WHERE (ds.name = mps.external_database_name or mps.external_database_name like ds.dataset_name_pattern)
           ) t
@@ -1620,7 +1507,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
   </tuningTable>
 
 
-  <tuningTable name="GenePubmed">
+  <tuningTable name="GenePubmed_p">
     <!-- PubMed records mapped to genes
       -->
     <internalDependency name="OrganismAttributes"/>
@@ -1634,7 +1521,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Create empty table structure -->
 <sql>
       <![CDATA[
-        CREATE TABLE GenePubmed&1 (
+        CREATE TABLE GenePubmed_p&1 (
           source_id varchar(80),
           gene_source_id varchar(80),
           project_id text,
@@ -1656,10 +1543,10 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           partition_name TEXT;
         BEGIN
           FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
-            partition_name := lower('GenePubmed&1_' || orgrecord.sanitized_org_abbrev);
-            EXECUTE format('CREATE TABLE %I PARTITION OF GenePubmed&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+            partition_name := lower('GenePubmed_p&1_' || orgrecord.sanitized_org_abbrev);
+            EXECUTE format('CREATE TABLE %I PARTITION OF GenePubmed_p&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
-            INSERT INTO GenePubmed&1
+            INSERT INTO GenePubmed_p&1
             with feat_pm as (
               select dbref_subset.na_feature_id,
                      pm.pubmed_id, pm.doi, pm.title,
@@ -1701,14 +1588,14 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <sql>
       <![CDATA[
         create index gpm_gene_idx&1
-          on GenePubmed&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
+          on GenePubmed_p&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
 
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create index gpm_tx_idx&1
-          on GenePubmed&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
+          on GenePubmed_p&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
 
       ]]>
     </sql>
@@ -2425,8 +2312,8 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     </sql>
   </tuningTable>
 
-
-  <tuningTable name="PreferredProductsGene">
+  <!-- this table is not used anyplace 12/8/25 -->
+  <tuningTable name="PreferredProductsGene_p">
     <comment>
       Text for PreferredProduct table on gene record page.
     </comment>
@@ -2454,7 +2341,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Create empty table structure -->
     <sql>
       <![CDATA[
-        CREATE TABLE PreferredProductsGene&1 (
+        CREATE TABLE PreferredProductsGene_p&1 (
           source_id text,
           product text,
           project_id text,
@@ -2478,10 +2365,10 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
           partition_name TEXT;
         BEGIN
           FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
-            partition_name := lower('preferredproductsgene&1_' || orgrecord.sanitized_org_abbrev);
-            EXECUTE format('CREATE TABLE %I PARTITION OF PreferredProductsGene&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+            partition_name := lower('preferredproductsgene_p&1_' || orgrecord.sanitized_org_abbrev);
+            EXECUTE format('CREATE TABLE %I PARTITION OF PreferredProductsGene_p&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
-            INSERT INTO PreferredProductsGene&1
+            INSERT INTO PreferredProductsGene_p&1
             -- PreferredProductsGene: check apidb.TranscriptProduct and
             -- apidb.GeneFeatureProduct for records with IS_PREFERRED set. If
             -- (and only if) that turns up nothing, check the PRODUCT column of
@@ -2559,14 +2446,14 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <sql>
       <![CDATA[
         create index ppg_ix&1
-          on PreferredProductsGene&1 (source_id, project_id)
+          on PreferredProductsGene_p&1 (source_id, project_id)
 
       ]]>
     </sql>
   </tuningTable>
 
 
-  <tuningTable name="AllGeneProducts" prefixEnabled="true">
+  <tuningTable name="AllGeneProducts_p" prefixEnabled="true">
     <comment>
       all products for each gene
     </comment>
@@ -2584,7 +2471,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <!-- Create empty table structure -->
     <sql>
      <![CDATA[
-       create table &prefixAllGeneProducts&1 (
+       create table &prefixAllGeneProducts_p&1 (
          source_id text,
          product text,
          project_id text,
@@ -2619,10 +2506,10 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
        begin
           FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
 
-           partition_name := lower('&prefixallgeneproducts&1_' || orgrecord.sanitized_org_abbrev);
-           EXECUTE format('CREATE TABLE %I PARTITION OF &prefixAllGeneProducts&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+           partition_name := lower('&prefixallgeneproducts_p&1_' || orgrecord.sanitized_org_abbrev);
+           EXECUTE format('CREATE TABLE %I PARTITION OF &prefixAllGeneProducts_p&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
 
-           insert into &prefixAllGeneProducts&1
+           insert into &prefixAllGeneProducts_p&1
            select ta.gene_source_id AS source_id, tp.product, ta.project_id,
                   CASE tp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
@@ -2638,7 +2525,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
            group by ta.gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
                  tp.with_from, tp.assigned_by;
 
-           insert into &prefixAllGeneProducts&1
+           insert into &prefixAllGeneProducts_p&1
            select ga.source_id as source_id, gfp.product, ga.project_id,
                   CASE gfp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
@@ -2650,7 +2537,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
            where ga.na_feature_id = gfp.na_feature_id
              and ga.org_abbrev = orgrecord.org_abbrev;
 
-           insert into &prefixAllGeneProducts&1
+           insert into &prefixAllGeneProducts_p&1
            select ga.source_id as source_id, gf.product, ga.project_id,
                   null as  is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
@@ -2664,7 +2551,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
              and ga.org_abbrev = orgrecord.org_abbrev
              and gp.source_rule >= 3; -- no product in apidb.GeneFeatureProduct
 
-           insert into &prefixAllGeneProducts&1
+           insert into &prefixAllGeneProducts_p&1
            select ta.gene_source_id AS source_id, t.product, ta.project_id,
                   null as is_alternate,
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
@@ -2681,7 +2568,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
                        and org_abbrev = orgrecord.org_abbrev) -- product only in dots.Transcript
            group by ta.gene_source_id, ta.project_id, t.product;
 
-           insert into &prefixAllGeneProducts&1
+           insert into &prefixAllGeneProducts_p&1
            select gp.source_id as source_id, gp.product, ga.project_id,
                   null as  is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
@@ -2701,7 +2588,7 @@ select ontology_term_name, gene_source_id, source_id, taxon_id, cast(organism as
     <sql>
       <![CDATA[
         create index allGeneProds_idx&1
-        on &prefixAllGeneProducts&1 (source_id, product)
+        on &prefixAllGeneProducts_p&1 (source_id, product)
 
       ]]>
     </sql>
