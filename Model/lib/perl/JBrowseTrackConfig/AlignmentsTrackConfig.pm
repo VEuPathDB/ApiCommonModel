@@ -55,9 +55,7 @@ sub new {
     $self->setMin(0);
     $self->setMax(500);
     $self->setYScalePosition("left");
-    #$self->setChunkSizeLimit(50000000);
-    $self->setChunkSizeLimit(2000000000);
-    #$self->fetchSizeLimit(2000000000);
+    $self->setChunkSizeLimit(50000000);
 
     if($args->{skip_histograms}) {
       $self->{_skip_histograms} = 1;
