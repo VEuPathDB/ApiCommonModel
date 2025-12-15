@@ -3876,13 +3876,13 @@
       <sql>
         <![CDATA[
           WITH ref AS (
-            SELECT r.NA_FEATURE_ID, ps.PROTOCOL_APP_NODE_NAME AS sample, ps.study_name, r.value
+            SELECT r.NA_FEATURE_ID, ps.PROTOCOL_APP_NODE_NAME AS sample, ps.study_name, r.value, ps.node_type
             FROM apidbtuning.profilesamples ps, results.nafeatureexpression r
             WHERE ps.PROTOCOL_APP_NODE_ID = r.PROTOCOL_APP_NODE_ID
               AND ps.protocol_app_node_id IN ($$samples_ref_antisense$$)
               AND ps.profile_type = 'values'
           ) , comp AS (
-            SELECT r.NA_FEATURE_ID, ps.PROTOCOL_APP_NODE_NAME AS sample, ps.study_name, r.value
+            SELECT r.NA_FEATURE_ID, ps.PROTOCOL_APP_NODE_NAME AS sample, ps.study_name, r.value, ps.node_type
             FROM apidbtuning.profilesamples ps, results.nafeatureexpression r
             WHERE ps.PROTOCOL_APP_NODE_ID = r.PROTOCOL_APP_NODE_ID
               AND ps.protocol_app_node_id IN ($$samples_comp_antisense$$)
@@ -3892,12 +3892,12 @@
             FROM (
                 SELECT *
                 FROM ref
-                WHERE study_name LIKE CONCAT('%', '&&sense&&', '%')
+                WHERE node_type LIKE CONCAT('%', '&&sense&&', '%')
               ) s
               , (
                 SELECT *
                 FROM ref
-                WHERE study_name LIKE CONCAT('%', '&&antisense&&', '%')
+                WHERE node_type LIKE CONCAT('%', '&&antisense&&', '%')
               ) a
             WHERE s.sample = a.sample
               AND s.NA_FEATURE_ID = a.NA_FEATURE_ID
@@ -3906,12 +3906,12 @@
             FROM (
                 SELECT *
                 FROM comp
-                WHERE study_name LIKE CONCAT('%', '&&sense&&', '%')
+                WHERE node_type LIKE CONCAT('%', '&&sense&&', '%')
               ) s
               , (
                 SELECT *
                 FROM comp
-                WHERE study_name LIKE CONCAT('%', '&&antisense&&', '%')
+                WHERE node_type LIKE CONCAT('%', '&&antisense&&', '%')
               ) a
             WHERE s.sample = a.sample
               AND s.NA_FEATURE_ID = a.NA_FEATURE_ID
@@ -3923,8 +3923,8 @@
             , fin.sample_pairs
             , fin.max_FC_product
             , $$antisense_floor$$ AS antisense_floor
-            , round($$antisense_direction$$ * log(2, REPLACE($$antisense_fold_change$$,0,0.0001)), 1) AS antisense_fold_change
-            , round($$sense_direction$$ * log(2, REPLACE($$sense_fold_change$$,0,0.0001)), 1) AS sense_fold_change
+            , round(($$antisense_direction$$ * log(2, CASE WHEN ($$antisense_fold_change$$ = 0) THEN 0.0001 ELSE $$antisense_fold_change$$ END))::numeric, 1) AS antisense_fold_change
+            , round(($$sense_direction$$ * log(2, CASE WHEN ($$antisense_fold_change$$ = 0) THEN 0.0001 ELSE $$antisense_fold_change$$ END))::numeric, 1) AS sense_fold_change
           FROM
             apidbtuning.TranscriptAttributes ga
             , (
@@ -3934,7 +3934,7 @@
                 FROM (
                     SELECT ref1.NA_FEATURE_ID
                       , CONCAT(ref1.sample , '->' , comp1.sample ) as sample_pair
-                      , round(CASE WHEN comp1.sense_value / greatest($$antisense_floor$$, ref1.sense_value) > 1
+                      , round((CASE WHEN comp1.sense_value / greatest($$antisense_floor$$, ref1.sense_value) > 1
                                      THEN comp1.sense_value / greatest($$antisense_floor$$, ref1.sense_value)
                                    ELSE ref1.sense_value / greatest($$antisense_floor$$, comp1.sense_value)
                               END
@@ -3942,7 +3942,7 @@
                                        THEN comp1.antisense_value / greatest($$antisense_floor$$, ref1.antisense_value)
                                      ELSE ref1.antisense_value / greatest($$antisense_floor$$, comp1.antisense_value)
                                 END
-                        , 1) AS FC_product
+                        )::numeric, 1) AS FC_product
                     FROM comp1, ref1
                     WHERE ref1.NA_FEATURE_ID = comp1.NA_FEATURE_ID
                       AND ref1.sample != comp1.sample
