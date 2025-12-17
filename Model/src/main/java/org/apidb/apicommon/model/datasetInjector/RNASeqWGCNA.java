@@ -5,8 +5,11 @@ public class RNASeqWGCNA extends RNASeqEbi {
 
   @Override
   public void injectTemplates() {
+      setPropValue("datasetClassCategoryIri", "http://purl.obolibrary.org/obo/OBI_0001271");
 
       super.injectTemplates();
+
+
 
 
       injectTemplate("rnaSeqWGCNAModulesQuestion");
