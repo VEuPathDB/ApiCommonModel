@@ -128,7 +128,7 @@
         <![CDATA[
           SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
           FROM webready.TranscriptAttributes_p ta
-          , (select * from table (apidb.pivot('SELect * from (
+          LEFT JOIN (select * from table (apidb.pivot('SELect * from (
 	    SELECT ga.source_id as profile_source_id,
 	    ''pan_'' || to_char(nfe.protocol_app_node_id) as protocol_app_node,
 	    to_number(round(nfe.value, 2)) as value
@@ -137,9 +137,8 @@
   	     AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
 	     and ps.DATASET_NAME = ''cparIowaII_rtpcr_Kissinger_RtPcr_RSRC''
 	     and ps.profile_type = ''values''
-	     and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p
-          WHERE ta.gene_source_id = p.profile_source_id (+)
-	    AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
+	     and nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID)'))) p ON ta.gene_source_id = p.profile_source_id 
+	     ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -1706,7 +1705,7 @@ AND ta.org_abbrev in (%%PARTITION_KEYS%%)
     </sqlQuery>
 
 
-    <sqlQuery name="tbruTREU927_RNAi_Horn_cdsColums" includeProjects="TriTrypDB,UniDB">
+    <sqlQuery name="tbruTREU927_RNAi_Horn_cdsColumns" includeProjects="TriTrypDB,UniDB">
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1721,39 +1720,83 @@ AND ta.org_abbrev in (%%PARTITION_KEYS%%)
       <column name="fc_dif_cds"/>
       <sql>
         <![CDATA[
-          select ta.source_id, ta.gene_source_id,ta.project_id, res.*
-           , CONCAT(CASE WHEN greatest(1,bfd3_cds) / greatest(1,no_tet_cds) >= 1 THEN round(greatest(1,bfd3_cds) / greatest(1,no_tet_cds), 1)
-                ELSE round(-1 * greatest(1,no_tet_cds) / greatest(1,bfd3_cds), 1) END,
-             CASE WHEN (bfd3_cds < 1 or no_tet_cds < 1) then '*' else '' END) AS fc_bfd3_cds
-           , CONCAT(CASE WHEN greatest(1,bfd6_cds) / greatest(1,no_tet_cds) >= 1 THEN round(greatest(1,bfd6_cds) / greatest(1,no_tet_cds), 1)
-                ELSE round(-1 * greatest(1,no_tet_cds) / greatest(1,bfd6_cds), 1) END,
-             CASE WHEN (bfd6_cds < 1 or no_tet_cds < 1) then '*' else '' END) AS fc_bfd6_cds
-           , CONCAT(CASE WHEN greatest(1,pf_cds) / greatest(1,no_tet_cds) >= 1 THEN round(greatest(1,pf_cds) / greatest(1,no_tet_cds), 1)
-                ELSE round(-1 * greatest(1,no_tet_cds) / greatest(1,pf_cds), 1) END,
-             CASE WHEN (pf_cds < 1 or no_tet_cds < 1) then '*' else '' END) AS fc_pf_cds
-           , CONCAT(CASE WHEN greatest(1,dif_cds) / greatest(1,no_tet_cds) >= 1 THEN round(greatest(1,dif_cds) / greatest(1,no_tet_cds), 1)
-                else round(-1 * greatest(1,no_tet_cds) / greatest(1,dif_cds), 1) end,
-             case when (dif_cds < 1 or no_tet_cds < 1) then '*' else '' end) as fc_dif_cds
-             FROM webready.TranscriptAttributes_p ta, (
-          select ta.gene_source_id as gene_id, ps.protocol_app_node_name, round(nfe.value,2) as value
-          from apidbtuning.profilesamples ps, results.nafeatureexpression nfe, webready.TranscriptAttributes_p ta
-          where ps.study_name = 'T.brucei paired end RNA Seq data from Horn aligned with cds coordinates [htseq-union - unstranded - tpm - unique]'
-          and ps.protocol_app_node_id = nfe.protocol_app_node_id
-          and ps.profile_type='values'
-          and ps.protocol_app_node_id = nfe.protocol_app_node_id
-          and ta.gene_na_feature_id = nfe.na_feature_id(+)
-          AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
-          ) pivot (
-              max(value) as cds
-              for protocol_app_node_name in ('No_Tet' no_tet,  'BFD3' bfd3, 'BFD6' bfd6, 'PF' pf, 'DIF' dif)
-          ) res
-          WHERE ta.gene_source_id = res.gene_id (+)
-            AND ta.org_abbrev in (%%PARTITION_KEYS%%)
+SELECT 
+    ta.source_id,
+    ta.gene_source_id,
+    ta.project_id,
+    res.*,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, bfd3_cds) / greatest(1, no_tet_cds) >= 1 
+                THEN round(greatest(1, bfd3_cds) / greatest(1, no_tet_cds), 1)
+            ELSE 
+                round(-1 * greatest(1, no_tet_cds) / greatest(1, bfd3_cds), 1)
+        END,
+        CASE WHEN (bfd3_cds < 1 OR no_tet_cds < 1) THEN '*' ELSE '' END
+    ) AS fc_bfd3_cds,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, bfd6_cds) / greatest(1, no_tet_cds) >= 1 
+                THEN round(greatest(1, bfd6_cds) / greatest(1, no_tet_cds), 1)
+            ELSE 
+                round(-1 * greatest(1, no_tet_cds) / greatest(1, bfd6_cds), 1)
+        END,
+        CASE WHEN (bfd6_cds < 1 OR no_tet_cds < 1) THEN '*' ELSE '' END
+    ) AS fc_bfd6_cds,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, pf_cds) / greatest(1, no_tet_cds) >= 1 
+                THEN round(greatest(1, pf_cds) / greatest(1, no_tet_cds), 1)
+            ELSE 
+                round(-1 * greatest(1, no_tet_cds) / greatest(1, pf_cds), 1)
+        END,
+        CASE WHEN (pf_cds < 1 OR no_tet_cds < 1) THEN '*' ELSE '' END
+    ) AS fc_pf_cds,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, dif_cds) / greatest(1, no_tet_cds) >= 1 
+                THEN round(greatest(1, dif_cds) / greatest(1, no_tet_cds), 1)
+            ELSE 
+                round(-1 * greatest(1, no_tet_cds) / greatest(1, dif_cds), 1)
+        END,
+        CASE WHEN (dif_cds < 1 OR no_tet_cds < 1) THEN '*' ELSE '' END
+    ) AS fc_dif_cds
+
+FROM webready.transcriptattributes_p ta
+
+LEFT JOIN (
+    SELECT
+        ta.gene_source_id AS gene_id,
+
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'No_Tet') AS no_tet_cds,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'BFD3')   AS bfd3_cds,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'BFD6')   AS bfd6_cds,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'PF')     AS pf_cds,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'DIF')    AS dif_cds
+
+    FROM apidbtuning.profilesamples ps
+    JOIN results.nafeatureexpression nfe
+        ON ps.protocol_app_node_id = nfe.protocol_app_node_id
+    JOIN webready.transcriptattributes_p ta
+        ON ta.gene_na_feature_id = nfe.na_feature_id
+    WHERE ps.study_name = 
+        'T.brucei paired end RNA Seq data from Horn aligned with cds coordinates [htseq-union - unstranded - tpm - unique]'
+      AND ps.profile_type = 'values'
+      AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
+    GROUP BY ta.gene_source_id
+) res
+ON ta.gene_source_id = res.gene_id
+
+WHERE ta.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
 
-    <sqlQuery name="tbruTREU927_RNAi_Horn_modelColums" includeProjects="TriTrypDB,UniDB">
+    <sqlQuery name="tbruTREU927_RNAi_Horn_modelColumns" includeProjects="TriTrypDB,UniDB">
       <column name="source_id"/>
       <column name="gene_source_id"/>
       <column name="project_id"/>
@@ -1768,34 +1811,78 @@ AND ta.org_abbrev in (%%PARTITION_KEYS%%)
       <column name="fc_dif_model"/>
       <sql>
         <![CDATA[
-          select ta.source_id, ta.gene_source_id,ta.project_id, res.*
-           , CONCAT(CASE WHEN greatest(1,bfd3_model) / greatest(1,no_tet_model) >= 1 THEN round(greatest(1,bfd3_model) / greatest(1,no_tet_model), 1)
-                ELSE round(-1 * greatest(1,no_tet_model) / greatest(1,bfd3_model), 1) END,
-             CASE WHEN (bfd3_model < 1 or no_tet_model < 1) then '*' else '' END) AS fc_bfd3_model
-           , CONCAT(CASE WHEN greatest(1,bfd6_model) / greatest(1,no_tet_model) >= 1 THEN round(greatest(1,bfd6_model) / greatest(1,no_tet_model), 1)
-                ELSE round(-1 * greatest(1,no_tet_model) / greatest(1,bfd6_model), 1) END,
-             CASE WHEN (bfd6_model < 1 or no_tet_model < 1) then '*' else '' END) AS fc_bfd6_model
-           , CONCAT(CASE WHEN greatest(1,pf_model) / greatest(1,no_tet_model) >= 1 THEN round(greatest(1,pf_model) / greatest(1,no_tet_model), 1)
-                ELSE round(-1 * greatest(1,no_tet_model) / greatest(1,pf_model), 1) END,
-             CASE WHEN (pf_model < 1 or no_tet_model < 1) then '*' else '' END) AS fc_pf_model
-           , CONCAT(CASE WHEN greatest(1,dif_model) / greatest(1,no_tet_model) >= 1 THEN round(greatest(1,dif_model) / greatest(1,no_tet_model), 1)
-                else round(-1 * greatest(1,no_tet_model) / greatest(1,dif_model), 1) end,
-             case when (dif_model < 1 or no_tet_model < 1) then '*' else '' end) as fc_dif_model
-             FROM webready.TranscriptAttributes_p ta, (
-          select ta.gene_source_id as gene_id, ps.protocol_app_node_name, round(nfe.value,2) as value
-          from apidbtuning.profilesamples ps, results.nafeatureexpression nfe, webready.TranscriptAttributes_p ta
-          where ps.study_name = 'T.brucei paired end RNA Seq data from Horn [htseq-union - unstranded - tpm - unique]'
-          and ps.protocol_app_node_id = nfe.protocol_app_node_id
-          and ps.profile_type='values'
-          and ps.protocol_app_node_id = nfe.protocol_app_node_id
-          and ta.gene_na_feature_id = nfe.na_feature_id(+)
-          AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
-          ) pivot (
-              max(value) as model
-              for protocol_app_node_name in ('No_Tet' no_tet, 'BFD3' bfd3, 'BFD6' bfd6, 'PF' pf, 'DIF' dif)
-          ) res
-          WHERE ta.gene_source_id = res.gene_id (+)
-            AND ta.org_abbrev in (%%PARTITION_KEYS%%)
+SELECT 
+    ta.source_id,
+    ta.gene_source_id,
+    ta.project_id,
+    res.*,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, bfd3_model) / greatest(1, no_tet_model) >= 1 
+                THEN round((greatest(1, bfd3_model)::numeric / greatest(1, no_tet_model)::numeric), 1)
+            ELSE 
+                round((-1 * greatest(1, no_tet_model)::numeric / greatest(1, bfd3_model)::numeric), 1)
+        END,
+        CASE WHEN (bfd3_model < 1 OR no_tet_model < 1) THEN '*' ELSE '' END
+    ) AS fc_bfd3_model,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, bfd6_model) / greatest(1, no_tet_model) >= 1 
+                THEN round((greatest(1, bfd6_model)::numeric / greatest(1, no_tet_model)::numeric), 1)
+            ELSE 
+                round((-1 * greatest(1, no_tet_model)::numeric / greatest(1, bfd6_model)::numeric), 1)
+        END,
+        CASE WHEN (bfd6_model < 1 OR no_tet_model < 1) THEN '*' ELSE '' END
+    ) AS fc_bfd6_model,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, pf_model) / greatest(1, no_tet_model) >= 1 
+                THEN round((greatest(1, pf_model)::numeric / greatest(1, no_tet_model)::numeric), 1)
+            ELSE 
+                round((-1 * greatest(1, no_tet_model)::numeric / greatest(1, pf_model)::numeric), 1)
+        END,
+        CASE WHEN (pf_model < 1 OR no_tet_model < 1) THEN '*' ELSE '' END
+    ) AS fc_pf_model,
+
+    CONCAT(
+        CASE 
+            WHEN greatest(1, dif_model) / greatest(1, no_tet_model) >= 1 
+                THEN round((greatest(1, dif_model)::numeric / greatest(1, no_tet_model)::numeric), 1)
+            ELSE 
+                round((-1 * greatest(1, no_tet_model)::numeric / greatest(1, dif_model)::numeric), 1)
+        END,
+        CASE WHEN (dif_model < 1 OR no_tet_model < 1) THEN '*' ELSE '' END
+    ) AS fc_dif_model
+
+FROM webready.transcriptattributes_p ta
+
+LEFT JOIN (
+    SELECT
+        ta.gene_source_id AS gene_id,
+
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'No_Tet') AS no_tet_model,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'BFD3')   AS bfd3_model,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'BFD6')   AS bfd6_model,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'PF')     AS pf_model,
+        MAX(value::numeric) FILTER (WHERE protocol_app_node_name = 'DIF')    AS dif_model
+
+    FROM apidbtuning.profilesamples ps
+    JOIN results.nafeatureexpression nfe
+        ON ps.protocol_app_node_id = nfe.protocol_app_node_id
+    JOIN webready.transcriptattributes_p ta
+        ON ta.gene_na_feature_id = nfe.na_feature_id
+    WHERE ps.study_name = 
+        'T.brucei paired end RNA Seq data from Horn [htseq-union - unstranded - tpm - unique]'
+      AND ps.profile_type = 'values'
+      AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
+    GROUP BY ta.gene_source_id
+) res
+ON ta.gene_source_id = res.gene_id
+
+WHERE ta.org_abbrev IN (%%PARTITION_KEYS%%);
        ]]>
       </sql>
     </sqlQuery>
