@@ -50,6 +50,7 @@ public class RNASeq extends  DatasetInjector {
   @Override
   public void injectTemplates() {
       setShortAttribution();
+      setProfileSamplesHelp();
 
       String projectName = getPropValue("projectName");
       //String presenterId = getPropValue("presenterId");

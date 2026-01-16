@@ -17,8 +17,8 @@ import javax.sql.DataSource;
 import org.apache.log4j.Logger;
 import org.gusdb.fgputil.BaseCLI;
 import org.gusdb.fgputil.db.SqlUtils;
-import org.gusdb.fgputil.db.runner.BasicResultSetHandler;
 import org.gusdb.fgputil.db.runner.SQLRunner;
+import org.gusdb.fgputil.db.runner.handler.BasicResultSetHandler;
 import org.gusdb.wdk.model.Utilities;
 import org.gusdb.wdk.model.WdkModel;
 import org.gusdb.wdk.model.WdkModelException;
@@ -306,7 +306,7 @@ public class BasketFixer2 extends BaseCLI {
     // get a snapshot of largest basket id. any newer ids are added by users during this run. we can ignore them.
     String sql = "select max(basket_id) as max_basket_id from " + userSchema + "user_baskets";
     BasicResultSetHandler handler = new SQLRunner(userDbDataSource, sql,
-        "invalid-step-report-summary").executeQuery(new Object[]{}, new BasicResultSetHandler());
+        "invalid-step-report-summary").executeQuery(new BasicResultSetHandler());
     List<Map<String,Object>> results = handler.getResults();
     Map<String,Object> row = results.get(0);
     BigDecimal maxBasketId = (BigDecimal)row.get("MAX_BASKET_ID");

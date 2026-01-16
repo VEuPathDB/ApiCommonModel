@@ -43,7 +43,32 @@
     </sql>
     <sql>
       <![CDATA[
+        CREATE UNIQUE INDEX transcriptattr_genesourceId&1 ON TranscriptAttributes&1  (gene_source_id, source_id);
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
         CREATE INDEX transcriptattr_t_p&1 ON TranscriptAttributes&1  (taxon_id, project_id, source_id);
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX transcriptattr_gnf&1 ON TranscriptAttributes&1  (gene_na_feature_id, gene_source_id, project_id, source_id);
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <!-- unpartitioned version of this table -->
+ <tuningTable name="ProteinAttributes">
+    <externalDependency name="webready.ProteinAttributes_p"/>
+    <sql>
+      <![CDATA[
+       create table proteinattributes&1 as select * from webready.proteinattributes_p;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX proteinattr_sourceId&1 ON ProteinAttributes&1  (source_id);
       ]]>
     </sql>
   </tuningTable>
@@ -69,11 +94,83 @@
   </tuningTable>
 
   <!-- unpartitioned version of this table -->
+ <tuningTable name="GoTermSummary">
+    <externalDependency name="webready.GoTermSummary_p"/>
+    <sql>
+      <![CDATA[
+       create table GoTermSummary&1 as select * from webready.gotermsummary_p;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index GoTermSumTT_aaSeqId_idx ON GoTermSummary&1  (aa_sequence_id, go_id, source)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index GoTermSumTT_taxId_idx ON GoTermSummary&1  (taxon_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index GoTermSumTT_plugin_ix ON GoTermSummary&1
+               (gene_source_id, ontology, is_not, is_go_slim,
+                go_id, go_term_name, evidence_code, evidence_category)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <!-- unpartitioned version of this table -->
  <tuningTable name="TaxonSpecies">
     <externalDependency name="webready.TaxonSpecies_p"/>
      <sql>
       <![CDATA[
        create table taxonspecies&1 as select * from webready.taxonspecies_p;
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <!-- unpartitioned (and thin) version of this table -->
+ <tuningTable name="PathwayGenesThin">
+    <externalDependency name="webready.PathwaysGeneTable_p"/>
+    <sql>
+      <![CDATA[
+       create table PathwayGenesThin&1 as select pathway_source_id, gene_source_id from webready.pathwaysgenetable_p
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index pathgene_ix&1 on PathwayGenesThin&1 (pathway_source_id, gene_source_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <!-- unpartitioned version of this table -->
+ <tuningTable name="TranscriptPathway">
+    <externalDependency name="webready.TranscriptPathway_p"/>
+    <sql>
+      <![CDATA[
+       create table TranscriptPathway&1 as select * from webready.TranscriptPathway_p
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index TranscriptPathTT_1_ix&1 on TranscriptPathway&1 (gene_source_id, complete_ec, exact_match, pathway_source, pathway_id, ec_number_gene, pathway_source, pathway_source_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index TranscriptPathTT_2_ix&1 on TranscriptPathway&1 (ec_number_gene, pathway_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index TranscriptPathTT_3_ix&1 on TranscriptPathway&1 (pathway_id, gene_source_id, ec_number_gene)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index TranscriptPathTT_4_ix&1 on TranscriptPathway&1 (complete_ec, exact_match, external_database_release_id)
       ]]>
     </sql>
   </tuningTable>
@@ -243,6 +340,7 @@
          The trick sql was cribbed and modified from: nuijten.blogspot.com/2011/08/splitting-comma-delimited-string-regexp.html
       -->
     <externalDependency name="webready.GeneAttributes_p"/>
+    <externalDependency name="webready.OrganismAbbreviation_p"/>
     <externalDependency name="apidb.Organism"/>
 
     <!-- Create empty table structure -->
@@ -929,7 +1027,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <internalDependency name="OrganismAbbreviationWS"/>
     <internalDependency name="OrganismTree"/>
 <!--    <internalDependency name="PopsetAttributes"/> -->
-    <externalDependency name="webready.TaxonSpecies_p"/>
+    <internalDependency name="TaxonSpecies"/>
     <externalDependency name="webready.EstAttributes_p"/>
     <sql>
       <![CDATA[
@@ -952,7 +1050,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                SELECT DISTINCT
                 sp.name as organism, ot.parentTerm as parent,
                 regexp_replace(org.name_for_filenames, replace(org.strain_abbrev, '/','_'),'') as abbreviation
-               FROM sres.TaxonName sp, webready.TaxonSpecies_p ts, apidb.Organism org, OrganismTree ot
+               FROM sres.TaxonName sp, TaxonSpecies ts, apidb.Organism org, OrganismTree ot
                WHERE org.taxon_id = ts.taxon_id
                  AND ts.species_taxon_id = sp.taxon_id
                  AND sp.name_class = 'scientific name'
@@ -982,7 +1080,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="sres.TaxonName"/>
     <internalDependency name="TranscriptAttributes"/>
     <internalDependency name="GenomicSeqAttributes"/>
-    <externalDependency name="webready.TaxonSpecies_p"/>
+    <internalDependency name="TaxonSpecies"/>
     <externalDependency name="webready.EstAttributes_p"/>
     <sql>
       <![CDATA[
@@ -1020,7 +1118,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         UNION
         /* Regular ESTs (all species from webready.EstAttributes_p) */
         SELECT DISTINCT sp.name as organism, ea.project_id, 'ESTs' as type
-        FROM webready.EstAttributes_p ea, sres.TaxonName tn, webready.TaxonSpecies_p ts, sres.TaxonName sp
+        FROM webready.EstAttributes_p ea, sres.TaxonName tn, TaxonSpecies ts, sres.TaxonName sp
         WHERE ea.organism = tn.name
           AND (tn.taxon_id = ts.taxon_id or tn.taxon_id = ts.species_taxon_id)
           AND ts.species_taxon_id = sp.taxon_id
@@ -1516,6 +1614,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="webready.DbRefNaFeature_p"/>
     <externalDependency name="sres.DbRef"/>
     <externalDependency name="webready.TranscriptAttributes_p"/>
+    <externalDependency name="webready.OrganismAbbreviation_p"/>
     <externalDependency name="apidb.Organism"/>
 
     <!-- Create empty table structure -->
@@ -1588,14 +1687,14 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <sql>
       <![CDATA[
         create index gpm_gene_idx&1
-          on GenePubmed&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
+          on GenePubmed_p&1 (gene_source_id, source_id, project_id, pubmed_id, doi, title, authors)
 
       ]]>
     </sql>
     <sql>
       <![CDATA[
         create index gpm_tx_idx&1
-          on GenePubmed&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
+          on GenePubmed_p&1 (source_id, gene_source_id, project_id, pubmed_id, doi, title, authors)
 
       ]]>
     </sql>
@@ -1620,6 +1719,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="study.NodeSet"/>
     <externalDependency name="study.NodeNodeSet"/>
     <internalDependency name="GeneAttributes"/>
+    <internalDependency name="GeneOrgAbbrev"/>
     <intermediateTable name="profile_nafeatureexp_summary"/>
     <intermediateTable name="gene_nafeatureexp"/>
     <sql>
@@ -1629,9 +1729,9 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
           na_feature_id numeric(10,0),
           node_type character varying(200),
           profile_as_string_value text,
+          profile_as_string_stderr text,
           profile_as_string_percentile1 text,
-          profile_as_string_percentile2 text,
-          profile_as_string_stderr text
+          profile_as_string_percentile2 text
        )
       ]]>
     </sql>
@@ -2313,7 +2413,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
   </tuningTable>
 
   <!-- this table is not used anyplace 12/8/25 -->
-  <tuningTable name="PreferredProductsGene">
+  <tuningTable name="PreferredProductsGene_p">
     <comment>
       Text for PreferredProduct table on gene record page.
     </comment>
@@ -2453,7 +2553,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
   </tuningTable>
 
 
-  <tuningTable name="AllGeneProducts" prefixEnabled="true">
+  <tuningTable name="AllGeneProducts_p" prefixEnabled="true">
     <comment>
       all products for each gene
     </comment>
