@@ -71,7 +71,6 @@
       </testParamValues>
 
       <column name="source_id"/>
-      <column name="so"/>
       <column name="project_id"/>
       <column name="start_min"/>
       <column name="end_max"/>
@@ -79,49 +78,21 @@
       <column name="piece_min"/>
       <column name="piece_max"/>
       <column name="piece_strand"/>
-      <column name="piece_so" excludeProjects="AmoebaDB,PiroplasmaDB,ToxoDB"/>
-      <column name="edge_level" excludeProjects="AmoebaDB,PiroplasmaDB,ToxoDB"/>
-      <sql excludeProjects="AmoebaDB,PiroplasmaDB,ToxoDB">
-        <![CDATA[
-          SELECT vs.source_id as source_id, vs.project_id,
-               sp.distance_from_left + 1 as start_min,
-               sp.end_position - sp.start_position + sp.distance_from_left + 1 as end_max,
-               case when es.source_id is null then CONCAT('(N)-', es.length) else es.source_id end as piece_source_id,
-               sp.start_position as piece_min,
-               sp.end_position as piece_max,
-               sp.strand_orientation as piece_strand,
-               sp.sequence_order, sp.edge_level,
-               eso.name as piece_so,
-               vso.name as so
-          FROM webready.SequencePieceClosure_p sp,
-             webready.GenomicSeqAttributes_p vs, sres.OntologyTerm vso,
-             Dots.NASEQUENCE es, sres.OntologyTerm eso
-          WHERE vs.na_sequence_id = sp.virtual_na_sequence_id
-            AND es.na_sequence_id = sp.piece_na_sequence_id
-            AND es.sequence_ontology_id = eso.ontology_term_id
-            AND vs.sequence_ontology_id = vso.ontology_term_id
-            AND vs.source_id is not null
-            AND es.source_id is not null
-            and vs.org_abbrev IN (%%PARTITION_KEYS%%)
-            and sp.org_abbrev IN (%%PARTITION_KEYS%%)
-          ORDER BY sp.edge_level, sp.sequence_order
-        ]]>
-      </sql>
-
-      <sql includeProjects="AmoebaDB,PiroplasmaDB,ToxoDB">
-        <![CDATA[
-          SELECT s.source_id, '@PROJECT_ID@' as project_id
-            , p.start_min, p.end_max
-            , p.piece_id AS piece_source_id
-            , p.piece_start AS piece_min, p.piece_end AS piece_max
-            , CASE p.is_reversed WHEN 0 THEN '+' WHEN 1 THEN '-' END AS piece_strand
-            , p.part_number AS sequence_order
-            , s.sequence_type AS so
-          FROM  apidb.agpPiece p, webready.GenomicSeqAttributes_p s
-          WHERE s.source_id = p.source_id
-            AND   gap_type is null
-            and s.org_abbrev IN (%%PARTITION_KEYS%%)
-        ]]>
+      <column name="sequence_order"/>
+      <sql>
+        SELECT s.source_id,
+          s.project_id,
+          p.start_min,
+          p.end_max,
+          p.piece_id AS piece_source_id,
+          p.piece_start AS piece_min,
+          p.piece_end AS piece_max,
+          CASE p.is_reversed WHEN 0 THEN '+' WHEN 1 THEN '-' END AS piece_strand,
+          p.part_number AS sequence_order
+        FROM apidb.agpPiece p, webready.GenomicSeqAttributes_p s
+        WHERE s.source_id = p.source_id
+          AND p.piece_id IS NOT NULL
+          AND s.org_abbrev IN (%%PARTITION_KEYS%%)
       </sql>
 
     </sqlQuery>
@@ -281,23 +252,19 @@
       <column name="qualifier_key"/>
       <column name="qualifier_value"/>
       <sql>
-        <![CDATA[
-          SELECT fl.sequence_source_id AS source_id
-            , sa.project_id
-            , c.comment_string AS note
-            , 'repeat_region' AS feature_key
-            , fl.start_min
-            , fl.end_max
-            , 'rpt_type' AS qualifier_key
-            , 'dispersed' AS qualifier_value
-          FROM apidb.FeatureLocation fl
-             INNER JOIN webready.GenomicSeqAttributes_p sa ON fl.sequence_source_id = sa.source_id
-             INNER JOIN sres.ontologyTerm so ON so.ontology_term_id = fl.sequence_ontology_id
-             LEFT JOIN webready.NaFeatureComment_p c ON fl.na_feature_id = c.na_feature_id
-          WHERE feature_type = 'Repeats'
-            and sa.org_abbrev IN (%%PARTITION_KEYS%%)
-            and c.org_abbrev IN (%%PARTITION_KEYS%%)
-        ]]>
+        SELECT bg.sequence_source_id as source_id,
+          sa.project_id,
+          NULL as note,
+          'repeat_region' as feature_key,
+          bg.start_location as start_min,
+          bg.end_location as end_max,
+          'rpt_type' as qualifier_key,
+          'dispersed' as qualifier_value
+        FROM webready.genomebedgraph_p bg, webready.GenomicSeqAttributes_p sa
+        WHERE bg.algorithm = 'repeatMasked'
+          AND bg.sequence_source_id = sa.source_id
+          AND sa.org_abbrev IN (%%PARTITION_KEYS%%)
+          AND bg.org_abbrev IN (%%PARTITION_KEYS%%)
       </sql>
     </sqlQuery>
 
@@ -315,13 +282,14 @@
           sa.project_id,
           'repeat_region' as feature_key,
           bg.start_location as start_min,
-          bg.end_location end_max,
+          bg.end_location as end_max,
           'rpt_type' as qualifier_key,
           'tandem' as qualifier_value
-        FROM apidb.genomebedgraph bg, webready.GenomicSeqAttributes_p sa
+        FROM webready.genomebedgraph_p bg, webready.GenomicSeqAttributes_p sa
         WHERE bg.algorithm = 'tandem_repeat_finder'
           AND bg.sequence_source_id = sa.source_id
           AND sa.org_abbrev IN (%%PARTITION_KEYS%%)
+          AND bg.org_abbrev IN (%%PARTITION_KEYS%%)
       </sql>
     </sqlQuery>
 
@@ -338,12 +306,13 @@
           sa.project_id,
           'misc_feature' as feature_key,
           bg.start_location as start_min,
-          bg.end_location end_max,
+          bg.end_location as end_max,
           'low complexity region: DUST' as note
-        FROM apidb.genomebedgraph bg, webready.GenomicSeqAttributes_p sa
+        FROM webready.genomebedgraph_p bg, webready.GenomicSeqAttributes_p sa
         WHERE bg.algorithm = 'dustmasker'
           AND bg.sequence_source_id = sa.source_id
           AND sa.org_abbrev IN (%%PARTITION_KEYS%%)
+          AND bg.org_abbrev IN (%%PARTITION_KEYS%%)
       </sql>
     </sqlQuery>
 

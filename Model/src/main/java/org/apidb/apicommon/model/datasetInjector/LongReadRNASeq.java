@@ -54,7 +54,7 @@ public class LongReadRNASeq extends DatasetInjector {
       }
     }
 
-    setPropValue("includeProjects", projectName);
+    setPropValue("includeProjects", projectName + ",UniDB");
     injectTemplate("LongReadGeneModelQuestion");
     injectTemplate("LongReadGeneModelSpanQuestion");
 

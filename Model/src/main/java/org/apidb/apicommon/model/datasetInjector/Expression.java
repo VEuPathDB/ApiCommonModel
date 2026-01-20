@@ -107,6 +107,8 @@ public abstract class Expression extends DatasetInjector {
 
         String projectName = getPropValue("projectName");
 
+	String cleanDatasetName = getDatasetName().replace('.', '_');
+	setPropValue ("cleanDatasetName", cleanDatasetName);
 
 
         if(getPropValueAsBoolean("isEuPathDBSite")) {
