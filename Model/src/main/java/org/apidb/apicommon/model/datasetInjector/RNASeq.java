@@ -56,6 +56,10 @@ public class RNASeq extends  DatasetInjector {
       //String presenterId = getPropValue("presenterId");
       String datasetName = getDatasetName();
 
+      String cleanDatasetName = datasetName.replace('.', '_');
+      setPropValue ("cleanDatasetName", cleanDatasetName);
+
+      
       Boolean switchStrandsGBrowse = getPropValueAsBoolean("switchStrandsGBrowse");
       Boolean switchStrandsProfiles = getPropValueAsBoolean("switchStrandsProfiles");
 
