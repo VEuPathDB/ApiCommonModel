@@ -129,7 +129,7 @@ my @tester = %{$args};
   if($buildNumber && $webservicesDir && $nameForFileNames ) {
     #todo:  construct the path
     #/var/www/Common/apiSiteFilesMirror/webServices/ToxoDB/build-68/TgondiiME49
-    my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeAndProteome/config/jbrowse.conf";
+    my $webServicePropertiesFile = "$webservicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeBrowser/config/jbrowse.conf";
     $webServicePropsHash = $self->makeProperties($webServicePropertiesFile);
   }
 
