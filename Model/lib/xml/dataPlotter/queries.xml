@@ -8,7 +8,7 @@
                         ', ' || dsp.short_attribution, '''', '`') as display_name,
                     dsp.dataset_presenter_id as presenter_id, 
                     ds.order_num
-                from apidbTuning.Profile p,
+                from apidbTuning.Profile_p p,
                      apidbTuning.ProfileSamples ps,
                      study.ProtocolAppNode pan,
 		     apidbtuning.datasetdatasource dd,
@@ -23,6 +23,7 @@
                 and p.dataset_subtype = 'rnaseq' 
                 and p.profile_type = 'values' 
                 and p.source_id = '$id'
+                and p.org_abbrev = '$orgAbbrev'
                 and ((dprop.value = 'false'
                       and pan.name like '%firststrand%')
                      or (dprop.value = 'true'
@@ -72,7 +73,7 @@
     <![CDATA[
       select DISTINCT pt.profile_set_name || ' [' || pt.node_type || ']' as profile_set_name
            , pt.profile_type
-      from apidbtuning.profile p
+      from apidbtuning.profile_p p
         , apidbtuning.Datasetdatasource dd
         , apidbtuning.profiletype pt
         LEFT JOIN (select distinct sl.node_set_id
@@ -85,6 +86,7 @@
       and p.profile_study_id = pt.profile_study_id
       and p.profile_type = pt.profile_type
       and p.source_id = '$sourceId'
+      and p.org_abbrev = '$orgAbbrev'
     ]]>
     </query>
 
@@ -97,7 +99,7 @@
             (select max(rownum) as m
              from($sourceIdValueQuery)) ct
        where ('$sourceId' = 'ALL' AND (rn = 1 or rn = ct.m or mod(rn, round(ct.m/$N,0)) = 0)) 
-       OR '$sourceId' = source_id
+       OR ('$sourceId' = source_id and '$orgAbbrev' = org_abbrev)
     ]]>
     </query>
 
@@ -133,8 +135,9 @@ from (select row_number() OVER () as rn, points.* from (
     ( select row_number() OVER () as rn, vs.* from (
                 SELECT profile_study_id, dataset_name,  p.profile_set_name, p.profile_type, p.node_type,
                        unnest( STRING_TO_ARRAY(p.profile_AS_STRING, chr(9) ,'')) as oneval
-                   FROM apidbtuning.Profile p 
+                   FROM apidbtuning.Profile_p p 
                    where p.profile_type = 'values'
+		   AND p.org_abbrev = '$orgAbbrev'
                    AND p.profile_set_name || ' [' || node_type || ']' = '$profileSetName'
                    ) vs
           ) vals
@@ -173,6 +176,7 @@ and pts.profile_study_id = vals.profile_study_id
                         AND ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')) ec
                   WHERE p.profile_set_name || ' [' || node_type || ']' = '$profileSetName'
                   AND p.profile_type = '$profileType'
+                  AND p.org_abbrev = '$orgAbbrev'
                   AND p.source_id = ec.gene_source_id) t
                , table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.profile_as_string, '[^' || CHR(9) || ']+'))  + 1) as sys.OdciNumberList)) levels) samplevalues
       where samplenames.element_order = samplevalues.element_order
@@ -248,6 +252,7 @@ and pts.profile_study_id = vals.profile_study_id
               and ps.profile_type = 'values'
               and ps.protocol_app_node_id =  na.protocol_app_node_id
               and na.na_feature_id = ga.na_feature_id
+              and ga.org_abbrev='$orgAbbrev',
               and ga.source_id='$sourceId') sense_comp
            , (select ps.node_order_num, ps.protocol_app_node_name
                    , na.value
@@ -258,6 +263,7 @@ and pts.profile_study_id = vals.profile_study_id
               and ps.profile_type = 'values'
               and ps.protocol_app_node_id =  na.protocol_app_node_id
               and na.na_feature_id = ga.na_feature_id
+              and ga.org_abbrev='$orgAbbrev',
               and ga.source_id='$sourceId') sense_ref
         where sense_comp.protocol_app_node_name != sense_ref.protocol_app_node_name) sense
         , (select antisense_ref.protocol_app_node_name || '->' || antisense_comp.protocol_app_node_name as name
@@ -270,6 +276,7 @@ and pts.profile_study_id = vals.profile_study_id
                 and ps.profile_type = 'values'
                 and ps.protocol_app_node_id =  na.protocol_app_node_id
                 and na.na_feature_id = ga.na_feature_id
+                and ga.org_abbrev='$orgAbbrev',
                 and ga.source_id='$sourceId') antisense_comp
                        , (select ps.node_order_num,ps.protocol_app_node_name,na.value
                 from apidbtuning.ProfileSamples ps
@@ -279,7 +286,8 @@ and pts.profile_study_id = vals.profile_study_id
                     and ps.profile_type = 'values'
                     and ps.protocol_app_node_id =  na.protocol_app_node_id
                     and na.na_feature_id = ga.na_feature_id
-                and ga.source_id='$sourceId') antisense_ref
+                    and ga.org_abbrev='$orgAbbrev',
+                    and ga.source_id='$sourceId') antisense_ref
                     where antisense_comp.protocol_app_node_name != antisense_ref.protocol_app_node_name) antisense
         where sense.name = antisense.name 
     ]]>
