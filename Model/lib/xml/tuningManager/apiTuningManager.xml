@@ -1705,6 +1705,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <comment> One profile per gene per dataset. Used for graphs.</comment>
     <externalDependency name="apidb.Datasource"/>
 <!--
+    NOTE: if we revive these datasets, hard code 'no_org_abbrev' for their org_abbrev value.  for dataplotter.
     <externalDependency name="apidb.OntologyTermResult"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
@@ -1985,6 +1986,58 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     </sql>
   </tuningTable>
 
+  <tuningTable name="Profile_p">
+    <internalDependency name="Profile"/>
+    <sql>
+      <![CDATA[
+	create table profile_p&1 (
+	 like profile
+	)  PARTITION BY LIST (org_abbrev)
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        DO $$
+        DECLARE
+          orgrecord RECORD;
+          partition_name TEXT;
+        BEGIN
+          FOR orgrecord IN SELECT org_abbrev, sanitized_org_abbrev from webready.OrganismAbbreviation_p LOOP
+            partition_name := lower('profile_p&1_' || orgrecord.sanitized_org_abbrev);
+            EXECUTE format('CREATE TABLE %I PARTITION OF Profile_p&1 FOR VALUES IN (%L)', partition_name, orgrecord.org_abbrev);
+
+            INSERT INTO Profile_p&1
+            Select *
+	    FROM profile p
+	    WHERE org_abbrev = orgrecord.org_abbrev;
+          END LOOP;
+        END $$;
+      ]]>
+    </sql>
+    
+    <sql>
+      <![CDATA[
+        create index exprof_p_idx&1
+          on Profile_p&1 (org_abbrev, source_id, profile_type, profile_set_name)
+      ]]>
+    </sql>
+    
+    <sql>
+      <![CDATA[
+        create index profset_p_idx&1
+          on Profile_p&1 (org_abbrev, profile_set_name, profile_type)
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create index srcdset_p_idx&1
+          on Profile_p&1 (org_abbrev, source_id, dataset_subtype, dataset_type)
+
+      ]]>
+    </sql>
+  </tuningTable>
 
   <tuningTable name="ProfileType">
     <internalDependency name="Profile"/>
