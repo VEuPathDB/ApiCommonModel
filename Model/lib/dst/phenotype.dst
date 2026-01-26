@@ -81,3 +81,84 @@ prop=edaEntityAbbrev
                FROM eda.ATTRIBUTEvalue_${edaStudyStableId}_${edaEntityAbbrev} av
                WHERE av.attribute_stable_id = 'VEUPATHDB_GENE_ID'
 >templateTextEnd<
+
+
+[templateStart]
+name=phenotypeEdaAttributeQueries
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+prop=includeProjects
+>templateTextStart<
+        <sqlQuery name="PhenotypeVariables${datasetName}"
+                  doNotTest="true"
+                  attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariables${datasetName}"
+                  includeProjects="${includeProjects}">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <sql>
+              <![CDATA[
+  SELECT ta.source_id, ta.project_id, p.*
+  FROM webready.TranscriptAttributes_p ta,
+    (SELECT * FROM public.crosstab(
+      'SELECT genes.string_value as gene_id, av.attribute_stable_id, av.string_value
+       FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
+            (SELECT ${edaEntityAbbrev}_stable_id, string_value
+             FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev}
+             WHERE attribute_stable_id = ''VEUPATHDB_GENE_ID'') genes
+       WHERE av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
+         AND av.attribute_stable_id != ''VEUPATHDB_GENE_ID''
+       ORDER BY 1, 2',
+      'SELECT stable_id
+       FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+       WHERE has_values = 1
+         AND stable_id != ''VEUPATHDB_GENE_ID''
+       ORDER BY stable_id'
+    ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
+    ) p
+    WHERE ta.source_id = p.gene_id
+      AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
+              ]]>
+            </sql>
+        </sqlQuery>
+
+       <sqlQuery name="MetaPhenotypeVariables${datasetName}" includeProjects="${includeProjects}">
+          <column name="name" />
+          <column name="display_name" />
+          <column name="help" />
+          <column name="reporter_name" />
+          <column name="reporter_display" />
+          <column name="reporter_description" />
+          <column name="reporter_implementation" />
+          <column name="reporter_properties" />
+
+          <sql>
+            <![CDATA[
+           SELECT stable_id as name,
+                  display_name,
+                  'Phenotype variable from ${datasetName}' as help,
+                  'histogram' as reporter_name,
+                  'Histogram' as reporter_display,
+                  'Display a histogram of the values' as reporter_description,
+                  'org.gusdb.wdk.model.report.reporter.HistogramAttributeReporter' as reporter_implementation,
+                  null as reporter_properties
+           FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+           WHERE has_values = 1
+             AND stable_id != 'VEUPATHDB_GENE_ID'
+           ORDER BY stable_id
+            ]]>
+          </sql>
+       </sqlQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=phenotypeEdaAttributeRef
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptRecord.xml
+prop=datasetName
+prop=includeProjects
+>templateTextStart<
+              <attributeQueryRef ref="TranscriptAttributes.PhenotypeVariables${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariables${datasetName}" includeProjects="${includeProjects}">
+              </attributeQueryRef>
+>templateTextEnd<
