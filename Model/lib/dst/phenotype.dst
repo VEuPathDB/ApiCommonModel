@@ -84,7 +84,7 @@ prop=edaEntityAbbrev
 
 
 [templateStart]
-name=phenotypeEdaAttributeQueries
+name=phenotypeEdaAttributeQueriesNumeric
 anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
 prop=datasetName
 prop=edaStudyStableId
@@ -92,9 +92,9 @@ prop=edaEntityAbbrev
 prop=includeProjects
 prop=orgListForPartitionedTables
 >templateTextStart<
-        <sqlQuery name="PhenotypeVariables${datasetName}"
+        <sqlQuery name="PhenotypeVariablesNumeric${datasetName}"
                   doNotTest="true"
-                  attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariables${datasetName}"
+                  attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariablesNumeric${datasetName}"
                   includeProjects="${includeProjects}">
             <column name="source_id"/>
             <column name="gene_source_id"/>
@@ -105,8 +105,7 @@ prop=orgListForPartitionedTables
   FROM apidbtuning.TranscriptAttributes ta
     LEFT OUTER JOIN (
       SELECT * FROM public.crosstab(
-        'SELECT genes.string_value as gene_id, av.attribute_stable_id,
-	        CASE WHEN ag.data_type = ''number'' OR ag.data_type = ''integer'' then av.number_value ELSE av.string_value END as val
+        'SELECT genes.string_value as gene_id, av.attribute_stable_id, av.number_value
          FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
               eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
               (SELECT ${edaEntityAbbrev}_stable_id, string_value
@@ -116,12 +115,14 @@ prop=orgListForPartitionedTables
            AND av.attribute_stable_id != ''VEUPATHDB_GENE_ID''
 	   AND av.attribute_stable_id = ag.stable_id
 	   AND ag.has_values = 1
+           AND (ag.data_type = ''number'' OR ag.data_type = ''integer'')
 	   AND (ag.hidden IS NULL OR NOT (ag.hidden::jsonb @> ''["variableTree"]''::jsonb))
          ORDER BY 1, 2',
         'SELECT stable_id
          FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
          WHERE has_values = 1
            AND stable_id != ''VEUPATHDB_GENE_ID''
+           AND (data_type = ''number'' OR data_type = ''integer'')
            AND (hidden IS NULL OR NOT (hidden::jsonb @> ''["variableTree"]''::jsonb))
          ORDER BY stable_id'
       ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
@@ -130,7 +131,7 @@ prop=orgListForPartitionedTables
             </sql>
         </sqlQuery>
 
-       <sqlQuery name="MetaPhenotypeVariables${datasetName}" includeProjects="${includeProjects}">
+       <sqlQuery name="MetaPhenotypeVariablesNumeric${datasetName}" includeProjects="${includeProjects}">
           <column name="name" />
           <column name="display_name" />
           <column name="help" />
@@ -144,11 +145,7 @@ prop=orgListForPartitionedTables
             <![CDATA[
            SELECT stable_id as name,
                   display_name,
-                  CASE data_type
-		    WHEN 'number' THEN 'number'
-                    WHEN 'integer' THEN 'number'
-		  ELSE 'string'
-		  END as column_type,
+                  'number' as column_type,
                   'Phenotype variable from ${datasetName}' as help,
                   'histogram' as reporter_name,
                   'Histogram' as reporter_display,
@@ -157,7 +154,88 @@ prop=orgListForPartitionedTables
                   null as reporter_properties
            FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
            WHERE has_values = 1
-             AND data_type = 'number'
+             AND (data_type = 'number' OR data_type = 'integer')
+             AND stable_id != 'VEUPATHDB_GENE_ID'
+             AND (hidden IS NULL OR NOT (hidden::jsonb @> '["variableTree"]'::jsonb))
+           ORDER BY stable_id
+            ]]>
+          </sql>
+       </sqlQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=phenotypeEdaAttributeQueriesString
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+prop=includeProjects
+prop=orgListForPartitionedTables
+>templateTextStart<
+        <sqlQuery name="PhenotypeVariablesString${datasetName}"
+                  doNotTest="true"
+                  attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariablesString${datasetName}"
+                  includeProjects="${includeProjects}">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <sql>
+              <![CDATA[
+  SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
+  FROM apidbtuning.TranscriptAttributes ta
+    LEFT OUTER JOIN (
+      SELECT * FROM public.crosstab(
+        'SELECT genes.string_value as gene_id, av.attribute_stable_id, av.string_value
+         FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
+              eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
+              (SELECT ${edaEntityAbbrev}_stable_id, string_value
+               FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev}
+               WHERE attribute_stable_id = ''VEUPATHDB_GENE_ID'') genes
+         WHERE av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
+           AND av.attribute_stable_id != ''VEUPATHDB_GENE_ID''
+	   AND av.attribute_stable_id = ag.stable_id
+	   AND ag.has_values = 1
+           AND ag.data_type NOT IN (''number'', ''integer'')
+	   AND (ag.hidden IS NULL OR NOT (ag.hidden::jsonb @> ''["variableTree"]''::jsonb))
+         ORDER BY 1, 2',
+        'SELECT stable_id
+         FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+         WHERE has_values = 1
+           AND stable_id != ''VEUPATHDB_GENE_ID''
+           AND data_type NOT IN (''number'', ''integer'')
+           AND (hidden IS NULL OR NOT (hidden::jsonb @> ''["variableTree"]''::jsonb))
+         ORDER BY stable_id'
+      ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
+    ) p ON ta.gene_source_id = p.gene_id
+              ]]>
+            </sql>
+        </sqlQuery>
+
+       <sqlQuery name="MetaPhenotypeVariablesString${datasetName}" includeProjects="${includeProjects}">
+          <column name="name" />
+          <column name="display_name" />
+          <column name="help" />
+          <column name="reporter_name" />
+          <column name="reporter_display" />
+          <column name="reporter_description" />
+          <column name="reporter_implementation" />
+          <column name="reporter_properties" />
+
+          <sql>
+            <![CDATA[
+           SELECT stable_id as name,
+                  display_name,
+                  'string' as column_type,
+                  'Phenotype variable from ${datasetName}' as help,
+                  'wordCloud' as reporter_name,
+                  'Word Cloud' as reporter_display,
+                  'Display a word cloud of the values' as reporter_description,
+                  'org.eupathdb.common.model.report.EbrcWordCloudAttributeReporter' as reporter_implementation,
+                  null as reporter_properties
+           FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+           WHERE has_values = 1
+             AND data_type NOT IN ('number', 'integer')
              AND stable_id != 'VEUPATHDB_GENE_ID'
              AND (hidden IS NULL OR NOT (hidden::jsonb @> '["variableTree"]'::jsonb))
            ORDER BY stable_id
@@ -173,7 +251,9 @@ anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptRecord.xml
 prop=datasetName
 prop=includeProjects
 >templateTextStart<
-              <attributeQueryRef ref="TranscriptAttributes.PhenotypeVariables${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariables${datasetName}" includeProjects="${includeProjects}">
+              <attributeQueryRef ref="TranscriptAttributes.PhenotypeVariablesNumeric${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariablesNumeric${datasetName}" includeProjects="${includeProjects}">
+              </attributeQueryRef>
+              <attributeQueryRef ref="TranscriptAttributes.PhenotypeVariablesString${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaPhenotypeVariablesString${datasetName}" includeProjects="${includeProjects}">
               </attributeQueryRef>
 >templateTextEnd<
 
@@ -185,5 +265,6 @@ prop=datasetName
 prop=datasetDisplayName
 >templateTextStart<
 PhenotypeDataset_${datasetName}	http://edamontology.org/topic_3298	Phenomics	DatasetRecordClasses.DatasetRecordClass	dataset	${datasetName}	${datasetDisplayName}	results
-TranscriptAttributes.MetaPhenotypeVariables${datasetName}	PhenotypeDataset_${datasetName}		TranscriptRecordClasses.TranscriptRecordClass	attributeMetaQuery	MetaPhenotypeVariables${datasetName}				gene		results	download
+TranscriptAttributes.MetaPhenotypeVariablesNumeric${datasetName}	PhenotypeDataset_${datasetName}		TranscriptRecordClasses.TranscriptRecordClass	attributeMetaQuery	MetaPhenotypeVariablesNumeric${datasetName}				gene		results	download
+TranscriptAttributes.MetaPhenotypeVariablesString${datasetName}	PhenotypeDataset_${datasetName}		TranscriptRecordClasses.TranscriptRecordClass	attributeMetaQuery	MetaPhenotypeVariablesString${datasetName}				gene		results	download
 >templateTextEnd<
