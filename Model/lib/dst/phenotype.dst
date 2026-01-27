@@ -105,19 +105,23 @@ prop=orgListForPartitionedTables
   FROM apidbtuning.TranscriptAttributes ta
     LEFT OUTER JOIN (
       SELECT * FROM public.crosstab(
-        'SELECT genes.string_value as gene_id, av.attribute_stable_id, av.number_value
+        'SELECT genes.string_value as gene_id, av.attribute_stable_id,
+	        CASE WHEN ag.data_type = ''number'' OR ag.data_type = ''integer'' then av.number_value ELSE av.string_value END as val
          FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
+              eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
               (SELECT ${edaEntityAbbrev}_stable_id, string_value
                FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev}
                WHERE attribute_stable_id = ''VEUPATHDB_GENE_ID'') genes
          WHERE av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
            AND av.attribute_stable_id != ''VEUPATHDB_GENE_ID''
+	   AND av.attribute_stable_id = ag.stable_id
+	   AND ag.has_values = 1
+	   AND (ag.hidden IS NULL OR NOT (ag.hidden::jsonb @> ''["variableTree"]''::jsonb))
          ORDER BY 1, 2',
         'SELECT stable_id
          FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
          WHERE has_values = 1
            AND stable_id != ''VEUPATHDB_GENE_ID''
-	   AND data_type = ''number''
            AND (hidden IS NULL OR NOT (hidden::jsonb @> ''["variableTree"]''::jsonb))
          ORDER BY stable_id'
       ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
@@ -140,6 +144,11 @@ prop=orgListForPartitionedTables
             <![CDATA[
            SELECT stable_id as name,
                   display_name,
+                  CASE data_type
+		    WHEN 'number' THEN 'number'
+                    WHEN 'integer' THEN 'number'
+		  ELSE 'string'
+		  END as column_type,
                   'Phenotype variable from ${datasetName}' as help,
                   'histogram' as reporter_name,
                   'Histogram' as reporter_display,
