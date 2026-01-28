@@ -8,7 +8,7 @@ public class SubcellularGeneList extends  GeneList {
     }
     @Override
     public String questionName() {
-        return("GenesBySubcellularGeneList" + getDatasetName());
+        return("GenesBySubcellularLocalization" + getDatasetName());
 
     }
     @Override
