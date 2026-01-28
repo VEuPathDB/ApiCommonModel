@@ -1044,6 +1044,98 @@ from (
         </sqlQuery>
 
 
+       <sqlQuery name="EdaCellularLocalizationGraphs" includeProjects="ToxoDB,TriTrypDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="project_id_url" />
+            <column name="graph_ids" />
+            <column name="default_graph_id" />
+            <column name="species" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
+            <column name="display_name" />
+            <column name="description" />
+            <column name="has_graph_data"/>
+	    <column name="has_meta_data"/>
+	    <column name="meta_data_categories"/>
+            <column name="dataset_name"/>
+            <column name="dataset_id"/>
+            <column name="summary"/>
+            <column name="short_attribution"/>
+            <column name="assay_type"/>
+            <column name="plot_configs_json"/>
+            <sql>
+
+<![CDATA[
+select g.*, decode('@PROJECT_ID@', 'UniDB', 'EuPathDB', g.project_id) as project_id_url, regexp_substr(graph_ids, '[^,]*') as default_graph_id
+from (
+        select ga.source_id, ga.project_id,
+             ga.organism as gene_organism, ga.genus_species ,
+             psgene.profile_graph_id as graph_ids,
+             case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
+             tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
+             'FALSE' has_meta_data, '' as meta_data_categories,
+             graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name,
+             dp.description, 'Cellular Localization' as assay_type, dp.dataset_presenter_id as dataset_id
+      from webready.GeneAttributes_p ga,
+           apidbtuning.DatasetDatasource dds,
+           apidbtuning.datasetPresenter dp,
+           sres.taxonname tn,
+           webready.TaxonSpecies_p ts,
+           sres.taxonname sn,
+           (WITH dataset_genes as (
+               SELECT '' as dataset_name, '' as source_id
+               -- TEMPLATE_ANCHOR cellularLocalizationEdaGeneTableSql
+           )
+          -- Special Case for ToxoDB - ME49 Genes
+          select distinct rsog.ref_source_id, p.dataset_name,
+                 rsog.source_id as profile_graph_id
+          from webready.RefSynOrthologousGenes_P rsog
+             , dataset_genes p
+          where rsog.source_id = p.source_id
+          and rsog.org_abbrev in ('tgonGT1')
+          union
+          -- this is the regular case
+          select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
+          from dataset_genes p, webready.GeneAttributes_p ga
+          where p.source_id = ga.source_id
+            ) psgene,
+           (  SELECT dataset_name,
+                     JSON_ARRAYAGG(
+                       JSON_OBJECT(
+                         'plotName' VALUE plot_name,
+                         'plotType' VALUE plot_type,
+                         'xAxisEntityId' VALUE x_axis_entity_id,
+                         'yAxisEntityId' VALUE y_axis_entity_id,
+                         'xAxisVariableId' VALUE x_axis_variable_id,
+                         'yAxisVariableId' VALUE y_axis_variable_id,
+                         'xMin' VALUE x_min,
+                         'xMax' VALUE x_max,
+                         'yMin' VALUE y_min,
+                         'yMax' VALUE y_max
+                        )
+                       ) AS plot_configs_json
+              FROM apidbtuning.edagenegraph
+              GROUP BY dataset_name
+           ) graph_descrip
+        where ga.source_id = psgene.source_id
+          and psgene.dataset_name = dds.name
+          and dds.dataset_presenter_id = dp.dataset_presenter_id
+          and graph_descrip.dataset_name = dp.name
+          and dds.taxon_id = tn.taxon_id
+          and tn.name_class = 'scientific name'
+          and dds.taxon_id = ts.taxon_id
+          and ts.species_taxon_id = sn.taxon_id
+          and sn.name_class = 'scientific name'
+          and ga.genus_species = sn.name
+          and dp.type = 'cellularLocalization'
+) g
+ ]]>
+       </sql>
+
+        </sqlQuery>
+
+
     <sqlQuery name="PhenotypeScoreGraphs" includeProjects="PlasmoDB,UniDB">
       <column name="source_id" />
       <column name="project_id" />
@@ -4665,6 +4757,25 @@ SELECT genes.string_value AS gene, ag.display_name AS variable, av.string_value,
    WHERE av.attribute_stable_id = ag.stable_id
    AND AV.GNPD_STABLE_ID = genes.GNPD_STABLE_ID
    AND AV.ATTRIBUTE_STABLE_ID != 'VEUPATHDB_GENE_ID'
+   ) gd
+   WHERE ga.source_id = gd.gene
+     AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+          <sqlQuery name="EdaCellularLocalizationGraphsDataTable" isCacheable="false" includeProjects="ToxoDB,TriTrypDB,UniDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="dataset_id"/>
+            <column name="variable"/>
+            <column name="value"/>
+            <sql>
+            <![CDATA[
+SELECT ga.source_id, ga.project_id, gd.variable, nvl(gd.string_value, nvl(to_char(round(gd.number_value, 4)), to_char(gd.date_value))) AS value, gd.dataset_id
+FROM webready.GeneAttributes_p ga, (
+SELECT '' AS gene, '' AS variable, '' AS string_value, NULL AS number_value, NULL AS date_value, '' AS dataset_id FROM dual WHERE 1=0
    ) gd
    WHERE ga.source_id = gd.gene
      AND ga.org_abbrev IN (%%PARTITION_KEYS%%)

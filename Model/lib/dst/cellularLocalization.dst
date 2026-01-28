@@ -33,3 +33,202 @@ prop=cellularLocalizationWdkAttributes
         </description>
     </question>
 >templateTextEnd<
+
+
+[templateStart]
+name=cellularLocalizationEdaGeneTableSql
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/geneTableQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+>templateTextStart<
+               UNION
+               SELECT '${datasetName}' AS dataset_name , string_value AS source_id
+               FROM eda.ATTRIBUTEvalue_${edaStudyStableId}_${edaEntityAbbrev} av
+               WHERE av.attribute_stable_id = 'VEUPATHDB_GENE_ID'
+>templateTextEnd<
+
+
+[templateStart]
+name=cellularLocalizationEdaAttributeQueriesNumeric
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+prop=includeProjects
+>templateTextStart<
+        <sqlQuery name="CellularLocalizationVariablesNumeric${datasetName}"
+                  doNotTest="true"
+                  attributeMetaQueryRef="TranscriptAttributes.MetaCellularLocalizationVariablesNumeric${datasetName}"
+                  includeProjects="${includeProjects}">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <sql>
+              <![CDATA[
+  SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
+  FROM apidbtuning.TranscriptAttributes ta
+    LEFT OUTER JOIN (
+      SELECT * FROM public.crosstab(
+        'SELECT genes.string_value as gene_id, av.attribute_stable_id, av.number_value
+         FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
+              eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
+              (SELECT ${edaEntityAbbrev}_stable_id, string_value
+               FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev}
+               WHERE attribute_stable_id = ''VEUPATHDB_GENE_ID'') genes
+         WHERE av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
+           AND av.attribute_stable_id != ''VEUPATHDB_GENE_ID''
+	   AND av.attribute_stable_id = ag.stable_id
+	   AND ag.has_values = 1
+           AND (ag.data_type = ''number'' OR ag.data_type = ''integer'')
+	   AND (ag.hidden IS NULL OR NOT (ag.hidden::jsonb @> ''["variableTree"]''::jsonb))
+         ORDER BY 1, 2',
+        'SELECT stable_id
+         FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+         WHERE has_values = 1
+           AND stable_id != ''VEUPATHDB_GENE_ID''
+           AND (data_type = ''number'' OR data_type = ''integer'')
+           AND (hidden IS NULL OR NOT (hidden::jsonb @> ''["variableTree"]''::jsonb))
+         ORDER BY stable_id'
+      ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
+    ) p ON ta.gene_source_id = p.gene_id
+              ]]>
+            </sql>
+        </sqlQuery>
+
+       <sqlQuery name="MetaCellularLocalizationVariablesNumeric${datasetName}" includeProjects="${includeProjects}">
+          <column name="name" />
+          <column name="display_name" />
+          <column name="help" />
+          <column name="reporter_name" />
+          <column name="reporter_display" />
+          <column name="reporter_description" />
+          <column name="reporter_implementation" />
+          <column name="reporter_properties" />
+
+          <sql>
+            <![CDATA[
+           SELECT stable_id as name,
+                  display_name,
+                  'number' as column_type,
+                  'Cellular Localization variable from ${datasetName}' as help,
+                  'histogram' as reporter_name,
+                  'Histogram' as reporter_display,
+                  'Display a histogram of the values' as reporter_description,
+                  'org.gusdb.wdk.model.report.reporter.HistogramAttributeReporter' as reporter_implementation,
+                  null as reporter_properties
+           FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+           WHERE has_values = 1
+             AND (data_type = 'number' OR data_type = 'integer')
+             AND stable_id != 'VEUPATHDB_GENE_ID'
+             AND (hidden IS NULL OR NOT (hidden::jsonb @> '["variableTree"]'::jsonb))
+           ORDER BY stable_id
+            ]]>
+          </sql>
+       </sqlQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=cellularLocalizationEdaAttributeQueriesString
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+prop=includeProjects
+>templateTextStart<
+        <sqlQuery name="CellularLocalizationVariablesString${datasetName}"
+                  doNotTest="true"
+                  attributeMetaQueryRef="TranscriptAttributes.MetaCellularLocalizationVariablesString${datasetName}"
+                  includeProjects="${includeProjects}">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <sql>
+              <![CDATA[
+  SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
+  FROM apidbtuning.TranscriptAttributes ta
+    LEFT OUTER JOIN (
+      SELECT * FROM public.crosstab(
+        'SELECT genes.string_value as gene_id, av.attribute_stable_id, av.string_value
+         FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
+              eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
+              (SELECT ${edaEntityAbbrev}_stable_id, string_value
+               FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev}
+               WHERE attribute_stable_id = ''VEUPATHDB_GENE_ID'') genes
+         WHERE av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
+           AND av.attribute_stable_id != ''VEUPATHDB_GENE_ID''
+	   AND av.attribute_stable_id = ag.stable_id
+	   AND ag.has_values = 1
+           AND ag.data_type NOT IN (''number'', ''integer'')
+	   AND (ag.hidden IS NULL OR NOT (ag.hidden::jsonb @> ''["variableTree"]''::jsonb))
+         ORDER BY 1, 2',
+        'SELECT stable_id
+         FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+         WHERE has_values = 1
+           AND stable_id != ''VEUPATHDB_GENE_ID''
+           AND data_type NOT IN (''number'', ''integer'')
+           AND (hidden IS NULL OR NOT (hidden::jsonb @> ''["variableTree"]''::jsonb))
+         ORDER BY stable_id'
+      ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
+    ) p ON ta.gene_source_id = p.gene_id
+              ]]>
+            </sql>
+        </sqlQuery>
+
+       <sqlQuery name="MetaCellularLocalizationVariablesString${datasetName}" includeProjects="${includeProjects}">
+          <column name="name" />
+          <column name="display_name" />
+          <column name="help" />
+          <column name="reporter_name" />
+          <column name="reporter_display" />
+          <column name="reporter_description" />
+          <column name="reporter_implementation" />
+          <column name="reporter_properties" />
+
+          <sql>
+            <![CDATA[
+           SELECT stable_id as name,
+                  display_name,
+                  'string' as column_type,
+                  'Cellular Localization variable from ${datasetName}' as help,
+                  'wordCloud' as reporter_name,
+                  'Word Cloud' as reporter_display,
+                  'Display a word cloud of the values' as reporter_description,
+                  'org.eupathdb.common.model.report.EbrcWordCloudAttributeReporter' as reporter_implementation,
+                  null as reporter_properties
+           FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+           WHERE has_values = 1
+             AND data_type NOT IN ('number', 'integer')
+             AND stable_id != 'VEUPATHDB_GENE_ID'
+             AND (hidden IS NULL OR NOT (hidden::jsonb @> '["variableTree"]'::jsonb))
+           ORDER BY stable_id
+            ]]>
+          </sql>
+       </sqlQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=cellularLocalizationEdaAttributeRef
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptRecord.xml
+prop=datasetName
+prop=includeProjects
+>templateTextStart<
+              <attributeQueryRef ref="TranscriptAttributes.CellularLocalizationVariablesNumeric${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaCellularLocalizationVariablesNumeric${datasetName}" includeProjects="${includeProjects}">
+              </attributeQueryRef>
+              <attributeQueryRef ref="TranscriptAttributes.CellularLocalizationVariablesString${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaCellularLocalizationVariablesString${datasetName}" includeProjects="${includeProjects}">
+              </attributeQueryRef>
+>templateTextEnd<
+
+
+[templateStart]
+name=cellularLocalizationEdaAttributeCategory
+anchorFile=ApiCommonModel/Model/lib/wdk/ontology/individuals.txt
+prop=datasetName
+prop=datasetDisplayName
+>templateTextStart<
+CellularLocalizationDataset_${datasetName}	http://edamontology.org/topic_0140	Protein targeting and localization	DatasetRecordClasses.DatasetRecordClass	dataset	${datasetName}	${datasetDisplayName}	results
+TranscriptAttributes.MetaCellularLocalizationVariablesNumeric${datasetName}	CellularLocalizationDataset_${datasetName}		TranscriptRecordClasses.TranscriptRecordClass	attributeMetaQuery	MetaCellularLocalizationVariablesNumeric${datasetName}				gene		results	download
+TranscriptAttributes.MetaCellularLocalizationVariablesString${datasetName}	CellularLocalizationDataset_${datasetName}		TranscriptRecordClasses.TranscriptRecordClass	attributeMetaQuery	MetaCellularLocalizationVariablesString${datasetName}				gene		results	download
+>templateTextEnd<

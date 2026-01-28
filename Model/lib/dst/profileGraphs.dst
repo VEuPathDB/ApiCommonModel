@@ -158,12 +158,13 @@ prop=isGraphCustom
       , ${graphPriorityOrderGrouping} as order_num
 >templateTextEnd<
 
-[templateStart] 
+[templateStart]
 name=profileAttributeQueries
 anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
 prop=datasetName
 prop=cleanDatasetName
 prop=projectName
+prop=organismAbbrev
 prop=includeProjectsExcludeEuPathDB
 >templateTextStart<
         <sqlQuery name="ProfileSamples${cleanDatasetName}" doNotTest="true" attributeMetaQueryRef="TranscriptAttributes.MetaProfileSamples${cleanDatasetName}"  includeProjects="${includeProjectsExcludeEuPathDB}">
@@ -174,21 +175,27 @@ prop=includeProjectsExcludeEuPathDB
               <![CDATA[
   SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
   FROM webready.TranscriptAttributes_p ta,
-    (SELect *
-     FROM  public.crosstab ('SELECT  ga.source_id as profile_source_id,
-                          ''pan_'' || nfe.protocol_app_node_id as protocol_app_node,
-                          round(cast(nfe.value as numeric), 2) as value
-                      FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes_p ga
-                      WHERE nfe.protocol_app_node_id = ps.protocol_app_node_id
-                      AND ps.DATASET_NAME = ''${datasetName}''
-                      AND ps.profile_type = ''values''
-                      AND nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID
-                      AND ga.org_abbrev IN ('%%PARTITION_KEYS%%')
-                      ORDER BY protocol_app_node,value')
-            as profileStr (profile_source_id varchar(80), pan1 numeric, pan2 numeric, pan3 numeric, pan4 numeric, pan5 numeric, pan6 numeric, pan7 numeric, pan8 numeric, pan9 numeric, pan11 numeric, pan12 numeric, pan13 numeric, pan14 numeric, pan15 numeric, pan16 numeric, pan17 numeric, pan18 numeric, pan19 numeric)
+    (SELECT *
+     FROM public.crosstab(
+       'SELECT ga.source_id as profile_source_id,
+              CONCAT(''pan_'', ps.PROTOCOL_APP_NODE_ID, ''_ns_'', ps.study_id) as protocol_app_node,
+               round(cast(nfe.value as numeric), 2) as value
+        FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes_p ga
+        WHERE nfe.protocol_app_node_id = ps.protocol_app_node_id
+          AND ps.DATASET_NAME = ''${datasetName}''
+          AND ps.profile_type = ''values''
+          AND nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID
+          AND ga.org_abbrev = ''${organismAbbrev}''
+        ORDER BY 1, 2',
+       'SELECT CONCAT(''pan_'', ps.PROTOCOL_APP_NODE_ID, ''_ns_'', ps.study_id)
+        FROM apidbtuning.profilesamples ps
+        WHERE ps.DATASET_NAME = ''${datasetName}''
+          AND ps.profile_type = ''values''
+        ORDER BY ps.study_id, ps.NODE_ORDER_NUM'
+     ) AS ct(profile_source_id varchar(80), &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
     ) p
     WHERE ta.gene_source_id = p.profile_source_id
-      AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
+      AND ta.org_abbrev = '${organismAbbrev}'
               ]]>
             </sql>
         </sqlQuery>
@@ -205,17 +212,18 @@ prop=includeProjectsExcludeEuPathDB
 
           <sql >
             <![CDATA[
-           select 'pan_' || ps.PROTOCOL_APP_NODE_ID as name
+           select CONCAT('pan_', ps.PROTOCOL_APP_NODE_ID, '_ns_', ps.study_id) as name
                 , CASE WHEN ct.ct > 1
-                        THEN COALESCE(ps.profile_set_suffix, REGEXP_REPLACE(ps.study_name, ' \[.+\]', '') ) || ' - ' || ps.protocol_app_node_name 
+                        THEN COALESCE(ps.profile_set_suffix, REGEXP_REPLACE(ps.study_name, ' \[.+\]', '') ) || ' - ' || ps.protocol_app_node_name
                        WHEN ct.ct = 1 and ps.profile_set_suffix is not null
-                        THEN ps.profile_set_suffix || ' - ' || ps.protocol_app_node_name 
-                       ELSE ps.protocol_app_node_name 
-                  END  || 
+                        THEN ps.profile_set_suffix || ' - ' || ps.protocol_app_node_name
+                       ELSE ps.protocol_app_node_name
+                  END  ||
                   CASE WHEN (ps.study_name LIKE '%nonunique]') THEN ' - nonunique'
                        WHEN (ps.study_name LIKE '%unique]') THEN  ' - unique'
-                       ELSE '' 
+                       ELSE ''
                   END || ' (' || dp2.VALUE || ')' AS display_name,
+                  'number' as column_type,
                   dp.value || ' [Dataset: ' || dp3.value || ']'as help,
                             'histogram' as reporter_name,
                             'Histogram' as reporter_display,
@@ -233,10 +241,10 @@ prop=includeProjectsExcludeEuPathDB
                       and ps.dataset_name = ct.dataset_name
                       and ps.dataset_name = dd.name
                       and dd.name = dp.datasource_name
-                      and dp.property = 'profileSamplesHelp'
-                      and dd.dataset_presenter_id = dp2.dataset_presenter_id
+		      and dd.name = dp2.datasource_name
+                      and dd.name = dp3.datasource_name
+		      and dp.property = 'profileSamplesHelp'
                       and dp2.property = 'datasetShortDisplayName'
-                      and dd.dataset_presenter_id = dp3.dataset_presenter_id
                       and dp3.property = 'datasetDisplayName'
                       ORDER BY ps.study_id, ps.NODE_ORDER_NUM
             ]]>
@@ -259,6 +267,7 @@ prop=datasetName
 prop=projectName
 prop=sense
 prop=antisense
+prop=organismAbbrev
 prop=includeProjectsExcludeEuPathDB
 prop=cleanDatasetName
 >templateTextStart<
@@ -271,20 +280,26 @@ prop=cleanDatasetName
   SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
   FROM webready.TranscriptAttributes_p ta,
     (SELECT *
-     FROM  public.crosstab ('SELECT  ga.source_id as profile_source_id,
-                          ''pan_'' || nfe.protocol_app_node_id as protocol_app_node,
-                          round(cast(nfe.value as numeric), 2) as value
-                      FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes_p ga
-                      WHERE nfe.protocol_app_node_id = ps.protocol_app_node_id
-                      AND ps.DATASET_NAME = ''${datasetName}'' 
-                      AND ps.profile_type = ''values''
-                      AND nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID
-                      AND ga.org_abbrev IN ('%%PARTITION_KEYS%%')
-                      ORDER BY protocol_app_node,value')
-            as profileStr (profile_source_id varchar(20), pan1 numeric, pan2 numeric, pan3 numeric, pan4 numeric, pan5 numeric, pan6 numeric, pan7 numeric, pan8 numeric, pan9 numeric, pan11 numeric, pan12 numeric, pan13 numeric, pan14 numeric, pan15 numeric, pan16 numeric, pan17 numeric, pan18 numeric, pan19 numeric)
+     FROM public.crosstab(
+       'SELECT ga.source_id as profile_source_id,
+              CONCAT(''pan_'', ps.PROTOCOL_APP_NODE_ID, ''_ns_'', ps.study_id) as protocol_app_node,
+               round(cast(nfe.value as numeric), 2) as value
+        FROM results.nafeatureexpression nfe, apidbtuning.profilesamples ps, webready.GeneAttributes_p ga
+        WHERE nfe.protocol_app_node_id = ps.protocol_app_node_id
+          AND ps.DATASET_NAME = ''${datasetName}''
+          AND ps.profile_type = ''values''
+          AND nfe.NA_FEATURE_ID = ga.NA_FEATURE_ID
+          AND ga.org_abbrev = ''${organismAbbrev}''
+        ORDER BY 1, 2',
+	'SELECT CONCAT(''pan_'', ps.PROTOCOL_APP_NODE_ID, ''_ns_'', ps.study_id) 
+        FROM apidbtuning.profilesamples ps
+        WHERE ps.DATASET_NAME = ''${datasetName}''
+          AND ps.profile_type = ''values''
+        ORDER BY ps.study_id, ps.NODE_ORDER_NUM'
+     ) AS ct(profile_source_id varchar(20), &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
     ) p
     WHERE ta.gene_source_id = p.profile_source_id
-      AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
+      AND ta.org_abbrev = '${organismAbbrev}'
               ]]>
             </sql>
         </sqlQuery>
@@ -301,7 +316,7 @@ prop=cleanDatasetName
 
           <sql >
             <![CDATA[
-SELECT 'pan_' || ps.PROTOCOL_APP_NODE_ID AS name, 
+SELECT CONCAT('pan_', ps.PROTOCOL_APP_NODE_ID, '_ns_', ps.study_id) as name,
   CASE
     WHEN ps.profile_set_suffix IS NULL
     THEN ''
@@ -319,6 +334,7 @@ SELECT 'pan_' || ps.PROTOCOL_APP_NODE_ID AS name,
     THEN ' - unique only'
     ELSE ''
   END AS display_name,
+  'number' as column_type,
   dp.value || ' [Dataset: ' || dp3.value || ']' as help,
                             'histogram' as reporter_name,
                             'Histogram' as reporter_display,
@@ -335,10 +351,10 @@ WHERE ps.DATASET_NAME = '${datasetName}'
 AND ps.profile_type = 'values'
 and ps.dataset_name = dd.name
 and dd.name = dp.datasource_name
+and dd.name = dp2.datasource_name
+and dd.name = dp3.datasource_name
 and dp.property = 'profileSamplesHelp'
-and dd.dataset_presenter_id = dp2.dataset_presenter_id
 and dp2.property = 'datasetShortDisplayName'
-and dd.dataset_presenter_id = dp3.dataset_presenter_id
 and dp3.property = 'datasetDisplayName'
 ORDER BY ps.study_id, ps.NODE_ORDER_NUM
             ]]>
