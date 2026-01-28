@@ -78,7 +78,7 @@ sub processOrganism {
 
   &addOrfs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
-#  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
 
 
@@ -407,21 +407,34 @@ sub addTandemRepeats {
 sub addClonedInsertEnds {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
-  my $track;
-  my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/gff/tbruTREU927_Genbank_BACEnds_clonedInsertEnds_RSRC.gff.gz";
+  my $clonedInsertEndsDatasets = $datasetProperties->{clonedinsertends} ? $datasetProperties->{clonedinsertends} : {};
 
-  $track = ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig->
-    new({
-	 project_name => $projectName,
-	 build_number => $buildNumber,
-	 relative_path_to_file => $relativePathToBedFile,
-	 application_type => $applicationType,
-	 key => "cloned insert ends",
-	 label => "cloned insert ends",
-         subcategory => "Sequence assembly",
-	})->getConfigurationObject();
+  foreach my $dataset (keys %$clonedInsertEndsDatasets){
+    next unless($dataset =~ /clonedInsertEnds/);
 
-   push @{$result->{tracks}}, $track if($track);
+    my $datasetName = $clonedInsertEndsDatasets->{$dataset}->{datasetName};
+    my $datasetDisplayName = $clonedInsertEndsDatasets->{$dataset}->{datasetDisplayName};
+    my $datasetPresenterId = $clonedInsertEndsDatasets->{$dataset}->{datasetPresenterId};
+    my $summary = $clonedInsertEndsDatasets->{$dataset}->{summary};
+    $summary =~ s/\n/ /g;
+    my $shortAttribution = $clonedInsertEndsDatasets->{$dataset}->{shortAttribution}; 
+
+    my $track;
+    #my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/gff/tbruTREU927_Genbank_BACEnds_clonedInsertEnds_RSRC.gff.gz";
+    my $relativePathToGffFile = "${nameForFileNames}/clonedInsertEnds/gff/${datasetName}.gff.gz";
+    $track = ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig->
+	new({
+	    project_name => $projectName,
+	    build_number => $buildNumber,
+	    relative_path_to_file => $relativePathToGffFile,
+	    application_type => $applicationType,
+	    key => $datasetDisplayName,
+	    label => $datasetDisplayName,
+	    subcategory => "Sequence assembly",
+	    })->getConfigurationObject();
+
+    push @{$result->{tracks}}, $track if($track);
+  }
 }
 
 
