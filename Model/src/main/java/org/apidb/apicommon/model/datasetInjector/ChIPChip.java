@@ -57,7 +57,9 @@ public class ChIPChip extends DatasetInjector {
   // second column is for documentation
   @Override
   public String[][] getPropertiesDeclaration() {
-    String[][] propertiesDeclaration = {};
+    String[][] propertiesDeclaration = {
+        { "subTrackAttr", "sub tracks for the dataset" }
+    };
     return propertiesDeclaration;
   }
 
