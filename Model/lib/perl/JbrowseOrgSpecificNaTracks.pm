@@ -66,7 +66,7 @@ sub processOrganism {
 
   &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
   &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
-  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
+  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $nameForFileNames, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
@@ -739,78 +739,56 @@ sub addUnifiedMassSpec {
 
 
 sub addChipChipTracks {
-  my ($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType) = @_;
+  my ($dbh, $result, $datasetProperties, $organismAbbrev, $nameForFileNames, $applicationType) = @_;
 
   my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
- my $sql = "select d.name, s.name, pan.name, pan.protocol_app_node_id
-from study.study s
-   , SRES.EXTERNALDATABASERELEASE r
-   , SRES.EXTERNALDATABASE d
-   , study.protocolappnode pan
-   , study.studylink sl
-where d.name like '${organismAbbrev}%_chipChipExper_%'
-and s.EXTERNAL_DATABASE_RELEASE_ID = r.EXTERNAL_DATABASE_RELEASE_ID
-and r.EXTERNAL_DATABASE_ID = d.EXTERNAL_DATABASE_ID
-and s.study_id = sl.study_id
-and sl.protocol_app_node_id = pan.PROTOCOL_APP_NODE_ID
-and s.investigation_id is null";
+  foreach my $dataset (keys %$chipChipSeqDatasets){
+   #@print STDERR  "XXXX addChipChipTracks dataset: " + $dataset + " <<<<\n";;
+    next unless($dataset =~ /chipChipExper/);
 
+    my $peakTrack = &makeChipChipPeak($dataset, $datasetProperties, $nameForFileNames, $applicationType);
+    push @{$result->{tracks}}, $peakTrack;  
 
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-
-  while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
-
-    if($panName =~ /_peaks \(ChIP-chip\)/) {
-        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
-        push @{$result->{tracks}}, $peakTrack;
-    }
-    if($panName =~ /_smoothed \(ChIP-chip\)/) {
-      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
-      push @{$result->{tracks}}, $track;
-    }
+   # my $track = &makeChipChipSmoothed($dataset, $datasetProperties, $nameForFileNames, $applicationType);
+   # push @{$result->{tracks}}, $track;
   }
  
-  $sh->finish();
 }
 
-
+    #BB
+ 
 sub makeChipChipPeak {
-  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
+  my ($dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
+  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{datasetPresenterId};
+  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  $summary =~ s/\n/ /g;
+  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
 
-    my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-    my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
-    $summary =~ s/\n/ /g;
-    my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
-    my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
-
-  my $key = $panName;
-  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
+# BB
+# my $key = $panName;
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
 
-  my $queryParams = {
-                            'exp' => $dataset,
-                            'sub' => $subTrackAttr,
-                            'cutoff' => $cutoff,
-                            'panId' => $panId,
-                                           };
+  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
+  my @tracks = split(/\;/, $_);
 
-  my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
-                                                                                                dataset_name => $dataset,
-                                                                                                attribution => $shortAttribution,
-                                                                                                study_display_name => $datasetDisplayName,
-                                                                                                description => $summary,
-                                                                                                query_params => $queryParams,
-                                                                                                application_type => $applicationType,
-                                                                                                label => $key,
-                                                                                                key => $key,
-												pan_name => $panName,
-												dataset_presenter_id => $datasetPresenterId,
-												summary => $summary,
-                                                                                              })->getConfigurationObject();
-  return $peaks;
+  foreach my $t (@tracks) {
+    my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}.bed.gz";
+    my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
+	dataset_name => $dataset,
+	attribution => $shortAttribution,
+	description => $summary,
+	application_type => $applicationType,
+	label => $datasetDisplayName,
+	key => $datasetDisplayName,
+	dataset_presenter_id => $datasetPresenterId,
+	summary => $summary  })->getConfigurationObject();
+    return $peaks;
+  }
 }
 
 
