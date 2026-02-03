@@ -1,9 +1,138 @@
-[templateStart] 
+[templateStart]
 name=chipchipCategories
 anchorFile=ApiCommonModel/Model/lib/wdk/ontology/individuals.txt
 prop=questionName
 >templateTextStart<
-TranscriptRecordClasses.TranscriptRecordClass.${questionName}	searchCategory-chipchip		TranscriptRecordClasses.TranscriptRecordClass	search	${questionName}						internal	webservice	
+TranscriptRecordClasses.TranscriptRecordClass.${questionName}	searchCategory-chipchip		TranscriptRecordClasses.TranscriptRecordClass	search	${questionName}						internal	webservice
+>templateTextEnd<
+
+
+[templateStart]
+name=chipchipFilterParam
+anchorFile=ApiCommonModel/Model/lib/wdk/model/questions/params/geneParams.xml
+prop=cleanDatasetName
+prop=includeProjects
+>templateTextStart<
+
+    <filterParam name="chipchip_samples_${cleanDatasetName}" includeProjects="${includeProjects}"
+                 metadataQueryRef="GeneVQ.ChipchipSamplesMetadata_${cleanDatasetName}"
+                 backgroundQueryRef="GeneVQ.ChipchipSamplesMetadata_${cleanDatasetName}"
+                 ontologyQueryRef="GeneVQ.ChipchipMetadataSpec_${cleanDatasetName}"
+                 prompt="Samples"
+                 trimMetadataTerms="false">
+      <help>
+        Select reference samples.
+      </help>
+    </filterParam>
+
+>templateTextEnd<
+
+
+[templateStart]
+name=chipchipParamQueries
+anchorFile=ApiCommonModel/Model/lib/wdk/model/questions/params/geneParams.xml
+prop=cleanDatasetName
+prop=includeProjects
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+>templateTextStart<
+
+    <sqlQuery name="ChipchipMetadataSpec_${cleanDatasetName}" doNotTest="1" includeProjects="${includeProjects}">
+      <column name="ontology_term_name"/>
+      <column name="parent_ontology_term_name"/>
+      <column name="display_name"/>
+      <column name="description"/>
+      <column name="type"/>
+      <column name="units"/>
+      <column name="precision"/>
+      <column name="is_range"/>
+      <sql>
+        <![CDATA[
+          WITH RECURSIVE ontology_tree AS (
+            SELECT stable_id, parent_stable_id, display_name, definition, data_type
+            FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev}
+            WHERE has_values = 1
+            UNION
+            SELECT ag.stable_id, ag.parent_stable_id, ag.display_name, ag.definition, ag.data_type
+            FROM eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag
+            JOIN ontology_tree ot ON ag.stable_id = ot.parent_stable_id
+            WHERE ag.stable_id != 'sample'
+          )
+          SELECT stable_id AS ontology_term_name,
+                 CASE WHEN parent_stable_id = 'sample' THEN null ELSE parent_stable_id END AS parent_ontology_term_name,
+                 display_name,
+                 definition AS description,
+                 CASE WHEN data_type = 'category' THEN null ELSE data_type END AS type,
+                 null AS units,
+                 1 AS precision,
+                 0 AS is_range
+          FROM ontology_tree
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <sqlQuery name="ChipchipSamplesMetadata_${cleanDatasetName}" doNotTest="1" includeProjects="${includeProjects}">
+      <column name="ontology_term_name"/>
+      <column name="internal"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <column name="string_value"/>
+      <sql>
+        <![CDATA[
+         SELECT concat(sid.string_value, '_peaks (ChIP-chip)') AS internal,
+                 av.attribute_stable_id AS ontology_term_name,
+                 av.string_value,
+                 av.number_value,
+                 av.date_value
+          FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av
+		     , (select sample_stable_id
+                             , string_value 
+	                from eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev}
+                        where attribute_stable_id = 'VAR_709a2322') sid
+         WHERE av.sample_stable_id = sid.sample_stable_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+>templateTextEnd<
+
+
+[templateStart]
+name=chipchipQuery
+anchorFile=ApiCommonModel/Model/lib/wdk/model/questions/queries/geneQueries.xml
+prop=cleanDatasetName
+prop=includeProjects
+>templateTextStart<
+
+    <sqlQuery name="GenesByChIPchip${cleanDatasetName}" includeProjects="${includeProjects}">
+
+      <paramRef ref="geneParams.chipchip_samples_${cleanDatasetName}"/>
+      <paramRef ref="geneParams.chip_distance"/>
+      <paramRef ref="geneParams.chip_direction"/>
+      <paramRef ref="geneParams.chip_score"/>
+
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="matched_result"/>
+      <column name="project_id"/>
+      <column name="chip_distance"/>
+      <column name="chip_score"/>
+
+      <sql>
+        <![CDATA[
+          SELECT 'Y' as matched_result, cct.source_id, cct.gene_source_id, cct.project_id,
+                 min(cct.distance) as chip_distance, max(cct.score) as chip_score
+          FROM webready.ChIPchipTranscript_p cct, study.ProtocolAppNode pan
+          WHERE cct.protocol_app_node_id = pan.protocol_app_node_id
+            AND pan.name in ($$chipchip_samples_${cleanDatasetName}$$)
+            AND ($$chip_direction$$ = 'Either' OR direction = $$chip_direction$$)
+            AND cct.distance <= $$chip_distance$$
+            AND cct.score >= $$chip_score$$
+          GROUP BY cct.project_id, cct.source_id, cct.gene_source_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
 >templateTextEnd<
 
 
@@ -11,24 +140,23 @@ TranscriptRecordClasses.TranscriptRecordClass.${questionName}	searchCategory-chi
 name=chipchipQuestion
 anchorFile=ApiCommonModel/Model/lib/wdk/model/questions/geneQuestions.xml
 prop=datasetName
-prop=datasetDisplayName 
+prop=datasetDisplayName
 prop=datasetShortDisplayName
 prop=includeProjects
 prop=cleanDatasetName
 >templateTextStart<
-    <question name="GenesByChIPchip${cleanDatasetName}" includeProjects="${includeProjects}" 
+    <question name="GenesByChIPchip${cleanDatasetName}" includeProjects="${includeProjects}"
          displayName="${datasetDisplayName} ChIP on Chip Evidence"
          shortDisplayName="${datasetShortDisplayName}"
-         queryRef="GeneId.GenesByChIPchip"
+         queryRef="GeneId.GenesByChIPchip${cleanDatasetName}"
          recordClassRef="TranscriptRecordClasses.TranscriptRecordClass">
 
-        <paramRef ref="sharedParams.metadata_datasets" default="${datasetName}" visible="false"/>
-        <paramRef ref="sharedParams.chipchip_samples"/>
+        <paramRef ref="geneParams.chipchip_samples_${cleanDatasetName}"/>
         <paramRef ref="geneParams.chip_distance"/>
         <paramRef ref="geneParams.chip_direction"/>
         <paramRef ref="geneParams.chip_score"/>
 
-	 
+
         <attributesList
          summary="organism,gene_location_text,gene_product,chip_score,chip_distance"
          sorting="chip_score desc, chip_distance desc"
