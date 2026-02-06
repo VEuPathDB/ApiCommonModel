@@ -130,6 +130,40 @@
     </sql>
   </tuningTable>
 
+  <!-- Maps node_sets to their output protocol_app_nodes (excludes input-only nodes) -->
+  <tuningTable name="NodeSetOutputNode">
+    <comment>
+      Links node_sets to protocol_app_nodes that are outputs of protocol_apps.
+      Filters out input-only nodes by requiring the node to be an output of a protocol_app
+      that has inputs from the same node_set.
+    </comment>
+    <internalDependency name="NodeSetOutputNode"/>
+    <externalDependency name="study.Input"/>
+    <externalDependency name="study.Output"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE NodeSetOutputNode&1 AS
+        SELECT DISTINCT nns1.node_set_id, nns2.protocol_app_node_id
+        FROM NodeSetOutputNode nns1
+        CROSS JOIN NodeSetOutputNode nns2
+        INNER JOIN study.input i ON nns1.protocol_app_node_id = i.protocol_app_node_id
+        INNER JOIN study.output o ON nns2.protocol_app_node_id = o.protocol_app_node_id
+        WHERE nns1.node_set_id = nns2.node_set_id
+        AND i.protocol_app_id = o.protocol_app_id
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX nodesetoutput_nsid_ix&1 ON NodeSetOutputNode&1 (node_set_id, protocol_app_node_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX nodesetoutput_panid_ix&1 ON NodeSetOutputNode&1 (protocol_app_node_id, node_set_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <!-- unpartitioned (and thin) version of this table -->
  <tuningTable name="PathwayGenesThin">
     <externalDependency name="webready.PathwaysGeneTable_p"/>
@@ -1718,9 +1752,8 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.NodeSet"/>
-    <externalDependency name="study.NodeNodeSet"/>
+    <internalDependency name="NodeSetOutputNode"/>
     <internalDependency name="GeneAttributes"/>
-    <internalDependency name="GeneOrgAbbrev"/>
     <intermediateTable name="profile_nafeatureexp_summary"/>
     <intermediateTable name="gene_nafeatureexp"/>
     <sql>
@@ -1755,7 +1788,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 string_agg(coalesce(round(result.standard_error::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_stderr,
                 string_agg(coalesce(round(result.percentile_channel1::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_percentile1,
                 string_agg(coalesce(round(result.percentile_channel2::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string_percentile2
-              FROM study.ProtocolAppNode pan, study.NodeNodeSet sl, results.NaFeatureExpression result
+              FROM study.ProtocolAppNode pan, NodeSetOutputNode sl, results.NaFeatureExpression result
               WHERE result.protocol_app_node_id = sl.protocol_app_node_id
                 AND result.protocol_app_node_id = pan.protocol_app_node_id
                 AND sl.node_set_id = nodeset.node_set_id
@@ -1774,10 +1807,8 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         SELECT summ.node_set_id, ga.source_id, summ.node_type,
                profile_as_string_value, profile_as_string_stderr,
                profile_as_string_percentile1, profile_as_string_percentile2
-        FROM Geneattributes ga, GeneOrgAbbrev goa, profile_nafeatureexp_summary summ
-               WHERE ga.source_id = goa.source_id
-               AND ga.org_abbrev = goa.org_abbrev
-               AND ga.na_feature_id = summ.na_feature_id
+        FROM Geneattributes ga, profile_nafeatureexp_summary summ
+               WHERE ga.na_feature_id = summ.na_feature_id
       ]]>
     </sql>
 
@@ -2060,7 +2091,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="results.CompoundMassSpec"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.NodeSet"/>
-    <externalDependency name="study.NodeNodeSet"/>
+    <internalDependency name="NodeSetOutputNode"/>
     <sql>
       <![CDATA[
       CREATE TABLE ProfileSamples&1 AS
@@ -2070,7 +2101,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
         pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+      FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
         study.protocolAppNode pan, results.nafeatureexpression r
       WHERE pt.profile_study_id = s.node_set_id
       AND sl.node_set_id = s.node_set_id
@@ -2084,7 +2115,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
             pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
             pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+          FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
             study.protocolAppNode pan, apidb.NAFeatureMetacycle r
           WHERE pt.profile_study_id = s.node_set_id
           AND sl.node_set_id = s.node_set_id
@@ -2098,7 +2129,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
             pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
             pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+          FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
             study.protocolAppNode pan, apidb.LopitResults r
           WHERE pt.profile_study_id = s.node_set_id
           AND sl.node_set_id = s.node_set_id
@@ -2112,7 +2143,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
         pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+      FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
         study.protocolAppNode pan, results.compoundMassSpec r
       WHERE pt.profile_study_id = s.node_set_id
       AND sl.node_set_id = s.node_set_id
@@ -2125,7 +2156,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
             pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
             pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+          FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
             study.protocolAppNode pan, APIDB.compoundmassspecresult r
           WHERE pt.profile_study_id = s.node_set_id
           AND sl.node_set_id = s.node_set_id
@@ -2139,7 +2170,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
         pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+      FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
         study.protocolAppNode pan, apidb.ontologytermresult r
       WHERE pt.profile_study_id = s.node_set_id
       AND sl.node_set_id = s.node_set_id
@@ -2152,7 +2183,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
         pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-      FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+      FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
         study.protocolAppNode pan, results.nafeaturehostresponse r
       WHERE pt.profile_study_id = s.node_set_id
       AND sl.node_set_id = s.node_set_id
@@ -2165,7 +2196,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
             pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
             pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+          FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
             study.protocolAppNode pan, apidb.subjectresult r
           WHERE pt.profile_study_id = s.node_set_id
           AND sl.node_set_id = s.node_set_id
@@ -2178,7 +2209,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
             pan.protocol_app_node_id, pan.node_order_num, pt.profile_type,
             pt.dataset_name, pt.dataset_type, pt.dataset_subtype,
             pt.profile_set_suffix
-          FROM profileType pt, study.nodeSet s, study.nodeNodeSet sl,
+          FROM profileType pt, study.nodeSet s, NodeSetOutputNode sl,
             study.protocolAppNode pan, apidb.EigenGeneWgcnaResults r
           WHERE pt.profile_study_id = s.node_set_id
           AND sl.node_set_id = s.node_set_id
@@ -2619,4 +2650,6 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     </sql>
   </tuningTable>
 
+
+  
 </tuningConfig>
