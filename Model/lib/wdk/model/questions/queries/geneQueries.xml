@@ -140,25 +140,6 @@
     </sqlQuery>
 
 
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Question for GenesByLOPIT -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <sqlQuery name="GenesByLopit" includeProjects="ToxoDB,TriTrypDB,UniDB">
-        <paramRef ref="organismParams.organismWithLopitData"/>
-      <paramRef ref="geneParams.lopit_method"/>
-      <paramRef ref="geneParams.lopit_filter"/>
-      <column name="source_id"/>
-      <column name="gene_source_id"/>
-      <column name="project_id"/>
-      <sql>
-        <![CDATA[
-          SELECT t.source_id, t.gene_source_id, t.project_id, 'Y' as matched_result
-          FROM webready.TranscriptAttributes_p t
-          WHERE t.gene_source_id in ($$lopit_filter$$)
-        ]]>
-      </sql>
-    </sqlQuery>
-
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
   <!-- EDA Study Filtering -->
   <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -1829,11 +1810,10 @@
 
 
 
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- Go Term  CL-->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-    <sqlQuery name="GenesByGoTermCL" includeProjects="GiardiaDB,TriTrypDB,UniDB">
+    <!--- GO TERM CL Dataset-specific (shared query) -->
+
+    <sqlQuery name="GenesByGoTermCLDataset" includeProjects="GiardiaDB,TriTrypDB,UniDB">
       <postCacheUpdateSql>
         <sql>
           <![CDATA[
@@ -1870,12 +1850,12 @@
       </postCacheUpdateSql>
 
       <testParamValues>
+        <paramValue name="cellularLocImageDataset">TrypTag</paramValue>
         <paramValue name="go_typeahead_cl">N/A</paramValue>
         <paramValue name="go_term">binding</paramValue>
       </testParamValues>
 
-      <paramRef ref="organismParams.organismWithCellularLocImages"/>
-      <paramRef ref="geneParams.tagType" includeProjects="TriTrypDB,UniDB"/>
+      <paramRef ref="geneParams.cellularLocImageDataset"/>
       <paramRef ref="geneParams.go_typeahead_cl"/>
       <paramRef ref="geneParams.go_term"/>
       <column name="project_id"/>
@@ -1894,12 +1874,19 @@
             , string_agg(DISTINCT gs.evidence_code, ', ') AS evidence_code
             , string_agg(regexp_replace(fi.note, ' <a href.+$', NULL), '; ') AS note
             , max(fi.image_uri) AS image
-          FROM webready.TranscriptAttributes_p ta, webready.GoTermSummary_p gs, apidb.nafeatureimage fi
-          WHERE ta.org_abbrev IN ($$organismWithCellularLocImages$$)
-            AND gs.org_abbrev IN ($$organismWithCellularLocImages$$)
-            -- Cellular loc datasets
-            AND gs.source IN ('TrypTag', 'DawsonLab')
+          FROM webready.TranscriptAttributes_p ta
+            , webready.GoTermSummary_p gs
+            , apidb.nafeatureimage fi
+            , sres.externaldatabaserelease r
+            , sres.externaldatabase d
+          WHERE gs.org_abbrev IN (%%PARTITION_KEYS%%)
+            AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
             AND ta.aa_sequence_id = gs.aa_sequence_id
+            -- Join to external database to filter by dataset
+            AND fi.external_database_release_id = r.external_database_release_id
+            AND r.external_database_id = d.external_database_id
+            AND d.name = $$cellularLocImageDataset$$
+            -- Filter by GO term
             AND (
               gs.go_id IN ($$go_typeahead_cl$$)
               OR (
@@ -1908,101 +1895,11 @@
                 OR CONCAT(gs.go_id, ' : ', gs.go_term_name) LIKE REPLACE($$go_term$$, '*', '%')
               )
             )
-            AND ((fi.image_type = 'GFP' AND ta.project_id = 'GiardiaDB') OR
-                 (fi.image_type = '$$tagType$$' AND ta.project_id = 'TriTrypDB'))
             AND (fi.na_feature_id = ta.gene_na_feature_id OR fi.na_feature_id = ta.na_feature_id)
           GROUP BY gs.transcript_source_id, gs.gene_source_id, ta.project_id
         ]]>
       </sql>
     </sqlQuery>
-
-
-
-    <!--- GO TERM CL TriTrypSpec-->
-
-    <sqlQuery name="GenesByGoTermCLTriTryp" includeProjects="TriTrypDB,UniDB">
-      <postCacheUpdateSql>
-        <sql>
-          <![CDATA[
-            -- insert missing transcripts of included genes
-            INSERT INTO ##WDK_CACHE_TABLE## -- query-specific version
-            (wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result)
-            WITH matches AS (
-              SELECT *
-              FROM ##WDK_CACHE_TABLE##
-              WHERE wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
-            ) , row_offset AS (
-              SELECT max(wdk_row_id) AS the_max
-              FROM matches
-            ) , mismatches AS (
-                SELECT source_id, gene_source_id, project_id
-                FROM webready.TranscriptAttributes_p
-                WHERE gene_source_id IN ( SELECT gene_source_id FROM matches )
-                  AND org_abbrev IN (%%PARTITION_KEYS%%)
-                  AND 1 = 0
-              EXCEPT
-                SELECT source_id, gene_source_id, project_id
-                FROM matches
-            )
-            SELECT ##WDK_CACHE_INSTANCE_ID##
-              , row_number() OVER () + the_max
-              , 0
-              , source_id
-              , gene_source_id
-              , project_id
-              , 'N'
-            FROM row_offset, mismatches
-          ]]>
-        </sql>
-      </postCacheUpdateSql>
-
-      <testParamValues>
-        <paramValue name="go_typeahead_cl">N/A</paramValue>
-        <paramValue name="go_term">binding</paramValue>
-      </testParamValues>
-
-      <paramRef ref="organismParams.organismWithCellularLocImages"/>
-      <paramRef ref="geneParams.tagType"/>
-      <paramRef ref="geneParams.go_typeahead_cl"/>
-      <paramRef ref="geneParams.go_term"/>
-      <column name="project_id"/>
-      <column name="source_id"/>
-      <column name="gene_source_id"/>
-      <column name="matched_result"/>
-      <column name="evidence_code"/>
-      <column name="note"/>
-      <column name="image"/>
-      <sql>
-        <![CDATA[
-          SELECT gs.transcript_source_id AS source_id
-            , gs.gene_source_id
-            , ta.project_id
-            , 'Y' AS matched_result
-            , string_agg(DISTINCT gs.evidence_code, ', ') AS evidence_code
-            , string_agg(regexp_replace(fi.note, ' <a href.+$', NULL), '; ') AS note
-            , fi.image_uri AS image
-          FROM webready.TranscriptAttributes_p ta, webready.GoTermSummary_p gs, apidb.nafeatureimage fi
-          WHERE ta.org_abbrev IN ($$organismWithCellularLocImages$$)
-            AND gs.org_abbrev IN ($$organismWithCellularLocImages$$)
-            -- Cellular loc datasets
-            AND gs.source IN ('TrypTag', 'DawsonLab')
-            AND ta.aa_sequence_id = gs.aa_sequence_id
-            AND (
-              gs.go_id IN ($$go_typeahead_cl$$)
-              OR (
-                gs.go_term_name LIKE REPLACE($$go_term$$, '*', '%')
-                OR gs.go_id LIKE REPLACE($$go_term$$, '*', '%')
-                OR CONCAT(gs.go_id, ' : ', gs.go_term_name) LIKE REPLACE($$go_term$$, '*', '%')
-              )
-            )
-            AND fi.image_type = $$tagType$$
-            AND (fi.na_feature_id = ta.gene_na_feature_id OR fi.na_feature_id = ta.na_feature_id)
-          GROUP BY gs.transcript_source_id, gs.gene_source_id, fi.image_uri, fi.image_type, ta.project_id
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
 
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
