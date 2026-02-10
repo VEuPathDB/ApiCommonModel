@@ -3,21 +3,25 @@
 ## Priority Cascades
 
 ### Gene Product Priority (source_priority / source_rule values)
-1. **Curated gene products** (Sanger, VEuPathDB, Apollo)
-2. **1:1 + Curated transcript products** (Sanger, VEuPathDB, Apollo)
-3. **ARBA gene products**
-4. **All gene products** (concatenated)
-5. **All transcript products** (concatenated)
-6. **Base gene product field** (GeneFeature.product)
-7. **Base transcript products** (concatenated, Transcript.product) - *only in webready*
+1. **Preferred curated gene products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
+2. **Any curated gene products** (Sanger, VEuPathDB, Apollo)
+3. **1:1 + Preferred curated transcript products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
+4. **1:1 + Any curated transcript products** (Sanger, VEuPathDB, Apollo)
+5. **ARBA gene products**
+6. **All gene products** (concatenated)
+7. **All transcript products** (concatenated)
+8. **Base gene product field** (GeneFeature.product)
+9. **Base transcript products** (concatenated, Transcript.product) - *only in webready*
 
 ### Transcript Product Priority (source_priority / source_rule values)
-1. **1:1 + Curated gene products** (Sanger, VEuPathDB, Apollo)
-2. **Curated transcript products** (Sanger, VEuPathDB, Apollo)
-3. **1:1 + All gene products** (concatenated)
-4. **All transcript products** (concatenated)
-5. **1:1 + Base gene product field** (GeneFeature.product)
-6. **Base transcript product field** (Transcript.product)
+1. **1:1 + Preferred curated gene products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
+2. **1:1 + Any curated gene products** (Sanger, VEuPathDB, Apollo)
+3. **Preferred curated transcript products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
+4. **Any curated transcript products** (Sanger, VEuPathDB, Apollo)
+5. **1:1 + All gene products** (concatenated)
+6. **All transcript products** (concatenated)
+7. **1:1 + Base gene product field** (GeneFeature.product)
+8. **Base transcript product field** (Transcript.product)
 
 ## Tables and Their Purpose
 
@@ -61,14 +65,22 @@ WHERE EXISTS (
 )
 ```
 
-### Curated Source Filter
+### Curated Source Filters
+
+**Preferred curated products:**
 ```sql
-WHERE source IN ('Sanger', 'VEuPathDB', 'Apollo')
+WHERE assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+  AND is_preferred = 1
+```
+
+**Any curated products:**
+```sql
+WHERE assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
 ```
 
 ### ARBA Filter
 ```sql
-WHERE source = 'ARBA'
+WHERE assigned_by = 'ARBA'
 ```
 
 ### Product Concatenation (with 4000 char limit)
@@ -117,9 +129,11 @@ apidb.TranscriptProduct ──┤
 2. **Temp tables are global** (no taxon filtering, source_id is unique)
 3. **Temp tables bypass webready** (source directly from dots/apidb)
 4. **Tuning tables override webready** (UPDATE statements replace flawed products)
-5. **Curated sources first** (Sanger, VEuPathDB, Apollo > ARBA > all others)
-6. **1:1 relationships matter** (transcripts inherit from genes when 1:1)
-7. **ARBA is automated** (lower priority than curated annotations)
+5. **Preferred curated products first** (is_preferred=1 takes priority within curated sources)
+6. **Curated sources prioritized** (Sanger, VEuPathDB, Apollo > ARBA > all others)
+7. **1:1 relationships matter** (transcripts inherit from genes when 1:1)
+8. **ARBA is automated** (lower priority than curated annotations)
+9. **Multiple curated products handled** (when multiple exist from same source, preferred ones win)
 
 ## File Locations
 
@@ -190,16 +204,28 @@ LIMIT 50;
 
 ### Sample high-priority products
 ```sql
--- Curated gene products (priority 1-2)
-SELECT source_id, product, source_priority
+-- Preferred curated gene products (priority 1)
+SELECT source_id, product, source_priority, source_rule_description
 FROM apidbtuning.TempGeneProduct
-WHERE source_priority IN (1, 2)
+WHERE source_priority = 1
 LIMIT 20;
 
--- Curated transcript products (priority 1-2)
-SELECT source_id, product, source_priority
+-- Any curated gene products (priority 2)
+SELECT source_id, product, source_priority, source_rule_description
+FROM apidbtuning.TempGeneProduct
+WHERE source_priority = 2
+LIMIT 20;
+
+-- Preferred curated transcript products (priority 3)
+SELECT source_id, product, source_priority, source_rule_description
 FROM apidbtuning.TempTranscriptProduct
-WHERE source_priority IN (1, 2)
+WHERE source_priority = 3
+LIMIT 20;
+
+-- Any curated transcript products (priority 4)
+SELECT source_id, product, source_priority, source_rule_description
+FROM apidbtuning.TempTranscriptProduct
+WHERE source_priority = 4
 LIMIT 20;
 ```
 

@@ -9,13 +9,13 @@ Successfully implemented a two-pronged solution to fix flawed gene and transcrip
 **Changes:**
 - **Added TempGeneProduct tuning table** (after line 190)
   - Sources from dots.GeneFeature, dots.Transcript, apidb.GeneFeatureProduct, apidb.TranscriptProduct
-  - Implements 6-level priority cascade for gene products
+  - Implements 8-level priority cascade for gene products (with is_preferred=1 prioritization)
   - Global table (all organisms)
   - Includes unique index on source_id and index on source_priority
 
 - **Added TempTranscriptProduct tuning table** (after TempGeneProduct)
   - Sources from same dots/apidb tables
-  - Implements 6-level priority cascade for transcript products
+  - Implements 8-level priority cascade for transcript products (with is_preferred=1 prioritization)
   - Global table (all organisms)
   - Includes unique index on source_id and index on source_priority
 
@@ -32,24 +32,28 @@ Successfully implemented a two-pronged solution to fix flawed gene and transcrip
 
 ### 2. Model/lib/psql/webready/orgSpecific/GeneProduct_p.psql
 **Complete rewrite** with new priority logic:
-1. Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
-2. 1:1 Gene:Transcript + Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
-3. ARBA GeneFeatureProduct
-4. All GeneFeatureProduct (concatenated)
-5. All TranscriptProduct (concatenated)
-6. GeneFeature.product (base field)
-7. Transcript.product (base field, concatenated)
+1. Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+2. Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
+3. 1:1 Gene:Transcript + Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+4. 1:1 Gene:Transcript + Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
+5. ARBA GeneFeatureProduct
+6. All GeneFeatureProduct (concatenated)
+7. All TranscriptProduct (concatenated)
+8. GeneFeature.product (base field)
+9. Transcript.product (base field, concatenated)
 
 Uses CTE-based approach with ROW_NUMBER() for priority selection.
 
 ### 3. Model/lib/psql/webready/orgSpecific/TranscriptProduct_p.psql (NEW FILE)
 **New webready table** for transcript products with priority logic:
-1. 1:1 Gene:Transcript + Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
-2. Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
-3. 1:1 Gene:Transcript + All GeneFeatureProduct (concatenated)
-4. All TranscriptProduct (concatenated)
-5. 1:1 Gene:Transcript + GeneFeature.product
-6. Transcript.product (base field)
+1. 1:1 Gene:Transcript + Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+2. 1:1 Gene:Transcript + Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
+3. Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+4. Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
+5. 1:1 Gene:Transcript + All GeneFeatureProduct (concatenated)
+6. All TranscriptProduct (concatenated)
+7. 1:1 Gene:Transcript + GeneFeature.product
+8. Transcript.product (base field)
 
 Uses same CTE-based approach as GeneProduct_p.
 
@@ -92,6 +96,8 @@ Index file for TranscriptProduct_p table:
 5. **Curated Source Priority**: Prioritizes Sanger, VEuPathDB, Apollo annotations
    - These are manually curated, higher quality
    - ARBA is automated annotation, lower priority
+   - Within curated sources, is_preferred=1 products are prioritized first
+   - Handles cases where multiple curated products exist per gene/transcript
 
 ## SQL Pattern Example
 
@@ -194,6 +200,8 @@ LIMIT 20;
 5. **Next Workflow Ready**: Webready tables have correct logic for next iteration
 6. **Clear Priority**: Cascading logic is easy to understand and maintain
 7. **Curated First**: Manually curated annotations prioritized over automated ones
+8. **Preferred Products Win**: When multiple curated products exist, is_preferred=1 takes priority
+9. **Handles Edge Cases**: Gracefully handles genes/transcripts with multiple curated product annotations
 
 ## Next Steps
 
