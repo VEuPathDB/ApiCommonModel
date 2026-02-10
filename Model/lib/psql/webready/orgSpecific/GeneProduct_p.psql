@@ -25,11 +25,26 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       HAVING COUNT(t.na_feature_id) = 1
     ),
 
-    -- Priority 1: Curated gene products
-    gene_curated AS (
+    -- Priority 1: Preferred curated gene products
+    gene_curated_preferred AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              1 as source_rule,
+             COUNT(DISTINCT gfp.product) as value_count,
+             'preferred_curated_gene' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+      WHERE gfp.assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+        AND gfp.is_preferred = 1
+        AND gfp.product IS NOT NULL
+      GROUP BY gf.source_id
+    ),
+
+    -- Priority 2: Any curated gene products
+    gene_curated_any AS (
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
+             2 as source_rule,
              COUNT(DISTINCT gfp.product) as value_count,
              'curated_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -39,11 +54,26 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 2: 1:1 + Curated transcript products
-    transcript_curated_one_to_one AS (
+    -- Priority 3: 1:1 + Preferred curated transcript products
+    transcript_curated_preferred_one_to_one AS (
       SELECT oto.gene_source_id as source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-             2 as source_rule,
+             3 as source_rule,
+             COUNT(DISTINCT tp.product) as value_count,
+             'preferred_curated_transcript_1to1' as rule_description
+      FROM one_to_one_genes oto
+      INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = oto.transcript_na_feature_id
+      WHERE tp.assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+        AND tp.is_preferred = 1
+        AND tp.product IS NOT NULL
+      GROUP BY oto.gene_source_id
+    ),
+
+    -- Priority 4: 1:1 + Any curated transcript products
+    transcript_curated_any_one_to_one AS (
+      SELECT oto.gene_source_id as source_id,
+             SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
+             4 as source_rule,
              COUNT(DISTINCT tp.product) as value_count,
              'curated_transcript_1to1' as rule_description
       FROM one_to_one_genes oto
@@ -53,11 +83,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY oto.gene_source_id
     ),
 
-    -- Priority 3: ARBA annotations
+    -- Priority 5: ARBA annotations
     gene_arba AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
-             3 as source_rule,
+             5 as source_rule,
              COUNT(DISTINCT gfp.product) as value_count,
              'arba_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -67,11 +97,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 4: All gene products (concatenated)
+    -- Priority 6: All gene products (concatenated)
     gene_all AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
-             4 as source_rule,
+             6 as source_rule,
              COUNT(DISTINCT gfp.product) as value_count,
              'all_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -80,11 +110,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 5: All transcript products (concatenated)
+    -- Priority 7: All transcript products (concatenated)
     transcript_all AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-             5 as source_rule,
+             7 as source_rule,
              COUNT(DISTINCT tp.product) as value_count,
              'all_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -94,22 +124,22 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 6: Base gene product field
+    -- Priority 8: Base gene product field
     gene_base AS (
       SELECT gf.source_id,
              gf.product,
-             6 as source_rule,
+             8 as source_rule,
              1 as value_count,
              'base_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       WHERE gf.product IS NOT NULL
     ),
 
-    -- Priority 7: Base transcript product field (concatenated)
+    -- Priority 9: Base transcript product field (concatenated)
     transcript_base AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT t.product, ', ' ORDER BY t.product), 1, 4000) as product,
-             7 as source_rule,
+             9 as source_rule,
              COUNT(DISTINCT t.product) as value_count,
              'base_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -120,8 +150,10 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
 
     -- Combine all priorities
     all_products AS (
-      SELECT * FROM gene_curated
-      UNION ALL SELECT * FROM transcript_curated_one_to_one
+      SELECT * FROM gene_curated_preferred
+      UNION ALL SELECT * FROM gene_curated_any
+      UNION ALL SELECT * FROM transcript_curated_preferred_one_to_one
+      UNION ALL SELECT * FROM transcript_curated_any_one_to_one
       UNION ALL SELECT * FROM gene_arba
       UNION ALL SELECT * FROM gene_all
       UNION ALL SELECT * FROM transcript_all
@@ -138,7 +170,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
   SELECT gf.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 8) as source_rule,
+         COALESCE(rp.source_rule, 10) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,

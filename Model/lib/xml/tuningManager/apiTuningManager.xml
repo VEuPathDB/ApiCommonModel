@@ -223,12 +223,14 @@
   <tuningTable name="TempGeneProduct">
     <comment>
       Provides correct gene products using priority-based cascading logic:
-      Priority 1: Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
-      Priority 2: 1:1 Gene:Transcript + Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
-      Priority 3: ARBA GeneFeatureProduct
-      Priority 4: All GeneFeatureProduct (concatenated)
-      Priority 5: All TranscriptProduct (concatenated)
-      Priority 6: GeneFeature.product (base field)
+      Priority 1: Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+      Priority 2: Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
+      Priority 3: 1:1 Gene:Transcript + Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+      Priority 4: 1:1 Gene:Transcript + Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
+      Priority 5: ARBA GeneFeatureProduct
+      Priority 6: All GeneFeatureProduct (concatenated)
+      Priority 7: All TranscriptProduct (concatenated)
+      Priority 8: GeneFeature.product (base field)
       This is a global table (all organisms) - source_id is globally unique.
     </comment>
     <externalDependency name="dots.GeneFeature"/>
@@ -250,11 +252,25 @@
             HAVING COUNT(t.na_feature_id) = 1
           ),
 
-          -- Priority 1: Curated gene products
-          gene_curated AS (
+          -- Priority 1: Preferred curated gene products
+          gene_curated_preferred AS (
             SELECT gf.source_id,
                    SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
                    1 as priority,
+                   'preferred_curated_gene' as rule_description
+            FROM dots.GeneFeature gf
+            INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+            WHERE gfp.assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+              AND gfp.is_preferred = 1
+              AND gfp.product IS NOT NULL
+            GROUP BY gf.source_id
+          ),
+
+          -- Priority 2: Any curated gene products
+          gene_curated_any AS (
+            SELECT gf.source_id,
+                   SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
+                   2 as priority,
                    'curated_gene' as rule_description
             FROM dots.GeneFeature gf
             INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
@@ -263,11 +279,25 @@
             GROUP BY gf.source_id
           ),
 
-          -- Priority 2: 1:1 + Curated transcript products
-          transcript_curated_one_to_one AS (
+          -- Priority 3: 1:1 + Preferred curated transcript products
+          transcript_curated_preferred_one_to_one AS (
             SELECT oto.gene_source_id as source_id,
                    SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-                   2 as priority,
+                   3 as priority,
+                   'preferred_curated_transcript_1to1' as rule_description
+            FROM one_to_one_genes oto
+            INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = oto.transcript_na_feature_id
+            WHERE tp.assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+              AND tp.is_preferred = 1
+              AND tp.product IS NOT NULL
+            GROUP BY oto.gene_source_id
+          ),
+
+          -- Priority 4: 1:1 + Any curated transcript products
+          transcript_curated_any_one_to_one AS (
+            SELECT oto.gene_source_id as source_id,
+                   SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
+                   4 as priority,
                    'curated_transcript_1to1' as rule_description
             FROM one_to_one_genes oto
             INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = oto.transcript_na_feature_id
@@ -276,11 +306,11 @@
             GROUP BY oto.gene_source_id
           ),
 
-          -- Priority 3: ARBA annotations
+          -- Priority 5: ARBA annotations
           gene_arba AS (
             SELECT gf.source_id,
                    SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
-                   3 as priority,
+                   5 as priority,
                    'arba_gene' as rule_description
             FROM dots.GeneFeature gf
             INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
@@ -289,11 +319,11 @@
             GROUP BY gf.source_id
           ),
 
-          -- Priority 4: All gene products (concatenated)
+          -- Priority 6: All gene products (concatenated)
           gene_all AS (
             SELECT gf.source_id,
                    SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
-                   4 as priority,
+                   6 as priority,
                    'all_gene' as rule_description
             FROM dots.GeneFeature gf
             INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
@@ -301,11 +331,11 @@
             GROUP BY gf.source_id
           ),
 
-          -- Priority 5: All transcript products (concatenated)
+          -- Priority 7: All transcript products (concatenated)
           transcript_all AS (
             SELECT gf.source_id,
                    SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-                   5 as priority,
+                   7 as priority,
                    'all_transcript' as rule_description
             FROM dots.GeneFeature gf
             INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
@@ -314,11 +344,11 @@
             GROUP BY gf.source_id
           ),
 
-          -- Priority 6: Base gene product field
+          -- Priority 8: Base gene product field
           gene_base AS (
             SELECT gf.source_id,
                    gf.product,
-                   6 as priority,
+                   8 as priority,
                    'base_gene' as rule_description
             FROM dots.GeneFeature gf
             WHERE gf.product IS NOT NULL
@@ -326,8 +356,10 @@
 
           -- Combine all priorities
           all_products AS (
-            SELECT * FROM gene_curated
-            UNION ALL SELECT * FROM transcript_curated_one_to_one
+            SELECT * FROM gene_curated_preferred
+            UNION ALL SELECT * FROM gene_curated_any
+            UNION ALL SELECT * FROM transcript_curated_preferred_one_to_one
+            UNION ALL SELECT * FROM transcript_curated_any_one_to_one
             UNION ALL SELECT * FROM gene_arba
             UNION ALL SELECT * FROM gene_all
             UNION ALL SELECT * FROM transcript_all
@@ -364,12 +396,14 @@
   <tuningTable name="TempTranscriptProduct">
     <comment>
       Provides correct transcript products using priority-based cascading logic:
-      Priority 1: 1:1 Gene:Transcript + Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
-      Priority 2: Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
-      Priority 3: 1:1 Gene:Transcript + All GeneFeatureProduct (concatenated)
-      Priority 4: All TranscriptProduct (concatenated)
-      Priority 5: 1:1 Gene:Transcript + GeneFeature.product
-      Priority 6: Transcript.product (base field)
+      Priority 1: 1:1 Gene:Transcript + Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+      Priority 2: 1:1 Gene:Transcript + Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
+      Priority 3: Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
+      Priority 4: Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
+      Priority 5: 1:1 Gene:Transcript + All GeneFeatureProduct (concatenated)
+      Priority 6: All TranscriptProduct (concatenated)
+      Priority 7: 1:1 Gene:Transcript + GeneFeature.product
+      Priority 8: Transcript.product (base field)
       This is a global table (all organisms) - source_id is globally unique.
     </comment>
     <externalDependency name="dots.GeneFeature"/>
@@ -397,11 +431,25 @@
             )
           ),
 
-          -- Priority 1: 1:1 + Curated gene products
-          gene_curated_one_to_one AS (
+          -- Priority 1: 1:1 + Preferred curated gene products
+          gene_curated_preferred_one_to_one AS (
             SELECT oto.transcript_source_id as source_id,
                    SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
                    1 as priority,
+                   'preferred_curated_gene_1to1' as rule_description
+            FROM one_to_one_transcripts oto
+            INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
+            WHERE gfp.assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+              AND gfp.is_preferred = 1
+              AND gfp.product IS NOT NULL
+            GROUP BY oto.transcript_source_id
+          ),
+
+          -- Priority 2: 1:1 + Any curated gene products
+          gene_curated_any_one_to_one AS (
+            SELECT oto.transcript_source_id as source_id,
+                   SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
+                   2 as priority,
                    'curated_gene_1to1' as rule_description
             FROM one_to_one_transcripts oto
             INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
@@ -410,11 +458,25 @@
             GROUP BY oto.transcript_source_id
           ),
 
-          -- Priority 2: Curated transcript products
-          transcript_curated AS (
+          -- Priority 3: Preferred curated transcript products
+          transcript_curated_preferred AS (
             SELECT t.source_id,
                    SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-                   2 as priority,
+                   3 as priority,
+                   'preferred_curated_transcript' as rule_description
+            FROM dots.Transcript t
+            INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+            WHERE tp.assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+              AND tp.is_preferred = 1
+              AND tp.product IS NOT NULL
+            GROUP BY t.source_id
+          ),
+
+          -- Priority 4: Any curated transcript products
+          transcript_curated_any AS (
+            SELECT t.source_id,
+                   SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
+                   4 as priority,
                    'curated_transcript' as rule_description
             FROM dots.Transcript t
             INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
@@ -423,11 +485,11 @@
             GROUP BY t.source_id
           ),
 
-          -- Priority 3: 1:1 + All gene products (concatenated)
+          -- Priority 5: 1:1 + All gene products (concatenated)
           gene_all_one_to_one AS (
             SELECT oto.transcript_source_id as source_id,
                    SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
-                   3 as priority,
+                   5 as priority,
                    'all_gene_1to1' as rule_description
             FROM one_to_one_transcripts oto
             INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
@@ -435,11 +497,11 @@
             GROUP BY oto.transcript_source_id
           ),
 
-          -- Priority 4: All transcript products (concatenated)
+          -- Priority 6: All transcript products (concatenated)
           transcript_all AS (
             SELECT t.source_id,
                    SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-                   4 as priority,
+                   6 as priority,
                    'all_transcript' as rule_description
             FROM dots.Transcript t
             INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
@@ -447,22 +509,22 @@
             GROUP BY t.source_id
           ),
 
-          -- Priority 5: 1:1 + Base gene product field
+          -- Priority 7: 1:1 + Base gene product field
           gene_base_one_to_one AS (
             SELECT oto.transcript_source_id as source_id,
                    gf.product,
-                   5 as priority,
+                   7 as priority,
                    'base_gene_1to1' as rule_description
             FROM one_to_one_transcripts oto
             INNER JOIN dots.GeneFeature gf ON gf.na_feature_id = oto.gene_na_feature_id
             WHERE gf.product IS NOT NULL
           ),
 
-          -- Priority 6: Base transcript product field
+          -- Priority 8: Base transcript product field
           transcript_base AS (
             SELECT t.source_id,
                    t.product,
-                   6 as priority,
+                   8 as priority,
                    'base_transcript' as rule_description
             FROM dots.Transcript t
             WHERE t.product IS NOT NULL
@@ -470,8 +532,10 @@
 
           -- Combine all priorities
           all_products AS (
-            SELECT * FROM gene_curated_one_to_one
-            UNION ALL SELECT * FROM transcript_curated
+            SELECT * FROM gene_curated_preferred_one_to_one
+            UNION ALL SELECT * FROM gene_curated_any_one_to_one
+            UNION ALL SELECT * FROM transcript_curated_preferred
+            UNION ALL SELECT * FROM transcript_curated_any
             UNION ALL SELECT * FROM gene_all_one_to_one
             UNION ALL SELECT * FROM transcript_all
             UNION ALL SELECT * FROM gene_base_one_to_one
