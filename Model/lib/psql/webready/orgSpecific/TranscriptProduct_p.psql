@@ -1,0 +1,150 @@
+DROP TABLE IF EXISTS :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp;
+
+create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
+(select t.na_feature_id
+      , t.source_id
+      , t.product
+      , t.parent_id as gene_na_feature_id
+      , gf.source_id as gene_source_id
+ from dots.transcript t
+    , dots.genefeature gf
+    , dots.nasequence nas
+ where t.parent_id = gf.na_feature_id
+   and gf.na_sequence_id = nas.na_sequence_id
+   and nas.taxon_id = :TAXON_ID
+)
+;
+
+
+:CREATE_AND_POPULATE
+  WITH
+    -- Identify 1:1 gene:transcript relationships for this organism
+    one_to_one_transcripts AS (
+      SELECT t.na_feature_id as transcript_na_feature_id,
+             t.source_id as transcript_source_id,
+             t.gene_na_feature_id,
+             t.gene_source_id
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      WHERE EXISTS (
+        SELECT 1
+        FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t2
+        WHERE t2.gene_na_feature_id = t.gene_na_feature_id
+        GROUP BY t2.gene_na_feature_id
+        HAVING COUNT(*) = 1
+      )
+    ),
+
+    -- Priority 1: 1:1 + Curated gene products
+    gene_curated_one_to_one AS (
+      SELECT oto.transcript_source_id as source_id,
+             SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
+             1 as source_rule,
+             COUNT(DISTINCT gfp.product) as value_count
+      FROM one_to_one_transcripts oto
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
+      WHERE gfp.source IN ('Sanger', 'VEuPathDB', 'Apollo')
+        AND gfp.product IS NOT NULL
+      GROUP BY oto.transcript_source_id
+    ),
+
+    -- Priority 2: Curated transcript products
+    transcript_curated AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
+             2 as source_rule,
+             COUNT(DISTINCT tp.product) as value_count
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+      WHERE tp.source IN ('Sanger', 'VEuPathDB', 'Apollo')
+        AND tp.product IS NOT NULL
+      GROUP BY t.source_id
+    ),
+
+    -- Priority 3: 1:1 + All gene products (concatenated)
+    gene_all_one_to_one AS (
+      SELECT oto.transcript_source_id as source_id,
+             SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
+             3 as source_rule,
+             COUNT(DISTINCT gfp.product) as value_count
+      FROM one_to_one_transcripts oto
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
+      WHERE gfp.product IS NOT NULL
+      GROUP BY oto.transcript_source_id
+    ),
+
+    -- Priority 4: All transcript products (concatenated)
+    transcript_all AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
+             4 as source_rule,
+             COUNT(DISTINCT tp.product) as value_count
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+      WHERE tp.product IS NOT NULL
+      GROUP BY t.source_id
+    ),
+
+    -- Priority 5: 1:1 + Base gene product field
+    gene_base_one_to_one AS (
+      SELECT oto.transcript_source_id as source_id,
+             gf.product,
+             5 as source_rule,
+             1 as value_count
+      FROM one_to_one_transcripts oto
+      INNER JOIN dots.GeneFeature gf ON gf.na_feature_id = oto.gene_na_feature_id
+      WHERE gf.product IS NOT NULL
+    ),
+
+    -- Priority 6: Base transcript product field
+    transcript_base AS (
+      SELECT t.source_id,
+             t.product,
+             6 as source_rule,
+             1 as value_count
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      WHERE t.product IS NOT NULL
+    ),
+
+    -- Combine all priorities
+    all_products AS (
+      SELECT * FROM gene_curated_one_to_one
+      UNION ALL SELECT * FROM transcript_curated
+      UNION ALL SELECT * FROM gene_all_one_to_one
+      UNION ALL SELECT * FROM transcript_all
+      UNION ALL SELECT * FROM gene_base_one_to_one
+      UNION ALL SELECT * FROM transcript_base
+    ),
+
+    -- Select highest priority product per transcript
+    ranked_products AS (
+      SELECT source_id, product, source_rule, value_count,
+             ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) as rank
+      FROM all_products
+    )
+  SELECT t.source_id,
+         COALESCE(rp.product, 'unspecified product') as product,
+         COALESCE(rp.value_count, 0) as value_count,
+         COALESCE(rp.source_rule, 7) as source_rule,
+         ':PROJECT_ID' as project_id,
+         ':ORG_ABBREV' as org_abbrev,
+         current_timestamp as modification_date
+  FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+  LEFT JOIN ranked_products rp ON t.source_id = rp.source_id AND rp.rank = 1;
+:DECLARE_PARTITION;
+
+
+/*
+
+
+Dependent Step
+  transcript product prioritization using new cascading logic
+
+
+
+
+*/
+
+delete from :SCHEMA.TranscriptProduct_p  where product is null and org_abbrev = ':ORG_ABBREV';
+
+drop table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp
+;
