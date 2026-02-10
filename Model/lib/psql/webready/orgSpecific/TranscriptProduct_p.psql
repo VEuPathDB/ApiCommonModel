@@ -39,7 +39,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       SELECT oto.transcript_source_id as source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              1 as source_rule,
-             COUNT(DISTINCT gfp.product) as value_count
+             COUNT(DISTINCT gfp.product) as value_count,
+             'curated_gene_1to1' as rule_description
       FROM one_to_one_transcripts oto
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
       WHERE gfp.source IN ('Sanger', 'VEuPathDB', 'Apollo')
@@ -52,7 +53,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       SELECT t.source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
              2 as source_rule,
-             COUNT(DISTINCT tp.product) as value_count
+             COUNT(DISTINCT tp.product) as value_count,
+             'curated_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
       WHERE tp.source IN ('Sanger', 'VEuPathDB', 'Apollo')
@@ -65,7 +67,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       SELECT oto.transcript_source_id as source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              3 as source_rule,
-             COUNT(DISTINCT gfp.product) as value_count
+             COUNT(DISTINCT gfp.product) as value_count,
+             'all_gene_1to1' as rule_description
       FROM one_to_one_transcripts oto
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
       WHERE gfp.product IS NOT NULL
@@ -77,7 +80,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       SELECT t.source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
              4 as source_rule,
-             COUNT(DISTINCT tp.product) as value_count
+             COUNT(DISTINCT tp.product) as value_count,
+             'all_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
       WHERE tp.product IS NOT NULL
@@ -89,7 +93,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       SELECT oto.transcript_source_id as source_id,
              gf.product,
              5 as source_rule,
-             1 as value_count
+             1 as value_count,
+             'base_gene_1to1' as rule_description
       FROM one_to_one_transcripts oto
       INNER JOIN dots.GeneFeature gf ON gf.na_feature_id = oto.gene_na_feature_id
       WHERE gf.product IS NOT NULL
@@ -100,7 +105,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       SELECT t.source_id,
              t.product,
              6 as source_rule,
-             1 as value_count
+             1 as value_count,
+             'base_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       WHERE t.product IS NOT NULL
     ),
@@ -117,7 +123,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
 
     -- Select highest priority product per transcript
     ranked_products AS (
-      SELECT source_id, product, source_rule, value_count,
+      SELECT source_id, product, source_rule, value_count, rule_description,
              ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) as rank
       FROM all_products
     )
@@ -125,6 +131,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
          COALESCE(rp.source_rule, 7) as source_rule,
+         COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
          current_timestamp as modification_date

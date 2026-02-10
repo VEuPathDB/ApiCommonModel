@@ -30,7 +30,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              1 as source_rule,
-             COUNT(DISTINCT gfp.product) as value_count
+             COUNT(DISTINCT gfp.product) as value_count,
+             'curated_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
       WHERE gfp.source IN ('Sanger', 'VEuPathDB', 'Apollo')
@@ -43,7 +44,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT oto.gene_source_id as source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
              2 as source_rule,
-             COUNT(DISTINCT tp.product) as value_count
+             COUNT(DISTINCT tp.product) as value_count,
+             'curated_transcript_1to1' as rule_description
       FROM one_to_one_genes oto
       INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = oto.transcript_na_feature_id
       WHERE tp.source IN ('Sanger', 'VEuPathDB', 'Apollo')
@@ -56,7 +58,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              3 as source_rule,
-             COUNT(DISTINCT gfp.product) as value_count
+             COUNT(DISTINCT gfp.product) as value_count,
+             'arba_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
       WHERE gfp.source = 'ARBA'
@@ -69,7 +72,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              4 as source_rule,
-             COUNT(DISTINCT gfp.product) as value_count
+             COUNT(DISTINCT gfp.product) as value_count,
+             'all_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
       WHERE gfp.product IS NOT NULL
@@ -81,7 +85,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
              5 as source_rule,
-             COUNT(DISTINCT tp.product) as value_count
+             COUNT(DISTINCT tp.product) as value_count,
+             'all_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
       INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
@@ -94,7 +99,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT gf.source_id,
              gf.product,
              6 as source_rule,
-             1 as value_count
+             1 as value_count,
+             'base_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       WHERE gf.product IS NOT NULL
     ),
@@ -104,7 +110,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT t.product, ', ' ORDER BY t.product), 1, 4000) as product,
              7 as source_rule,
-             COUNT(DISTINCT t.product) as value_count
+             COUNT(DISTINCT t.product) as value_count,
+             'base_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
       WHERE t.product IS NOT NULL
@@ -124,7 +131,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
 
     -- Select highest priority product per gene
     ranked_products AS (
-      SELECT source_id, product, source_rule, value_count,
+      SELECT source_id, product, source_rule, value_count, rule_description,
              ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) as rank
       FROM all_products
     )
@@ -132,6 +139,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
          COALESCE(rp.source_rule, 8) as source_rule,
+         COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
          current_timestamp as modification_date
