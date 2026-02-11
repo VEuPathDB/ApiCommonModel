@@ -6,8 +6,11 @@ public class GeneImage extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
-    injectTemplate("geneImageGoTermQuestion");
-    injectTemplate("geneImageGoTermOntology");
+      String projectName = getPropValue("projectName");
+      setPropValue("includeProjects", projectName + ",UniDB");
+
+      injectTemplate("geneImageGoTermQuestion");
+      injectTemplate("geneImageGoTermOntology");
   }
 
   @Override
