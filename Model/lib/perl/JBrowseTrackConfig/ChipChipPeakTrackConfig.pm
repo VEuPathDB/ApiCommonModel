@@ -3,7 +3,7 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
-use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::BedStore;
 
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
@@ -28,11 +28,11 @@ sub new {
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::BedStore->new($args);
     }
     else {
         # TODO
-	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::BedStore->new($args);
     }
 
     $self->setStore($store);
