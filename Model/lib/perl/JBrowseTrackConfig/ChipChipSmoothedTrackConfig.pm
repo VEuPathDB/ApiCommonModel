@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 
-use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
@@ -25,8 +25,8 @@ sub new {
 #    $self->setDisplayMode(undef);
 #    $self->setGlyph(undef);
 
-    $self->setCovMaxScoreDefault($args->{cov_max_score_default});
-    $self->setCovMinScoreDefault($args->{cov_min_score_default});
+    $self->setCovMaxScoreDefault(defined $args->{cov_max_score_default} ? $args->{cov_max_score_default} : 1000);
+    $self->setCovMinScoreDefault(defined $args->{cov_min_score_default} ? $args->{cov_min_score_default} : 0);
 
     #TODO
     #$self->setTrackTypeDisplay("XYPlot");
@@ -35,11 +35,11 @@ sub new {
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
     }
     else {
         # TODO
-	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
     }
 
     $self->setStore($store);
