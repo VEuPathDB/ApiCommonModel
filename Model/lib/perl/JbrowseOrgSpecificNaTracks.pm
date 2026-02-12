@@ -744,19 +744,17 @@ sub addChipChipTracks {
   my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
   foreach my $dataset (keys %$chipChipSeqDatasets){
-   #@print STDERR  "XXXX addChipChipTracks dataset: " + $dataset + " <<<<\n";;
     next unless($dataset =~ /chipChipExper/);
 
-    my $peakTrack = &makeChipChipPeak($dataset, $datasetProperties, $nameForFileNames, $applicationType);
-    push @{$result->{tracks}}, $peakTrack;  
+    my @peakTracks = &makeChipChipPeak($dataset, $datasetProperties, $nameForFileNames, $applicationType);
+    push @{$result->{tracks}}, @peakTracks;  
 
-   # my $track = &makeChipChipSmoothed($dataset, $datasetProperties, $nameForFileNames, $applicationType);
-   # push @{$result->{tracks}}, $track;
+    my @smoothedTracks = &makeChipChipSmoothed($dataset, $datasetProperties, $nameForFileNames, $applicationType);
+    push @{$result->{tracks}}, @smoothedTracks;
   }
  
 }
 
-    #BB
  
 sub makeChipChipPeak {
   my ($dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
@@ -768,27 +766,69 @@ sub makeChipChipPeak {
   $summary =~ s/\n/ /g;
   my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
 
-# BB
-# my $key = $panName;
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
 
   my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-  my @tracks = split(/\;/, $_);
+  my @subTracks = split(/\;/, $subTrackAttr); 
+  my @peakTracks; 
 
-  foreach my $t (@tracks) {
-    my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}.bed.gz";
+  foreach my $subTrackName (@subTracks) { # Loop through sub-tracks
+    my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${subTrackName}_peaks.bed.gz";
+    #print Dumper "PEAK PATH  $relativePath";
+
     my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
-	dataset_name => $dataset,
+        dataset_name => $dataset,
+        attribution => $shortAttribution,
+        description => $summary,
+        application_type => $applicationType,
+        label => "$datasetDisplayName - $subTrackName Peaks",
+        key => "${datasetDisplayName}_${subTrackName}_Peaks",
+        dataset_presenter_id => $datasetPresenterId,
+        summary => $summary,
+        relative_path_to_file => $relativePath
+    })->getConfigurationObject();
+    push @peakTracks, $peaks;
+  }
+  return @peakTracks;
+}
+
+
+sub makeChipChipSmoothed {
+  my ($dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
+  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
+  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  $summary =~ s/\n/ /g;
+  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
+
+  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
+  my @subTracks = split(/\;/, $subTrackAttr);
+  my @smoothedTracks; 
+
+  foreach my $subTrackName (@subTracks) { # Loop through sub-tracks
+    my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${subTrackName}.bw";
+    #print Dumper "SMOOTH PATH $relativePath\n";
+    
+    my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
+	dataset_name  => $dataset,
 	attribution => $shortAttribution,
+	study_display_name => $datasetDisplayName,
 	description => $summary,
 	application_type => $applicationType,
-	label => $datasetDisplayName,
-	key => $datasetDisplayName,
-	dataset_presenter_id => $datasetPresenterId,
-	summary => $summary  })->getConfigurationObject();
-    return $peaks;
+	label => "$datasetDisplayName - $subTrackName Smoothed",
+	key => "${datasetDisplayName}_${subTrackName}_Smoothed",
+	summary => $summary,
+	relative_path_to_file => $relativePath,
+	cov_max_score_default => 1000, # default
+	cov_min_score_default => 0     # default
+    })->getConfigurationObject(); 
+  
+    push @smoothedTracks, $smoothed;
   }
+  return @smoothedTracks;
 }
 
 
@@ -821,43 +861,6 @@ order by pan.name";
 
   }
   $sh->finish();
-}
-
-
-sub makeChipChipSmoothed {
-  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
-
-    my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-    my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
-    $summary =~ s/\n/ /g;
-    my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
-
-    my $datasetKey = $datasetProperties->{$dataset}->{key};
-    my $key = $panName;
-    my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-
-    my $queryParams = {
-                            'exp' => $dataset,
-                            'sub' => $subTrackAttr,
-                            'panId' => $panId,
-                                           };
-
-    my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
-                                                                                                dataset_name  => $dataset,
-                                                                                                attribution => $shortAttribution,
-                                                                                                study_display_name => $datasetDisplayName,
-                                                                                                description => $summary,
-                                                                                                query_params => $queryParams,
-                                                                                                application_type => $applicationType,
-                                                                                                pan_name => $panName,
-                                                                                                cov_max_score_default => 3,
-                                                                                                cov_min_score_default => 3,
-                                                                                                label => $key,
-                                                                                                key => $key,
-												summary => $summary,
-                                                                                              })->getConfigurationObject();
-  
-  return $smoothed;
 }
 
 
