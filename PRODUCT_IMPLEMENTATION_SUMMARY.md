@@ -32,10 +32,10 @@ Successfully implemented a two-pronged solution to fix flawed gene and transcrip
 
 ### 2. Model/lib/psql/webready/orgSpecific/GeneProduct_p.psql
 **Complete rewrite** with new priority logic:
-1. Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
-2. Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
-3. 1:1 Gene:Transcript + Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
-4. 1:1 Gene:Transcript + Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
+1. Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo|GeneDB)
+2. Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo|GeneDB)
+3. 1:1 Gene:Transcript + Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo|GeneDB)
+4. 1:1 Gene:Transcript + Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo|GeneDB)
 5. ARBA GeneFeatureProduct
 6. All GeneFeatureProduct (concatenated)
 7. All TranscriptProduct (concatenated)
@@ -46,10 +46,10 @@ Uses CTE-based approach with ROW_NUMBER() for priority selection.
 
 ### 3. Model/lib/psql/webready/orgSpecific/TranscriptProduct_p.psql (NEW FILE)
 **New webready table** for transcript products with priority logic:
-1. 1:1 Gene:Transcript + Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
-2. 1:1 Gene:Transcript + Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo)
-3. Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo)
-4. Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo)
+1. 1:1 Gene:Transcript + Preferred Curated GeneFeatureProduct (is_preferred=1, Sanger|VEuPathDB|Apollo|GeneDB)
+2. 1:1 Gene:Transcript + Any Curated GeneFeatureProduct (Sanger|VEuPathDB|Apollo|GeneDB)
+3. Preferred Curated TranscriptProduct (is_preferred=1, Sanger|VEuPathDB|Apollo|GeneDB)
+4. Any Curated TranscriptProduct (Sanger|VEuPathDB|Apollo|GeneDB)
 5. 1:1 Gene:Transcript + All GeneFeatureProduct (concatenated)
 6. All TranscriptProduct (concatenated)
 7. 1:1 Gene:Transcript + GeneFeature.product

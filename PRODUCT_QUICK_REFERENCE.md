@@ -3,10 +3,10 @@
 ## Priority Cascades
 
 ### Gene Product Priority (source_priority / source_rule values)
-1. **Preferred curated gene products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
-2. **Any curated gene products** (Sanger, VEuPathDB, Apollo)
-3. **1:1 + Preferred curated transcript products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
-4. **1:1 + Any curated transcript products** (Sanger, VEuPathDB, Apollo)
+1. **Preferred curated gene products** (is_preferred=1, Sanger, VEuPathDB, Apollo, GeneDB)
+2. **Any curated gene products** (Sanger, VEuPathDB, Apollo, GeneDB)
+3. **1:1 + Preferred curated transcript products** (is_preferred=1, Sanger, VEuPathDB, Apollo, GeneDB)
+4. **1:1 + Any curated transcript products** (Sanger, VEuPathDB, Apollo, GeneDB)
 5. **ARBA gene products**
 6. **All gene products** (concatenated)
 7. **All transcript products** (concatenated)
@@ -14,10 +14,10 @@
 9. **Base transcript products** (concatenated, Transcript.product) - *only in webready*
 
 ### Transcript Product Priority (source_priority / source_rule values)
-1. **1:1 + Preferred curated gene products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
-2. **1:1 + Any curated gene products** (Sanger, VEuPathDB, Apollo)
-3. **Preferred curated transcript products** (is_preferred=1, Sanger, VEuPathDB, Apollo)
-4. **Any curated transcript products** (Sanger, VEuPathDB, Apollo)
+1. **1:1 + Preferred curated gene products** (is_preferred=1, Sanger, VEuPathDB, Apollo, GeneDB)
+2. **1:1 + Any curated gene products** (Sanger, VEuPathDB, Apollo, GeneDB)
+3. **Preferred curated transcript products** (is_preferred=1, Sanger, VEuPathDB, Apollo, GeneDB)
+4. **Any curated transcript products** (Sanger, VEuPathDB, Apollo, GeneDB)
 5. **1:1 + All gene products** (concatenated)
 6. **All transcript products** (concatenated)
 7. **1:1 + Base gene product field** (GeneFeature.product)
@@ -69,13 +69,13 @@ WHERE EXISTS (
 
 **Preferred curated products:**
 ```sql
-WHERE assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+WHERE assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo', 'GeneDB')
   AND is_preferred = 1
 ```
 
 **Any curated products:**
 ```sql
-WHERE assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo')
+WHERE assigned_by IN ('Sanger', 'VEuPathDB', 'Apollo', 'GeneDB')
 ```
 
 ### ARBA Filter
@@ -130,7 +130,7 @@ apidb.TranscriptProduct ──┤
 3. **Temp tables bypass webready** (source directly from dots/apidb)
 4. **Tuning tables override webready** (UPDATE statements replace flawed products)
 5. **Preferred curated products first** (is_preferred=1 takes priority within curated sources)
-6. **Curated sources prioritized** (Sanger, VEuPathDB, Apollo > ARBA > all others)
+6. **Curated sources prioritized** (Sanger, VEuPathDB, Apollo, GeneDB > ARBA > all others)
 7. **1:1 relationships matter** (transcripts inherit from genes when 1:1)
 8. **ARBA is automated** (lower priority than curated annotations)
 9. **Multiple curated products handled** (when multiple exist from same source, preferred ones win)
