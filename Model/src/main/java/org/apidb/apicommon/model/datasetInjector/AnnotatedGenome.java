@@ -286,6 +286,29 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Seqedits");
 
+
+
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AllProducts");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CommunityExpComments");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SignalP");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "TMHMM");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Orthologs");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "OrthologsLite");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Products");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "LowComplexity");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "BlastP");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneId");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneName");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "BlastpForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterProForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MendelGPIForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MitoprotForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "StringDBForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "WolfPsortForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ECNumbersInferred");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MobileElements");
+
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "Reference");
     addWdkReference("EstRecordClasses.EstRecordClass", "table", "AlignmentInfo");
 
