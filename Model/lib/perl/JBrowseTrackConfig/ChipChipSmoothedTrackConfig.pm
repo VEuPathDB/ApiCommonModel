@@ -29,8 +29,8 @@ sub new {
     $self->setCovMinScoreDefault(defined $args->{cov_min_score_default} ? $args->{cov_min_score_default} : 0);
 
     #TODO
-    #$self->setTrackTypeDisplay("XYPlot");
-    ###  $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
+    $self->setTrackTypeDisplay("XYPlot");
+    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
 
     my $store;
 

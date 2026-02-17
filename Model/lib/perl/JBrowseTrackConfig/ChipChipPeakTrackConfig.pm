@@ -8,6 +8,10 @@ use ApiCommonModel::Model::JBrowseTrackConfig::BedStore;
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
 
+sub getUrl {$_[0]->{url} }
+sub setUrl {$_[0]->{url} = $_[1]}
+
+
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -21,6 +25,7 @@ sub new {
     $self->setId($args->{key});
     $self->setLabel($args->{label});
     $self->setGlyph($args->{glyph});
+    $self->setUrl($args->{relative_path_to_file});
 
 #    $self->setDisplayMode(undef);
 #    $self->setGlyph(undef);

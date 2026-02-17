@@ -66,7 +66,7 @@ sub processOrganism {
 
   &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
   &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
-  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $nameForFileNames, $applicationType);
+  &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
@@ -738,26 +738,52 @@ sub addUnifiedMassSpec {
 }
 
 
+#     my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
+
 sub addChipChipTracks {
-  my ($dbh, $result, $datasetProperties, $organismAbbrev, $nameForFileNames, $applicationType) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
 
   my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
+  # get sample names for each dataset
+  my $dataFile = "/var/www/Common/apiSiteFilesMirror/webServices/$projectName/build-${buildNumber}/${nameForFileNames}/genomeBrowser/config/jbrowse.conf";
+  my %cc_data;  #to store sample names for each dataset
+
+  open my $fh, '<', $dataFile or die "Could not open file '$dataFile': $!";
+  while (my $line = <$fh>) {
+    chomp $line;
+    if ($line =~ /^chipchip::/ && $line =~ /::panName=/) {
+      my @parts = split(/::/, $line);
+      my $dataset_key = $parts[1];
+      my $pan_name_part = $parts[-1];
+      my $sample_name;
+      if ($pan_name_part =~ /^panName=(.*)$/) {
+	$sample_name = $1;
+	$sample_name =~ s/_peaks\s+\(ChIP-chip\)$//;
+	push @{$cc_data{$dataset_key}}, $sample_name;
+      }
+    }
+  }
+  close $fh;
+  #print Dumper \%cc_data;
+
+  # get data from auto_generated prop file
   foreach my $dataset (keys %$chipChipSeqDatasets){
     next unless($dataset =~ /chipChipExper/);
 
-    my @peakTracks = &makeChipChipPeak($dataset, $datasetProperties, $nameForFileNames, $applicationType);
-    push @{$result->{tracks}}, @peakTracks;  
+    foreach my $sample (@{$cc_data{$dataset}}) { # for each
+      my @peakTracks = &makeChipChipPeak($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType);
+      push @{$result->{tracks}}, @peakTracks;
 
-    my @smoothedTracks = &makeChipChipSmoothed($dataset, $datasetProperties, $nameForFileNames, $applicationType);
-    push @{$result->{tracks}}, @smoothedTracks;
+      my @smoothedTracks = &makeChipChipSmoothed($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType);
+      push @{$result->{tracks}}, @smoothedTracks;
+    }
   }
- 
 }
 
- 
+
 sub makeChipChipPeak {
-  my ($dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
+  my ($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
   my $chipChipSeqDatasets = $datasetProperties->{chipchip};
   my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
   my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
@@ -769,66 +795,52 @@ sub makeChipChipPeak {
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
 
-  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-  my @subTracks = split(/\;/, $subTrackAttr); 
-  my @peakTracks; 
+  my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${sample}.bed.gz";
 
-  foreach my $subTrackName (@subTracks) { # Loop through sub-tracks
-    my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${subTrackName}_peaks.bed.gz";
-    #print Dumper "PEAK PATH  $relativePath";
+  my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
+										       dataset_name => $dataset,
+										       study_display_name => $datasetDisplayName,
+										       attribution => $shortAttribution,
+										       description => $summary,
+										       application_type => $applicationType,
+										       label => "$sample Peaks",
+										       key => "$sample Peaks",
+										       dataset_presenter_id => $datasetPresenterId,
+										       summary => $summary,
+										       relative_path_to_file => $relativePath
+										      })->getConfigurationObject();
 
-    my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
-        dataset_name => $dataset,
-        attribution => $shortAttribution,
-        description => $summary,
-        application_type => $applicationType,
-        label => "$datasetDisplayName - $subTrackName Peaks",
-        key => "${datasetDisplayName}_${subTrackName}_Peaks",
-        dataset_presenter_id => $datasetPresenterId,
-        summary => $summary,
-        relative_path_to_file => $relativePath
-    })->getConfigurationObject();
-    push @peakTracks, $peaks;
-  }
-  return @peakTracks;
+  push @{$result->{tracks}}, $peaks;
+
 }
 
-
 sub makeChipChipSmoothed {
-  my ($dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
+  my ($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
   my $chipChipSeqDatasets = $datasetProperties->{chipchip};
   my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
   my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
   my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
   my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
   $summary =~ s/\n/ /g;
-  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
+  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
 
-  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-  my @subTracks = split(/\;/, $subTrackAttr);
-  my @smoothedTracks; 
+  my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${sample}.bw";
 
-  foreach my $subTrackName (@subTracks) { # Loop through sub-tracks
-    my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${subTrackName}.bw";
-    #print Dumper "SMOOTH PATH $relativePath\n";
-    
-    my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
-	dataset_name  => $dataset,
-	attribution => $shortAttribution,
-	study_display_name => $datasetDisplayName,
-	description => $summary,
-	application_type => $applicationType,
-	label => "$datasetDisplayName - $subTrackName Smoothed",
-	key => "${datasetDisplayName}_${subTrackName}_Smoothed",
-	summary => $summary,
-	relative_path_to_file => $relativePath,
-	cov_max_score_default => 1000, # default
-	cov_min_score_default => 0     # default
-    })->getConfigurationObject(); 
-  
-    push @smoothedTracks, $smoothed;
-  }
-  return @smoothedTracks;
+  my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
+											      dataset_name  => $dataset,
+											      study_display_name => $datasetDisplayName,
+											      attribution => $shortAttribution,
+											      study_display_name => $datasetDisplayName,
+											      description => $summary,
+											      application_type => $applicationType,
+											      label => $sample,
+											      key => $sample,
+											      summary => $summary,
+											      relative_path_to_file => $relativePath,
+											      cov_max_score_default => 1000, # default
+											      cov_min_score_default => 0     # default
+											     })->getConfigurationObject();
+  push @{$result->{tracks}}, $smoothed;
 }
 
 
