@@ -5495,7 +5495,8 @@ products of your selected type (or types).<br><br>
                     queryRef="GeneVQ.DomainDatabase"
                     prompt="Domain Database"
                     quote="true"
-                    multiPick="false">
+                    multiPick="false"
+                    dependedParamRef="organismParams.organism">
       <help>
         Choose one of the constituent databases of InterPro.
       </help>
@@ -5507,7 +5508,7 @@ products of your selected type (or types).<br><br>
                     prompt="Specific Domain(s)"
                     multiPick="true"
                     displayType="typeAhead"
-                    dependedParamRef="geneParams.domain_database">
+                    dependedParamRef="geneParams.domain_database,organismParams.organism">
       <suggest selectMode="none" />
       <help><![CDATA[Use this parameter to indicate the domain you wish to query for. Genes returned by this
             search have protein products that are predicted to contain the domain(s) you indicate here.<br><br>
@@ -8760,28 +8761,36 @@ end as term
 
     <sqlQuery name="DomainAccession"  doNotTest="1">
       <paramRef ref="geneParams.domain_database"/>
+      <paramRef ref="organismParams.organism"/>
       <column name="internal" />
       <column name="term" />
       <column name="display"/>
 
       <sql>
         SELECT interpro_primary_id as internal
-          , interpro_primary_id AS term --  || CONCAT(' : ' , interpro_secondary_id ) as term
-          , CONCAT(interpro_primary_id, ' : ', -- CONCAT(interpro_secondary_id , ' ' ,
-            interpro_desc) as display
+          , interpro_primary_id AS term 
+          , CONCAT(interpro_primary_id, ' : ', interpro_desc) as display
           , count(*) as ct_hits
-        FROM apidb.interproResults
+        FROM webready.interproResults_p
         WHERE interpro_db_name = $$domain_database$$
-        GROUP BY interpro_primary_id, interpro_secondary_id, interpro_desc
+          AND org_abbrev IN ($$organism$$)
+        GROUP BY interpro_primary_id, interpro_desc
+        UNION
+        SELECT interpro_family_id as internal
+          , interpro_family_id AS term 
+          , CONCAT(interpro_family_id, ' : ', interpro_desc) as display
+          , count(*) as ct_hits
+        FROM webready.interproResults_p
+        WHERE 'INTERPRO' = $$domain_database$$
+          AND interpro_family_id is not null
+          AND interpro_family_id != '-'
+          AND org_abbrev IN ($$organism$$)
+        GROUP BY interpro_family_id, interpro_desc
         UNION
         SELECT 'N/A', 'N/A', 'N/A', 0.5
         ORDER BY ct_hits desc
       </sql>
     </sqlQuery>
-
-
-
-
 
     <sqlQuery name="GeneTypes" >
       <column name="internal"/>
@@ -8849,15 +8858,20 @@ end as term
 
 
     <sqlQuery name="DomainDatabase" >
+      <paramRef ref="organismParams.organism"/>
       <column name="internal"/>
       <column name="term"/>
       <sql>
+        select * from (
         SELECT DISTINCT
-          interpro_db_name as internal
-          , CASE WHEN upper(interpro_db_name) like 'INTERPRO%'
-            THEN 'INTERPRO'  ELSE interpro_db_name
-            END AS term
-        FROM apidb.interproResults
+             interpro_db_name as term
+          ,  interpro_db_name as internal
+        FROM webready.interproResults_p
+        WHERE org_abbrev IN ($$organism$$)
+        UNION
+        select 'INTERPRO' as term
+             , 'INTERPRO' as internal
+        )
         ORDER BY term
       </sql>
     </sqlQuery>

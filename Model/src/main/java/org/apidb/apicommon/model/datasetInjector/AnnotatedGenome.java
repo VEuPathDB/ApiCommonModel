@@ -267,6 +267,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithUserComments");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesWithSignalPeptide");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByTransmembraneDomains");
+    addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByInterproDomain");
     addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "attribute", "overview");
 
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Notes");
@@ -301,6 +302,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneName");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "BlastpForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterPro");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterProForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MendelGPIForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MitoprotForm");
