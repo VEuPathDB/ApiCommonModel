@@ -101,7 +101,7 @@ sub processOrganism {
 
   # TODO:  need to set isReference 
   if($projectName eq 'FungiDB' && $isReference) {
-      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType);
+      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType, $buildNumber);
   }
 
 
@@ -968,7 +968,7 @@ sub addOrfs {
 
 
 sub addAntismash {
-  my ($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType) = @_;
+  my ($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType, $buildNumber) = @_;
 
   # These reference genomes returned no result for antismash so no track should be shown
   my %excludeOrganisms = ("AastaciAPO3" => 1,
@@ -997,18 +997,19 @@ sub addAntismash {
       );
 
   return if($excludeOrganisms{$nameForFileNames});
-
-  my $gffUrl = "/a/service/jbrowse/auxiliary?data=${projectName}/antismash/" . uri_escape_utf8("${nameForFileNames}.sorted.gff.gz");
-
+  my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/sorted.gff.gz";
 
   my $summary = "Secondary metabolite gene clusters as predicted using antiSmash version 7.1 under default parameters";
 
-    my $antiSmashTrack = ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig->new({url_template => $gffUrl,
-                                                                                                 application_type => $applicationType,
-												 summary => $summary,
-												 gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH6_colorcode_features.png'/>",
-												 region_legend => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
-                                                                                                })->getConfigurationObject();
+  my $antiSmashTrack = ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig->new({
+											     project_name => $projectName,
+											     build_number => $buildNumber,
+											     relative_path_to_file => $relativePathToGffFile,
+											     application_type => $applicationType,
+											     summary => $summary,
+											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH6_colorcode_features.png'/>",
+											     region_legend => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
+											    })->getConfigurationObject();
 
 
   push @{$result->{tracks}}, $antiSmashTrack;
