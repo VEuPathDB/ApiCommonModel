@@ -2,12 +2,15 @@ package ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
-
+use Data::Dumper;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
+
+sub getUrl {$_[0]->{url} }
+sub setUrl {$_[0]->{url} = $_[1]}
 
 
 sub new {
@@ -22,6 +25,11 @@ sub new {
     $self->setLabel($args->{label});
     $self->setGlyph($args->{glyph});
 
+    $self->setUrl($args->{relative_path_to_file});
+    my $uu = $self->getUrl();
+    #print Dumper "SMOOTH CCST url = $uu";
+    
+    
 #    $self->setDisplayMode(undef);
 #    $self->setGlyph(undef);
 

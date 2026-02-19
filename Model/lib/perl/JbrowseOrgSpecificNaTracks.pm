@@ -772,10 +772,10 @@ sub addChipChipTracks {
     next unless($dataset =~ /chipChipExper/);
 
     foreach my $sample (@{$cc_data{$dataset}}) { # for each
-      my @peakTracks = &makeChipChipPeak($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType);
+      my @peakTracks = &makeChipChipPeak($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
       push @{$result->{tracks}}, @peakTracks;
 
-      my @smoothedTracks = &makeChipChipSmoothed($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType);
+      my @smoothedTracks = &makeChipChipSmoothed($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
       push @{$result->{tracks}}, @smoothedTracks;
     }
   }
@@ -783,7 +783,7 @@ sub addChipChipTracks {
 
 
 sub makeChipChipPeak {
-  my ($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
   my $chipChipSeqDatasets = $datasetProperties->{chipchip};
   my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
   my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
@@ -794,7 +794,7 @@ sub makeChipChipPeak {
 
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
-
+  #print Dumper "PEAK nameForFileNames $nameForFileNames";
   my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${sample}.bed.gz";
 
   my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
@@ -815,7 +815,7 @@ sub makeChipChipPeak {
 }
 
 sub makeChipChipSmoothed {
-  my ($result, $sample, $dataset, $datasetProperties, $nameForFileNames, $applicationType) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
   my $chipChipSeqDatasets = $datasetProperties->{chipchip};
   my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
   my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
@@ -823,7 +823,7 @@ sub makeChipChipSmoothed {
   my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
   $summary =~ s/\n/ /g;
   my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
-
+  #print Dumper "SMOOTHED nameForFileNames $nameForFileNames";
   my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${sample}.bw";
 
   my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({

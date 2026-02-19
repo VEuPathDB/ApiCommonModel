@@ -2,6 +2,7 @@ package ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
+use Data::Dumper;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::BedStore;
 
@@ -25,8 +26,11 @@ sub new {
     $self->setId($args->{key});
     $self->setLabel($args->{label});
     $self->setGlyph($args->{glyph});
-    $self->setUrl($args->{relative_path_to_file});
 
+    $self->setUrl($args->{relative_path_to_file});
+    my $uu = $self->getUrl();
+    #print Dumper "PEAK CCPT url = $uu";
+    
 #    $self->setDisplayMode(undef);
 #    $self->setGlyph(undef);
 
