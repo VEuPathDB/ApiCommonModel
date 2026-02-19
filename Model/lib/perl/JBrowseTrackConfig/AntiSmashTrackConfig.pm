@@ -1,22 +1,23 @@
 package ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
-use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
+#use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 
 use strict;
 use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
 
-sub getSubParts {$_[0]->{sub_parts}}
-sub setSubParts {$_[0]->{sub_parts} = $_[1]}
+#sub getSubParts {$_[0]->{sub_parts}}
+#sub setSubParts {$_[0]->{sub_parts} = $_[1]}
 
-sub getGeneLegend {$_[0]->{gene_legend}}
-sub setGeneLegend {$_[0]->{gene_legend} = $_[1]}
+#sub getGeneLegend {$_[0]->{gene_legend}}
+#sub setGeneLegend {$_[0]->{gene_legend} = $_[1]}
 
-sub getRegionLegend {$_[0]->{region_legend}}
-sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
+#sub getRegionLegend {$_[0]->{region_legend}}
+#sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
 
-sub getBorderColor {$_[0]->{border_color}}
-sub setBorderColor {$_[0]->{border_color} = $_[1]}
+#sub getBorderColor {$_[0]->{border_color}}
+#sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -30,23 +31,20 @@ sub new {
     $self->setLabel("antibiotics and Secondary Metabolites Analysis SHell (antiSMASH)");
 
 
-
     my $store;
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-        $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
     }
     else {
         # TODO
 	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-
-        $self->setTrackType("FeatureTrack");
     }
 
     $self->setStore($store);
 
     $self->setColor("{antismashColor}");
-    $self->setSubParts("CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,proto_core");
+    #$self->setSubParts("CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,proto_core");
+    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments");
 
     return $self;
 }
@@ -63,26 +61,26 @@ sub getJBrowseStyle {
    return $jbrowseStyle;
 }
 
-sub getMetadata {
-    my $self = shift;
+# sub getMetadata {
+#     my $self = shift;
 
-    my $geneLegend = $self->getGeneLegend();
-    my $regionLegend = $self->getRegionLegend();
+#     my $geneLegend = $self->getGeneLegend();
+#     my $regionLegend = $self->getRegionLegend();
 
-    my $metadata = $self->SUPER::getMetadata();
-    $metadata->{GeneLegend} = $geneLegend if($geneLegend);
-    $metadata->{RegionLegend} = $regionLegend if($regionLegend);
+#     my $metadata = $self->SUPER::getMetadata();
+#     $metadata->{GeneLegend} = $geneLegend if($geneLegend);
+#     $metadata->{RegionLegend} = $regionLegend if($regionLegend);
 
-    return $metadata;
-}
+#     return $metadata;
+# }
 
 sub getJBrowseObject{
 	my $self = shift;
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
         $jbrowseObject->{unsafePopup} = "JSON::true";
-        $jbrowseObject->{subParts} = $self->getSubParts() if($self->getSubParts()); 
-        $jbrowseObject->{transcriptType} = "function(f) { return f.children()[0].get(\"type\")}"; 
+        #$jbrowseObject->{subParts} = $self->getSubParts() if($self->getSubParts());
+        #$jbrowseObject->{transcriptType} = "function(f) { return f.children()[0].get(\"type\")}";
 
 
     return $jbrowseObject;
