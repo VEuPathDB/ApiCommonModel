@@ -54,7 +54,7 @@ sub processOrganism {
 
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
+  &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
   &addSynteny($applicationType, $dbh, $result);
@@ -740,13 +740,18 @@ sub addUnifiedSnp {
 
 
 sub addUnifiedMassSpec {
-  my ($datasetProps, $applicationType, $result) = @_;
-    my $hasMassSpec = $datasetProps->{hasMassSpec} ? $datasetProps->{hasMassSpec} : {};
-        if($hasMassSpec == 1) {
-    my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({application_type => $applicationType })->getConfigurationObject();
-
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasMassSpec = $datasetProps->{hasUnifiedGenomicMassSpec} ? $datasetProps->{hasUnifiedGenomicMassSpec} : 0;
+  if($hasMassSpec == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/unifiedGenomicMassSpec.gff.gz";
+    my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({
+      application_type      => $applicationType,
+      project_name          => $projectName,
+      build_number          => $buildNumber,
+      relative_path_to_file => $relativePathToGffFile,
+    })->getConfigurationObject();
     push @{$result->{tracks}}, $unifiedMassSpecTrack;
-   };
+  }
 }
 
 
