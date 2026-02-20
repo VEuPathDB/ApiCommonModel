@@ -480,7 +480,7 @@ sub addCentromere {
 
 sub addScaffolds {
   my ($datasetProps, $applicationType, $result) = @_;
-     my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
+     my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : {};
         if($hasScaffold == 1) {
       my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
       push @{$result->{tracks}}, $track;
