@@ -52,7 +52,7 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
-  &addScaffolds($datasetProps, $applicationType, $result);
+  &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
@@ -479,11 +479,17 @@ sub addCentromere {
 
 
 sub addScaffolds {
-  my ($datasetProps, $applicationType, $result) = @_;
-     my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : {};
-        if($hasScaffold == 1) {
-      my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
-      push @{$result->{tracks}}, $track;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : 0;
+  if($hasScaffold == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/scaffolds.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({
+      application_type      => $applicationType,
+      project_name          => $projectName,
+      build_number          => $buildNumber,
+      relative_path_to_file => $relativePathToGffFile,
+    })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
   }
 }
 
