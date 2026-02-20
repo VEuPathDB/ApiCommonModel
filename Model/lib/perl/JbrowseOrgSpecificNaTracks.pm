@@ -53,7 +53,7 @@ sub processOrganism {
   my $isReference = ($orgHash->{isReferenceStrain});
 
   &addScaffolds($datasetProps, $applicationType, $result);
-  &addCentromere($datasetProps, $applicationType, $result);
+  &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
@@ -463,12 +463,18 @@ sub addESTs {
 }
 
 sub addCentromere {
-  my ($datasetProps, $applicationType, $result) = @_;
-     my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
-	if($hasCentromere == 1) {
-     my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
-     push @{$result->{tracks}}, $track;
-    };
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
+  if($hasCentromere == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/centromere.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({
+                                                                                        project_name => $projectName,
+                                                                                        build_number => $buildNumber,
+                                                                                        relative_path_to_file => $relativePathToGffFile,
+                                                                                        application_type => $applicationType,
+                                                                                      })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  };
 }
 
 
