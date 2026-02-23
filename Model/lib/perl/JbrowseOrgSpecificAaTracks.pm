@@ -24,6 +24,8 @@ sub processOrganism {
   #print Dumper ($datasetProps);
   ### Get organism properties
   my $orgHash = ($datasetProps->{'organism'});
+  my $ranExportPred = ($orgHash->{runExportPred});
+  
   my $nameForFileName = ($orgHash->{organismNameForFiles});
   my $projectName = ($orgHash->{projectName});
 
@@ -37,7 +39,9 @@ sub processOrganism {
   &addSecondaryStructureHelix($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureStrand($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  if ($ranExportPred eq 'true'){
+    &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  }
   &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
 
   &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -301,11 +305,6 @@ sub addExportPred {
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/exportpred.gff.gz";
     my $summary = "Export domains predicted by ExportPred";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "domain:ExportPred",
-                                           };
-
     $exportPredTrack = ApiCommonModel::Model::JBrowseTrackConfig::ExportPredTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -313,8 +312,7 @@ sub addExportPred {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "Predicted Protein Export Domains",
-                                                                                                label => "NA",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "ExportPred",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $exportPredTrack if($exportPredTrack);
