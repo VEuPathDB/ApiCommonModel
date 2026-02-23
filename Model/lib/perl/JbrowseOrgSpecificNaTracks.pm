@@ -52,9 +52,9 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
-  &addScaffolds($datasetProps, $applicationType, $result);
-  &addCentromere($datasetProps, $applicationType, $result);
-  &addUnifiedMassSpec($datasetProps, $applicationType, $result);
+  &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
   &addSynteny($applicationType, $dbh, $result);
@@ -463,21 +463,33 @@ sub addESTs {
 }
 
 sub addCentromere {
-  my ($datasetProps, $applicationType, $result) = @_;
-     my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
-	if($hasCentromere == 1) {
-     my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
-     push @{$result->{tracks}}, $track;
-    };
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
+  if($hasCentromere == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/centromere.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig->new({
+                                                                                        project_name => $projectName,
+                                                                                        build_number => $buildNumber,
+                                                                                        relative_path_to_file => $relativePathToGffFile,
+                                                                                        application_type => $applicationType,
+                                                                                      })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  };
 }
 
 
 sub addScaffolds {
-  my ($datasetProps, $applicationType, $result) = @_;
-     my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
-        if($hasScaffold == 1) {
-      my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({application_type => $applicationType})->getConfigurationObject();
-      push @{$result->{tracks}}, $track;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : 0;
+  if($hasScaffold == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/scaffolds.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({
+      application_type      => $applicationType,
+      project_name          => $projectName,
+      build_number          => $buildNumber,
+      relative_path_to_file => $relativePathToGffFile,
+    })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
   }
 }
 
@@ -728,13 +740,18 @@ sub addUnifiedSnp {
 
 
 sub addUnifiedMassSpec {
-  my ($datasetProps, $applicationType, $result) = @_;
-    my $hasMassSpec = $datasetProps->{hasMassSpec} ? $datasetProps->{hasMassSpec} : {};
-        if($hasMassSpec == 1) {
-    my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({application_type => $applicationType })->getConfigurationObject();
-
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasMassSpec = $datasetProps->{hasUnifiedGenomicMassSpec} ? $datasetProps->{hasUnifiedGenomicMassSpec} : 0;
+  if($hasMassSpec == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/unifiedGenomicMassSpec.gff.gz";
+    my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({
+      application_type      => $applicationType,
+      project_name          => $projectName,
+      build_number          => $buildNumber,
+      relative_path_to_file => $relativePathToGffFile,
+    })->getConfigurationObject();
     push @{$result->{tracks}}, $unifiedMassSpecTrack;
-   };
+  }
 }
 
 

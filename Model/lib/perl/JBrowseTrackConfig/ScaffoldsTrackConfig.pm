@@ -3,7 +3,7 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
-use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
 
 sub new {
     my ($class, $args) = @_;
@@ -23,8 +23,7 @@ sub new {
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("scaffold:genome");
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
     }
     else {
         # TODO

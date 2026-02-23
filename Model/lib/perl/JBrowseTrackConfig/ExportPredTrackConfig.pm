@@ -54,7 +54,7 @@ sub getJBrowseStyle {
     my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
     $jbrowseStyle->{color} = "navy";
-    $jbrowseStyle->{label} = "NA";
+    $jbrowseStyle->{label} = "ExportPred";
 
     return $jbrowseStyle;
 }

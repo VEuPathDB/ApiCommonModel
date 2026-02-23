@@ -24,6 +24,8 @@ sub processOrganism {
   #print Dumper ($datasetProps);
   ### Get organism properties
   my $orgHash = ($datasetProps->{'organism'});
+  my $ranExportPred = ($orgHash->{runExportPred});
+  
   my $nameForFileName = ($orgHash->{organismNameForFiles});
   my $projectName = ($orgHash->{projectName});
 
@@ -37,10 +39,13 @@ sub processOrganism {
   &addSecondaryStructureHelix($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSecondaryStructureStrand($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  if ($ranExportPred eq 'true'){
+    &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  }
   &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
 
   &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addUnifiedPTMassSpec($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber);
 }
 
 sub addProteinRefSeq {
@@ -300,11 +305,6 @@ sub addExportPred {
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/exportpred.gff.gz";
     my $summary = "Export domains predicted by ExportPred";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "domain:ExportPred",
-                                           };
-
     $exportPredTrack = ApiCommonModel::Model::JBrowseTrackConfig::ExportPredTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -312,8 +312,7 @@ sub addExportPred {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "Predicted Protein Export Domains",
-                                                                                                label => "NA",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "ExportPred",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $exportPredTrack if($exportPredTrack);
@@ -343,9 +342,6 @@ sub addIedb {
 sub addProteinExpressionMassSpec {
   my ($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
-
-  my $hasPTMDataset;
-
   my $proteinExpressionMassSpecDatasets = $datasetProps->{protexpmassspec} ? $datasetProps->{protexpmassspec} : {};
 
   foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
@@ -357,22 +353,13 @@ sub addProteinExpressionMassSpec {
     my $datasetExtdbName = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetExtdbName};
     my $category = $proteinExpressionMassSpecDatasets->{$dataset}->{datasetClassCategory};
 
-    my $hasPTMs = $proteinExpressionMassSpecDatasets->{$dataset}->{hasPTMs};
-
     my $summary = $proteinExpressionMassSpecDatasets->{$dataset}->{summary};
     $summary =~ s/\n/ /g;
     my $shortAttribution = $proteinExpressionMassSpecDatasets->{$dataset}->{shortAttribution};
 
-    my $feature = "domain:MassSpecPeptide";
-
-    if(lc($hasPTMs) eq 'true') {
-      $feature = "domain:MassSpecPeptidePhospho";
-      $hasPTMDataset = 1;
-    }
-
     my $relativePathToGffFile = "${nameForFileNames}/massSpec/gff/${datasetExtdbName}/ms_peptides_protein_align.gff.gz";
 
-    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({  
+    my $massSpec = ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
@@ -389,16 +376,24 @@ sub addProteinExpressionMassSpec {
 
     push @{$result->{tracks}}, $massSpec if($massSpec);
   }
+}
 
-  if($hasPTMDataset) {
 
-  my $unifiedPtm = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedPostTranslationalMod->new({application_type => $applicationType,
+sub addUnifiedPTMassSpec {
+  my ($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber) = @_;
 
-                                                                                              })->getConfigurationObject();
+  my $hasPTMMassSpec = $datasetProps->{hasUnifiedPostTraslationalMod} ? $datasetProps->{hasUnifiedPostTraslationalMod} : 0;
+  if($hasPTMMassSpec == 1) {
+    my $relativePathToGffFile = "${nameForFileName}/genomeBrowser/gff/unifiedPostTraslationalMod.gff.gz";
 
-    push @{$result->{tracks}}, $unifiedPtm if($unifiedPtm);
+    my $unifiedPTMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedPostTranslationalMod->new({
+													       application_type      => $applicationType,
+													       project_name          => $projectName,
+													       build_number          => $buildNumber,
+													       relative_path_to_file => $relativePathToGffFile,
+													      })->getConfigurationObject();
+    push @{$result->{tracks}}, $unifiedPTMassSpecTrack;
   }
-
 }
 
 1;

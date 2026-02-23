@@ -3,7 +3,7 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
-use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
 
 use JSON;
 
@@ -23,7 +23,7 @@ sub new {
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
     }
     else {
         # TODO
@@ -34,17 +34,27 @@ sub new {
     my $detailsFunction = "{massSpecDetails}";
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
+    $self->setDisplayMode("compact");
+    $self->setBorderColor("black");
 
-    $self->setMaxFeatureScreenDensity(0.01);
+    $self->setMaxFeatureScreenDensity(0.5);
 
     $self->setRegionFeatureDensities(JSON::true);
-
-    $self->setDisplayMode("compact");
-    $self->setGlyph("");
+    #$self->setGlyph("");
 
     return $self;
 }
 
+sub getJBrowseStyle {
+	my $self = shift;
+
+	my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
+
+	# 'massSpecColor' function does NOT work as we are not running SQL
+	# $jbrowseStyle->{color} = "{massSpecColor}";
+	$jbrowseStyle->{label} = "Sample,sample,name";
+	return $jbrowseStyle;
+}
 
 # TODO:
 sub getJBrowse2Object{
