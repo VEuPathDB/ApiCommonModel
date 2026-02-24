@@ -65,8 +65,8 @@ sub getJBrowseObject{
 	#my $url = $self->getUrl();
 	my $summary = $self->getSummary();
 
-	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"};        
-        $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{gsnapUnifiedIntronJunctionTitleFxn}"}, {label => "Intron Record:  {name}", action => "iframeDialog",hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"}, {label => "Highlight this Feature"}];
+	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{id}?tables=SampleInfo"};
+        $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{gsnapUnifiedIntronJunctionTitleFxn}"}, {label => "Intron Record:  {id}", action => "iframeDialog",hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{id}?tables=SampleInfo"}, {label => "Highlight this Feature"}];
         $jbrowseObject->{fmtMetaValue_Description} =  "function(){return datasetDescription(\"$summary\", \"\");}";
         $jbrowseObject->{maxFeatureScreenDensity} = 9999999;
         $jbrowseObject->{subtracks} = [{featureFilters => {annotatedintron => "Yes", evidence => "Strong Evidence",},visible => 1, label => "Matches Annotation", metadata => {},},{featureFilters => {annotatedintron => "No",evidence => "Strong Evidence",},visible => 1,label => "Unannotated (Strong Evidence)",metadata => {},},{featureFilters => {annotatedintron => "No",evidence => "Weak Evidence",},visible => 0,label => "Unannotated (Weak Evidence)",metadata => {},}];
