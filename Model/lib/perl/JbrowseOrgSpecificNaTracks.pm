@@ -803,8 +803,8 @@ sub makeChipChipPeak {
 										       attribution => $shortAttribution,
 										       description => $summary,
 										       application_type => $applicationType,
-										       label => "$sample Peaks",
-										       key => "$sample Peaks",
+										       label => "$sample - peaks",
+										       key => "$sample - peaks",
 										       dataset_presenter_id => $datasetPresenterId,
 										       summary => $summary,
 										       relative_path_to_file => $relativePath
@@ -833,8 +833,8 @@ sub makeChipChipSmoothed {
 											      study_display_name => $datasetDisplayName,
 											      description => $summary,
 											      application_type => $applicationType,
-											      label => $sample,
-											      key => $sample,
+											      label => "$sample - smoothed",
+											      key => "$sample - smoothed",
 											      summary => $summary,
 											      relative_path_to_file => $relativePath,
 											      cov_max_score_default => 1000, # default

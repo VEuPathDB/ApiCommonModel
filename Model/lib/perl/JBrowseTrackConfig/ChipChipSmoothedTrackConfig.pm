@@ -26,19 +26,15 @@ sub new {
     $self->setGlyph($args->{glyph});
 
     $self->setUrl($args->{relative_path_to_file});
-    my $uu = $self->getUrl();
-    #print Dumper "SMOOTH CCST url = $uu";
-    
-    
+
 #    $self->setDisplayMode(undef);
 #    $self->setGlyph(undef);
 
     $self->setCovMaxScoreDefault(defined $args->{cov_max_score_default} ? $args->{cov_max_score_default} : 1000);
     $self->setCovMinScoreDefault(defined $args->{cov_min_score_default} ? $args->{cov_min_score_default} : 0);
 
-    #TODO
+
     $self->setTrackTypeDisplay("XYPlot");
-    $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
 
     my $store;
 
