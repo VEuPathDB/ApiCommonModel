@@ -4,12 +4,11 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::JBrowseUtil;
 use ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig;
-use ApiCommonModel::Model::JbrowseRnaSeqJunctionTracks;
 
 use Storable 'dclone';
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $isApollo, $applicationType, $jbrowseUtil, $result) = @_;
+  my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
 
   my $methodDescription = "<h1><u>Definitions</u>:</h1>
 
@@ -43,32 +42,18 @@ sub processOrganism {
  ";
   $methodDescription =~ s/\n//g;
 
+  my $datasetProps = $jbrowseUtil->getDatasetProperties();
+  my $orgHash = $datasetProps->{'organism'};
+  my $nameForFileNames = $orgHash->{organismNameForFiles};
 
-  my $inclusiveQueryParams = $jbrowseUtil->intronJunctionsQueryParams('inclusive');
+  my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/unifiedIntronJunction.gff.gz";
 
-  my $dbh = $jbrowseUtil->getDbh();   
-
-  my $sql = "select count(*)
-from apidbtuning.datasetproperty p
-   , apidbtuning.datasetdatasource d
-   , apidb.organism o
-where d.DATASET_PRESENTER_ID = p.DATASET_PRESENTER_ID
-and o.taxon_id = d.taxon_id
-and d.name like '%rnaSeq_RSRC'
-and p.property = 'showIntronJunctions'
-and lower(p.value) = 'true'
-and o.ABBREV = '$organismAbbrev'";
-
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-
-  my ($count) = $sh->fetchrow_array();
-  $sh->finish();
-
-  if ($count > 0) {
-
+  {
     my $inclusive = ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig->new({application_type => $applicationType,
                                                                                                summary => $methodDescription,
+                                                                                               project_name => $projectName,
+                                                                                               build_number => $buildNumber,
+                                                                                               relative_path_to_file => $relativePathToGffFile,
                                                                                               })->getConfigurationObject();
 
     #  my $inclusive = {storeClass => "JBrowse/Store/SeqFeature/REST",
@@ -152,7 +137,7 @@ and o.ABBREV = '$organismAbbrev'";
       $refinedNovel->{type} = "JBrowse/View/Track/HTMLFeatures";
       $refinedNovel->{key} = $refinedNovel->{key} . " Novel with Strong Evidence";
       $refinedNovel->{label} = $refinedNovel->{label} . " Novel with Strong Evidence";
-      $refinedNovel->{query}->{annotated_intron} = "No";
+      $refinedNovel->{query}->{annotatedintron} = "No";
       $refinedNovel->{query}->{feature} = "gsnap:unifiedintronjunctionHCOnly";
       delete $refinedNovel->{onClick};
 
@@ -161,7 +146,7 @@ and o.ABBREV = '$organismAbbrev'";
       $inclusiveNovel->{type} = "JBrowse/View/Track/HTMLFeatures";
       $inclusiveNovel->{key} = $inclusiveNovel->{key} . " Novel with Weak Evidence";
       $inclusiveNovel->{label} = $inclusiveNovel->{label} . " Novel with Weak Evidence";
-      $inclusiveNovel->{query}->{annotated_intron} = "No";
+      $inclusiveNovel->{query}->{annotatedintron} = "No";
       $inclusiveNovel->{query}->{feature} = "gsnap:unifiedintronjunctionLCOnly";
       delete $inclusiveNovel->{onClick};
 
@@ -170,7 +155,7 @@ and o.ABBREV = '$organismAbbrev'";
       $inclusiveKnown->{type} = "JBrowse/View/Track/HTMLFeatures";
       $inclusiveKnown->{key} = $inclusiveKnown->{key} . " Matches Transcript Annotation";
       $inclusiveKnown->{label} = $inclusiveKnown->{label} . " Matches Transcript Annotation";
-      $inclusiveKnown->{query}->{annotated_intron} = "Yes";
+      $inclusiveKnown->{query}->{annotatedintron} = "Yes";
       $inclusiveKnown->{query}->{feature} = "gsnap:unifiedintronjunctionAnnotatedOnly";
       delete $inclusiveKnown->{onClick};
 
@@ -180,13 +165,5 @@ and o.ABBREV = '$organismAbbrev'";
       push @{$result->{tracks}}, $inclusiveKnown;
     }
   }
-
-  $dbh->disconnect();
-
-#   unless($isApollo) {
-#     open(CACHE, "> " . $jbrowseUtil->getCacheFile()) or die "Cannot open file " . $jbrowseUtil->getCacheFile() . " for writing: $!";
-#     print CACHE encode_json($result);
-#     close CACHE;
-#   }
 }
 1;
