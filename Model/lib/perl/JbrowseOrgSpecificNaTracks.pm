@@ -795,7 +795,7 @@ sub makeChipChipPeak {
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
   #print Dumper "PEAK nameForFileNames $nameForFileNames";
-  my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${sample}.bed.gz";
+  my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${sample}_peaks.bed.gz";
 
   my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
 										       dataset_name => $dataset,
@@ -807,7 +807,9 @@ sub makeChipChipPeak {
 										       key => "$sample - peaks",
 										       dataset_presenter_id => $datasetPresenterId,
 										       summary => $summary,
-										       relative_path_to_file => $relativePath
+										       relative_path_to_file => $relativePath,
+										       project_name => $projectName,
+										       build_number => $buildNumber,
 										      })->getConfigurationObject();
 
   push @{$result->{tracks}}, $peaks;
@@ -838,7 +840,9 @@ sub makeChipChipSmoothed {
 											      summary => $summary,
 											      relative_path_to_file => $relativePath,
 											      cov_max_score_default => 1000, # default
-											      cov_min_score_default => 0     # default
+											      cov_min_score_default => 0,    # default
+											      project_name => $projectName,
+											      build_number => $buildNumber,
 											     })->getConfigurationObject();
   push @{$result->{tracks}}, $smoothed;
 }
