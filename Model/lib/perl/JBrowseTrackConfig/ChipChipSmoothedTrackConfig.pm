@@ -2,16 +2,15 @@ package ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
+use Data::Dumper;
 
-use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 
-use JSON;
+sub getGlyph {$_[0]->{glyph} }
+sub setGlyph {$_[0]->{glyph} = $_[1]}
 
-sub getPanName {$_[0]->{pan_name}}
-sub setPanName {$_[0]->{pan_name} = $_[1]}
-
-sub getBorderColor {$_[0]->{border_color}}
-sub setBorderColor {$_[0]->{border_color} = $_[1]}
+sub getUrl {$_[0]->{url} }
+sub setUrl {$_[0]->{url} = $_[1]}
 
 
 sub new {
@@ -22,27 +21,29 @@ sub new {
     $datasetConfig->setCategory("Epigenomics");
     $datasetConfig->setSubcategory("ChIP chip");
 
-    $self->setPanName($args->{pan_name});
-    my $panName = $self->getPanName();
-    $self->setId($panName);
-    $self->setLabel($panName);
-    $self->setCovMaxScoreDefault($args->{cov_max_score_default});
-    $self->setCovMinScoreDefault($args->{cov_min_score_default});
+    $self->setId($args->{key});
+    $self->setLabel($args->{label});
+    $self->setGlyph($args->{glyph});
 
-    #TODO
+    $self->setUrl($args->{relative_path_to_file});
+
+#    $self->setDisplayMode(undef);
+#    $self->setGlyph(undef);
+
+    $self->setCovMaxScoreDefault(defined $args->{cov_max_score_default} ? $args->{cov_max_score_default} : 1000);
+    $self->setCovMinScoreDefault(defined $args->{cov_min_score_default} ? $args->{cov_min_score_default} : 0);
+
+
     $self->setTrackTypeDisplay("XYPlot");
-    ###  $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");
 
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("ChIP:ChIPchip_smoothedjbrowse");
-        $store->setQueryParamsHash($args->{query_params});
-
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
     }
     else {
         # TODO
+	$store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
     }
 
     $self->setStore($store);
@@ -53,24 +54,13 @@ sub new {
 sub getJBrowseStyle {
     my $self = shift;
 
-    my $jbrowseStyle = {};
+    my $jbrowseStyle = $self->SUPER::getJBrowseStyle();
 
     $jbrowseStyle->{height} = 40;
     $jbrowseStyle->{neg_color} = "{chipColor}";
     $jbrowseStyle->{pos_color} = "{chipColor}";
 
     return $jbrowseStyle;
-}
-
-sub getMetadata {
-    my $self = shift;
-
-    my $metadata = $self->SUPER::getMetadata();
-
-    $metadata->{attribution} = undef;
-
-
-    return $metadata;
 }
 
 
@@ -83,18 +73,17 @@ sub getJBrowseObject{
  # $jbrowseObject->{scale} = undef;
 
   return $jbrowseObject;
-
 }
 
 
 # TODO:
 sub getJBrowse2Object{
-        my $self = shift;
+    my $self = shift;
 
-        my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+    my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
 
 
-        return $jbrowse2Object;
+    return $jbrowse2Object;
 }
 
 

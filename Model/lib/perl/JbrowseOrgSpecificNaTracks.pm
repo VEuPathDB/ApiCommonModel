@@ -66,7 +66,7 @@ sub processOrganism {
 
   &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
   &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
-  &addChipChipTracks($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType);
+  &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
@@ -755,79 +755,113 @@ sub addUnifiedMassSpec {
 }
 
 
+#     my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
+
 sub addChipChipTracks {
-  my ($dbh, $result, $datasetProperties, $organismAbbrev, $applicationType) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
 
   my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
- my $sql = "select d.name, s.name, pan.name, pan.protocol_app_node_id
-from study.study s
-   , SRES.EXTERNALDATABASERELEASE r
-   , SRES.EXTERNALDATABASE d
-   , study.protocolappnode pan
-   , study.studylink sl
-where d.name like '${organismAbbrev}%_chipChipExper_%'
-and s.EXTERNAL_DATABASE_RELEASE_ID = r.EXTERNAL_DATABASE_RELEASE_ID
-and r.EXTERNAL_DATABASE_ID = d.EXTERNAL_DATABASE_ID
-and s.study_id = sl.study_id
-and sl.protocol_app_node_id = pan.PROTOCOL_APP_NODE_ID
-and s.investigation_id is null";
+  # get sample names for each dataset
+  my $dataFile = "/var/www/Common/apiSiteFilesMirror/webServices/$projectName/build-${buildNumber}/${nameForFileNames}/genomeBrowser/config/jbrowse.conf";
+  my %cc_data;  #to store sample names for each dataset
 
-
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
-
-  while(my ($dataset, $study, $panName, $panId) = $sh->fetchrow_array()) {
-
-    if($panName =~ /_peaks \(ChIP-chip\)/) {
-        my $peakTrack = &makeChipChipPeak($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
-        push @{$result->{tracks}}, $peakTrack;
-    }
-    if($panName =~ /_smoothed \(ChIP-chip\)/) {
-      my $track = &makeChipChipSmoothed($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType);
-      push @{$result->{tracks}}, $track;
+  open my $fh, '<', $dataFile or die "Could not open file '$dataFile': $!";
+  while (my $line = <$fh>) {
+    chomp $line;
+    if ($line =~ /^chipchip::/ && $line =~ /::panName=/) {
+      my @parts = split(/::/, $line);
+      my $dataset_key = $parts[1];
+      my $pan_name_part = $parts[-1];
+      my $sample_name;
+      if ($pan_name_part =~ /^panName=(.*)$/) {
+	$sample_name = $1;
+	$sample_name =~ s/_peaks\s+\(ChIP-chip\)$//;
+	push @{$cc_data{$dataset_key}}, $sample_name;
+      }
     }
   }
- 
-  $sh->finish();
+  close $fh;
+  #print Dumper \%cc_data;
+
+  # get data from auto_generated prop file
+  foreach my $dataset (keys %$chipChipSeqDatasets){
+    next unless($dataset =~ /chipChipExper/);
+
+    foreach my $sample (@{$cc_data{$dataset}}) { # for each
+      my @peakTracks = &makeChipChipPeak($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
+      push @{$result->{tracks}}, @peakTracks;
+
+      my @smoothedTracks = &makeChipChipSmoothed($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
+      push @{$result->{tracks}}, @smoothedTracks;
+    }
+  }
 }
 
 
 sub makeChipChipPeak {
-  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
+  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{datasetPresenterId};
+  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  $summary =~ s/\n/ /g;
+  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
 
-    my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-    my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
-    $summary =~ s/\n/ /g;
-    my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
-    my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
-
-  my $key = $panName;
-  my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
-
-  my $queryParams = {
-                            'exp' => $dataset,
-                            'sub' => $subTrackAttr,
-                            'cutoff' => $cutoff,
-                            'panId' => $panId,
-                                           };
+  #print Dumper "PEAK nameForFileNames $nameForFileNames";
+  my $relativePath = "${nameForFileNames}/chipChip/bed/${datasetName}/${sample}_peaks.bed.gz";
 
   my $peaks = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipPeakTrackConfig->new({
-                                                                                                dataset_name => $dataset,
-                                                                                                attribution => $shortAttribution,
-                                                                                                study_display_name => $datasetDisplayName,
-                                                                                                description => $summary,
-                                                                                                query_params => $queryParams,
-                                                                                                application_type => $applicationType,
-                                                                                                label => $key,
-                                                                                                key => $key,
-												pan_name => $panName,
-												dataset_presenter_id => $datasetPresenterId,
-												summary => $summary,
-                                                                                              })->getConfigurationObject();
-  return $peaks;
+										       dataset_name => $dataset,
+										       study_display_name => $datasetDisplayName,
+										       attribution => $shortAttribution,
+										       description => $summary,
+										       application_type => $applicationType,
+										       label => "$sample - peaks",
+										       key => "$sample - peaks",
+										       dataset_presenter_id => $datasetPresenterId,
+										       summary => $summary,
+										       relative_path_to_file => $relativePath,
+										       project_name => $projectName,
+										       build_number => $buildNumber,
+										      })->getConfigurationObject();
+
+  push @{$result->{tracks}}, $peaks;
+
+}
+
+sub makeChipChipSmoothed {
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
+  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
+  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  $summary =~ s/\n/ /g;
+  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
+  #print Dumper "SMOOTHED nameForFileNames $nameForFileNames";
+  my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${sample}.bw";
+
+  my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
+											      dataset_name  => $dataset,
+											      study_display_name => $datasetDisplayName,
+											      attribution => $shortAttribution,
+											      study_display_name => $datasetDisplayName,
+											      description => $summary,
+											      application_type => $applicationType,
+											      label => "$sample - smoothed",
+											      key => "$sample - smoothed",
+											      summary => $summary,
+											      relative_path_to_file => $relativePath,
+											      cov_max_score_default => 1000, # default
+											      cov_min_score_default => 0,    # default
+											      project_name => $projectName,
+											      build_number => $buildNumber,
+											     })->getConfigurationObject();
+  push @{$result->{tracks}}, $smoothed;
 }
 
 
@@ -860,43 +894,6 @@ order by pan.name";
 
   }
   $sh->finish();
-}
-
-
-sub makeChipChipSmoothed {
-  my ($dataset, $study, $panName, $panId, $datasetProperties, $chipChipSeqDatasets, $applicationType) = @_;
-
-    my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-    my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
-    $summary =~ s/\n/ /g;
-    my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
-
-    my $datasetKey = $datasetProperties->{$dataset}->{key};
-    my $key = $panName;
-    my $subTrackAttr = $chipChipSeqDatasets->{$dataset}->{subTrackAttr};
-
-    my $queryParams = {
-                            'exp' => $dataset,
-                            'sub' => $subTrackAttr,
-                            'panId' => $panId,
-                                           };
-
-    my $smoothed = ApiCommonModel::Model::JBrowseTrackConfig::ChipChipSmoothedTrackConfig->new({
-                                                                                                dataset_name  => $dataset,
-                                                                                                attribution => $shortAttribution,
-                                                                                                study_display_name => $datasetDisplayName,
-                                                                                                description => $summary,
-                                                                                                query_params => $queryParams,
-                                                                                                application_type => $applicationType,
-                                                                                                pan_name => $panName,
-                                                                                                cov_max_score_default => 3,
-                                                                                                cov_min_score_default => 3,
-                                                                                                label => $key,
-                                                                                                key => $key,
-												summary => $summary,
-                                                                                              })->getConfigurationObject();
-  
-  return $smoothed;
 }
 
 
