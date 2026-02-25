@@ -69,16 +69,25 @@
       <column name="percent_max"/>
       <sql>
         <![CDATA[
-          SELECT gij.intron_feature_id, nm.exp_name, nm.sample_name
-              , j.unique_reads, round(j.unique_reads * nm.multiplier,2) as isrpm
+          WITH expname AS (
+            select distinct nns.protocol_app_node_id, dsp.display_name
+            from study.nodenodeset nns
+            inner join study.nodeset ns on nns.node_set_id = ns.node_set_id
+            inner join sres.externaldatabaserelease r on ns.external_database_release_id = r.external_database_release_id
+            inner join sres.externaldatabase d on r.external_database_id = d.external_database_id
+            inner join apidbtuning.datasetdatasource dds on d.name = dds.name
+            inner join apidbtuning.datasetpresenter dsp on dds.dataset_presenter_id = dsp.dataset_presenter_id 
+            )
+            SELECT gij.intron_feature_id, en.display_name as exp_name, nm.sample_name  , nm.junctions_pan_id, nm.exp_pan_id
+              , j.unique_reads, round((j.unique_reads * nm.multiplier)::numeric, 2) as isrpm
               , CASE
                 WHEN nafe.value > 0
-                  THEN round(j.unique_reads
-                               / ((nafe.value * nm.mapped_reads / 1000000) * (nm.read_length / 1000)), 2)
+                  THEN round((j.unique_reads
+                               / ((nafe.value * nm.mapped_reads / 1000000.0) * (nm.read_length / 1000.0)))::numeric, 2)
                 ELSE -1
               END as isr_coverage_ratio
               , CASE
-                WHEN maxi.max_isrpm > 0 THEN round(100 * round(j.unique_reads * nm.multiplier,2) / maxi.max_isrpm,2)::varchar
+                WHEN maxi.max_isrpm > 0 THEN round((100 * round((j.unique_reads * nm.multiplier)::numeric, 2) / maxi.max_isrpm)::numeric, 2)::varchar
                 ELSE 'NA'
               END as percent_max
           FROM webready.GeneIntronJunction_p gij
@@ -90,8 +99,10 @@
             INNER JOIN webready.JunctionToCoverageProfileMapping_p nm ON j.protocol_app_node_id = nm.junctions_pan_id
             LEFT JOIN results.NaFeatureExpression nafe ON gij.gene_na_feature_id = nafe.na_feature_id AND nm.exp_pan_id = nafe.protocol_app_node_id
             LEFT JOIN webready.GeneMaxJunction_p maxi ON gij.gene_source_id = maxi.gene_source_id AND j.protocol_app_node_id = maxi.protocol_app_node_id
-          WHERE j.unique_reads > 0
-          ORDER BY exp_name, sample_name
+	    LEFT JOIN expname en ON en.protocol_app_node_id = nm.junctions_pan_id
+          WHERE gij.intron_feature_id = $$intron_feature_id$$
+            AND j.unique_reads > 0
+          ORDER BY en.display_name, sample_name
         ]]>
       </sql>
     </sqlQuery>

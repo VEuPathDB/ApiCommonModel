@@ -3,7 +3,7 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig);
 use strict;
 use warnings;
 
-use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
 
 sub getSummary {$_[0]->{summary} }
 sub setSummary {$_[0]->{summary} = $_[1]}
@@ -21,8 +21,7 @@ sub new {
 
     my $store;
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("gsnap:unifiedintronjunctionnew");
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
 
         $self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
         $self->setTrackTypeDisplay("Predicted Intron Junctions");
@@ -32,8 +31,10 @@ sub new {
     }
     else {
         # TODO
-	$store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $self->setDisplayType("LinearBasicDisplay")
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+	$self->setDisplayType("NeatCanvasFeatures/View/Track/NeatFeatures");
+        $self->setGlyph("JBrowse/View/FeatureGlyph/ProcessedTranscript");
+
     }
 
     $self->setStore($store);
@@ -64,11 +65,11 @@ sub getJBrowseObject{
 	#my $url = $self->getUrl();
 	my $summary = $self->getSummary();
 
-	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"};        
-        $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{gsnapUnifiedIntronJunctionTitleFxn}"}, {label => "Intron Record:  {name}", action => "iframeDialog",hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{name}?tables=SampleInfo"}, {label => "Highlight this Feature"}];
+	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{id}?tables=SampleInfo"};
+        $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{gsnapUnifiedIntronJunctionTitleFxn}"}, {label => "Intron Record:  {id}", action => "iframeDialog",hideIframeDialogUrl => JSON::true, url => "/a/app/embed-record/junction/{id}?tables=SampleInfo"}, {label => "Highlight this Feature"}];
         $jbrowseObject->{fmtMetaValue_Description} =  "function(){return datasetDescription(\"$summary\", \"\");}";
-        $jbrowseObject->{maxFeatureScreenDensity} = 0.5;
-        $jbrowseObject->{subtracks} = [{featureFilters => {annotated_intron => "Yes", evidence => "Strong Evidence",},visible => 1, label => "Matches Annotation", metadata => {},},{featureFilters => {annotated_intron => "No",evidence => "Strong Evidence",},visible => 1,label => "Unannotated (Strong Evidence)",metadata => {},},{featureFilters => {annotated_intron => "No",evidence => "Weak Evidence",},visible => 0,label => "Unannotated (Weak Evidence)",metadata => {},}];
+        $jbrowseObject->{maxFeatureScreenDensity} = 9999999;
+        $jbrowseObject->{subtracks} = [{featureFilters => {annotatedintron => "Yes", evidence => "Strong Evidence",},visible => 1, label => "Matches Annotation", metadata => {},},{featureFilters => {annotatedintron => "No",evidence => "Strong Evidence",},visible => 1,label => "Unannotated (Strong Evidence)",metadata => {},},{featureFilters => {annotatedintron => "No",evidence => "Weak Evidence",},visible => 0,label => "Unannotated (Weak Evidence)",metadata => {},}];
         $jbrowseObject->{glyph} = "EbrcTracks/View/FeatureGlyph/AnchoredSegment";
         $jbrowseObject->{unsafePopup} = JSON::true;
         $jbrowseObject->{displayMode} = "normal";
