@@ -8,7 +8,9 @@ use ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig;
 use Storable 'dclone';
 
 sub processOrganism {
-  my ($organismAbbrev, $projectName, $isApollo, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
+  my ($organismAbbrev, $projectName, $isApollo, $applicationType, $jbrowseUtil, $result) = @_;
+
+  my $buildNumber = $jbrowseUtil->getBuildNumber();
 
   my $methodDescription = "<h1><u>Definitions</u>:</h1>
 
