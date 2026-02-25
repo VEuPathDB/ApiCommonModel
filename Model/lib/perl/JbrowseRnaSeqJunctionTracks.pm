@@ -45,12 +45,14 @@ sub processOrganism {
   $methodDescription =~ s/\n//g;
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
+
   my $orgHash = $datasetProps->{'organism'};
   my $nameForFileNames = $orgHash->{organismNameForFiles};
 
   my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/unifiedIntronJunction.gff.gz";
+  my $hasUnifiedIntronJunction = $datasetProps->{hasUnifiedIntronJunction} ? $datasetProps->{hasUnifiedIntronJunction} : 0;
 
-  {
+  if ($hasUnifiedIntronJunction) {
     my $inclusive = ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig->new({application_type => $applicationType,
                                                                                                summary => $methodDescription,
                                                                                                project_name => $projectName,
