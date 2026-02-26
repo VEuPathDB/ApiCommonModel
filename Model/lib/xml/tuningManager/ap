@@ -86,11 +86,6 @@
         CREATE INDEX transcriptattr_gnf&1 ON TranscriptAttributes&1  (gene_na_feature_id, gene_source_id, project_id, source_id);
       ]]>
     </sql>
-    <sql>
-      <![CDATA[
-        CREATE INDEX transcriptattr_lowersrc&1 ON TranscriptAttributes&1  (lower(source_id), gene_source_id, project_id, source_id);
-      ]]>
-    </sql>
   </tuningTable>
 
   <!-- unpartitioned version of this table -->
@@ -765,6 +760,7 @@
       ]]>
     </sql>
   </tuningTable>
+
 
   <tuningTable name="DatasetExampleSourceId">
     <comment> Each row maps a dataset onto an ID for which the dataset contains data;
@@ -2210,8 +2206,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
           end_time timestamptz;
         BEGIN
           -- Loop through each dataset/experiment and compute & insert results into the temp table
-          -- Excluding quantitative_massSpec_diffresult otherwise we will get duplicates
-          FOR nodeset IN SELECT node_set_id, node_type FROM study.nodeset where node_type != 'quantitative_massSpec_diffresult' LOOP
+          FOR nodeset IN SELECT node_set_id, node_type FROM study.nodeset LOOP
             start_time := clock_timestamp();
               INSERT INTO profile_nafeatureexp_summary
               SELECT sl.node_set_id, result.na_feature_id, nodeset.node_type,
@@ -3014,14 +3009,13 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
            select ga.source_id as source_id, gfp.product, ga.project_id,
                   CASE gfp.is_preferred WHEN 1 THEN 'No' WHEN 0 THEN 'Yes' END as is_alternate,
                   null as transcript_ids,
-                  gfp.publication as reference,
+                string_agg(gfp.publication, ', ' order by ta.source_id) as reference,
                   e.name as evidence_code, gfp.with_from as evidence_code_parameter,
                   gfp.assigned_by,
                   'apidb.GeneFeatureProduct' as source, orgrecord.org_abbrev
-           from apidb.GeneFeatureProduct gfp
-           INNER JOIN webready.GeneAttributes_p ga ON ga.na_feature_id = gfp.na_feature_id
-           LEFT JOIN all_gene_product_evids e ON gfp.evidence_code = e.go_evidence_code_id
-           WHERE ga.org_abbrev = orgrecord.org_abbrev;
+           from apidb.GeneFeatureProduct gfp, webready.GeneAttributes_p ga
+           where ga.na_feature_id = gfp.na_feature_id
+             and ga.org_abbrev = orgrecord.org_abbrev;
 
            insert into &prefixAllGeneProducts_p&1
            select ga.source_id as source_id, gf.product, ga.project_id,
