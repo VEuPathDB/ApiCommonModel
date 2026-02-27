@@ -57,7 +57,7 @@ sub processOrganism {
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
-  &addSynteny($applicationType, $dbh, $result);
+  #  &addSynteny($applicationType, $dbh, $result);
 
   &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
 
@@ -547,14 +547,17 @@ sub addSynteny {
 
   return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
-  my $sql = "select otr.organism, oa.internal_abbrev as public_abbrev, otr.phylum, otr.genus, otr.species, otr.kingdom, otr.class, gt.gtracks
+  my $sql = "WITH proj AS (
+                SELECT project_id FROM APIDBTUNING.ORGANISMATTRIBUTES WHERE internal_abbrev = ?
+             )
+             select otr.organism, oa.internal_abbrev as public_abbrev, otr.phylum, otr.genus, otr.species, otr.kingdom, otr.class, gt.gtracks
             from webready.OrganismSelectTaxonRank_p otr
                , APIDBTUNING.ORGANISMATTRIBUTES oa
+               JOIN proj ON oa.PROJECT_ID = proj.project_id
                RIGHT JOIN (select * from APIDBTUNING.GBROWSETRACKSORGANISM where type = 'synteny' ) gt
                 ON oa.ORGANISM_NAME = gt.organism
-            where oa.ORGANISM_NAME = otr.organism 
-            and oa.IS_ANNOTATED_GENOME = 1
-            and oa.PROJECT_ID in (select distinct name from core.projectinfo)";
+            where oa.ORGANISM_NAME = otr.organism
+            and oa.IS_ANNOTATED_GENOME = 1";
 
   my $hasSyntenyTracks = 0;
 
@@ -568,7 +571,7 @@ sub addSynteny {
 
 
   my $sh = $dbh->prepare($sql);
-  $sh->execute();
+  $sh->execute($organismAbbrev);
   while(my ($organism, $publicAbbrev, $phylum, $genus, $species, $kingdom, $class, $gTracks) = $sh->fetchrow_array()) {
     if($publicAbbrev eq $organismAbbrev) {
       $hasSyntenyTracks = 1;
