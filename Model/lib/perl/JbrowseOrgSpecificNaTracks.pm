@@ -129,6 +129,7 @@ sub processOrganism {
   my $orgPublicAbbrev = $strain{$organismAbbrev}->{public};
   if ($isAnnotated eq 'true'){
     &addGenes($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
+    &addGeneDensity($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
   }
 }
 
@@ -541,6 +542,26 @@ sub addGenes {
   push (@{$result->{tracks}}, $track);
 }
 
+sub addGeneDensity {
+  my ($result, $orgPublicAbbrev, $projectName, $nameForFileNames) = @_;
+
+  my $urlTemplate = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/gff/annotated_transcripts.gff.gz";
+  my $track = {
+	       storeClass => "JBrowse/Store/SeqFeature/GFF3Tabix",
+	       key => "Gene Density",
+	       label => "geneDensity",
+	       type  => "JBrowse/View/Track/CanvasFeatures",
+	       category => "Gene Models",
+	       unsafePopup => JSON::true,
+	       urlTemplate => $urlTemplate,
+	       maxFeatureScreenDensity => 0,
+	       histograms => {
+                              color  => "goldenrod",
+                              height => 100,
+                            },
+	      };
+  push (@{$result->{tracks}}, $track);
+}
 
 sub addSynteny {
   my ($applicationType, $dbh, $result, $organismAbbrev) = @_;
