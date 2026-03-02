@@ -95,7 +95,7 @@ public class BasketFixer2 extends BaseCLI {
     for (String projectId : projects) {
       logger.info("Fixing basket for project " + projectId);
       try (WdkModel wdkModel = WdkModel.construct(projectId, gusHome)) {
-        fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "webready.GeneId_p",  "gene");
+        fixBasket(wdkModel, "TranscriptRecordClasses.TranscriptRecordClass", "apidbtuning.GeneId",  "gene");
         updateTranscripts(wdkModel, projectId);
         fixBasket(wdkModel, "SequenceRecordClasses.SequenceRecordClass", "webready.GenomicSequenceId_p",  "sequence");
         logger.info("=========================== done ============================");
