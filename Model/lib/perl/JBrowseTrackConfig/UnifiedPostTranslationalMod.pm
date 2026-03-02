@@ -21,7 +21,7 @@ sub new {
     $datasetConfig->setSubcategory("Protein Expression");
 
     $self->setId("Unified Post Translational Modification MassSpec");
-    $self->setLabel("Unified PTM MassSpecPeptides");
+    $self->setLabel("UnifiedMassSpecPeptides");
 
     my $store;
 
